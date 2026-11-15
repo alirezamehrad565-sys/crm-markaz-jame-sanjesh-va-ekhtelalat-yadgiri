@@ -207,7 +207,8 @@ var init_seed_demo = __esm({
 // scripts/engine/engine.mjs
 import { spawn } from "node:child_process";
 import { randomBytes as randomBytes2 } from "node:crypto";
-import { existsSync as existsSync5, mkdirSync as mkdirSync4, openSync as openSync2, promises as fsPromises, writeFileSync as writeFileSync2 } from "node:fs";
+import { existsSync as existsSync5, mkdirSync as mkdirSync4, openSync as openSync2, promises as fsPromises, readFileSync as readFileSync4, readdirSync as readdirSync4, writeFileSync as writeFileSync3 } from "node:fs";
+import { tmpdir } from "node:os";
 import { createServer as createServer2 } from "node:net";
 import path6 from "node:path";
 import { DatabaseSync as DatabaseSync5 } from "node:sqlite";
@@ -394,7 +395,7 @@ const config :W.Config = (
 
 // scripts/engine/adapter/server.mjs
 import { createServer } from "node:http";
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import path2 from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -601,6 +602,148 @@ async function writeWebResponse(res, response) {
   res.end();
 }
 var reqHead = (m) => String(m ?? "").toUpperCase() === "HEAD";
+var CLOUD_FILE_RE = /^(cloud-config\.json|sync-state\.json|cloud-sync-(pre|clone)-[A-Za-z0-9._-]+\.json)$/;
+function makeCloudFsIO(dataDir) {
+  if (!dataDir) return null;
+  const safeName = (name) => typeof name === "string" && CLOUD_FILE_RE.test(name);
+  return {
+    readText: async (name) => {
+      if (!safeName(name)) throw new Error(`نام فایل ابری مجاز نیست: ${String(name).slice(0, 64)}`);
+      try {
+        return readFileSync(path2.join(dataDir, name), "utf8");
+      } catch {
+        return null;
+      }
+    },
+    writeText: async (name, text) => {
+      if (!safeName(name)) throw new Error(`نام فایل ابری مجاز نیست: ${String(name).slice(0, 64)}`);
+      const target = path2.join(dataDir, name);
+      const tmp = `${target}.tmp`;
+      writeFileSync(tmp, String(text), "utf8");
+      try {
+        renameSync(tmp, target);
+      } catch (err) {
+        try {
+          unlinkSync(tmp);
+        } catch {
+        }
+        throw err;
+      }
+    },
+    remove: async (name) => {
+      if (!safeName(name)) throw new Error(`نام فایل ابری مجاز نیست: ${String(name).slice(0, 64)}`);
+      try {
+        unlinkSync(path2.join(dataDir, name));
+      } catch {
+      }
+    },
+    list: async (prefix) => {
+      try {
+        return readdirSync(dataDir).filter((n) => typeof n === "string" && n.startsWith(prefix) && CLOUD_FILE_RE.test(n)).sort().reverse();
+      } catch {
+        return [];
+      }
+    },
+    dir: () => dataDir
+  };
+}
+function makeCloudProvision(centralWorkerPath, schemaSqlPath, webAssetsReader) {
+  if (!centralWorkerPath || !schemaSqlPath) return null;
+  const fileOk = (p) => {
+    try {
+      return statSync(p).isFile();
+    } catch {
+      return false;
+    }
+  };
+  if (!fileOk(centralWorkerPath) || !fileOk(schemaSqlPath)) return null;
+  return {
+    readCentralWorker: async () => {
+      try {
+        return readFileSync(centralWorkerPath, "utf8");
+      } catch {
+        return null;
+      }
+    },
+    readSchemaSql: async () => {
+      try {
+        return readFileSync(schemaSqlPath, "utf8");
+      } catch {
+        return null;
+      }
+    },
+    ...typeof webAssetsReader === "function" ? { readWebAssets: webAssetsReader } : {}
+  };
+}
+var WEB_ASSETS_MAX_FILES = 250;
+var WEB_ASSETS_MAX_FILE_BYTES = 8 * 1024 * 1024;
+var WEB_ASSETS_MAX_TOTAL_BYTES = 20 * 1024 * 1024;
+function makeWebAssetsReader(publicDir) {
+  if (!publicDir) return null;
+  const base = path2.resolve(publicDir);
+  return async function readWebAssets() {
+    const files = [];
+    let totalBytes = 0;
+    let refused = "";
+    const underBase = (abs) => abs === base || abs.startsWith(base + path2.sep);
+    const relOf = (abs) => path2.relative(base, abs).split(path2.sep).join("/");
+    const visit = (dir) => {
+      if (refused) return;
+      if (files.length >= WEB_ASSETS_MAX_FILES) {
+        refused = "شمار فایل‌های public از ۲۵۰ گذشت";
+        return;
+      }
+      let entries;
+      try {
+        entries = readdirSync(dir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const e of entries) {
+        if (refused) return;
+        if (e.name.startsWith(".")) continue;
+        const abs = path2.resolve(dir, e.name);
+        if (!underBase(abs)) {
+          refused = "مسیری بیرون از پوشهٔ public دیده شد";
+          return;
+        }
+        if (e.isDirectory()) {
+          visit(abs);
+          continue;
+        }
+        if (!e.isFile()) continue;
+        let size = 0;
+        try {
+          size = statSync(abs).size;
+        } catch {
+          continue;
+        }
+        if (size > WEB_ASSETS_MAX_FILE_BYTES) {
+          refused = `فایل «${relOf(abs)}» از سقف ۸ مگابایت بزرگ‌تر است`;
+          return;
+        }
+        if (totalBytes + size > WEB_ASSETS_MAX_TOTAL_BYTES) {
+          refused = "مجموع دارایی‌های public از سقف ۲۰ مگابایت گذشت";
+          return;
+        }
+        let buf;
+        try {
+          buf = readFileSync(abs);
+        } catch {
+          continue;
+        }
+        totalBytes += size;
+        files.push({ path: relOf(abs), bytes: new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength) });
+      }
+    };
+    visit(base);
+    if (refused) {
+      console.warn(`[engine] دارایی‌های وب بارگذاری نشد — ${refused} (provision بدون وب ادامه می‌یابد)`);
+      return null;
+    }
+    return files;
+  };
+}
 async function startAdapterEngine(opts2) {
   const { port, gamesPort, dbPath, mainBundle, gamesBundle, publicDir, log } = opts2;
   const bindings = opts2.bindings ?? {};
@@ -610,6 +753,7 @@ async function startAdapterEngine(opts2) {
     throw new Error("باندل ورکر شکل موردانتظار ({ fetch }) ندارد — بازسازی باندل‌ها لازم است");
   }
   const DB = makeD1(dbPath, { log });
+  const cloudFs = makeCloudFsIO(bindings.dataDir);
   const mainEnv = {
     DB,
     ENV: "production",
@@ -618,7 +762,12 @@ async function startAdapterEngine(opts2) {
     PUBLIC_BASE_URL: bindings.publicBaseUrl ?? `http://127.0.0.1:${port}`,
     AUTH_SECRET: bindings.authSecret,
     CENTER_DESKTOP_ENGINE: "1",
-    GAMES_HEALTH_URL: bindings.gamesHealthUrl ?? `http://127.0.0.1:${gamesPort}/health`
+    GAMES_HEALTH_URL: bindings.gamesHealthUrl ?? `http://127.0.0.1:${gamesPort}/health`,
+    CLOUD_FS: cloudFs,
+    // فاز C — دارایی‌های «ساخت ورکر ابری» (central-worker.js + schema.sql)؛ در workerd غایب است → اپ ۵۰۱ می‌دهد
+    // فاز D1 — خوانندهٔ سوم webAssetsReader (فایل‌های public برای Static Assets) از bindings می‌آید
+    CLOUD_PROVISION: makeCloudProvision(bindings.centralWorkerPath, bindings.centralSchemaPath, bindings.webAssetsReader),
+    ENGINE_CLOUD_SECRET: typeof bindings.engineCloudSecret === "string" ? bindings.engineCloudSecret : ""
   };
   const gamesEnv = {
     DB,
@@ -736,7 +885,7 @@ init_engine_paths();
 
 // scripts/engine/apply-migrations.mjs
 init_engine_paths();
-import { existsSync as existsSync2, mkdirSync, readdirSync, readFileSync as readFileSync2 } from "node:fs";
+import { existsSync as existsSync2, mkdirSync, readdirSync as readdirSync2, readFileSync as readFileSync2 } from "node:fs";
 import path4 from "node:path";
 import { createRequire } from "node:module";
 var { DatabaseSync: DatabaseSync2 } = createRequire(import.meta.url)("node:sqlite");
@@ -750,7 +899,7 @@ function applyMigrations(dbPath) {
   )`);
   const applied = new Set(db.prepare("SELECT version FROM _migrations").all().map((r) => r.version));
   const dir = path4.join(REPO_ROOT2, "migrations");
-  const files = existsSync2(dir) ? readdirSync(dir).filter((f) => f.endsWith(".sql")).sort() : [];
+  const files = existsSync2(dir) ? readdirSync2(dir).filter((f) => f.endsWith(".sql")).sort() : [];
   let appliedCount = 0;
   for (const file of files) {
     if (applied.has(file)) continue;
@@ -770,7 +919,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 }
 
 // scripts/engine/db-snapshot.mjs
-import { copyFileSync, existsSync as existsSync3, mkdirSync as mkdirSync2, readdirSync as readdirSync2, rmSync, statSync as statSync2, unlinkSync } from "node:fs";
+import { copyFileSync, existsSync as existsSync3, mkdirSync as mkdirSync2, readdirSync as readdirSync3, rmSync, statSync as statSync2, unlinkSync as unlinkSync2 } from "node:fs";
 import { basename, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { createRequire as createRequire2 } from "node:module";
@@ -816,14 +965,14 @@ function checkpointLiveWal(dbPath) {
 function rotateSnapshots(backupsDir, keep = 7) {
   let files = [];
   try {
-    files = readdirSync2(backupsDir).filter((f) => /^backup-\d{8}-\d{6}(-\d+)?\.db$/.test(f)).map((f) => ({ f, m: statSync2(join(backupsDir, f)).mtimeMs })).sort((a, b) => b.m - a.m).map((x) => x.f);
+    files = readdirSync3(backupsDir).filter((f) => /^backup-\d{8}-\d{6}(-\d+)?\.db$/.test(f)).map((f) => ({ f, m: statSync2(join(backupsDir, f)).mtimeMs })).sort((a, b) => b.m - a.m).map((x) => x.f);
   } catch {
     return [];
   }
   const removed = [];
   for (const f of files.slice(keep)) {
     try {
-      unlinkSync(join(backupsDir, f));
+      unlinkSync2(join(backupsDir, f));
       removed.push(f);
     } catch {
     }
@@ -849,7 +998,7 @@ function takeSnapshot(dbPath, dataDir, opts2 = {}) {
     const verified = verifyDbFile(outPath);
     if (!verified) {
       try {
-        unlinkSync(outPath);
+        unlinkSync2(outPath);
       } catch {
       }
       log(`پشتیبان فایل‌سطح تأیید نشد و کنار گذاشته شد (${name}) — پایگاه زنده دست‌نخورده ماند`);
@@ -867,7 +1016,7 @@ function takeSnapshot(dbPath, dataDir, opts2 = {}) {
 function newestVerifiedSnapshot(backupsDir) {
   let files = [];
   try {
-    files = readdirSync2(backupsDir).filter((f) => /^backup-\d{8}-\d{6}(-\d+)?\.db$/.test(f)).map((f) => ({ f, m: statSync2(join(backupsDir, f)).mtimeMs })).sort((a, b) => b.m - a.m).map((x) => x.f);
+    files = readdirSync3(backupsDir).filter((f) => /^backup-\d{8}-\d{6}(-\d+)?\.db$/.test(f)).map((f) => ({ f, m: statSync2(join(backupsDir, f)).mtimeMs })).sort((a, b) => b.m - a.m).map((x) => x.f);
   } catch {
     return null;
   }
@@ -978,7 +1127,7 @@ function ensureDbIntegrityOrRestore(dbPath, dataDir, opts2 = {}) {
 }
 
 // scripts/engine/human-log.mjs
-import { existsSync as existsSync4, openSync, renameSync, statSync as statSync3, unlinkSync as unlinkSync2, appendFileSync, readFileSync as readFileSync3, writeFileSync } from "node:fs";
+import { existsSync as existsSync4, openSync, renameSync as renameSync2, statSync as statSync3, unlinkSync as unlinkSync3, appendFileSync, readFileSync as readFileSync3, writeFileSync as writeFileSync2 } from "node:fs";
 var LOG_ROTATE_BYTES = 5 * 1024 * 1024;
 var LOG_KEEP_FILES = 7;
 var HUMAN_EVENTS_QUEUE_KEY = "sys_human_events";
@@ -1024,12 +1173,12 @@ function rotateFileIfNeeded(logPath, opts2 = {}) {
   if (size < maxBytes) return false;
   try {
     const oldest = `${logPath}.${keep - 1}`;
-    if (existsSync4(oldest)) unlinkSync2(oldest);
+    if (existsSync4(oldest)) unlinkSync3(oldest);
     for (let i = keep - 2; i >= 1; i -= 1) {
       const from = `${logPath}.${i}`;
-      if (existsSync4(from)) renameSync(from, `${logPath}.${i + 1}`);
+      if (existsSync4(from)) renameSync2(from, `${logPath}.${i + 1}`);
     }
-    renameSync(logPath, `${logPath}.1`);
+    renameSync2(logPath, `${logPath}.1`);
     return true;
   } catch {
     return false;
@@ -1060,7 +1209,7 @@ function drainQueueToLog(db, logPath, opts2 = {}) {
   const lastTs = events[events.length - 1]?.ts ?? null;
   if (lastTs && pending.length > 0) {
     try {
-      writeFileSync(posFileOf(logPath), lastTs, "utf8");
+      writeFileSync2(posFileOf(logPath), lastTs, "utf8");
     } catch {
     }
   }
@@ -1092,6 +1241,66 @@ function restartMessage(attempt) {
 }
 
 // scripts/engine/engine.mjs
+function applyLocalTriggersBestEffort(dbPath) {
+  const file = path6.join(REPO_ROOT2, "scripts", "engine", "local-triggers.sql");
+  if (!existsSync5(file)) {
+    console.log("[engine] local-triggers.sql موجود نیست (باندل نصاب) — مُهر خودکار trigger خاموش؛ رفتار ابر");
+    return;
+  }
+  let db = null;
+  try {
+    db = new DatabaseSync5(dbPath);
+    db.exec(readFileSync4(file, "utf8"));
+    console.log("[engine] triggerهای فقط-میز اعمال شد (مُهر خودکار updated_at + تومب‌استون حذف در _sync_deleted)");
+  } catch (err) {
+    console.error(`[engine] هشدار: اعمال triggerهای فقط-میز ناموفق بود — بوت بدون trigger ادامه می‌یابد (هم‌گامی سالم می‌ماند؛ فقط مُهر خودکار ندارد): ${err?.message ?? err}`);
+  } finally {
+    try {
+      db?.close();
+    } catch {
+    }
+  }
+}
+function resolveCentralPaths(opts2) {
+  const bundleDir = path6.dirname(opts2.mainBundle ?? path6.join(REPO_ROOT2, "worker/bundle.js"));
+  const centralDir = path6.join(bundleDir, "..", "central");
+  const installWorker = path6.join(centralDir, "central-worker.js");
+  const installSchema = path6.join(centralDir, "schema.sql");
+  const installPublic = path6.join(bundleDir, "..", "public");
+  if (existsSync5(installWorker) && existsSync5(installSchema)) {
+    return {
+      centralWorkerPath: installWorker,
+      centralSchemaPath: installSchema,
+      publicDir: existsSync5(installPublic) ? installPublic : null
+    };
+  }
+  const devWorker = path6.join(REPO_ROOT2, "worker", "central-bundle.js");
+  if (!existsSync5(devWorker)) return { centralWorkerPath: null, centralSchemaPath: null, publicDir: null };
+  try {
+    const migDir = path6.join(REPO_ROOT2, "migrations");
+    const migFiles = readdirSync4(migDir).filter((f) => f.endsWith(".sql")).sort();
+    if (migFiles.length === 0) return { centralWorkerPath: null, centralSchemaPath: null, publicDir: null };
+    let schema = `-- schema.sql — تجمیع ${migFiles.length} مایگریشن رسمی (ساخته‌شده در موتور محلی — فقط توسعه)
+`;
+    schema += `-- مقصد: پایگاه markaz-central روی حساب کلادفلر کاربر — این فایل را دستی ویرایش نکنید.
+`;
+    for (const f of migFiles) {
+      schema += `
+-- ===== migration: ${f} =====
+` + readFileSync4(path6.join(migDir, f), "utf8") + "\n";
+    }
+    const tmpSchema = path6.join(tmpdir(), `markaz-central-schema-${process.pid}.sql`);
+    writeFileSync3(tmpSchema, schema, "utf8");
+    return {
+      centralWorkerPath: devWorker,
+      centralSchemaPath: tmpSchema,
+      publicDir: opts2.publicDir ?? path6.join(REPO_ROOT2, "public")
+    };
+  } catch (err) {
+    console.error(`[engine] هشدار: دارایی‌های ساخت ورکر ابری حل نشد — CLOUD_PROVISION خاموش می‌ماند (بوت سالم ادامه می‌یابد): ${err?.message ?? err}`);
+    return { centralWorkerPath: null, centralSchemaPath: null, publicDir: null };
+  }
+}
 function parseArgs(argv) {
   const out = { port: 8787, gamesPort: 8788, dataDir: path6.join(REPO_ROOT2, "engine-data"), seed: false, engine: "workerd" };
   for (let i = 0; i < argv.length; i++) {
@@ -1249,6 +1458,7 @@ async function runEngine(opts2) {
     process.exit(1);
   }
   console.log(`[engine] مایگریشن‌ها: ${mig.appliedCount} اعمال شد (از ${mig.total})`);
+  applyLocalTriggersBestEffort(dbPath);
   const walDb = openDbAndAssertIntegrity(dbPath);
   if (opts2.seed || !existsSync5(dbPath)) {
     const { seedDemo: seedDemo2 } = await Promise.resolve().then(() => (init_seed_demo(), seed_demo_exports));
@@ -1271,7 +1481,7 @@ async function runEngine(opts2) {
   const isAdapter = opts2.engine === "adapter";
   if (isAdapter) {
     const configOut = path6.join(opts2.dataDir, "engine-config.json");
-    writeFileSync2(configOut, JSON.stringify({
+    writeFileSync3(configOut, JSON.stringify({
       engine: "adapter",
       port,
       gamesPort,
@@ -1285,7 +1495,7 @@ async function runEngine(opts2) {
     }, null, 2) + "\n");
   } else {
     const configText = await buildEngineConfig({ port, gamesPort, dataDir: opts2.dataDir, authSecret });
-    writeFileSync2(path6.join(opts2.dataDir, "workerd.capnp"), configText);
+    writeFileSync3(path6.join(opts2.dataDir, "workerd.capnp"), configText);
   }
   const base = `http://127.0.0.1:${port}`;
   const gamesBase = `http://127.0.0.1:${gamesPort}`;
@@ -1303,7 +1513,9 @@ async function runEngine(opts2) {
       process.exit(1);
     });
   };
+  let centralPaths = null;
   const startAdapter = async () => {
+    if (centralPaths === null) centralPaths = resolveCentralPaths(opts2);
     handle = await startAdapterEngine({
       port,
       gamesPort,
@@ -1311,7 +1523,23 @@ async function runEngine(opts2) {
       mainBundle: opts2.mainBundle ?? path6.join(REPO_ROOT2, "worker/bundle.js"),
       gamesBundle: opts2.gamesBundle ?? path6.join(REPO_ROOT2, "worker/games-bundle.js"),
       publicDir: opts2.publicDir ?? path6.join(REPO_ROOT2, "public"),
-      bindings: { authSecret, publicBaseUrl: base, gamesHealthUrl: `${gamesBase}/health` },
+      // فاز B — passthrough راز ابری از env پروسهٔ موتور (ENGINE_CLOUD_SECRET که پوستهٔ Rust
+      // پیش از بوت تزریق می‌کند) + مسیر dataDir برای پل فایل‌های ابری CloudFsIO
+      // (cloud-config.json / sync-state.json / پشتیبان‌های cloud-sync-*) — server.mjs همین‌ها
+      // را در bindingهای CLOUD_FS و ENGINE_CLOUD_SECRET اپ می‌بندد؛ حالت workerd غایب = خاموش.
+      // فاز C — دو مسیر ثابت دارایی‌های ساخت ورکر ابری → binding CLOUD_PROVISION (adapter فقط).
+      // فاز D1 — خوانندهٔ دارایی‌های وب (public نصب/مخزن) برای آپلود Static Assets؛
+      // publicDir حل‌نشده → null → binding بدون readWebAssets → ساخت بدون وب (سازگار عقب).
+      bindings: {
+        authSecret,
+        publicBaseUrl: base,
+        gamesHealthUrl: `${gamesBase}/health`,
+        engineCloudSecret: process.env.ENGINE_CLOUD_SECRET ?? "",
+        dataDir: opts2.dataDir,
+        centralWorkerPath: centralPaths.centralWorkerPath,
+        centralSchemaPath: centralPaths.centralSchemaPath,
+        webAssetsReader: makeWebAssetsReader(centralPaths.publicDir)
+      },
       log: (m) => console.log(`[engine] ${m}`)
     });
   };

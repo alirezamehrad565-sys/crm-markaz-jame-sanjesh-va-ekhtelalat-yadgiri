@@ -166,8 +166,10 @@ function makeCloudFsIO(dataDir) {
  * اپ هیچ مسیری نمی‌فرستد و همین‌جا هیچ مسیر دلخواهی باز نمی‌شود — دو خوانندهٔ بی‌آرگومان
  * روی دو مسیری که فقط سمت موتور (engine.mjs) حل شده‌اند. هر دو فایل حاضر نبودند → null
  * → اپ روی مسیر provision «۵۰۱ — فقط در نسخهٔ دسکتاپ» می‌دهد (حالت workerd همیشه null).
+ * فاز D1 (B2) — خوانندهٔ سوم اختیاری readWebAssets (makeWebAssetsReader): فایل‌های public
+ * برای آپلود Workers Static Assets؛ غایب/null → ساخت بدون وب (سازگار عقب، خطا نیست).
  */
-function makeCloudProvision(centralWorkerPath, schemaSqlPath) {
+function makeCloudProvision(centralWorkerPath, schemaSqlPath, webAssetsReader) {
   if (!centralWorkerPath || !schemaSqlPath) return null;
   const fileOk = (p) => {
     try { return statSync(p).isFile(); } catch { return false; }
@@ -180,6 +182,80 @@ function makeCloudProvision(centralWorkerPath, schemaSqlPath) {
     readSchemaSql: async () => {
       try { return readFileSync(schemaSqlPath, 'utf8'); } catch { return null; }
     },
+    ...(typeof webAssetsReader === 'function' ? { readWebAssets: webAssetsReader } : {}),
+  };
+}
+
+// فاز D1 (B2) — سدهای سخت آپلود دارایی‌های وب (آینهٔ گارد حجم assets.ts در provision)
+const WEB_ASSETS_MAX_FILES = 250;
+const WEB_ASSETS_MAX_FILE_BYTES = 8 * 1024 * 1024;
+const WEB_ASSETS_MAX_TOTAL_BYTES = 20 * 1024 * 1024;
+
+/**
+ * فاز D1 (B2) — خوانندهٔ دارایی‌های وب برای آپلود Workers Static Assets (binding webAssetsReader).
+ * پیمایش فقط-خواندنیِ بازگشتی publicDir — خروجی فایل‌های واقعی زیر پوشهٔ داده‌شده با مسیر نسبی
+ * posix و بایت‌های node:fs (Buffer → Uint8Array). سدها: هر گام walk با resolve بررسی می‌شود که
+ * زیر publicDir بماند (خروج از مرز → null) و محدودیت‌های سخت ۲۵۰ فایل / ۸ مگابایت هر فایل /
+ * ۲۰ مگابایت مجموع رعایت شود — عبور از هر مرز → کل دارایی null (وب نمی‌آید و provision بدون
+ * دارایی ادامه می‌یابد؛ سازگار عقب). پوشه‌های .git و هر نام نقطه‌دار رد می‌شوند؛ symlink
+ * خوانده نمی‌شود (Dirent روی پیوند، فایل نیست) — فقط فایل واقعی زیر همان پوشه.
+ */
+export function makeWebAssetsReader(publicDir) {
+  if (!publicDir) return null;
+  const base = path.resolve(publicDir);
+  return async function readWebAssets() {
+    const files = [];
+    let totalBytes = 0;
+    let refused = '';
+    const underBase = (abs) => abs === base || abs.startsWith(base + path.sep);
+    const relOf = (abs) => path.relative(base, abs).split(path.sep).join('/');
+    const visit = (dir) => {
+      if (refused) return;
+      if (files.length >= WEB_ASSETS_MAX_FILES) {
+        refused = 'شمار فایل‌های public از ۲۵۰ گذشت';
+        return;
+      }
+      let entries;
+      try {
+        entries = readdirSync(dir, { withFileTypes: true });
+      } catch {
+        return; // پوشهٔ ناخوانا — همین شاخه بخشی از دارایی نیست
+      }
+      for (const e of entries) {
+        if (refused) return;
+        if (e.name.startsWith('.')) continue; // مخفی نقطه‌دار + .git
+        const abs = path.resolve(dir, e.name);
+        if (!underBase(abs)) {
+          refused = 'مسیری بیرون از پوشهٔ public دیده شد';
+          return;
+        }
+        if (e.isDirectory()) {
+          visit(abs);
+          continue;
+        }
+        if (!e.isFile()) continue;
+        let size = 0;
+        try { size = statSync(abs).size; } catch { continue; }
+        if (size > WEB_ASSETS_MAX_FILE_BYTES) {
+          refused = `فایل «${relOf(abs)}» از سقف ۸ مگابایت بزرگ‌تر است`;
+          return;
+        }
+        if (totalBytes + size > WEB_ASSETS_MAX_TOTAL_BYTES) {
+          refused = 'مجموع دارایی‌های public از سقف ۲۰ مگابایت گذشت';
+          return;
+        }
+        let buf;
+        try { buf = readFileSync(abs); } catch { continue; } // فایل حین پیمایش رفت — رد
+        totalBytes += size;
+        files.push({ path: relOf(abs), bytes: new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength) });
+      }
+    };
+    visit(base);
+    if (refused) {
+      console.warn(`[engine] دارایی‌های وب بارگذاری نشد — ${refused} (provision بدون وب ادامه می‌یابد)`);
+      return null;
+    }
+    return files;
   };
 }
 
@@ -211,7 +287,8 @@ export async function startAdapterEngine(opts) {
     GAMES_HEALTH_URL: bindings.gamesHealthUrl ?? `http://127.0.0.1:${gamesPort}/health`,
     CLOUD_FS: cloudFs,
     // فاز C — دارایی‌های «ساخت ورکر ابری» (central-worker.js + schema.sql)؛ در workerd غایب است → اپ ۵۰۱ می‌دهد
-    CLOUD_PROVISION: makeCloudProvision(bindings.centralWorkerPath, bindings.centralSchemaPath),
+    // فاز D1 — خوانندهٔ سوم webAssetsReader (فایل‌های public برای Static Assets) از bindings می‌آید
+    CLOUD_PROVISION: makeCloudProvision(bindings.centralWorkerPath, bindings.centralSchemaPath, bindings.webAssetsReader),
     ENGINE_CLOUD_SECRET: typeof bindings.engineCloudSecret === 'string' ? bindings.engineCloudSecret : '',
   };
   const gamesEnv = {

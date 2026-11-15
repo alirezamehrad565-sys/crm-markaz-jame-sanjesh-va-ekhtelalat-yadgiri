@@ -53,17 +53,18 @@ function makeDeps(opts: { failInvoke?: boolean; postData?: Record<string, unknow
 }
 
 describe('cloudSetupView — مدل خالص ویزارد (بی‌DOM، الگوی cloudSyncStateView)', () => {
-  it('گام choice: هر سه گزینه با عنوان و توضیح فارسی درست (B1 / A1 / skip)', () => {
+  it('گام choice: هر سه گزینه با عنوان و توضیح فارسی درست (B1 / A1 / skip) — واژگان فاز D1', () => {
     const v = cloudSetupView({ step: 'choice' });
     expect(v.step).toBe('choice');
     expect(v.choices.map((c: { key: string }) => c.key)).toEqual(['existing', 'create', 'local']);
-    expect(v.choices[0].title).toBe('اتصال به ورکر ابری موجود');
-    expect(v.choices[0].desc).toContain('رمز یک‌بارمصرف');
-    expect(v.choices[1].title).toBe('ساخت ورکر تازه با توکن کلادفلر');
+    expect(v.choices[0].title).toBe('اتصال به مرکز ابری موجود');
+    expect(v.choices[0].desc).toContain('رمز اتصال');
+    expect(v.choices[1].title).toBe('ساخت مرکز ابری با کلید کلادفلر');
+    expect(v.choices[1].desc).toContain('کلید کلادفلر');
     expect(v.choices[1].desc).toContain('حساب خودتان');
     expect(v.choices[2].title).toBe('فقط محلی');
     expect(v.choices[2].desc).toContain('پنل سلامت');
-    expect(v.skipHint).toContain('هر زمان از پنل سلامت');
+    expect(v.skipHint).toBe('فقط محلی — هر زمان از پنل سلامت می‌توانید اتصال بسازید.');
   });
 
   it('ورودی غایب/خراب/گام ناشناخته → گام choice بی‌کرش', () => {
@@ -79,7 +80,7 @@ describe('cloudSetupView — مدل خالص ویزارد (بی‌DOM، الگو
     expect(desktop.existing.defaultMinutes).toBe(10);
     expect(desktop.existing.minMinutes).toBe(1);
     expect(desktop.existing.desktopSecret).toBe(true);
-    expect(desktop.existing.secretHint).toContain('Credential Manager');
+    expect(desktop.existing.secretHint).toContain('حافظهٔ امن');
     expect(desktop.status).toMatchObject({ badge: 'badge--success', label: 'هم‌گام شد' });
     const web = cloudSetupView({ step: 'existing' });
     expect(web.existing.desktopSecret).toBe(false);
@@ -130,6 +131,44 @@ describe('cloudSetupView — مدل خالص ویزارد (بی‌DOM، الگو
     expect(v.status).toMatchObject({ badge: 'badge--success', label: 'هم‌گام شد' });
     expect(cloudSetupView({ step: 'done', status: { configured: false } }).status.label).toBe('اتصال ابری تنظیم نشده');
     expect(cloudSetupView({ step: 'done' }).status.label).toBe('وضعیت نامشخص');
+  });
+
+  it('فاز D1 — گام A1 متن وب: webNote دقیق در مدل گام create', () => {
+    const v = cloudSetupView({ step: 'create', createPhase: 'form' });
+    expect(v.create.webNote).toBe('مرکز ابری ساخته می‌شود و وب آن هم فعال است — همان نرم‌افزار، در مرورگر، با همین آدرس.');
+  });
+
+  it('فاز D1 — پیوند «وب مرکز ابری» در done فقط وقتی webEnabled (اتصال ثبت‌شده با آدرس https)', () => {
+    // اتصال ثبت‌شده با https → پیوند فعال با همان آدرس
+    const on = cloudSetupView({ step: 'done', status: { configured: true, url: 'https://markaz-x.workers.dev' } });
+    expect(on.web).toMatchObject({ enabled: true, url: 'https://markaz-x.workers.dev' });
+    // بی‌اتصال / بی‌آدرس / آدرس غیر-https → بی‌پیوند
+    expect(cloudSetupView({ step: 'done', status: { configured: false, url: 'https://markaz-x.workers.dev' } }).web.enabled).toBe(false);
+    expect(cloudSetupView({ step: 'done', status: { configured: true } }).web.enabled).toBe(false);
+    expect(cloudSetupView({ step: 'done', status: { configured: true, url: 'http://insecure.example' } }).web.enabled).toBe(false);
+    expect(cloudSetupView({ step: 'done' }).web).toMatchObject({ enabled: false, url: null });
+    expect(cloudSetupView({ step: 'choice' }).web).toBeUndefined(); // فقط گام done فیلد وب دارد
+  });
+
+  it('فاز D1 — سوپ واژگان: در متن‌های UI ویزارد «توکن» و «schema» و «ورکر» خام نیاید', () => {
+    const v = cloudSetupView({ step: 'choice' });
+    const texts = [
+      ...v.choices.map((c: { title: string; desc: string; button: string }) => `${c.title} ${c.desc} ${c.button}`),
+      v.skipHint,
+      cloudSetupView({ step: 'create', createPhase: 'form' }).create.tokenHint,
+      cloudSetupView({ step: 'create', createPhase: 'form' }).create.webNote,
+      cloudSetupView({ step: 'create', createPhase: 'secret', secretRevealed: true, provisioned: { workerName: 'x', d1Name: 'y' } }).create.secretWarning,
+      cloudSetupView({ step: 'existing', desktopSecret: true }).existing.secretHint,
+      cloudSetupView({ step: 'done', status: { configured: true, url: 'https://x' } }).status.label,
+      cloudSetupStatusView({ ...FULL_STATUS, schema_match: false }).label
+    ];
+    for (const t of texts) {
+      for (const banned of ['توکن', 'schema', 'ورکر', 'push', 'Worker ', 'توکن API']) {
+        expect(String(t)).not.toContain(banned);
+      }
+    }
+    // نام مجوزهای کلادفلر (برچسب‌های کنسول CF) عیناً می‌ماند — راهنمای واقعی کاربر
+    expect(cloudSetupView({ step: 'create', createPhase: 'form' }).create.tokenHint).toContain('Workers Scripts:Edit');
   });
 });
 

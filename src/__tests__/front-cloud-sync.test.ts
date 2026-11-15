@@ -8,7 +8,7 @@
  * feed وضعیت HTTP است: poll ۳۰ثانیه‌ای + poll فوری پس از هر کنش؛ پاکت ناآشنا نادیده می‌ماند.
  */
 // @ts-ignore — فایل .js فرانت، خارج از include تایپ‌اسکریپت است (import تک‌خطی تا @ts-ignore نشتی را بپوشاند)
-import { cloudSyncStateView, cloudCountsView, cloudSecretMaskView, cloudCardView, unwrapInstanceSyncStatus, cloudSecretInvoke, startCloudSyncFeed, pollCloudSyncNow, subscribeCloudSyncStatus, lastCloudSyncStatus, resetCloudSyncFeedForTests } from '../../public/assets/js/views/health-panel.js';
+import { cloudSyncStateView, cloudCountsView, cloudSecretMaskView, cloudCardView, cloudSyncErrorKindOf, cloudSyncErrorKindView, cloudSyncStatusMessageView, cloudHumanStatusView, cloudAdvancedView, cloudAdvancedToggleView, unwrapInstanceSyncStatus, cloudSecretInvoke, startCloudSyncFeed, pollCloudSyncNow, subscribeCloudSyncStatus, lastCloudSyncStatus, resetCloudSyncFeedForTests } from '../../public/assets/js/views/health-panel.js';
 
 /** پاکت کامل سبز — مرجع مشترک آزمون‌های حالت */
 const FULL_SYNCED = {
@@ -29,7 +29,7 @@ describe('cloudSyncStateView — تقدم حالت‌های اتصال ابری 
     expect(cloudSyncStateView({ ...FULL_SYNCED, configured: false, schema_match: false, running: true }))
       .toMatchObject({ badge: 'badge--neutral', dot: 'dot--neutral', label: 'اتصال ابری تنظیم نشده' });
     expect(cloudSyncStateView({ ...FULL_SYNCED, schema_match: false, running: true }))
-      .toMatchObject({ badge: 'badge--error', dot: 'dot--error', label: 'ناسازگاری نسخهٔ schema — به‌روزرسانی لازم است' });
+      .toMatchObject({ badge: 'badge--error', dot: 'dot--error', label: 'نسخهٔ ساختار اطلاعات متفاوت است — به‌روزرسانی لازم است' });
     expect(cloudSyncStateView({ ...FULL_SYNCED, running: true }))
       .toMatchObject({ badge: 'badge--warning', dot: 'dot--warning', label: 'هم‌گامی در جریان…' });
   });
@@ -166,6 +166,125 @@ describe('cloudCardView — گاردهای دکمه‌ها/ردیف‌های ک�
     expect(partial.intervalText).toBeNull();
     expect(partial.conflictsTotal).toBeNull();
     expect(partial.urlText).toBeNull();
+  });
+});
+
+/* ── فاز D1 — «انسانی‌سازی» کارت «اتصال ابری»: نگاشت گونهٔ خطا، پیام‌های وضعیت کارفرما،
+   خط وضعیت انسانی لایهٔ عادی، مدل لایهٔ پیشرفته و بازو/بستن پیش‌فرض‌بسته — همه تابع خالص. ── */
+
+describe('cloudSyncErrorKindOf/cloudSyncErrorKindView — گونهٔ خطا → جملهٔ انسانی تاریخچه', () => {
+  it('نگاشت واژگان موجود error kindها به جملات تاریخچهٔ خطاها (قطع اینترنت/ابر شلوغ/کلید/به‌روزرسانی)', () => {
+    expect(cloudSyncErrorKindView('network_error')).toBe('قطع اینترنت');
+    expect(cloudSyncErrorKindView('http_error')).toBe('ابر شلوغ بود');
+    expect(cloudSyncErrorKindView('throttled')).toBe('ابر شلوغ بود');
+    expect(cloudSyncErrorKindView('auth_error')).toBe('کلید اتصال پذیرفته نشد');
+    expect(cloudSyncErrorKindView('version_error')).toBe('نیاز به به‌روزرسانی برنامه');
+    expect(cloudSyncErrorKindView('weird')).toBeNull(); // ناشناخته → null بی‌کرش
+    expect(cloudSyncErrorKindView(undefined)).toBeNull();
+  });
+
+  it('دسته‌بندی نتیجهٔ پاکت: offline → network_error؛ متن خطا با نشانهٔ روشن به گونهٔ درست', () => {
+    expect(cloudSyncErrorKindOf({ result: 'offline' })).toBe('network_error');
+    expect(cloudSyncErrorKindOf({ result: 'error', error: 'کلید نود رد شد (۴۰۱)' })).toBe('auth_error');
+    expect(cloudSyncErrorKindOf({ result: 'error', error: 'نسخهٔ اسکیما با ابر هم‌خوان نیست — یک سو را به‌روزرسانی کنید' })).toBe('version_error');
+    expect(cloudSyncErrorKindOf({ result: 'error', error: '۴۲۹Too Many Requests' })).toBe('throttled');
+    expect(cloudSyncErrorKindOf({ result: 'synced' })).toBeNull();
+    expect(cloudSyncErrorKindOf(null)).toBeNull();
+  });
+});
+
+describe('cloudSyncStatusMessageView — سه پیام وضعیت کارفرما عیناً', () => {
+  it('network_error / http_error/throttled / auth_error → سه پیام دقیق بند کارفرما', () => {
+    expect(cloudSyncStatusMessageView('network_error'))
+      .toBe('اتصال ابر کند است؛ اطلاعات محلی سالم است و در صف ارسال است');
+    expect(cloudSyncStatusMessageView('http_error'))
+      .toBe('مرکز ابری در دسترس نیست؛ کار عادی ادامه دارد و پس از وصل شدن، اطلاعات خودکار رد و بدل می‌شود');
+    expect(cloudSyncStatusMessageView('throttled'))
+      .toBe('مرکز ابری در دسترس نیست؛ کار عادی ادامه دارد و پس از وصل شدن، اطلاعات خودکار رد و بدل می‌شود');
+    expect(cloudSyncStatusMessageView('auth_error'))
+      .toBe('کلید اتصال پذیرفته نشد — اتصال را ویرایش کنید');
+    expect(cloudSyncStatusMessageView('weird')).toBeNull();
+  });
+});
+
+describe('cloudHumanStatusView — خط وضعیت انسانی لایهٔ عادی کارت', () => {
+  it('بی‌اتصال → «اتصال ابری تنظیم نشده»؛ synced → «متصل به مرکز ابری — آخرین هم‌گامی: …»', () => {
+    expect(cloudHumanStatusView({})).toMatchObject({ tone: 'unknown', text: 'اتصال ابری تنظیم نشده' });
+    expect(cloudHumanStatusView(null).text).toBe('اتصال ابری تنظیم نشده');
+    const human = cloudHumanStatusView(FULL_SYNCED, Date.parse('2026-01-01T10:02:00Z'));
+    expect(human.tone).toBe('ok');
+    expect(human.text).toContain('متصل به مرکز ابری');
+    expect(human.text).toContain('آخرین هم‌گامی:');
+    expect(human.text).toContain('۲ دقیقه پیش');
+    // بی‌last_sync با اتصال → انتظار اولین رد و بدل
+    expect(cloudHumanStatusView({ configured: true }).text).toContain('در انتظار اولین دریافت و ارسال');
+  });
+
+  it('offline و خطا → سه پیام کارفرما عیناً در خط وضعیت؛ auth قرمز و بقیه زرد', () => {
+    const offline = cloudHumanStatusView({ ...FULL_SYNCED, last_sync: { at: '2026-01-01T10:00:00Z', result: 'offline' } });
+    expect(offline.text).toBe('اتصال ابر کند است؛ اطلاعات محلی سالم است و در صف ارسال است');
+    expect(offline.tone).toBe('warn');
+    const auth = cloudHumanStatusView({ ...FULL_SYNCED, last_sync: { result: 'error', error: 'کلید نود رد شد (۴۰۱)' } });
+    expect(auth.text).toBe('کلید اتصال پذیرفته نشد — اتصال را ویرایش کنید');
+    expect(auth.tone).toBe('error');
+    const http = cloudHumanStatusView({ ...FULL_SYNCED, last_sync: { result: 'error', error: 'خطای HTTP ۵۰۰ از ابر' } });
+    expect(http.text)
+      .toBe('مرکز ابری در دسترس نیست؛ کار عادی ادامه دارد و پس از وصل شدن، اطلاعات خودکار رد و بدل می‌شود');
+    expect(http.tone).toBe('warn');
+    // در جریان بودن + کج‌ساعت ضمیمهٔ کوتاه خودش را دارد
+    expect(cloudHumanStatusView({ ...FULL_SYNCED, running: true }).text).toContain('در جریان است');
+    const clock = cloudHumanStatusView({ ...FULL_SYNCED, clock_warning: true });
+    expect(clock.text.endsWith('— اختلاف ساعت با مقصد')).toBe(true);
+  });
+});
+
+describe('cloudAdvancedView — مدل لایهٔ پیشرفته (پیش‌فرض بسته؛ جزئیات نشست‌محلی)', () => {
+  it('نسخهٔ ساختار اطلاعات با جملهٔ «یکسان است/متفاوت است» + تعارض با جملهٔ امن + تاریخچهٔ خطا', () => {
+    expect(cloudAdvancedView(FULL_SYNCED)).toMatchObject({
+      schemaText: 'نسخهٔ ساختار اطلاعات: یکسان است',
+      conflictsText: 'بدون تعارض — همهٔ رکوردها یک نسخه دارند',
+      errorText: null
+    });
+    const schemaBad = cloudAdvancedView({ ...FULL_SYNCED, schema_match: false });
+    expect(schemaBad.schemaText).toContain('متفاوت است');
+    const conflicts = cloudAdvancedView({ ...FULL_SYNCED, conflicts_total: 3 });
+    expect(conflicts.conflictsText)
+      .toBe('۳ رکورد دو نسخه‌ای شدند — نسخهٔ قدیمی‌تر به‌عنوان مرجع است و نسخهٔ دیگر امن ذخیره شده');
+    const err = cloudAdvancedView({ ...FULL_SYNCED, last_sync: { at: '2026-01-01T10:00:00Z', result: 'offline' } });
+    expect(err.errorText).toContain('قطع اینترنت');
+    // بی‌اتصال → هر سه null (لایهٔ پیشرفته اصلاً رندر نمی‌شود)
+    expect(cloudAdvancedView(null)).toMatchObject({ schemaText: null, conflictsText: null, errorText: null });
+    expect(cloudAdvancedView({ configured: false, conflicts_total: 5 }).conflictsText).toBeNull();
+  });
+});
+
+describe('cloudAdvancedToggleView — بازو/بستن «جزئیات پیشرفته» با پیش‌فرض بسته', () => {
+  it('پیش‌فرض (بسته) → برچسب «جزئیات پیشرفته» + hidden=true + expanded=false؛ باز → برچسب «بستن …»', () => {
+    expect(cloudAdvancedToggleView()).toMatchObject({ label: 'جزئیات پیشرفته', hidden: true, expanded: false });
+    expect(cloudAdvancedToggleView(false)).toMatchObject({ hidden: true, expanded: false });
+    expect(cloudAdvancedToggleView(true)).toMatchObject({ label: 'بستن جزئیات پیشرفته', hidden: false, expanded: true });
+  });
+});
+
+describe('سوپ واژگان فاز D1 — در متن‌های UI کارت ابری اصطلاح خام نمی‌آید', () => {
+  it('برچسب‌ها/خط وضعیت/لایهٔ پیشرفته بدون «schema» و «push» و «توکن» و «ورکر» و «secret»', () => {
+    const texts = [
+      ...Object.values(cloudSyncStateView(FULL_SYNCED)).filter((v) => typeof v === 'string'),
+      cloudSyncStateView({ ...FULL_SYNCED, schema_match: false }).label,
+      cloudHumanStatusView(FULL_SYNCED).text,
+      cloudHumanStatusView({ ...FULL_SYNCED, last_sync: { result: 'offline' } }).text,
+      cloudAdvancedView(FULL_SYNCED).schemaText,
+      cloudAdvancedView({ ...FULL_SYNCED, conflicts_total: 2 }).conflictsText,
+      cloudAdvancedToggleView().label,
+      cloudAdvancedToggleView(true).label,
+      cloudCardView(FULL_SYNCED).intervalText,
+      cloudSyncErrorKindView('auth_error')
+    ];
+    for (const t of texts) {
+      for (const banned of ['schema', 'push', 'pull', 'توکن', 'ورکر', 'secret', 'Worker', 'endpoint', 'binding']) {
+        expect(String(t)).not.toContain(banned);
+      }
+    }
   });
 });
 

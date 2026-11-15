@@ -7,7 +7,8 @@
  *
  * قراردادهای قطعی مأموریت فاز C:
  *   • زنجیرهٔ گام‌ها دقیقاً سند §۳: وارسی توکن → حساب → D1 (موجود = استفاده) → اسکیما
- *     قطعه‌قطعه → آپلود ورکر (multipart) → دامنهٔ workers.dev → سلامت + وارسی state با Bearer.
+ *     قطعه‌قطعه → (فاز D1: گام ۵‌الف دارایی‌های وب — Static Assets) آپلود ورکر (multipart) →
+ *     دامنهٔ workers.dev → سلامت + وارسی state با Bearer (+ فاز D1: چک وب GET /).
  *   • راز سشن ابر = binding AUTH_SECRET ورکر (runtime-secret — حداقل ۱۶ کاراکتر) → گام پایانی
  *     GET /api/instance-sync/state با Bearer همین راز و هدر X-Device-Id قراردادی.
  *   • نام ورکر فقط انگلیسی ^[a-z][a-z0-9-]{1,61}$ — پیشوند «markaz-» خودکار (تصمیم §۵-۶:
@@ -40,15 +41,21 @@ const COMPATIBILITY_DATE = '2025-01-01';
 export const WORKER_NAME_PATTERN = /^[a-z][a-z0-9-]{1,61}$/;
 export const WORKER_NAME_PREFIX = 'markaz-';
 
+import { uploadWebAssets } from './assets';
+import type { WebAssetFile } from './assets';
+
 // ─── پل دارایی‌ها (binding CLOUD_PROVISION) ───
 
 /**
  * شکل binding CLOUD_PROVISION (adapter/server.mjs — makeCloudProvision). دو خوانندهٔ
  * بی‌آرگومان روی دو فایل ثابت نصب؛ هر دو غایب → null → مسیر provision «۵۰۱» می‌دهد.
+ * فاز D1 — readWebAssets اختیاری است (makeWebAssetsReader): غایب/null/خالی = ساخت بدون
+ * دارایی وب (سازگار عقب — خطا نیست).
  */
 export interface CloudProvisionIO {
   readCentralWorker(): Promise<string | null>;
   readSchemaSql(): Promise<string | null>;
+  readWebAssets?(): Promise<WebAssetFile[] | null>;
 }
 
 // ─── شکل‌های قرارداد ───
@@ -81,6 +88,8 @@ export interface ProvisionSuccess {
   workerName: string;
   d1Name: string;
   steps: ProvisionStep[];
+  /** فاز D1 — نشان «وب فعال»: GET / پاسخ HTML داد (فقط وقتی دارایی وب آپلود شده بود) */
+  webEnabled: boolean;
 }
 
 export interface ProvisionFailure {
@@ -96,7 +105,8 @@ export interface ProvisionFailure {
     | 'account_mismatch'
     | 'health_timeout'
     | 'worker_error'
-    | 'schema_mismatch';
+    | 'schema_mismatch'
+    | 'assets_error';
   message: string;
   /** جزئیات خطای CF (گام verify و…) — بدون هیچ مقدار secret */
   errors?: CloudflareError[];
@@ -112,6 +122,12 @@ export interface ProvisionDeps {
   centralWorker: string;
   /** اسکیمای تجمیعی از binding CLOUD_PROVISION */
   schemaSql: string;
+  /**
+   * فاز D1 — فایل‌های وب (public) از binding CLOUD_PROVISION (makeWebAssetsReader).
+   * null/غایب/خالی = بدون دارایی: وب بالا نمی‌آید و چک وب گام ۷ رد می‌شود — خطا نیست
+   * (سازگار عقب با نصب‌های بدون public).
+   */
+  webAssets?: WebAssetFile[] | null;
   name: string;
   /** توکن API کلادفلر — فقط به api.cloudflare.com می‌رود و هرگز در خروجی/لاگ نمی‌آید */
   token: string;
@@ -488,7 +504,36 @@ export async function provisionCloudWorker(deps: ProvisionDeps): Promise<Provisi
   }
   record('schema', t0, true, `${chunks.length} قطعه`);
 
-  // ─── گام ۵ — آپلود ورکر: multipart با metadata + ماژول باندل مرکزی ───
+  // ─── گام ۵‌الف (فاز D1) — دارایی‌های وب: Static Assets Direct Upload (سشن → bucketها → توکن) ───
+  // webAssets غایب/null/خالی = بدون وب — گام کلاً رد می‌شود (سازگار عقب؛ خطا نیست)
+  const webFiles = Array.isArray(deps.webAssets) ? deps.webAssets : [];
+  let assetsJwt = '';
+  if (webFiles.length > 0) {
+    t0 = now();
+    const uploaded = await uploadWebAssets({
+      fetchImpl: doFetch,
+      token: deps.token,
+      accountId,
+      scriptName: workerName,
+      files: webFiles,
+      log: deps.log,
+      now
+    });
+    if (!uploaded.ok) {
+      record(uploaded.step, t0, false);
+      return fail(uploaded.step, uploaded.kind, uploaded.message, uploaded.errors);
+    }
+    assetsJwt = uploaded.jwt;
+    // jwt دارایی هرگز در detail نمی‌آید — فقط نشان ***
+    record(
+      'assets-upload',
+      t0,
+      true,
+      `${uploaded.uploadedCount} از ${uploaded.fileCount} فایل وب آپلود شد — توکن دارایی به متادیتای گام بعد می‌رود (jwt: ***)`
+    );
+  }
+
+  // ─── گام ۵ — آپلود ورکر: multipart با metadata + ماژول باندل مرکزی (+ دارایی‌های وب فاز D1) ───
   t0 = now();
   const authSecret = randomSecret(deps.random);
   const nodeSetupToken = randomSecret(deps.random);
@@ -499,7 +544,17 @@ export async function provisionCloudWorker(deps: ProvisionDeps): Promise<Provisi
       { type: 'd1', name: 'DB', id: d1Id },
       { type: 'secret_text', name: 'AUTH_SECRET', text: authSecret },
       { type: 'secret_text', name: 'NODE_SETUP_TOKEN', text: nodeSetupToken }
-    ]
+    ],
+    // فاز D1 — دارایی‌های وب فقط وقتی آپلود شدند الصاق می‌شود (SPA؛ بدون binding ASSETS —
+    // workers.dev خودش دارایی‌ها را سرو می‌کند و مسیرهای غیراستاتیک به اسکریپت می‌روند)
+    ...(assetsJwt
+      ? {
+          assets: {
+            jwt: assetsJwt,
+            config: { html_handling: 'auto-trailing-slash', not_found_handling: 'single-page-application' }
+          }
+        }
+      : {})
   };
   const form = new FormData();
   form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
@@ -511,7 +566,14 @@ export async function provisionCloudWorker(deps: ProvisionDeps): Promise<Provisi
   });
   if (outcome.kind !== 'ok') return failFromOutcome('worker', t0, 'آپلود ورکر مرکزی ناموفق بود', outcome);
   // رازها هرگز در detail نمی‌آیند — فقط نشان ***
-  record('worker', t0, true, 'باندل مرکزی آپلود شد — bindingهای DB/AUTH_SECRET/NODE_SETUP_TOKEN ست شدند (رازها: ***)');
+  record(
+    'worker',
+    t0,
+    true,
+    assetsJwt
+      ? 'باندل مرکزی + دارایی‌های وب آپلود شد — bindingهای DB/AUTH_SECRET/NODE_SETUP_TOKEN ست شدند (رازها: ***)'
+      : 'باندل مرکزی آپلود شد — bindingهای DB/AUTH_SECRET/NODE_SETUP_TOKEN ست شدند (رازها: ***)'
+  );
 
   // ─── گام ۶ — دامنه: زیردامنهٔ حساب + فعال‌سازی workers.dev برای همین ورکر ───
   t0 = now();
@@ -590,8 +652,38 @@ export async function provisionCloudWorker(deps: ProvisionDeps): Promise<Provisi
   }
   record('state', t0, true, applied === null ? 'شمارش مایگریشن ابر نامعلوم — پاسخ سبز' : `${applied} مایگریشن`);
 
+  // ─── گام ۷ پی‌گرفته (فاز D1) — چک وب: GET / با Accept text/html → ۲۰۰ + بدنهٔ HTML ───
+  // فقط وقتی دارایی وب رفت؛ بدون دارایی skip با یادداشت در log (بدون گام — سازگار عقب)
+  let webEnabled = false;
+  if (assetsJwt) {
+    t0 = now();
+    let webRes: Response;
+    try {
+      webRes = await doFetch(`${workerUrl}/`, {
+        headers: { accept: 'text/html' },
+        signal: AbortSignal.timeout(2_000)
+      });
+    } catch {
+      record('web', t0, false);
+      return fail('web', 'network', 'ورکر تازه پاسخ صفحهٔ وب نداد — نشانی ورکر را بررسی کنید');
+    }
+    const html = (await webRes.text().catch(() => '')).toLowerCase();
+    if (!webRes.ok || !(html.includes('<!doctype html') || html.includes('<html'))) {
+      record('web', t0, false, `HTTP ${webRes.status}`);
+      return fail(
+        'web',
+        'worker_error',
+        `صفحهٔ وب روی ورکر بالا نیامد (HTTP ${webRes.status}) — دارایی‌های وب آپلود شده اما GET / پاسخ HTML نداد؛ چند لحظه بعد در مرورگر بررسی کنید (${workerUrl})`
+      );
+    }
+    record('web', t0, true, 'وب فعال — index.html سرو شد');
+    webEnabled = true;
+  } else {
+    deps.log?.('چک وب رد شد — دارایی وبی برای این ساخت آپلود نشد');
+  }
+
   // خروجی نهایی — رازها یک‌بار به کاربر نشان داده می‌شوند و هیچ‌جا ذخیره/لاگ نمی‌شوند
-  return { ok: true, workerUrl, authSecret, nodeSetupToken, workerName, d1Name, steps };
+  return { ok: true, workerUrl, authSecret, nodeSetupToken, workerName, d1Name, steps, webEnabled };
 }
 
 // ─── گام وارسی تنها (مسیر verify — بدون هیچ پرویژن) ───

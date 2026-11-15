@@ -21,6 +21,12 @@
 // فاز B — کارت «اتصال ابری» (سند §۲-۵ طرح server-cloud-update-design): GET /api/instance-sync/status
 //       فقط‌مدیر — وضعیت + آخرین هم‌گامی دوطرفه + تعارض‌ها + پیکربندی/حذف/کلون؛ فرمان‌های راز
 //       (cloud_secret_set/get/delete) فقط روی پوستهٔ میز — Credential Manager، هرگز فایل JSON
+// فاز D1 — «انسانی‌سازی» (خواست کارفرما): کارت «اتصال ابری» دو-لایه شد — لایهٔ عادی فقط خط وضعیت
+//       انسانی + دو دکمهٔ «دریافت اطلاعات»/«ارسال اطلاعات» + «همگام‌سازی خودکار» + بازو/بستنِ
+//       «جزئیات پیشرفته» (پیش‌فرض بسته)؛ جزئیات فنی (نسخهٔ ساختار اطلاعات، تعارض، تاریخچهٔ خطاها)
+//       فقط در لایهٔ پیشرفته است. واژگان رسمی UI: Worker→«مرکز ابری»، secret→«کلید اتصال»،
+//       pull→«دریافت اطلاعات»، push→«ارسال اطلاعات»، schema→«نسخهٔ ساختار اطلاعات».
+//       هیچ تغییر قرارداد API و هیچ تغییر نام تابع — فقط متن‌ها، ترتیب نمایش و بازو/بستن.
 import { api } from '../api.js';
 import { el, icon, emptyState, skeletonState, confirmModal, formModal, toast, toastError, lockBtn } from '../ui.js';
 import { fa, formatJalaliDateTime } from '../format.js';
@@ -574,7 +580,7 @@ function quotaSection(quota, quotaError) {
         headBadge
       ),
       el('p', { class: 'hint-text', style: { margin: '4px 0 0' } },
-        'سهمیهٔ روزانهٔ مرکز (کارگر ابری) با برآوردِ خواندن — سه شاخص با سطح رنگی؛ ورود ناموفق ۲۴ ساعت همان آمار امنیتی مرکز است. این درگاه فقط-مدیر مرکز است؛ اگر پنل روی نود اجرا شود همین کارت «دریافت نشد» می‌گیرد و بقیهٔ پنل سالم می‌ماند.')
+        'سهمیهٔ روزانهٔ مرکز ابری با برآوردِ خواندن — سه شاخص با سطح رنگی؛ ورود ناموفق ۲۴ ساعت همان آمار امنیتی مرکز است. این درگاه فقط-مدیر مرکز است؛ اگر پنل روی نود اجرا شود همین کارت «دریافت نشد» می‌گیرد و بقیهٔ پنل سالم می‌ماند.')
     ),
     !q
       ? el('div', {},
@@ -707,6 +713,7 @@ export function installEngineWatchdogBanner() {
         });
         // M4 — ناسالمی مستقل ورکر بازی‌ها با سرویس اصلی سالم: زرد ماندگار تا بازگشت سلامت؛
         // پیام فارسی از payload رخداد (lib.rs) می‌آید — پیام غایب/خراب → پیام پیش‌فرض بی‌کرش
+        // (متن پیش‌فرض عین واژگان payload سرور می‌ماند — پین front-sync-status.test.ts)
         await listen('engine:degraded', (ev) => {
           const msg = typeof ev?.payload?.message === 'string' && ev.payload.message
             ? ev.payload.message
@@ -1058,7 +1065,7 @@ export function cloudSyncStateView(status) {
   if (status.configured !== true) {
     out = { badge: 'badge--neutral', dot: 'dot--neutral', label: 'اتصال ابری تنظیم نشده' };
   } else if (status.schema_match === false) {
-    out = { badge: 'badge--error', dot: 'dot--error', label: 'ناسازگاری نسخهٔ schema — به‌روزرسانی لازم است' };
+    out = { badge: 'badge--error', dot: 'dot--error', label: 'نسخهٔ ساختار اطلاعات متفاوت است — به‌روزرسانی لازم است' };
   } else if (status.running === true) {
     out = { badge: 'badge--warning', dot: 'dot--warning', label: 'هم‌گامی در جریان…' };
   } else {
@@ -1146,6 +1153,121 @@ export function cloudCardView(status) {
     conflictsTotal: configured && Number.isFinite(conflicts) && conflicts >= 0 ? Math.round(conflicts) : null,
     secretPresent: configured && s?.secret_present === true
   };
+}
+
+/* ── فاز D1 — «انسانی‌سازی» کارت «اتصال ابری» (خواست کارفرما: UI/UX طبقه‌بندی‌شده و واژگان ساده) ──
+   همه تابع خالص بی‌DOM (الگوی cloudSyncStateView) تا بی‌ماک سنگین آزمون شوند. نگاشت گونهٔ خطا
+   به واژگان موجود error kindها (network_error/http_error/throttled/auth_error/version_error —
+   همان واژگان node-sync-runner/runner.ts) و سه پیام وضعیتِ کارفرما عیناً؛ هیچ تغییر قرارداد API
+   و هیچ تغییر نام تابع — فقط متن‌ها و ترتیب نمایش. */
+
+/** گونهٔ خطای آخرین هم‌گامی → واژگان موجود error kindها؛ فقط برای انتخاب جملهٔ انسانی (بی‌کرش) */
+export function cloudSyncErrorKindOf(ls) {
+  if (!ls || typeof ls !== 'object') return null;
+  if (ls.result === 'offline') return 'network_error';
+  if (ls.result !== 'error') return null;
+  const t = typeof ls.error === 'string' ? ls.error : '';
+  if (/۴۰۱|۴۰۳|auth|کلید|اعتبار|Bearer/i.test(t)) return 'auth_error';
+  if (/اسکیما|نسخه|schema|version/i.test(t)) return 'version_error';
+  if (/۴۲۹|شلوغ|throttl/i.test(t)) return 'throttled';
+  return 'http_error';
+}
+
+const CLOUD_SYNC_KIND_HISTORY = {
+  network_error: 'قطع اینترنت',
+  http_error: 'ابر شلوغ بود',
+  throttled: 'ابر شلوغ بود',
+  auth_error: 'کلید اتصال پذیرفته نشد',
+  version_error: 'نیاز به به‌روزرسانی برنامه'
+};
+
+/** گونهٔ خطا → جملهٔ کوتاه تاریخچهٔ خطاها؛ گونهٔ ناشناخته/غایب → null (فراخوان پیام خودش را می‌گذارد) */
+export function cloudSyncErrorKindView(kind) {
+  return CLOUD_SYNC_KIND_HISTORY[kind] ?? null;
+}
+
+const CLOUD_SYNC_KIND_MESSAGES = {
+  network_error: 'اتصال ابر کند است؛ اطلاعات محلی سالم است و در صف ارسال است',
+  http_error: 'مرکز ابری در دسترس نیست؛ کار عادی ادامه دارد و پس از وصل شدن، اطلاعات خودکار رد و بدل می‌شود',
+  throttled: 'مرکز ابری در دسترس نیست؛ کار عادی ادامه دارد و پس از وصل شدن، اطلاعات خودکار رد و بدل می‌شود',
+  auth_error: 'کلید اتصال پذیرفته نشد — اتصال را ویرایش کنید',
+  version_error: 'برنامه نیاز به به‌روزرسانی دارد — اول به‌روزرسانی، بعد هم‌گامی'
+};
+
+/** گونهٔ خطا → پیام وضعیت انسانی (سه پیام کارفرما عیناً)؛ گونهٔ ناشناخته → null */
+export function cloudSyncStatusMessageView(kind) {
+  return CLOUD_SYNC_KIND_MESSAGES[kind] ?? null;
+}
+
+/**
+ * فاز D1 — خط وضعیت انسانی لایهٔ عادی کارت (یک جملهٔ کوتاه فعل‌محور): بی‌اتصال → «اتصال ابری
+ * تنظیم نشده»؛ در جریان؛ سبز «متصل به مرکز ابری — آخرین هم‌گامی: …»؛ خطا/قطع با سه پیام
+ * کارفرما عیناً (نگاشت گونهٔ خطا). ورودی غایب/خراب بی‌کرش. tone = همان واژگان healthToneView.
+ */
+export function cloudHumanStatusView(status, nowMs = Date.now()) {
+  const s = status && typeof status === 'object' ? status : null;
+  if (!s || s.configured !== true) return { tone: 'unknown', text: 'اتصال ابری تنظیم نشده' };
+  if (s.running === true) return { tone: 'warn', text: 'هم‌گامی در جریان است — چند لحظه صبر کنید' };
+  const ls = s.last_sync && typeof s.last_sync === 'object' ? s.last_sync : null;
+  let text;
+  if (!ls) {
+    text = 'متصل به مرکز ابری — در انتظار اولین دریافت و ارسال اطلاعات';
+  } else if (ls.result === 'synced') {
+    const ms = typeof ls.at === 'string'
+      ? isoMsOf(ls.at)
+      : (Number.isFinite(Number(ls.at)) && Number(ls.at) > 0 ? Number(ls.at) * 1000 : null);
+    const age = ms !== null ? ` — آخرین هم‌گامی: ${ageHuman(Math.max(0, Math.round((nowMs - ms) / 1000)))}` : '';
+    text = `متصل به مرکز ابری${age}`;
+  } else {
+    const kind = cloudSyncErrorKindOf(ls);
+    const msg = cloudSyncStatusMessageView(kind);
+    text = msg ?? 'هم‌گامی این‌بار کامل نشد — اطلاعات محلی سالم است و دوباره تلاش می‌شود';
+  }
+  // هشدار کج‌ساعت فقط ضمیمه می‌شود — سه پیام کارفرما بدون آن عیناً می‌مانند
+  if (s.clock_warning === true) text += ' — اختلاف ساعت با مقصد';
+  let tone;
+  if (!ls) tone = 'unknown';
+  else if (ls.result === 'synced') tone = 'ok';
+  else if (ls.result === 'offline') tone = 'warn';
+  else {
+    const kind = cloudSyncErrorKindOf(ls);
+    tone = kind === 'auth_error' || kind === 'version_error' ? 'error' : 'warn';
+  }
+  return { tone, text };
+}
+
+/**
+ * فاز D1 — مدل خالص لایهٔ پیشرفتهٔ کارت (جزئیات نشست‌محلی؛ پیش‌فرض بسته): نسخهٔ ساختار اطلاعات
+ * با جملهٔ «یکسان است/متفاوت است»، تعارض اطلاعات با جملهٔ امن، تاریخچهٔ خطاها با متن انسانی.
+ * بی‌اتصال → هر سه null (لایهٔ پیشرفته اصلاً رندر نمی‌شود). هر ورودی غایب/خراب بی‌کرش.
+ */
+export function cloudAdvancedView(status) {
+  const s = status && typeof status === 'object' ? status : null;
+  if (!s || s.configured !== true) return { schemaText: null, conflictsText: null, errorText: null };
+  const schemaText = s.schema_match === true
+    ? 'نسخهٔ ساختار اطلاعات: یکسان است'
+    : s.schema_match === false
+      ? 'نسخهٔ ساختار اطلاعات: متفاوت است — با به‌روزرسانی برنامه هم‌خوان می‌شود'
+      : null;
+  const conflicts = Number(s.conflicts_total);
+  const conflictsText = Number.isFinite(conflicts) && conflicts >= 0
+    ? (conflicts > 0
+        ? `${fa(Math.round(conflicts))} رکورد دو نسخه‌ای شدند — نسخهٔ قدیمی‌تر به‌عنوان مرجع است و نسخهٔ دیگر امن ذخیره شده`
+        : 'بدون تعارض — همهٔ رکوردها یک نسخه دارند')
+    : null;
+  const ls = s.last_sync && typeof s.last_sync === 'object' ? s.last_sync : null;
+  let errorText = null;
+  if (ls && (ls.result === 'error' || ls.result === 'offline')) {
+    const at = cloudSyncAtView(ls.at);
+    errorText = `${cloudSyncErrorKindView(cloudSyncErrorKindOf(ls)) ?? 'خطای نامشخص'}${at ? ` — ${at}` : ''}`;
+  }
+  return { schemaText, conflictsText, errorText };
+}
+
+/** فاز D1 — بازو/بستن «جزئیات پیشرفته»: پیش‌فرض بسته (مدیر تازه‌کار فقط لایهٔ عادی را می‌بیند) */
+export function cloudAdvancedToggleView(open) {
+  if (open === true) return { label: 'بستن جزئیات پیشرفته', hidden: false, expanded: true };
+  return { label: 'جزئیات پیشرفته', hidden: true, expanded: false };
 }
 
 /** پوشش پاسخ درگاه وضعیت اتصال ابری: پاکت {data:…} باز می‌شود؛ بی‌هیچ فیلد شناخته → null (الگوی unwrapQuota) */
@@ -1263,7 +1385,7 @@ const GUIDE_SECTIONS = [
     lines: [
       '۱) نصب روی هر رایانهٔ شعبه: فایل نصب را اجرا کنید و «نصب» را بزنید — بقیه‌اش خودکار است.',
       'اگر پیام «آنتی‌ویروس مانع شد» دیدید: «مشاهدهٔ راهنما» را بزنید و همان ۴ قدم تصویری را انجام دهید؛ به آنتی‌ویروس بگویید پوشهٔ نصب «مطمئن» است.',
-      '۲) ساختن مرکز مشترک (فقط یک‌بار، روی رایانهٔ ستاد): بخش «مرکز» ← نصب‌و‌راه‌اندازی مرکز؛ حساب رایگان کلادفلر و توکن لازم است. اگر وسطش اینترنت قطع شد، «تلاش دوباره» بی‌خطر است.',
+      '۲) ساختن مرکز مشترک (فقط یک‌بار، روی رایانهٔ ستاد): بخش «مرکز» ← نصب‌و‌راه‌اندازی مرکز؛ حساب رایگان کلادفلر و کلید کلادفلر لازم است. اگر وسطش اینترنت قطع شد، «تلاش دوباره» بی‌خطر است.',
       '۳) دیدن وضعیت: «پنل سلامت» را باز کنید — هدف این است که پنج چراغ سبز باشد: موتور محلی، مرکز، سینک، سهمیه، پشتیبان.'
     ]
   },
@@ -1317,7 +1439,7 @@ const GUIDE_SECTIONS = [
     lines: [
       'موتور محلی: سرویس پشت‌صحنهٔ همین رایانه · مرکز: دستگاه اشتراک دادهٔ بین شعبه‌ها روی کلادفلر.',
       'سینک: رفت‌وآمد خودکار داده بین شعبه‌ها و مرکز · پشتیبان: عکس لحظه‌ای از همهٔ داده‌ها برای روز نیاز.',
-      'سهمیه: سقف رایگان کلادفلر برای مصرف روزانه · توکن: کلید مجوزی که کلادفلر برای نصب مرکز می‌خواهد.',
+      'سهمیه: سقف رایگان کلادفلر برای مصرف روزانه · کلید کلادفلر: کلید مجوزی که کلادفلر برای نصب مرکز می‌خواهد.',
       'واچ‌داگ: نگهبان خودکار؛ اگر سرویس داخلی بمیرد، دوباره راهش می‌اندازد.'
     ]
   }
@@ -1435,7 +1557,7 @@ export async function renderHealthPanel(outlet) {
         ]);
         const rec = stateM.loadCloudRecord();
         if (!rec.worker_url || !rec.node_code) {
-          setResult(resultLine, 'اتصال ابر روی این دستگاه تنظیم نشده است', 'warn');
+          setResult(resultLine, 'اتصال ابری روی این دستگاه تنظیم نشده است', 'warn');
           return;
         }
         const secureRes = await stateM.resolveSecureStore();
@@ -1461,7 +1583,7 @@ export async function renderHealthPanel(outlet) {
   // «اتصال ابر» + مخزن امن در لحظهٔ کلیک خوانده می‌شود — راز انبار نمی‌شود (قرارداد panel.ts).
   const CATCHUP_STATUS_FA = {
     ok: 'کامل شد',
-    unconfigured: 'اتصال ابر کامل نیست',
+    unconfigured: 'اتصال ابری کامل نیست',
     auth_error: 'اعتبار نود رد شد',
     version_error: 'نسخه ناسازگار — اول برنامه را به‌روز کنید',
     http_error: 'خطای مرکز',
@@ -1696,7 +1818,7 @@ export async function renderHealthPanel(outlet) {
         el('div', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', flexWrap: 'wrap' } },
           el('h3', { style: { margin: 0 } }, 'سرور محلی'),
           el('p', { class: 'hint-text', style: { margin: '4px 0 0' } },
-            'وضعیت زندهٔ موتور محلی از رویداد engine:status و بازخوانی ۳۰ثانیه‌ای پوسته — نقطهٔ رنگی همان نگاشت pill سربرگ است.')
+            'وضعیت زندهٔ سرور محلی — همان نقطهٔ رنگی نشانگر سربرگ؛ هر ۳۰ ثانیه و با هر رویداد پوسته تازه می‌شود.')
         )
       ),
       body
@@ -1733,9 +1855,9 @@ export async function renderHealthPanel(outlet) {
         if (out.ok) {
           setResult(resultLine, 'پوشهٔ داده در مدیریت فایل ویندوز باز شد', 'ok');
         } else if (out.reason === 'no-tauri-channel') {
-          setResult(resultLine, 'پوستهٔ میز در دسترس نیست — بازکردن پوشهٔ دیتا اجرا نشد', 'error');
+          setResult(resultLine, 'پوستهٔ میز در دسترس نیست — بازکردن پوشهٔ داده اجرا نشد', 'error');
         } else {
-          setResult(resultLine, `بازکردن پوشهٔ دیتا ناموفق بود: ${out.reason ?? 'خطای نامشخص'}`, 'error');
+          setResult(resultLine, `بازکردن پوشهٔ داده ناموفق بود: ${out.reason ?? 'خطای نامشخص'}`, 'error');
         }
       });
     }
@@ -1762,6 +1884,8 @@ export async function renderHealthPanel(outlet) {
         return;
       }
       const view = serverStateView(status?.state, status?.degradedReason);
+      // فاز D1 — توضیح انسانی پورت‌ها (خواست کارفرما: «سرور محلی روشن است روی پورت …»)
+      const portLine = status?.state === 'Ready' ? `سرور محلی روشن است — ${serverPortsView(status)}` : serverPortsView(status);
       body.replaceChildren(
         el('div', { class: 'ob-row' },
           el('div', { class: 'ob-row__main' },
@@ -1770,8 +1894,8 @@ export async function renderHealthPanel(outlet) {
               view.label),
             el('div', { class: 'cell-sub' },
               status
-                ? `${serverPortsView(status)} · آخرین رویداد: ${unixAgeView(status?.lastEventAtUnix)}`
-                : 'پاکت وضعیت هنوز از پوسته نرسیده — با بازخوانی ۳۰ثانیه‌ای پُر می‌شود')
+                ? `${portLine} · آخرین رویداد: ${unixAgeView(status?.lastEventAtUnix)}`
+                : 'وضعیت هنوز از پوستهٔ برنامه نرسیده — با بازخوانی ۳۰ثانیه‌ای خودکار پُر می‌شود')
           ),
           el('div', { class: 'ob-row__side' },
             el('span', { class: `badge ${view.badge}` }, typeof status?.state === 'string' && status.state ? status.state : '—')
@@ -1787,7 +1911,7 @@ export async function renderHealthPanel(outlet) {
         el('div', { class: 'ob-row' },
           el('div', { class: 'ob-row__side' },
             el('button', { class: 'btn btn--primary', type: 'button', onclick: (e) => void engineRestartAction(e.currentTarget) }, 'راه‌اندازی دوباره'),
-            el('button', { class: 'btn btn--ghost', type: 'button', onclick: (e) => void openDataDirAction(e.currentTarget) }, 'بازکردن پوشهٔ دیتا'),
+            el('button', { class: 'btn btn--ghost', type: 'button', onclick: (e) => void openDataDirAction(e.currentTarget) }, 'بازکردن پوشهٔ داده'),
             el('button', { class: 'btn btn--ghost', type: 'button', onclick: (e) => void copyDiagAction(e.currentTarget) }, 'کپی اطلاعات عیب‌یابی')
           )
         ),
@@ -1800,14 +1924,18 @@ export async function renderHealthPanel(outlet) {
   }
 
   /* ── فاز B — کارت «اتصال ابری» (سند §۲-۵) — کنار کارت «سرور محلی» (دو کارت جدا) ─────────
-     وضعیت/آخرین هم‌گامی دوطرفه/تعارض‌ها از feed مشترک HTTP (/api/instance-sync/status +
-     poll ۳۰ثانیه‌ای + poll فوری پس از هر کنش) — رندر درجا با شنونده، بدون rebuild کل نما
-     (الگوی paint کارت سرور فاز A). کنش‌ها: «هم‌گام‌سازی اکنون» (run-now؛ در جریان → غیرفعال)،
-     «پیکربندی اتصال» (formModal: URL ورکر با normalizeWorkerUrl موجود + فاصلهٔ خودکار دقیقه +
-     secret فقط در دسکتاپ → POST config + invoke cloud_secret_set + poll فوری)، «حذف اتصال»
-     (تأیید دوبله + پیام پشتیبان/cursorها → DELETE config)، «کلون از ابر…» در فرم (تأیید دوبله +
-     هشدار جایگزینی دیتا → POST clone {confirm:true} → نتیجه + مسیر بکاپ). بیرون پوستهٔ میز
-     فیلد secret غیرفعال است («تنظیم secret فقط در نسخهٔ دسکتاپ») — بقیهٔ کارت سالم می‌ماند. */
+     فاز D1 — چیدمان دو-لایه (خواست کارفرما): لایهٔ عادی فقط خط وضعیت انسانی + دو دکمهٔ برجستهٔ
+     «دریافت اطلاعات»/«ارسال اطلاعات» (هر دو = POST run-now، همان قرارداد فعلی) + خط «همگام‌سازی
+     خودکار: هر X دقیقه (تغییر)» + دکمهٔ «جزئیات پیشرفته»؛ لایهٔ پیشرفته (بازو/بسته، پیش‌فرض بسته)
+     نسخهٔ ساختار اطلاعات/تعارض/تاریخچهٔ خطاها/آدرس/کلید + «پیکربندی اولیه…» و «حذف اتصال».
+     وضعیت/آخرین هم‌گامی دوطرفه از feed مشترک HTTP (/api/instance-sync/status + poll ۳۰ثانیه‌ای +
+     poll فوری پس از هر کنش) — رندر درجا با شنونده، بدون rebuild کل نما (الگوی paint کارت سرور
+     فاز A). کنش‌ها: run-now (در جریان → غیرفعال)، «تغییر» (formModal: URL با normalizeWorkerUrl
+     موجود + فاصلهٔ خودکار دقیقه + کلید اتصال فقط در دسکتاپ → POST config + invoke
+     cloud_secret_set + poll فوری)، «حذف اتصال» (تأیید دوبله + پیام پشتیبان → DELETE config)،
+     «کلون از ابر…» در فرم (تأیید دوبله + هشدار جایگزینی اطلاعات → POST clone {confirm:true} →
+     نتیجه + مسیر پشتیبان). بیرون پوستهٔ میز فیلد کلید غیرفعال است — بقیهٔ کارت سالم می‌ماند.
+     ⚠ هیچ تغییر قرارداد API و هیچ تغییر نام تابع — فقط متن‌ها، ترتیب نمایش و بازو/بستن. */
   function cloudSyncSection() {
     const desktopSecret = cloudSecretChannelAvailable();
     const resultLine = el('div', { class: 'hint-text', style: { marginTop: 'var(--sp-2)', whiteSpace: 'normal' } });
@@ -1817,39 +1945,39 @@ export async function renderHealthPanel(outlet) {
         el('div', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', flexWrap: 'wrap' } },
           el('h3', { style: { margin: 0 } }, 'اتصال ابری'),
           el('p', { class: 'hint-text', style: { margin: '4px 0 0' } },
-            'هم‌گامی دوسویهٔ همین دستگاه با ورکر ابری — قرارداد instance-sync، جدای هم‌گامی نود با مرکز (کارت «وضعیت هم‌گامی» پایین)؛ وضعیت هر ۳۰ثانیه و پس از هر کنش تازه می‌شود.')
+            'همین دستگاه با مرکز ابری اطلاعات رد و بدل می‌کند — «دریافت اطلاعات» تازه‌ها را از ابر می‌گیرد و «ارسال اطلاعات» کارهای این دستگاه را می‌فرستد؛ وضعیت هر ۳۰ ثانیه و پس از هر کنش تازه می‌شود.')
         )
       ),
       body
     );
 
-    // «هم‌گام‌سازی اکنون» — POST run-now + poll فوری؛ در جریان بودن → دکمه غیرفعال (گارد paint)
+    // «دریافت اطلاعات»/«ارسال اطلاعات» — POST run-now + poll فوری؛ در جریان بودن → دکمه غیرفعال (گارد paint)
     async function runNowAction(btn) {
       await lockBtn(btn, async () => {
         try {
           await api.post('/api/instance-sync/run-now');
-          setResult(resultLine, 'هم‌گام‌سازی فرمان گرفت — وضعیت درجا تازه می‌شود', 'warn');
+          setResult(resultLine, 'دریافت و ارسال اطلاعات فرمان گرفت — وضعیت درجا تازه می‌شود', 'warn');
           await pollCloudSyncNow();
         } catch (err) {
           toastError(err);
-          setResult(resultLine, `هم‌گام‌سازی اکنون ناموفق بود: ${err?.message ?? 'خطای نامشخص'}`, 'error');
+          setResult(resultLine, `دریافت و ارسال اطلاعات انجام نشد: ${err?.message ?? 'خطای نامشخص'}`, 'error');
         }
       });
     }
 
-    // «کلون از ابر…» — دکمهٔ دوم فرم پیکربندی: تأیید دوبله + هشدار جایگزینی دیتا → POST clone
+    // «کلون از ابر…» — دکمهٔ دوم فرم پیکربندی: تأیید دوبله + هشدار جایگزینی اطلاعات → POST clone
     // قرارداد: ۴۰۹=نیاز confirm — پس از تأیید دوبله با {confirm:true} می‌رویم؛ پاسخ {ok, tables, backup_path}
     async function cloneFromCloudAction() {
       const okFirst = await confirmModal({
         title: 'کلون از ابر',
-        message: 'دیتای محلی با ابر جایگزین می‌شود؛ بکاپ خودکار گرفته می‌شود. ادامه می‌دهید؟',
+        message: 'اطلاعات محلی با اطلاعات ابر جایگزین می‌شود؛ پیش از آن یک پشتیبان خودکار گرفته می‌شود. ادامه می‌دهید؟',
         confirmLabel: 'ادامه',
         danger: true
       });
       if (!okFirst) return;
       const okFinal = await confirmModal({
         title: 'تأیید نهایی کلون',
-        message: 'کلون برگشت‌پذیر نیست؛ تغییرات محلیِ هم‌گامی‌نشده از بین می‌رود (بکاپ خودکار نگه داشته می‌شود). مطمئن هستید؟',
+        message: 'کلون برگشت‌پذیر نیست؛ کارهایی که هنوز به ابر نرسیده‌اند از بین می‌روند (پشتیبان خودکار نگه داشته می‌شود). مطمئن هستید؟',
         confirmLabel: 'کلون می‌کنم',
         danger: true
       });
@@ -1859,7 +1987,7 @@ export async function renderHealthPanel(outlet) {
         const data = res?.data && typeof res.data === 'object' ? res.data : res;
         const backup = typeof data?.backup_path === 'string' && data.backup_path ? data.backup_path : null;
         const tables = Array.isArray(data?.tables) ? data.tables.length : null;
-        const text = `کلون از ابر کامل شد — ${tables != null ? `${fa(tables)} جدول · ` : ''}بکاپ: ${backup ?? '—'}`;
+        const text = `کلون از ابر کامل شد — ${tables != null ? `${fa(tables)} جدول · ` : ''}پشتیبان: ${backup ?? '—'}`;
         toast(text, 'success');
         setResult(resultLine, text, 'ok');
         await pollCloudSyncNow();
@@ -1869,16 +1997,16 @@ export async function renderHealthPanel(outlet) {
       }
     }
 
-    // «پیکربندی اتصال» — فرم URL ورکر + فاصلهٔ خودکار دقیقه + secret (فقط دسکتاپ)
+    // «تغییر» (ویرایش اتصال) — فرم آدرس مرکز ابری + همگام‌سازی خودکار + کلید اتصال (فقط دسکتاپ)
     function configureAction() {
-      let secretHint = 'تنظیم secret فقط در نسخهٔ دسکتاپ';
+      let secretHint = 'تنظیم کلید اتصال فقط در نسخهٔ دسکتاپ فعال است';
       const openForm = () => {
         const { form } = formModal({
           title: 'پیکربندی اتصال ابری',
           fields: [
-            { name: 'url', label: 'آدرس ورکر ابری', type: 'text', required: true, ltr: true, placeholder: 'https://markaz-….workers.dev', hint: 'آدرس ورکر کلادفلر — https (الگوی normalizeWorkerUrl)' },
-            { name: 'interval_minutes', label: 'فاصلهٔ هم‌گامی خودکار (دقیقه)', type: 'number', min: 1, value: '10', hint: 'پیش‌فرض ۱۰ دقیقه — خالی بماند همان پیش‌فرض سرور اعمال می‌شود' },
-            { name: 'secret', label: 'secret ورکر ابری', type: 'password', ltr: true, hint: secretHint }
+            { name: 'url', label: 'آدرس مرکز ابری', type: 'text', required: true, ltr: true, placeholder: 'https://markaz-….workers.dev', hint: 'آدرس مرکز ابری کلادفلر — با https شروع می‌شود' },
+            { name: 'interval_minutes', label: 'همگام‌سازی خودکار (دقیقه)', type: 'number', min: 1, value: '10', hint: 'پیش‌فرض ۱۰ دقیقه — یعنی هر ۱۰ دقیقه یک‌بار؛ خالی بماند پیش‌فرض سرور اعمال می‌شود' },
+            { name: 'secret', label: 'کلید اتصال', type: 'password', ltr: true, hint: secretHint }
           ],
           submitLabel: 'ذخیره',
           secondary: { label: 'کلون از ابر…', onClick: () => cloneFromCloudAction() },
@@ -1893,28 +2021,28 @@ export async function renderHealthPanel(outlet) {
             await api.post('/api/instance-sync/config', configBody);
             if (desktopSecret && values.secret) {
               const out = await cloudSecretInvoke('cloud_secret_set', { secret: values.secret });
-              if (!out.ok) throw new Error(`پیکربندی ذخیره شد ولی ذخیرهٔ secret در پوستهٔ میز ناموفق بود: ${out.reason ?? 'خطای نامشخص'}`);
+              if (!out.ok) throw new Error(`پیکربندی ذخیره شد ولی ذخیرهٔ کلید اتصال در پوستهٔ میز ناموفق بود: ${out.reason ?? 'خطای نامشخص'}`);
             }
             toast('پیکربندی اتصال ابری ذخیره شد', 'success');
             setResult(resultLine, 'پیکربندی اتصال ذخیره شد — وضعیت درجا تازه می‌شود', 'ok');
             await pollCloudSyncNow();
           }
         });
-        // حالت وب — فیلد secret غیرفعال؛ مقدار هرگز خوانده/فرستاده نمی‌شود (گارد کانال)
+        // حالت وب — فیلد کلید اتصال غیرفعال؛ مقدار هرگز خوانده/فرستاده نمی‌شود (گارد کانال)
         if (!desktopSecret) {
           const secretInput = form.querySelector('input[name="secret"]');
           if (secretInput) { secretInput.disabled = true; secretInput.placeholder = '—'; }
         }
       };
       if (!desktopSecret) { openForm(); return; }
-      // دسکتاپ — ماسک secret فعلی از پوسته خوانده می‌شود تا hint فرم واقعی باشد
+      // دسکتاپ — ماسک کلید فعلی از پوسته خوانده می‌شود تا hint فرم واقعی باشد
       void (async () => {
         try {
           const cur = await cloudSecretInvoke('cloud_secret_get');
           const mask = cloudSecretMaskView(cur?.ok && typeof cur.value === 'string' ? cur.value : null);
           secretHint = mask !== '—'
-            ? `secret فعلی: ${mask} — برای تغییر، مقدار تازه بدهید`
-            : 'secret ورکر ابری — یک‌بار در Credential Manager ذخیره می‌شود';
+            ? `کلید اتصال فعلی: ${mask} — برای تغییر، مقدار تازه بدهید`
+            : 'کلید اتصال — یک‌بار در حافظهٔ امن ویندوز ذخیره می‌شود';
         } catch { /* خواندن ماسک نافرجام ماند — hint پیش‌فرض */ }
         openForm();
       })();
@@ -1925,7 +2053,7 @@ export async function renderHealthPanel(outlet) {
       await lockBtn(btn, async () => {
         const okFirst = await confirmModal({
           title: 'حذف اتصال ابری',
-          message: 'پیکربندی اتصال ابری این دستگاه حذف می‌شود و cursorهای هم‌گامی بازنشسته می‌شوند — پیش از حذف یک پشتیبان بگیرید. ادامه می‌دهید؟',
+          message: 'پیکربندی اتصال ابری این دستگاه حذف می‌شود و هم‌گامی از نو شروع می‌شود — پیش از حذف یک پشتیبان بگیرید. ادامه می‌دهید؟',
           confirmLabel: 'حذف اتصال',
           danger: true
         });
@@ -1941,7 +2069,7 @@ export async function renderHealthPanel(outlet) {
           await api.del('/api/instance-sync/config');
           if (desktopSecret) await cloudSecretInvoke('cloud_secret_delete');
           toast('اتصال ابری حذف شد — پشتیبان‌های محلی سرِ جایشان هستند', 'success');
-          setResult(resultLine, 'اتصال ابری حذف شد — cursorهای هم‌گامی بازنشسته شد', 'ok');
+          setResult(resultLine, 'اتصال ابری حذف شد — هم‌گامی از نو شروع می‌شود', 'ok');
           await pollCloudSyncNow();
         } catch (err) {
           toastError(err);
@@ -1952,6 +2080,22 @@ export async function renderHealthPanel(outlet) {
 
     let unsubscribed = false;
     let unsubscribe = null;
+    // فاز D1 — لایهٔ پیشرفته: بازو/بستهٔ نشست‌محلی با پیش‌فرض بسته (مدیر تازه‌کار فقط لایهٔ عادی را می‌بیند)
+    let advancedOpen = false;
+    const advancedBody = el('div', { style: { display: 'none' } });
+    const advancedToggleBtn = el('button', {
+      class: 'btn btn--ghost',
+      type: 'button',
+      onclick: () => { advancedOpen = !advancedOpen; paintAdvanced(); }
+    });
+    const paintAdvanced = () => {
+      const t = cloudAdvancedToggleView(advancedOpen);
+      advancedToggleBtn.textContent = t.label;
+      advancedToggleBtn.setAttribute('aria-expanded', String(t.expanded));
+      advancedBody.style.display = t.hidden ? 'none' : 'block';
+    };
+    paintAdvanced();
+
     const paint = (status) => {
       // نما رندر دوباره شده (بازخوانی ۶۰ثانیه‌ای کل پنل) — اشتراک کهنه بسته شود
       if (!body.isConnected) {
@@ -1960,50 +2104,79 @@ export async function renderHealthPanel(outlet) {
       }
       const vm = cloudCardView(status);
       const view = cloudSyncStateView(status);
+      const human = cloudHumanStatusView(status);
+      const humanTone = healthToneView(human.tone);
       const counts = cloudCountsView(status?.last_sync?.pulled, status?.last_sync?.pushed);
       const subParts = [];
       if (view.detail) subParts.push(view.detail);
       if (counts.detail) subParts.push(counts.detail);
+      /* لایهٔ عادی — خط وضعیت انسانی + همگام‌سازی خودکار + دو دکمهٔ برجستهٔ همان قرارداد run-now */
       const rows = [
         el('div', { class: 'ob-row' },
           el('div', { class: 'ob-row__main' },
             el('div', { class: 'cell-main' },
-              el('span', { class: `dot ${view.dot}`, style: { marginInlineEnd: 'var(--sp-2)' } }),
-              view.label),
+              el('span', { class: `dot ${humanTone.dot}`, style: { marginInlineEnd: 'var(--sp-2)' } }),
+              human.text),
             el('div', { class: 'cell-sub' }, subParts.length > 0 ? subParts.join(' · ') : '—')
           ),
           el('div', { class: 'ob-row__side' },
             vm.configured ? el('span', { class: `badge ${view.badge}` }, counts.head) : null
           )
+        ),
+        vm.configured
+          ? el('div', { class: 'ob-row' },
+              el('div', { class: 'ob-row__main' },
+                el('div', { class: 'cell-main' }, `همگام‌سازی خودکار: ${vm.intervalText ?? 'تنظیم نشده'}`),
+                el('div', { class: 'cell-sub' }, 'در این فاصله اطلاعات خودکار رد و بدل می‌شود — بدون نیاز به کار شما')
+              ),
+              el('div', { class: 'ob-row__side' },
+                el('button', { class: 'btn btn--ghost', type: 'button', onclick: () => configureAction() }, 'تغییر')
+              )
+            )
+          : null,
+        el('div', { class: 'ob-row' },
+          el('div', { class: 'ob-row__side' },
+            el('button', { class: 'btn btn--primary', type: 'button', disabled: vm.runNowDisabled, onclick: (e) => void runNowAction(e.currentTarget) }, 'دریافت اطلاعات'),
+            el('button', { class: 'btn btn--primary', type: 'button', disabled: vm.runNowDisabled, onclick: (e) => void runNowAction(e.currentTarget) }, 'ارسال اطلاعات')
+          )
         )
       ];
       if (!vm.configured) {
+        // بی‌اتصال — مسیر ساخت اتصال در لایهٔ عادی می‌ماند (مدیر تازه‌کار نباید دنبالش بگردد)
         rows.push(el('div', { class: 'ob-row' },
           el('div', { class: 'ob-row__main' },
-            el('div', { class: 'cell-main' }, 'اتصال ابری تنظیم نشده'),
-            el('div', { class: 'cell-sub' }, 'با «پیکربندی اتصال» آدرس ورکر و secret را ثبت کنید — یا در نصب تازه «کلون از ابر» را انتخاب کنید.')),
+            el('div', { class: 'cell-sub' }, 'با «پیکربندی اولیه» این دستگاه به مرکز ابری وصل می‌شود — چند دقیقه بیشتر طول نمی‌کشد.')),
           // فاز C — ورودی ویزارد «پیکربندی اولیه اتصال ابری» (سه‌گامی: existing/create/فقط محلی)
           el('div', { class: 'ob-row__side' },
-            el('button', { class: 'btn btn--ghost', type: 'button', onclick: () => { location.hash = '#/cloud-setup'; } }, 'پیکربندی اولیه…'))
+            el('button', { class: 'btn btn--primary', type: 'button', onclick: () => { location.hash = '#/cloud-setup'; } }, 'پیکربندی اولیه…'))
         ));
-      } else {
-        rows.push(
-          infoRow('آدرس ورکر · دستگاه', el('span', { style: { direction: 'ltr', unicodeBidi: 'plaintext' } }, `${vm.urlText ?? '—'} · ${vm.deviceIdText ?? '—'}`)),
-          infoRow('فاصلهٔ هم‌گامی خودکار', vm.intervalText ?? '—'),
-          infoRow('تعارض‌های انباشته', vm.conflictsTotal != null ? `${fa(vm.conflictsTotal)}${vm.conflictsTotal > 0 ? ' — رسیدگی لازم' : ''}` : '—'),
-          infoRow('secret ورکر', vm.secretPresent ? 'تنظیم شده' : '—')
-        );
       }
-      rows.push(
+      /* لایهٔ پیشرفته — جزئیات نشست‌محلی؛ فقط با اتصال رندر می‌شود (الگوی guideSection) */
+      const adv = cloudAdvancedView(status);
+      advancedBody.replaceChildren(
+        ...(vm.configured ? [
+          infoRow('نسخهٔ ساختار اطلاعات', adv.schemaText ?? '—'),
+          infoRow('تعارض اطلاعات', adv.conflictsText ?? '—'),
+          infoRow('تاریخچهٔ خطاها', adv.errorText ?? 'خطایی ثبت نشده است'),
+          infoRow('آدرس مرکز ابری · دستگاه', el('span', { style: { direction: 'ltr', unicodeBidi: 'plaintext' } }, `${vm.urlText ?? '—'} · ${vm.deviceIdText ?? '—'}`)),
+          infoRow('کلید اتصال', vm.secretPresent ? 'تنظیم شده' : '—')
+        ] : []),
         el('div', { class: 'ob-row' },
           el('div', { class: 'ob-row__side' },
-            el('button', { class: 'btn btn--primary', type: 'button', disabled: vm.runNowDisabled, onclick: (e) => void runNowAction(e.currentTarget) }, 'هم‌گام‌سازی اکنون'),
-            el('button', { class: 'btn btn--ghost', type: 'button', onclick: () => configureAction() }, 'پیکربندی اتصال'),
+            vm.configured ? el('button', { class: 'btn btn--ghost', type: 'button', onclick: () => { location.hash = '#/cloud-setup'; } }, 'پیکربندی اولیه…') : null,
             vm.showDelete ? el('button', { class: 'btn btn--ghost', type: 'button', onclick: (e) => void deleteConnectionAction(e.currentTarget) }, 'حذف اتصال') : null
           )
-        ),
-        resultLine
+        )
       );
+      if (vm.configured) {
+        rows.push(
+          el('div', { class: 'ob-row' },
+            el('div', { class: 'ob-row__side' }, advancedToggleBtn)
+          ),
+          advancedBody
+        );
+      }
+      rows.push(resultLine);
       body.replaceChildren(...rows);
     };
     paint(lastCloudSyncStatus());

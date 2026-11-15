@@ -25201,6 +25201,10 @@ function createInstanceSyncApp(deps) {
 }
 __name(createInstanceSyncApp, "createInstanceSyncApp");
 
+// src/application/instance-sync/assets.ts
+var WEB_ASSETS_MAX_TOTAL_BYTES = 20 * 1024 * 1024;
+var WEB_ASSETS_MAX_FILE_BYTES = 8 * 1024 * 1024;
+
 // src/application/instance-sync/provision.ts
 var SCHEMA_CHUNK_BYTES = 64 * 1024;
 

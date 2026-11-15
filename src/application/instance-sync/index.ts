@@ -49,3 +49,19 @@ export type {
   VerifyCloudResult,
   WorkerNameOutcome
 } from './provision';
+// فاز D1 (B2) — دارایی‌های وب ورکر ابری: Workers Static Assets Direct Upload
+export {
+  buildAssetManifest,
+  uploadWebAssets,
+  WEB_ASSETS_MAX_TOTAL_BYTES,
+  WEB_ASSETS_MAX_FILE_BYTES
+} from './assets';
+export type {
+  WebAssetFile,
+  AssetManifest,
+  AssetManifestEntry,
+  WebAssetsCfError,
+  UploadWebAssetsStep,
+  UploadWebAssetsResult,
+  UploadWebAssetsDeps
+} from './assets';

@@ -48,6 +48,7 @@ import {
 import type { CloudFsIO, CloudSyncDeps } from './runner';
 // فاز C (A1) — کلاینت ساخت خودکار ورکر ابری (گام‌های CF API — سند first-run-and-cloud §۳)
 import { provisionCloudWorker, verifyCloudToken } from './provision';
+import type { WebAssetFile } from './assets';
 import type { CloudProvisionIO, ProvisionResult, VerifyCloudResult } from './provision';
 
 type Env = { Bindings: AppBindings; Variables: AppVariables };
@@ -285,10 +286,15 @@ export function registerDesktopRoutes(app: AppHono, deps: DesktopRoutesDeps): vo
       );
     }
     // لاگ فقط رویدادهای بی‌راز (redaction در خود provision.ts تضمین شده — پیام‌ها هرگز secret ندارند)
+    // فاز D1 (B2) — دارایی‌های وب (SPA) وقتی خوانندهٔ نصب موجود است؛ غایب/خالی = استقرار بدون وب (سازگار عقب)
+    const webAssets: WebAssetFile[] | null = provision.readWebAssets
+      ? ((await provision.readWebAssets()) as WebAssetFile[] | null)
+      : null;
     const result: ProvisionResult = await provisionCloudWorker({
       fetchImpl: fetchImplOf(envOf(c)),
       centralWorker,
       schemaSql,
+      webAssets,
       name: parsed.data.name,
       token: parsed.data.token,
       accountId: parsed.data.accountId,

@@ -36,7 +36,8 @@ const SERVER_STATE_VIEWS = {
 const SERVER_STATE_UNKNOWN = { badge: 'badge--neutral', dot: 'dot--neutral', label: 'وضعیت نامشخص' };
 
 const DEGRADED_REASON_VIEWS = {
-  games_unhealthy: 'ورکر بازی‌ها ناسالم'
+  // فاز D1 — واژگان ساده برای مدیر تازه‌کار: «ورکر» اصطلاح فنی است؛ همین بخش «بازی‌ها» نام دارد
+  games_unhealthy: 'بخش بازی‌ها ناسالم است'
 };
 
 /** دلیل Degraded → فارسی؛ دلیل ناشناخته/غایب → «دلیل نامشخص» (تابع خالص جدای خودش) */

@@ -13,7 +13,7 @@ import { serverStateView, degradedReasonView, serverPortsView, unixJalaliView, u
 describe('serverStateView — نگاشت حالت FSM موتور به برچسب/رنگ', () => {
   it('هفت حالت شناخته‌شدهٔ قرارداد → برچسب فارسی و کلاس رنگ درست', () => {
     expect(serverStateView('Ready')).toMatchObject({ badge: 'badge--success', dot: 'dot--success', label: 'سرور محلی در حال اجرا' });
-    expect(serverStateView('Degraded', 'games_unhealthy')).toMatchObject({ badge: 'badge--warning', dot: 'dot--warning', label: 'سرور محلی ناتمام — ورکر بازی‌ها ناسالم' });
+    expect(serverStateView('Degraded', 'games_unhealthy')).toMatchObject({ badge: 'badge--warning', dot: 'dot--warning', label: 'سرور محلی ناتمام — بخش بازی‌ها ناسالم است' });
     expect(serverStateView('Failed')).toMatchObject({ badge: 'badge--error', dot: 'dot--error', label: 'سرور بالا نیامد' });
     expect(serverStateView('Booting')).toMatchObject({ badge: 'badge--warning', dot: 'dot--warning', label: 'در حال راه‌اندازی…' });
     expect(serverStateView('Validating')).toMatchObject({ badge: 'badge--warning', dot: 'dot--warning', label: 'در حال راه‌اندازی…' });
@@ -43,7 +43,7 @@ describe('serverStateView — نگاشت حالت FSM موتور به برچسب
 
 describe('degradedReasonView — نگاشت دلیل ناتمامی موتور به فارسی', () => {
   it('دلیل شناخته‌شدهٔ قرارداد → فارسی؛ ناشناخته/غایب → «دلیل نامشخص»', () => {
-    expect(degradedReasonView('games_unhealthy')).toBe('ورکر بازی‌ها ناسالم');
+    expect(degradedReasonView('games_unhealthy')).toBe('بخش بازی‌ها ناسالم است');
     expect(degradedReasonView('other_reason')).toBe('دلیل نامشخص');
     expect(degradedReasonView(undefined)).toBe('دلیل نامشخص');
     expect(degradedReasonView(null)).toBe('دلیل نامشخص');
@@ -109,8 +109,8 @@ describe('serverDiagnosticsText — رشتهٔ «کپی اطلاعات عیب‌
 
   it('Degraded → وضعیت و دلیل فارسی در همان رشته؛ پاکت غایب/خراب → «نامشخص» بی‌کرش', () => {
     const text = serverDiagnosticsText({ state: 'Degraded', degradedReason: 'games_unhealthy' });
-    expect(text).toContain('وضعیت FSM: Degraded — سرور محلی ناتمام — ورکر بازی‌ها ناسالم');
-    expect(text).toContain('دلیل ناتمامی: ورکر بازی‌ها ناسالم');
+    expect(text).toContain('وضعیت FSM: Degraded — سرور محلی ناتمام — بخش بازی‌ها ناسالم است');
+    expect(text).toContain('دلیل ناتمامی: بخش بازی‌ها ناسالم است');
     const empty = serverDiagnosticsText(null);
     expect(empty).toContain('وضعیت FSM: نامشخص');
     expect(empty).toContain('نسخهٔ اپ: —');

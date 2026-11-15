@@ -26,6 +26,8 @@ import {
   SCHEMA_CHUNK_BYTES
 } from '../provision';
 import type { CloudProvisionIO, ProvisionResult, VerifyCloudResult } from '../provision';
+import { buildAssetManifest } from '../assets';
+import type { WebAssetFile } from '../assets';
 
 // ─── دارایی‌های آزمون ───
 
@@ -52,6 +54,12 @@ const SCHEMA = [
 ].join('\n');
 const EXPECTED_MIGRATIONS = schemaMigrationCount(SCHEMA);
 
+/** فاز D1 — دارایی‌های وب فیک (دو فایل؛ دومی با بک‌اسلش برای آزمون نرمال‌سازی مسیر) */
+const WEB_FILES: WebAssetFile[] = [
+  { path: 'index.html', bytes: new TextEncoder().encode('<!doctype html><html><body>وب مرکزی</body></html>') },
+  { path: 'assets\\app.js', bytes: new TextEncoder().encode('console.log("app")') }
+];
+
 // ─── CF API فیک + ورکر تازه ───
 
 interface RecordedCall {
@@ -70,10 +78,13 @@ interface FakeOptions {
   /** بخشی از URL که باید شکست بخورد (CF API یا ورکر تازه) */
   failMatch?: string;
   failStatus?: number;
+  /** فاز D1 — پاسخ GET / چک وب: پیش‌فرض HTML سبز؛ false → JSON (آزمون شکست گام web) */
+  webHtml?: boolean;
 }
 
 function makeCfFake(opts: FakeOptions = {}) {
   const calls: RecordedCall[] = [];
+  let uploadSeq = 0; // فاز D1 — شمارش آپلودهای دارایی برای jwt ترتیبی
   const failOf = (url: string): Response | null => {
     if (opts.failMatch && url.includes(opts.failMatch)) {
       return Response.json({ success: false, errors: [{ code: 971, message: 'شکست فیک' }] }, { status: opts.failStatus ?? 400 });
@@ -104,6 +115,22 @@ function makeCfFake(opts: FakeOptions = {}) {
     if (url === `${CF_BASE}/accounts` && method === 'GET') {
       return Response.json({ success: true, result: [{ id: ACCOUNT_ID, name: ACCOUNT_NAME }] });
     }
+    if (url === `${CF_BASE}/accounts/${ACCOUNT_ID}/workers/scripts/${WORKER_NAME}/assets-upload-session` && method === 'POST') {
+      // فاز D1 — manifest بدنه را می‌خواند و hashها را در دو bucket برمی‌گرداند (آینهٔ سشن واقعی)
+      let manifest: Record<string, { hash: string }> = {};
+      try {
+        manifest = (JSON.parse(String(init?.body ?? '{}')) as { manifest?: typeof manifest }).manifest ?? {};
+      } catch {
+        manifest = {};
+      }
+      const hashes = Object.values(manifest).map((e) => e.hash);
+      const buckets = hashes.length > 1 ? [hashes.slice(0, 1), hashes.slice(1)] : [hashes];
+      return Response.json({ success: true, result: { jwt: 'assets-session-jwt', buckets } });
+    }
+    if (url === `${CF_BASE}/accounts/${ACCOUNT_ID}/workers/assets/upload?base64=true` && method === 'POST') {
+      uploadSeq += 1;
+      return Response.json({ success: true, result: { jwt: `assets-upload-jwt-${uploadSeq}` } }, { status: 201 });
+    }
     if (url.startsWith(`${CF_BASE}/accounts/${ACCOUNT_ID}/d1/database?name=`) && method === 'GET') {
       return Response.json(
         opts.existingD1
@@ -128,6 +155,15 @@ function makeCfFake(opts: FakeOptions = {}) {
     }
     if (url === `${WORKER_URL}/healthz` && method === 'GET') {
       return new Response('ok', { status: 200 });
+    }
+    if (url === `${WORKER_URL}/` && method === 'GET') {
+      // فاز D1 — چک وب گام ۷: پیش‌فرض HTML سبز؛ webHtml:false → JSON (شکست فیک)
+      return opts.webHtml === false
+        ? Response.json({ ok: true })
+        : new Response('<!DOCTYPE html><html lang="fa"><body>وب مرکزی</body></html>', {
+            status: 200,
+            headers: { 'content-type': 'text/html; charset=utf-8' }
+          });
     }
     if (url === `${WORKER_URL}/api/instance-sync/state` && method === 'GET') {
       return Response.json({
@@ -453,6 +489,149 @@ describe('شکست‌های گام‌های اول', () => {
       expect(result.message).toContain('healthz');
     }
     expect(fake.calls.some((c) => c.url.includes('/api/instance-sync/state'))).toBe(false);
+  });
+});
+
+// ─── فاز D1 — دارایی‌های وب (گام ۵‌الف + چک وب گام ۷) ───
+
+describe('فاز D1 — زنجیره با دارایی‌های وب', () => {
+  const runWithWeb = async (extra: { webAssets?: WebAssetFile[] | null; fakeOpts?: FakeOptions } = {}) => {
+    const fake = makeCfFake(extra.fakeOpts ?? {});
+    const logs: string[] = [];
+    const result = await provisionCloudWorker({
+      fetchImpl: fake.fetchImpl,
+      centralWorker: CENTRAL_WORKER,
+      schemaSql: SCHEMA,
+      ...(extra.webAssets !== undefined ? { webAssets: extra.webAssets } : {}),
+      name: 'clinic',
+      token: TOKEN,
+      random: makeDeterministicRandom(),
+      log: (m) => logs.push(m)
+    });
+    return { result, fake, logs };
+  };
+
+  it('گام assets-upload میان schema و worker — سشن با manifest قطعی، آپلود multipart با base64 صحیح، metadata.assets و web فعال', async () => {
+    const { result, fake, logs } = await runWithWeb({ webAssets: WEB_FILES });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('غیرقابل‌دسترس');
+    expect(result.webEnabled).toBe(true);
+    expect(result.steps.map((s) => s.step)).toEqual([
+      'verify',
+      'accounts',
+      'd1',
+      'schema',
+      'assets-upload',
+      'worker',
+      'subdomain',
+      'health',
+      'state',
+      'web'
+    ]);
+    // ترتیب — سشن پس از آخرین قطعهٔ اسکیما و پیش از PUT ورکر
+    const urls = fake.calls.map((c) => `${c.method} ${c.url}`);
+    const sessionIdx = urls.findIndex((u) => u.includes('assets-upload-session'));
+    const putIdx = urls.findIndex((u) => u === `PUT ${CF_BASE}/accounts/${ACCOUNT_ID}/workers/scripts/${WORKER_NAME}`);
+    const queryIdx = urls.findIndex((u) => u.includes('/d1/database/db-new/query'));
+    expect(sessionIdx).toBeGreaterThan(queryIdx);
+    expect(sessionIdx).toBeLessThan(putIdx);
+    expect(urls.filter((u) => u.includes('/workers/assets/upload?base64=true')).length).toBe(2);
+    // سشن — manifest با همان hashهای قطعی buildAssetManifest
+    const expected = await buildAssetManifest(WEB_FILES);
+    const session = fake.calls.find((c) => c.url.includes('assets-upload-session'))!;
+    expect((session.init.headers as Record<string, string>).authorization).toBe(`Bearer ${TOKEN}`);
+    expect(JSON.parse(String(session.init.body)).manifest).toEqual(expected);
+    // آپلود — part به نام hash و مقدار base64 صحیح؛ Authorization با jwt سشن
+    const hashToFile = new Map<string, Uint8Array>();
+    for (const file of WEB_FILES) {
+      const key = '/' + file.path.replace(/\\/g, '/');
+      hashToFile.set((expected as Record<string, { hash: string }>)[key].hash, file.bytes);
+    }
+    const uploads = fake.calls.filter((c) => c.url.includes('/workers/assets/upload?base64=true'));
+    for (const up of uploads) {
+      expect((up.init.headers as Record<string, string>).authorization).toBe('Bearer assets-session-jwt');
+      const form = up.init.body as FormData;
+      for (const hash of [...form.keys()]) {
+        const bytes = hashToFile.get(hash);
+        expect(bytes).toBeTruthy();
+        expect(Uint8Array.from([...atob(form.get(hash) as string)].map((ch) => ch.charCodeAt(0)))).toEqual(bytes);
+      }
+    }
+    // متادیتای PUT — assets.jwt توکن پایانی و config SPA
+    const put = fake.calls.find((c) => c.method === 'PUT' && c.url.endsWith(`/workers/scripts/${WORKER_NAME}`))!;
+    expect(put.metadata).toMatchObject({
+      assets: {
+        jwt: 'assets-upload-jwt-2',
+        config: { html_handling: 'auto-trailing-slash', not_found_handling: 'single-page-application' }
+      }
+    });
+    // چک وب — GET / با Accept text/html
+    const webCall = fake.calls.find((c) => c.url === `${WORKER_URL}/`);
+    expect(webCall).toBeTruthy();
+    expect((webCall!.init.headers as Record<string, string>).accept).toBe('text/html');
+    // redaction — jwt دارایی در steps/log نمی‌آید
+    const blob = `${JSON.stringify(result.steps)}\n${logs.join('\n')}`;
+    expect(blob).not.toContain('assets-session-jwt');
+    expect(blob).not.toContain('assets-upload-jwt');
+    expect(blob).not.toContain(TOKEN);
+  });
+
+  it('webAssets null — بدون هیچ تماس دارایی، بدون assets در metadata، بدون چک وب و webEnabled=false', async () => {
+    const { result, fake, logs } = await runWithWeb({ webAssets: null });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('غیرقابل‌دسترس');
+    expect(result.webEnabled).toBe(false);
+    expect(fake.calls.some((c) => c.url.includes('assets-upload-session'))).toBe(false);
+    expect(fake.calls.some((c) => c.url.includes('/workers/assets/upload'))).toBe(false);
+    expect(fake.calls.some((c) => c.url === `${WORKER_URL}/`)).toBe(false);
+    const put = fake.calls.find((c) => c.method === 'PUT' && c.url.endsWith(`/workers/scripts/${WORKER_NAME}`))!;
+    expect((put.metadata as { assets?: unknown }).assets).toBeUndefined();
+    // سازگار عقب — گام‌ها همان هشت‌گام قبلی و یادداشت skip در log
+    expect(result.steps.map((s) => s.step)).toEqual(['verify', 'accounts', 'd1', 'schema', 'worker', 'subdomain', 'health', 'state']);
+    expect(logs.join('\n')).toContain('چک وب رد شد');
+  });
+
+  it('webAssets خالی [] — مثل null بدون دارایی', async () => {
+    const { result, fake } = await runWithWeb({ webAssets: [] });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('غیرقابل‌دسترس');
+    expect(result.webEnabled).toBe(false);
+    expect(fake.calls.some((c) => c.url.includes('assets-upload-session'))).toBe(false);
+    expect(result.steps.some((s) => s.step === 'assets-upload')).toBe(false);
+  });
+
+  it('شکست سشن دارایی‌ها → توقف در assets-session با پیام فارسی و بدون PUT اسکریپت', async () => {
+    const { result, fake } = await runWithWeb({ webAssets: WEB_FILES, fakeOpts: { failMatch: 'assets-upload-session', failStatus: 400 } });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.step).toBe('assets-session');
+      expect(result.kind).toBe('cf_api');
+      expect(result.message).toContain('سشن آپلود دارایی‌های وب ساخته نشد');
+    }
+    expect(fake.calls.some((c) => c.method === 'PUT' && c.url.endsWith(`/workers/scripts/${WORKER_NAME}`))).toBe(false);
+    expect(fake.calls.some((c) => c.url.includes('/workers/subdomain'))).toBe(false);
+  });
+
+  it('شکست آپلود bucket دارایی → توقف در assets-upload و بدون PUT اسکریپت', async () => {
+    const { result, fake } = await runWithWeb({ webAssets: WEB_FILES, fakeOpts: { failMatch: '/workers/assets/upload', failStatus: 500 } });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.step).toBe('assets-upload');
+      expect(result.kind).toBe('cf_api');
+      expect(result.message).toContain('آپلود دارایی‌های وب');
+    }
+    expect(fake.calls.some((c) => c.method === 'PUT' && c.url.endsWith(`/workers/scripts/${WORKER_NAME}`))).toBe(false);
+  });
+
+  it('GET / پاسخ غیر HTML → توقف در گام web با پیام فارسی، با وجود سبزی state', async () => {
+    const { result, fake } = await runWithWeb({ webAssets: WEB_FILES, fakeOpts: { webHtml: false } });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.step).toBe('web');
+      expect(result.kind).toBe('worker_error');
+      expect(result.message).toContain('صفحهٔ وب');
+    }
+    expect(fake.calls.some((c) => c.url === `${WORKER_URL}/`)).toBe(true);
   });
 });
 

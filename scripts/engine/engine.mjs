@@ -19,7 +19,7 @@ import { createServer } from 'node:net';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { buildEngineConfig } from './config.mjs';
-import { startAdapterEngine } from './adapter/server.mjs';
+import { makeWebAssetsReader, startAdapterEngine } from './adapter/server.mjs';
 import { REPO_ROOT, d1SqlitePath } from './engine-paths.mjs';
 import { applyMigrations } from './apply-migrations.mjs';
 import { ensureDbIntegrityOrRestore, takeSnapshot, writeAuditRow } from './db-snapshot.mjs';
@@ -59,24 +59,32 @@ function applyLocalTriggersBestEffort(dbPath) {
  * --main-bundle است که پوستهٔ Rust همیشه می‌دهد (bundles/worker.js → یک پوشه بالاتر central/).
  * توسعه: worker/central-bundle.js (کامیت‌شده) + فایل موقت schema.sql در os.tmpdir با تجمیع
  * migrations/ — عین الگوی تجمیع ⑤ همان اسکریپت (فقط توسعه؛ dataDir دیتای کاربر است و هرگز).
- * شکست حل مسیر → هر دو null → binding غایب → اپ روی مسیر provision «۵۰۱» می‌دهد؛ بوت هرگز
- * نمی‌کشد. مسیر فقط node-side است: باندل ورکر این فایل‌ها را نمی‌بیند — دو خوانندهٔ بی‌آرگومان.
+ * فاز D1 (B2) — publicDir دارایی‌های وب (Static Assets) با همان لنگر حل می‌شود: نصب public/
+ * هم‌پوشهٔ central/ در resources/engine (عین همان رزولوشنی که adapter برای سرو استاتیک دارد) و
+ * در توسعه مسیر مخزن public. غایب بودن آن → null → وب نمی‌آید (provision بدون دارایی — خطا نیست).
+ * شکست حل مسیر → null/null → binding غایب → اپ روی مسیر provision «۵۰۱» می‌دهد؛ بوت هرگز
+ * نمی‌کشد. مسیر فقط node-side است: باندل ورکر این فایل‌ها را نمی‌بیند — خواننده‌های بی‌آرگومان.
  */
 function resolveCentralPaths(opts) {
   const bundleDir = path.dirname(opts.mainBundle ?? path.join(REPO_ROOT, 'worker/bundle.js'));
   const centralDir = path.join(bundleDir, '..', 'central');
   const installWorker = path.join(centralDir, 'central-worker.js');
   const installSchema = path.join(centralDir, 'schema.sql');
+  const installPublic = path.join(bundleDir, '..', 'public');
   if (existsSync(installWorker) && existsSync(installSchema)) {
-    return { centralWorkerPath: installWorker, centralSchemaPath: installSchema };
+    return {
+      centralWorkerPath: installWorker,
+      centralSchemaPath: installSchema,
+      publicDir: existsSync(installPublic) ? installPublic : null,
+    };
   }
   // توسعه — باندل مرکزی کامیت‌شده + اسکیمای موقت از تجمیع migrations/
   const devWorker = path.join(REPO_ROOT, 'worker', 'central-bundle.js');
-  if (!existsSync(devWorker)) return { centralWorkerPath: null, centralSchemaPath: null };
+  if (!existsSync(devWorker)) return { centralWorkerPath: null, centralSchemaPath: null, publicDir: null };
   try {
     const migDir = path.join(REPO_ROOT, 'migrations');
     const migFiles = readdirSync(migDir).filter((f) => f.endsWith('.sql')).sort();
-    if (migFiles.length === 0) return { centralWorkerPath: null, centralSchemaPath: null };
+    if (migFiles.length === 0) return { centralWorkerPath: null, centralSchemaPath: null, publicDir: null };
     let schema = `-- schema.sql — تجمیع ${migFiles.length} مایگریشن رسمی (ساخته‌شده در موتور محلی — فقط توسعه)\n`;
     schema += `-- مقصد: پایگاه markaz-central روی حساب کلادفلر کاربر — این فایل را دستی ویرایش نکنید.\n`;
     for (const f of migFiles) {
@@ -84,10 +92,15 @@ function resolveCentralPaths(opts) {
     }
     const tmpSchema = path.join(tmpdir(), `markaz-central-schema-${process.pid}.sql`);
     writeFileSync(tmpSchema, schema, 'utf8');
-    return { centralWorkerPath: devWorker, centralSchemaPath: tmpSchema };
+    // public توسعه — همان رزولوشن سرو استاتیک adapter (opts.publicDir یا مسیر مخزن)
+    return {
+      centralWorkerPath: devWorker,
+      centralSchemaPath: tmpSchema,
+      publicDir: opts.publicDir ?? path.join(REPO_ROOT, 'public'),
+    };
   } catch (err) {
     console.error(`[engine] هشدار: دارایی‌های ساخت ورکر ابری حل نشد — CLOUD_PROVISION خاموش می‌ماند (بوت سالم ادامه می‌یابد): ${err?.message ?? err}`);
-    return { centralWorkerPath: null, centralSchemaPath: null };
+    return { centralWorkerPath: null, centralSchemaPath: null, publicDir: null };
   }
 }
 
@@ -399,6 +412,8 @@ export async function runEngine(opts) {
       // (cloud-config.json / sync-state.json / پشتیبان‌های cloud-sync-*) — server.mjs همین‌ها
       // را در bindingهای CLOUD_FS و ENGINE_CLOUD_SECRET اپ می‌بندد؛ حالت workerd غایب = خاموش.
       // فاز C — دو مسیر ثابت دارایی‌های ساخت ورکر ابری → binding CLOUD_PROVISION (adapter فقط).
+      // فاز D1 — خوانندهٔ دارایی‌های وب (public نصب/مخزن) برای آپلود Static Assets؛
+      // publicDir حل‌نشده → null → binding بدون readWebAssets → ساخت بدون وب (سازگار عقب).
       bindings: {
         authSecret,
         publicBaseUrl: base,
@@ -407,6 +422,7 @@ export async function runEngine(opts) {
         dataDir: opts.dataDir,
         centralWorkerPath: centralPaths.centralWorkerPath,
         centralSchemaPath: centralPaths.centralSchemaPath,
+        webAssetsReader: makeWebAssetsReader(centralPaths.publicDir),
       },
       log: (m) => console.log(`[engine] ${m}`),
     });
