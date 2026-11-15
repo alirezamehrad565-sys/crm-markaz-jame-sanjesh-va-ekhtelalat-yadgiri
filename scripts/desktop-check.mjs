@@ -3,7 +3,7 @@
 // استفاده: node scripts/desktop-check.mjs   (npm run desktop:check)
 // بررسی‌ها: فایل‌های الزامی، پارس JSON/Cargo، هم‌گامی نسخه با APP_VERSION،
 // آیکن واقعی (سربرگ ICO)، capabilities، اسکریپت‌های npm، gitignore بیلد.
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { PINNED_WORKERD_VERSION } from './desktop/config.mjs';
@@ -356,6 +356,50 @@ try {
   capA.includes('engine_status') || capA.includes('engine-status')
     ? ok('capabilities: مجوز فرمان‌های موتور (engine_status یا engine-status) ثبت شده است (فاز A)')
     : bad('capabilities/default.json مجوز فرمان‌های موتور را ندارد — پس از merge عامل R باید الگوی allow-engine-status یا allow_engine_status در permissions باشد (پین نرم هوشمند فاز A: یکی از دو الگو کافی است)');
+
+  // فاز B — قرارداد هم‌گامی دوسویهٔ میز↔ابر «instance-sync» (سند §۲-۴/§۲-۵؛ تغییرات هم‌زمان
+  // سه عامل: بک‌اند instance-sync / پوستهٔ Rust / فرانت پنل سلامت). پین‌های زیر سخت‌اند و
+  // تا merge عامل‌های موازی قرمزند — قرمزیِ آن‌ها در این مرحله انتظار است و پس از merge
+  // هر سه باید همه سبز شوند. عمداً هیچ پین نرم/هشدارِ موقتی این‌جا نیست.
+  const pinB = (file, tokens, label) => {
+    let src = null;
+    try { src = readFileSync(file, 'utf8'); } catch { /* غایب — پیام پایین */ }
+    if (src === null) {
+      bad(`${label} یافت نشد: ${file} (فاز B — تا merge عامل موازی)`);
+      return;
+    }
+    for (const t of tokens) {
+      src.includes(t)
+        ? ok(`${label}: ${t} سیم است (فاز B)`)
+        : bad(`${label}: رشتهٔ ${t} غایب است (فاز B — تا merge عامل موازی)`);
+    }
+  };
+  const IS_DIR = path.join(ROOT, 'src', 'application', 'instance-sync');
+  pinB(path.join(IS_DIR, 'service.ts'), ['rowWinner', 'instanceState'], 'instance-sync/service.ts');
+  pinB(path.join(IS_DIR, 'tables.ts'), ['SYNC_TABLES'], 'instance-sync/tables.ts');
+  // ③ مایگریشن هم‌گامی — کشف داینامیک با readdirSync (الگوی apply-migrations): پین به شمارهٔ
+  // مایگریشن گره نمی‌خورد؛ نام فایل (با شماره) در پیام می‌آید تا قرمزی قابل ردیابی باشد.
+  try {
+    const migDir = path.join(ROOT, 'migrations');
+    const migFiles = readdirSync(migDir).filter((f) => f.endsWith('.sql')).sort();
+    const mig = migFiles.find((f) => {
+      const c = readFileSync(path.join(migDir, f), 'utf8');
+      return c.includes('_sync_deleted') && c.includes('_sync_conflicts') && c.includes('_sync_state');
+    });
+    mig
+      ? ok(`مایگریشن هم‌گامی ${mig} سه قرارداد _sync_deleted/_sync_conflicts/_sync_state را دارد (فاز B)`)
+      : bad(`مایگریشن فاز B با _sync_deleted/_sync_conflicts/_sync_state در migrations/ یافت نشد (بررسی‌شده ${migFiles.length} فایل sql — تا merge عامل موازی)`);
+  } catch (e) {
+    bad(`کشف مایگریشن فاز B خطا داد: ${e instanceof Error ? e.message : String(e)}`);
+  }
+  pinB(path.join(IS_DIR, 'runner.ts'), ['runCloudSync', 'ENGINE_CLOUD_SECRET', 'cloud-config.json'], 'instance-sync/runner.ts');
+  pinB(path.join(IS_DIR, 'desktop-routes.ts'), ['instance-sync/status', 'instance-sync/clone'], 'instance-sync/desktop-routes.ts');
+  pinB(path.join(T, 'src', 'lib.rs'), ['cloud_secret_set', 'ENGINE_CLOUD_SECRET', 'cloud-sync-secret'], 'lib.rs');
+  pinB(path.join(T, 'Cargo.toml'), ['keyring'], 'Cargo.toml');
+  pinB(path.join(ROOT, 'public', 'assets', 'js', 'views', 'health-panel.js'), ['cloudSyncStateView'], 'health-panel');
+  pinB(path.join(ROOT, 'src', '__tests__', 'front-cloud-sync.test.ts'), ['cloudSyncStateView'], 'آزمون front-cloud-sync.test.ts');
+  pinB(path.join(ROOT, 'src', '__tests__', 'two-instance-sync.test.ts'), ['rowWinner'], 'آزمون two-instance-sync.test.ts');
+  pinB(path.join(ROOT, 'worker', 'central-bundle.js'), ['instance-sync'], 'worker/central-bundle.js');
 } catch (e) {
   bad(`گیت پین‌های P2 خطا داد: ${e instanceof Error ? e.message : String(e)}`);
 }

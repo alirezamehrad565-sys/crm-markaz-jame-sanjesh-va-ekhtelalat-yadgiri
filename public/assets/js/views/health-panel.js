@@ -18,8 +18,11 @@
 //       ۴-۲ نوار نجات سه‌دکمه‌ای (restart/پشتیبان/zip) · ۴-۱ پنج سیگنال §۴ نقد با سه رنگ و
 //       دکمهٔ اقدام · EXP-6 ثبت drill عملیاتی (nodesync:ops-drill-v1) · ۴-۵ راهنمای درون‌برنامه‌ای
 //       (چکیدهٔ دستی ADMIN-GUIDE — بدون خواندن فایل در زمان اجرا)
+// فاز B — کارت «اتصال ابری» (سند §۲-۵ طرح server-cloud-update-design): GET /api/instance-sync/status
+//       فقط‌مدیر — وضعیت + آخرین هم‌گامی دوطرفه + تعارض‌ها + پیکربندی/حذف/کلون؛ فرمان‌های راز
+//       (cloud_secret_set/get/delete) فقط روی پوستهٔ میز — Credential Manager، هرگز فایل JSON
 import { api } from '../api.js';
-import { el, icon, emptyState, skeletonState, confirmModal, toast, toastError, lockBtn } from '../ui.js';
+import { el, icon, emptyState, skeletonState, confirmModal, formModal, toast, toastError, lockBtn } from '../ui.js';
 import { fa, formatJalaliDateTime } from '../format.js';
 
 /** فاصلهٔ خوانا به فارسی — از ثانیه */
@@ -1124,6 +1127,244 @@ export function resetServerStatusFeedForTests() {
   lastServerStatusPayload = null;
 }
 
+/* ── فاز B — قرارداد «اتصال ابری» (سند §۲-۵؛ هم‌گامی دوسویهٔ میز↔ابر instance-sync) ────────
+   قرارداد، جدای هم‌گامی نود با CP است (ف۶ بالای همین فایل — دو کارت جدا). درگاه‌ها:
+   GET /api/instance-sync/status (فقط‌مدیر) + POST run-now / config + DELETE config +
+   POST clone {confirm:true} (۴۰۹=نیاز confirm). نگاشت‌ها همه تابع خالص بی‌DOM
+   (الگوی serverStateView/syncStateView) تا بی‌ماک سنگین آزمون شوند
+   (src/__tests__/front-cloud-sync.test.ts). فرمان‌های راز فقط روی کانال __TAURI__
+   (cloud_secret_set/get/delete — Credential Manager در lib.rs)؛ بیرون پوستهٔ میز
+   گارد کامل {ok:false, reason} — SPA هرگز نمی‌شکند (الگوی engineInvoke). feed وضعیت
+   HTTP است و برخلاف feed سرور فاز A به کانال پوسته نیاز ندارد: poll هر ۳۰ثانیه +
+   poll فوری پس از هر کنش؛ کارت پنل با subscribe/unsubscribe (rebuild و teardown)
+   روی همین feed مشترک می‌نشیند. */
+
+const CLOUD_SYNC_POLL_MS = 30_000; // poll ۳۰ثانیه‌ای — هم‌ریتم feed وضعیت سرور (فاز A)
+const CLOUD_SYNC_STATUS_PATH = '/api/instance-sync/status';
+
+const CLOUD_SYNC_UNKNOWN = { badge: 'badge--neutral', dot: 'dot--neutral', label: 'وضعیت نامشخص' };
+
+/** مُهر آخرین هم‌گامی → فارسی؛ ISO یا unix ثانیه — ورودی غایب/خراب → null (بی‌کرش) */
+function cloudSyncAtView(at) {
+  if (typeof at === 'string' && isoMsOf(at) !== null) return formatJalaliDateTime(at);
+  const n = Number(at);
+  if (Number.isFinite(n) && n > 0) return unixJalaliView(n);
+  return null;
+}
+
+/** خطای هم‌گامی → متن کوتاه (سقف ۱۲۰ نویسه)؛ غایب/خراب → null */
+function cloudSyncErrorShort(err) {
+  if (typeof err !== 'string' || !err.trim()) return null;
+  const t = err.trim();
+  return t.length > 120 ? `${t.slice(0, 120)}…` : t;
+}
+
+/**
+ * فاز B — وضعیت اتصال ابری → برچسب فارسی/کلاس رنگ (تابع خالص — الگوی serverStateView).
+ * تقدم: unconfigured → ناسازگاری schema → در جریان → نتیجهٔ آخرین هم‌گامی (synced/error/
+ * offline) → بی‌last_sync → ناشناخته. clock_warning=true → ضمیمهٔ «اختلاف ساعت با مقصد!»
+ * (فقط وقتی اتصال هست — بی‌اتصال مقصدی در کار نیست). هر ورودی غایب/ناقص/ناشناخته بی‌کرش است.
+ */
+export function cloudSyncStateView(status) {
+  if (!status || typeof status !== 'object') return CLOUD_SYNC_UNKNOWN;
+  let out;
+  if (status.configured !== true) {
+    out = { badge: 'badge--neutral', dot: 'dot--neutral', label: 'اتصال ابری تنظیم نشده' };
+  } else if (status.schema_match === false) {
+    out = { badge: 'badge--error', dot: 'dot--error', label: 'ناسازگاری نسخهٔ schema — به‌روزرسانی لازم است' };
+  } else if (status.running === true) {
+    out = { badge: 'badge--warning', dot: 'dot--warning', label: 'هم‌گامی در جریان…' };
+  } else {
+    const ls = status.last_sync && typeof status.last_sync === 'object' ? status.last_sync : null;
+    if (!ls) {
+      out = { badge: 'badge--neutral', dot: 'dot--neutral', label: 'در انتظار اولین هم‌گامی', detail: null };
+    } else if (ls.result === 'synced') {
+      const at = cloudSyncAtView(ls.at);
+      out = { badge: 'badge--success', dot: 'dot--success', label: 'هم‌گام شد', detail: at ? `آخرین هم‌گامی: ${at}` : null };
+    } else if (ls.result === 'error') {
+      out = { badge: 'badge--error', dot: 'dot--error', label: 'خطای هم‌گامی', detail: cloudSyncErrorShort(ls.error) };
+    } else if (ls.result === 'offline') {
+      out = { badge: 'badge--warning', dot: 'dot--warning', label: 'خارج از خط — تلاش دوباره خودکار', detail: null };
+    } else {
+      out = CLOUD_SYNC_UNKNOWN; // نتیجهٔ ناشناخته — خنثی بی‌کرش
+    }
+  }
+  if (status.configured === true && status.clock_warning === true) {
+    out = { ...out, label: `${out.label} — اختلاف ساعت با مقصد!` };
+  }
+  return out;
+}
+
+/**
+ * فاز B — شمارنده‌های آخرین هم‌گامی → «↑۲۳ ↓۴۱» (ارسال/دریافت) + جزئیات per-table مرتب
+ * بر الفبای نام جدول — فقط جدول‌های غیرصفر (الگوی reconciliationDetailView). ورودی غایب/
+ * خراب → «↑۰ ↓۰» بی‌کرش؛ مقدار منفی/غیرعددی همان صفر می‌شود.
+ */
+export function cloudCountsView(pulled, pushed) {
+  const num = (v) => {
+    const n = Number(v);
+    return Number.isFinite(n) && n > 0 ? Math.round(n) : 0;
+  };
+  const pullMap = pulled && typeof pulled === 'object' ? pulled : {};
+  const pushMap = pushed && typeof pushed === 'object' ? pushed : {};
+  const tables = [...new Set([...Object.keys(pullMap), ...Object.keys(pushMap)])].sort();
+  let pullTotal = 0;
+  let pushTotal = 0;
+  const parts = [];
+  for (const t of tables) {
+    if (typeof t !== 'string' || !t) continue;
+    const p = num(pullMap[t]);
+    const s = num(pushMap[t]);
+    pullTotal += p;
+    pushTotal += s;
+    if (p === 0 && s === 0) continue;
+    const arrows = s > 0 && p > 0 ? `↑${fa(s)} ↓${fa(p)}` : s > 0 ? `↑${fa(s)}` : `↓${fa(p)}`;
+    parts.push(`${t} ${arrows}`);
+  }
+  return { head: `↑${fa(pushTotal)} ↓${fa(pullTotal)}`, detail: parts.length > 0 ? parts.join(' · ') : null };
+}
+
+/**
+ * فاز B — ماسک secret برای نمایش: رشتهٔ ماسک‌شدهٔ پوسته («●●●●۱۲۳۴» — خروجی cloud_secret_get)
+ * → خودش؛ غایب/خراب/تهی → «—» بی‌کرش.
+ */
+export function cloudSecretMaskView(masked) {
+  if (typeof masked !== 'string') return '—';
+  const t = masked.trim();
+  return t ? t : '—';
+}
+
+/**
+ * فاز B — گاردهای کارت «اتصال ابری» (تابع خالص): کدام دکمه غیرفعال/پنهان و کدام ردیف
+ * نمایش می‌شود. «هم‌گام‌سازی اکنون» بی‌اتصال یا در جریان بودن غیرفعال است؛ «حذف اتصال»
+ * فقط با اتصال؛ ردیف‌های url/device/interval/تعارض فقط وقتی configured. پاکت غایب →
+ * همهٔ گاردها بسته، بی‌کرش.
+ */
+export function cloudCardView(status) {
+  const s = status && typeof status === 'object' ? status : null;
+  const configured = s?.configured === true;
+  const running = s?.running === true;
+  const intervalMs = Number(s?.interval_ms);
+  const minutes = Number.isFinite(intervalMs) && intervalMs > 0 ? Math.round(intervalMs / 60_000) : null;
+  const conflicts = Number(s?.conflicts_total);
+  const str = (v) => (typeof v === 'string' && v ? v : null);
+  return {
+    configured,
+    running,
+    runNowDisabled: !configured || running,
+    showDelete: configured,
+    urlText: configured ? str(s?.url) : null,
+    deviceIdText: configured ? str(s?.device_id) : null,
+    intervalText: configured && minutes !== null ? `هر ${fa(minutes)} دقیقه` : null,
+    conflictsTotal: configured && Number.isFinite(conflicts) && conflicts >= 0 ? Math.round(conflicts) : null,
+    secretPresent: configured && s?.secret_present === true
+  };
+}
+
+/** پوشش پاسخ درگاه وضعیت اتصال ابری: پاکت {data:…} باز می‌شود؛ بی‌هیچ فیلد شناخته → null (الگوی unwrapQuota) */
+export function unwrapInstanceSyncStatus(payload) {
+  const raw = payload && typeof payload === 'object' && payload.data && typeof payload.data === 'object'
+    ? payload.data
+    : payload;
+  if (!raw || typeof raw !== 'object') return null;
+  const known = ['configured', 'url', 'device_id', 'secret_present', 'running', 'interval_ms', 'last_sync', 'conflicts_total', 'clock_warning', 'schema_match']
+    .some((k) => k in raw);
+  return known ? raw : null;
+}
+
+/**
+ * فاز B — فرمان راز ابری روی پوستهٔ میز با گارد کامل (cloud_secret_set/get/delete):
+ * فقط وقتی کانال __TAURI__ هست اجرا می‌شود؛ بیرون دسکتاپ یا Err پوسته → {ok:false, reason}
+ * با پیام فارسی‌پذیر — SPA هرگز نمی‌شکند (الگوی engineInvoke). کانال __TAURI_INTERNALS__
+ * به‌تنهایی کافی نیست — معیار، کانال عمومی __TAURI__ است (هم‌الگوی بقیهٔ feedهای این فایل).
+ */
+export async function cloudSecretInvoke(command, args) {
+  try {
+    const tauri = globalThis.__TAURI__;
+    const invoke = tauri && typeof tauri.invoke === 'function' ? tauri.invoke : null;
+    if (!invoke) return { ok: false, reason: 'no-tauri-channel' };
+    return { ok: true, value: await invoke(command, args ?? {}) };
+  } catch (err) {
+    return { ok: false, reason: err?.message != null ? String(err.message) : String(err ?? 'خطای نامشخص') };
+  }
+}
+
+/** کانال راز دسکتاپ در دسترس است؟ — فعال‌سازی فیلد secret در فرم پیکربندی */
+export function cloudSecretChannelAvailable() {
+  const tauri = globalThis.__TAURI__;
+  return Boolean(tauri && typeof tauri.invoke === 'function');
+}
+
+/* ── فاز B — feed مشترک وضعیت اتصال ابری (HTTP) ────────────────────────────────
+   برخلاف feed سرور فاز A (رویداد پوسته + poll) این feed صرفاً HTTP است و در حالت وب هم
+   کار می‌کند. poll نخست بلافاصله، سپس هر ۳۰ثانیه؛ pollCloudSyncNow برای poll فوری پس از
+   هر کنش (ذخیره/حذف/هم‌گام‌سازی اکنون). پاکت ناآشنا نادیده گرفته می‌شود — وضعیت قبلی
+   می‌ماند؛ شنوندهٔ خراب هرگز feed را نمی‌کشد (الگوی notifyServerStatus). */
+
+let cloudSyncFeedInstalled = false;
+let cloudSyncFeedTimer = null;
+let cloudSyncFetcher = null;
+let lastCloudSyncPayload = null;
+const cloudSyncCallbacks = new Set();
+
+function notifyCloudSyncStatus(payload) {
+  const clean = unwrapInstanceSyncStatus(payload);
+  if (!clean) return; // پاکت ناآشنا — وضعیت قبلی دست‌نخورده می‌ماند
+  lastCloudSyncPayload = clean;
+  for (const cb of [...cloudSyncCallbacks]) {
+    try { cb(clean); } catch { /* شنوندهٔ خراب هرگز feed را نمی‌کشد */ }
+  }
+}
+
+function defaultCloudSyncFetcher() {
+  return api.get(CLOUD_SYNC_STATUS_PATH);
+}
+
+/** poll یک‌بارهٔ وضعیت اتصال ابری — fetcher تزریقی فقط برای آزمون؛ خرابی درگاه نرم است */
+export async function pollCloudSyncNow(fetcher) {
+  const f = typeof fetcher === 'function' ? fetcher : (cloudSyncFetcher ?? defaultCloudSyncFetcher);
+  try {
+    notifyCloudSyncStatus(await f());
+  } catch { /* درگاه هنوز مستقر نیست یا خط رفت — نرم؛ poll دوره‌ای ادامه می‌یابد */ }
+}
+
+/**
+ * فاز B — نصب یک‌بارهٔ feed وضعیت اتصال ابری: poll نخست فوری + setInterval هر ۳۰ثانیه.
+ * fetcher اختیاری فقط برای آزمون؛ بیرون آن api.get روی درگاه فقط‌مدیر استفاده می‌شود.
+ */
+export function startCloudSyncFeed(fetcher) {
+  if (cloudSyncFeedInstalled) return { installed: true };
+  cloudSyncFeedInstalled = true;
+  if (typeof fetcher === 'function') cloudSyncFetcher = fetcher;
+  void pollCloudSyncNow();
+  cloudSyncFeedTimer = setInterval(() => void pollCloudSyncNow(), CLOUD_SYNC_POLL_MS);
+  return { installed: true };
+}
+
+/** اشتراک شنوندهٔ وضعیت اتصال ابری — آخرین وضعیت شناخته‌شده بلافاصله می‌رسد؛ خروجی لغو اشتراک */
+export function subscribeCloudSyncStatus(cb) {
+  if (typeof cb !== 'function') return () => {};
+  cloudSyncCallbacks.add(cb);
+  if (lastCloudSyncPayload) {
+    try { cb(lastCloudSyncPayload); } catch { /* نرم */ }
+  }
+  return () => cloudSyncCallbacks.delete(cb);
+}
+
+/** آخرین وضعیت پاک‌سازی‌شدهٔ پاکت instance-sync/status — برای رندر نخست کارت (غایب → null) */
+export function lastCloudSyncStatus() {
+  return lastCloudSyncPayload;
+}
+
+/** بازنشانی feed اتصال ابری — فقط آزمون */
+export function resetCloudSyncFeedForTests() {
+  cloudSyncFeedInstalled = false;
+  if (cloudSyncFeedTimer) { clearInterval(cloudSyncFeedTimer); cloudSyncFeedTimer = null; }
+  cloudSyncFetcher = null;
+  cloudSyncCallbacks.clear();
+  lastCloudSyncPayload = null;
+}
+
 /* ── موج ۴ (۴-۵) — راهنمای درون‌برنامه‌ای ─────────────────────────────────────────
    چکیدهٔ دستی و فشردهٔ docs/ADMIN-GUIDE.fa.md (نسخهٔ ساده برای مدیر غیرفنی) — در همین فایل
    تعبیه شده است؛ در زمان اجرا هیچ فایل راهنما خوانده نمی‌شود و هیچ مسیر تازه‌ای به ناوبری
@@ -1671,6 +1912,216 @@ export async function renderHealthPanel(outlet) {
     return card;
   }
 
+  /* ── فاز B — کارت «اتصال ابری» (سند §۲-۵) — کنار کارت «سرور محلی» (دو کارت جدا) ─────────
+     وضعیت/آخرین هم‌گامی دوطرفه/تعارض‌ها از feed مشترک HTTP (/api/instance-sync/status +
+     poll ۳۰ثانیه‌ای + poll فوری پس از هر کنش) — رندر درجا با شنونده، بدون rebuild کل نما
+     (الگوی paint کارت سرور فاز A). کنش‌ها: «هم‌گام‌سازی اکنون» (run-now؛ در جریان → غیرفعال)،
+     «پیکربندی اتصال» (formModal: URL ورکر با normalizeWorkerUrl موجود + فاصلهٔ خودکار دقیقه +
+     secret فقط در دسکتاپ → POST config + invoke cloud_secret_set + poll فوری)، «حذف اتصال»
+     (تأیید دوبله + پیام پشتیبان/cursorها → DELETE config)، «کلون از ابر…» در فرم (تأیید دوبله +
+     هشدار جایگزینی دیتا → POST clone {confirm:true} → نتیجه + مسیر بکاپ). بیرون پوستهٔ میز
+     فیلد secret غیرفعال است («تنظیم secret فقط در نسخهٔ دسکتاپ») — بقیهٔ کارت سالم می‌ماند. */
+  function cloudSyncSection() {
+    const desktopSecret = cloudSecretChannelAvailable();
+    const resultLine = el('div', { class: 'hint-text', style: { marginTop: 'var(--sp-2)', whiteSpace: 'normal' } });
+    const body = el('div', { class: 'card__body--flush' });
+    const card = el('div', { class: 'card card__body--flush', style: { marginBottom: 'var(--sp-4)' } },
+      el('div', { class: 'ob-section__head' },
+        el('div', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', flexWrap: 'wrap' } },
+          el('h3', { style: { margin: 0 } }, 'اتصال ابری'),
+          el('p', { class: 'hint-text', style: { margin: '4px 0 0' } },
+            'هم‌گامی دوسویهٔ همین دستگاه با ورکر ابری — قرارداد instance-sync، جدای هم‌گامی نود با مرکز (کارت «وضعیت هم‌گامی» پایین)؛ وضعیت هر ۳۰ثانیه و پس از هر کنش تازه می‌شود.')
+        )
+      ),
+      body
+    );
+
+    // «هم‌گام‌سازی اکنون» — POST run-now + poll فوری؛ در جریان بودن → دکمه غیرفعال (گارد paint)
+    async function runNowAction(btn) {
+      await lockBtn(btn, async () => {
+        try {
+          await api.post('/api/instance-sync/run-now');
+          setResult(resultLine, 'هم‌گام‌سازی فرمان گرفت — وضعیت درجا تازه می‌شود', 'warn');
+          await pollCloudSyncNow();
+        } catch (err) {
+          toastError(err);
+          setResult(resultLine, `هم‌گام‌سازی اکنون ناموفق بود: ${err?.message ?? 'خطای نامشخص'}`, 'error');
+        }
+      });
+    }
+
+    // «کلون از ابر…» — دکمهٔ دوم فرم پیکربندی: تأیید دوبله + هشدار جایگزینی دیتا → POST clone
+    // قرارداد: ۴۰۹=نیاز confirm — پس از تأیید دوبله با {confirm:true} می‌رویم؛ پاسخ {ok, tables, backup_path}
+    async function cloneFromCloudAction() {
+      const okFirst = await confirmModal({
+        title: 'کلون از ابر',
+        message: 'دیتای محلی با ابر جایگزین می‌شود؛ بکاپ خودکار گرفته می‌شود. ادامه می‌دهید؟',
+        confirmLabel: 'ادامه',
+        danger: true
+      });
+      if (!okFirst) return;
+      const okFinal = await confirmModal({
+        title: 'تأیید نهایی کلون',
+        message: 'کلون برگشت‌پذیر نیست؛ تغییرات محلیِ هم‌گامی‌نشده از بین می‌رود (بکاپ خودکار نگه داشته می‌شود). مطمئن هستید؟',
+        confirmLabel: 'کلون می‌کنم',
+        danger: true
+      });
+      if (!okFinal) return;
+      try {
+        const res = await api.post('/api/instance-sync/clone', { confirm: true });
+        const data = res?.data && typeof res.data === 'object' ? res.data : res;
+        const backup = typeof data?.backup_path === 'string' && data.backup_path ? data.backup_path : null;
+        const tables = Array.isArray(data?.tables) ? data.tables.length : null;
+        const text = `کلون از ابر کامل شد — ${tables != null ? `${fa(tables)} جدول · ` : ''}بکاپ: ${backup ?? '—'}`;
+        toast(text, 'success');
+        setResult(resultLine, text, 'ok');
+        await pollCloudSyncNow();
+      } catch (err) {
+        setResult(resultLine, `کلون از ابر ناموفق بود: ${err?.message ?? 'خطای نامشخص'}`, 'error');
+        throw err; // errBox فرم — مودال باز می‌ماند تا کاربر پیام را ببیند
+      }
+    }
+
+    // «پیکربندی اتصال» — فرم URL ورکر + فاصلهٔ خودکار دقیقه + secret (فقط دسکتاپ)
+    function configureAction() {
+      let secretHint = 'تنظیم secret فقط در نسخهٔ دسکتاپ';
+      const openForm = () => {
+        const { form } = formModal({
+          title: 'پیکربندی اتصال ابری',
+          fields: [
+            { name: 'url', label: 'آدرس ورکر ابری', type: 'text', required: true, ltr: true, placeholder: 'https://markaz-….workers.dev', hint: 'آدرس ورکر کلادفلر — https (الگوی normalizeWorkerUrl)' },
+            { name: 'interval_minutes', label: 'فاصلهٔ هم‌گامی خودکار (دقیقه)', type: 'number', min: 1, value: '10', hint: 'پیش‌فرض ۱۰ دقیقه — خالی بماند همان پیش‌فرض سرور اعمال می‌شود' },
+            { name: 'secret', label: 'secret ورکر ابری', type: 'password', ltr: true, hint: secretHint }
+          ],
+          submitLabel: 'ذخیره',
+          secondary: { label: 'کلون از ابر…', onClick: () => cloneFromCloudAction() },
+          onSubmit: async (values) => {
+            // URL با نگاشت موجود اعتبارسنجی می‌شود؛ خطا → errBox فرم و ماندن مودال باز
+            const { normalizeWorkerUrl } = await import('../../../../src/cloud-setup/verify.ts');
+            const nm = normalizeWorkerUrl(values.url ?? '');
+            if (!nm.ok) throw new Error(nm.message);
+            const configBody = { url: nm.url };
+            const minutes = Number(values.interval_minutes);
+            if (Number.isFinite(minutes) && minutes > 0) configBody.interval_ms = Math.round(minutes * 60_000);
+            await api.post('/api/instance-sync/config', configBody);
+            if (desktopSecret && values.secret) {
+              const out = await cloudSecretInvoke('cloud_secret_set', { secret: values.secret });
+              if (!out.ok) throw new Error(`پیکربندی ذخیره شد ولی ذخیرهٔ secret در پوستهٔ میز ناموفق بود: ${out.reason ?? 'خطای نامشخص'}`);
+            }
+            toast('پیکربندی اتصال ابری ذخیره شد', 'success');
+            setResult(resultLine, 'پیکربندی اتصال ذخیره شد — وضعیت درجا تازه می‌شود', 'ok');
+            await pollCloudSyncNow();
+          }
+        });
+        // حالت وب — فیلد secret غیرفعال؛ مقدار هرگز خوانده/فرستاده نمی‌شود (گارد کانال)
+        if (!desktopSecret) {
+          const secretInput = form.querySelector('input[name="secret"]');
+          if (secretInput) { secretInput.disabled = true; secretInput.placeholder = '—'; }
+        }
+      };
+      if (!desktopSecret) { openForm(); return; }
+      // دسکتاپ — ماسک secret فعلی از پوسته خوانده می‌شود تا hint فرم واقعی باشد
+      void (async () => {
+        try {
+          const cur = await cloudSecretInvoke('cloud_secret_get');
+          const mask = cloudSecretMaskView(cur?.ok && typeof cur.value === 'string' ? cur.value : null);
+          secretHint = mask !== '—'
+            ? `secret فعلی: ${mask} — برای تغییر، مقدار تازه بدهید`
+            : 'secret ورکر ابری — یک‌بار در Credential Manager ذخیره می‌شود';
+        } catch { /* خواندن ماسک نافرجام ماند — hint پیش‌فرض */ }
+        openForm();
+      })();
+    }
+
+    // «حذف اتصال» — تأیید دوبله + پیام پشتیبان/cursorها → DELETE config (+ پاک‌کردن راز در میز)
+    async function deleteConnectionAction(btn) {
+      await lockBtn(btn, async () => {
+        const okFirst = await confirmModal({
+          title: 'حذف اتصال ابری',
+          message: 'پیکربندی اتصال ابری این دستگاه حذف می‌شود و cursorهای هم‌گامی بازنشسته می‌شوند — پیش از حذف یک پشتیبان بگیرید. ادامه می‌دهید؟',
+          confirmLabel: 'حذف اتصال',
+          danger: true
+        });
+        if (!okFirst) return;
+        const okFinal = await confirmModal({
+          title: 'تأیید نهایی حذف',
+          message: 'حذف اتصال برگشت‌پذیر نیست — برای هم‌گامی دوباره باید پیکربندی از اول انجام شود. مطمئن هستید؟',
+          confirmLabel: 'حذف می‌کنم',
+          danger: true
+        });
+        if (!okFinal) return;
+        try {
+          await api.del('/api/instance-sync/config');
+          if (desktopSecret) await cloudSecretInvoke('cloud_secret_delete');
+          toast('اتصال ابری حذف شد — پشتیبان‌های محلی سرِ جایشان هستند', 'success');
+          setResult(resultLine, 'اتصال ابری حذف شد — cursorهای هم‌گامی بازنشسته شد', 'ok');
+          await pollCloudSyncNow();
+        } catch (err) {
+          toastError(err);
+          setResult(resultLine, `حذف اتصال ناموفق بود: ${err?.message ?? 'خطای نامشخص'}`, 'error');
+        }
+      });
+    }
+
+    let unsubscribed = false;
+    let unsubscribe = null;
+    const paint = (status) => {
+      // نما رندر دوباره شده (بازخوانی ۶۰ثانیه‌ای کل پنل) — اشتراک کهنه بسته شود
+      if (!body.isConnected) {
+        if (unsubscribe && !unsubscribed) { unsubscribed = true; unsubscribe(); }
+        return;
+      }
+      const vm = cloudCardView(status);
+      const view = cloudSyncStateView(status);
+      const counts = cloudCountsView(status?.last_sync?.pulled, status?.last_sync?.pushed);
+      const subParts = [];
+      if (view.detail) subParts.push(view.detail);
+      if (counts.detail) subParts.push(counts.detail);
+      const rows = [
+        el('div', { class: 'ob-row' },
+          el('div', { class: 'ob-row__main' },
+            el('div', { class: 'cell-main' },
+              el('span', { class: `dot ${view.dot}`, style: { marginInlineEnd: 'var(--sp-2)' } }),
+              view.label),
+            el('div', { class: 'cell-sub' }, subParts.length > 0 ? subParts.join(' · ') : '—')
+          ),
+          el('div', { class: 'ob-row__side' },
+            vm.configured ? el('span', { class: `badge ${view.badge}` }, counts.head) : null
+          )
+        )
+      ];
+      if (!vm.configured) {
+        rows.push(el('div', { class: 'ob-row' },
+          el('div', { class: 'ob-row__main' },
+            el('div', { class: 'cell-main' }, 'اتصال ابری تنظیم نشده'),
+            el('div', { class: 'cell-sub' }, 'با «پیکربندی اتصال» آدرس ورکر و secret را ثبت کنید — یا در نصب تازه «کلون از ابر» را انتخاب کنید.'))
+        ));
+      } else {
+        rows.push(
+          infoRow('آدرس ورکر · دستگاه', el('span', { style: { direction: 'ltr', unicodeBidi: 'plaintext' } }, `${vm.urlText ?? '—'} · ${vm.deviceIdText ?? '—'}`)),
+          infoRow('فاصلهٔ هم‌گامی خودکار', vm.intervalText ?? '—'),
+          infoRow('تعارض‌های انباشته', vm.conflictsTotal != null ? `${fa(vm.conflictsTotal)}${vm.conflictsTotal > 0 ? ' — رسیدگی لازم' : ''}` : '—'),
+          infoRow('secret ورکر', vm.secretPresent ? 'تنظیم شده' : '—')
+        );
+      }
+      rows.push(
+        el('div', { class: 'ob-row' },
+          el('div', { class: 'ob-row__side' },
+            el('button', { class: 'btn btn--primary', type: 'button', disabled: vm.runNowDisabled, onclick: (e) => void runNowAction(e.currentTarget) }, 'هم‌گام‌سازی اکنون'),
+            el('button', { class: 'btn btn--ghost', type: 'button', onclick: () => configureAction() }, 'پیکربندی اتصال'),
+            vm.showDelete ? el('button', { class: 'btn btn--ghost', type: 'button', onclick: (e) => void deleteConnectionAction(e.currentTarget) }, 'حذف اتصال') : null
+          )
+        ),
+        resultLine
+      );
+      body.replaceChildren(...rows);
+    };
+    paint(lastCloudSyncStatus());
+    unsubscribe = subscribeCloudSyncStatus(paint);
+    startCloudSyncFeed();
+    return card;
+  }
+
   async function reload() {
     // ف۶ + EXP-2 — پنل سلامت، گزارش رشد، وضعیت هم‌گامی و سهمیهٔ مرکز هم‌زمان گرفته می‌شوند؛
     // خرابیِ هر بخش فقط کارت خودش را degraded می‌کند
@@ -1754,7 +2205,10 @@ export async function renderHealthPanel(outlet) {
 
       oneGlanceSection(data, sync, quota, lastBackupAt), // ۴-۱ — پنج سیگنال §۴ نقد با اقدام
 
-      serverSection(), // فاز A — کارت «سرور محلی»: وضعیت زندهٔ FSM موتور + سه کنش پوسته (حالت وب → خاکستری)
+      // فاز B — دو کارت جدا کنار هم (دو قرارداد جدا — سند §۲-۵): «سرور محلی» (فاز A) + «اتصال ابری» (فاز B)؛
+      // روی نمایشگر باریک خودش می‌شکند (auto-fit) — هیچ تغییری در ساخت کارت سرور فاز A ندادیم
+      el('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 'var(--sp-3)', alignItems: 'start' } },
+        serverSection(), cloudSyncSection()),
 
       el('div', { class: 'card', style: { marginBottom: 'var(--sp-4)' } },
         el('div', { class: 'card__head' },
