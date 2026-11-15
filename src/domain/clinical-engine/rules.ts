@@ -108,9 +108,16 @@ export const RULES: RuleSet[] = [
     ],
     consensus: { parent: 'ce-snap-iv-p-v1', teacher: 'ce-snap-iv-t-v1' },
     criteriaMap: [
-      { criterionId: 'adhd.a1', toolKey: 'ce-snap-iv-p-v1', itemRefs: [], passScore: 0 },
-      { criterionId: 'adhd.a2', toolKey: 'ce-snap-iv-p-v1', itemRefs: [], passScore: 0 },
-      { criterionId: 'adhd.c', toolKey: 'ce-snap-iv-p-v1', itemRefs: [], passScore: 0 }
+      /* ۱.۲۵.۰۶ — پرشدن ردگیر ملاک‌ها (قبلاً خالی بود → وضعیت ملاک همیشه «نامشخص»):
+         A1 از ۹ نشانهٔ کم‌توجهی و A2 از ۹ نشانهٔ بی‌قراری SNAP-IV (هر دو مرجع)؛ نشانهٔ بالینی
+         روی پاسخ «خیلی» (۲) به بالا — همان معیار Swanson. C (دو محیط) = هر دو مرجع پرچم‌اند
+         و ماشین هم‌گرایی (metCount≥2) همان دو-منبعی را می‌شمارد. */
+      { criterionId: 'adhd.a1', toolKey: 'ce-snap-iv-p-v1', itemRefs: ['s01', 's02', 's03', 's04', 's05', 's06', 's07', 's08', 's09'], passScore: 2 },
+      { criterionId: 'adhd.a1', toolKey: 'ce-snap-iv-t-v1', itemRefs: ['s01', 's02', 's03', 's04', 's05', 's06', 's07', 's08', 's09'], passScore: 2 },
+      { criterionId: 'adhd.a2', toolKey: 'ce-snap-iv-p-v1', itemRefs: ['s10', 's11', 's12', 's13', 's14', 's15', 's16', 's17', 's18'], passScore: 2 },
+      { criterionId: 'adhd.a2', toolKey: 'ce-snap-iv-t-v1', itemRefs: ['s10', 's11', 's12', 's13', 's14', 's15', 's16', 's17', 's18'], passScore: 2 },
+      { criterionId: 'adhd.c', toolKey: 'ce-snap-iv-p-v1', itemRefs: ['s01', 's02', 's03', 's04', 's05', 's06', 's07', 's08', 's09', 's10', 's11', 's12', 's13', 's14', 's15', 's16', 's17', 's18'], passScore: 2 },
+      { criterionId: 'adhd.c', toolKey: 'ce-snap-iv-t-v1', itemRefs: ['s01', 's02', 's03', 's04', 's05', 's06', 's07', 's08', 's09', 's10', 's11', 's12', 's13', 's14', 's15', 's16', 's17', 's18'], passScore: 2 }
     ],
     differentials: [
       { targetKey: 'odd', fa: 'اگر نافرمانی بر تکانشگری غالب است → چک‌لیست ODD بگیرید و تفکیک کنید.' },
@@ -195,7 +202,10 @@ export const RULES: RuleSet[] = [
     ],
     consensus: undefined,
     criteriaMap: [
-      { criterionId: 'dcd.a', toolKey: 'ce-dcdq-v1', itemRefs: [], passScore: 0 },
+      /* ۱.۲۵.۰۶ — dcd.a از ۱۵ آیتم DCDQ با پاس‌سختِ ۴ از ۴ (دشواری شدید)؛ چون DCDQ تک-گزارش‌دهنده
+         است، این ملاک حداکثر «ناقص» می‌گیرد نه «برآورده» — صادقانه، نه inflate. dcd.b (اختلال
+         روزمره) منبع صریح جداگانه ندارد و آگاهانه خالی می‌ماند — نامشخصِ صادق بهتر از نشانه‌سازی است. */
+      { criterionId: 'dcd.a', toolKey: 'ce-dcdq-v1', itemRefs: ['d01', 'd02', 'd03', 'd04', 'd05', 'd06', 'd07', 'd08', 'd09', 'd10', 'd11', 'd12', 'd13', 'd14', 'd15'], passScore: 4 },
       { criterionId: 'dcd.b', toolKey: 'ce-dcdq-v1', itemRefs: [], passScore: 0 }
     ],
     differentials: [
@@ -215,13 +225,33 @@ export const RULES: RuleSet[] = [
     ],
     consensus: { parent: 'ce-odd-criteria-v1', teacher: 'ce-odd-criteria-v1' },
     criteriaMap: [
-      { criterionId: 'odd.a1', toolKey: 'ce-odd-criteria-v1', itemRefs: ['oA1', 'oA6'], passScore: 2 },
+      /* ۱.۲۵.۰۶ — اصلاح ملاک هشتم DSM-5: oA6 (زودرنجی) قبلاً به odd.a1 تا شده بود و odd.a6
+         هیچ‌وقت مپ نمی‌شد (۷ ملاک از ۸). اکنون: oA1→a1 … oA8→a8 عیناً + آیتم‌های ODD فُرم
+         SNAP-IV (s19–s26) هر دو مرجع به‌عنوان منبع دوم برای هم‌گرایی خانه/مدرسه. */
+      { criterionId: 'odd.a1', toolKey: 'ce-odd-criteria-v1', itemRefs: ['oA1'], passScore: 2 },
       { criterionId: 'odd.a2', toolKey: 'ce-odd-criteria-v1', itemRefs: ['oA2'], passScore: 2 },
       { criterionId: 'odd.a3', toolKey: 'ce-odd-criteria-v1', itemRefs: ['oA3'], passScore: 2 },
       { criterionId: 'odd.a4', toolKey: 'ce-odd-criteria-v1', itemRefs: ['oA4'], passScore: 2 },
       { criterionId: 'odd.a5', toolKey: 'ce-odd-criteria-v1', itemRefs: ['oA5'], passScore: 2 },
+      { criterionId: 'odd.a6', toolKey: 'ce-odd-criteria-v1', itemRefs: ['oA6'], passScore: 2 },
       { criterionId: 'odd.a7', toolKey: 'ce-odd-criteria-v1', itemRefs: ['oA7'], passScore: 2 },
       { criterionId: 'odd.a8', toolKey: 'ce-odd-criteria-v1', itemRefs: ['oA8'], passScore: 2 },
+      { criterionId: 'odd.a1', toolKey: 'ce-snap-iv-p-v1', itemRefs: ['s19'], passScore: 2 },
+      { criterionId: 'odd.a1', toolKey: 'ce-snap-iv-t-v1', itemRefs: ['s19'], passScore: 2 },
+      { criterionId: 'odd.a2', toolKey: 'ce-snap-iv-p-v1', itemRefs: ['s20'], passScore: 2 },
+      { criterionId: 'odd.a2', toolKey: 'ce-snap-iv-t-v1', itemRefs: ['s20'], passScore: 2 },
+      { criterionId: 'odd.a3', toolKey: 'ce-snap-iv-p-v1', itemRefs: ['s21'], passScore: 2 },
+      { criterionId: 'odd.a3', toolKey: 'ce-snap-iv-t-v1', itemRefs: ['s21'], passScore: 2 },
+      { criterionId: 'odd.a4', toolKey: 'ce-snap-iv-p-v1', itemRefs: ['s22'], passScore: 2 },
+      { criterionId: 'odd.a4', toolKey: 'ce-snap-iv-t-v1', itemRefs: ['s22'], passScore: 2 },
+      { criterionId: 'odd.a5', toolKey: 'ce-snap-iv-p-v1', itemRefs: ['s23'], passScore: 2 },
+      { criterionId: 'odd.a5', toolKey: 'ce-snap-iv-t-v1', itemRefs: ['s23'], passScore: 2 },
+      { criterionId: 'odd.a6', toolKey: 'ce-snap-iv-p-v1', itemRefs: ['s24'], passScore: 2 },
+      { criterionId: 'odd.a6', toolKey: 'ce-snap-iv-t-v1', itemRefs: ['s24'], passScore: 2 },
+      { criterionId: 'odd.a7', toolKey: 'ce-snap-iv-p-v1', itemRefs: ['s25'], passScore: 2 },
+      { criterionId: 'odd.a7', toolKey: 'ce-snap-iv-t-v1', itemRefs: ['s25'], passScore: 2 },
+      { criterionId: 'odd.a8', toolKey: 'ce-snap-iv-p-v1', itemRefs: ['s26'], passScore: 2 },
+      { criterionId: 'odd.a8', toolKey: 'ce-snap-iv-t-v1', itemRefs: ['s26'], passScore: 2 },
       { criterionId: 'odd.b', toolKey: 'ce-odd-criteria-v1', itemRefs: ['oB1'], passScore: 2 },
       { criterionId: 'odd.c', toolKey: 'ce-odd-criteria-v1', itemRefs: ['oC1'], passScore: 2 },
       { criterionId: 'odd.d', toolKey: 'ce-odd-criteria-v1', itemRefs: ['oD1'], passScore: 2 }
@@ -241,6 +271,10 @@ export const RULES: RuleSet[] = [
     ],
     consensus: undefined,
     criteriaMap: [
+      /* ۱.۲۵.۰۶ — bif.a آگاهانه خالی می‌ماند: ملاک «هوشبهر ۷۰–۸۵» بازه‌ای است و ماشین ملاک‌ها
+         فقط «هر آیتم ≥ پاس‌سخت» می‌فهمد — fsiq≥70 هوشبهر ۱۲۰ را هم «برآورده» می‌کرد (غلط).
+         رتبه‌بندی همین مسیر با قاعدهٔ شواهد وکسلری (band danger روی BIF_IQ_RANGE) پوشش داده
+         می‌شود؛ bif.b/c هم مقادیر شرح‌حال v3 برچسبی‌اند (نه عددی) و از itemRefs عددمی‌شوند. */
       { criterionId: 'bif.a', toolKey: 'ce-wechsler-w4-v1', itemRefs: [], passScore: 0 },
       { criterionId: 'bif.b', toolKey: 'ce-anamnesis-v2', itemRefs: [], passScore: 0 },
       { criterionId: 'bif.c', toolKey: 'ce-anamnesis-v2', itemRefs: [], passScore: 0 }

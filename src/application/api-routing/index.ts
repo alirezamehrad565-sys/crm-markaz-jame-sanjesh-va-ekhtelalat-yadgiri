@@ -1,10 +1,10 @@
 import { Hono } from 'hono';
-import type { AppHono, AuthContext } from '@core/shared';
+import type { AppHono, AppBindings, AppVariables } from '@core/shared';
 import { APP_VERSION } from '@core/version';
 import { authMiddleware, supervisorGate, getAuthContext } from '@core/auth';
 import { createDb } from '@core/db';
 import type { DbClient } from '@core/db';
-import { createAuditWriter } from '@core/audit';
+import { createAuditWriter, runWithRequestId } from '@core/audit';
 import type { AuditWriter } from '@core/audit';
 import { createLogger } from '@core/logger';
 import type { Logger } from '@core/logger';
@@ -39,6 +39,8 @@ import type { ExerciseBankService, ExerciseFileSender } from '@domain/exercise-b
 import { createDocumentRequestService, registerRoutes as documentRequestRoutes } from '@domain/document-requests';
 import type { DocumentRequestService } from '@domain/document-requests';
 import { createCaseEventsService, registerCaseEventsRoutes, registerCaseEventPublicRoutes } from '@domain/case-events';
+import { createGamesService, registerGamesRoutes, registerGamesPublicRoutes } from '@domain/games'; // بستر بک‌اند بازی (۱.۲۵.۰۷)
+import type { GamesService } from '@domain/games';
 import type { CaseEventsService } from '@domain/case-events';
 import { createClinicalEngineService, registerClinicalEngineRoutes } from '@domain/clinical-engine';
 import type { ClinicalEngineService } from '@domain/clinical-engine';
@@ -59,6 +61,22 @@ import { createClearbookService, registerClearbookRoutes } from '@domain/clearbo
 import type { ClearbookService } from '@domain/clearbook';
 import { createDocsService, registerDocsRoutes } from '@domain/docs'; // نمون‌برگ‌ها و اسناد خام
 import type { DocsService } from '@domain/docs';
+import { createCenterKpiService, registerCenterKpiRoutes } from '@domain/center-kpi'; // ۱.۲۵.۴۶ — شاخص‌های مرکز
+import type { CenterKpiService } from '@domain/center-kpi';
+import { createNetworkContentService, registerNetworkContentRoutes } from '@domain/network-content'; // ۱.۲۵.۴۶ — کتابخانهٔ شبکه
+import { createBugReportService, registerBugReportRoutes } from '@domain/bug-reports'; // بازاعمال ۱.۲۵.۵۱ — گزارش باگ به پشتیبانی CP
+import type { BugReportService } from '@domain/bug-reports';
+import { createClientErrorsService, registerClientErrorsRoutes } from '@app/client-errors'; // ۱.۲۵.۶۶ — لولهٔ خطای مرورگر
+import type { ClientErrorsService } from '@app/client-errors';
+import { createHealthService, registerHealthRoutes } from '@app/health'; // ۱.۲۵.۶۷ — پنل سلامت (CP-3 ف۱)
+import type { HealthService } from '@app/health';
+import { registerSystemRoutes, registerSystemPublicRoutes, isRestartScheduled } from '@app/system'; // ۱.۲۶.۴ — دکمه‌های نجات (۴-۲) + بستهٔ خطا
+import { createGrowthService, registerGrowthRoutes } from '@app/growth'; // ف۴ — گزارش رشد جدول‌ها (بهداشت داده)
+import type { GrowthService } from '@app/growth';
+import { createContentScoreService, registerContentScoreRoutes } from '@domain/content-score'; // ۱.۲۵.۴۸ m6 — امتیاز شناسنامه
+import type { ContentScoreService } from '@domain/content-score';
+import { fetchCpContentFile } from '@app/cp-content/sync';
+import type { NetworkContentService } from '@domain/network-content';
 import { createFinanceService, registerFinanceRoutes } from '@domain/finance'; // بودجه و مالی مرکز
 import type { FinanceService } from '@domain/finance';
 import { registerImportRoutes } from '@app/excel-import'; // درون‌ریزی اکسل
@@ -88,9 +106,16 @@ import type { SessionNotesService } from '@app/session-notes';
 import { createRumService, registerRumRoutes } from '@app/rum'; // پایش کارایی (RUM)
 import type { RumService } from '@app/rum';
 import { registerAuthRoutes, registerLogoutRoute } from '@app/auth';
+import { registerSetupStatusRoutes, registerSetupCompleteRoutes } from '@app/setup/routes'; // v1.26.0 — راه‌اندازی نخست
 import { FEATURES } from '@core/shared';
+import { createNodeSyncApp, registerCentralQuotaRoutes, registerCentralNodesMapRoutes } from '../../node-sync/app'; // rust-f4 — زیراپ سینک نودهای دسکتاپ؛ rust-f15 — دید سهمیهٔ روزانه فقط-مدیر؛ EXP-8 — نقشهٔ معماری فقط-مدیر
+import { registerInternalSyncRoutes } from '../../internal-sync'; // rust-f9 — استقرار سینک (فقط-موتور، گیت env)
+import { registerNodeSyncStatusRoute } from '../../node-sync-runner/status'; // rust-f14 — وضعیت سینک نود برای UI میز
+import { createInstanceSyncApp } from '../../application/instance-sync/index'; // فاز B — هستهٔ هم‌گامی دوسویه نمونه‌ها (§۲-۴؛ گیت Bearer runtime-secret خودش)
+import { registerDesktopRoutes } from '@app/instance-sync/desktop-routes'; // فاز B — هم‌گامی میز↔ابر + کلون (سند §۲-۲/§۲-۴)
 
-import { errorHandler } from '@app/http';
+import { errorHandler, parseApiRateLimitPerMin, makeKeyedRateLimiter, API_RATE_LIMIT_WINDOW_MS } from '@app/http';
+import { RateLimitError } from '@core/errors';
 
 export interface AppDeps {
   db: DbClient;
@@ -106,6 +131,16 @@ export interface AppDeps {
   publicBaseUrl?: string | null;
   backupDocumentSender?: BackupDocumentSender | null; // تزریق ارسال‌کنندهٔ آزمایشی
   exerciseFileSender?: ExerciseFileSender | null; // تزریق ارسال‌کنندهٔ فایل تمرین (تست/سلف‌هاست)
+  // 1.25.48 m6 — اتصال CP برای دانلود فایل برگزیده‌ها (خاموش اگر env سینک خالی است)
+  cpSyncUrl?: string | null;
+  cpNodeCode?: string | null;
+  cpNodeKey?: string | null;
+  /** ۱.۲۵.۶۷ — نام محیط برای پنل سلامت (ENV رانتایم) */
+  envName?: string | null;
+  /** ف۵ (P0-3) — آستانهٔ هشدار خطاهای مرورگر در ۲۴ ساعت (env اختیاری ALERT_CLIENT_ERRORS_MAX؛ پیش‌فرض ۱۰۰) */
+  clientErrorsMax?: number | string | null;
+  /** ENG-4 (۱.۲۶.۴) — نشانی /health ورکر بازی‌ها (binding GAMES_HEALTH_URL؛ فقط در موتور محلی) */
+  gamesHealthUrl?: string | null;
 }
 
 export interface Services {
@@ -143,8 +178,16 @@ export interface Services {
   caseEvents: CaseEventsService;
   clinicalEngine: ClinicalEngineService;
   otEngine: OtEngineService;
+  games: GamesService; // ۱.۲۵.۰۷ — بستر بک‌اند بازی
   backup: BackupService;
   rum: RumService; // 
+  centerKpi: CenterKpiService; // ۱.۲۵.۴۶ — تابلوی شاخص‌های مرکز
+  networkContent: NetworkContentService; // ۱.۲۵.۴۶ — کتابخانهٔ شبکه
+  bugReports: BugReportService; // بازاعمال ۱.۲۵.۵۱ — گزارش باگ به پشتیبانی CP
+  clientErrors: ClientErrorsService; // ۱.۲۵.۶۶ — لولهٔ خطای مرورگر
+  health: HealthService; // ۱.۲۵.۶۷ — پنل سلامت (وضعیت سامانه + لینک CP — CP-3)
+  growth: GrowthService; // ف۴ — گزارش رشد جدول‌ها (شمارش روزانه در کرون + خواندن فقط‌مدیر)
+  contentScore: ContentScoreService; // ۱.۲۵.۴۸ m6 — امتیاز شناسنامه
 }
 
 export function createServices(deps: AppDeps): Services {
@@ -300,15 +343,6 @@ export function createServices(deps: AppDeps): Services {
     }
   });
 
-  appointments.setOpsObserver({
-    onOpsStatusChanged: async (appointment, students, _from, to) => {
-      if (to !== 'completed') return;
-      for (const s of students) {
-        await waitlist.onAttendanceMarked(appointment.id, s.studentId, 'present');
-      }
-    }
-  });
-
   todos.setNotifier((todo) => notify.notifyTodoAssigned(todo));
 
   exerciseBank.setGradeObserver(async (record) => {
@@ -419,10 +453,30 @@ export function createServices(deps: AppDeps): Services {
   const docs = createDocsService({ db, audit, logger, storage: exerciseStorage });
   const finance = createFinanceService({ db, audit, logger, storage: exerciseStorage });
 
-  // اعتبارسنجی لینک کارت طرح درمان به بانک تمرین: تزریق تابع (نه وابستگی ماژولیِ domain→domain)
-  const clinicalEngine = createClinicalEngineService({ db, audit, logger, exerciseIdsExist: (ids) => exerciseBank.idsExist(ids) });
-
+  // ۱.۲۵.۰۵ — otEngine قبل از موتور بالینی ساخته می‌شود: زمینهٔ صورت‌بندی مورد (گیت‌ها + پروفایل OT)
+  // با تزریق تابع داده می‌شود (قرارداد «نه وابستگی ماژولی domain→domain»)، مثل اعتبارسنجی لینک کارت
   const otEngine = createOtEngineService({ db, audit, logger });
+  const clinicalEngine = createClinicalEngineService({
+    db, audit, logger,
+    exerciseIdsExist: (ids) => exerciseBank.idsExist(ids),
+    formulationOt: {
+      gatesOf: (studentId, actor) => otEngine.getGates(studentId, actor),
+      otProfileOf: (studentId, actor) => otEngine.getOtProfile(studentId, actor)
+    }
+  });
+
+  /* ۱.۲۵.۵۹ — کانون‌های پایش خانه: موتور بالینی به case-events تزریق می‌شود تا هنگام ارسال
+     «پایش در خانه نسخهٔ ۲»، سازه‌های درگیرِ آخرین جمع‌بندی تشخیصی در رویداد اسنپ‌شات شود
+     (قرارداد «نه وابستگی ماژولی domain→domain» — هم‌الگوی formulationOt) */
+  caseEvents.setMonitorFocusProvider((studentId, actor) => clinicalEngine.homeMonitorFocusOf(studentId, actor));
+
+  // ۱.۲۵.۰۷ — بستر بک‌اند بازی: پراپ بازی با تزریق تابع به مسیر مداخله می‌رود
+  // (قرارداد «نه وابستگی ماژولی domain→domain» — هم‌الگوی formulationOt)
+  const games = createGamesService({
+    db, audit, logger,
+    publicBaseUrl: deps.publicBaseUrl ?? null,
+    injectPathProbe: (pathId, input, actor) => clinicalEngine.addPathProbe(pathId, input, actor)
+  });
 
   // مکانیک پشتیبان‌گیری و بازیابی
   const backup = createBackupService({ db, audit, logger, baleToken: deps.baleToken ?? null, sender: deps.backupDocumentSender ?? null }); // ارسال به آیدی بله
@@ -430,19 +484,115 @@ export function createServices(deps: AppDeps): Services {
   // تله‌متری کارایی: ثبت بی‌نام + جمع‌بندی صدک (نرخ درون‌حافظه، بدون IP/UA)
   const rum = createRumService({ db, logger });
 
-  return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, clearbook, docs, finance, reports, waitlist, followups, sessionNotes, todos, exerciseBank, documentRequests, caseEvents, clinicalEngine, otEngine, backup, rum };
+  // ۱.۲۵.۶۶ — لولهٔ خطای مرورگر: تا امروز کلاینت به /api/client-errors پست می‌کرد و ۴۰۱ می‌گرفت
+  const clientErrors = createClientErrorsService({ db, logger });
+
+  // ۱.۲۵.۶۷ — پنل سلامت (ف۱ طرح ارتقا، CP-3): وضعیت سامانه + شش درگاه لینک CP از مُهرهای settings؛
+  // ف۵ (P0-3) — همان پنل حالا آرایهٔ هشدارها را هم مشتق می‌کند (آستانهٔ خطاهای مرورگر از deps)
+  // ENG-4 (۱.۲۶.۴) — ردیف تازهٔ بازی‌ها از پروب /health پورت دوم (binding GAMES_HEALTH_URL)
+  const health = createHealthService({
+    db,
+    cpConfigured: Boolean(deps.cpSyncUrl && deps.cpNodeCode && deps.cpNodeKey),
+    envName: deps.envName ?? null,
+    clientErrorsMax: deps.clientErrorsMax ?? null,
+    gamesHealthUrl: deps.gamesHealthUrl ?? null
+  });
+
+  // ف۴ — گزارش رشد جدول‌ها: شمارش روزانه فقط در کرون digest رخ می‌دهد؛ این سرویس در مسیر درخواست فقط می‌خواند
+  const growth = createGrowthService({ db, logger });
+
+  // ۱.۲۵.۴۶ — تابلوی شاخص‌های مرکز + کتابخانهٔ شبکه (محورهای کیفیِ غنی‌سازی CP)
+  const centerKpi = createCenterKpiService({ db });
+  const networkContent = createNetworkContentService({
+    db,
+    audit,
+    // m6 — دانلود فقط-خواندنی فایل برگزیده‌ها با کلید نود (خاموش اگر env سینک خالی است)
+    fetchCpFile: deps.cpSyncUrl
+      ? (itemId) => {
+          let origin: string | null = null;
+          try { origin = new URL(deps.cpSyncUrl as string).origin; } catch { origin = null; }
+          return fetchCpContentFile({
+            config: { cpOrigin: origin, cpNodeCode: deps.cpNodeCode ?? null, cpNodeKey: deps.cpNodeKey ?? null, cpSyncStaffId: null },
+            networkItemId: itemId
+          }).catch(() => null);
+        }
+      : undefined
+  });
+
+  // m6 — مولد امتیاز شناسنامهٔ آیتم: خودِ سامانهٔ کلاینت (refs/uses از دادهٔ واقعی مرکز)
+  const contentScore = createContentScoreService(db, audit);
+
+  // بازاعمال ۱.۲۵.۵۱ — گزارش باگ به پشتیبانی CP (صف محلی؛ ارسال در @app/bug-report-forward)
+  const bugReports = createBugReportService(db, audit);
+
+  return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, clearbook, docs, finance, reports, waitlist, followups, sessionNotes, todos, exerciseBank, documentRequests, caseEvents, clinicalEngine, otEngine, games, backup, rum, centerKpi, networkContent, bugReports, clientErrors, health, growth, contentScore };
 }
 
 export function createApp(deps: AppDeps): AppHono {
   const services = createServices(deps);
 
-  const app: AppHono = new Hono<{ Bindings: { DB: D1Database; ENV: string; CF_ACCESS_TEAM_DOMAIN: string }; Variables: { authContext: AuthContext; logger: Logger } }>();
+  const app: AppHono = new Hono<{ Bindings: AppBindings; Variables: AppVariables }>();
 
   // — هوک تستی: دسترسی به سرویس‌ها برای e2e (مثلاً setFillObserver در آزمون )
   (app as unknown as { __services?: Services }).__services = services;
 
   app.use('*', async (c, next) => {
     c.set('logger', services.logger);
+    return next();
+  });
+
+  /* ف۵ (P2-13) — request-id سراسری: هر درخواست /api/* شناسهٔ همبستگی `req-<uuid>` می‌گیرد که
+     در سه‌جا می‌نشیند: هدر پاسخ X-Request-Id، فیلد request_id پاکت خطا (errorHandler) و
+     ردیف‌های audit_log همان درخواست (زمینهٔ AsyncLocalStorage در @core/audit — همهٔ
+     audit.logهای از اعماق سرویس‌ها بدون تغییر امضا شامل می‌شوند). میدل‌ور اولِ /api/* است
+     تا هر چیزی که بعدش می‌آید — حتی خطا — شناسه را داشته باشد. */
+  app.use('/api/*', async (c, next) => {
+    const requestId = `req-${crypto.randomUUID()}`;
+    c.set('requestId', requestId);
+    try {
+      return await runWithRequestId(requestId, () => next());
+    } finally {
+      // با finally حتی روی مسیر خطا (۴xx/۵xx) هدر می‌نشیند
+      c.header('X-Request-Id', requestId);
+    }
+  });
+
+  /* ف۵ (P2-15) — محدودسازی نرخ نوشتنی /api/* per-IP (پنجرهٔ ثابت درون‌حافظهٔ per-isolate):
+     پیش‌فرض ۲۴۰ نوشتنی در دقیقه بر IP — سخاوتمندانه تا کاربرد عادی هرگز ۴۲۹ نبیند؛
+     env اختیاری API_RATE_LIMIT_PER_MIN («۰» = خاموش با یک لاگ). مستثنی‌ها:
+     ① /api/auth/login — throttle اختصاصی دوبل خودش را دارد (login_throttle: ۵/۱۵دقیقه بر
+       شناسه + ۲۰/۱۵دقیقه بر IP) و سقف سراسری روی مسیر ورود، قفل‌شدن دفتر پشت NAT واحد را
+       به‌همراه دارد؛ ② مسیرهای /public (تله‌متری rum/client-errors) در این میدل‌ور نیستند و
+       limiter خودشان را دارند. محدودیت صادقانه: شمارنده per-isolate است — جزئیات در
+       @app/http/rate-limit و سند طرح §۴ آیتم ۱۵. */
+  const apiRateLimiter = makeKeyedRateLimiter(API_RATE_LIMIT_WINDOW_MS);
+  let rateLimitDisabledLogged = false;
+  app.use('/api/*', async (c, next) => {
+    if (c.req.method !== 'POST' && c.req.method !== 'PUT' && c.req.method !== 'PATCH' && c.req.method !== 'DELETE') {
+      return next(); // فقط متدهای نوشتنی — خواندنی‌ها بی‌سقف می‌مانند (کش no-store خودشان را دارند)
+    }
+    if (c.req.path === '/api/auth/login') return next(); // مستثنی مستند — throttle اختصاصی دارد
+
+    // env در هر درخواست از bindings خوانده می‌شود (wrangler var/secret رشته می‌دهد)؛
+    // کلید سطل، سقف را هم شامل است تا تغییر env سطل تازه بسازد نه بازنویسی سطل قدیم
+    const perMin = parseApiRateLimitPerMin(c.env?.API_RATE_LIMIT_PER_MIN);
+    if (perMin <= 0) {
+      if (!rateLimitDisabledLogged) {
+        rateLimitDisabledLogged = true;
+        services.logger.child('http').warn('api_rate_limit.disabled', {
+          reason: 'API_RATE_LIMIT_PER_MIN=0'
+        });
+      }
+      return next();
+    }
+    const ip = (c.req.header('cf-connecting-ip') ?? 'unknown').slice(0, 64);
+    if (!apiRateLimiter.allow(`${perMin}:${ip}`, perMin)) {
+      c.header('Retry-After', String(Math.ceil(API_RATE_LIMIT_WINDOW_MS / 1000)));
+      throw new RateLimitError(
+        Math.ceil(API_RATE_LIMIT_WINDOW_MS / 1000),
+        'درخواست‌های نوشتنی بیش از حد مجاز است — کمی بعد دوباره تلاش کنید'
+      );
+    }
     return next();
   });
 
@@ -481,7 +631,13 @@ export function createApp(deps: AppDeps): AppHono {
     });
   });
 
-  // — : سلامت واقعی = دسترسی D1 هم آزموده می‌شود؛ خرابی → 503 تا مانیتور بیرونی متوجه شود
+  // — : سلامت واقعی = دسترسی D1 هم آزموده می‌شود؛ خرابی → 503 تا مانیتور بیرونی متوجه شود.
+  // EXP-4 (رصد بیرونی مرکز): این مسیر «عمومی و بی‌احراز» است و شکل پاسخ حداقلی و قراردادی
+  // {ok, version, server_ts} — نه فیلد بیشتر (بدون هیچ نشت داده؛ جزئیات db/ping بیرون نمی‌رود).
+  // مصرف‌کنندگان: Cloudflare Health Check / uptime-check بیرونی (سند راهنمای ادمین §EXP-4)،
+  // دروازهٔ سلامت ×۳ scripts/update-remote.mjs (فقط res.ok و "version" می‌خواند) و انتظار
+  // سبزشدن موتور محلی در scripts/engine/engine.mjs (فقط res.ok). server_ts هم‌قرارداد
+  // پاسخ‌های سینک است تا ساعت مرجع مرکز از همین مسیر هم خواندنی باشد.
   app.get('/health', async (c) => {
     let dbOk = true;
     try {
@@ -492,9 +648,8 @@ export function createApp(deps: AppDeps): AppHono {
     return c.json(
       {
         ok: dbOk,
-        db: dbOk ? 'up' : 'down',
         version: APP_VERSION,
-        ts: new Date().toISOString()
+        server_ts: new Date().toISOString()
       },
       dbOk ? 200 : 503,
       { 'Cache-Control': 'no-store' }
@@ -523,7 +678,30 @@ export function createApp(deps: AppDeps): AppHono {
     });
   });
 
+  // ۱.۲۵.۰۷ — زنجیرهٔ عمومی بازی (/m/:token و /api/m/:token/*): باید «پیش از» گیت authMiddleware
+  // ثبت شود تا توکنِ خودِ لینک جای احراز هویت بنشیند (قرارداد §۵ نقشهٔ راه؛ بدون هیچ اطلاعات بالینی در خطا)
+  registerGamesPublicRoutes(app, services.games);
+
   registerAuthRoutes(app, { audit: services.audit, logger: services.logger });
+
+  // v1.26.0 — وضعیت راه‌اندازی نخست: عمومی و سبک (دو بولین) — راهنمای «manager / 1234»
+  // در صفحهٔ ورود فقط تا پایان راه‌اندازی نمایش داده می‌شود (هم در وب هم میز بی‌ضرر است).
+  registerSetupStatusRoutes(app, { logger: services.logger });
+
+  // ۱.۲۶.۴ — وضعیت مُهر ری‌استارت برای ناظر بیرونی (قبل از گیت auth؛ ناظر سشن اپ ندارد)
+  registerSystemPublicRoutes(app, { db: services.db });
+
+  /* rust-f4 — زیراپ سینک نودهای دسکتاپ (/node/*): «پیش از» گیت authMiddleware ثبت می‌شود
+     (زنجیرهٔ عمومی §۵)؛ احراز مسیرهای نودی خودش node_code+node_key است و مسیرهای مدیریتی
+     درون زیراپ با همان گیت سشن بسته می‌شوند. سند: docs/rust/node-sync.md */
+  app.route('/node', createNodeSyncApp({ db: services.db, audit: services.audit, logger: services.logger }));
+
+  /* فاز B — هستهٔ هم‌گامی دوسویه نمونه‌ها (/api/instance-sync/*): «پیش از» گیت authMiddleware
+     ثبت می‌شود — احراز این مسیرها خودش Bearer runtime-secret (helper handshake مرکز↔نمونه‌ها
+     resolveSessionSecret از @core/auth) + هدر X-Device-Id است (سند §۲-۴؛ هر دو سو — ابر و موتور
+     محلی — همین باندل را سرو می‌کنند). مسیرهای UI پنل همین قرارداد، جدا و بعد از گیت‌ها ثبت
+     می‌شوند (registerDesktopRoutes پایین‌تر). */
+  app.route('/api/instance-sync', createInstanceSyncApp({ db: services.db, logger: services.logger }));
 
   app.use('/api/*', authMiddleware());
   app.use('/api/*', supervisorGate(services.audit));
@@ -531,6 +709,38 @@ export function createApp(deps: AppDeps): AppHono {
   // بستن حلقهٔ خروج: خروج احرازشده بعد از گیت ناظر سوار می‌شود؛ رویداد ممیزی actor درست دارد.
   // ناظر طبق از گیت رد می‌شود (۴۰۳) — رفتار فقط-خواندن دست‌نخورده می‌ماند.
   registerLogoutRoute(app, { audit: services.audit, logger: services.logger });
+
+  // v1.26.0 — پایان راه‌اندازی نخست (بستن حساب‌های نمایشی) — فقط-مدیر؛
+  // مدیریت کارکنان از مسیرهای موجود @domain/staff (registerRoutes) استفاده می‌کند — همان‌جا سوار است.
+  registerSetupCompleteRoutes(app, { db: services.db, audit: services.audit, logger: services.logger });
+
+  // rust-f9 — استقرار سینک نود در میز: بعد از گیت‌ها تا سشن بگیرد؛ خودش گیت زمان‌اجرای
+  // CENTER_DESKTOP_ENGINE دارد (در تولید وب binding غایب است → ۴۰۴ کم‌دست، باندل یکسان).
+  registerInternalSyncRoutes(app, { db: services.db, logger: services.logger });
+
+  // rust-f14 — قرارداد وضعیت سینک نود برای UI میز: GET /api/node-sync/status (آینهٔ وضعیت
+  // هماهنگ‌ساز/catch-up + شمارش pending_push از DB) و POST همان مسیر برای آینهٔ اسنپ‌شات
+  // فرانت‌اند (runner.mirrorStatus). بعد از گیت‌ها تا سشن بگیرد؛ خودش گیت زمان‌اجرای
+  // CENTER_DESKTOP_ENGINE دارد (در تولید وب → ۴۰۴ کم‌دست، باندل یکسان).
+  registerNodeSyncStatusRoute(app, { db: services.db, logger: services.logger });
+
+  // فاز B — رانر هم‌گامی میز↔ابر (سند §۲-۲/§۲-۴): شش مسیر UI /api/instance-sync/* + زمان‌بند
+  // دوره‌ای بوت (فقط-فرایند؛ گارد محیط تست در خودش). بعد از گیت‌ها تا سشن بگیرد؛ خودش گیت
+  // CENTER_DESKTOP_ENGINE دارد و تغییرپذیرها فقط-مدیرند (در تولید وب → ۴۰۴ کم‌دست).
+  registerDesktopRoutes(app, {
+    db: services.db,
+    audit: services.audit,
+    logger: services.logger,
+    backup: services.backup
+  });
+
+  // rust-f15 — GET /api/central/quota: دید برآورد مصرف روزانهٔ سهمیه (فقط-مدیر؛ گیت سشن + نقش
+  // مدیر درون خود روت). بعد از گیت‌های سراسری تا no-store و ۴۰۱ کم‌دست زنجیرهٔ عمومی برقرار بماند.
+  registerCentralQuotaRoutes(app, { db: services.db });
+
+  // EXP-8 — GET /api/central/nodes-map: نقشهٔ معماری مرکز↔نودها (فقط-مدیر؛ همان گیت quota؛
+  // ?format=html صفحهٔ مدیریتی رندر-سروری بدون JavaScript). ثبت دو-خطی هم‌الگوی quota.
+  registerCentralNodesMapRoutes(app, { db: services.db });
 
   app.get('/api/me', (c) => c.json({ data: c.get('authContext') }, 200));
 
@@ -555,6 +765,8 @@ export function createApp(deps: AppDeps): AppHono {
   registerCaseEventsRoutes(app, services.caseEvents);
 
   registerClinicalEngineRoutes(app, services.clinicalEngine);
+
+  registerGamesRoutes(app, services.games); // ۱.۲۵.۰۷ — API پرسنلی بازی‌ها
 
   registerOtEngineRoutes(app, services.otEngine);
   registerCaseEventPublicRoutes(app, services.caseEvents, {
@@ -592,6 +804,23 @@ export function createApp(deps: AppDeps): AppHono {
   registerBackupRoutes(app, services.backup); // پشتیبان‌گیری و بازیابی
 
   registerRumRoutes(app, services.rum); // تله‌متری کارایی (نوشتن عمومی /public/rum، جمع‌بندی فقط‌مدیر)
+
+  registerCenterKpiRoutes(app, services.centerKpi); // ۱.۲۵.۴۶ — شاخص‌های مرکز (مدیر/منشی)
+  registerNetworkContentRoutes(app, services.networkContent); // ۱.۲۵.۴۶ — کتابخانهٔ شبکه
+
+  registerBugReportRoutes(app, services.bugReports); // بازاعمال ۱.۲۵.۵۱ — گزارش باگ به پشتیبانی CP
+
+  registerClientErrorsRoutes(app, services.clientErrors); // ۱.۲۵.۶۶ — لولهٔ خطای مرورگر (POST عمومی /public/client-errors، خواندن فقط‌مدیر)
+  registerHealthRoutes(app, services.health); // ۱.۲۵.۶۷ — پنل سلامت (GET /api/health/panel فقط‌مدیر)
+  registerSystemRoutes(app, {
+    db: services.db,
+    audit: services.audit,
+    logger: services.logger,
+    envName: deps.envName ?? null
+  }); // ۱.۲۶.۴ — POST /api/system/restart + GET /api/support/error-package (فقط‌مدیر، ۴-۲)
+  registerGrowthRoutes(app, services.growth); // ف۴ — گزارش رشد جدول‌ها (GET /api/growth/report فقط‌مدیر)
+
+  registerContentScoreRoutes(app, { contentScore: services.contentScore }); // ۱.۲۵.۴۸ m6 — امتیاز شناسنامه
 
   if (FEATURES.apiKeys) registerKeysRoutes(app, services.keys);
 

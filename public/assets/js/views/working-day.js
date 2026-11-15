@@ -18,7 +18,7 @@ import {
   WEEKDAY_ABBRS,
   WEEKDAY_NAMES
 } from '../format.js';
-import { el, icon, toast, toastError, loadingState, skeletonState, errorState, emptyState, statusBadge, formModal, confirmModal, openModal } from '../ui.js';
+import { el, icon, toast, toastError, skeletonState, errorState, emptyState, statusBadge, formModal, confirmModal, collapseRemove } from '../ui.js'; /* ۱.۲۵.۰۲ — نسخهٔ محلی با undo به جعبه‌ابزار مشترک منتقل شد (rm?.undo() با قرارداد جدید سازگار است) */
 import { hueClass, staffHue } from '../staff-hue.js'; // — رنگ ثابت هر درمانگر روی کارت نوبت
 import { sessionTypeOf } from '../session-type.js'; // — نوع جلسه (جدول ۴)
 import { openCaseEventForm, canCreateCaseEvents } from '../case-events.js';
@@ -40,38 +40,23 @@ const STAFF_STATUS_BADGE = { present: 'success', absent: 'error', late: 'warning
 const SESSION_STATUS_CLS = { present: 'ok', late: 'warn', absent: 'err', pending: 'muted', cancelled: 'muted' };
 const SESSION_STATUS_LABEL = { present: 'حاضر', late: 'تأخیر', absent: 'غایب', pending: 'در انتظار', cancelled: 'لغو' };
 
-const OPS_LABEL = { checked_in: 'آمد', delayed: 'تأخیر', in_session: 'در جلسه', completed: 'انجام شد', no_show: 'نیامد' };
-const OPS_ACTIONS = {
-  none: [
-    { to: 'checked_in', label: 'آمد', cls: 'primary' },
-    { to: 'delayed', label: 'تأخیر', cls: 'ghost' },
-    { to: 'no_show', label: 'نیامد', cls: 'danger-ghost' }
-  ],
-  checked_in: [
-    { to: 'in_session', label: 'شروع جلسه', cls: 'primary' },
-    { to: 'no_show', label: 'نیامد', cls: 'danger-ghost' }
-  ],
-  delayed: [
-    { to: 'checked_in', label: 'آمد', cls: 'primary' },
-    { to: 'in_session', label: 'شروع جلسه', cls: 'ghost' },
-    { to: 'no_show', label: 'نیامد', cls: 'danger-ghost' }
-  ],
-  in_session: [
-    { to: 'completed', label: 'اتمام جلسه', cls: 'primary' }
-  ],
-  completed: [],
-  no_show: []
-};
+/* ۱.۱۸.۰ — سیستم موازی «وضعیت عملیاتی نوبت» (آمد/تأخیر/شروع جلسه/اتمام جلسه/نیامد) حذف شد.
+   تنها مرجعِ وضعیت، حضور و غیاب واقعی هر دانش‌آموز است: همهٔ حاضر/تأخیر = برگزارشده؛
+   همه غایب = برگزار نشده؛ بقیه = در انتظار. */
+function attStateOf(a) {
+  if (a.status === 'cancelled') return 'cancelled';
+  const rows = (a.students ?? []).filter((s) => s.attendance !== 'cancelled');
+  if (rows.length === 0) return 'none';
+  if (rows.every((s) => s.attendance === 'present' || s.attendance === 'late')) return 'completed';
+  if (rows.every((s) => s.attendance === 'absent')) return 'no_show';
+  return 'none';
+}
 
-const OPS_STAT_ORDER = ['none', 'checked_in', 'delayed', 'in_session', 'completed', 'no_show'];
-
-const OPS_DOT = {
+const ATT_DOT = {
   none: 'wd-tl__dot--planned',
-  checked_in: 'wd-tl__dot--checked_in',
-  delayed: 'wd-tl__dot--delayed',
-  in_session: 'wd-tl__dot--in_session',
   completed: 'wd-tl__dot--completed',
-  no_show: 'wd-tl__dot--no_show'
+  no_show: 'wd-tl__dot--no_show',
+  cancelled: 'wd-tl__dot--cancelled'
 };
 
 function canManage() {
@@ -82,19 +67,226 @@ function isTherapist() {
   return session.user?.role === 'therapist';
 }
 
-function canOperate() {
-  return canManage() || isTherapist();
-}
-
 function canDeleteNotes() {
   return session.user?.role === 'manager';
 }
 
-const absenceFollowUpDone = new Set();
+/* ۱.۱۹.۰ — جریان پیوسته: هیچ اکشنی کل نما را دوباره نمی‌سازد.
+   هر دکمه همان لحظه وضعیت خودش را روی داده و DOM وصله می‌کند (optimistic UI)
+   و درخواست در پس‌زمینه می‌رود؛ خطا = برگشت نرم به وضعیت قبل.
+   rerender کامل فقط برای ناوبری تاریخ و دکمهٔ دستی «به‌روزرسانی» می‌ماند. */
+let currentBoard = null; // مرجع دادهٔ زندهٔ بورد برای وصله‌های جراحی
+const inflight = new Set(); // قفل اکشن در جریان — جلوی دابل‌اثر و رقابت پچ‌ها
+let overdueMeta = null; // شمارندهٔ کارت «ثبت‌های عقب‌افتاده» برای پچ فوری
+
+/* قرینهٔ sessionStatsFromAppointments سمت سرور — شمارش سطح دانش‌آموز در نوبت‌های غیرلغوشده */
+function recomputeSessionStats(board) {
+  if (!board) return;
+  let present = 0, absent = 0, pending = 0, total = 0;
+  const lists = [...(board.staff ?? []).map((c) => c.appointments ?? []), board.unassigned ?? []];
+  for (const list of lists) {
+    for (const appt of list) {
+      if (appt.status === 'cancelled') continue;
+      for (const s of appt.students ?? []) {
+        total++;
+        if (s.attendance === 'present') present++;
+        else if (s.attendance === 'absent') absent++;
+        else if (s.attendance === 'pending') pending++;
+      }
+    }
+  }
+  board.sessionStats = { total, present, absent, pending, cancelledAppointments: board.sessionStats?.cancelledAppointments ?? 0 };
+}
+
+function syncBoardJson() {
+  if (currentBoard) lastBoardJson = JSON.stringify(currentBoard); // softRefresh این تغییر را «خارجی» نبیند
+}
+
+function findAppt(apptId) {
+  if (!currentBoard) return null;
+  for (const c of currentBoard.staff ?? []) {
+    const hit = (c.appointments ?? []).find((a) => a.id === apptId);
+    if (hit) return hit;
+  }
+  return (currentBoard.unassigned ?? []).find((a) => a.id === apptId) ?? null;
+}
+
+function pulse(elm) {
+  if (!elm || !elm.isConnected) return;
+  elm.classList.remove('wd-flash');
+  void elm.offsetWidth; // ری‌استارت انیمیشن
+  elm.classList.add('wd-flash');
+  elm.addEventListener('animationend', () => elm.classList.remove('wd-flash'), { once: true });
+}
+
+/* برداشتن نرم یک عنصر — ۱.۲۵.۰۲: به ui.js منتقل شد (با ضبط parent/next + undo) */
+
+function refreshApptChips() {
+  const box = currentContainer?.querySelector?.('.wd-appts-card .wd-att__chips');
+  if (!box || !currentBoard) return;
+  const ss = currentBoard.sessionStats ?? {};
+  box.replaceChildren(...[
+    chip(ss.total, 'جلسه', 'primary', 'جلسه‌های این روز'),
+    ss.pending > 0 ? chip(ss.pending, 'بدون ثبت', 'neutral', 'جلسات بدون ثبت حضور دانش‌آموز') : null,
+    ss.present > 0 ? chip(ss.present, 'حاضر', 'success') : null,
+    ss.absent > 0 ? chip(ss.absent, 'غایب', 'error') : null,
+    currentBoard.assessmentsToday > 0 ? chip(currentBoard.assessmentsToday, 'ارزیابی امروز', 'accent', 'گزارش‌های جلسهٔ ثبت‌شدهٔ امروز') : null
+  ].filter(Boolean));
+}
+
+function refreshCalCount() {
+  const elc = currentContainer?.querySelector?.('.wd-cal__count');
+  if (!elc || !currentBoard) return;
+  elc.replaceChildren(icon('board', 13), `${fa(currentBoard.sessionStats?.total ?? 0)} جلسه`);
+}
+
+function refreshAttChips() {
+  const box = currentContainer?.querySelector?.('.wd-att-card .wd-att__chips');
+  if (!box || !currentBoard) return;
+  const counts = { present: 0, absent: 0, late: 0, leave: 0, sick: 0, unmarked: 0 };
+  for (const c of currentBoard.staff ?? []) {
+    if ((c.dayHours ?? []).length === 0) continue;
+    const st = c.attendance?.status;
+    if (st && counts[st] !== undefined) counts[st] += 1;
+    else counts.unmarked += 1;
+  }
+  box.replaceChildren(...[
+    chip(counts.present, 'حاضر', 'success'),
+    chip(counts.absent, 'غایب', 'error'),
+    chip(counts.late, 'تأخیر', 'warn'),
+    chip(counts.leave, 'مرخصی', 'accent'),
+    chip(counts.sick, 'بیمار', 'sick'),
+    chip(counts.unmarked, 'بدون ثبت', 'neutral')
+  ].filter(Boolean));
+}
+
+function staffStBits(st, note) {
+  return [
+    st ? el('span', { class: `badge badge--${STAFF_STATUS_BADGE[st]}` }, STAFF_STATUS_LABEL[st]) : null,
+    note
+      ? el('span', { class: 'att-note', title: note }, icon('edit', 12), note.length > 26 ? `${note.slice(0, 26)}…` : note)
+      : null
+  ];
+}
+
+function updateStaffRowVisuals(row, st, note) {
+  if (!row || !row.isConnected) return;
+  row.classList.toggle('wd-att__row--absent', st === 'absent');
+  const wrap = row.querySelector('.wd-att__stwrap');
+  if (!wrap) return;
+  wrap.replaceChildren(...staffStBits(st, note).filter(Boolean));
+  pulse(wrap.querySelector('.badge'));
+}
+
+function patchStaffBlockBadge(staffId, st) {
+  if (!canManage()) return;
+  const block = currentContainer?.querySelector?.(`.wd-block[data-staff-id="${staffId}"]`);
+  const wrap = block?.querySelector?.('.wd-block__stwrap');
+  if (!wrap) return;
+  wrap.replaceChildren(...(st ? [el('span', { class: `badge badge--${STAFF_STATUS_BADGE[st]}`, title: 'وضعیت حضور امروز' }, STAFF_STATUS_LABEL[st])] : []));
+  pulse(wrap.querySelector('.badge'));
+}
+
+/* وصلهٔ نقطهٔ تایم‌لاین و کلاس کارت نوبت بر اساس وضعیت تازهٔ حضورها */
+function patchApptVisuals(apptId) {
+  if (!currentContainer) return;
+  const appt = findAppt(apptId);
+  const item = currentContainer.querySelector(`.wd-tl__item[data-appt-id="${apptId}"]`);
+  if (!item || !appt) return;
+  const dotKey = attStateOf(appt);
+  const dot = item.querySelector('.wd-tl__dot');
+  if (dot && !dot.classList.contains('wd-tl__dot--now')) {
+    dot.className = `wd-tl__dot ${ATT_DOT[dotKey] ?? 'wd-tl__dot--planned'}${appt.status === 'cancelled' ? ' wd-tl__dot--cancelled' : ''}`;
+  }
+  const cardEl = item.querySelector('.wd-appt');
+  if (cardEl) {
+    cardEl.classList.toggle('is-attended', dotKey === 'completed');
+    cardEl.classList.toggle('is-noshow', dotKey === 'no_show');
+  }
+}
+
+/* ثبت وضعیت یک دانش‌آموز روی دادهٔ بورد + وصلهٔ فوری DOM — prev را برمی‌گرداند */
+function applyStudentStatusInBoard(apptId, studentId, status) {
+  const appt = findAppt(apptId);
+  if (!appt || !currentBoard) return null;
+  const s = (appt.students ?? []).find((x) => x.studentId === studentId);
+  if (!s) return null;
+  const prev = s.attendance;
+  s.attendance = status;
+  recomputeSessionStats(currentBoard);
+  const rowEl = currentContainer?.querySelector?.(`.wd-appt[data-appt-id="${apptId}"] .wd-appt__student[data-student-id="${studentId}"]`);
+  if (rowEl) {
+    const markEl = rowEl.querySelector('.wd-mark'); // ۱.۲۵.۰: نشان فقط روی ردیف لغوشده می‌ماند
+    if (markEl) {
+      markEl.className = `wd-mark wd-mark--${SESSION_STATUS_CLS[status] ?? 'muted'}`;
+      markEl.textContent = SESSION_STATUS_LABEL[status] ?? status;
+      pulse(markEl);
+    }
+    rowEl.querySelectorAll('.wd-appt__sbtn').forEach((b) => {
+      const on = b.dataset.status === status;
+      b.classList.toggle('is-active', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+  }
+  patchApptVisuals(apptId);
+  refreshApptChips();
+  refreshCalCount();
+  return prev;
+}
+
+function removeApptFromBoard(apptId) {
+  if (!currentBoard) return null;
+  for (const c of currentBoard.staff ?? []) {
+    const i = (c.appointments ?? []).findIndex((a) => a.id === apptId);
+    if (i >= 0) { c.appointments.splice(i, 1); return c; }
+  }
+  const j = (currentBoard.unassigned ?? []).findIndex((a) => a.id === apptId);
+  if (j >= 0) {
+    currentBoard.unassigned.splice(j, 1);
+    const badge = currentContainer?.querySelector?.('.wd-block--other .wd-block__head .badge');
+    if (badge) badge.textContent = `${fa(currentBoard.unassigned.length)} نوبت`;
+  }
+  return null;
+}
+
+function resolveOverdueRow(apptId, studentId) {
+  if (!currentContainer) return;
+  const row = currentContainer.querySelector(`.att-row[data-appt-id="${apptId}"][data-student-id="${studentId}"]`);
+  if (!row) return;
+  const card = row.closest('.card');
+  const rowsLeft = card ? card.querySelectorAll('.att-row').length : 0;
+  collapseRemove(row);
+  if (overdueMeta && overdueMeta.total > 0) overdueMeta.total -= 1;
+  refreshOverdueBadge(card);
+  if (card && rowsLeft <= 1) collapseRemove(card); // آخرین مورد بود — کل کارت جمع می‌شود
+}
+
+function refreshOverdueBadge(card) {
+  const badge = card?.querySelector?.('.card__head .badge');
+  if (badge && overdueMeta) badge.textContent = `${fa(overdueMeta.total)} نوبت`;
+}
+
+let assessmentSyncTimer = null;
+function syncAssessmentsLight() { // فقط شمارندهٔ «ارزیابی امروز» — بدون بازسازی نما
+  if (assessmentSyncTimer) clearTimeout(assessmentSyncTimer);
+  assessmentSyncTimer = setTimeout(async () => {
+    assessmentSyncTimer = null;
+    if (!currentContainer?.isConnected || !currentBoard) return;
+    try {
+      const fresh = await api.get(`/api/working-day${qs({ date: local.date })}`).then((r) => r.data);
+      if (!currentContainer?.isConnected || !currentBoard) return;
+      currentBoard.assessmentsToday = fresh.assessmentsToday;
+      refreshApptChips();
+      syncBoardJson();
+    } catch { /* بی‌اهمیت */ }
+  }, 700);
+}
 
 function rerender() {
   if (currentContainer) renderWorkingDay(currentContainer);
 }
+
+let renderSeq = 0; // — گارد نسل رندر (الگوی router.js): پاسخِ دیرِ تاریخ قبلی اجازه ندارد بورد تاریخ تازه را بازنویسی کند
 
 const REFRESH_MS = 30000;
 let refreshTimer = null;
@@ -109,6 +301,7 @@ function stopRefresh() {
 
 function isBoardBusy() {
   if (document.hidden) return true;
+  if (inflight.size > 0) return true; // پچ جراحی در جریان است — دست نزن
   if (document.querySelector('.modal-overlay')) return true; // مودال بازی
   const noteInput = document.querySelector('.wd-note-form__input');
   if (noteInput && (noteInput.value || '').trim().length > 0) return true; // در حال تایپ توضیح
@@ -160,7 +353,9 @@ function shiftJalaliMonth(jy, jm, delta) {
 }
 
 export async function renderWorkingDay(container, opts = {}) {
+  const mySeq = ++renderSeq; // — هر ناوبری/به‌روزرسانی یک نسل تازه؛ دو کلیک سریع نباید بوردِ تاریخ کهنه را رنگ کند
   currentContainer = container;
+  currentBoard = null;
   stopRefresh(); // جلوگیری از تایمرهای انباشته
   const scrollY = opts.keepScroll ? window.scrollY : null;
 
@@ -170,17 +365,20 @@ export async function renderWorkingDay(container, opts = {}) {
   try {
     board = await api.get(`/api/working-day${qs({ date: local.date })}`).then((r) => r.data);
   } catch (err) {
+    if (mySeq !== renderSeq) return; // — ناوبری/رندر تازه‌تر در جریان است؛ خطای نسخهٔ مرده رنگ نگیرد
     container.replaceChildren(errorState(err, () => renderWorkingDay(container)));
     return;
   }
+  if (mySeq !== renderSeq) return; // — پاسخ بوردِ کهنه: تاریخ/رندر عوض شده — دور بریز
   lastBoardJson = JSON.stringify(board); // مرجع مقایسهٔ auto-refresh
+  currentBoard = board; // مرجع وصله‌های جراحی (جریان پیوسته)
 
   const pageHead = el('div', { class: 'page-head' },
     el('div', {},
       el('div', { class: 'page-head__title' }, 'روز کاری'),
       el('div', { class: 'page-head__desc' },
         isTherapist()
-          ? 'تقویم و کارت جلسات خودتان — حضور و غیاب، وضعیت جلسه و گزارش، همه در یک نگاه'
+          ? 'تقویم و کارت جلسات خودتان — حضور و غیاب و گزارش، همه در یک نگاه'
           : 'تقویم، حضور و غیاب همکاران، نوبت‌ها و سنجش — همه در یک نگاه'
       )
     ),
@@ -406,14 +604,8 @@ function attRow(col, board, canMark) {
       ...(canMark ? {} : { 'aria-disabled': 'true' }),
       'aria-label': canMark ? s.label : (board.isToday ? `${s.label} — فقط مدیر و منشی مجاز به ثبت هستند` : `${s.label} — ثبت حضور فقط برای امروز مجاز است`),
       title: canMark ? s.label : (board.isToday ? 'فقط مدیر و منشی مجاز به ثبت هستند' : 'ثبت حضور فقط برای امروز مجاز است'),
-      onclick: async () => {
-        if (!canMark) return;
-        try {
-          await api.put('/api/staff-attendance', { staff_id: col.staffId, date: board.date, status: s.key });
-          toast(`${col.fullName}: ${STAFF_STATUS_LABEL[s.key]}`, 'success', 2200);
-          rerender();
-        } catch (err) { toastError(err); }
-      }
+      /* جریان پیوسته: کلید همان لحظه فعال می‌شود؛ PUT در پس‌زمینه */
+      onclick: (e) => markStaffAttendance(col, board, s.key, e.currentTarget, { seg, segBtns, row })
     }, s.label);
     btn.setAttribute('aria-pressed', 'false'); /* S1-25: وضعیت فعال مثل بقیهٔ سگمنت‌ها اعلام شود */
     segBtns.set(s.key, btn);
@@ -442,24 +634,58 @@ function attRow(col, board, canMark) {
       )
     : null;
 
-  return el('div', { class: `wd-att__row${st === 'absent' ? ' wd-att__row--absent' : ''}` },
+  const row = el('div', { class: `wd-att__row${st === 'absent' ? ' wd-att__row--absent' : ''}`, dataset: { staffId: col.staffId } },
     el('div', { class: 'staff-mini__avatar' }, col.fullName.trim().charAt(0)),
     el('div', { class: 'wd-att__who' },
       el('div', { class: 'wd-att__name' }, col.fullName),
       el('div', { class: 'wd-att__meta' }, statusBadge(col.role), hoursChip,
-        st ? el('span', { class: `badge badge--${STAFF_STATUS_BADGE[st]}` }, STAFF_STATUS_LABEL[st]) : null,
-        col.attendance?.note
-          ? el('span', { class: 'att-note', title: col.attendance.note }, icon('edit', 12), col.attendance.note.length > 26 ? `${col.attendance.note.slice(0, 26)}…` : col.attendance.note)
-          : null
+        el('span', { class: 'wd-att__stwrap' }, ...staffStBits(st, col.attendance?.note ?? null).filter(Boolean))
       )
     ),
     el('div', { class: 'wd-att__actions' }, seg, noteBtn)
   );
+  return row;
+}
+
+/* جریان پیوسته — حضور همکار: سگمنت و بج‌ها همان لحظه عوض می‌شوند، PUT در پس‌زمینه؛ خطا = برگشت نرم */
+async function markStaffAttendance(col, board, status, btn, bits = {}) {
+  if (!(board.isToday && canManage())) return;
+  const key = `staff:${col.staffId}`;
+  if (inflight.has(key)) return;
+  inflight.add(key);
+  const { seg, segBtns, row } = bits;
+  const prevAtt = col.attendance ?? null; // — کل شکل قبلی؛ برای برگشت نرم خطا
+  const prevStatus = prevAtt?.status ?? null;
+  const prevNote = prevAtt?.note ?? null;
+  /* F12: دادهٔ بورد قبل از apply به‌روز شود — وگرنه refreshAttChips داخل apply چیپ‌ها را
+     با وضعیت «قبلی» می‌شمارد و چیپ‌ها تا پایان PUT یک جهش عقب می‌مانند */
+  col.attendance = { ...(prevAtt ?? {}), status, note: prevNote };
+  const apply = (st) => {
+    seg?.classList.toggle('wd-seg--unset', !st);
+    if (segBtns) for (const [k, b] of segBtns) {
+      b.classList.toggle('is-active', k === st);
+      b.setAttribute('aria-pressed', k === st ? 'true' : 'false');
+    }
+    updateStaffRowVisuals(row, st, col.attendance?.note ?? prevNote);
+    patchStaffBlockBadge(col.staffId, st);
+    refreshAttChips();
+  };
+  apply(status);
+  try {
+    await api.put('/api/staff-attendance', { staff_id: col.staffId, date: board.date, status });
+    toast(`${col.fullName}: ${STAFF_STATUS_LABEL[status]}`, 'success', 2200);
+    syncBoardJson();
+  } catch (err) {
+    col.attendance = prevAtt; // — برگشت نرم به دادهٔ قبل؛ apply زیر چیپ‌ها و بج‌ها را هم برمی‌گرداند
+    apply(prevStatus);
+    toastError(err);
+  } finally {
+    inflight.delete(key);
+  }
 }
 
 function apptsCard(board) {
   const ss = board.sessionStats;
-  const ops = board.opsStats;
 
   const selfId = session.user?.staffId ?? null;
   const staffBlocks = (board.staff ?? [])
@@ -485,16 +711,11 @@ function apptsCard(board) {
       el('div', { class: 'card__title' }, icon('board', 16), isTherapist() ? 'جلسات من' : 'درمانگران و نوبت‌ها'),
       el('div', { class: 'wd-att__chips' },
         chip(ss.total, 'جلسه', 'primary', 'جلسه‌های این روز'),
-        chip(ss.pending, 'بدون ثبت', 'neutral', 'جلسات بدون ثبت حضور دانش‌آموز'),
-        chip(ss.present, 'حاضر', 'success'),
-        chip(ss.absent, 'غایب', 'error'),
-        chip(ops.planned, 'در انتظار عملیات', 'info', 'نوبت‌های بدون وضعیت عملیاتی'),
-        chip(ops.checkedIn, 'آمد', 'accent'),
-        chip(ops.delayed, 'تأخیر', 'warn'),
-        chip(ops.inSession, 'در جلسه', 'primary'),
-        chip(ops.completed, 'انجام شد', 'success'),
-        chip(ops.noShow, 'نیامد', 'error'),
-        chip(ops.cancelled, 'لغو', 'muted'),
+        /* UX-ممیزی فاز ۳: دوازده چیپ آماری هم‌زمان سربرگ را پر می‌کرد —
+           چیپ‌های صفر اطلاعی ندارند و فقط شلوغی‌اند؛ فقط شمارنده‌های غیرصفر رندر می‌شوند */
+        ss.pending > 0 ? chip(ss.pending, 'بدون ثبت', 'neutral', 'جلسات بدون ثبت حضور دانش‌آموز') : null,
+        ss.present > 0 ? chip(ss.present, 'حاضر', 'success') : null,
+        ss.absent > 0 ? chip(ss.absent, 'غایب', 'error') : null,
         board.assessmentsToday > 0 ? chip(board.assessmentsToday, 'ارزیابی امروز', 'accent', 'گزارش‌های جلسهٔ ثبت‌شدهٔ امروز') : null
       )
     ),
@@ -511,34 +732,25 @@ function staffBlock(col, board) {
       )
     : el('span', { class: 'wd-hours wd-hours--off' }, 'بدون بازهٔ کاری');
 
-  const opsCounts = new Map();
-  for (const ap of col.appointments) {
-    if (ap.status === 'cancelled') continue;
-    const key = ap.opsStatus ?? 'none';
-    opsCounts.set(key, (opsCounts.get(key) ?? 0) + 1);
-  }
-  const statPills = OPS_STAT_ORDER
-    .filter((k) => (opsCounts.get(k) ?? 0) > 0)
-    .slice(0, 3)
-    .map((k) => el('span', { class: 'wd-mark wd-mark--muted', title: 'وضعیت عملیاتی نوبت‌های این درمانگر امروز' },
-      `${fa(opsCounts.get(k))} ${OPS_LABEL[k] ?? 'بدون ثبت'}`));
-
-  return el('div', { class: `wd-block${st === 'absent' ? ' wd-block--absent' : ''}` },
+  /* ۱.۲۵.۰ — رنگ درمانگر روی کل بلوک نشسته تا بج شمارش و حاشیهٔ کارت‌ها و آواتار سربرگ
+     همه از یک جفت متغیر hue تغذیه شوند (وحدت رنگی سربرگ ↔ کارت‌ها) */
+  return el('div', { class: `wd-block ${hueClass(col.staffId)}${st === 'absent' ? ' wd-block--absent' : ''}`, dataset: { staffId: col.staffId } },
     el('div', { class: 'wd-block__head' },
-      el('div', { class: `staff-mini__avatar ${hueClass(col.staffId)}` }, col.fullName.trim().charAt(0)),
+      el('div', { class: `staff-mini__avatar ${hueClass(col.staffId)}`, 'aria-hidden': 'true' }, col.fullName.trim().charAt(0)),
       el('div', { class: 'wd-block__title' },
         el('div', { class: 'wd-block__name' }, col.fullName),
         el('div', { class: 'wd-block__meta' },
           statusBadge(col.role),
           hoursChip,
-          st && canManage()
-            ? el('span', { class: `badge badge--${STAFF_STATUS_BADGE[st]}`, title: 'وضعیت حضور امروز' }, STAFF_STATUS_LABEL[st])
-            : null
+          el('span', { class: 'wd-block__stwrap' },
+            st && canManage()
+              ? el('span', { class: `badge badge--${STAFF_STATUS_BADGE[st]}`, title: 'وضعیت حضور امروز' }, STAFF_STATUS_LABEL[st])
+              : null
+          )
         )
       ),
       el('div', { class: 'wd-block__stats' },
-        el('span', { class: 'badge badge--neutral' }, `${fa(col.appointments.length)} نوبت`),
-        ...statPills
+        el('span', { class: 'wd-block__count', title: 'تعداد نوبت‌های این درمانگر امروز (شامل لغوشده)' }, `${fa(col.appointments.length)} نوبت`)
       )
     ),
     timeline(col.appointments, board)
@@ -579,14 +791,14 @@ function timeline(appointments, board) {
 
 function apptItem(a) {
   const cancelled = a.status === 'cancelled';
-  const dotKey = cancelled ? 'cancelled' : (a.opsStatus ?? 'none');
-  return el('div', { class: `wd-tl__item${cancelled ? ' wd-tl__item--cancelled' : ''}` },
+  const dotKey = attStateOf(a);
+  return el('div', { class: `wd-tl__item${cancelled ? ' wd-tl__item--cancelled' : ''}`, dataset: { apptId: a.id } },
     el('div', { class: 'wd-tl__time' },
-      fa(tehranTimeOfIso(a.startAt)),
+      el('b', {}, fa(tehranTimeOfIso(a.startAt))), // ۱.۲۵.۰ — شروع پررنگ‌تر از پایان
       el('span', {}, `تا ${fa(tehranTimeOfIso(a.endAt))}`)
     ),
     el('div', { class: 'wd-tl__rail' },
-      el('span', { class: `wd-tl__dot ${OPS_DOT[dotKey] ?? 'wd-tl__dot--planned'}${cancelled ? ' wd-tl__dot--cancelled' : ''}`, 'aria-hidden': 'true' })
+      el('span', { class: `wd-tl__dot ${ATT_DOT[dotKey] ?? 'wd-tl__dot--planned'}${cancelled ? ' wd-tl__dot--cancelled' : ''}`, 'aria-hidden': 'true' })
     ),
     el('div', { class: 'wd-tl__body' }, apptCard(a))
   );
@@ -603,26 +815,28 @@ function nowItem(nowLabel) {
 }
 
 function wdApptStatusClass(a) {
-  if (a.status === 'cancelled') return '';
-  if (a.opsStatus === 'completed') return ' is-attended';
-  if (a.opsStatus === 'no_show') return ' is-noshow';
+  const st = attStateOf(a);
+  if (st === 'completed') return ' is-attended';
+  if (st === 'no_show') return ' is-noshow';
   return '';
 }
 
 function apptCard(a) {
   const cancelled = a.status === 'cancelled';
-  const opsKey = a.opsStatus ?? 'none';
   const durMin = Math.round((Date.parse(a.endAt) - Date.parse(a.startAt)) / 60000);
   const stType = sessionTypeOf(a.sessionType);
 
-  const head = el('div', { class: 'wd-appt__time' },
-    a.opsStatus ? statusBadge(a.opsStatus) : null,
+  /* ۱.۲۵.۰ — بازطراحی کارت نوبت (فقط پیکربندی DOM، بدون تغییر منطق):
+     ① نام دانش‌آموز خط اول و برجسته است؛ نوع خدمت/مدت/وضعیت در ردیف فرودی زیر آن
+     ② چیپ‌های «۴۵ دقیقه» و «۱ دانش‌آموز» حذف شدند — مدت در ستون تایم‌لاین (شروع–پایان) و
+        شمارش در خود ردیف‌ها دیده می‌شود؛ آواتار حرفی دانش‌آموز هم برداشته شد
+     ③ سه دکمهٔ حاضر/تأخیر/غایب به یک سگمنت یکپارچه با وضعیت فعال در زمان رندر تبدیل شد
+     ④ data-appt-id روی کارت نشست — وصله‌های جراحی جریان پیوسته (نشان حضور + پیش‌نمایش توضیح)
+        تا ۱.۲۴.۰ انتخابگر مرده داشتند و درجا اعمال نمی‌شدند (رفع باگ واقعی) */
+  const meta = el('div', { class: 'wd-appt__meta' },
     cancelled ? el('span', { class: 'badge badge--neutral' }, 'لغوشده') : null,
     stType ? el('span', { class: `st-chip st-chip--${stType.key}`, title: stType.hint }, stType.short) : null,
-    el('span', { class: 'wd-hours', title: 'مدت این نوبت' }, `${fa(Math.max(0, durMin))} دقیقه`),
-    a.students.length > 0
-      ? el('span', { class: 'wd-hours', title: 'تعداد دانش‌آموزان این نوبت' }, `${fa(a.students.length)} دانش‌آموز`)
-      : null,
+    el('span', { class: 'wd-appt__dur', title: 'مدت این نوبت' }, `${fa(Math.max(0, durMin))} دقیقه`),
     el('span', { class: 'spacer' }),
     el('button', {
       class: `btn btn--ghost btn--icon btn--sm${a.note ? ' has-note' : ''}`,
@@ -652,8 +866,28 @@ function apptCard(a) {
     if (!ok) return;
     try {
       await api.del(`/api/appointments/${appt.id}`);
+      const col = removeApptFromBoard(appt.id);
+      recomputeSessionStats(currentBoard);
+      /* F14: بورد ممکن است حین DELETE بازسازی شده باشد؛ گرهٔ کهنه جداافتاده و no-op می‌شد —
+         بعد از پاسخ، آیتم را از لنگر data-appt-id دوباره می‌گیریم */
+      const item = currentContainer?.querySelector?.(`.wd-tl__item[data-appt-id="${appt.id}"]`);
+      collapseRemove(item); // جریان پیوسته: آیتم همان لحظه جمع می‌شود — نه رفرش کل نما
+      if (col) {
+        const badge = currentContainer?.querySelector?.(`.wd-block[data-staff-id="${col.staffId}"] .wd-block__stats .badge`);
+        if (badge) badge.textContent = `${fa(col.appointments.length)} نوبت`;
+        if ((col.appointments ?? []).length === 0) {
+          const block = currentContainer?.querySelector?.(`.wd-block[data-staff-id="${col.staffId}"]`);
+          if (block) collapseRemove(block); // بلوک خالی مثل رندر تازه جمع می‌شود
+        }
+      }
+      if ((currentBoard?.unassigned ?? []).length === 0) {
+        const ob = currentContainer?.querySelector?.('.wd-block--other');
+        if (ob) collapseRemove(ob);
+      }
+      refreshApptChips();
+      refreshCalCount();
+      syncBoardJson();
       toast('نوبت حذف شد', 'success');
-      rerender();
     } catch (err) {
       toastError(err);
     }
@@ -665,8 +899,16 @@ function apptCard(a) {
 
   const studentRows = a.students.map((s) => {
     const cls = SESSION_STATUS_CLS[s.attendance] ?? 'muted';
-    return el('div', { class: 'wd-appt__student' },
-      el('span', { class: 'wd-appt__savatar', 'aria-hidden': 'true' }, String(s.name ?? '').trim().charAt(0)),
+    const segBtn = (status, sbtnCls, ic, label) => el('button', {
+      class: `wd-appt__sbtn ${sbtnCls}${!cancelled && s.attendance === status ? ' is-active' : ''}`,
+      type: 'button',
+      dataset: { status },
+      'aria-pressed': !cancelled && s.attendance === status ? 'true' : 'false',
+      'aria-label': `${label} — ${s.name}`,
+      title: `${label} — ${s.name}`,
+      onclick: (e) => markStudent(a, s, status, e.currentTarget)
+    }, icon(ic, 13));
+    return el('div', { class: 'wd-appt__student', dataset: { studentId: s.studentId } },
       el('a', {
         class: 'wd-appt__sname',
         title: `پروفایل ${s.name}`,
@@ -691,92 +933,21 @@ function apptCard(a) {
             onclick: () => openSessionReport(a, s)
           }, icon('file', 12))
         : null,
-      el('span', { class: `wd-mark wd-mark--${cls}` }, SESSION_STATUS_LABEL[s.attendance] ?? s.attendance),
-      !cancelled
-        ? el('span', { class: 'wd-appt__sactions' },
-            el('button', {
-              class: 'wd-appt__sbtn wd-appt__sbtn--ok',
-              type: 'button',
-              'aria-label': `حاضر — ${s.name}`,
-              title: `حاضر — ${s.name}`,
-              onclick: () => markStudent(a, s, 'present')
-            }, icon('check', 13)),
-            el('button', {
-              class: 'wd-appt__sbtn wd-appt__sbtn--warn',
-              type: 'button',
-              'aria-label': `تأخیر — ${s.name}`,
-              title: `تأخیر — ${s.name}`,
-              onclick: () => markStudent(a, s, 'late')
-            }, icon('clock', 13)),
-            el('button', {
-              class: 'wd-appt__sbtn wd-appt__sbtn--err',
-              type: 'button',
-              'aria-label': `غایب — ${s.name}`,
-              title: `غایب — ${s.name}`,
-              onclick: () => markStudent(a, s, 'absent')
-            }, icon('x', 13))
+      cancelled
+        ? el('span', { class: `wd-mark wd-mark--${cls}` }, SESSION_STATUS_LABEL[s.attendance] ?? s.attendance)
+        : el('span', { class: 'wd-appt__sactions', role: 'group', 'aria-label': `ثبت حضور ${s.name}` },
+            segBtn('present', 'wd-appt__sbtn--ok', 'check', 'حاضر'),
+            segBtn('late', 'wd-appt__sbtn--warn', 'clock', 'تأخیر'),
+            segBtn('absent', 'wd-appt__sbtn--err', 'x', 'غایب')
           )
-        : null
     );
   });
 
-  const acts = (!cancelled && canOperate()) ? (OPS_ACTIONS[opsKey] ?? []) : [];
-  const followUp = opsKey === 'no_show' && canManage() && !absenceFollowUpDone.has(a.id);
-  const opsRow = (acts.length > 0 || followUp)
-    ? el('div', { class: 'wd-appt__ops' },
-        acts.map((act) =>
-          el('button', {
-            class: `btn btn--${act.cls} btn--sm`,
-            type: 'button',
-            title: `ثبت وضعیت «${act.label}» — حضور دانش‌آموزانِ بدونِ ثبت هم خودکار ثبت می‌شود`,
-            onclick: () => setOps(a, act.to)
-          }, act.label)
-        ),
-        followUp
-          ? el('button', {
-              class: 'btn btn--ghost btn--sm',
-              type: 'button',
-              title: 'ساخت پیگیری برای این غیبت (مسئول: شما، مهلت: ۷ روز)',
-              onclick: () => createAbsenceFollowUp(a)
-            }, icon('bell', 13), 'ایجاد پیگیری غیبت')
-          : null
-      )
-    : null;
-
-  return el('div', { class: `wd-appt${cancelled ? ' wd-appt--cancelled' : ''}${wdApptStatusClass(a)} ${hueClass(a.staffId)}` },
-    head,
-    notePreview,
+  return el('div', { class: `wd-appt${cancelled ? ' wd-appt--cancelled' : ''}${wdApptStatusClass(a)} ${hueClass(a.staffId)}`, dataset: { apptId: a.id } },
     studentRows.length > 0 ? el('div', { class: 'wd-appt__students' }, studentRows) : el('div', { class: 'wd-appt__student wd-appt__student--none' }, 'بدون دانش‌آموز'),
-    opsRow
+    meta,
+    notePreview
   );
-}
-
-async function setOps(appt, to) {
-  try {
-    await api.post(`/api/appointments/${appt.id}/ops-status`, { ops_status: to });
-
-    let synced = 0;
-    if (to === 'checked_in' || to === 'no_show') {
-      const status = to === 'checked_in' ? 'present' : 'absent';
-      for (const s of appt.students ?? []) {
-        if (s.attendance !== 'present' && s.attendance !== 'late' && s.attendance !== 'absent' && s.attendance !== 'cancelled') {
-          try {
-            await api.patch(`/api/attendance/${appt.id}/${s.studentId}`, { status });
-            synced += 1;
-          } catch { /* ادامه با بقیه — وضعیت واقعی بعد از ری‌رندر دیده می‌شود */ }
-        }
-      }
-    }
-
-    if (synced > 0 && to === 'checked_in') toast(`آمد ثبت شد — حضور ${fa(synced)} دانش‌آموز حاضر شد`, 'success', 2600);
-    else if (synced > 0 && to === 'no_show') toast(`نیامد ثبت شد — ${fa(synced)} دانش‌آموز غایب ثبت شد`, 'success', 2600);
-    else toast(`«${OPS_LABEL[to]}» ثبت شد`, 'success', 2200);
-
-    if (to === 'completed') await promptSessionReport(appt.id);
-    rerender();
-  } catch (err) {
-    toastError(err);
-  }
 }
 
 async function openSessionReport(appt, s) {
@@ -788,7 +959,7 @@ async function openSessionReport(appt, s) {
       occurredYmd: tehranYmdOfIso(appt.startAt),
       onSaved: () => {
         toast('گزارش روی خط زمانی پرونده ثبت شد', 'success', 2400);
-        rerender();
+        syncAssessmentsLight(); // فقط چیپ «ارزیابی امروز» در پس‌زمینه — بدون بازسازی نما
       }
     });
   } catch (err) {
@@ -796,112 +967,97 @@ async function openSessionReport(appt, s) {
   }
 }
 
-async function promptSessionReport(appointmentId) {
-  if (!canCreateCaseEvents()) return;
-  let students = [];
-  try {
-    const board = await api.get(`/api/working-day${qs({ date: local.date })}`).then((r) => r.data);
-    const cols = [...(board.staff ?? []), ...(board.unassigned ?? [])];
-    for (const col of cols) {
-      for (const a of col.appointments ?? []) {
-        if (a.id !== appointmentId) continue;
-        for (const s of a.students ?? []) if (s.attendance === 'present' || s.attendance === 'late') students.push(s); // — تأخیر هم حاضر است
-      }
-    }
-  } catch { /* بی‌خطر — پرامپت نمی‌آید */ }
-  if (students.length === 0) return;
-  openModal({
-    title: 'گزارش جلسه — یادتان نرود',
-    body: el('div', { style: { display: 'flex', flexDirection: 'column', gap: '10px' } },
-      el('p', { style: { margin: 0 } }, 'جلسه تمام شد. برای هر دانش‌آموز حاضر، گزارش جلسه (رویداد ساخت‌یافته) را روی پرونده ثبت کنید:'),
-      ...students.map((s) =>
-        el('button', {
-          class: 'btn btn--soft',
-          style: { justifyContent: 'space-between', display: 'flex', alignItems: 'center' },
-          onclick: async () => {
-            try {
-              const prof = await api.get(`/api/students/${s.studentId}`);
-              openCaseEventForm({ student: prof.data, appointmentId, onSaved: () => toast('گزارش روی خط زمانی ثبت شد', 'success') });
-            } catch (err) { toastError(err); }
-          }
-        }, el('span', { style: { display: 'inline-flex', alignItems: 'center', gap: '5px' } }, icon('clipboard', 13), s.name), icon('chevL', 15))
-      )
-    ),
-    actions: [(close) => el('button', { class: 'btn btn--ghost', onclick: close }, 'بعداً')]
-  });
-}
-
-async function createAbsenceFollowUp(appt) {
-  const single = appt.students.length === 1 ? appt.students[0] : null;
-  const timeLabel = fa(tehranTimeOfIso(appt.startAt));
-  const title = single
-    ? `پیگیری غیبت — ${single.name} (${timeLabel})`
-    : `پیگیری غیبت جلسه — ${timeLabel}`;
-  try {
-    await api.post('/api/followups', {
-      entity_type: 'appointment',
-      entity_id: appt.id,
-      student_id: single ? single.studentId : undefined,
-      title,
-      assignee_id: session.user.staffId,
-      due_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
-    });
-    absenceFollowUpDone.add(appt.id);
-    toast('پیگیری غیبت ساخته شد — مسئول: خود شما، مهلت: ۷ روز بعد', 'success', 2600);
-    rerender();
-  } catch (err) {
-    toastError(err);
-  }
-}
-
-async function markStudent(appt, student, status) {
-  const LABEL = { present: 'حاضر', late: 'تأخیر', absent: 'غایب' };
+/* جریان پیوسته — حضور دانش‌آموز: نشان همان لحظه عوض می‌شود، نقطهٔ تایم‌لاین و چیپ‌ها در جا پچ می‌شوند؛
+   PATCH در پس‌زمینه می‌رود و در خطا همه‌چیز نرم برمی‌گردد. هیچ re-render کلی رخ نمی‌دهد. */
+async function markStudent(appt, student, status, btn) {
+  const key = `st:${appt.id}:${student.studentId}`;
+  if (inflight.has(key)) return;
+  inflight.add(key);
+  const prev = applyStudentStatusInBoard(appt.id, student.studentId, status);
   try {
     await api.patch(`/api/attendance/${appt.id}/${student.studentId}`, { status });
-    toast(`${student.name}: ${LABEL[status] ?? status}`, 'success', 2000);
-    rerender();
+    toast(`${student.name}: ${SESSION_STATUS_LABEL[status] ?? status}`, 'success', 2000);
+    resolveOverdueRow(appt.id, student.studentId);
+    syncBoardJson();
   } catch (err) {
+    applyStudentStatusInBoard(appt.id, student.studentId, prev ?? 'pending');
     toastError(err);
+  } finally {
+    inflight.delete(key);
   }
+}
+
+function buildNoteEl(n) {
+  const isSystem = n.kind === 'system'; // فاز ۱ — D2: تفکیک انسانی/سیستمی
+  return el('div', { class: `wd-note${isSystem ? ' wd-note--system' : ''}`, dataset: { noteId: n.id } },
+    isSystem ? el('div', { class: 'wd-note__kind' }, icon('bot', 12), 'سیستمی') : null,
+    el('div', { class: 'wd-note__body' }, n.body),
+    el('div', { class: 'wd-note__meta' },
+      el('span', {}, n.creatorName),
+      el('span', { class: 'wd-note__time' }, formatJalaliNumeric(tehranYmdOfIso(n.createdAt)) + ' · ساعت ' + fa(tehranTimeOfIso(n.createdAt))),
+      !isSystem && canDeleteNotes()
+        ? el('button', {
+            class: 'btn btn--ghost btn--icon btn--sm',
+            type: 'button',
+            'aria-label': 'حذف توضیح',
+            title: 'حذف (فقط مدیر)',
+            /* جریان پیوسته: توضیح فوری جمع می‌شود؛ در خطای شبکه با undo برمی‌گردد */
+            onclick: async (e) => {
+              const btn = e.currentTarget;
+              const ok = await confirmModal({
+                title: 'حذف توضیح روز',
+                message: 'این توضیح از لاگ روز حذف می‌شود. در لاگ ممیزی (audit) ثبت می‌ماند. ادامه می‌دهید؟',
+                confirmLabel: 'حذف کن',
+                danger: true
+              });
+              if (!ok) return;
+              const noteEl = btn.closest('.wd-note');
+              const cardEl = noteEl?.closest('.wd-notes-card');
+              const rm = collapseRemove(noteEl);
+              try {
+                await api.del(`/api/working-day/notes/${n.id}`);
+                const i = currentBoard?.notes?.findIndex((x) => x.id === n.id) ?? -1;
+                if (i >= 0) currentBoard.notes.splice(i, 1);
+                syncBoardJson();
+                refreshNotesCount(cardEl);
+                toast('توضیح حذف شد', 'success');
+              } catch (err) {
+                rm?.undo();
+                toastError(err);
+              }
+            }
+          }, icon('trash', 14))
+        : null
+    )
+  );
+}
+
+function refreshNotesCount(cardEl) {
+  if (!cardEl || !currentBoard) return;
+  const badge = cardEl.querySelector('.card__head .badge');
+  if (badge) badge.textContent = `${fa(currentBoard.notes.length)} ثبت`;
+}
+
+function appendNoteToBoard(note) {
+  const cardEl = currentContainer?.querySelector?.('.wd-notes-card');
+  if (!cardEl) return;
+  const empty = cardEl.querySelector('.wd-notes--empty');
+  if (empty) {
+    empty.replaceWith(el('div', { class: 'wd-notes' }, buildNoteEl(note)));
+    return;
+  }
+  const list = cardEl.querySelector('.wd-notes');
+  if (!list) return;
+  const elm = buildNoteEl(note);
+  elm.classList.add('wd-note--fresh');
+  list.appendChild(elm);
+  pulse(elm);
+  list.scrollTop = list.scrollHeight;
 }
 
 function notesCard(board) {
   const list = board.notes.length > 0
-    ? el('div', { class: 'wd-notes' },
-        board.notes.map((n) => {
-          const isSystem = n.kind === 'system'; // فاز ۱ — D2: تفکیک انسانی/سیستمی
-          return el('div', { class: `wd-note${isSystem ? ' wd-note--system' : ''}` },
-            isSystem ? el('div', { class: 'wd-note__kind' }, icon('bot', 12), 'سیستمی') : null,
-            el('div', { class: 'wd-note__body' }, n.body),
-            el('div', { class: 'wd-note__meta' },
-              el('span', {}, n.creatorName),
-              el('span', { class: 'wd-note__time' }, formatJalaliNumeric(tehranYmdOfIso(n.createdAt)) + ' · ساعت ' + fa(tehranTimeOfIso(n.createdAt))),
-              !isSystem && canDeleteNotes()
-                ? el('button', {
-                    class: 'btn btn--ghost btn--icon btn--sm',
-                    type: 'button',
-                    'aria-label': 'حذف توضیح',
-                    title: 'حذف (فقط مدیر)',
-                    onclick: async () => {
-                      const ok = await confirmModal({
-                        title: 'حذف توضیح روز',
-                        message: 'این توضیح از لاگ روز حذف می‌شود. در لاگ ممیزی (audit) ثبت می‌ماند. ادامه می‌دهید؟',
-                        confirmLabel: 'حذف کن',
-                        danger: true
-                      });
-                      if (!ok) return;
-                      try {
-                        await api.del(`/api/working-day/notes/${n.id}`);
-                        toast('توضیح حذف شد', 'success');
-                        rerender();
-                      } catch (err) { toastError(err); }
-                    }
-                  }, icon('trash', 14))
-                : null
-            )
-          );
-        })
-      )
+    ? el('div', { class: 'wd-notes' }, board.notes.map((n) => buildNoteEl(n)))
     : el('div', { class: 'wd-notes wd-notes--empty' }, 'برای این روز توضیحی ثبت نشده است');
 
   const addForm = canManage()
@@ -925,12 +1081,20 @@ function notesCard(board) {
             }
             btn.disabled = true;
             try {
-              await api.post('/api/working-day/notes', { date: board.date, body });
+              const res = await api.post('/api/working-day/notes', { date: board.date, body });
+              const note = res?.data ?? null;
+              if (note) {
+                currentBoard?.notes?.push(note);
+                syncBoardJson();
+                appendNoteToBoard(note);
+                refreshNotesCount(currentContainer?.querySelector?.('.wd-notes-card'));
+              }
+              textarea.value = ''; // حس پیوستگی: فرم فوراً خالی می‌شود و توضیح در جا می‌نشیند
               toast('توضیح ثبت شد', 'success');
-              rerender();
             } catch (err) {
               toastError(err);
-              btn.disabled = false;
+            } finally {
+              btn.disabled = false; // — F11: بعد از موفقیت هم دکمه زنده بماند؛ ثبت توضیح زنجیره‌ای ممکن شود
             }
           }
         }, icon('plus', 15), 'افزودن توضیح')
@@ -954,6 +1118,7 @@ async function drawOverdue(slot, board) {
     return; // اهمیتی ندارد — بورد نباید به‌خاطر آن شکست بخورد
   }
   if (pending.length === 0 || !slot.isConnected) return;
+  overdueMeta = { total: pending.length }; // مرجع پچ فوری کارت
 
   const shown = pending.slice(0, 8);
   const card = el('div', { class: 'card' },
@@ -963,7 +1128,7 @@ async function drawOverdue(slot, board) {
     ),
     el('div', { class: 'card__body att-list' },
       shown.map((p) =>
-        el('div', { class: 'att-row att-row--student' },
+        el('div', { class: 'att-row att-row--student', dataset: { apptId: p.appointmentId, studentId: p.studentId } },
           el('div', { class: 'att-row__id' },
             el('div', { class: 'staff-mini__avatar staff-mini__avatar--alt' }, p.studentName.trim().charAt(0)),
             el('div', {},
@@ -972,8 +1137,8 @@ async function drawOverdue(slot, board) {
             )
           ),
           el('div', { class: 'att-row__seg att-row__seg--actions' },
-            el('button', { class: 'btn btn--sm btn--primary', type: 'button', onclick: () => markOverdue(p, 'present') }, icon('check', 15), 'حاضر'),
-            el('button', { class: 'btn btn--sm btn--danger-ghost', type: 'button', onclick: () => markOverdue(p, 'absent') }, icon('x', 15), 'غایب')
+            el('button', { class: 'btn btn--sm btn--primary', type: 'button', onclick: (e) => markOverdue(p, 'present', e.currentTarget) }, icon('check', 15), 'حاضر'),
+            el('button', { class: 'btn btn--sm btn--danger-ghost', type: 'button', onclick: (e) => markOverdue(p, 'absent', e.currentTarget) }, icon('x', 15), 'غایب')
           )
         )
       ),
@@ -985,13 +1150,32 @@ async function drawOverdue(slot, board) {
   slot.appendChild(card);
 }
 
-async function markOverdue(p, status) {
+/* جریان پیوسته — عقب‌افتاده‌ها: ردیف فوری قفل/محو می‌شود، پس از موفقیت جمع و شمارندهٔ کارت پچ می‌شود */
+async function markOverdue(p, status, btn) {
+  const key = `ov:${p.appointmentId}:${p.studentId}`;
+  if (inflight.has(key)) return;
+  inflight.add(key);
+  const row = btn?.closest('.att-row');
+  const card = row?.closest('.card');
+  const btns = row ? [...row.querySelectorAll('button')] : [];
+  const rowsLeft = card ? card.querySelectorAll('.att-row').length : 0;
+  btns.forEach((b) => { b.disabled = true; });
+  row?.classList.add('is-busy');
   try {
     await api.patch(`/api/attendance/${p.appointmentId}/${p.studentId}`, { status });
     toast(`${p.studentName}: ${status === 'present' ? 'حاضر' : 'غایب'}`, 'success', 2200);
-    rerender();
+    applyStudentStatusInBoard(p.appointmentId, p.studentId, status); // اگر همین نوبت روی بورد امروز دیده می‌شود
+    collapseRemove(row);
+    if (overdueMeta && overdueMeta.total > 0) overdueMeta.total -= 1;
+    refreshOverdueBadge(card);
+    if (card && rowsLeft <= 1) collapseRemove(card); // آخرین مورد بود — کل کارت جمع می‌شود
+    syncBoardJson();
   } catch (err) {
+    btns.forEach((b) => { b.disabled = false; });
+    row?.classList.remove('is-busy');
     toastError(err);
+  } finally {
+    inflight.delete(key);
   }
 }
 
@@ -1011,8 +1195,13 @@ function openAttendanceNoteModal(col, board) {
         status,
         note: values.note || undefined
       });
+      col.attendance = { ...(col.attendance ?? { status }), status, note: values.note || null };
+      /* جریان پیوسته: فقط همین ردیف در جا تعویض می‌شود — نه کل نما */
+      const rowEl = currentContainer?.querySelector?.(`.wd-att__row[data-staff-id="${col.staffId}"]`);
+      if (rowEl && rowEl.isConnected) rowEl.replaceWith(attRow(col, board, board.isToday && canManage()));
+      refreshAttChips();
+      syncBoardJson();
       toast('یادداشت ذخیره شد', 'success');
-      rerender();
     }
   });
 }
@@ -1026,12 +1215,31 @@ function openAppointmentNoteModal(appt) {
     initial: { note: appt.note ?? '' },
     submitLabel: 'ذخیره توضیحات',
     onSubmit: async (values) => {
-      await api.patch(`/api/appointments/${appt.id}`, {
+      const res = await api.patch(`/api/appointments/${appt.id}`, {
         note: values.note || '',
         version: appt.version
       });
+      const fresh = res?.data;
+      if (fresh?.version != null) appt.version = fresh.version; // برای ویرایش بعدی
+      appt.note = values.note || '';
+      /* جریان پیوسته: فقط پیش‌نمایش توضیح همین کارت پچ می‌شود (لنگر data-appt-id — ۱.۲۵.۰ زنده شد) */
+      const cardEl = currentContainer?.querySelector?.(`.wd-appt[data-appt-id="${appt.id}"]`);
+      if (cardEl) {
+        const preview = cardEl.querySelector('.wd-appt__note');
+        const editBtn = cardEl.querySelector('.wd-appt__meta .btn--icon:not(.wd-appt__del)');
+        if (appt.note) {
+          const text = appt.note.length > 90 ? `${appt.note.slice(0, 90)}…` : appt.note;
+          if (preview) { preview.textContent = text; preview.title = appt.note; }
+          else cardEl.querySelector('.wd-appt__meta')?.insertAdjacentElement('afterend', el('div', { class: 'wd-appt__note', title: appt.note }, text));
+          if (editBtn) { editBtn.classList.add('has-note'); editBtn.title = appt.note; }
+          pulse(cardEl.querySelector('.wd-appt__note'));
+        } else {
+          preview?.remove();
+          if (editBtn) { editBtn.classList.remove('has-note'); editBtn.title = 'افزودن/ویرایش توضیحات نوبت'; }
+        }
+      }
+      syncBoardJson();
       toast('توضیحات نوبت ذخیره شد', 'success');
-      rerender();
     }
   });
 }

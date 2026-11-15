@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { APP_VERSION } from '@core/version';
+import { DEV_AUTH_SECRET } from '@core/auth/runtime-secret';
 import {
   createTestApp,
   Api,
@@ -274,5 +275,92 @@ describe('RBAC — نقش‌ها روی endpointهای محافظت‌شده', (
     expect(res.status).toBe(200);
     const json = (await res.json()) as { data: unknown[] };
     expect(Array.isArray(json.data)).toBe(true);
+  });
+});
+
+// ─── مایلستون ۱ بخش ۸ (0111) — ابطال سمت‌سرور نشست‌ها ───
+// JWT دیگر بی‌حالت نیست: امضای معتبر + ردیف auth_sessions زنده هر دو لازم است.
+
+function decodePayload(token: string): { sid?: string; sub: string } {
+  const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+  return JSON.parse(atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4))) as { sid?: string; sub: string };
+}
+
+/** امضای دستی توکن «قدیمی» بدون sid — دقیقاً شکل صدور پیش از 0111 */
+async function signLegacyToken(secret: string): Promise<string> {
+  const enc = (o: unknown): string =>
+    btoa(JSON.stringify(o)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const data = `${enc({ alg: 'HS256', typ: 'JWT' })}.${enc({
+    sub: MANAGER_ID, name: 'mgr', role: 'manager', email: 'legacy@test', iat: 1, exp: 9999999999
+  })}`;
+  const key = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(data));
+  const bytes = new Uint8Array(sig);
+  let bin = '';
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return `${data}.${btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')}`;
+}
+
+describe('auth_sessions — ابطال سمت‌سرور (0111، مایلستون ۱)', () => {
+  let A: ReturnType<typeof createTestApp>;
+
+  beforeAll(() => {
+    A = createTestApp();
+  });
+
+  it('login: claim sid در توکن + ردیف نشست زنده در DB (revoked_at خالی)', async () => {
+    const token = await loginToken(A, 'manager');
+    const payload = decodePayload(token);
+    const sid = payload.sid as string;
+    expect(sid).toBeTruthy();
+    const row = A.sql.prepare('SELECT sid, revoked_at, expires_at FROM auth_sessions WHERE sid = ?')
+      .get(sid) as { sid: string; revoked_at: string | null; expires_at: string } | undefined;
+    expect(row).toBeTruthy();
+    expect(row?.revoked_at).toBeNull();
+    expect(row && row.expires_at > new Date().toISOString()).toBe(true);
+  });
+
+  it('logout: همان توکن بلافاصله ۴۰۱ می‌گیرد و revoked_at ثبت می‌شود', async () => {
+    const token = await loginToken(A, 'manager');
+    const api = new Api(A).withToken(token);
+    expect((await api.get('/api/me')).status).toBe(200);
+    expect((await api.post('/api/auth/logout')).status).toBe(200);
+    expect((await api.get('/api/me')).status).toBe(401);
+    const row = A.sql.prepare('SELECT revoked_at FROM auth_sessions WHERE sid = ?')
+      .get(decodePayload(token).sid as string) as { revoked_at: string | null };
+    expect(row.revoked_at).not.toBeNull();
+  });
+
+  it('نشست‌ها مستقل‌اند: خروج از یکی، دیگری سالم می‌ماند', async () => {
+    const t1 = await loginToken(A, 'manager');
+    const t2 = await loginToken(A, 'secretary');
+    await new Api(A).withToken(t1).post('/api/auth/logout');
+    expect((await new Api(A).withToken(t2).get('/api/me')).status).toBe(200);
+    expect((await new Api(A).withToken(t1).get('/api/me')).status).toBe(401);
+  });
+
+  it('نشست منقضی‌شده در DB (باطل‌سازی دستی/مدیریتی) → ۴۰۱ با JWT سالم', async () => {
+    const token = await loginToken(A, 'ali'); // درمانگر (نام کاربری seed هارنس)
+    const sid = decodePayload(token).sid as string;
+    A.sql.prepare("UPDATE auth_sessions SET expires_at = '2020-01-01T00:00:00.000Z' WHERE sid = ?").run(sid);
+    expect((await new Api(A).withToken(token).get('/api/me')).status).toBe(401);
+  });
+
+  it('هرس فرصت‌طلب: نشست منقضی قدیمی هنگام لاگین بعدی پاک می‌شود', async () => {
+    A.sql.prepare(
+      "INSERT INTO auth_sessions (sid, staff_id, issued_at, expires_at, revoked_at) VALUES ('expired-prune-test', ?, '2020-01-01T00:00:00.000Z', '2020-01-02T00:00:00.000Z', NULL)"
+    ).run(MANAGER_ID);
+    await loginToken(A, 'manager');
+    const row = A.sql.prepare("SELECT sid FROM auth_sessions WHERE sid = 'expired-prune-test'").get();
+    expect(row).toBeUndefined();
+  });
+
+  it('توکن legacy بدون sid (صدور پیش از 0111) → ۴۰۱ با پیام ورود دوباره — سخت‌گیری عمدی', async () => {
+    const legacy = await signLegacyToken(DEV_AUTH_SECRET);
+    const res = await new Api(A).withToken(legacy).get('/api/me');
+    expect(res.status).toBe(401);
+    expect((res.body as { message?: string }).message ?? '').toContain('ورود دوباره');
   });
 });

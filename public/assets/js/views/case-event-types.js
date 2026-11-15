@@ -1,10 +1,12 @@
 import { api } from '../api.js';
 import { fa, formatJalaliDateTime } from '../format.js';
-import { el, icon, openModal, formModal, confirmModal, toast, toastError, emptyState, errorState, skeletonState, scienceNote } from '../ui.js';
+import { el, icon, openModal, formModal, confirmModal, toast, toastError, emptyState, errorState, skeletonState, scienceNote, rowMenu, collapseRemove, flashNode, lockBtn } from '../ui.js'; /* ۱.۲۲.۰ — collapseRemove/flashNode/lockBtn برای جریان پیوسته */
 import { TOOL_GUIDES } from '../clinical-content.js';
 import { session } from '../state.js';
 import { openChecklistSendModal, fillTargetOf } from '../case-events.js';
 import { CATEGORY_ICONS, TYPE_ICON_CHOICES, typeIconNode } from '../case-event-icons.js';
+/* ۱.۲۵.۶۰ — نظرسنجی خانواده‌ها به ماژول مستقل «#/family-surveys» منتقل شد (فقط مدیر)؛
+   این نما فقط فرم‌ساز است و تب نظرسنجی/کدهای آن از این‌جا حذف شده‌اند. */
 
 const CATEGORY_LABELS = { session: 'جلسه', checklist: 'چک‌لیست', note: 'یادداشت' };
 // — برچسب فارسی آیکون‌ها برای aria-label دکمه‌های انتخاب آیکون (title انگلیسیِ آیکون برای منطق انتخاب فعال باید بماند)
@@ -74,20 +76,34 @@ export async function renderCaseEventTypes(container) {
   const tagName = new Map((tags ?? []).map((t) => [t.id, t.name]));
   const state = { tab: 'library', cat: 'all', aud: 'all', types, pending, tagName };
 
+  /* —— ۱.۲۲.۰ جریان پیوسته (زبان ۱.۱۹–۱.۲۱): شِلِ نما — سربرگ، تب‌ها، نوار فیلترهای
+     کتابخانه و ناحیه‌های فهرست — یک‌بار مونت می‌شود و هیچ اکشنی دیگر کل container را
+     با اسکلت rebuild نمی‌کند. ساخت/ویرایش/غیرفعال‌سازی/حذف قالب فقط همان کارت را پچ
+     (ctl.patch) یا جمع (ctl.remove) می‌کنند یا ناحیهٔ فهرست را بی‌صدا همگام می‌کنند
+     (ctl.quietSync)؛ یادآوری/لغو/حذف چک‌لیست هم فقط ناحیهٔ صف انتظار را. فیلتر
+     دسته/مخاطب/جستجو فقط ناحیهٔ فهرست را عوض می‌کند و چیپ‌ها درجا فعال می‌شوند —
+     ورودی جستجو دیگر هرگز بازسازی نمی‌شود، پس هک بازگرداندن مکان‌نما (searchRefocus)
+     حذف شد. اسکلت فقط روی مونت اولیه و خطای مرگبار بارگذاری. —— */
+  let gen = 0; // — گارد نسل قالب‌ها: پاسخ کهنهٔ درخواست قبلی نباید روی دادهٔ تازه بنشیند
+  let pendingGen = 0; /* ۱.۲۲.۲ (F11) — گارد نسل مستقل صف انتظار؛ درخواست قالب‌ها و صف همدیگر را دور نمی‌ریزند */
+
   const head = el('div', { class: 'page-head' },
     el('div', {},
       el('div', { class: 'page-head__title' }, 'فرم‌ها و پرسش‌نامه‌ها — رویدادساز'),
       el('div', { class: 'page-head__desc' },
-        'فرم‌ساز حرفه‌ای روان‌سنجی: گزینه‌های نمره‌دار، آیتم معکوس/بحرانی، زیرمقیاس و تفسیر خودکار؛ به‌علاوهٔ ارسال یک‌کلیکی چک‌لیست برای خانواده و معلم در بله.'
+        'فرم و پرسش‌نامهٔ استاندارد بسازید — با نمره‌گذاری، زیرمقیاس و تفسیر خودکار — و چک‌لیست را با یک کلیک برای خانواده و معلم در بله بفرستید.' /* H1 — بازنویسی انسانی: انباشت اصطلاح و «به‌علاوهٔ» حذف شد */
       )
     ),
-    el('button', { class: 'btn btn--primary', onclick: () => openTypeForm({ tagName, onSaved: () => renderCaseEventTypes(container) }) },
+    el('button', { class: 'btn btn--primary', onclick: () => openTypeForm({ tagName, onSaved: () => ctl.quietSync() }) }, /* ۱.۲۲.۰ — جای قالب تازه را ترتیب سرور تعیین می‌کند */
       icon('plus', 16), 'قالب جدید')
   );
 
+  const tabBtns = { /* ۱.۲۲.۰ — ارجاع تب‌ها برای تازه‌سازی شمارنده‌ها بدون rebuild */
+    library: tabBtn('library', `کتابخانهٔ فرم‌ها (${fa(types.filter((t) => t.active).length)})`),
+    pending: tabBtn('pending', `در انتظار پاسخ (${fa(pending.length)})`)
+  }; /* ۱.۲۵.۶۰ — تب «نظرسنجی خانواده‌ها» حذف شد؛ ماژول مستقل #/family-surveys (فقط مدیر) */
   const tabs = el('div', { style: { display: 'flex', gap: '8px', margin: '0 0 var(--sp-4)', flexWrap: 'wrap' } },
-    tabBtn('library', `کتابخانهٔ فرم‌ها (${fa(types.filter((t) => t.active).length)})`),
-    tabBtn('pending', `در انتظار پاسخ (${fa(pending.length)})`)
+    tabBtns.library, tabBtns.pending
   );
   function tabBtn(key, label) {
     return el('button', {
@@ -100,33 +116,98 @@ export async function renderCaseEventTypes(container) {
       b.classList.remove('btn--primary');
       b.classList.add('btn--soft');
     }
-    const activeBtn = tabs.querySelectorAll('button')[state.tab === 'library' ? 0 : 1];
+    const idx = state.tab === 'library' ? 0 : 1;
+    const activeBtn = tabs.querySelectorAll('button')[idx];
     activeBtn.classList.remove('btn--soft');
     activeBtn.classList.add('btn--primary');
-    body.replaceChildren(state.tab === 'library' ? renderLibrary() : renderPending());
-    // بازسازی بدنه مکان‌نمای جستجو را نمی‌بَرد
-    if (searchRefocus) {
-      searchRefocus = false;
-      const si = body.querySelector('.exb-search');
-      if (si) {
-        si.focus();
-        const end = si.value.length;
-        si.setSelectionRange(end, end);
-      }
+    renderBodyZone(); /* ۱.۲۲.۰ — تعویض تب فقط ناحیهٔ بدنه را جابه‌جا می‌کند؛ شِل دست‌نخورده */
+  }
+
+  /* ۱.۲۲.۰ — ناحیه‌های یک‌بارمونت: نوار فیلتر کتابخانه، فهرست قالب‌ها و صف انتظار */
+  const libraryFilters = buildLibraryFilters();
+  const listZone = el('div', {});
+  const pendingZone = el('div', {});
+  const body = el('div', {});
+  container.replaceChildren(head, tabs, body);
+  renderBodyZone();
+
+  function renderBodyZone() {
+    if (state.tab === 'library') {
+      body.replaceChildren(libraryFilters, listZone);
+      paintTypeZone();
+    } else {
+      body.replaceChildren(pendingZone);
+      paintPendingZone();
     }
   }
 
-  const body = el('div', {});
-  let searchRefocus = false; // فوکوس فقط پس از تایپ کاربر بازگردد
-  container.replaceChildren(head, tabs, body);
-  body.replaceChildren(renderLibrary());
+  /* ۱.۲۲.۰ — شمارندهٔ تب‌ها پس از هر mutation تازه می‌شود (به‌جای rebuild کل نما) */
+  function updateCounts() {
+    tabBtns.library.textContent = `کتابخانهٔ فرم‌ها (${fa(state.types.filter((t) => t.active).length)})`;
+    tabBtns.pending.textContent = `در انتظار پاسخ (${fa(state.pending.length)})`;
+  }
 
-  function renderLibrary() {
-    const wrap = el('div', {});
-    const chip = (label, active, onClick) => el('button', {
+  /* فیلتر بخش فعال — همان منطق قبلی renderLibrary */
+  function matchesTypeFilter(t) {
+    const q2 = (state.q2 ?? '').trim();
+    return Boolean(t.active)
+      && (state.cat === 'all' || t.category === state.cat)
+      && (state.aud === 'all' || t.audience === state.aud || t.audience === 'both')
+      && (!q2 || String(t.title ?? '').includes(q2));
+  }
+
+  /* ۱.۲۲.۰ — رندر «فقط ناحیهٔ فهرست قالب‌ها» از state محلی — بدون GET، بدون اسکلت، بدون پرش اسکرول */
+  function paintTypeZone() {
+    if (!listZone.isConnected) return;
+    updateCounts();
+    const active = state.types.filter(matchesTypeFilter);
+    const inactive = state.types.filter((t) => !t.active);
+    if (active.length === 0) {
+      listZone.replaceChildren(emptyState({
+        iconName: 'file',
+        title: 'قالبی در این فیلتر نیست',
+        hint: 'با «قالب جدید» فرم خودتان را بسازید؛ قالب‌های سنجش استاندارد (SDQ، کانرز، چک‌لیست رفتاری، معلم، غربال چندگزینه‌ای) از قبل در کتابخانه هست.'
+      }));
+      return;
+    }
+    listZone.replaceChildren(...[
+      el('div', { dataset: { zone: 'active' }, style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 'var(--sp-4)' } },
+        ...active.map((t) => typeCard(t))),
+      inactive.length > 0
+        ? el('div', { style: { marginTop: 'var(--sp-5)' } },
+            el('h3', { style: { marginBottom: 'var(--sp-3)', fontSize: 'var(--fs-md)' } }, 'غیرفعال'),
+            el('div', { dataset: { zone: 'inactive' }, style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 'var(--sp-4)', opacity: '0.65' } },
+              ...inactive.map((t) => typeCard(t))))
+        : null
+    ].filter(Boolean));
+  }
+
+  /* ۱.۲۲.۰ — پس از جمع‌شدن نرمِ یک کارت، اگر بخش فعال خالی شده یا سرتیتر «غیرفعال»
+     دیگر لازم نیست، حالت درستِ همان ناحیه بی‌صدا بنشیند (بدون قطع انیمیشن) */
+  function ensureNonEmptyPaint() {
+    setTimeout(() => {
+      if (!listZone.isConnected) return;
+      const grid = listZone.querySelector('[data-zone="active"]');
+      const inactiveGrid = listZone.querySelector('[data-zone="inactive"]');
+      const stateActive = state.types.filter(matchesTypeFilter).length;
+      const stateInactive = state.types.filter((t) => !t.active).length;
+      const activeMismatch = stateActive === 0
+        ? Boolean(grid)
+        : !grid || grid.querySelectorAll(':scope > [data-id]').length !== stateActive;
+      const inactiveMismatch = stateActive > 0 && stateInactive > 0
+        ? !inactiveGrid || inactiveGrid.querySelectorAll(':scope > [data-id]').length !== stateInactive
+        : Boolean(inactiveGrid);
+      if (activeMismatch || inactiveMismatch) paintTypeZone();
+    }, 320);
+  }
+
+  /* ۱.۲۲.۰ — نوار فیلترهای کتابخانه (چیپ‌های دسته/مخاطب + جستجو) — یک‌بار ساخته می‌شود */
+  function buildLibraryFilters() {
+    const chip = (label, active, onClick, key = null) => el('button', {
       class: `chip ${active ? 'is-active' : ''}`,
       type: 'button',
       'aria-pressed': String(active), /* S3-21 */
+      ...(key ? { dataset: { chip: key } } : {}), /* ۱.۲۲.۰ — کلید چیپ برای فعال‌سازی درجا */
       style: { cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px' },
       onclick: onClick
     }, label);
@@ -140,71 +221,124 @@ export async function renderCaseEventTypes(container) {
     let searchTimer = null;
     searchInput.addEventListener('input', () => {
       clearTimeout(searchTimer);
-      searchTimer = setTimeout(() => { state.q2 = searchInput.value.trim(); searchRefocus = true; renderTabs(); }, 250);
+      searchTimer = setTimeout(() => { state.q2 = searchInput.value.trim(); paintTypeZone(); }, 250); /* ۱.۲۲.۰ — فقط ناحیهٔ فهرست؛ گرهٔ input و مکان‌نما سرِ جایش می‌ماند */
     });
 
-    const filters = el('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', margin: '0 0 var(--sp-4)', alignItems: 'center' } },
+    return el('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', margin: '0 0 var(--sp-4)', alignItems: 'center' } },
       el('span', { class: 'cell-sub' }, 'دسته:'),
-      chip('همه', state.cat === 'all', () => { state.cat = 'all'; renderTabs(); }),
+      chip('همه', state.cat === 'all', () => setTypeFilter('cat', 'all'), 'cat:all'),
       ...Object.entries(CATEGORY_LABELS).map(([k, v]) =>
-        chip(el('span', { style: { display: 'inline-flex', alignItems: 'center', gap: '5px' } }, icon(CATEGORY_ICONS[k], 13), v), state.cat === k, () => { state.cat = k; renderTabs(); })),
+        chip(el('span', { style: { display: 'inline-flex', alignItems: 'center', gap: '5px' } }, icon(CATEGORY_ICONS[k], 13), v), state.cat === k, () => setTypeFilter('cat', k), `cat:${k}`)),
       el('span', { style: { width: '12px' } }),
       el('span', { class: 'cell-sub' }, 'مخاطب:'),
-      chip('همه', state.aud === 'all', () => { state.aud = 'all'; renderTabs(); }),
-      ...Object.entries(AUDIENCE_LABELS).map(([k, v]) => chip(v, state.aud === k, () => { state.aud = k; renderTabs(); })),
+      chip('همه', state.aud === 'all', () => setTypeFilter('aud', 'all'), 'aud:all'),
+      ...Object.entries(AUDIENCE_LABELS).map(([k, v]) => chip(v, state.aud === k, () => setTypeFilter('aud', k), `aud:${k}`)),
       el('span', { style: { flex: 1 } }),
       searchInput
     );
-
-    const q2 = (state.q2 ?? '').trim();
-    const active = state.types.filter((t) => t.active
-      && (state.cat === 'all' || t.category === state.cat)
-      && (state.aud === 'all' || t.audience === state.aud || t.audience === 'both')
-      && (!q2 || String(t.title ?? '').includes(q2)));
-    const inactive = state.types.filter((t) => !t.active);
-
-    if (active.length === 0) {
-      wrap.replaceChildren(
-        filters,
-        emptyState({
-          iconName: 'file',
-          title: 'قالبی در این فیلتر نیست',
-          hint: 'با «قالب جدید» فرم خودتان را بسازید؛ قالب‌های سنجش استاندارد (SDQ، کانرز، چک‌لیست رفتاری، معلم، غربال چندگزینه‌ای) از قبل در کتابخانه هست.'
-        })
-      );
-      return wrap;
-    }
-
-    wrap.replaceChildren(
-      filters,
-      el('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 'var(--sp-4)' } }, ...active.map((t) => typeCard(t))),
-      inactive.length > 0
-        ? el('div', { style: { marginTop: 'var(--sp-5)' } },
-            el('h3', { style: { marginBottom: 'var(--sp-3)', fontSize: 'var(--fs-md)' } }, 'غیرفعال'),
-            el('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 'var(--sp-4)', opacity: '0.65' } },
-              ...inactive.map((t) => typeCard(t))))
-        : null
-    );
-    return wrap;
   }
 
-  function renderPending() {
+  /* ۱.۲۲.۰ — تغییر فیلتر دسته/مخاطب: فقط ناحیهٔ فهرست رندر می‌شود؛ فعال‌بودن چیپ‌ها درجا عوض می‌شود */
+  function setTypeFilter(kind, value) {
+    if (kind === 'cat') state.cat = value;
+    else state.aud = value;
+    paintFilterChips();
+    paintTypeZone();
+  }
+
+  function paintFilterChips() {
+    for (const b of libraryFilters.querySelectorAll('button[data-chip]')) {
+      const on = b.dataset.chip === `cat:${state.cat}` || b.dataset.chip === `aud:${state.aud}`;
+      b.classList.toggle('is-active', on);
+      b.setAttribute('aria-pressed', String(on)); /* S3-21 */
+    }
+  }
+
+  /* ۱.۲۲.۰ — رندر «فقط ناحیهٔ صف انتظار» از state محلی */
+  function paintPendingZone() {
+    if (!pendingZone.isConnected) return;
+    updateCounts();
     if (state.pending.length === 0) {
-      return emptyState({
+      pendingZone.replaceChildren(emptyState({
         iconName: 'check',
         title: 'صف خالی است',
         hint: 'چک‌لیست در انتظاری وجود ندارد — از پروفایل دانش‌آموز یا دکمهٔ «ارسال» قالب‌ها، چک‌لیست جدید برای خانواده/معلم بفرستید.'
-      });
+      }));
+      return;
     }
-    return el('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 'var(--sp-4)' } },
-      ...state.pending.map((p) => pendingCard(p)));
+    pendingZone.replaceChildren(
+      el('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 'var(--sp-4)' } },
+        ...state.pending.map((p) => pendingCard(p)))
+    );
   }
+
+  /* ۱.۲۲.۰ — حذف نرم کارت از صف (لغو/حذف — پاسخ سرور کارت‌پذیر نیست): جمع‌شدن همان کارت */
+  function removePending(id) {
+    state.pending = state.pending.filter((x) => x.id !== id);
+    updateCounts();
+    const old = pendingZone.querySelector(`[data-id="${CSS.escape(String(id))}"]`);
+    if (old) collapseRemove(old);
+    setTimeout(() => {
+      if (pendingZone.isConnected && !pendingZone.querySelector('[data-id]')) paintPendingZone(); // حالت خالی پس از جمع‌شدن
+    }, 320);
+  }
+
+  /* ۱.۲۲.۰ — همگام‌سازی بی‌صدای دادهٔ صف (پاسخ «ارسال» فقط شمارنده دارد) — بدون اسکلت */
+  async function refreshPending() {
+    const myGen = ++pendingGen;
+    try {
+      const res = await api.get('/api/case-events/pending');
+      if (myGen !== pendingGen) return;
+      state.pending = res.data ?? [];
+      updateCounts();
+      if (pendingZone.isConnected) paintPendingZone();
+    } catch (err) {
+      if (myGen === pendingGen) toastError(err);
+    }
+  }
+  const ctl = {
+    /* ۱.۲۲.۰ — پچ درجای یک کارت از بدنهٔ پاسخ mutation — بدون GET، بدون اسکلت، بدون پرش اسکرول */
+    patch(t) {
+      updateCounts();
+      if (!t?.id || !listZone.isConnected) { ctl.quietSync(); return; }
+      const prev = state.types.find((x) => x.id === t.id);
+      state.types = state.types.map((x) => (x.id === t.id ? t : x));
+      const old = listZone.querySelector(`[data-id="${CSS.escape(String(t.id))}"]`);
+      if (!old) { ctl.quietSync(); return; } // با فیلتر فعلی تازه وارد دید شده — همگام‌سازی بی‌صدا
+      // از فیلتر دسته/مخاطب/جستجو خارج شد (فقط کارت‌های فعال فیلتر می‌شوند؛ بخش «غیرفعال» بی‌فیلتر است)
+      if (t.active && !matchesTypeFilter(t)) { collapseRemove(old); ensureNonEmptyPaint(); return; }
+      if (Boolean(prev?.active) !== Boolean(t.active)) { paintTypeZone(); return; } // جابه‌جایی فعال↔غیرفعال — مقصد در همین ناحیه است
+      const fresh = typeCard(t);
+      old.replaceWith(fresh);
+      flashNode(fresh);
+    },
+    /* ۱.۲۲.۰ — حذف کامل قالب (پاسخ {ok:true} بی‌داده): جمع‌شدن نرم همان کارت */
+    remove(id) {
+      state.types = state.types.filter((x) => x.id !== id);
+      updateCounts();
+      const old = listZone.querySelector(`[data-id="${CSS.escape(String(id))}"]`);
+      if (old) { collapseRemove(old); ensureNonEmptyPaint(); }
+    },
+    /* ۱.۲۲.۰ — همگام‌سازی بی‌صدا: GET قالب‌ها → فقط ناحیهٔ فهرست؛ سربرگ/تب‌ها/فیلترها دست‌نخورده */
+    async quietSync() {
+      const myGen = ++gen;
+      try {
+        const res = await api.get('/api/case-events/types');
+        if (myGen !== gen) return;
+        state.types = res.data ?? [];
+        updateCounts();
+        if (listZone.isConnected) paintTypeZone();
+      } catch (err) {
+        if (myGen === gen) toastError(err);
+      }
+    }
+  };
 
   function pendingCard(p) {
     const sentLine = p.sentCount > 0
       ? `ارسال: ${fa(p.sentCount)} بار — آخرین: ${formatJalaliDateTime(p.sentAt)}`
       : 'هنوز از پنل ارسال نشده — خانواده فقط از داخل بات می‌تواند آن را ببیند';
-    return el('div', { class: 'card' },
+    return el('div', { class: 'card', dataset: { id: String(p.id) } }, /* ۱.۲۲.۰ — data-id برای پچ/حذف درجای کارت */
       el('div', { class: 'card__body' },
         el('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' } },
           el('span', { class: 'typegrid__icon typegrid__icon--lg', style: { display: 'inline-flex' } }, typeIconNode(null, p.typeIcon, 20)),
@@ -215,50 +349,50 @@ export async function renderCaseEventTypes(container) {
         ),
         el('div', { class: 'cell-sub', style: { margin: '8px 0' } },
           `ثبت: ${formatJalaliDateTime(p.occurredAt)} — ${sentLine}`),
-        el('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } },
+        /* UX-ممیزی فاز ۳: چهار دکمهٔ هم‌اندازه در هر کارت → یک CTA اصلی + منوی «⋯» با تفکیک مخرب‌ها */
+        el('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' } },
           el('button', {
             class: 'btn btn--primary btn--sm',
-            onclick: async () => {
+            onclick: async (e) => lockBtn(e.currentTarget, async () => { /* ۱.۲۲.۰ — قفل دکمه + همگام‌سازی بی‌صدای صف */
               try {
                 const res = await api.post(`/api/case-events/${p.id}/send`, { audience: p.typeAudience });
                 toast(res.data.sent > 0
                   ? `یادآوری برای ${fa(res.data.sent)} نفر ارسال شد`
                   : 'همین حالا ارسال شده — یک دقیقه بعد تلاش کنید', res.data.sent > 0 ? 'success' : 'warning');
-                renderCaseEventTypes(container);
+                refreshPending(); // — پاسخ سرور فقط شمارندهٔ ارسال دارد؛ فقط ناحیهٔ صف بی‌صدا همگام می‌شود
               } catch (err) { toastError(err); }
-            }
+            })
           }, icon('bell', 14), p.sentCount > 0 ? 'یادآوری دوباره' : 'ارسال پیام بله'),
-          el('a', { class: 'btn btn--soft btn--sm', href: `#/students/${p.studentId}` }, icon('student', 14), 'پرونده'),
-          el('button', {
-            class: 'btn btn--ghost btn--sm',
-            onclick: async () => {
-              const ok = await confirmModal({ title: 'لغو چک‌لیست', message: `چک‌لیست «${p.typeTitle}» برای «${p.studentName}» لغو شود؟`, confirmLabel: 'لغو', danger: true });
-              if (!ok) return;
-              try {
-                await api.post(`/api/case-events/${p.id}/cancel`, {});
-                toast('لغو شد');
-                renderCaseEventTypes(container);
-              } catch (err) { toastError(err); }
-            }
-          }, icon('x', 14), 'لغو'),
-          isManager()
-            ? el('button', {
-                class: 'btn btn--danger btn--sm',
-                onclick: async () => {
-                  const ok = await confirmModal({
-                    title: 'حذف رویداد (مدیر)',
-                    message: `چک‌لیست «${p.typeTitle}» برای «${p.studentName}» برای همیشه از صف و پرونده حذف شود؟ این عمل در گزارش رخدادها ثبت می‌شود.`,
-                    confirmLabel: 'حذف', danger: true
-                  });
+          rowMenu({
+            label: `اقدامات بیشتر برای چک‌لیست ${p.studentName}`,
+            items: [
+              { icon: 'student', label: 'پروندهٔ دانش‌آموز', onclick: () => { location.hash = `#/students/${p.studentId}`; } },
+              { icon: 'x', label: 'لغو چک‌لیست', danger: true, onclick: async () => {
+                  const ok = await confirmModal({ title: 'لغو چک‌لیست', message: `چک‌لیست «${p.typeTitle}» برای «${p.studentName}» لغو شود؟`, confirmLabel: 'لغو', danger: true });
                   if (!ok) return;
                   try {
-                    await api.del(`/api/case-events/${p.id}`);
-                    toast('رویداد حذف شد');
-                    renderCaseEventTypes(container);
+                    await api.post(`/api/case-events/${p.id}/cancel`, {});
+                    toast('لغو شد');
+                    removePending(p.id); // ۱.۲۲.۰ — جمع‌شدن نرم همان کارت از صف (رویداد دیگر «در انتظار» نیست)
                   } catch (err) { toastError(err); }
-                }
-              }, icon('x', 14), 'حذف')
-            : null
+                } },
+              isManager()
+                ? { icon: 'trash', label: 'حذف کامل (مدیر)', danger: true, onclick: async () => {
+                    const ok = await confirmModal({
+                      title: 'حذف رویداد (مدیر)',
+                      message: `چک‌لیست «${p.typeTitle}» برای «${p.studentName}» برای همیشه از صف و پرونده حذف شود؟ این عمل در گزارش رخدادها ثبت می‌شود.`,
+                      confirmLabel: 'حذف', danger: true
+                    });
+                    if (!ok) return;
+                    try {
+                      await api.del(`/api/case-events/${p.id}`);
+                      toast('رویداد حذف شد');
+                      removePending(p.id); // ۱.۲۲.۰ — جمع‌شدن نرم همان کارت از صف
+                    } catch (err) { toastError(err); }
+                  } }
+                : null
+            ].filter(Boolean)
+          })
         )
       )
     );
@@ -270,7 +404,7 @@ export async function renderCaseEventTypes(container) {
       .filter((x) => x.name);
     const isChecklist = t.category === 'checklist';
     const subscales = t.subscales ?? [];
-    return el('div', { class: 'card' },
+    return el('div', { class: 'card', dataset: { id: String(t.id) } }, /* ۱.۲۲.۰ — data-id برای پچ/حذف درجای کارت */
       el('div', { class: 'card__body' },
         el('div', { style: { display: 'flex', alignItems: 'flex-start', gap: '10px' } },
           el('div', {
@@ -310,47 +444,47 @@ export async function renderCaseEventTypes(container) {
               : null
           )
         ),
-        el('div', { style: { display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap' } },
+        /* UX-ممیزی فاز ۳: یک CTA + منوی «⋯» — مخرب‌ها («غیرفعال‌سازی/حذف») از دکمه‌های سطح کارت جدا شدند */
+        el('div', { style: { display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap', alignItems: 'center' } },
           isChecklist && t.familyFillable && t.active
             ? el('button', {
                 class: 'btn btn--primary btn--sm',
                 onclick: () => openStudentPicker(t)
-              }, icon('zap', 14), 'ارسال برای دانش‌آموز')
+              }, icon('zap', 14), `ارسال برای ${fillTargetOf(t).label}`) /* B6 — گیرندهٔ واقعی فرم خانواده/معلم است؛ «دانش‌آموز» فقط معرفی‌کنندهٔ پرونده است */
             : null,
-          el('button', { class: 'btn btn--soft btn--sm', onclick: () => openTypeForm({ type: t, tagName: state.tagName, onSaved: () => renderCaseEventTypes(container) }) }, icon('edit', 14), 'ویرایش'),
-          t.active
-            ? el('button', {
-                class: 'btn btn--ghost btn--sm',
-                onclick: async () => {
-                  const ok = await confirmModal({ title: 'غیرفعال‌سازی قالب', message: `«${t.title}» از فهرست انتخاب و ارسال حذف می‌شود (رویدادهای قبلی می‌مانند).`, confirmLabel: 'غیرفعال کن', danger: true });
-                  if (!ok) return;
-                  try {
-                    await api.post(`/api/case-events/types/${t.id}/deactivate`, {});
-                    toast('قالب غیرفعال شد');
-                    renderCaseEventTypes(container);
-                  } catch (err) { toastError(err); }
-                }
-              }, icon('x', 14), 'غیرفعال‌سازی')
-            : null,
-          isManager()
-            ? el('button', {
-                class: 'btn btn--danger btn--sm',
-                title: 'فقط وقتی مجاز است که هیچ رویدادی به این قالب وصل نباشد',
-                onclick: async () => {
-                  const ok = await confirmModal({
-                    title: 'حذف کامل قالب (مدیر)',
-                    message: `«${t.title}» از کتابخانه حذف شود؟ اگر به این قالب رویدادی وصل باشد، حذف رد می‌شود و باید آن را غیرفعال کنید.`,
-                    confirmLabel: 'حذف', danger: true
-                  });
-                  if (!ok) return;
-                  try {
-                    await api.del(`/api/case-events/types/${t.id}`);
-                    toast('قالب حذف شد');
-                    renderCaseEventTypes(container);
-                  } catch (err) { toastError(err); }
-                }
-              }, icon('x', 14), 'حذف')
-            : null
+          rowMenu({
+            label: `اقدامات بیشتر برای «${t.title}»`,
+            items: [
+              { icon: 'edit', label: 'ویرایش قالب', onclick: () => openTypeForm({ type: t, tagName: state.tagName, onSaved: (updated) => (updated ? ctl.patch(updated) : ctl.quietSync()) }) }, /* ۱.۲۲.۰ — همان کارت درجا پچ می‌شود */
+              t.active
+                ? { icon: 'x', label: 'غیرفعال‌سازی', danger: true, onclick: async () => {
+                    const ok = await confirmModal({ title: 'غیرفعال‌سازی قالب', message: `«${t.title}» از فهرست انتخاب و ارسال حذف می‌شود (رویدادهای قبلی می‌مانند).`, confirmLabel: 'غیرفعال کن', danger: true });
+                    if (!ok) return;
+                    try {
+                      await api.post(`/api/case-events/types/${t.id}/deactivate`, {});
+                      toast('قالب غیرفعال شد');
+                      ctl.quietSync(); // ۱.۲۲.۰ — پاسخ {ok:true} بی‌داده است؛ فقط ناحیهٔ فهرست بی‌صدا همگام می‌شود (کارت به بخش «غیرفعال» می‌رود)
+                    } catch (err) { toastError(err); }
+                  } }
+                : null,
+              isManager() ? { sep: true } : null,
+              isManager()
+                ? { icon: 'trash', label: 'حذف کامل (مدیر)', danger: true, onclick: async () => {
+                    const ok = await confirmModal({
+                      title: 'حذف کامل قالب (مدیر)',
+                      message: `«${t.title}» از کتابخانه حذف شود؟ اگر به این قالب رویدادی وصل باشد، حذف رد می‌شود و باید آن را غیرفعال کنید.`,
+                      confirmLabel: 'حذف', danger: true
+                    });
+                    if (!ok) return;
+                    try {
+                      await api.del(`/api/case-events/types/${t.id}`);
+                      toast('قالب حذف شد');
+                      ctl.remove(t.id); // ۱.۲۲.۰ — جمع‌شدن نرم همان کارت
+                    } catch (err) { toastError(err); }
+                  } }
+                : null
+            ].filter(Boolean)
+          })
         ),
         // — : «پشتوانهٔ علمی و نحوهٔ استفاده» زیر هر کارت چک‌لیست
         scienceNote(TOOL_GUIDES[t.key])
@@ -360,6 +494,9 @@ export async function renderCaseEventTypes(container) {
 
   function openStudentPicker(type) {
     const results = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px', margin: '10px 0', maxHeight: '320px', overflowY: 'auto' } });
+    /* B5 — مودال بدون راهنما باز می‌شد: فقط یک input خالی؛ کاربر نمی‌دانست باید تایپ کند */
+    const hint = el('p', { class: 'cell-sub', style: { margin: '10px 0' } }, 'بخشی از نام یا کد ملی دانش‌آموز را بنویسید تا فهرست بگیرید.');
+    results.replaceChildren(hint);
     const input = el('input', {
       class: 'input',
       type: 'search',
@@ -370,7 +507,8 @@ export async function renderCaseEventTypes(container) {
     async function search(q) {
       results.replaceChildren(el('p', { class: 'cell-sub' }, 'در حال جستجو…'));
       try {
-        const res = await api.get(`/api/students?q=${encodeURIComponent(q)}&page=1&pageSize=8`);
+        /* B2 — سرور پارامتر «query» را می‌خواند نه «q»؛ با «q» فیلتر بی‌صدا بی‌اثر می‌شد (هم‌الگو: games-console.js) */
+        const res = await api.get(`/api/students?query=${encodeURIComponent(q)}&page=1&pageSize=8`);
         const items = res.data?.items ?? res.data ?? [];
         if (items.length === 0) {
           results.replaceChildren(el('p', { class: 'cell-sub' }, 'چیزی پیدا نشد — با کد ملی یا بخشی از نام جستجو کنید.'));
@@ -383,7 +521,7 @@ export async function renderCaseEventTypes(container) {
             style: { justifyContent: 'flex-start', width: '100%' },
             onclick: () => {
               closeModal();
-              openChecklistSendModal({ student: s, typeId: type.id, onSent: () => renderCaseEventTypes(container) });
+              openChecklistSendModal({ student: s, typeId: type.id, onSent: () => refreshPending() }); /* ۱.۲۲.۰ — شمارندهٔ صف و داده‌اش بی‌صدا تازه می‌شود */
             }
           }, `${name}${s.class_name ? ` — ${s.class_name}` : ''}`);
         }));
@@ -394,7 +532,7 @@ export async function renderCaseEventTypes(container) {
     input.addEventListener('input', () => {
       clearTimeout(timer);
       const q = input.value.trim();
-      if (q.length < 2) { results.replaceChildren(); return; }
+      if (q.length < 2) { results.replaceChildren(hint); return; } /* B5 — بر گشت به راهنما */
       timer = setTimeout(() => search(q), 350);
     });
 
@@ -431,7 +569,7 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
     actions: [
       (closeModal) => el('button', {
         class: 'btn btn--primary',
-        onclick: () => save(closeModal)
+        onclick: (e) => lockBtn(e.currentTarget, () => save(closeModal)) /* ۱.۲۲.۲ (F12) — قفل مشغولی: دوبارکلیک قالب تکراری نمی‌سازد */
       }, icon('check', 16), isEdit ? 'ذخیره تغییرات' : 'ساخت قالب'),
       (closeModal) => el('button', { class: 'btn btn--ghost', onclick: closeModal }, 'انصراف')
     ]
@@ -690,10 +828,15 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
       audience: st.category === 'checklist' ? st.audience : 'family'
     };
     try {
-      if (isEdit) await api.patch(`/api/case-events/types/${type.id}`, payload);
-      else await api.post('/api/case-events/types', payload);
-      toast(isEdit ? 'قالب به‌روزرسانی شد' : 'قالب ساخته شد', 'success');
-      onSaved?.();
+      if (isEdit) {
+        const res = await api.patch(`/api/case-events/types/${type.id}`, payload); /* ۱.۲۲.۰ — بدنهٔ پاسخ سرور برای پچ درجای همان کارت */
+        toast('قالب به‌روزرسانی شد', 'success');
+        onSaved?.(res?.data);
+      } else {
+        await api.post('/api/case-events/types', payload);
+        toast('قالب ساخته شد', 'success');
+        onSaved?.();
+      }
       closeModal();
     } catch (err) {
       toastError(err);

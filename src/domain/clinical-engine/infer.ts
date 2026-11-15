@@ -346,6 +346,21 @@ export interface InferOptions {
   now?: () => Date;
 }
 
+/* ۱.۲۵.۵۹ — والد-SDQ دو کلید دارد: قدیم sdq-parent (در رجیستری غیرفعال شد) و جدید ce-sdq-p-v1.
+   قواعد/ملاک‌ها/هم‌رأیی فقط کلید قدیمی را می‌شناسند؛ تازه‌ترین رویداد والد-SDQ برنده است و
+   فقط همان زیر کلید قدیم می‌ماند — نه قواعد بی‌داده می‌ماند نه دوبارشماری ساخته می‌شود. */
+function normalizeSdqParentKeys(done: EvidenceEvent[]): EvidenceEvent[] {
+  const both = done.filter((e) => e.toolKey === 'sdq-parent' || e.toolKey === 'ce-sdq-p-v1');
+  if (both.length === 0) return done;
+  const newest = [...both].sort((a, b) =>
+    String(b.occurredAt ?? '').localeCompare(String(a.occurredAt ?? ''))
+  )[0];
+  const winner: EvidenceEvent = newest.toolKey === 'sdq-parent' ? newest : { ...newest, toolKey: 'sdq-parent' };
+  return done
+    .filter((e) => e.toolKey !== 'sdq-parent' && e.toolKey !== 'ce-sdq-p-v1')
+    .concat(winner);
+}
+
 // مجموعهٔ واقعیت‌های مشترک موتور و قواعد مبنا: یک ساختن، دو مصرف
 export interface EngineFacts {
   done: EvidenceEvent[];
@@ -359,7 +374,7 @@ export interface EngineFacts {
 }
 
 export function engineFactsOf(events: EvidenceEvent[]): EngineFacts {
-  const done = completed(events);
+  const done = normalizeSdqParentKeys(completed(events));
   const latest = latestPerTool(done);
   const perTool = latestTwoPerTool(done);
   const wEvent = latest.get(WECHSLER_W4_EVENT_KEY);

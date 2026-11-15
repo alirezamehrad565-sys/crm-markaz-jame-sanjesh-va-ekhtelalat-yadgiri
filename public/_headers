@@ -64,6 +64,13 @@
 /assets/dist/*
   Cache-Control: public, max-age=31536000, immutable
 
+# ۴ث) دارایی‌های صفحهٔ کودک (پخش‌کنندهٔ بازی — G7/۱.۲۵.۴۳): engine/kinds/fx/scene
+#    بدون ?v= بار می‌شوند؛ همان سیاست محتاط JS — کش کوتاه با must-revalidate تا
+#    کهنگی پس از deploy از ۵ دقیقه بگذرد (skins/<kind>.css هم با ?v= می‌آید اما
+#    همین سقف برای کل پوشه کافی است — پوشهٔ کودک از قاعدهٔ «یک‌ساله» مستثناست)
+/assets/play/*
+  Cache-Control: public, max-age=300, must-revalidate
+
 # ۵) favicon — نام ثابت؛ کش کوتاه‌تر برای اطمینان
 /favicon.png
   Cache-Control: public, max-age=86400

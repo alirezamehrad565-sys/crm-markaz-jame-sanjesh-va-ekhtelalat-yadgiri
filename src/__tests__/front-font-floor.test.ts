@@ -49,12 +49,12 @@ const ALLOW: Record<string, Record<string, string>> = {
     'font-size: 10px;': '.side-search kbd — کلید میان‌بر لاتین (Ctrl و…)',
   },
   'css/views.css': {
-    '.tl-strip__label { font-size: 10px; color: var(--text-3); }': 'رقم فارسی ساعت نوار زمان داشبورد — استثنای رقم ',
+    /* ورودی .tl-strip__label حذف شد: نوار خط زمانی داشبورد مدیر در ۱.۱۱.۰ برداشته شد */
     'display: grid; place-items: center; font-size: 11px; font-weight: 700;': 'help-toc__n — رقم شمارهٔ فهرست در دایرهٔ ۲۰px',
     'display: grid; place-items: center; font-size: 11.5px; font-weight: 700;': 'help-points__n — رقم شماره در دایرهٔ ۲۲px',
-    'font-size: 10px; font-weight: 700;': 'wd-appt__savatar — حرف اول نام، aria-hidden تزئینی در دایرهٔ ۲۰px',
+    /* ورودی wd-appt__savatar حذف شد: آواتار حرفی دانش‌آموز در بازطراحی ۱.۲۵.۰ از کارت نوبت برداشته شد */
     '.wd-cal__more { font-size: 10px; color: var(--text-3); line-height: 1; font-weight: 700; } /* F2: ۸٫۵ → کف رقم ۱۰ */': 'رقم شمارندهٔ «+N» تقویم روز کاری — کف رقم ',
-    '.ot-domain-chip__pend { top: 4px; inset-inline-end: 6px; font-size: 10px; background: var(--primary); color: var(--on-primary, #fff); border-radius: 999px; padding: 0 5px; line-height: 16px; }': 'رقم شمارندهٔ در انتظار چیپ دامنهٔ OT',
+    '.ot-domain-chip__pend { top: 4px; inset-inline-end: 6px; font-size: 10px; background: var(--primary); color: var(--on-primary); border-radius: 999px; padding: 0 5px; line-height: 16px; }': 'رقم شمارندهٔ در انتظار چیپ دامنهٔ OT (۱.۲۵.۰۵: فال‌بک #fff پاکسازی شد)',
     'position: absolute; top: 3px; inset-inline-start: 6px; font-size: 10px; line-height: 14px; /* F2: ۹ → کف نماد ۱۰ */': 'نماد «●» نشان درخت کارت — کف نماد ',
     ".rehab-fx-guide > summary::after, .science-guide > summary::after { content: '▾'; font-size: 10px; color: var(--text-3, var(--text-2)); }": 'نماد فلش ▾ جمع‌شونده — استثنای نماد ',
     /* سه ورودی chart__tick/chart__axis/chart__threshold-label حذف شد: فونت‌ها به var(--fs-2xs) رسیدند (C2/C16) */

@@ -15,6 +15,7 @@ import type { MediaFetcher } from '@core/notify';
 import type { BackupDocumentSender } from '@app/backup';
 import type { ExerciseFileSender } from '@domain/exercise-bank';
 import { createApp } from '@app/api-routing';
+import { createGamesApp } from '@app/games-standalone'; // ۱.۲۵.۷۵ — بستهٔ مستقل بازی‌ها
 
 export const MANAGER_ID = '00000000-0000-0000-0000-000000000001';
 export const ALI_ID = '00000000-0000-0000-0000-000000000002'; // نقش درمانگر
@@ -52,10 +53,13 @@ export function createTestDb(seed = true): DatabaseSyncInstance {
 }
 
 function silentLogger(scope = 'test'): Logger {
+  const dbg = (level: string) => (msg: string, meta?: unknown) => {
+    if (process.env.DEBUG_ERRORS) console.error(`[${level.toUpperCase()}:${scope}]`, msg, meta);
+  };
   const base: Logger = {
     debug: () => undefined,
     info: () => undefined,
-    warn: () => undefined,
+    warn: dbg('warn'),
     // eslint-disable-next-line no-console -- دیباگ موقت
     error: ((msg: string, meta?: unknown) => { if (process.env.DEBUG_ERRORS) console.error(`[ERR:${scope}]`, msg, meta); }) as Logger['error'],
     child: (sub) => silentLogger(`${scope}.${sub}`)
@@ -75,6 +79,13 @@ export interface TestApp {
     ENV: string;
     CF_ACCESS_TEAM_DOMAIN: string;
     AUTH_SECRET?: string;
+    /** ف۵ (P2-15) — هارنس پیش‌فرض محدودساز را خاموش می‌گذارد تا آزمون‌های موجود با رگبار درخواست ۴۲۹ نخورند؛
+     *  آزمون اختصاصی محدودساز خودش مقدار مشخص می‌دهد (هم‌الگوی صریح‌نگه‌داشتن رفتار در آزمون) */
+    API_RATE_LIMIT_PER_MIN?: string;
+    /** EXP-7 — سقف نودی per-node در دقیقه؛ هارنس مقدار پیش‌فرض نمی‌گذارد (پارس در node-sync/service) */
+    NODE_RATE_LIMIT_PER_MIN?: string;
+    /** rust-f9 — گیت زمان‌اجرای میز: فقط در کانفیگ capnp موتور محلی بایند می‌شود */
+    CENTER_DESKTOP_ENGINE?: string;
   };
 }
 
@@ -109,18 +120,43 @@ export function createTestApp(
   const env = {
     DB: d1 as unknown as D1Database,
     ENV: 'development',
-    CF_ACCESS_TEAM_DOMAIN: 'test.team.example.com'
+    CF_ACCESS_TEAM_DOMAIN: 'test.team.example.com',
+    API_RATE_LIMIT_PER_MIN: '0' // هارنس: محدودساز خاموش — آزمون اختصاصی P2-15 خودش سقف می‌دهد
   };
   return { sql: store, d1, db, app, env };
 }
 
-const FAKE_CTX = { waitUntil: () => undefined, passThroughOnException: () => undefined } as unknown as ExecutionContext;
+/** اپ مستقل بازی‌ها روی همان MockD1 — e2e بستهٔ games-standalone (۱.۲۵.۷۵)؛ هم‌شکل TestApp اصلی */
+export function createTestGamesApp(
+  sql?: DatabaseSyncInstance,
+  opts?: { publicBaseUrl?: string | null }
+): TestApp {
+  const store = sql ?? createTestDb();
+  const d1 = new MockD1(store);
+  const db = createDb(d1 as unknown as D1Database);
+  const audit = createAuditWriter(db);
+  const app = createGamesApp({
+    db,
+    audit,
+    logger: silentLogger('games-it'),
+    publicBaseUrl: opts?.publicBaseUrl !== undefined ? opts.publicBaseUrl : 'https://center.test.example.com'
+  });
+  const env = {
+    DB: d1 as unknown as D1Database,
+    ENV: 'development',
+    CF_ACCESS_TEAM_DOMAIN: 'test.team.example.com',
+    API_RATE_LIMIT_PER_MIN: '0' // هارنس: محدودساز خاموش — هم‌الگوی اپ اصلی
+  };
+  return { sql: store, d1, db, app, env };
+}
 
-export interface JsonOutcome<T = unknown> {
+const FAKE_CTX = { waitUntil: () => undefined, passThroughOnException: () => undefined } as unknown as ExecutionContext;export interface JsonOutcome<T = unknown> {
   status: number;
   ok: boolean;
   body: T;
   cacheControl: string | null;
+  /** ف۵ (P2-13) — هدر X-Request-Id پاسخ (هم‌بستگی لاگ/audit/پاکت خطا) */
+  requestId: string | null;
 }
 
 export class Api {
@@ -144,6 +180,7 @@ export class Api {
       FAKE_CTX
     );
     const cacheControl = res.headers.get('cache-control');
+    const requestId = res.headers.get('x-request-id');
     let parsed: unknown = null;
     const text = await res.text();
     if (text.length > 0) {
@@ -153,7 +190,7 @@ export class Api {
         parsed = text;
       }
     }
-    return { status: res.status, ok: res.ok, body: parsed, cacheControl };
+    return { status: res.status, ok: res.ok, body: parsed, cacheControl, requestId };
   }
 
   get(url: string) { return this.req('GET', url); }

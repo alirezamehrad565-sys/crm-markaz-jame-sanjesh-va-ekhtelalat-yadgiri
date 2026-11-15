@@ -2,6 +2,7 @@
 // دستورها، احراز با کد، فایل‌های والد و منوها. بدنه‌ها عیناً از service.ts آمده‌اند ().
 
 import { ConflictError } from '@core/errors';
+import { inParamChunks, inPlaceholders } from '@core/db/in-chunks'; // ۱.۲۵.۷۲ — دروازهٔ IN-list (بدهی ف۶ ⑧)
 import type { Appointment } from '@core/shared';
 import { LINK_CODE_LENGTH, MAX_EXB_PARENT_FILES, addDaysYmd, addMinutes, faDigits, jalaliFullLabel, iranianWeekdayOfYmd, tehranRange, tehranTimeLabel, tehranTodayYmd, tehranYmdOf } from '@core/shared';
 import { listStaff } from '@core/auth';
@@ -131,7 +132,15 @@ export function createBotCommandsSection(ctx: NotifyCtx): Pick<NotifyAppService,
 
         case 'about': {
           const ownerAbout = await this.resolveOwner(cmd.chatId);
-          return { handled: true, reply: renderTemplate('bot_about', { clinicName: await deps.settings.getClinicName() }), keyboard: buildBotKeyboard(ownerAbout) };
+          /* ۱.۲۵.۵۷ — «دربارهٔ مرکز» از تنظیمات (متن قابل ویرایش مدیر) می‌آید */
+          return {
+            handled: true,
+            reply: renderTemplate('bot_about', {
+              clinicName: await deps.settings.getClinicName(),
+              aboutText: await deps.settings.getBotAbout()
+            }),
+            keyboard: buildBotKeyboard(ownerAbout)
+          };
         }
 
         case 'myid':
@@ -564,13 +573,16 @@ export function createBotCommandsSection(ctx: NotifyCtx): Pick<NotifyAppService,
       }
 
       const studentIds = studentRows.map((s) => s.id);
-      const placeholders = studentIds.map(() => '?').join(',');
-      const claimedRows = await db.query<{ student_id: string; chat_id: string }>(
-        `SELECT student_id, chat_id FROM bot_links
+      /* ۱.۲۵.۷۲ — تکه‌بندی ۹۰تایی: شناسه‌ها از تطابق گذرواژه/کد ملی می‌آیند و می‌توانند بزرگ شوند */
+      const claimedRows: { student_id: string; chat_id: string }[] = [];
+      for (const chunk of inParamChunks(studentIds)) {
+        claimedRows.push(...await db.query<{ student_id: string; chat_id: string }>(
+          `SELECT student_id, chat_id FROM bot_links
           WHERE status = 'linked' AND chat_id IS NOT NULL AND chat_id != ?
-            AND student_id IN (${placeholders})`,
-        [chatId, ...studentIds]
-      );
+            AND student_id IN (${inPlaceholders(chunk.length)})`,
+          [chatId, ...chunk]
+        ));
+      }
       if (claimedRows.length > 0) {
         await audit.log({
           actorId: 'bale-bot',

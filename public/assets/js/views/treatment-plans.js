@@ -59,6 +59,12 @@ function openEditor(tpl, targets, { onSaved }) {
           el('span', { class: 'tpl-session__num' }, ''),
           ttlPreview,
           el('span', { class: 'tpl-session__chev', 'aria-hidden': 'true' }, icon('chevL', 14))),
+        /* ۱.۲۵.۱۰ — دکمهٔ بالا/پایین: ترتیب جلسه‌ها روی لمسی هم قابل عوض‌کردن است
+           (درگ HTML5 روی صفحهٔ لمسی کار نمی‌کند)؛ همان ترتیب DOM/ذخیره را عوض می‌کنند. */
+        el('button', { class: 'btn btn--ghost btn--sm tpl-session__move', type: 'button', title: 'انتقال به بالا', 'aria-label': `انتقال جلسه «${titleInput.value.trim() || 'بدون عنوان'}» به بالا`,
+          onclick: () => { const p = block.previousElementSibling; if (p) { sessionBlocks.insertBefore(block, p); renumber(); } } }, icon('chevU', 13)),
+        el('button', { class: 'btn btn--ghost btn--sm tpl-session__move', type: 'button', title: 'انتقال به پایین', 'aria-label': `انتقال جلسه «${titleInput.value.trim() || 'بدون عنوان'}» به پایین`,
+          onclick: () => { const n = block.nextElementSibling; if (n) { sessionBlocks.insertBefore(n, block); renumber(); } } }, icon('chevD', 13)),
         el('button', { class: 'btn btn--ghost btn--sm', type: 'button', title: 'حذف این جلسه از طرح', 'aria-label': `حذف جلسه «${titleInput.value.trim() || 'بدون عنوان'}» از طرح`,
           onclick: () => { block.remove(); renumber(); } }, icon('trash', 13))),
       el('div', { class: 'tpl-session__body' },
@@ -117,13 +123,11 @@ function openEditor(tpl, targets, { onSaved }) {
       el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'هدف پیش‌فرض'), targetSel)
     ),
     el('div', { class: 'clx-sub__title', style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)' } },
-      'پروتکل جلسه به جلسه', 
-      el('span', { class: 'cell-sub' }, 'جلسه‌ها را با دستگیرهٔ ⠿ جابه‌جا کنید')),
+      'پروتکل جلسه به جلسه'),
     sessionBlocks,
     el('div', { class: 'tpl-sessions__add' },
       el('button', { class: 'btn btn--ghost btn--sm', type: 'button', onclick: () => addSessionBlock({}, { open: true }) },
-        icon('plus', 13), 'افزودن جلسه')),
-    el('div', { class: 'cell-sub' }, 'هر جلسه: هدف + معیار تسلط + کارت‌ها (تمرین/تکلیف/بازی/رویداد/دستورالعمل/پراپ/آموزش خانواده). کارت را از «کارت آماده» پیوسته بسازید یا از «کارت‌های قبلی» سریع بیفزایید — هنگام ساخت مسیر دانش‌آموز همهٔ این‌ها کپی می‌شود.')
+        icon('plus', 13), 'افزودن جلسه'))
   );
 
   let closeModal = null;
@@ -189,85 +193,108 @@ export async function renderTreatmentPlans(container) {
     container.replaceChildren(emptyState({ iconName: 'alert', title: 'دسترسی مجاز نیست', hint: 'این بخش برای مدیر و درمانگر (معلم LD) فعال است.' }));
     return;
   }
-  container.replaceChildren(skeletonState('cards', 3));
+  container.replaceChildren(skeletonState('cards', 3)); // اسکلت فقط برای سوارشدن نما (ناوبری)
 
-  let templates, targets;
+  /* ۱.۲۵.۰۴ جریان پیوسته: هدف‌های بالینی (واژه‌نامهٔ ثابت) یک‌بار در مونت واکشی می‌شود؛
+     ذخیره/غیرفعال‌سازی/کپی فقط ناحیهٔ فهرست (data-zone) را با پالس نرم و واکشی قالب‌ها تازه می‌کند —
+     قبلاً هر ذخیره کل نما را با اسکلت بازمی‌ساخت و سربرگ و دکمهٔ «طرح جدید» هم دوباره ساخته می‌شد. */
+  let targets;
   try {
-    const [tplRes, tgtRes] = await Promise.all([
-      api.get('/api/pathway-templates'),
-      api.get('/api/clinical-targets')
-    ]);
-    templates = tplRes.data ?? [];
-    targets = tgtRes.data ?? [];
+    targets = (await api.get('/api/clinical-targets')).data ?? [];
   } catch (err) {
     container.replaceChildren(errorState(err, () => renderTreatmentPlans(container)));
     return;
   }
 
-  const refresh = () => renderTreatmentPlans(container);
-
   const head = el('div', { class: 'page-head' },
     el('div', {},
       el('div', { class: 'page-head__title' }, 'طرح درمان'),
       el('div', { class: 'page-head__desc' },
-        'نوشتن طرح جلسه‌به‌جلسه با هدف، معیار تسلط و کارت‌های جلسه — کارت‌ها از «کارت‌های آماده» یا کارت‌های قبلی تیم. طرح، شالودهٔ مداخلهٔ دانش‌آموز است: در تب تفسیر بالینی پرونده، مسیر از همین طرح‌ها ساخته می‌شود.'
+        'طرح جلسه‌به‌جلسه با هدف و معیار تسلط — پایهٔ ساخت مسیر دانش‌آموز.'
       )
     ),
     el('button', { class: 'btn btn--primary', onclick: () => openEditor(null, targets, { onSaved: refresh }) },
       icon('plus', 16), 'طرح جدید')
   );
 
-  const list = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '10px' } },
-    ...templates.map((t) => {
-      const itemsCount = (t.sessions ?? []).reduce((sum, s) => sum + (s.items?.length ?? 0), 0);
-      const linkedCount = (t.sessions ?? []).reduce((sum, s) => sum + (s.items ?? []).filter((it) => it.linkId).length, 0);
-      return el('div', { class: 'card tpl-card' },
-        el('div', { class: 'tpl-card__main' },
-          el('div', { class: 'tpl-card__title' }, t.title),
-          el('div', { class: 'tpl-card__meta' },
-            t.protocol ? el('span', { class: 'badge badge--info' }, PROTOCOL_LABELS[t.protocol] ?? t.protocol) : null,
-            t.targetKey ? el('span', { class: 'badge badge--neutral' }, 'هدف پیش‌فرض') : null,
-            el('span', { class: 'badge badge--neutral' }, `${fa((t.sessions ?? []).length)} جلسه`),
-            itemsCount ? el('span', { class: 'badge badge--neutral' }, `${fa(itemsCount)} کارت`) : null,
-            linkedCount ? el('span', { class: 'badge badge--accent' }, `${fa(linkedCount)} پیوسته به کتابخانه`) : null),
-          t.description ? el('div', { class: 'cell-sub' }, t.description) : null,
-          (t.sessions ?? []).length ? el('div', { class: 'tpl-card__sessions' },
-            ...t.sessions.map((s, i) => el('div', { class: 'tpl-card__session' },
-              el('b', {}, `جلسهٔ ${fa(i + 1)} — ${s.title}`),
-              ...(s.items ?? []).map((it) => el('span', { class: `path-session__item path-session__item--${it.type}` },
-                SESSION_ITEM_TYPES.find((x) => x.key === it.type)?.label ?? it.type, it.text)))
-          )) : null),
-        el('div', { class: 'tpl-card__actions' },
-          el('button', { class: 'btn btn--soft btn--sm', onclick: () => openEditor(t, targets, { onSaved: refresh }) },
-            icon('edit', 13), 'ویرایش'),
-          el('button', { class: 'btn btn--soft btn--sm', title: 'ساخت طرح جدید بر پایهٔ این طرح — برای انتخاب بین نسخه‌های مشابه',
-            onclick: () => openEditor({ ...t, __copy: true }, targets, { onSaved: refresh }) },
-            icon('copy', 13), 'کپی'),
-          el('button', {
-            class: 'btn btn--danger-ghost btn--sm',
-            onclick: async () => {
-              const ok = await confirmModal({
-                title: 'غیرفعال‌سازی طرح',
-                message: `«${t.title}» از فهرست طرح‌ها و ساخت مسیر حذف می‌شود. مسیرهای ساخته‌شدهٔ قبلی سالم می‌مانند.`,
-                confirmLabel: 'غیرفعال‌سازی',
-                danger: true
-              });
-              if (!ok) return;
-              try {
-                await api.patch(`/api/pathway-templates/${t.key}`, { title: t.title, active: false });
-                toast('طرح غیرفعال شد', 'success');
-                refresh();
-              } catch (err) { toastError(err); }
-            }
-          }, icon('pause', 13), 'غیرفعال‌سازی')) /* S6-03 */
-      );
-    }),
-    templates.length ? null : emptyState({
+  const zone = el('div', { class: 'data-zone', style: { display: 'flex', flexDirection: 'column', gap: '10px' } });
+  container.replaceChildren(head, zone);
+
+  async function load() {
+    zone.setAttribute('aria-busy', 'true');
+    zone.classList.add('is-loading');
+    let templates;
+    try {
+      templates = (await api.get('/api/pathway-templates')).data ?? [];
+    } catch (err) {
+      if (!zone.isConnected) return;
+      zone.classList.remove('is-loading');
+      zone.removeAttribute('aria-busy');
+      zone.replaceChildren(errorState(err, () => load()));
+      return;
+    }
+    if (!zone.isConnected) return;
+    zone.classList.remove('is-loading');
+    zone.removeAttribute('aria-busy');
+    zone.replaceChildren(...buildList(templates, targets, refresh));
+  }
+
+  function refresh() { load(); }
+
+  await load();
+}
+
+function buildList(templates, targets, refresh) {
+  const cards = templates.map((t) => {
+    const itemsCount = (t.sessions ?? []).reduce((sum, s) => sum + (s.items?.length ?? 0), 0);
+    const linkedCount = (t.sessions ?? []).reduce((sum, s) => sum + (s.items ?? []).filter((it) => it.linkId).length, 0);
+    return el('div', { class: 'card tpl-card' },
+      el('div', { class: 'tpl-card__main' },
+        el('div', { class: 'tpl-card__title' }, t.title),
+        el('div', { class: 'tpl-card__meta' },
+          t.protocol ? el('span', { class: 'badge badge--info' }, PROTOCOL_LABELS[t.protocol] ?? t.protocol) : null,
+          t.targetKey ? el('span', { class: 'badge badge--neutral' }, 'هدف پیش‌فرض') : null,
+          el('span', { class: 'badge badge--neutral' }, `${fa((t.sessions ?? []).length)} جلسه`),
+          itemsCount ? el('span', { class: 'badge badge--neutral' }, `${fa(itemsCount)} کارت`) : null,
+          linkedCount ? el('span', { class: 'badge badge--accent' }, `${fa(linkedCount)} پیوسته به کتابخانه`) : null),
+        t.description ? el('div', { class: 'cell-sub' }, t.description) : null,
+        (t.sessions ?? []).length ? el('div', { class: 'tpl-card__sessions' },
+          ...t.sessions.map((s, i) => el('div', { class: 'tpl-card__session' },
+            el('b', {}, `جلسهٔ ${fa(i + 1)} — ${s.title}`),
+            ...(s.items ?? []).map((it) => el('span', { class: `path-session__item path-session__item--${it.type}` },
+              SESSION_ITEM_TYPES.find((x) => x.key === it.type)?.label ?? it.type, it.text)))
+        )) : null),
+      el('div', { class: 'tpl-card__actions' },
+        el('button', { class: 'btn btn--soft btn--sm', onclick: () => openEditor(t, targets, { onSaved: refresh }) },
+          icon('edit', 13), 'ویرایش'),
+        el('button', { class: 'btn btn--soft btn--sm', title: 'ساخت طرح جدید بر پایهٔ این طرح — برای انتخاب بین نسخه‌های مشابه',
+          onclick: () => openEditor({ ...t, __copy: true }, targets, { onSaved: refresh }) },
+          icon('copy', 13), 'کپی'),
+        el('button', {
+          class: 'btn btn--danger-ghost btn--sm',
+          onclick: async () => {
+            const ok = await confirmModal({
+              title: 'غیرفعال‌سازی طرح',
+              message: `«${t.title}» از فهرست طرح‌ها و ساخت مسیر حذف می‌شود. مسیرهای ساخته‌شدهٔ قبلی سالم می‌مانند.`,
+              confirmLabel: 'غیرفعال‌سازی',
+              danger: true
+            });
+            if (!ok) return;
+            try {
+              await api.patch(`/api/pathway-templates/${t.key}`, { title: t.title, active: false });
+              toast('طرح غیرفعال شد', 'success');
+              refresh();
+            } catch (err) { toastError(err); }
+          }
+        }, icon('pause', 13), 'غیرفعال‌سازی')) /* S6-03 */
+    );
+  });
+  return [
+    ...cards,
+    ...(templates.length ? [] : [emptyState({
       iconName: 'clipboard',
       title: 'هنوز طرحی نوشته نشده',
       hint: 'با «طرح جدید» اولین طرح درمان را بسازید — هدف و معیار هر جلسه + کارت‌ها از کارت‌های آماده.'
-    })
-  );
-
-  container.replaceChildren(head, list);
+    })])
+  ];
 }

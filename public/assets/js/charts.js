@@ -1,4 +1,4 @@
-import { el } from './ui.js';
+import { el, markScrollable, prefersReducedMotion } from './ui.js'; // ۱.۲۵.۰۵ — countUp/prefersReducedMotion به ui.js رفت (kpi مشترک؛ پرهیز از چرخهٔ import)
 import { fa } from './format.js';
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -10,10 +10,6 @@ function svg(tag, attrs = {}) {
     node.setAttribute(k, String(v));
   }
   return node;
-}
-
-function prefersReducedMotion() {
-  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
 /* E3: ساخت نمودارهای زیرِ فولد تعویق می‌شود. wrap با ارتفاع رزروشده (minHeight) فوراً
@@ -172,7 +168,12 @@ export function barChart({ points, height = 170, valueFormatter = (v) => fa(v) }
     }));
     node.appendChild(g);
 
-    if (points.length <= 16 || i % Math.ceil(points.length / 16) === 0) {
+    /* ۱.۲۵.۱۰ — تراکم برچسب: هر برچسب حداقل ۴۶px جای می‌خواهد؛ اگر slot کمتر بود
+       هر چندتا‌یکی نمایش داده می‌شود (قبلاً تا ۱۶ نقطه همه برچسب‌ها روی هم می‌افتادند).
+       آخرین (تازه‌ترین) برچسب اگر به‌اندازهٔ کافی از قبلی دور باشد همیشه می‌آید. */
+    const tickEvery = Math.max(1, Math.ceil((points.length * 46) / W));
+    const lastIdx = points.length - 1;
+    if (i % tickEvery === 0 || (i === lastIdx && ((lastIdx % tickEvery) * slot) >= 46)) {
       const t = svg('text', { x: slot * i + slot / 2, y: height - 6, class: 'chart__tick', 'text-anchor': 'middle' });
       // برچسب جلالی (حاوی فاصله) همان‌طور نمایش داده می‌شود؛ ISO فقط بخش روز
       t.textContent = typeof p.date === 'string' && p.date.includes(' ') ? p.date : String(p.date ?? '').slice(8, 10);
@@ -186,7 +187,7 @@ export function barChart({ points, height = 170, valueFormatter = (v) => fa(v) }
 
   // C1: سری متراکم داخل اسکرول افقی (عرض واقعی حفظ می‌شود؛ متن خوانا می‌ماند)
   if (W > 640) {
-    wrap.appendChild(el('div', { class: 'chart__scroll' }, node));
+    wrap.appendChild(markScrollable(el('div', { class: 'chart__scroll' }, node))); /* UX-ممیزی: نشانهٔ اسکرول */
   } else {
     node.removeAttribute('width'); node.removeAttribute('height');
     wrap.appendChild(node);
@@ -315,26 +316,6 @@ export function hbars({ items, valueFormatter = (v) => fa(v) }) { // پیش‌ف
   return wrap;
 }
 
-export function countUp(el_, value, { duration = 700, formatter = (v) => String(v) } = {}) {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    el_.textContent = formatter(value);
-    return;
-  }
-  if (prefersReducedMotion()) {
-    el_.textContent = formatter(value);
-    return;
-  }
-  const start = performance.now();
-  const from = 0;
-  function frame(t) {
-    const p = Math.min((t - start) / duration, 1);
-    const eased = 1 - Math.pow(1 - p, 3); // منحنی حرکت easeOutCubic
-    el_.textContent = formatter(Math.round(from + (value - from) * eased));
-    if (p < 1) requestAnimationFrame(frame);
-  }
-  requestAnimationFrame(frame);
-}
-
 export function lineChart({ points, yMin = 0, yMax = null, height = 190, valueFormatter = (v) => fa(Math.round(v)), threshold = null, goalLine = null, ticks = null }) { // goalLine · ticks اختیاری (C21)
   const wrap = el('div', { class: 'chart chart--line' });
   if (!points.length) {
@@ -440,7 +421,7 @@ export function lineChart({ points, yMin = 0, yMax = null, height = 190, valueFo
     }
   });
   if (W > 640) {
-    wrap.appendChild(el('div', { class: 'chart__scroll' }, node));
+    wrap.appendChild(markScrollable(el('div', { class: 'chart__scroll' }, node))); /* UX-ممیزی: نشانهٔ اسکرول */
   } else {
     wrap.appendChild(node);
   }

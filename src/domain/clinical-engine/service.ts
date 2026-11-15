@@ -1,6 +1,7 @@
 import type { AuthContext } from '@core/shared';
 import { tehranDayRange } from '@core/shared'; // مرز روزِ بازهٔ گزارش با آفست تهران (قرارداد §۷)
 import type { DbClient } from '@core/db';
+import { inParamChunks, inPlaceholders } from '@core/db/in-chunks'; // ۱.۲۵.۷۲ — دروازهٔ IN-list (بدهی ف۶ ⑧)
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@core/errors';
 import type { AuditWriter } from '@core/audit';
 import type { Logger } from '@core/logger';
@@ -35,6 +36,10 @@ import type {
   SessionFidelity
 } from './types';
 import { runInference } from './infer';
+import { WECHSLER_W4_EVENT_KEY } from './wechsler-link'; // ۱.۲۵.۰۵ — واکشی آخرین رویداد وکسلر برای صورت‌بندی
+import { formulateCase, ageYearsFromBirthDate } from '@domain/case-formulation'; // ۱.۲۵.۰۵ — احیای صورت‌بندی مورد (موتور + تلفیق استنتاج زنده)
+import type { FormulationEvidence, FormulationResult } from '@domain/case-formulation';
+import type { GatesOutput, OtProfile } from '@domain/ot-engine/types'; // فقط تایپ — بدون وابستگی زمان‌اجرا
 import { HYPOTHESIS_LOG_EVENT_KEY, hypothesisLogFingerprint, hypothesisLogPayload, hypothesisLogSummary } from './hypothesis-log'; // لج فرضیه
 import { basisSuggestionsOf, basisSnapshotForTarget, type BasisSuggestion } from './basis'; // قواعد اگر-آنگاه مبنا
 import { computeValidationKpis, type ValidationKpis, type ValidationPathInput, type ValidationSessionAgg, type ValidationProbeAgg, type ValidationStudentInput } from './validation'; // اعتبارسنجی بیرونی
@@ -175,6 +180,12 @@ export interface ClinicalEngineDeps {
   logger: Logger;
   now?: () => Date;
   exerciseIdsExist?: (ids: string[]) => Promise<Set<string>>; // اعتبارسنجی لینک کارت به بانک تمرین (تزریقی)
+  /* ۱.۲۵.۰۵ — زمینهٔ OT برای صورت‌بندی مورد: تزریقی (قرارداد «وابستگی ماژولی domain→domain ممنوع»)
+     تا سرویس بالینی بدون تزریق هم در تست‌ها بالا بیاید؛ نبودش فقط پوشش داده را کم می‌کند */
+  formulationOt?: {
+    gatesOf: (studentId: string, actor: AuthContext) => Promise<GatesOutput>;
+    otProfileOf: (studentId: string, actor: AuthContext) => Promise<OtProfile>;
+  };
 }
 
 interface StudentRow {
@@ -335,6 +346,7 @@ export function sanitizeTemplateSteps(raw: unknown): PathwayTemplateStep[] {
 export function createClinicalEngineService(deps: ClinicalEngineDeps) {
   const { db, audit, logger } = deps;
   const exerciseIdsExist = deps.exerciseIdsExist ?? null; // تزریقی؛ نبودش فقط اعتبارسنجی لینک را رد می‌کند
+  const formulationOt = deps.formulationOt ?? null; // ۱.۲۵.۰۵ — تزریقی؛ نبودش صورت‌بندی را بدون OT/گیت می‌سازد
   const log = logger.child('clinical-engine');
   const now = deps.now ?? (() => new Date());
   const iso = () => now().toISOString();
@@ -486,6 +498,67 @@ export function createClinicalEngineService(deps: ClinicalEngineDeps) {
     return plan;
   }
 
+  /* ۱.۲۵.۰۵ — احیای صورت‌بندی مورد: فرانت‌اند از همیشه «جمع‌بندی تشخیصی» را از
+     GET /api/students/:id/case-formulation می‌خواند ولی هیچ روت این مسیر را سرو نمی‌کرد —
+     ۴۰۴ بی‌صدا catch می‌شد و کارت هرگز برای هیچ‌کس نمی‌نشست. همین قرارداد به موتورِ
+     case-formulation وصل شد: رویدادهای شواهد + خروجی وکسلر + پروفایل OT + گیت‌های شناسایی.
+     خروجی formulateCase استاندارد FormulationResult است و استنتاج زندهٔ موتور بالینی
+     (ranked/convergence) هم در همان پاسخ تلفیق می‌شود. */
+  async function getCaseFormulation(studentId: string, actor: AuthContext): Promise<FormulationResult> {
+    const student = await loadStudent(studentId);
+    assertCanView(student, actor);
+    const events = await loadEvidenceEvents(studentId);
+    const [birthRow, wechslerRow] = await Promise.all([
+      db.queryOne<{ birth_date: string | null }>(`SELECT birth_date FROM students WHERE id = ?`, [studentId]),
+      db.queryOne<{ payload: string | null }>(
+        `SELECT e.payload
+           FROM case_events e
+           JOIN case_event_types t ON t.id = e.event_type_id
+          WHERE e.student_id = ? AND t.key = ? AND e.status = 'completed' AND e.deleted_at IS NULL
+          ORDER BY e.occurred_at DESC, e.created_at DESC LIMIT 1`,
+        [studentId, WECHSLER_W4_EVENT_KEY]
+      )
+    ]);
+    /* خروجی موتور وکسلر از همان قفل payload['engine_output'].value باز می‌شود که wechsler-link می‌خواند */
+    let wechsler: FormulationEvidence['wechsler'] = null;
+    const payloadRaw = wechslerRow?.payload ? parseJson<{ engine_output?: { value?: string } | null } | null>(wechslerRow.payload, null) : null;
+    const engineRaw = payloadRaw?.engine_output?.value?.trim();
+    if (engineRaw) {
+      try {
+        const parsed = JSON.parse(engineRaw) as { ok?: unknown } | null;
+        if (parsed && typeof parsed === 'object' && parsed.ok) wechsler = parsed as FormulationEvidence['wechsler'];
+      } catch { /* خروجی معیوب = بدون وکسلر؛ صورت‌بندی با بقیهٔ شواهد ادامه می‌یابد */ }
+    }
+    const ot = formulationOt ? await formulationOt.otProfileOf(studentId, actor) : null;
+    const gates = formulationOt ? await formulationOt.gatesOf(studentId, actor) : null;
+    const evidence: FormulationEvidence = {
+      /* مرز اقتباس: EvidenceEvent موتور بالینی و موتور صورت‌بندی هم‌شکل زمان‌اجراست
+         (toolKey/status/payload/analysis.flags[].label/subscaleScores)؛ فقط تایپ CaseEventFlag
+         ایندکس-امضا ندارد — در این مرز پذیرفته می‌شود، موتور فقط label می‌خواند */
+      events: events as unknown as FormulationEvidence['events'],
+      wechsler,
+      ot,
+      gates,
+      child: { id: student.id, ageYears: ageYearsFromBirthDate(birthRow?.birth_date ?? null), grade: student.grade }
+    };
+    const result = formulateCase(evidence, { now });
+    log.debug('case formulation computed', { studentId, constructs: result.constructs.length, coverage: result.dataCoverage.percent });
+    return result;
+  }
+
+  /* ۱.۲۵.۵۹ — کانون‌های پایش خانه: سازه‌های درگیرِ آخرین جمع‌بندی تشخیصی (قابل‌توجه/هم‌گرا-بالا)
+     مرتب‌شده برمی‌گردد تا هنگام ارسال «پایش در خانه نسخهٔ ۲» در رویداد اسنپ‌شات شود و
+     فرم خانواده با تقدم همان کانون‌ها رندر شود (تزریق از روت مرکزی به case-events). */
+  async function homeMonitorFocusOf(studentId: string, actor: AuthContext) {
+    const result = await getCaseFormulation(studentId, actor);
+    const items = result.constructs
+      .filter((c) => c.level === 'قابل‌توجه' || c.level === 'هم‌گرا-بالا')
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 4)
+      .map((c) => ({ key: c.key, titleFa: c.titleFa, level: c.level, score: c.score }));
+    return { generatedAt: result.generatedAt, coherence: result.coherence, items };
+  }
+
   function sessionRowToRecord(r: PathSessionRow): PathSessionRecord {
     const status: PathwaySessionStatus = PATHWAY_SESSION_STATUSES.includes(r.status as PathwaySessionStatus)
       ? (r.status as PathwaySessionStatus)
@@ -520,12 +593,16 @@ export function createClinicalEngineService(deps: ClinicalEngineDeps) {
   async function loadSessionsOfPaths(pathIds: string[]): Promise<Map<string, PathSessionRecord[]>> {
     const map = new Map<string, PathSessionRecord[]>();
     if (pathIds.length === 0) return map;
-    const rows = await db.query<PathSessionRow>(
-      `SELECT * FROM pathway_sessions
-        WHERE pathway_id IN (${pathIds.map(() => '?').join(', ')})
+    /* ۱.۲۵.۷۲ — تکه‌بندی ۹۰تایی؛ هر مسیر در یک تکه است پس ترتیب جلسه‌های هر مسیر حفظ می‌شود */
+    const rows: PathSessionRow[] = [];
+    for (const chunk of inParamChunks(pathIds)) {
+      rows.push(...await db.query<PathSessionRow>(
+        `SELECT * FROM pathway_sessions
+        WHERE pathway_id IN (${inPlaceholders(chunk.length)})
         ORDER BY ord ASC, created_at ASC`,
-      pathIds
-    );
+        chunk
+      ));
+    }
     for (const r of rows) {
       const list = map.get(r.pathway_id);
       const rec = sessionRowToRecord(r);
@@ -577,13 +654,19 @@ export function createClinicalEngineService(deps: ClinicalEngineDeps) {
   async function loadProbeSummariesOfPaths(pathIds: string[]): Promise<Map<string, PathProbeSummaryBadge>> {
     const map = new Map<string, PathProbeSummaryBadge>();
     if (pathIds.length === 0) return map;
-    const rows = await db.query<{ pathway_id: string; metric: string; value: number; taken_at: string }>(
-      `SELECT pathway_id, metric, value, taken_at FROM pathway_probes
-        WHERE pathway_id IN (${pathIds.map(() => '?').join(', ')})
+    /* ۱.۲۵.۷۲ — تکه‌بندی ۹۰تایی + مرتب‌سازی سراسری پس از ادغام (LIMIT 400 سراسری بین تکه‌ها معنا ندارد) */
+    const rows: { pathway_id: string; metric: string; value: number; taken_at: string }[] = [];
+    for (const chunk of inParamChunks(pathIds)) {
+      rows.push(...await db.query<{ pathway_id: string; metric: string; value: number; taken_at: string }>(
+        `SELECT pathway_id, metric, value, taken_at FROM pathway_probes
+        WHERE pathway_id IN (${inPlaceholders(chunk.length)})
         ORDER BY taken_at DESC
         LIMIT 400`,
-      pathIds
-    );
+        chunk
+      ));
+    }
+    rows.sort((a, b) => (a.taken_at < b.taken_at ? 1 : a.taken_at > b.taken_at ? -1 : 0));
+    rows.length = Math.min(rows.length, 400); // هم‌قرارداد LIMIT 400 پیشین — سقف سراسری پس از ادغام تکه‌ها
     // سقف ۴۰۰ سطر: بج اطلاع‌رسانی است نه گزارش رسمی؛ ۴۰۰ پراپِ جدیدتر برای دنبالهٔ تسلط کافی است
     // (ترتیب DESC یعنی جدیدترین‌ها می‌مانند) و شمارش بیش از سقف، کمتر از واقعی دیده می‌شود.
     type MetricSeries = { points: { value: number; takenAt: string }[]; lastAt: string };
@@ -1489,7 +1572,7 @@ export function createClinicalEngineService(deps: ClinicalEngineDeps) {
     };
   }
 
-  return { getInsights, getChecklistPlan, listPaths, createPath, decidePath, getPath, listTargets, toggleStep, listPathTemplates, upsertPathTemplate, listPathSessions, addPathSession, updatePathSession, deletePathSession, reorderPathSessions, listRecentCards, getPathwayReport, addPathProbe, listPathProbes, updatePathProbe, updatePathGoal, getValidationKpis, createCaseAudit, listCaseAudits }; // پراپ‌های پیشروی · هدف مسیر · اعتبارسنجی
+  return { getInsights, getCaseFormulation, homeMonitorFocusOf, getChecklistPlan, listPaths, createPath, decidePath, getPath, listTargets, toggleStep, listPathTemplates, upsertPathTemplate, listPathSessions, addPathSession, updatePathSession, deletePathSession, reorderPathSessions, listRecentCards, getPathwayReport, addPathProbe, listPathProbes, updatePathProbe, updatePathGoal, getValidationKpis, createCaseAudit, listCaseAudits }; // پراپ‌های پیشروی · هدف مسیر · اعتبارسنجی · صورت‌بندی مورد (۱.۲۵.۰۵)
 }
 
 export type ClinicalEngineService = ReturnType<typeof createClinicalEngineService>;

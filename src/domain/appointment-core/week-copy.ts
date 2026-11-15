@@ -4,6 +4,7 @@ import { ForbiddenError, NotFoundError, ValidationError } from '@core/errors';
 import type { AuditWriter } from '@core/audit';
 import type { Logger } from '@core/logger';
 import type { DbClient } from '@core/db';
+import { inParamChunks, inPlaceholders } from '@core/db/in-chunks'; // ۱.۲۵.۷۲ — دروازهٔ IN-list (بدهی ف۶ ⑧)
 import type { AppointmentRow } from './repository';
 import type { CopyWeekInput, CopyWeekResult } from './types';
 
@@ -57,11 +58,14 @@ export async function copyWeek(ctx: WeekCopyCtx & { input: CopyWeekInput }): Pro
   }
 
   const ids = sourceRows.map((r) => r.id);
-  const placeholders = ids.map(() => '?').join(',');
-  const studentRows = await db.query<{ appointment_id: string; student_id: string; facet_id: string | null }>(
-    `SELECT appointment_id, student_id, facet_id FROM appointment_students WHERE appointment_id IN (${placeholders})`,
-    ids
-  );
+  /* ۱.۲۵.۷۲ — تکه‌بندی ۹۰تایی: کپی هفتهٔ پر (≤ ۷روز × ظرفیت روزانه) از سقف ۱۰۰ بایند D1 می‌گذرد */
+  const studentRows: { appointment_id: string; student_id: string; facet_id: string | null }[] = [];
+  for (const chunk of inParamChunks(ids)) {
+    studentRows.push(...await db.query<{ appointment_id: string; student_id: string; facet_id: string | null }>(
+      `SELECT appointment_id, student_id, facet_id FROM appointment_students WHERE appointment_id IN (${inPlaceholders(chunk.length)})`,
+      chunk
+    ));
+  }
   const studentsByAppt = new Map<string, { student_id: string; facet_id: string | null }[]>();
   for (const s of studentRows) {
     const list = studentsByAppt.get(s.appointment_id) ?? [];
@@ -155,12 +159,15 @@ export async function undoCopyWeek(ctx: WeekCopyCtx & { batchId: string }): Prom
     }
   }
 
-  const placeholders = batchRows.map(() => '?').join(',');
-  const attended = await db.query<{ appointment_id: string }>(
-    `SELECT DISTINCT appointment_id FROM appointment_students
-      WHERE appointment_id IN (${placeholders}) AND attendance != 'pending'`,
-    batchRows.map((r) => r.id)
-  );
+  /* ۱.۲۵.۷۲ — تکه‌بندی ۹۰تایی: دستهٔ کپی هفتهٔ پر صدها نوبت دارد (سقف ۱۰۰ بایند D1) */
+  const attended: { appointment_id: string }[] = [];
+  for (const chunk of inParamChunks(batchRows.map((r) => r.id))) {
+    attended.push(...await db.query<{ appointment_id: string }>(
+      `SELECT DISTINCT appointment_id FROM appointment_students
+      WHERE appointment_id IN (${inPlaceholders(chunk.length)}) AND attendance != 'pending'`,
+      chunk
+    ));
+  }
   const blockedIds = new Set(attended.map((r) => r.appointment_id));
 
   const removable = batchRows.map((r) => r.id).filter((id) => !blockedIds.has(id));
@@ -168,10 +175,11 @@ export async function undoCopyWeek(ctx: WeekCopyCtx & { batchId: string }): Prom
     return { removed: 0 };
   }
 
-  const removablePlaceholders = removable.map(() => '?').join(',');
   await db.transaction(async (tx) => {
-    await tx.execute(`DELETE FROM appointment_students WHERE appointment_id IN (${removablePlaceholders})`, removable);
-    await tx.execute(`DELETE FROM appointments WHERE id IN (${removablePlaceholders})`, removable);
+    for (const chunk of inParamChunks(removable)) {
+      await tx.execute(`DELETE FROM appointment_students WHERE appointment_id IN (${inPlaceholders(chunk.length)})`, chunk);
+      await tx.execute(`DELETE FROM appointments WHERE id IN (${inPlaceholders(chunk.length)})`, chunk);
+    }
     await audit.logInTransaction(tx, {
       actorId: actor.staffId,
       action: 'appointment.copy_week.undo',

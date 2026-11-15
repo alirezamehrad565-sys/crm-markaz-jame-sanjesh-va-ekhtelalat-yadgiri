@@ -35,7 +35,8 @@ export CLOUDFLARE_API_TOKEN=<token حساب-محدود>
 export CLOUDFLARE_ACCOUNT_ID=<ACCOUNT_ID>
 ```
 
-`account_id` ثابت تولید از قبل در `wrangler.toml` ثبت است.
+`account_id` هرگز در مخزن ثبت نمی‌شود (ممیزی نشت ۲۰۲۶-۱۱-۱۲) — خط `account_id` از `wrangler.toml`
+حذف شده و wrangler فقط از env می‌خواند (آزمون زنده: مقدار داخل فایل بر env ترجیح داده می‌شد و placeholder به API می‌رفت).
 
 ## ۳) نصب از صفر (فقط بار اول)
 
@@ -120,6 +121,7 @@ npx wrangler d1 execute center-system-db-restore --remote --file=backups/backup-
 
 | علامت | علت محتمل | اقدام |
 |-------|-----------|-------|
+| رگبار 404 روی `/assets/dist/*.js` در تب‌های باز | تب از قبل از انتشار باز مانده و chunk نسخهٔ قبل را می‌خواهد که بیلد جدید حذفش کرده | از **۱.۲۵.۲۷** یک reload خودکار با گارد نشست هم‌گام می‌کند؛ در نسخه‌های قدیمی‌تر یک بار نوسازی سخت (Ctrl+Shift+R) |
 | `/health` نسخهٔ قدیمی | استقرار ناتمام یا کش | `update-remote.mjs` را تا گام ۴ دوباره اجرا کنید |
 | بعد از انتشار، فرانت «کهنه» است | کش مرورگر | پارامتر `?v=` در `index.html` را با نسخهٔ جدید هم‌گام کنید |
 | `wrangler: authentication error` | توکن منقضی/بی‌دسترس | توکن حساب-محدود تازه صادر و به env بدهید |

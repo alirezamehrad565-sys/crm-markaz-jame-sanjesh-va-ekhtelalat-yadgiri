@@ -1,4 +1,4 @@
-import type { AppointmentOpsStatus, AppointmentStatus, AppointmentStudent, NextAction } from '@core/shared';
+import type { AppointmentStatus, AppointmentStudent, NextAction } from '@core/shared';
 
 export interface AppointmentRow {
   id: string;
@@ -6,7 +6,6 @@ export interface AppointmentRow {
   start_at: string;
   end_at: string;
   status: AppointmentStatus;
-  ops_status: AppointmentOpsStatus | null;
   session_type: string | null;
   note: string | null;
   version: number;
@@ -33,7 +32,6 @@ export function rowToAppointment(row: AppointmentRow, students: AppointmentStude
     startAt: row.start_at,
     endAt: row.end_at,
     status: row.status,
-    opsStatus: row.ops_status ?? null,
     sessionType: (row.session_type ?? null) as import('@core/shared').Appointment['sessionType'],
     note: row.note,
     version: row.version,
@@ -56,7 +54,7 @@ export function rowToStudent(row: AppointmentStudentRow): AppointmentStudent {
   };
 }
 
-const APPOINTMENT_COLS = 'id, staff_id, start_at, end_at, status, ops_status, session_type, note, version, batch_id, created_by, created_at, updated_at';
+const APPOINTMENT_COLS = 'id, staff_id, start_at, end_at, status, session_type, note, version, batch_id, created_by, created_at, updated_at';
 
 export function selectAppointmentById(id: string): { sql: string; params: unknown[] } {
   return {
@@ -95,8 +93,24 @@ export function selectAppointments(filters: { staffId?: string; studentId?: stri
   };
 }
 
+/**
+ * سقف پارامترهای bind در D1 = ۱۰۰ پارامتر برای «هر کوئری» (خطای واقعی: «too many SQL variables»
+ * روی GET /api/dashboard/summary با پنجرهٔ >۱۰۰ نوبت — کشف baseline بار ف۵، scripts/load).
+ * تکه‌بندی باید در «حلقهٔ صدا زننده» باشد — UNION ALL با پارامترهای بیشتر هم همان سقف را می‌کارد.
+ * صدا زنندهٔ این سازنده باید ids را با همین ثابت slice کند (هم‌قرارداد).
+ */
+export const APPOINTMENT_STUDENT_QUERY_CHUNK = 90;
+
 export function selectStudentsOfAppointments(ids: string[]): { sql: string; params: unknown[] } {
-  const placeholders = ids.map(() => '?').join(',');
+  // گارد دفاعی: IN خالی SQL نامعتبر است — کوئریِ هم‌شکل که هیچ ردیفی نمی‌دهد (هم‌قرارداد خروجی)
+  if (ids.length === 0) {
+    return {
+      sql: `SELECT appointment_id, student_id, facet_id, attendance, note, session_note, next_action
+              FROM appointment_students WHERE 0`,
+      params: []
+    };
+  }
+  const placeholders = ids.map(() => '?').join(','); // IN-bounded: صدا زننده با APPOINTMENT_STUDENT_QUERY_CHUNK=90 تکه می‌کند (گیت e2e-in-list-chunk) (۱.۲۵.۷۲)
   return {
     sql: `SELECT appointment_id, student_id, facet_id, attendance, note, session_note, next_action
             FROM appointment_students
