@@ -41,9 +41,7 @@ export {
   NewWorkingHourSchema,
   NotificationListQuerySchema,
   NewTagSchema,
-  OpsStatusSchema,
   SaveSessionNoteSchema,
-  SetOpsStatusSchema,
   ReplaceCenterHoursSchema,
   ReplaceStudentTagsSchema,
   ReplaceStudentFocusSchema,
@@ -109,12 +107,15 @@ export {
   UpdateExercisePackageSchema,
   CreateExerciseBatchSchema,
   ScoringWeightsSchema,
-  ScoringConfigSchema
+  ScoringConfigSchema,
+  BotTokenUpdateSchema, // ۱.۲۵.۵۷ — ثبت/پاک‌کردن توکن بات مستقیم از کاربر
+  SCREENING_READINESS_MAX, // ۱.۲۵.۵۷ — سقف ۳۴ نمای فرمت کلاینت هم است
+  SCREENING_NOTE_MAX,
+  BOT_ABOUT_MAX
 } from './schemas';
 
 export type {
   Appointment,
-  AppointmentOpsStatus,
   AppointmentStatus,
   AppointmentStudent,
   AppointmentUpdateInput,
@@ -194,8 +195,6 @@ export type {
   WorkingDayAppointment,
   WorkingDayStaffColumn,
   WorkingDaySessionStats,
-  WorkingDayOpsStats,
-  WorkingDayQueueItem,
   WorkingDayBoard,
   StudentGrade,
   WaitlistBadge,
@@ -216,9 +215,6 @@ export type {
 
 export {
   APPOINTMENT_STATUS,
-  APPOINTMENT_OPS_STATUSES,
-  OPS_TERMINAL_STATUSES,
-  OPS_QUEUE_WINDOW_MINUTES,
   NEXT_ACTION_VALUES,
   SESSION_NOTE_MAX,
   DAY_NOTE_KINDS,
@@ -244,6 +240,7 @@ export {
   DEFAULT_PAGE_SIZE,
   DEFAULT_REMINDER_HOURS_BEFORE,
   DEFAULT_SETTINGS,
+  CP_SYNC_CRON,
   DIGEST_CRON,
   DISPLAY_TIMEZONE,
   LINK_CODE_LENGTH,
@@ -343,6 +340,23 @@ export {
   CLEARBOOK_ENTRY_PAGE_MAX,
   CLEARBOOK_PLAN_STATUSES,
   CLEARBOOK_PLAN_STATUS_LABELS,
+  BUG_REPORT_AREA_ID_MAX,
+  BUG_REPORT_AREAS_MAX,
+  BUG_REPORT_DESCRIPTION_MAX,
+  BUG_REPORT_PAGE_MAX,
+  BUG_REPORT_VERSION_MAX,
+  BUG_REPORT_REPORTER_MAX,
+  BUG_REPORT_NODE_ID_MAX,
+  BUG_REPORT_SEVERITIES,
+  BUG_REPORT_AREAS,
+  BUG_REPORT_AREA_IDS,
+  BUG_REPORT_SEVERITY_LABELS,
+  HOME_MONITOR_EVENT_KEY,
+  CENTER_SURVEY_EVENT_KEY,
+  SURVEY_DISCHARGE_EVENT_KEY,
+  SURVEY_PROGRESS_EVENT_KEY,
+  FAMILY_SURVEY_EVENT_KEYS,
+  SURVEY_KIND_EVENT_KEYS,
 } from './constants';
 
 export {
@@ -374,6 +388,8 @@ export type { KnowledgeCategory } from './constants';
 export type { SpecialNeedType, SpecialNeedSeverity } from './constants';
 
 export type { ClearbookPlanStatus } from './constants';
+
+export type { BugReportSeverity, BugReportAreaId } from './constants';
 
 export {
   SESSION_TYPES,

@@ -363,7 +363,7 @@ function renderFilesSection(event, canEdit, onChanged) {
       ...(files.length === 0
         ? [el('p', { class: 'cell-sub' }, 'پیوستی ثبت نشده است.')]
         : files.map((f) =>
-            el('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 0', borderBottom: '1px solid var(--line, #eee)' } },
+            el('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 0', borderBottom: '1px solid var(--line)' } },
               el('span', { style: { flex: '1', display: 'inline-flex', alignItems: 'center', gap: '6px', minWidth: '0' } }, icon('file', 14), el('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, f.filename)),
               el('span', { class: 'cell-sub' }, `${fa(Math.max(1, Math.round(f.sizeBytes / 1024)))} KB`),
               el('a', { class: 'btn btn--ghost btn--sm', href: `/api/case-events/${event.id}/files/${f.id}`, target: '_blank', rel: 'noopener' }, 'دانلود'),
@@ -489,6 +489,40 @@ export function openCaseEventDetail(event, { onChanged } = {}) {
       body.appendChild(el('div', { class: 'badge badge--error', style: { fontSize: 'var(--fs-2xs)', padding: '7px 10px', marginBottom: '12px', whiteSpace: 'normal', textAlign: 'right', lineHeight: 'var(--lh-body)' } },
         `آیتم بحرانی (${fa(a.flags.length)}): ${a.flags.map((fl) => fl.label).join('، ')}`));
     }
+
+    /* ۱.۲۵.۵۹ — پایش در خانهٔ نسخهٔ ۲: «هم‌سویی با جمع‌بندی تشخیصی» — سازه‌های درگیرِ
+       آخرین جمع‌بندی (اسنپ‌شاتِ لحظهٔ ارسال) کنار نمرهٔ همان کانون در همین پایش می‌نشینند */
+    if (event.typeKey === 'ce-home-monitor-v2') {
+      let focus = null;
+      try {
+        const raw = event.payload?.['_monitor_focus']?.value;
+        if (raw) focus = JSON.parse(String(raw));
+      } catch { /* اسنپ‌شات معیوب = بدون بلوک هم‌سویی */ }
+      if (focus && Array.isArray(focus.items) && focus.items.length > 0) {
+        const subById = new Map((a.subscaleScores ?? []).map((s) => [s.id, s]));
+        const rows = focus.items.map((f) => {
+          const sub = subById.get(f.key);
+          const verdict = !sub
+            ? { label: 'در این دوره پاسخ نیامده', cls: 'badge--neutral' }
+            : sub.color === 'danger'
+              ? { label: 'هم‌سو — خانه هم پررنگ گزارش کرده', cls: 'badge--error' }
+              : sub.color === 'warn'
+                ? { label: 'در حد گزارش — قابل قبول', cls: 'badge--warning' }
+                : { label: 'خانه آرام‌تر گزارش می‌کند — بازبینی جمع‌بندی', cls: 'badge--success' };
+          return el('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', padding: '7px 0', borderBottom: '1px solid var(--line)' } },
+            el('b', { style: { flex: '1', minWidth: '0', fontSize: 'var(--fs-xs)' } }, f.titleFa ?? f.key),
+            el('span', { class: 'badge badge--neutral' }, `جمع‌بندی: ${f.level}`),
+            sub ? el('span', { class: 'cell-sub' }, `${fa(sub.score)} از ${fa(sub.max)}${sub.band ? ` — ${sub.band}` : ''}`) : null,
+            el('span', { class: `badge ${verdict.cls}` }, verdict.label)
+          );
+        });
+        body.appendChild(el('div', { style: { background: 'var(--surface-2)', borderRadius: 'var(--radius-md)', padding: '12px 14px', marginBottom: '12px' } },
+          el('b', { style: { display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' } }, icon('target', 14), 'هم‌سویی با جمع‌بندی تشخیصی'),
+          el('div', { class: 'cell-sub', style: { marginBottom: '6px' } }, focus.coherence ? `انسجام آخرین جمع‌بندی: ${focus.coherence}` : null),
+          ...rows
+        ));
+      }
+    }
   }
 
   if (event.status === 'pending_family') {
@@ -507,7 +541,7 @@ export function openCaseEventDetail(event, { onChanged } = {}) {
       if (c && c.ok) wEng = c;
     } catch {}
   }
-  const keys = Object.keys(payload).filter((k) => k !== 'engine_output' && payload[k] && String(payload[k].value ?? '').length > 0);
+  const keys = Object.keys(payload).filter((k) => k !== 'engine_output' && !k.startsWith('_') && payload[k] && String(payload[k].value ?? '').length > 0); /* ۱.۲۵.۵۹: کلیدهای رزرو (_) نمایشی نیستند */
   if (wEng) {
     const wSection = wechslerEventAnalysisSection(wEng);
     if (wSection) body.appendChild(wSection);
@@ -871,7 +905,7 @@ export async function openChecklistBatchSendModal({ student, types, onDone }) {
 
   const rowOf = (t) => {
     const target = fillTargetOf(t);
-    const cb = el('input', { type: 'checkbox', checked: true, style: { width: '17px', height: '17px', accentColor: 'var(--brand, #229ED9)', flex: 'none' } });
+    const cb = el('input', { type: 'checkbox', checked: true, style: { width: '17px', height: '17px', accentColor: 'var(--brand)', flex: 'none' } });
     cb.addEventListener('change', () => {
       checked.set(t.id, cb.checked);
       syncTeacher();
@@ -880,7 +914,7 @@ export async function openChecklistBatchSendModal({ student, types, onDone }) {
     return el('label', {
       style: {
         display: 'flex', alignItems: 'flex-start', gap: '9px', padding: '9px 11px',
-        background: 'var(--surface-2, #f7f3ea)', borderRadius: 'var(--radius-sm)', cursor: 'pointer'
+        background: 'var(--surface-2)', borderRadius: 'var(--radius-sm)', cursor: 'pointer'
       }
     },
       cb,
@@ -901,7 +935,7 @@ export async function openChecklistBatchSendModal({ student, types, onDone }) {
     ...teacherOptions.map((o) => el('option', { value: o.value }, o.label)));
   const newName = el('input', { class: 'input', type: 'text', maxlength: 120, placeholder: 'نام و نام خانوادگی معلم' });
   const newClass = el('input', { class: 'input', type: 'text', maxlength: 120, placeholder: 'کلاس/درس (اختیاری)' });
-  const newContact = el('input', { class: 'input', type: 'text', maxlength: 60, dir: 'ltr', placeholder: 'راه ارتباطی (اختیاری)' });
+  const newContact = el('input', { class: 'input', type: 'text', maxlength: 60, dir: 'auto', placeholder: 'راه ارتباطی (اختیاری)' }); /* ۱.۲۵.۰۵: dir=auto — placeholder فارسی راست‌چین، شماره/شناسه لاتین چپ‌چین (قبلاً placeholder فارسی داخل ltr به‌هم می‌ریخت) */
   const newWrap = el('div', { style: { display: 'none', flexDirection: 'column', gap: '6px', marginTop: '6px' } }, newName, newClass, newContact);
   teacherSel.addEventListener('change', () => {
     newWrap.style.display = teacherSel.value === '__new__' ? 'flex' : 'none';
@@ -1043,7 +1077,7 @@ export async function openChecklistBatchSendModal({ student, types, onDone }) {
     }
     for (const f of failItems) toastError(new Error(`${f.type.title}: ${f.error}`));
 
-    const resultRows = results.map((r) => el('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', padding: '7px 0', borderBottom: '1px solid var(--line, #eee)' } },
+    const resultRows = results.map((r) => el('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', padding: '7px 0', borderBottom: '1px solid var(--line)' } },
       r.error
         ? icon('alert', 15)
         : (r.manual ? icon('copy', 15) : icon('check', 15)),

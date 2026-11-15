@@ -5,7 +5,7 @@
 // ذخیره‌سازی: PUT /api/students/:id/focus → student_focus_links (مهاجرت ۰۰۸۵) — سقف ۸ پیوند.
 // پیشنهاد کارت () با همین پیوندها دو-بعدی می‌شود: برچسب مشترک + هدف مشترک.
 import { api } from './api.js';
-import { el, icon, openModal, toast, toastError } from './ui.js';
+import { el, icon, openModalAsync, toast, toastError } from './ui.js';
 import { buildTaxonomyPicker } from './taxonomy.js';
 
 let treeCache = null; // درخت واحد از meta — یک بار در نشست
@@ -44,55 +44,59 @@ export async function focusLabels() {
  * ویرایشگر هدف‌های شناختی دانش‌آموز — همان کامپوننت درخت واحد با بافت پروفایل
  * @param {{ student: { id: string, firstName: string, lastName: string }, onSaved?: Function }} p
  */
-export async function openFocusEditor({ student, onSaved }) {
-  let tree;
-  try {
-    tree = await fetchFocusTree();
-  } catch (err) {
-    toastError(err);
-    return;
-  }
-  if (!tree || tree.length === 0) {
-    toast('درخت طبقه‌بندی بارگذاری نشده است', 'warning');
-    return;
-  }
-
-  const current = await fetchStudentFocus(student.id);
-  const focusSel = new Set(current);
-  const tagSel = new Set(); // ستون برچسبی در این بافت رندر نمی‌شود — خالی می‌ماند
-
-  const picker = buildTaxonomyPicker({
-    tree,
-    focusSel,
-    tagSel,
-    maxFocus: 8,
-    subjectFa: 'دانش‌آموز', // پیام سقف با زبان پروفایل
-    selectedNote: 'پیشنهاد کارت‌ها با هدف‌های پروفایل هم‌راستا می‌شود', // 
-    summaryHint: 'هدف‌های شناختی دانش‌آموز را انتخاب کنید — اختیاری؛ پایهٔ پیشنهاد هوشمند کارت در «ارسال تمرین»'
-  });
-
-  openModal({
+export function openFocusEditor({ student, onSaved }) {
+  /* ۱.۱۴.۰ — پوستهٔ لودینگ همان لحظه باز می‌شود؛ درخت و پیوندهای فعلی که آمدند درجا پر می‌شوند.
+     قبلاً دو await پشت‌سرهم پیش از مودال بود — سکوتِ چندثانیه‌ای روی شبکهٔ کند. */
+  openModalAsync({
     title: `هدف‌های شناختی ${student.firstName} ${student.lastName}`,
     wide: true,
-    body: el('div', {}, picker.el),
-    actions: [
-      (close) => el('button', { class: 'btn btn--ghost', type: 'button', onclick: close }, 'انصراف'),
-      (close) => {
-        const saveBtn = el('button', { class: 'btn btn--primary', type: 'button' }, icon('check', 14), 'ذخیره');
-        saveBtn.addEventListener('click', async () => {
-          saveBtn.disabled = true;
-          try {
-            const res = await api.put(`/api/students/${student.id}/focus`, { focus_keys: [...focusSel] });
-            toast('هدف‌های شناختی ذخیره شد', 'success');
-            close();
-            onSaved?.(res.data ?? []);
-          } catch (err) {
-            toastError(err);
-            saveBtn.disabled = false;
-          }
-        });
-        return saveBtn;
+    loadingText: 'در حال بارگذاری درخت هدف‌ها…',
+    load: async () => {
+      const tree = await fetchFocusTree(); // خطا → پوسته بسته می‌شود و toastError می‌آید
+      if (!tree || tree.length === 0) {
+        shell.close();
+        toast('درخت طبقه‌بندی بارگذاری نشده است', 'warning');
+        return null;
       }
-    ]
+
+      const current = await fetchStudentFocus(student.id);
+      const focusSel = new Set(current);
+      const tagSel = new Set(); // ستون برچسبی در این بافت رندر نمی‌شود — خالی می‌ماند
+
+      const picker = buildTaxonomyPicker({
+        tree,
+        focusSel,
+        tagSel,
+        maxFocus: 8,
+        subjectFa: 'دانش‌آموز', // پیام سقف با زبان پروفایل
+        selectedNote: 'پیشنهاد کارت‌ها با هدف‌های پروفایل هم‌راستا می‌شود', // 
+        summaryHint: 'هدف‌های شناختی دانش‌آموز را انتخاب کنید — اختیاری؛ پایهٔ پیشنهاد هوشمند کارت در «ارسال تمرین»'
+      });
+
+      return {
+        title: `هدف‌های شناختی ${student.firstName} ${student.lastName}`,
+        wide: true,
+        body: el('div', {}, picker.el),
+        actions: [
+          (close) => el('button', { class: 'btn btn--ghost', type: 'button', onclick: close }, 'انصراف'),
+          (close) => {
+            const saveBtn = el('button', { class: 'btn btn--primary', type: 'button' }, icon('check', 14), 'ذخیره');
+            saveBtn.addEventListener('click', async () => {
+              saveBtn.disabled = true;
+              try {
+                const res = await api.put(`/api/students/${student.id}/focus`, { focus_keys: [...focusSel] });
+                toast('هدف‌های شناختی ذخیره شد', 'success');
+                close();
+                onSaved?.(res.data ?? []);
+              } catch (err) {
+                toastError(err);
+                saveBtn.disabled = false;
+              }
+            });
+            return saveBtn;
+          }
+        ]
+      };
+    }
   });
 }

@@ -239,13 +239,19 @@ describe('نمون‌برگ‌ها و اسناد خام — فایل‌ها', ()
     expect(pdf.size).toBe(PDF_BYTES.length);
     expect(img.mime).toBe('image/png');
 
-    // دانلود — بایت یکسان
+    // دانلود — بایت یکسان + هیچ کشی پاسخ فایل را نگه نمی‌دارد (no-store صریح)
     const headers = { authorization: `Bearer ${tokenOf(manager)}` };
     const dl = await A.app.request(`/api/docs/${doc.id}/files/${pdf.id}`, { headers }, A.env as never);
     expect(dl.status).toBe(200);
     expect(await dl.text()).toBe('%PDF-fake-docs-circular-letter');
     expect(dl.headers.get('content-type')).toBe('application/pdf');
     expect(dl.headers.get('content-disposition')).toContain('attachment');
+    expect(dl.headers.get('cache-control')).toContain('no-store');
+
+    // دانلود فایل دومِ همان سند — بایت خودش را می‌دهد نه فایل اول را (جدايی کلیدها)
+    const dlImg = await A.app.request(`/api/docs/${doc.id}/files/${img.id}`, { headers }, A.env as never);
+    expect(dlImg.status).toBe(200);
+    expect(await dlImg.text()).toBe('%PNG-fake-docs-form-scan');
 
     // جزئیات سند فایل‌ها را نشان می‌دهد
     const detail = dataOf<DocRecord>(await manager.get(`/api/docs/${doc.id}`));
@@ -415,7 +421,8 @@ describe('نمون‌برگ‌ها و اسناد خام — فایل‌ها', ()
     expect(del.status).toBe(200);
     const rest = dataOf<DocRecord>(del).files;
     expect(rest).toHaveLength(1);
-    expect(rest[0].filename).toBe('dovi.png');
+    // ۱.۱۲.۰ — ترتیب فایل‌ها جدیدترین-اول: files[0] آخرین بارگذاری (dovi.png) بود
+    expect(rest[0].filename).toBe('yeki.pdf');
 
     // قطعه‌های فایل حذف‌شده از ذخیره‌ساز پاک شده‌اند
     const chunkRows = A.sql
@@ -427,6 +434,21 @@ describe('نمون‌برگ‌ها و اسناد خام — فایل‌ها', ()
     const headers = { authorization: `Bearer ${tokenOf(manager)}` };
     const dl = await A.app.request(`/api/docs/${doc.id}/files/${files[0].id}`, { headers }, A.env as never);
     expect(dl.status).toBe(404);
+  });
+
+  it('ترتیب فایل‌ها جدیدترین-اول + uploadedAt (۱.۱۲.۰ — تفکیک ردیف‌های هم‌نام)', async () => {
+    const doc = await makeDoc('سند ترتیب فایل');
+    const form1 = new FormData();
+    form1.append('files', makeFile(PDF_BYTES, 'version-a.pdf', 'application/pdf'));
+    await postForm(manager, `/api/docs/${doc.id}/files`, form1);
+    await new Promise((r) => setTimeout(r, 15)); // اختلاف زمانی مطمئن بین دو بارگذاری
+    const form2 = new FormData();
+    form2.append('files', makeFile(PNG_BYTES, 'version-b.png', 'image/png'));
+    const up2 = await postForm(manager, `/api/docs/${doc.id}/files`, form2);
+    const files = dataOf<DocRecord>(up2).files;
+    // جدیدترین بارگذاری اول می‌نشیند — ریشهٔ گزارش «دانلود فایل دیگر» همین ترتیب کهنه بود
+    expect(files.map((f) => f.filename)).toEqual(['version-b.png', 'version-a.pdf']);
+    for (const f of files) expect(typeof f.uploadedAt).toBe('string');
   });
 
   it('دانلود فایلِ سند حذف‌نرم‌شده — ۴۰۴', async () => {

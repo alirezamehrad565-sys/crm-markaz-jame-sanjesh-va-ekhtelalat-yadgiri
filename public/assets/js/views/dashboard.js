@@ -4,16 +4,14 @@ import {
   fa,
   iranianWeekdayOfYmd,
   tehranDayRange,
-  tehranNowShifted, /* S1-06 */
   tehranTimeOfIso,
   tehranTodayYmd,
   tehranYmdOfIso,
   WEEKDAY_NAMES,
   formatJalaliNumeric
 } from '../format.js';
-import { el, icon, loadingState, skeletonState, errorState, statusBadge, emptyState, openModal, progressRing, toast, toastError } from '../ui.js'; // toast/toastError گم‌شده بود: مسیر ذخیرهٔ حسابرسی بی‌بازخورد می‌افتد
-import { hueClass } from '../staff-hue.js'; // — رنگ ثابت درمانگر
-import { illoHeroOrnament, illoNoAnnouncements, illoKnowledge } from '../illustrations.js'; // — وکتورها
+import { el, icon, skeletonState, errorState, emptyState, openModal, progressRing, toast, toastError, kpi, KPI_ALERT_RATE } from '../ui.js'; // toast/toastError گم‌شده بود: مسیر ذخیرهٔ حسابرسی بی‌بازخورد می‌افتد · ۱.۲۵.۰۵: kpi/آستانه تک‌منبع
+import { illoNoAnnouncements, illoKnowledge } from '../illustrations.js'; // — وکتورها
 import { session } from '../state.js';
 import { canSeeTodos, renderMyTodosCard } from '../my-todos.js';
 
@@ -47,11 +45,11 @@ export async function renderDashboard(container) {
   const knowledge = kpis?.knowledge ?? null;
   const announcements = kpis?.announcements ?? null;
   const waitlist = kpis?.waitlist ?? null;
-  const dayAppts = kpis?.dayAppts ?? null;
   const followups = kpis?.followups ?? null;
   const validation = kpis?.validation ?? null;
 
-  if (!isTherapist && !todayData) {
+  /* برای درمانگر، null بودن me یعنی شکست بارگذاری — به‌جای کارت‌های خالیِ بی‌صدا، خطا با تلاش مجدد */
+  if ((!isTherapist && !todayData) || (isTherapist && !myStats)) {
     container.replaceChildren(errorState(new Error('بارگذاری داشبورد ناموفق بود'), () => renderDashboard(container)));
     return;
   }
@@ -61,7 +59,7 @@ export async function renderDashboard(container) {
   if (isTherapist) {
     parts.push(...therapistDashboard(container, { myStats, scoring, knowledge, announcements }));
   } else {
-    parts.push(...officeDashboard(container, { todayData, summaryData, goalData, scoring, knowledge, announcements, waitlist, dayAppts, followups, today, validation }));
+    parts.push(...officeDashboard(container, { todayData, summaryData, goalData, scoring, knowledge, announcements, waitlist, followups, today, validation }));
   }
 
   container.replaceChildren(...parts.filter(Boolean));
@@ -79,22 +77,38 @@ function therapistDashboard(container, { myStats, scoring, knowledge, announceme
     )
   );
 
+  /* ۱.۱۱.۰ — درخواست مدیر: اعلان و دانش‌افزایی در داشبورد درمانگر هم بیاید بالا —
+     اطلاع‌رسانی مرکز + دانش‌افزایی درست زیر سربرگ، پیش از کارنامهٔ امتیاز */
+  const info = infoGrid(knowledge, announcements);
+  if (info) parts.push(info);
+
   const scoreRows = scoring?.rows ?? [];
   const scoreRow = scoreRows.find((r) => r.staffId === session.user?.staffId) ?? null;
   if (scoreRow) parts.push(heroScore(scoreRow, scoreRows, scoring?.since));
 
   if (myStats) {
     if (myStats.missingNotes > 0) {
+      /* UX-ممیزی گلایهٔ ۱: دکمه در هم‌ردیفِ متن بود و در عرض کم متن را له می‌کرد —
+         اکنون متن و دکمه در بدنهٔ آلرت دو ردیف مستقل‌اند (wrap هم تضمین CSS می‌شود) */
       parts.push(
         el(
           'div',
           { class: 'alert alert--warning', style: { marginBottom: 'var(--sp-4)' } },
           icon('edit', 18),
-          el('span', {}, `${fa(myStats.missingNotes)} جلسهٔ برگزارشدهٔ این ماه هنوز گزارش جلسه ندارند — گزارشِ نوشته‌شده هم امتیاز رقابت است، هم سند بالینی.`),
           el(
-            'button',
-            { class: 'btn btn--soft btn--sm', onclick: () => { location.hash = '#/working-day'; } },
-            'ثبت گزارش جلسه‌ها'
+            'div',
+            { class: 'alert__body' },
+            el('span', {}, `${fa(myStats.missingNotes)} جلسهٔ برگزارشدهٔ این ماه هنوز گزارش جلسه ندارند — گزارشِ نوشته‌شده هم امتیاز رقابت است، هم سند بالینی.`),
+            el(
+              'div',
+              { class: 'alert__actions' },
+              el(
+                'button',
+                { class: 'btn btn--soft btn--sm', onclick: () => { location.hash = '#/working-day'; } },
+                icon('edit', 14),
+                'ثبت گزارش جلسه‌ها'
+              )
+            )
           )
         )
       );
@@ -121,22 +135,35 @@ function therapistDashboard(container, { myStats, scoring, knowledge, announceme
 
   if (scoreRows.length) parts.push(leaderboardCard(scoreRows, 'تابلوی پیشرفت', session.user?.staffId, scoring?.since));
 
-  const info = infoGrid(knowledge, announcements);
-  if (info) parts.push(info);
-
   return parts;
 }
 
 function heroScore(scoreRow, rows, since = null) {
   const top = Math.max(1, ...rows.map((r) => r.total));
+  const isTop = scoreRow.rank === 1 && scoreRow.total > 0;
+  const gap = Math.max(0, top - scoreRow.total);
 
+  // — v1.08.0 ریورک کارت ورودی داشبورد درمانگر: حلقهٔ واقعی + نوار رتبهٔ آیکون‌دار + راهنمای فاصله تا صدر؛
+  //   حذف وکتور تزئینی غالب و رفع تکرار عنوان «تابلوی پیشرفت» (لیبل کارت ← «امتیاز کل شما»)
   const rankChip = el(
     'div',
-    { class: `hero-score__rank${scoreRow.rank === 1 ? ' hero-score__rank--gold' : ''}` },
-    `رتبهٔ ${fa(scoreRow.rank)} از ${fa(rows.length)} همکار`
+    { class: `hero-score__rank${isTop ? ' hero-score__rank--gold' : ''}` },
+    icon(isTop ? 'trophy' : 'users', 18),
+    el(
+      'div',
+      { class: 'hero-score__rank-text' },
+      el('b', {}, isTop ? 'صدرنشین تابلوی پیشرفت' : `رتبهٔ ${fa(scoreRow.rank)}`),
+      el('span', {}, isTop ? `با ${fa(scoreRow.total)} امتیاز` : `از ${fa(rows.length)} همکار`)
+    )
   );
 
   const sinceLabel = since ? `شروع شمارش: ${formatJalaliNumeric(tehranYmdOfIso(since))}` : null;
+  const hint =
+    scoreRow.total === 0
+      ? 'با ثبت گزارش جلسه و تمرین در بانک تمرین، امتیاز می‌گیرید'
+      : !isTop && gap > 0
+        ? `${fa(gap)} امتیاز تا صدر تابلو`
+        : null;
 
   return el(
     'div',
@@ -150,13 +177,15 @@ function heroScore(scoreRow, rows, since = null) {
     el(
       'div',
       { class: 'hero-score__main' },
-      el('div', { class: 'hero-score__label' }, 'تابلوی پیشرفت'),
+      el('div', { class: 'hero-score__label' }, 'امتیاز کل شما'),
       sinceLabel
         ? el('div', { class: 'cell-sub', style: { marginTop: 'var(--sp-1)', color: 'var(--on-primary-soft)' } }, sinceLabel) // text-3 روی primary-soft تیره ≈۳٫۴ (S1-11)
+        : null,
+      hint
+        ? el('div', { class: 'hero-score__hint', style: { color: 'var(--on-primary-soft)' } }, icon('zap', 13), hint)
         : null
     ),
-    rankChip,
-    illoHeroOrnament()
+    rankChip
   );
 }
 
@@ -186,7 +215,7 @@ function scoreTiles(myStats) {
   );
 }
 
-function officeDashboard(container, { todayData, summaryData, goalData, scoring, knowledge, announcements, waitlist, dayAppts, followups, today, validation }) {
+function officeDashboard(container, { todayData, summaryData, goalData, scoring, knowledge, announcements, waitlist, followups, today, validation }) {
   const parts = [];
 
   parts.push(
@@ -218,6 +247,22 @@ function officeDashboard(container, { todayData, summaryData, goalData, scoring,
     ? (waitlist.data ?? waitlist).filter((w) => w.status === 'waiting' || w.status === 'called').length
     : null;
 
+  /* ۱.۱۱.۰ — بازطراحی داشبورد مدیر به روایت خود مدیر:
+     ① «کارهای من» کارت قهرمان صفحه است — بزرگ‌تر (دوسوم عرض) و در صدرِ داشبورد؛
+     ② «اطلاع‌رسانی مرکز» بغل‌به‌بغلِ همان کارت (یک‌سوم باقی‌مانده)؛
+     ③ «دانش‌افزایی» هم بیاید بالا — بلافاصله زیر ردیف قهرمان؛
+     ④ کارت رویدادهای روز حذف شد — مدیران راضی نبودند و ضرورت نداشت (تقویم نوبت‌ها مرجع کامل همان داده است)؛
+     ⑤ بقیهٔ ماژول‌ها (شاخص‌ها، تابلو، پیگیری‌ها، روند و هدف) زیر این سه می‌نشینند. */
+  const todosCard = canSeeTodos() ? renderMyTodosCard() : null;
+  const anCard = announcementsCard(announcements);
+  if (todosCard) {
+    parts.push(el('div', { class: 'dash-duo', style: { marginBottom: 'var(--sp-4)' } }, todosCard, anCard));
+  } else {
+    if (anCard) parts.push(anCard);
+  }
+  const knCard = knowledgeCard(knowledge);
+  if (knCard) parts.push(knCard);
+
   parts.push(
     // A19: stagger فقط در mount اول نشست — هر refresh داده KPIها دوباره «می‌رقصیدند»
     el(
@@ -225,7 +270,7 @@ function officeDashboard(container, { todayData, summaryData, goalData, scoring,
       { class: `kpi-grid${document.body.dataset.kpiStaggered ? '' : ' stagger'}`, style: { marginBottom: 'var(--sp-5)' }, ...(document.body.dataset.kpiStaggered ? {} : { dataset: { staggerOnce: '1' } }) },
       kpi('نوبت‌های امروز', fa(todayData.appointments.total), `برنامه‌ریزی‌شده ${fa(todayData.appointments.scheduled)} · لغوشده ${fa(todayData.appointments.cancelled)}`, 'primary'),
       kpi('در انتظار حضور و غیاب', fa(todayData.pendingAttendance), 'نوبت‌های امروز بدون وضعیت', 'accent'),
-      kpi('نرخ غیبت', hasAttendanceData ? `${fa(absencePct)}٪` : '—', hasAttendanceData ? 'آمار حضور امروز' : 'هنوز حاضری امروز ثبت نشده', hasAttendanceData ? (absencePct >= 20 ? 'error' : 'success') : 'neutral'),
+      kpi('نرخ غیبت', hasAttendanceData ? `${fa(absencePct)}٪` : '—', hasAttendanceData ? 'آمار حضور امروز' : 'هنوز حاضری امروز ثبت نشده', hasAttendanceData ? ((todayData.absenceRate ?? 0) >= KPI_ALERT_RATE ? 'error' : 'success') : 'neutral') /* ۱.۲۵.۰۵: مقایسه با نرخ خام و آستانهٔ مشترک — قبلاً 20 روی درصد گردشده بود */,
       waitingCount !== null
         ? kpi('لیست انتظار', fa(waitingCount), 'متقاضیِ در صف (در انتظار/فراخوانده)', waitingCount > 0 ? 'accent' : 'neutral')
         : null,
@@ -233,11 +278,6 @@ function officeDashboard(container, { todayData, summaryData, goalData, scoring,
     )
   );
   if (!document.body.dataset.kpiStaggered) document.body.dataset.kpiStaggered = '1'; /* A19 */
-
-  if (canSeeTodos()) parts.push(renderMyTodosCard());
-
-  const timeline = todayTimelineCard(dayAppts, todayData);
-  if (timeline) parts.push(timeline);
 
   const scoreRows = scoring?.rows ?? [];
   if (scoreRows.length) {
@@ -254,47 +294,49 @@ function officeDashboard(container, { todayData, summaryData, goalData, scoring,
   if (validation) parts.push(validationCard(validation.kpis, validation.audits));
 
   if (summaryData) {
-    const maxTotal = Math.max(1, ...summaryData.byDay.map((d) => d.total));
-    parts.push(
-      el(
-        'div',
-        { class: 'card', style: { marginBottom: 'var(--sp-4)' } },
-        el(
-          'div',
-          { class: 'card__head' },
-          el('div', { class: 'card__title' }, 'روند ۷ روز اخیر'),
-          el('span', { class: 'badge badge--neutral' }, `${formatJalaliNumeric(addDaysYmd(todayData.date ?? tehranTodayYmd(), -6))} تا ${formatJalaliNumeric(todayData.date ?? tehranTodayYmd())}`)
-        ),
-        el(
-          'div',
-          { class: 'card__body' },
-          el(
-            'div',
-            { class: 'spark' },
-            summaryData.byDay.map((d) =>
-              el(
-                'div',
-                { class: 'spark__col', 'aria-label': `${formatJalaliNumeric(d.date)} — ${fa(d.total)} نوبت`, role: 'img' },
-                el('div', { class: 'spark__num' }, fa(d.total)),
-                // C13: صفر واقعی = نقطهٔ پایهٔ کم‌رنگ، نه میلهٔ ۴px که از مقدار کم تفکیک‌ناپذیر است
-                d.total === 0
-                  ? el('div', { class: 'spark__bar spark__bar--zero', style: { height: '4px', opacity: '.35' } })
-                  : el('div', { class: 'spark__bar', style: { height: `${Math.max(4, Math.round((d.total / maxTotal) * 72))}px` } }),
-                el('div', { class: 'spark__day' }, WEEKDAY_NAMES[iranianWeekdayOfYmd(d.date)])
-              )
-            )
-          )
-        )
-      )
-    );
+    /* UX-ممیزی P2: «روند ۷ روز اخیر» با همهٔ صفرها = نیم‌صفحهٔ مرده؛
+       اگر در کل هفته حتی یک نوبت نبوده، کارت اصلاً رندر نمی‌شود */
+    const weekHasAny = summaryData.byDay.some((d) => d.total > 0);
+    if (weekHasAny) parts.push(weekTrendCard(summaryData, todayData, today));
   }
 
   if (goalData) parts.push(drawScreeningGoalCard(goalData));
 
-  const info = infoGrid(knowledge, announcements);
-  if (info) parts.push(info);
-
   return parts;
+}
+
+function weekTrendCard(summaryData, todayData) {
+  const maxTotal = Math.max(1, ...summaryData.byDay.map((d) => d.total));
+  return el(
+    'div',
+    { class: 'card', style: { marginBottom: 'var(--sp-4)' } },
+    el(
+      'div',
+      { class: 'card__head' },
+      el('div', { class: 'card__title' }, 'روند ۷ روز اخیر'),
+      el('span', { class: 'badge badge--neutral' }, `${formatJalaliNumeric(addDaysYmd(todayData.date ?? tehranTodayYmd(), -6))} تا ${formatJalaliNumeric(todayData.date ?? tehranTodayYmd())}`)
+    ),
+    el(
+      'div',
+      { class: 'card__body' },
+      el(
+        'div',
+        { class: 'spark' },
+        summaryData.byDay.map((d) =>
+          el(
+            'div',
+            { class: 'spark__col', 'aria-label': `${formatJalaliNumeric(d.date)} — ${fa(d.total)} نوبت`, role: 'img' },
+            el('div', { class: 'spark__num' }, fa(d.total)),
+            // C13: صفر واقعی = نقطهٔ پایهٔ کم‌رنگ، نه میلهٔ ۴px که از مقدار کم تفکیک‌ناپذیر است
+            d.total === 0
+              ? el('div', { class: 'spark__bar spark__bar--zero', style: { height: '4px', opacity: '.35' } })
+              : el('div', { class: 'spark__bar', style: { height: `${Math.max(4, Math.round((d.total / maxTotal) * 72))}px` } }),
+            el('div', { class: 'spark__day' }, WEEKDAY_NAMES[iranianWeekdayOfYmd(d.date)])
+          )
+        )
+      )
+    )
+  );
 }
 
 function leaderboardCard(rows, title, meStaffId, since = null) {
@@ -358,50 +400,17 @@ function leaderboardCard(rows, title, meStaffId, since = null) {
   );
 }
 
-function todayTimelineCard(appts, todayData) {
-  if (!Array.isArray(appts) || appts.length === 0) return null;
-  const staffNames = new Map((todayData?.perStaff ?? []).map((s) => [s.staffId, s.staffName]));
-  const nowHour = tehranNowShifted().getUTCHours(); /* S1-06 */
-  const cols = [];
-  for (let h = 6; h <= 21; h += 1) {
-    const inHour = appts.filter((a) => Number(String(tehranTimeOfIso(a.startAt)).slice(0, 2)) === h);
-    cols.push(
-      el(
-        'div',
-        { class: `tl-strip__hour${h === nowHour ? ' is-now' : ''}` },
-        el('div', { class: 'tl-strip__dots' },
-          inHour.map((a) =>
-            el('span', {
-              class: `tl-strip__dot ${hueClass(a.staffId)}${a.status === 'cancelled' ? ' is-cancelled' : ''}`,
-              title: `${fa(tehranTimeOfIso(a.startAt))} — ${staffNames.get(a.staffId) ?? 'درمانگر'}${a.status === 'cancelled' ? ' (لغوشده)' : ''}`,
-              'aria-label': `${fa(tehranTimeOfIso(a.startAt))} — ${staffNames.get(a.staffId) ?? 'درمانگر'}${a.status === 'cancelled' ? ' (لغوشده)' : ''}` /* S1-05: نه فقط tooltip */
-            })
-          )
-        ),
-        el('div', { class: 'tl-strip__label' }, fa(String(h).padStart(2, '0')))
-      )
-    );
-  }
-  return el(
-    'div',
-    { class: 'card', style: { marginBottom: 'var(--sp-4)' } },
-    el(
-      'div',
-      { class: 'card__head' },
-      el('div', { class: 'card__title' }, icon('timeline', 16), 'خط زمانی امروز'),
-      el('span', { class: 'badge badge--neutral' }, `${fa(appts.length)} نوبت`)
-    ),
-    el('div', { class: 'card__body', style: { padding: 'var(--sp-3)' } }, el('div', { class: 'tl-strip' }, cols))
-  );
-}
+/* ۱.۱۱.۰ — کارت رویدادهای روز از داشبورد مدیر حذف شد (بازخورد مدیران: ضرورتی نداشت؛
+   تقویم نوبت‌ها #/appointments مرجع کامل همان داده است). تابع سازندهٔ آن و CSSهای tl-card
+   همراهش نیز برداشته شدند. */
 
 function followupsDueCard(rows, todayYmd) {
   const open = (Array.isArray(rows) ? rows : (rows?.data ?? [])).filter((f) => (f.status === 'open' || f.status === 'in_progress') && f.dueAt);
-  const due = open
+  const dueAll = open
     .filter((f) => String(f.dueAt).slice(0, 10) <= todayYmd)
-    .sort((a, b) => String(a.dueAt).localeCompare(String(b.dueAt)))
-    .slice(0, 6);
-  if (due.length === 0) return null;
+    .sort((a, b) => String(a.dueAt).localeCompare(String(b.dueAt)));
+  const due = dueAll.slice(0, 6); // بج از کل آرایهٔ سررسیده شمرده می‌شود، نه سقف ۶
+  if (dueAll.length === 0) return null;
   return el(
     'div',
     { class: 'card', style: { marginBottom: 'var(--sp-4)' } },
@@ -409,7 +418,7 @@ function followupsDueCard(rows, todayYmd) {
       'div',
       { class: 'card__head' },
       el('div', { class: 'card__title' }, icon('bell', 16), 'پیگیری‌های سررسیده'),
-      el('span', { class: 'badge badge--error' }, `${fa(due.length)} مورد`)
+      el('span', { class: 'badge badge--error' }, `${fa(dueAll.length)} مورد`)
     ),
     el(
       'div',
@@ -470,14 +479,16 @@ function waitlistAgingCard(waitlist) {
   );
 }
 
-function infoGrid(knowledge, announcements) {
+/* ۱.۱۱.۰ — کارت اطلاع‌رسانی و کارت دانش‌افزایی از هم جدا شدند تا داشبورد مدیر بتواند
+   «اطلاع‌رسانی» را بغل‌به‌بغلِ «کارهای من» بگذارد و «دانش‌افزایی» را درست زیر آن ردیف بیاورد بالا.
+   infoGrid (جفت دوستونهٔ دو کارت) برای داشبورد درمانگر سرِ جایش می‌ماند. */
+function announcementsCard(announcements) {
   const anItems = (announcements ?? []).slice(0, 3);
-  const knItems = (knowledge ?? []).slice(0, 4);
   const isOffice = ['manager', 'secretary'].includes(session.user?.role);
 
-  const anCard = el(
+  return el(
     'div',
-    { class: 'card' },
+    { class: 'card an-card' },
     el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, icon('bell', 16), 'اطلاع‌رسانی مرکز')),
     el(
       'div',
@@ -503,10 +514,15 @@ function infoGrid(knowledge, announcements) {
           )
     )
   );
+}
 
-  const knCard = el(
+function knowledgeCard(knowledge) {
+  const knItems = (knowledge ?? []).slice(0, 4);
+  const isOffice = ['manager', 'secretary'].includes(session.user?.role);
+
+  return el(
     'div',
-    { class: 'card' },
+    { class: 'card kn-card', style: { marginBottom: 'var(--sp-4)' } },
     el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, icon('file', 16), 'دانش‌افزایی'), knItems.length ? el('span', { class: 'badge badge--neutral' }, `${fa(knowledge.length)} مقاله`) : null),
     el(
       'div',
@@ -533,12 +549,14 @@ function infoGrid(knowledge, announcements) {
           )
     )
   );
+}
 
+function infoGrid(knowledge, announcements) {
   return el(
     'div',
-    { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 'var(--sp-4)', marginBottom: 'var(--sp-4)' } },
-    anCard,
-    knCard
+    { class: 'info-grid', style: { marginBottom: 'var(--sp-4)' } },
+    announcementsCard(announcements),
+    knowledgeCard(knowledge)
   );
 }
 
@@ -554,16 +572,6 @@ function openKnowledgeReader(k) {
     ),
     actions: []
   });
-}
-
-function kpi(label, value, sub, tone = 'primary') {
-  return el(
-    'div',
-    { class: `kpi kpi--${tone}` },
-    el('div', { class: 'kpi__label' }, label),
-    el('div', { class: 'kpi__value' }, value),
-    sub ? el('div', { class: 'kpi__sub' }, sub) : null
-  );
 }
 
 function goalMini(value, label, tone) {
@@ -707,11 +715,16 @@ function validationCard(kpis, audits) {
     el('div', { class: 'pr-kpi__num' }, numv),
     el('div', { class: 'pr-kpi__label' }, label));
 
-  const card = el('div', { class: 'card' },
+  /* ۱.۲۵.۰۱ — ناظر فقط-خواندن: ثبت حسابرسی (POST /api/case-audits) فقط دفتر مرکز — دکمه از اول پنهان شود */
+  const canAudit = ['manager', 'secretary'].includes(session.user?.role);
+
+  const card = el('div', { class: 'card', dataset: { validationCard: '1' } }, /* ۱.۲۱.۰: شناسه‌دار برای رفرش درجای فقط همین کارت */
     el('div', { class: 'card__head' },
       el('div', { class: 'card__title' }, icon('compass', 16), 'اعتبارسنجی بیرونی — شاخص‌های اعتماد'),
-      el('button', { class: 'btn btn--soft btn--sm', onclick: () => openCaseAuditModal() },
-        icon('clipboard', 14), 'حسابرسی موردی')),
+      canAudit
+        ? el('button', { class: 'btn btn--soft btn--sm', onclick: () => openCaseAuditModal() },
+            icon('clipboard', 14), 'حسابرسی موردی')
+        : null),
     el('div', { class: 'card__body' },
       el('div', { class: 'pr-kpis' },
         kpi(share(kpis.hypothesisConvergence), 'هم‌گرایی فرضیه با تصمیم', 'از مسیرهای تصمیم‌گرفته، سهمی که با اسنپ‌شات فرضیهٔ موتور تأیید شدند'),
@@ -726,6 +739,22 @@ function validationCard(kpis, audits) {
             'حسابرسی موردی: مرور یک پرونده توسط دو ارزیاب و ثبت سادهٔ توافق — نتیجه‌ها همین‌جا آرشیو می‌شوند.'))
   );
   return card;
+}
+
+/* ۱.۲۱.۰ — پس از ثبت حسابرسی فقط همین کارت درجا تازه می‌شود (دو GET کوچک؛ بدون اسکلت،
+   بدون پرش اسکرول، بدون رقص دوبارهٔ بقیهٔ کارت‌های داشبورد) —
+   جایگزین renderDashboard(#view) که کل داشبورد را با اسکلت از صفر می‌ساخت */
+async function refreshValidationCard(cardEl) {
+  try {
+    const [kRes, aRes] = await Promise.all([
+      api.get('/api/validation-kpis'),
+      api.get('/api/case-audits')
+    ]);
+    if (!cardEl.isConnected || !kRes?.data) return;
+    cardEl.replaceWith(validationCard(kRes.data, aRes.data ?? []));
+  } catch {
+    /* بی‌صدا — ثبت حسابرسی موفق بوده؛ کارت با دادهٔ فعلی می‌ماند */
+  }
 }
 
 function openCaseAuditModal() {
@@ -751,7 +780,8 @@ function openCaseAuditModal() {
       });
       toast('حسابرسی موردی ثبت شد', 'success');
       if (closeFn) closeFn();
-      renderDashboard(document.querySelector('#view')); // بازخوانی کارت
+      const cardEl = document.querySelector('[data-validation-card]');
+      if (cardEl) refreshValidationCard(cardEl); // — فقط کارت اعتبارسنجی؛ کل داشبورد سرجایش
     } catch (err) { toastError(err); }
     finally { saveBtn.disabled = false; }
   });

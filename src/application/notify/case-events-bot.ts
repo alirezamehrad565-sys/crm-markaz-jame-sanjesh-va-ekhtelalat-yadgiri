@@ -1,4 +1,5 @@
 import type { DbClient } from '@core/db';
+import { inParamChunks, inPlaceholders } from '@core/db/in-chunks'; // ۱.۲۵.۷۲ — دروازهٔ IN-list (بدهی ف۶ ⑧)
 import type { AuditWriter } from '@core/audit';
 import type { Logger } from '@core/logger';
 import type { AuthContext } from '@core/shared';
@@ -111,28 +112,38 @@ export function createCaseEventsBot(deps: CaseEventsBotDeps) {
     if (studentIds.length === 0) {
       return { text: 'برای دیدن چک‌لیست‌ها، ابتدا با کد اتصال از دفتر مرکز فرزند خود را به بات وصل کنید.', buttons: null };
     }
-    const placeholders = studentIds.map(() => '?').join(', ');
-    const rows2 = await db.query<{ id: string; student_id: string; type_title: string; type_icon: string | null; first_name: string; last_name: string; created_at: string }>(
-      `SELECT e.id, e.student_id, t.title AS type_title, t.icon AS type_icon,
+    /* ۱.۲۵.۷۲ — تکه‌بندی ۹۰تایی + مرتب‌سازی سراسری پس از ادغام (LIMIT 8 سراسری بین تکه‌ها معنا ندارد) */
+    const rows2: { id: string; student_id: string; type_title: string; type_icon: string | null; first_name: string; last_name: string; created_at: string }[] = [];
+    for (const chunk of inParamChunks(studentIds)) {
+      rows2.push(...await db.query<{ id: string; student_id: string; type_title: string; type_icon: string | null; first_name: string; last_name: string; created_at: string }>(
+        `SELECT e.id, e.student_id, t.title AS type_title, t.icon AS type_icon,
               s.first_name, s.last_name, e.created_at
          FROM case_events e
          JOIN case_event_types t ON t.id = e.event_type_id AND t.family_fillable = 1
          JOIN students s ON s.id = e.student_id
-        WHERE e.student_id IN (${placeholders}) AND e.status = 'pending_family'
+        WHERE e.student_id IN (${inPlaceholders(chunk.length)}) AND e.status = 'pending_family'
         ORDER BY e.created_at DESC
         LIMIT 8`,
-      studentIds
-    );
-    const doneRows = await db.query<{ type_title: string; type_icon: string | null; first_name: string; last_name: string; analysis: string | null; occurred_at: string }>(
-      `SELECT t.title AS type_title, t.icon AS type_icon, s.first_name, s.last_name, e.analysis, e.occurred_at
+        chunk
+      ));
+    }
+    rows2.sort((a, b) => (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0));
+    rows2.length = Math.min(rows2.length, 8); // هم‌قرارداد LIMIT 8 پیشین — سقف سراسری پس از ادغام
+    const doneRows: { type_title: string; type_icon: string | null; first_name: string; last_name: string; analysis: string | null; occurred_at: string }[] = [];
+    for (const chunk of inParamChunks(studentIds)) {
+      doneRows.push(...await db.query<{ type_title: string; type_icon: string | null; first_name: string; last_name: string; analysis: string | null; occurred_at: string }>(
+        `SELECT t.title AS type_title, t.icon AS type_icon, s.first_name, s.last_name, e.analysis, e.occurred_at
          FROM case_events e
          JOIN case_event_types t ON t.id = e.event_type_id AND t.family_fillable = 1
          JOIN students s ON s.id = e.student_id
-        WHERE e.student_id IN (${placeholders}) AND e.status = 'completed'
+        WHERE e.student_id IN (${inPlaceholders(chunk.length)}) AND e.status = 'completed'
         ORDER BY e.occurred_at DESC
         LIMIT 3`,
-      studentIds
-    );
+        chunk
+      ));
+    }
+    doneRows.sort((a, b) => (a.occurred_at < b.occurred_at ? 1 : a.occurred_at > b.occurred_at ? -1 : 0));
+    doneRows.length = Math.min(doneRows.length, 3); // هم‌قرارداد LIMIT 3 پیشین — سقف سراسری پس از ادغام
     const resultLines: string[] = [];
     for (const d of doneRows) {
       let scoreLine = '';

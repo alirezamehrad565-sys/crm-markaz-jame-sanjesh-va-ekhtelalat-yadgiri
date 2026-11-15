@@ -65,6 +65,19 @@ export function authMiddleware(): MiddlewareHandler<Env> {
       const sessionToken = authHeader.slice(7).trim();
       const payload = await verifySessionJwt(sessionToken, await resolveSessionSecret(env));
       if (payload) {
+        // مایلستون ۱ (0111) — ابطال سمت‌سرور: امضای معتبر کافی نیست؛ ردیف نشست باید
+        // موجود و زنده باشد. توکن بدون sid (صدور پیش از 0111) عمداً رد می‌شود.
+        if (!payload.sid) {
+          throw new AuthError('توکن فاقد شناسهٔ نشست است — ورود دوباره لازم است');
+        }
+        const nowIso = new Date().toISOString();
+        const session = await db
+          .prepare('SELECT revoked_at, expires_at FROM auth_sessions WHERE sid = ?')
+          .bind(payload.sid)
+          .first<{ revoked_at: string | null; expires_at: string }>();
+        if (!session || session.revoked_at !== null || session.expires_at <= nowIso) {
+          throw new AuthError('نشست باطل یا منقضی شده است — ورود دوباره لازم است');
+        }
         const staff = await getStaffById(db, payload.sub);
         if (!staff || staff.active !== 1) {
           throw new AuthError('کاربر یافت نشد یا غیرفعال است');
@@ -73,7 +86,8 @@ export function authMiddleware(): MiddlewareHandler<Env> {
           staffId: staff.id,
           email: staff.email,
           role: staff.role,
-          displayName: staff.full_name
+          displayName: staff.full_name,
+          sessionId: payload.sid
         } satisfies AuthContext);
         return next();
       }

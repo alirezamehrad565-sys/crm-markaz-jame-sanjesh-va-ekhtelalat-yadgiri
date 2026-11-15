@@ -153,17 +153,15 @@ describe('پذیرش خودکار با اولین جلسهٔ واقعی', () => 
     expect(rows.find((r) => r.id === st.id)?.waitStatus).toBeNull();
   });
 
-  it('مسیر بورد: checked_in → in_session → completed → admitted (بدون اعلان — D6)', async () => {
+  it('مسیر بورد: ثبت «حاضر» از مسیر نوبت → admitted (بدون اعلان — D6) — ۱.۱۸.۰: وضعیت عملیاتی حذف شد', async () => {
     const st = await createStudent(sec);
     const entry = entryOf(await waitStatus(sec, st.id, true, { source: 'self' }));
 
     const created = await sec.post('/api/appointments', apptBody(ALI_ID, quarterHourFromNow(150), 45, [st.id]));
     const apptId = (created.body as { data: { id: string } }).data.id;
 
-    for (const ops of ['checked_in', 'in_session', 'completed']) {
-      const r = await mgr.post(`/api/appointments/${apptId}/ops-status`, { ops_status: ops });
-      expect(r.status).toBe(200);
-    }
+    const r = await mgr.patch(`/api/attendance/${apptId}/${st.id}`, { status: 'present' });
+    expect(r.status).toBe(200);
 
     const after = await sec.get(`/api/waitlist/${entry.id}`);
     expect(after.status).toBe(404);

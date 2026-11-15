@@ -1,0 +1,7 @@
+{
+  "$schema": "gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "مجوزهای پیش‌فرض پنجرهٔ اصلی — فاز ۱ فقط هستهٔ Tauri. فاز A (قرارداد وضعیت سرور محلی — server-cloud-update-design.md §۱): فرمان‌های engine_status / engine_restart / open_data_dir و رویداد engine:status فرمان‌های خود اپ‌اند و در Tauri v2 با همین core:default صدا زده می‌شوند (صفحهٔ بوت امروز عین همین را کار می‌کند). افزودن شناسهٔ تعریف‌نشدهٔ allow-engine-status یا allow_engine_status به permissions بیلد ACL را در CI می‌شکند — تا وقتی مجوز رسمی در src-tauri/permissions تعریف شود، این توضیح مرجع پین نرم فاز A در desktop-check است.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

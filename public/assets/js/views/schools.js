@@ -1,7 +1,7 @@
 import { api, qs } from '../api.js';
 import { session } from '../state.js';
 import { fa, enDigits } from '../format.js';
-import { el, icon, formModal, confirmModal, openModal, toast, toastError, dataTable, statusBadge, loadingState, skeletonState, emptyState, callBadge } from '../ui.js';
+import { el, icon, formModal, confirmModal, openModal, toast, toastError, dataTable, statusBadge, loadingState, emptyState, callBadge, lockBtn, collapseRemove, flashNode } from '../ui.js';
 import { invalidateStudentFormMeta } from '../student-form.js'; // — کش فرم دانش‌آموز بعد از هر تغییر مدارس/کلاس تازه شود
 import { openExcelImport } from '../excel-import.js'; // درون‌ریزی اکسل
 import { resolveBotUsername, buildBotLink, botLinkBox } from '../bot-link.js'; // — لینک احراز خودکار بات
@@ -10,6 +10,18 @@ let showInactive = false;
 
 function canDeactivate() {
   return session.user?.role === 'manager';
+}
+
+/* ۱.۱۷.۰ — زبان واحد دایره‌های اقدام (هم‌سان با فهرست/پروفایل دانش‌آموز ۱.۱۵–۱.۱۶):
+   به درخواست کاربر سیستم مودال‌محورِ منوی ⋯ در مدارس هم حذف شد — دکمه‌ها مستقیم سرِ ردیف‌اند،
+   امن‌ها اول و حذفِ مخرب همیشه آخری با فاصلهٔ ایمن؛ هر دکمه قفل مشغولی واحد (ضد اسپم) دارد
+   و تأیید مخرب‌ها با همان confirmModal شفاف می‌ماند. */
+function actionCircle(iconName, label, onclick, danger = false) {
+  return el('button', {
+    class: `icon-circle${danger ? ' icon-circle--danger' : ''}`,
+    type: 'button', title: label, 'aria-label': label,
+    onclick: (e) => lockBtn(e.currentTarget, onclick)
+  }, icon(iconName, 14));
 }
 
 function searchable(text) {
@@ -26,7 +38,7 @@ function matchesQuery(rowFields, query) {
 }
 
 export async function renderSchools(container) {
-  container.replaceChildren(skeletonState('table', 5));
+  container.replaceChildren(loadingState('بارگذاری مدارس…'));
 
   let rows;
   try {
@@ -36,6 +48,10 @@ export async function renderSchools(container) {
     return;
   }
 
+  /* —— ۱.۲۲.۰ جریان پیوسته: شِل یک‌بار مونت می‌شود؛ فعال/غیرفعال‌سازی، حذف، ویرایش،
+     درون‌ریزی و فیلتر «نمایش غیرفعال‌ها» فقط tbody را عوض می‌کنند — ویرایش کلاس هم
+     دیگر کل نما را از نو نمی‌سازد (فقط فهرست مودال کلاس‌ها). —— */
+
   const searchInput = el('input', {
     class: 'input', type: 'search',
     placeholder: 'جستجو: نام، کد، مدیر یا تلفن…',
@@ -44,28 +60,28 @@ export async function renderSchools(container) {
   let searchTimer;
   searchInput.addEventListener('input', () => {
     clearTimeout(searchTimer);
-    searchTimer = setTimeout(drawTable, 200);
+    searchTimer = setTimeout(drawTbody, 200);
   });
+
+  /* ۱.۲۲.۲ (F7) — چک‌باکس با نام نگه داشته می‌شود تا حالت خالیِ «همه غیرفعال‌اند» بتواند آن را روشن کند */
+  const showInactiveCb = el('input', { type: 'checkbox', onchange: (e) => { showInactive = e.target.checked; refreshRows(); } });
+  showInactiveCb.checked = showInactive;
+  showInactiveCb.style.accentColor = 'var(--primary)';
 
   const toolbar = el('div', { class: 'toolbar' },
     searchInput,
     el('label', { style: { display: 'flex', alignItems: 'center', gap: '8px', fontSize: 'var(--fs-sm)', color: 'var(--text-2)', cursor: 'pointer' } },
-      (() => {
-        const cb = el('input', { type: 'checkbox', onchange: (e) => { showInactive = e.target.checked; renderSchools(container); } });
-        cb.checked = showInactive;
-        cb.style.accentColor = 'var(--primary)';
-        return cb;
-      })(),
+      showInactiveCb,
       'نمایش غیرفعال‌ها'
     ),
     el('div', { class: 'spacer' }),
     canDeactivate()
-      ? el('button', { class: 'btn btn--soft btn--sm', onclick: () => openExcelImport({ entity: 'schools', onDone: () => renderSchools(container) }) }, icon('upload', 16), 'درون‌ریزی مدارس')
+      ? el('button', { class: 'btn btn--soft btn--sm', onclick: () => openExcelImport({ entity: 'schools', onDone: () => ctl.quietSync() }) }, icon('upload', 16), 'درون‌ریزی مدارس')
       : null,
     canDeactivate()
-      ? el('button', { class: 'btn btn--soft btn--sm', title: 'هر سطر: نام مدرسه + نام کلاس + معلم و تلفن او', onclick: () => openExcelImport({ entity: 'school-classes', onDone: () => renderSchools(container) }) }, icon('upload', 16), 'درون‌ریزی کلاس‌ها و معلمان')
+      ? el('button', { class: 'btn btn--soft btn--sm', title: 'هر سطر: نام مدرسه + نام کلاس + معلم و تلفن او', onclick: () => openExcelImport({ entity: 'school-classes', onDone: () => ctl.quietSync() }) }, icon('upload', 16), 'درون‌ریزی کلاس‌ها و معلمان')
       : null,
-    el('button', { class: 'btn btn--primary btn--sm', onclick: () => openForm(null, container) }, icon('plus', 16), 'مدرسه جدید')
+    el('button', { class: 'btn btn--primary btn--sm', onclick: () => openForm(null, ctl) }, icon('plus', 16), 'مدرسه جدید')
   );
 
   const schoolColumns = [
@@ -99,72 +115,161 @@ export async function renderSchools(container) {
       { key: 'active', label: 'وضعیت', render: (s) => statusBadge(s.active ? 'active' : 'inactive') },
       {
         key: 'actions', label: 'عملیات', align: 'end',
-        render: (s) => el('div', { class: 'cell-actions' },
-          el('button', { class: 'btn btn--ghost btn--sm', title: 'وضعیت همکاری', 'aria-label': 'وضعیت همکاری', onclick: () => openSchoolOverview(s) }, icon('zap', 15)),
-          el('button', { class: 'btn btn--ghost btn--sm', title: 'کلاس‌ها و معلم‌ها', 'aria-label': 'کلاس‌ها و معلم‌ها', onclick: () => openClassManager(s, container) }, icon('student', 15)),
-          el('button', { class: 'btn btn--ghost btn--sm', title: 'ویرایش', 'aria-label': 'ویرایش', onclick: () => openForm(s, container) }, icon('edit', 15)),
-          s.active && canDeactivate()
-            ? el('button', {
-                class: 'btn btn--danger btn--sm', title: 'غیرفعال‌سازی', 'aria-label': 'غیرفعال‌سازی',
-                onclick: async () => {
+        /* ۱.۱۷.۰ — دکمه‌ها مستقیم سرِ ردیف، همان زبان دایره‌های فهرست دانش‌آموزان (۱.۱۶.۰):
+           کلاس‌ها (رایج‌ترین) · وضعیت همکاری · ویرایش · غیرفعال‌سازی — و حذفِ مخرب آخری با فاصلهٔ ایمن */
+        render: (s) => el('div', { class: 'cell-actions row-circles', role: 'group', 'aria-label': `اقدامات مدرسه ${s.name}` },
+          actionCircle('student', 'کلاس‌ها و معلم‌ها', () => openClassManager(s)),
+          actionCircle('zap', 'وضعیت همکاری', () => openSchoolOverview(s)),
+          actionCircle('edit', 'ویرایش', () => openForm(s, ctl)),
+          ...(canDeactivate()
+            ? [s.active
+              ? actionCircle('pause', 'غیرفعال‌سازی', async () => {
                   if (!(await confirmModal({ title: 'غیرفعال‌سازی مدرسه', message: `«${s.name}» از انتخاب‌ها حذف می‌شود (اطلاعات حفظ می‌شود).`, confirmLabel: 'غیرفعال کن', danger: true }))) return;
                   try {
-                    await api.post(`/api/schools/${s.id}/deactivate`);
+                    const res = await api.post(`/api/schools/${s.id}/deactivate`);
                     invalidateStudentFormMeta();
                     toast('مدرسه غیرفعال شد', 'success');
-                    renderSchools(container);
+                    ctl.patch(res.data); // — بج وضعیت همان ردیف درجا (یا با فیلتر فعال، جمع‌شدن نرم)
                   } catch (err) { toastError(err); }
-                }
-              }, icon('x', 15))
-            : null,
-          canDeactivate()
-            ? el('button', {
-                class: 'btn btn--danger btn--sm', title: 'حذف کامل — فقط اگر دانش‌آموز/کلاس نداشته باشد', 'aria-label': 'حذف کامل — فقط اگر دانش‌آموز/کلاس نداشته باشد',
-                onclick: async () => {
-                  if (!(await confirmModal({ title: 'حذف کامل مدرسه', message: `«${s.name}» به‌کلی پاک می‌شود — برای ثبت‌های اشتباه یا تکراری. اگر دانش‌آموز یا کلاس دارد حذف ممکن نیست (پیام سرور راهنمایی می‌کند). برگشت ندارد.`, confirmLabel: 'حذف کن', danger: true }))) return;
+                })
+              : actionCircle('check', 'فعال‌سازی', async () => { /* ۱.۲۴.۰ — قبلاً برگشت از غیرفعال مسیری نداشت */
+                  if (!(await confirmModal({ title: 'فعال‌سازی مدرسه', message: `«${s.name}» دوباره به انتخاب‌ها و نوبت‌دهی برمی‌گردد.`, confirmLabel: 'فعال کن' }))) return;
                   try {
-                    await api.del(`/api/schools/${s.id}`);
-                    toast('مدرسه حذف شد', 'success');
-                    renderSchools(container);
+                    const res = await api.post(`/api/schools/${s.id}/activate`);
+                    invalidateStudentFormMeta();
+                    toast('مدرسه فعال شد', 'success');
+                    ctl.patch(res.data); // — بج وضعیت همان ردیف درجا
                   } catch (err) { toastError(err); }
-                }
-              }, icon('trash', 15))
-            : null
+                })]
+            : []),
+          ...(canDeactivate()
+            ? [actionCircle('trash', 'حذف کامل', async () => {
+                if (!(await confirmModal({ title: 'حذف کامل مدرسه', message: `«${s.name}» به‌کلی پاک می‌شود — برای ثبت‌های اشتباه یا تکراری. اگر دانش‌آموز یا کلاس دارد حذف ممکن نیست (پیام سرور راهنمایی می‌کند). برگشت ندارد.`, confirmLabel: 'حذف کن', danger: true }))) return;
+                try {
+                  await api.del(`/api/schools/${s.id}`);
+                  toast('مدرسه حذف شد', 'success');
+                  ctl.remove(s.id); // — جمع‌شدن نرم همان ردیف
+                } catch (err) { toastError(err); }
+              }, true)]
+            : [])
         )
       }
     ];
 
-  const tableWrap = el('div');
+  const colCount = schoolColumns.length;
+  const thead = el('thead', {}, el('tr', {}, schoolColumns.map((c) => el('th', { scope: 'col', style: c.align ? { textAlign: c.align } : null }, c.label))));
+  const tbody = el('tbody');
+  const tableWrap = el('div', { class: 'table-wrap' }, el('table', { class: 'table' }, thead, tbody));
   const countBadge = el('span', { class: 'badge badge--neutral' }, `${fa(rows.length)} مورد`);
 
-  function drawTable() {
+  function matchesVisibility(s) {
+    return showInactive || s.active;
+  }
+
+  function rowEl(s) {
+    return el(
+      'tr',
+      { dataset: { id: String(s.id) } },
+      schoolColumns.map((c) =>
+        el('td', { style: c.align ? { textAlign: c.align } : null, dataset: { label: c.label } }, c.render ? c.render(s) : s[c.key] ?? '—')
+      )
+    );
+  }
+
+  function emptyRow() {
     const q = searchInput.value.trim();
-    const filtered = rows.filter((s) => matchesQuery(
+    /* ۱.۲۲.۲ (F7) — مدارسی هست ولی همه غیرفعال‌اند و «نمایش غیرفعال‌ها» خاموش است: پیام «ثبت نشده» گمراه‌کننده است */
+    const allHidden = !q && rows.length > 0 && !rows.some((s) => matchesVisibility(s));
+    return el('tr', {}, el('td', { colspan: colCount, style: { padding: 'var(--sp-2)' } },
+      emptyState(allHidden
+        ? {
+            iconName: 'school',
+            title: 'همهٔ مدارس غیرفعال‌اند',
+            hint: 'هیچ مدرسه فعالی برای نمایش نیست — برای دیدن مدارس غیرفعال، «نمایش غیرفعال‌ها» را روشن کنید.',
+            actionLabel: 'نمایش غیرفعال‌ها',
+            onAction: () => { showInactive = true; showInactiveCb.checked = true; refreshRows(); }
+          }
+        : q
+          ? {
+              iconName: 'search',
+              title: 'موردی مطابق جستجو پیدا نشد',
+              hint: 'بخشی از نام، کد مدرسه، نام مدیر یا شماره تلفن را امتحان کنید.'
+            }
+          : {
+              iconName: 'school',
+              title: 'هنوز مدرسه‌ای ثبت نشده',
+              hint: 'مدارس و مهدکودک‌هایی را که با آن‌ها کار می‌کنید اضافه کنید.',
+              actionLabel: 'مدرسه جدید',
+              onAction: () => openForm(null, ctl)
+            })));
+  }
+
+  /* ۱.۲۲.۲ (F4) — فیلتر نمایش (غیرفعال‌ها) هم مثل جستجو اعمال می‌شود؛ با پیش‌فیلتر سرور (?active=true) ایدم‌پوتنت است */
+  function visibleRows() {
+    const q = searchInput.value.trim();
+    return rows.filter((s) => matchesVisibility(s) && matchesQuery(
       [s.name, s.code, s.principalName, s.principalPhone, s.phone, s.address, s.kind], q
     ));
-    countBadge.textContent = q
-      ? `${fa(filtered.length)} از ${fa(rows.length)} مورد`
-      : `${fa(rows.length)} مورد`;
-    const hasQuery = q.length > 0;
-    tableWrap.replaceChildren(dataTable({
-      columns: schoolColumns,
-      rows: filtered,
-      empty: hasQuery
-        ? {
-            iconName: 'search',
-            title: 'موردی مطابق جستجو پیدا نشد',
-            hint: 'بخشی از نام، کد مدرسه، نام مدیر یا شماره تلفن را امتحان کنید.'
-          }
-        : {
-            iconName: 'school',
-            title: 'هنوز مدرسه‌ای ثبت نشده',
-            hint: 'مدارس و مهدکودک‌هایی را که با آن‌ها کار می‌کنید اضافه کنید.',
-            actionLabel: 'مدرسه جدید',
-            onAction: () => openForm(null, container)
-          }
-    }));
   }
-  drawTable();
+
+  /* ۱.۲۲.۲ (F5) — بج شمارنده از طول فهرستِ در واقع visible محاسبه می‌شود */
+  function paintCount(filteredLen) {
+    const q = searchInput.value.trim();
+    countBadge.textContent = q
+      ? `${fa(filteredLen)} از ${fa(rows.length)} مورد`
+      : `${fa(filteredLen)} مورد`;
+  }
+
+  function drawTbody() {
+    const filtered = visibleRows();
+    paintCount(filtered.length);
+    tbody.replaceChildren(...(filtered.length ? filtered.map((s) => rowEl(s)) : [emptyRow()]));
+  }
+
+  let gen = 0; // — گارد نسل
+  async function refreshRows() {
+    const myGen = ++gen;
+    try {
+      const res = await api.get(`/api/schools${showInactive ? '' : '?active=true'}`);
+      if (myGen !== gen || !tbody.isConnected) return;
+      rows = res.data ?? [];
+      drawTbody();
+    } catch (err) {
+      if (myGen !== gen || !tbody.isConnected) return;
+      tbody.replaceChildren(el('tr', {}, el('td', { colspan: colCount, style: { padding: 'var(--sp-2)' } },
+        emptyState({ iconName: 'alert', title: 'خطا در بارگذاری', hint: String(err?.message ?? err) }))));
+    }
+  }
+
+  function ensureNonEmptyPaint() {
+    setTimeout(() => {
+      if (tbody.isConnected && !tbody.querySelector('tr[data-id]')) drawTbody();
+    }, 320);
+  }
+
+  const ctl = {
+    /* پچ درجای یک مدرسه از بدنهٔ پاسخ mutation — بدون GET، بدون اسکلت */
+    patch(s) {
+      if (!s?.id || !tbody.isConnected) { ctl.quietSync(); return; }
+      rows = rows.map((r) => (r.id === s.id ? s : r));
+      const old = tbody.querySelector(`tr[data-id="${CSS.escape(String(s.id))}"]`);
+      if (!old) { ctl.quietSync(); return; } // با فیلتر فعلی تازه وارد دید شده
+      if (!matchesVisibility(s)) { collapseRemove(old); paintCount(visibleRows().length); ensureNonEmptyPaint(); return; } // از فیلتر خارج شد
+      const fresh = rowEl(s);
+      old.replaceWith(fresh);
+      flashNode(fresh);
+    },
+    /* حذف کامل (۲۰۴ بی‌بدنه): جمع‌شدن نرم همان ردیف */
+    remove(id) {
+      rows = rows.filter((r) => r.id !== id);
+      const old = tbody.querySelector(`tr[data-id="${CSS.escape(String(id))}"]`);
+      if (old) { collapseRemove(old); paintCount(visibleRows().length); ensureNonEmptyPaint(); }
+    },
+    /* همگام‌سازی بی‌صدا: GET با فیلتر فعلی — فقط tbody و شمارنده */
+    quietSync: refreshRows
+  };
+
+  drawTbody();
 
   container.replaceChildren(
     el('div', { class: 'page-head' },
@@ -176,7 +281,7 @@ export async function renderSchools(container) {
   );
 }
 
-function openForm(school, container) {
+function openForm(school, ctl) {
   formModal({
     title: school ? 'ویرایش مدرسه' : 'مدرسه جدید',
     wide: true,
@@ -212,15 +317,16 @@ function openForm(school, container) {
         notes: values.notes || undefined
       };
       if (school) {
-        await api.patch(`/api/schools/${school.id}`, payload);
+        const res = await api.patch(`/api/schools/${school.id}`, payload);
         invalidateStudentFormMeta();
         toast('تغییرات ذخیره شد', 'success');
+        ctl.patch(res.data); // — همان ردیف درجا؛ بدون rebuild نما
       } else {
         await api.post('/api/schools', payload);
         invalidateStudentFormMeta();
         toast('مدرسه اضافه شد', 'success');
+        ctl.quietSync(); // جای ردیف تازه را ترتیب سرور تعیین می‌کند
       }
-      renderSchools(container);
     }
   });
 }
@@ -286,9 +392,13 @@ const REASON_LABELS = {
   no_recent_session: 'بیش از ۳۰ روز جلسه ندارد'
 };
 
-function openClassManager(school, container) {
+function openClassManager(school) {
   let classes = [];
   let classSearch = null; // — ورودی جستجو در body مودال ساخته می‌شود؛ در این اسکوپ نگه داشته می‌شود
+  /* ۱.۲۵.۶۵ — رفع TDZ (باگ واقعی «مودال کلاس‌ها لود نمی‌شود»): body مودال هم‌زمانِ ساختِ openModal
+     اجرا می‌شود و همان‌جا refresh() → ++refreshGen؛ تعریفِ این گارد بعد از openModal یعنی متغیر هنوز
+     در ناحیهٔ مرده است → ReferenceError → درخواست /api/classes هرگز شلیک نمی‌شد و اسپینر ابدی می‌ماند */
+  let refreshGen = 0;
   const listBox = el('div', { style: { minHeight: '120px' } }, loadingState('در حال بارگذاری کلاس‌ها…'));
   const countBadge = el('span', { class: 'badge badge--neutral' }, '—');
 
@@ -325,13 +435,17 @@ function openClassManager(school, container) {
     }
   });
 
+  /* گارد نسل + isConnected (از ۱.۲۲.۲): پاسخ کهنه در مودال بسته رندر نمی‌شود */
   async function refresh() {
+    const myGen = ++refreshGen;
     try {
       const res = await api.get(`/api/classes${qs({ school_id: school.id })}`);
+      if (myGen !== refreshGen || !listBox.isConnected) return;
       classes = res.data;
       countBadge.textContent = `${fa(classes.length)} کلاس`;
       drawList();
     } catch (err) {
+      if (myGen !== refreshGen || !listBox.isConnected) return;
       listBox.replaceChildren(emptyState({ iconName: 'alert', title: 'خطا در بارگذاری', hint: err.message }));
     }
   }
@@ -367,40 +481,55 @@ function openClassManager(school, container) {
             : el('span', { class: 'cell-sub' }, '—') },
           {
             key: 'actions', label: 'عملیات', align: 'end',
-            render: (c) => el('div', { class: 'cell-actions' },
-              c.active ? el('button', { class: 'btn btn--ghost btn--sm', title: 'کد اتصال معلم (بات)', 'aria-label': 'کد اتصال معلم (بات)', onclick: () => openTeacherLink(c) }, icon('bot', 15)) : null,
-              c.active ? el('button', { class: 'btn btn--ghost btn--sm', title: 'ویرایش', 'aria-label': 'ویرایش', onclick: () => openClassForm(school, c, refresh) }, icon('edit', 15)) : null,
-              c.active && canDeactivate() ? el('button', {
-                class: 'btn btn--danger btn--sm', title: 'غیرفعال‌سازی کلاس', 'aria-label': 'غیرفعال‌سازی کلاس',
-                onclick: async () => {
-                  if (!(await confirmModal({
-                    title: 'غیرفعال‌سازی کلاس',
-                    message: `کلاس «${c.name}» غیرفعال می‌شود و دانش‌آموزانش از کلاس خارج می‌شوند (سابقه حفظ می‌شود).`,
-                    confirmLabel: 'غیرفعال کن', danger: true
-                  }))) return;
-                  try {
-                    await api.post(`/api/classes/${c.id}/deactivate`);
-                    invalidateStudentFormMeta();
-                    toast('کلاس غیرفعال شد', 'success');
-                    refresh();
-                  } catch (err) { toastError(err); }
-                }
-              }, icon('x', 15)) : null,
-              canDeactivate() ? el('button', {
-                class: 'btn btn--danger btn--sm', title: 'حذف کامل کلاس — فقط اگر دانش‌آموز نداشته باشد', 'aria-label': 'حذف کامل کلاس — فقط اگر دانش‌آموز نداشته باشد',
-                onclick: async () => {
-                  if (!(await confirmModal({
-                    title: 'حذف کامل کلاس',
-                    message: `کلاس «${c.name}» به‌کلی پاک می‌شود — برای ثبت‌های اشتباه یا تکراری. اگر دانش‌آموز دارد حذف ممکن نیست (پیام سرور راهنمایی می‌کند). برگشت ندارد.`,
-                    confirmLabel: 'حذف کن', danger: true
-                  }))) return;
-                  try {
-                    await api.del(`/api/classes/${c.id}`);
-                    toast('کلاس حذف شد', 'success');
-                    refresh();
-                  } catch (err) { toastError(err); }
-                }
-              }, icon('trash', 15)) : null
+            /* ۱.۱۷.۰ — دایره‌های اقدام سرِ ردیف کلاس؛ ویرایشِ تکراری (دکمه + منو) یکی شد */
+            render: (c) => el('div', { class: 'cell-actions row-circles', role: 'group', 'aria-label': `اقدامات کلاس ${c.name}` },
+              ...(c.active ? [
+                actionCircle('bot', 'کد اتصال معلم (بات)', () => openTeacherLink(c)),
+                actionCircle('edit', 'ویرایش', () => openClassForm(school, c, refresh))
+              ] : []),
+              ...(canDeactivate()
+                ? [c.active
+                  ? actionCircle('pause', 'غیرفعال‌سازی کلاس', async () => {
+                      if (!(await confirmModal({
+                        title: 'غیرفعال‌سازی کلاس',
+                        message: `کلاس «${c.name}» غیرفعال می‌شود و دانش‌آموزانش از کلاس خارج می‌شوند (سابقه حفظ می‌شود).`,
+                        confirmLabel: 'غیرفعال کن', danger: true
+                      }))) return;
+                      try {
+                        await api.post(`/api/classes/${c.id}/deactivate`);
+                        invalidateStudentFormMeta();
+                        toast('کلاس غیرفعال شد', 'success');
+                        refresh();
+                      } catch (err) { toastError(err); }
+                    })
+                  : actionCircle('check', 'فعال‌سازی کلاس', async () => { /* ۱.۲۴.۰ — قرینهٔ غیرفعال‌سازی */
+                      if (!(await confirmModal({
+                        title: 'فعال‌سازی کلاس',
+                        message: `کلاس «${c.name}» دوباره به انتخاب کلاس‌ها برمی‌گردد.`,
+                        confirmLabel: 'فعال کن'
+                      }))) return;
+                      try {
+                        await api.post(`/api/classes/${c.id}/activate`);
+                        invalidateStudentFormMeta();
+                        toast('کلاس فعال شد', 'success');
+                        refresh();
+                      } catch (err) { toastError(err); }
+                    })]
+                : []),
+              ...(canDeactivate()
+                ? [actionCircle('trash', 'حذف کامل کلاس', async () => {
+                    if (!(await confirmModal({
+                      title: 'حذف کامل کلاس',
+                      message: `کلاس «${c.name}» به‌کلی پاک می‌شود — برای ثبت‌های اشتباه یا تکراری. اگر دانش‌آموز دارد حذف ممکن نیست (پیام سرور راهنمایی می‌کند). برگشت ندارد.`,
+                      confirmLabel: 'حذف کن', danger: true
+                    }))) return;
+                    try {
+                      await api.del(`/api/classes/${c.id}`);
+                      toast('کلاس حذف شد', 'success');
+                      refresh();
+                    } catch (err) { toastError(err); }
+                  }, true)]
+                : [])
             )
           }
         ],
@@ -440,7 +569,8 @@ function openClassManager(school, container) {
           toast('کلاس اضافه شد', 'success');
         }
         done();
-        renderSchools(container);
+        /* ۱.۲۲.۰: rebuild کل نما حذف شد — تغییر کلاس ردیف مدرسه را عوض نمی‌کند؛
+           فهرست مودال کلاس‌ها با done() همگام می‌شود و کش فرم دانش‌آموز تازه شده */
       }
     });
   }
@@ -534,11 +664,16 @@ function openClassManager(school, container) {
       listBox.replaceChildren(...[intro, pendingBlock, linkedBlock, othersBlock, generateRow].flat().filter(Boolean));
     }
 
+    /* ۱.۲۲.۲ (F6) — گارد نسل + isConnected: پاسخ کهنه در مودال بسته رندر نمی‌شود */
+    let linkRefreshGen = 0;
     async function refresh() {
+      const myGen = ++linkRefreshGen;
       try {
         const res = (await api.get(`/api/notifications/class-links${qs({ class_id: cls.id })}`)).data;
+        if (myGen !== linkRefreshGen || !listBox.isConnected) return;
         render(res);
       } catch (err) {
+        if (myGen !== linkRefreshGen || !listBox.isConnected) return;
         toastError(err);
       }
     }

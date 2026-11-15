@@ -33,5 +33,17 @@ writeFileSync(out, banner + body, 'utf8');
 
 const version = readFileSync(path.join(root, 'src', 'core', 'version.ts'), 'utf8')
   .match(/APP_VERSION = '([^']+)'/)?.[1] ?? '?';
+
+// — همگام‌سازی خودکار «?v=»های index.html با APP_VERSION (۱.۱۰.۱)
+//   برچسب نسخهٔ سایدبار از همین «?v=» خوانده می‌شود؛ جاماندنِ دستی bump یعنی
+//   برچسب کهنه روی سامانهٔ نو (باگ گزارشی ۱.۰۸/۱.۰۹). اکنون با هر build تضمین می‌شود.
+const htmlPath = path.join(root, 'public', 'index.html');
+const html = readFileSync(htmlPath, 'utf8');
+const htmlSynced = html.replace(/([?&]v=)\d+\.\d+\.\d+/g, `$1${version}`);
+if (htmlSynced !== html) {
+  writeFileSync(htmlPath, htmlSynced, 'utf8');
+  console.log(`✓ public/index.html — همهٔ «?v=» با نسخهٔ ${version} همگام شد`);
+}
+
 const size = Buffer.byteLength(body, 'utf8');
 console.log(`✓ worker/bundle.js بازسازی شد — نسخهٔ ${version} — ${(size / 1024 / 1024).toFixed(2)}MB`);

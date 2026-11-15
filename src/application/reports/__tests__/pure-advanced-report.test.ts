@@ -27,26 +27,44 @@ describe('buildWeeklyTrend', () => {
 
   it('W5: نوبت‌ها به هفتهٔ درست می‌روند — لغوشده جزو sessions نیست', () => {
     const appts = [
-      { startAt: '2026-10-03T06:00:00.000Z', status: 'scheduled', opsStatus: 'completed' }, // شنبه هفتهٔ ۱
-      { startAt: '2026-10-04T06:00:00.000Z', status: 'scheduled', opsStatus: null },        // یکشنبه هفتهٔ ۱
-      { startAt: '2026-10-05T06:00:00.000Z', status: 'cancelled', opsStatus: null },        // لغوشده هفتهٔ ۱
-      { startAt: '2026-10-09T06:00:00.000Z', status: 'scheduled', opsStatus: 'completed' }, // جمعه هفتهٔ ۱
-      { startAt: '2026-10-10T06:00:00.000Z', status: 'scheduled', opsStatus: 'completed' }  // شنبهٔ بعد — خارج از سبد
+      { startAt: '2026-10-03T06:00:00.000Z', status: 'scheduled' }, // شنبه هفتهٔ ۱
+      { startAt: '2026-10-04T06:00:00.000Z', status: 'scheduled' }, // یکشنبه هفتهٔ ۱
+      { startAt: '2026-10-05T06:00:00.000Z', status: 'cancelled' }, // لغوشده هفتهٔ ۱
+      { startAt: '2026-10-09T06:00:00.000Z', status: 'scheduled' }, // جمعه هفتهٔ ۱
+      { startAt: '2026-10-10T06:00:00.000Z', status: 'scheduled' }  // شنبهٔ بعد — خارج از سبد
     ];
     const weeks = buildWeeklyTrend(appts, [], base, '2026-10-09');
     expect(weeks).toHaveLength(1);
     expect(weeks[0].sessions).toBe(3);
     expect(weeks[0].cancelled).toBe(1);
-    expect(weeks[0].completed).toBe(2);
+  });
+
+  it('W5b: «جلسات تکمیل‌شده» بر پایهٔ حضور — همهٔ دانش‌آموزان حاضر/تأخیر = تکمیل؛ غایب یا درانتظار = نه', () => {
+    const appts = [
+      { startAt: '2026-10-03T06:00:00.000Z', status: 'scheduled' }, // همه حاضر → تکمیل
+      { startAt: '2026-10-04T06:00:00.000Z', status: 'scheduled' }, // یک غایب → نه
+      { startAt: '2026-10-05T06:00:00.000Z', status: 'cancelled' }, // لغوشده → نه حتی با حاضر
+      { startAt: '2026-10-06T06:00:00.000Z', status: 'scheduled' }  // درانتظار → نه
+    ];
+    const att = [
+      { appointmentId: 'a1', startAt: '2026-10-03T06:00:00.000Z', attendance: 'present', apptStatus: 'scheduled' },
+      { appointmentId: 'a1', startAt: '2026-10-03T06:00:00.000Z', attendance: 'late', apptStatus: 'scheduled' },
+      { appointmentId: 'a2', startAt: '2026-10-04T06:00:00.000Z', attendance: 'present', apptStatus: 'scheduled' },
+      { appointmentId: 'a2', startAt: '2026-10-04T06:00:00.000Z', attendance: 'absent', apptStatus: 'scheduled' },
+      { appointmentId: 'a3', startAt: '2026-10-05T06:00:00.000Z', attendance: 'present', apptStatus: 'cancelled' },
+      { appointmentId: 'a4', startAt: '2026-10-06T06:00:00.000Z', attendance: 'pending', apptStatus: 'scheduled' }
+    ];
+    const weeks = buildWeeklyTrend(appts, att, base, base);
+    expect(weeks[0].completed).toBe(1);
   });
 
   it('W6: نرخ حضور هفته = present/(present+absent) — نوبت لغوشده لحاظ نمی‌شود', () => {
-    const appts = [{ startAt: '2026-10-03T06:00:00.000Z', status: 'scheduled', opsStatus: null }];
+    const appts = [{ startAt: '2026-10-03T06:00:00.000Z', status: 'scheduled' }];
     const att = [
-      { startAt: '2026-10-03T06:00:00.000Z', attendance: 'present', apptStatus: 'scheduled' },
-      { startAt: '2026-10-03T06:00:00.000Z', attendance: 'absent', apptStatus: 'scheduled' },
-      { startAt: '2026-10-03T06:00:00.000Z', attendance: 'pending', apptStatus: 'scheduled' },
-      { startAt: '2026-10-03T06:00:00.000Z', attendance: 'present', apptStatus: 'cancelled' } // لغوشده — نادیده
+      { appointmentId: 'a1', startAt: '2026-10-03T06:00:00.000Z', attendance: 'present', apptStatus: 'scheduled' },
+      { appointmentId: 'a1', startAt: '2026-10-03T06:00:00.000Z', attendance: 'absent', apptStatus: 'scheduled' },
+      { appointmentId: 'a1', startAt: '2026-10-03T06:00:00.000Z', attendance: 'pending', apptStatus: 'scheduled' },
+      { appointmentId: 'a2', startAt: '2026-10-03T06:00:00.000Z', attendance: 'present', apptStatus: 'cancelled' } // لغوشده — نادیده
     ];
     const weeks = buildWeeklyTrend(appts, att, base, base);
     expect(weeks[0].attendanceRate).toBeCloseTo(1 / 2, 3);
@@ -54,8 +72,8 @@ describe('buildWeeklyTrend', () => {
 
   it('W7: نوبت خارج از بازه نادیده گرفته می‌شود', () => {
     const appts = [
-      { startAt: '2026-09-20T06:00:00.000Z', status: 'scheduled', opsStatus: null }, // قبل از بازه
-      { startAt: '2026-10-03T06:00:00.000Z', status: 'scheduled', opsStatus: null }
+      { startAt: '2026-09-20T06:00:00.000Z', status: 'scheduled' }, // قبل از بازه
+      { startAt: '2026-10-03T06:00:00.000Z', status: 'scheduled' }
     ];
     const weeks = buildWeeklyTrend(appts, [], base, base);
     expect(weeks[0].sessions).toBe(1);

@@ -1,4 +1,4 @@
-import type { Appointment, AppointmentOpsStatus, AppointmentStudent, AuthContext, ConflictWarning, CopyWeekInput, CopyWeekResult, NewAppointmentInput } from '@core/shared';
+import type { Appointment, AppointmentStudent, AuthContext, ConflictWarning, CopyWeekInput, CopyWeekResult, NewAppointmentInput } from '@core/shared';
 import type { DbClient } from '@core/db';
 
 export interface AppointmentUpdatePatch {
@@ -39,15 +39,6 @@ export interface AppointmentLifecycleObserver {
   onCancelled(appointment: Appointment): Promise<void>;
 }
 
-export interface AppointmentOpsObserver {
-  onOpsStatusChanged(
-    appointment: Appointment,
-    students: Array<{ studentId: string }>,
-    from: AppointmentOpsStatus | null,
-    to: AppointmentOpsStatus
-  ): Promise<void>;
-}
-
 export interface AppointmentService {
   create(input: NewAppointmentInput, actor: AuthContext): Promise<{ appointment: Appointment; warnings: ConflictWarning[] }>;
   createWithinTx(tx: DbClient, input: NewAppointmentInput, actor: AuthContext): Promise<{ appointment: Appointment; warnings: ConflictWarning[] }>;
@@ -61,7 +52,6 @@ export interface AppointmentService {
   cancel(id: string, version: number, actor: AuthContext): Promise<Appointment>;
   restore(id: string, version: number, actor: AuthContext): Promise<Appointment>;
   remove(id: string, actor: AuthContext): Promise<void>;
-  setOpsStatus(id: string, opsStatus: AppointmentOpsStatus, actor: AuthContext): Promise<Appointment>;
   addStudent(appointmentId: string, studentId: string, facetId: string | undefined, actor: AuthContext): Promise<void>;
   removeStudent(appointmentId: string, studentId: string, actor: AuthContext): Promise<void>;
   copyWeek(input: CopyWeekInput, actor: AuthContext): Promise<CopyWeekResult>;
@@ -77,7 +67,6 @@ export interface AppointmentService {
   }): void;
 
   setLifecycleObserver(observer: AppointmentLifecycleObserver): void;
-  setOpsObserver(observer: AppointmentOpsObserver): void;
 }
 
-export type { Appointment, AppointmentOpsStatus, AppointmentStudent, ConflictWarning, CopyWeekInput, CopyWeekResult, NewAppointmentInput };
+export type { Appointment, AppointmentStudent, ConflictWarning, CopyWeekInput, CopyWeekResult, NewAppointmentInput };

@@ -96,6 +96,22 @@ async function probe(bundlePath) {
     let norm = text;
     try { norm = JSON.stringify(JSON.parse(text)); } catch { /* متن خام */ }
     norm = norm.replace(/"ts":"[^"]*"/g, '"ts":"<TS>"');
+    // ۱.۲۵.۴۰ — مُهرهای زمانی seed بین دو اجرا فرق می‌کنند؛ رفتار نیستند
+    norm = norm.replace(/"createdAt":"[^"]*"/g, '"createdAt":"<TS>"');
+    norm = norm.replace(/"started_at":"[^"]*"/g, '"started_at":"<TS>"');
+    // ۱.۲۵.۵۷ — نسخهٔ /health و فیلد تازهٔ botAbout در تنظیمات، محصولِ bumpاند نه تغییر رفتار
+    norm = norm.replace(/"version":"[0-9][0-9.]*"/g, '"version":"<V>"');
+    norm = norm.replace(/"botAbout":"[^"]*",?/g, ''); // فیلد در باندل کهنه اصلاً نیست — حضور/غیاب مقایسه‌نشود
+    // ۱.۲۵.۵۹ — iat/exp توکن لاگین بین دو پروب فرق می‌کنند (مرز ثانیه) — رفتار نیستند
+    norm = norm.replace(/"iat":[0-9]+/g, '"iat":<IAT>').replace(/"exp":[0-9]+/g, '"exp":<EXP>');
+    // ۱.۲۵.۶۵ — خودِ رشتهٔ JWT مهرِ iat را درون payload کدگذاری‌شده دارد؛ مرز ثانیه کل رشتهٔ توکن
+    // را عوض می‌کرد و مقایسهٔ رفتاری را کاذب‌قرمز می‌کرد — فقط رشتهٔ مات می‌شود (حضور/غیاب می‌ماند)
+    norm = norm.replace(/"token":"[^"]*"/g, '"token":"<TOKEN>"');
+    // ۱.۲۵.۶۶ — expiresAt پاسخ لاگین هم مهر ثانیه‌ای now+۳۰روز است — رفتار نیست
+    norm = norm.replace(/"expiresAt":"[^"]*"/g, '"expiresAt":"<EXPIRES>"');
+    // ۱.۲۵.۷۰ — ف۵ request-id سراسری: پاکت خطای ۴xx/۵xx اکنون request_id تصادفی دارد —
+    // رفتارِ تازهٔ طراحی است؛ شناسه رندوم است و در باندل کهنه اصلاً نیست — حضور/غیاب مقایسه‌نشود (هم‌الگوی botAbout)
+    norm = norm.replace(/,?"request_id":"req-[^"]*"/g, '');
     out.push(`${method} ${urlPath} → ${res.status} :: ${norm.slice(0, 4000)}`);
   }
   return out;

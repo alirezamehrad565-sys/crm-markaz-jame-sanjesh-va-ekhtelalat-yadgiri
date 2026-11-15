@@ -61,6 +61,10 @@ export async function render(outlet) {
   viewAbort = new AbortController();
   setViewSignal(viewAbort.signal);
 
+  /* B3 — جابه‌جایی بین ماژول‌ها جای اسکرول قبلی را نگه می‌داشت و نمای تازه از وسط صفحه باز می‌شد
+     (اسکرول سایدبار عنصر جداگانه است و دست نمی‌خورد) */
+  window.scrollTo(0, 0);
+
   const { path, query } = parseHash();
   for (const route of routes) {
     const match = path.match(route.regex);

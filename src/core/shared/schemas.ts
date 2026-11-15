@@ -18,7 +18,6 @@ import {
   KNOWLEDGE_CATEGORIES,
   KNOWLEDGE_TITLE_MAX,
   APPOINTMENT_STATUS,
-  APPOINTMENT_OPS_STATUSES,
   ATTENDANCE_STATUS,
   CLASS_NAME_MAX,
   DAY_NOTE_BODY_MAX,
@@ -80,7 +79,10 @@ import {
 import { isValidIranianNationalId, normalizeNationalId } from './national-id';
 import { isOnGrid, tehranTodayYmd } from './time';
 
-export const UuidSchema = z.string().uuid('شناسه معتبر نیست');
+// zod4 — z.uuid() فقط UUID استاندارد RFC 9562 می‌پذیرد (نسخهٔ ۱..۸ + واریانت 89ab)؛
+// برای حفظ رفتار zod3 روی داده‌های موجود D1 و فیکسچرها (مثل seedهای «۱۱۱…») همان پذیرش باز با regex بازتولید شد
+const UUID_LOOSE_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+export const UuidSchema = z.string().regex(UUID_LOOSE_RE, 'شناسه معتبر نیست');
 
 export const IsoDateTimeSchema = z
   .string()
@@ -158,12 +160,6 @@ export const ResizeAppointmentSchema = z.object({
 
 export const CancelAppointmentSchema = z.object({
   version: z.number().int().positive()
-});
-
-export const OpsStatusSchema = z.enum(APPOINTMENT_OPS_STATUSES);
-
-export const SetOpsStatusSchema = z.object({
-  ops_status: OpsStatusSchema
 });
 
 export const CopyWeekSchema = z.object({
@@ -441,6 +437,24 @@ export const ReplaceCenterHoursSchema = z.object({
   items: z.array(WorkingHourRangeSchema).max(70, 'حداکثر ۷۰ بازه در هفته مجاز است')
 });
 
+/* ۱.۲۵.۵۷ — سقف متن «دربارهٔ مرکز» بات؛ رشتهٔ خالی = بازگشت به متن پیش‌فرض */
+export const BOT_ABOUT_MAX = 1500;
+
+/* ۱.۲۵.۵۷ — توکن بات بله مستقیم از کاربر: یا ثبت توکن تازه یا پاک‌کردن.
+   توکن بله شکل «123456:AA...» دارد — حداقل طول ۲۰ و فقط نویسه‌های امن.
+   پاسخ GET هرگز توکن را برنمی‌گرداند؛ audit فقط «configured» را ثبت می‌کند. */
+export const BotTokenUpdateSchema = z.union([
+  z.object({
+    token: z
+      .string()
+      .trim()
+      .min(20, 'توکن بات خیلی کوتاه است — توکن کامل را از BotFather بله بگیرید')
+      .max(200, 'توکن بات حداکثر ۲۰۰ نویسه است')
+      .regex(/^[A-Za-z0-9:_-]+$/, 'توکن فقط حروف، رقم و :_- است')
+  }),
+  z.object({ clear: z.literal(true) })
+]);
+
 export const UpdateSettingsSchema = z.object({
   clinic_name: z.string().min(2, 'نام مرکز حداقل ۲ نویسه است').max(120).optional(),
   default_reminder_hours: z.number().int().min(1).max(48).optional(),
@@ -454,6 +468,11 @@ export const UpdateSettingsSchema = z.object({
     .string()
     .max(65, 'نام کاربری بات حداکثر ۶۴ نویسه است')
     .regex(/^@?[A-Za-z0-9_]*$/, 'نام کاربری بات فقط حروف لاتین، رقم و خط زیر است')
+    .optional(),
+  /* ۱.۲۵.۵۷ — متن «دربارهٔ مرکز» بات؛ رشتهٔ خالی = بازگشت به متن پیش‌فرض سامانه */
+  bot_about: z
+    .string()
+    .max(BOT_ABOUT_MAX, `متن «دربارهٔ مرکز» حداکثر ${BOT_ABOUT_MAX} نویسه است`)
     .optional(),
   notify_batch_hour: z
     .number()
@@ -480,7 +499,7 @@ export const UpdateSettingsSchema = z.object({
           const hasFrom = typeof v.from === 'string' && v.from.length > 0;
           const hasTo = typeof v.to === 'string' && v.to.length > 0;
           if (hasFrom !== hasTo) {
-            ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'هر دو تاریخ «از» و «تا» باید با هم وارد شوند' });
+            ctx.addIssue({ code: 'custom', message: 'هر دو تاریخ «از» و «تا» باید با هم وارد شوند' }); // zod4 — ZodIssueCode حذف شده
             return;
           }
           if (hasFrom && hasTo) {
@@ -502,7 +521,7 @@ export const UpdateSettingsSchema = z.object({
 });
 
 const ScoringWeightField = z
-  .number({ invalid_type_error: 'وزن باید عدد باشد' })
+  .number({ error: 'وزن باید عدد باشد' }) // zod4
   .int('وزن باید عدد صحیح باشد')
   .min(0, 'وزن نمی‌تواند منفی باشد')
   .max(10000, 'وزن حداکثر ۱۰۰۰۰ است');
@@ -520,7 +539,7 @@ export const ScoringWeightsSchema = z.object({
   formRefs: ScoringWeightField,
   base_action: ScoringWeightField,
   admin_cap: z
-    .number({ invalid_type_error: 'سقف باید عدد باشد' })
+    .number({ error: 'سقف باید عدد باشد' }) // zod4
     .int('سقف باید عدد صحیح باشد')
     .min(0, 'سقف نمی‌تواند منفی باشد')
     .max(100000, 'سقف حداکثر ۱۰۰۰۰۰ است')
@@ -1081,12 +1100,35 @@ export const CreateExerciseBatchSchema = z
 
 export const SCREENING_NAME_MAX = 80;
 export const SCREENING_TAGS_MAX = 12;
+/* ۱.۲۵.۵۷ — نمرهٔ آمادگی تحصیلی از ۳۴ است (خواست کارفرما: فرم اصلی ۳۴ آیتمی است) */
+export const SCREENING_READINESS_MIN = 0;
+export const SCREENING_READINESS_MAX = 34;
+/* ۱.۲۵.۵۷ — فیلد اختیاری «توضیحات» سنجش روزانه */
+export const SCREENING_NOTE_MAX = 500;
 
 const ScreeningTagSchema = z
   .string()
   .trim()
   .min(1, 'برچسب خالی مجاز نیست')
   .max(60, 'برچسب حداکثر ۶۰ نویسه است');
+
+/* ۱.۲۵.۵۰ — دو فیلد اختیاری ثبت روزانه: تاریخ تولد (میلادی YYYY-MM-DD، نمایش شمسی سمت کلاینت)
+   و نمرهٔ آمادگی تحصیلی (۰..۱۰۰) — هر دو null-پذیر؛ خالی = ثبت‌نشده */
+const ScreeningBirthDateSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'تاریخ تولد باید به قالب YYYY-MM-DD باشد');
+
+const ScreeningReadinessSchema = z
+  .number()
+  .int('نمرهٔ آمادگی تحصیلی باید عدد صحیح باشد')
+  .min(SCREENING_READINESS_MIN, 'نمرهٔ آمادگی تحصیلی نمی‌تواند منفی باشد')
+  .max(SCREENING_READINESS_MAX, 'نمرهٔ آمادگی تحصیلی حداکثر ۳۴ است');
+
+const ScreeningNoteSchema = z
+  .string()
+  .trim()
+  .max(SCREENING_NOTE_MAX, `توضیحات حداکثر ${SCREENING_NOTE_MAX} نویسه است`)
+  .nullish();
 
 export const ScreeningCreateSchema = z.object({
   name: z
@@ -1095,7 +1137,10 @@ export const ScreeningCreateSchema = z.object({
     .min(2, 'نام و فامیل حداقل ۲ نویسه است')
     .max(SCREENING_NAME_MAX, `نام و فامیل حداکثر ${SCREENING_NAME_MAX} نویسه است`),
   tags: z.array(ScreeningTagSchema).max(SCREENING_TAGS_MAX, `حداکثر ${SCREENING_TAGS_MAX} برچسب`).default([]),
-  day: TehranYmdSchema.optional()
+  day: TehranYmdSchema.optional(),
+  birth_date: ScreeningBirthDateSchema.nullish(),
+  readiness_score: ScreeningReadinessSchema.nullish(),
+  note: ScreeningNoteSchema
 });
 
 export const ScreeningUpdateSchema = z
@@ -1106,11 +1151,17 @@ export const ScreeningUpdateSchema = z
       .min(2, 'نام و فامیل حداقل ۲ نویسه است')
       .max(SCREENING_NAME_MAX, `نام و فامیل حداکثر ${SCREENING_NAME_MAX} نویسه است`)
       .optional(),
-    tags: z.array(ScreeningTagSchema).max(SCREENING_TAGS_MAX, `حداکثر ${SCREENING_TAGS_MAX} برچسب`).optional()
+    tags: z.array(ScreeningTagSchema).max(SCREENING_TAGS_MAX, `حداکثر ${SCREENING_TAGS_MAX} برچسب`).optional(),
+    birth_date: ScreeningBirthDateSchema.nullish(),
+    readiness_score: ScreeningReadinessSchema.nullish(),
+    note: ScreeningNoteSchema
   })
-  .refine((v) => v.name !== undefined || v.tags !== undefined, {
-    message: 'حداقل یک فیلد برای ویرایش لازم است'
-  });
+  .refine(
+    (v) => v.name !== undefined || v.tags !== undefined || v.birth_date !== undefined || v.readiness_score !== undefined || v.note !== undefined,
+    {
+      message: 'حداقل یک فیلد برای ویرایش لازم است'
+    }
+  );
 
 export const ScreeningQuerySchema = z.object({
   from: TehranYmdSchema.optional(),

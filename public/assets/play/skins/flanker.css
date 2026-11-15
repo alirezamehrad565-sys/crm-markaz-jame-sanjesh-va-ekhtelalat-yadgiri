@@ -1,0 +1,64 @@
+/* ═══ skins/flanker.css — پوستهٔ «دشت مهتاب» برای گلهٔ فریبکار (G7) ═══
+   لایهٔ هنری روی play.css؛ بعد از آن سرو می‌شود و کلاس ماندگار
+   .play-skin--flanker روی play-root است. فقط گرادیان/سایه/بورد؛
+   کروم گرگ‌ها متقارن — جهت فقط از flip آیتم می‌آید. */
+
+/* چرا؟ رنگ مهتاب یک‌جا؛ پالت §۲ دست‌نخورده */
+.play-skin--flanker{--f-moon:#F3EEDC}
+
+/* چرا؟ شب خاکستری با هالهٔ ماه کامل می‌شود؛ حاشیهٔ هشدار سرجاست */
+.play-skin--flanker .play-stage--flanker{background:radial-gradient(115% 85% at 14% 0%,rgba(243,238,220,.18),transparent 46%),linear-gradient(180deg,#1B2436 0%,#2C3850 40%,#46536B 68%,#55617A 100%);box-shadow:inset 0 0 0 3px rgba(196,96,95,.45),inset 0 0 0 6px rgba(10,15,26,.92)}
+
+/* چرا موج علف؟ تپه‌های محو دشت؛ بی‌اثر برای لمس */
+.play-skin--flanker .play-stage--flanker::before{content:'';position:absolute;inset-inline:0;bottom:0;height:34%;background:radial-gradient(58% 95% at 18% 100%,rgba(142,151,168,.3),transparent 72%),radial-gradient(52% 85% at 74% 100%,rgba(142,151,168,.2),transparent 74%),linear-gradient(180deg,transparent,rgba(10,15,26,.5));pointer-events:none}
+
+/* چرا ویگنت؟ نگاه کودک وسط صحنه بماند */
+.play-skin--flanker .play-stage--flanker::after{content:'';position:absolute;inset:0;border-radius:inherit;background:radial-gradient(130% 120% at 50% 42%,transparent 56%,rgba(10,15,26,.34) 100%);pointer-events:none}
+
+/* چرا ستاره؟ نقطه‌های سرد پشت گرگ‌ها */
+.play-flanker__sky::before{content:'';position:absolute;inset:0 0 46% 0;background:radial-gradient(2px 2px at 12% 34%,rgba(243,238,220,.8),transparent 65%),radial-gradient(1.5px 1.5px at 44% 12%,rgba(243,238,220,.55),transparent 65%),radial-gradient(2px 2px at 81% 30%,rgba(243,238,220,.7),transparent 65%);pointer-events:none}
+
+/* چرا ماه درشت؟ قهرمان دشت؛ inline-end برای RTL */
+.play-flanker__moon{top:-12px;inset-inline-end:4%;width:clamp(64px,13vmin,120px);filter:drop-shadow(0 0 16px rgba(243,238,220,.5)) drop-shadow(0 0 44px rgba(243,238,220,.24))}
+
+/* چرا افق سرد؟ مرز نقره‌ای دشت؛ متقارن */
+.play-flanker__ground{max-width:min(88%,560px);height:10px;background:linear-gradient(90deg,transparent,rgba(201,212,232,.6) 24%,#DCE4F4 50%,rgba(201,212,232,.6) 76%,transparent);box-shadow:0 0 16px rgba(201,212,232,.25)}
+
+/* چرا کروم عمودی؟ نور از بالا؛ بی‌نشانهٔ جهت */
+.play-flanker__slot{filter:drop-shadow(0 3px 4px rgba(10,15,26,.55)) drop-shadow(0 -7px 10px rgba(201,212,232,.16))}
+.play-flanker__slot--real{filter:drop-shadow(0 3px 5px rgba(10,15,26,.55)) drop-shadow(0 0 16px rgba(255,196,107,.42)) drop-shadow(0 -7px 10px rgba(201,212,232,.2))}
+.play-flanker__wolf{filter:brightness(1.07) saturate(1.04)}
+
+/* چرا سنگ‌چین؟ دو گزینه مثل دو پشتهٔ سنگ زیر نور ماه؛ کف لمس ≥۸۸px */
+.play-flanker__btn{min-height:88px;border:2px solid rgba(201,212,232,.5);border-radius:18px;color:var(--f-moon);background:radial-gradient(130% 150% at 50% 0%,rgba(243,238,220,.16),transparent 56%),linear-gradient(180deg,#3C485F 0%,#2C3648 62%,#232C3D 100%);box-shadow:inset 0 2px 0 rgba(243,238,220,.16),inset 0 -5px 10px rgba(10,15,26,.45),0 8px 18px rgba(10,15,26,.35);transition:transform .15s ease,border-color .15s ease}
+.play-flanker__btn:active{transform:translateY(2px) scale(.98);border-color:rgba(243,238,220,.8)}
+
+/* چرا سبز؟ پاسخ درست تمرین با Teal پالت */
+.play-flanker__btn--truth{border-color:var(--p-teal);background:linear-gradient(180deg,#3E5A56,#2C4744);box-shadow:0 0 0 3px rgba(67,140,137,.4),inset 0 2px 0 rgba(243,238,220,.14)}
+
+/* چرا چیپ؟ هم‌شکل دکمه‌ها ولی غیرلمسی */
+.play-flanker__demo{background:linear-gradient(180deg,#3C485F,#2C3648);border-color:rgba(201,212,232,.5);color:var(--f-moon)}
+
+/* چرا پرامپت؟ درشت‌تر تا روی آسمان تیره بخواند */
+.play-flanker__prompt{font-size:18px;text-shadow:0 1px 2px rgba(10,15,26,.65)}
+
+/* چرا نوار نقره‌ای؟ زمانِ پاسخ مثل خط مهتاب آب می‌شود */
+.play-flanker__timer{height:12px;background:rgba(10,15,26,.55);box-shadow:inset 0 1px 3px rgba(10,15,26,.6)}
+.play-flanker__timer>span{background:linear-gradient(90deg,#C9D4E8,var(--p-amber))}
+
+/* چرا؟ کلاف و بازخورد هم وارد دشت مهتاب شوند */
+.play-skin--flanker .play-progress{background:rgba(20,27,41,.3);box-shadow:inset 0 1px 3px rgba(10,15,26,.45),0 0 0 1px rgba(201,212,232,.22)}
+.play-skin--flanker .play-progress__bar{background:linear-gradient(to left,#6FA3AE,#C9D4E8)}
+.play-skin--flanker .play-bubble,.play-skin--flanker .play-basket{background:#232C3D;color:var(--f-moon);border:2px solid rgba(201,212,232,.4);box-shadow:0 10px 26px rgba(10,15,26,.45)}
+
+/* چرا کاغذ مهتابی؟ معرفی/پایان خوانا بماند */
+.play-skin--flanker .play-stage--teach,.play-skin--flanker .play-stage--end{background:linear-gradient(180deg,#FBF8EF,#EEE8D6);box-shadow:0 14px 34px rgba(21,62,80,.12),inset 0 0 0 1px rgba(201,212,232,.65)}
+
+/* چرا افقی؟ مبنا نمای افقی؛ سنگ‌ها نفس می‌گیرند */
+@media (orientation:landscape){.play-flanker__answers{max-width:540px}.play-flanker__btn{min-height:96px}.play-flanker__prompt{font-size:19px}}
+
+/* چرا؟ صفحه کوتاه؛ جمع‌تر تا بی‌اسکرول جا شود */
+@media (orientation:landscape) and (max-height:480px){.play-flanker{gap:8px}.play-flanker__row{padding-top:4px}.play-flanker__btn{min-height:76px;font-size:20px}.play-flanker__prompt{font-size:16px}.play-flanker__timer{height:9px}.play-flanker__moon{width:clamp(48px,11vmin,84px);top:-8px}}
+
+/* چرا؟ transitionها هم زیر گارد §۹ خاموش */
+@media (prefers-reduced-motion:reduce){.play-flanker__btn,.play-flanker__slot,.play-flanker__moon,.play-skin--flanker .play-progress__bar{transition:none}.play-flanker__btn:active{transform:none}}

@@ -1,6 +1,5 @@
 import type {
   APPOINTMENT_STATUS,
-  APPOINTMENT_OPS_STATUSES,
   ATTENDANCE_STATUS,
   DAY_NOTE_KINDS,
   FOLLOWUP_STATUSES,
@@ -26,7 +25,6 @@ export type { ScreeningTargetConfig };
 export type StaffRole = (typeof STAFF_ROLES)[number];
 export type StaffAttendanceStatus = (typeof STAFF_ATTENDANCE_STATUSES)[number];
 export type AppointmentStatus = (typeof APPOINTMENT_STATUS)[keyof typeof APPOINTMENT_STATUS];
-export type AppointmentOpsStatus = (typeof APPOINTMENT_OPS_STATUSES)[number];
 export type DayNoteKind = (typeof DAY_NOTE_KINDS)[number];
 export type NextAction = (typeof NEXT_ACTION_VALUES)[number];
 export type AttendanceStatus = (typeof ATTENDANCE_STATUS)[keyof typeof ATTENDANCE_STATUS];
@@ -38,6 +36,8 @@ export interface AuthContext {
   email: string;
   role: StaffRole;
   displayName: string;
+  /** شناسهٔ نشست فعال (0111) — فقط در مسیر توکن سشن؛ خروج با آن ردیف را ابطال می‌کند */
+  sessionId?: string;
 }
 
 export interface ConflictWarning {
@@ -65,7 +65,6 @@ export interface Appointment {
   startAt: string; // زمان ISO UTC از سرور
   endAt: string;   // زمان ISO UTC از سرور
   status: AppointmentStatus;
-  opsStatus?: AppointmentOpsStatus | null;
   sessionType?: import('./constants').SessionTypeKey | null;
   note: string | null;
   version: number;
@@ -159,6 +158,7 @@ export interface TemplateVars {
   exerciseTitle?: string; // عنوان تمرین
   dueYmd?: string;        // تاریخ بازسنجی (YYYY-MM-DD)
   phone?: string;         // شمارهٔ تماس مرکز (bot_contact)
+  aboutText?: string;     // ۱.۲۵.۵۷ — متن «دربارهٔ مرکز» از تنظیمات (bot_about)
   list?: string;          // فهرست چندخطی آماده (bot_public_files/bot_class_activity)
   count?: string;         // شمارش فارسی (bot_pending_homework)
   title?: string;         // عنوان فایل/گزارش (bot_doc_received)
@@ -286,6 +286,7 @@ export interface CenterSettings {
   clinicPhone: string;
   notifyBatchHour: number;
   botUsername: string;
+  botAbout: string; // ۱.۲۵.۵۷ — متن «دربارهٔ مرکز» بات؛ خالی = متن پیش‌فرض سامانه
   meta: {
     baleConfigured: boolean;
     webhookEnabled: boolean;
@@ -359,11 +360,19 @@ export interface AppBindings {
   ENV: string;
   CF_ACCESS_TEAM_DOMAIN: string;
   AUTH_SECRET?: string;
+  /** ف۵ (P2-15) — سقف نوشتنی per-IP در دقیقه روی /api/*؛ رشتهٔ «۰» = خاموش (پارس در @app/http/rate-limit) */
+  API_RATE_LIMIT_PER_MIN?: string;
+  /** EXP-7 — سقف درخواست نودی per-node در دقیقه روی /node/pull|push|reconcile؛ رشتهٔ «۰» = خاموش (پارس در node-sync/service) */
+  NODE_RATE_LIMIT_PER_MIN?: string;
+  /** ENG-4 (۱.۲۶.۴) — نشانی /health ورکر بازی‌ها؛ فقط در موتور محلی بسته می‌شود (config.mjs) — تولید وب غایب */
+  GAMES_HEALTH_URL?: string;
 }
 
 export interface AppVariables {
   authContext: AuthContext;
   logger: Logger;
+  /** ف۵ (P2-13) — شناسهٔ همبستگی درخواست (`req-<uuid>`)؛ در هدر X-Request-Id و پاکت خطا هم می‌آید */
+  requestId: string;
 }
 
 export interface DashboardStaffCard {
@@ -771,10 +780,10 @@ export interface WorkingDayAppointment {
   startAt: string;
   endAt: string;
   status: AppointmentStatus;
-  opsStatus?: AppointmentOpsStatus | null;
   note: string | null;
   version: number;
   students: WorkingDayAppointmentStudent[];
+  sessionType?: string | null; /* ۱.۲۵.۰: نوع جلسه روی بورد روز کاری — قبلاً SELECT نمی‌شد و چیپ نوع هرگز رندر نمی‌شد */
 }
 
 export interface WorkingDayStaffColumn {
@@ -794,35 +803,12 @@ export interface WorkingDaySessionStats {
   cancelledAppointments: number;
 }
 
-export interface WorkingDayOpsStats {
-  planned: number;
-  checkedIn: number;
-  delayed: number;
-  inSession: number;
-  completed: number;
-  noShow: number;
-  cancelled: number;
-  total: number;
-}
-
-export interface WorkingDayQueueItem {
-  appointmentId: string;
-  staffId: string;
-  staffName: string;
-  startAt: string;
-  endAt: string;
-  opsStatus: AppointmentOpsStatus | null;
-  studentNames: string[];
-}
-
 export interface WorkingDayBoard {
   date: string;
   weekday: number;
   isToday: boolean;
   summary: StaffAttendanceDaySummary;
   sessionStats: WorkingDaySessionStats;
-  opsStats: WorkingDayOpsStats;
-  queue: WorkingDayQueueItem[];
   assessmentsToday: number;
   staff: WorkingDayStaffColumn[];
   unassigned: WorkingDayAppointment[];

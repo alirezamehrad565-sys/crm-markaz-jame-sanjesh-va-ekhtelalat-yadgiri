@@ -29,6 +29,7 @@ import { createBotLinksSection } from './bot-links';
 import { createBotCommandsSection } from './bot-commands';
 import { createDigestSection } from './digest';
 import { createNotificationSendersSection } from './senders';
+import { createAlertSection } from './alerts'; // ف۵ (P0-3) — رساندن هشدار خودکار تا مدیر
 
 export interface NotifyAppDeps {
   db: DbClient;
@@ -133,6 +134,8 @@ export interface NotifyAppService {
   sendDailyDigest(nowDate?: Date): Promise<DigestSummary>;
   enqueueFollowupNudges(nowDate?: Date): Promise<number>;
   enqueueReassessmentNudges(nowDate?: Date): Promise<number>;
+  /** ف۵ (P0-3) — پیام هشدار خودکار برای مدیرانِ بات‌لینک‌دار صف می‌کند — تعداد صف‌شده */
+  enqueueOwnerAlert(text: string, dedupKey: string): Promise<number>;
   resolveOwner(chatId: string): Promise<{ kind: string; ref_id: string; role: string | null } | null>;
   notifyAppointmentCreated(appointment: Appointment): Promise<void>;
   notifyAppointmentMoved(appointment: Appointment, previous: { startAt: string; endAt: string }): Promise<void>;
@@ -258,6 +261,7 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
     ...createBotCommandsSection(ctx),
     ...createDigestSection(ctx),
     ...createNotificationSendersSection(ctx),
+    ...createAlertSection(ctx), // ف۵ (P0-3) — رساندن هشدار خودکار تا مدیر روی همان کانال دایجست
 
     async listNotifications(filters: NotifyListFilters): Promise<NotificationRecord[]> {
       return notify.list(filters);

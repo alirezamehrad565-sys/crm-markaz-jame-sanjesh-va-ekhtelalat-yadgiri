@@ -1,6 +1,6 @@
 import { api } from '../api.js';
 import { fa, formatJalaliDateTime } from '../format.js';
-import { el, icon, toast, toastError, loadingState, errorState } from '../ui.js';
+import { el, icon, toast, toastError, loadingState, errorState, skeletonState, flashNode } from '../ui.js';
 
 // ─── پشتیبان‌گیری و بازیابی () + ارسال به آیدی بله () — فقط مدیر مرکز ───
 // مکانیک: گرفتن یک فایل JSON از کل داده‌ها + بازیابی جایگزینی‌کل با دو گارد امنیتی
@@ -271,12 +271,21 @@ function smallText(...children) {
   return el('div', { style: { fontSize: 'var(--fs-xs)', color: 'var(--text-3)', marginTop: '4px' } }, ...children);
 }
 
+/* UX-ممیزی: گارد تعلیق — درخواست‌های کند به خطای قابل‌اقدام با «تلاش دوباره» تبدیل می‌شوند */
+function withTimeout(p, ms, message) {
+  return Promise.race([
+    p,
+    new Promise((_, rej) => setTimeout(() => rej(new Error(message)), ms))
+  ]);
+}
+
 export async function renderBackup(container) {
-  container.replaceChildren(loadingState('در حال خواندن وضعیت داده‌ها…'));
+  /* UX-ممیزی الگوی ۷: اسکلت به‌جای اسپینر تنها + سقف زمانی تا صفحه برای همیشه «در حال خواندن» نماند */
+  container.replaceChildren(skeletonState('list', 5));
 
   let status = null;
   try {
-    status = (await api.get('/api/backup/status')).data;
+    status = (await withTimeout(api.get('/api/backup/status'), 20000, 'خواندن وضعیت داده‌ها بیش از حد طول کشید — اتصال را بررسی کنید و دوباره تلاش کنید.')).data;
   } catch (err) {
     container.replaceChildren(errorState(err, () => renderBackup(container)));
     return;
@@ -302,16 +311,27 @@ export async function renderBackup(container) {
   ));
 
   // ─── وضعیت داده‌ها ───
+  // ۱.۲۳.۰: چیپ «آخرین دریافت پشتیبان» مرجع زنده شد — بعد از دانلود درجا به‌روز می‌شود
+  // (reload کل صفحه که فقط برای همین چیپ بود حذف شد)
   const lastAt = localStorage.getItem(LAST_BACKUP_KEY);
+  const lastChip = el('span', { class: 'chip' },
+    lastAt ? `آخرین دریافت پشتیبان در این مرورگر: ${formatJalaliDateTime(lastAt)}` : 'در این مرورگر هنوز پشتیبانی گرفته نشده');
+
+  /* F8: به‌روزرسانی چیپ «آخرین دریافت» یک مسیر مشترک — هم دانلود عادی، هم پشتیبانِ اطمینانِ گام ۱ بازیابی
+     (پیش‌تر گام ۱ فقط localStorage می‌نوشت و چیپ ثانیه‌ها بعد «هرگز پشتیبانی گرفته نشده» نشان می‌داد) */
+  function touchLastChip() {
+    lastChip.textContent = `آخرین دریافت پشتیبان در این مرورگر: ${formatJalaliDateTime(localStorage.getItem(LAST_BACKUP_KEY))}`;
+    flashNode(lastChip); // — ۱.۲۳.۰: به‌جای reload کل صفحه، همان چیپ درجا با فلش توجه
+  }
+
   wrap.appendChild(section('وضعیت داده‌ها', 'dashboard', null,
     el('div', { class: 'chip-row' },
       el('span', { class: 'chip' }, `نسخهٔ سامانه: ${fa(status.version)}`),
       el('span', { class: 'chip' }, `${fa(status.tableCount)} جدول داده`),
       el('span', { class: 'chip' }, `${fmtNum(status.totalRows)} ردیف اطلاعات`),
-      el('span', { class: 'chip' },
-        lastAt ? `آخرین دریافت پشتیبان در این مرورگر: ${formatJalaliDateTime(lastAt)}` : 'در این مرورگر هنوز پشتیبانی گرفته نشده')
+      lastChip
     ),
-    status.recent.length > 0
+    (status.recent ?? []).length > 0 /* F9: قرارداد سرور بدون گارد نباشد */
       ? el('div', { style: { marginTop: 'var(--sp-3)' } },
           el('h4', { style: { fontSize: 'var(--fs-sm)', margin: '0 0 6px' } }, 'رویدادهای اخیر پشتیبان‌گیری:'),
           ...status.recent.map((r) => smallText(
@@ -332,7 +352,9 @@ export async function renderBackup(container) {
     try {
       await downloadBackup(includeFiles);
       toast('فایل پشتیبان دانلود شد — جای امنی نگه‌اش دارید', 'success');
-      setTimeout(() => location.reload(), 700);
+      touchLastChip(); /* F8 */
+      downloadBtn.disabled = false;
+      downloadBtn.replaceChildren(icon('download', 18), ' دریافت فایل پشتیبان');
     } catch (err) {
       toastError(err);
       downloadBtn.disabled = false;
@@ -414,6 +436,7 @@ export async function renderBackup(container) {
         step2.style.display = 'block';
         safetyBtn.replaceChildren(icon('check', 16), ' پشتیبان وضعیت فعلی گرفته شد');
         toast('فایل اطمینان دانلود شد — نگه‌اش دارید', 'success');
+        touchLastChip(); /* F8: چیپ «آخرین دریافت» همین‌جا هم زنده شود */
       } catch (err) {
         toastError(err);
         safetyBtn.disabled = false;
@@ -461,7 +484,7 @@ export async function renderBackup(container) {
           ? null
           : el('div', { style: { color: 'var(--error)', fontWeight: 600, marginTop: '6px' } },
               'این فایل با نسخهٔ فعلی سامانه هم‌خوان نیست و بازیابی انجام نمی‌شود: ',
-              ...summary.problems.flatMap((p, i) => [i > 0 ? '؛ ' : '', p]),
+              ...(summary.problems ?? []).flatMap((p, i) => [i > 0 ? '؛ ' : '', p]), /* F9: قرارداد سرور بدون گارد نباشد */
               '. اگر فایل پشتیبان از نسخهٔ خیلی قدیمی سامانه است، با مدیر فنی سامانه تماس بگیرید.'),
         el('ul', { style: { margin: 'var(--sp-2) 0 0', paddingRight: '18px', fontSize: 'var(--fs-sm)', lineHeight: 'var(--lh-relaxed)' } }, /* */
           el('li', {}, `نسخهٔ سامانهٔ وقت پشتیبان: ${summary.app_version}`),

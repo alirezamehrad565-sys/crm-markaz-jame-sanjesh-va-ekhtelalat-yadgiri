@@ -8,6 +8,7 @@ import {
   makeNationalId,
   ALI_ID,
   MARYAM_ID,
+  MANAGER_ID,
   SCHOOL1_ID,
   STUDENT1_ID
 } from '../../test/harness';
@@ -388,5 +389,100 @@ describe('حذف پروندهٔ دانش‌آموز', () => {
     const del = await ther.delete(`/api/students/${st.id}`);
     expect(del.status).toBe(403);
     await sec.delete(`/api/students/${st.id}`);
+  });
+});
+
+/* ۱.۱۳.۰ — «حذف با سابقه»: پروندهٔ اشتباهی که نوبت/رویداد دارد دیگر بن‌بست نیست؛
+   مدیر با force کامل حذف می‌کند (cascade امن FK)، منشی ۴۰۳ می‌گیرد،
+   گزارش ارزیابی رسمی/مالی سد سخت می‌ماند و پیش‌شمارش (delete-check) پیش از مودال می‌آید */
+describe('حذف با سابقه (force) و پیش‌شمارش حذف پرونده', () => {
+  let A: ReturnType<typeof createTestApp>;
+  let mgr: ReturnType<typeof asRole> extends Promise<infer T> ? T : never;
+  let sec: ReturnType<typeof asRole> extends Promise<infer T> ? T : never;
+
+  beforeAll(async () => {
+    A = createTestApp();
+    mgr = await asRole(A, 'manager');
+    sec = await asRole(A, 'secretary');
+  });
+
+  it('پیش‌شمارش delete-check سابقهٔ نوبت را دقیق اعلام می‌کند', async () => {
+    const st = await createStudent(mgr);
+    const created = await mgr.post('/api/appointments', apptBody(MARYAM_ID, quarterHourFromNow(240), 45, [st.id]));
+    expect(created.status).toBe(201);
+
+    const check = await mgr.get(`/api/students/${st.id}/delete-check`);
+    expect(check.status).toBe(200);
+    const data = (check.body as { data: { blocks: Array<{ key: string; label: string; count: number }>; canDelete: boolean; canForce: boolean; hardBlocks: unknown[] } }).data;
+    expect(data.blocks).toHaveLength(1);
+    expect(data.blocks[0].key).toBe('appointment');
+    expect(data.blocks[0].count).toBe(1);
+    expect(data.blocks[0].label).toContain('نوبت'); // برچسب فارسی — نه نام جدول خام
+    expect(data.canDelete).toBe(false);
+    expect(data.canForce).toBe(true); // مدیر
+    expect(data.hardBlocks).toHaveLength(0);
+  });
+
+  it('حذف معمولی پروندهٔ سابقه‌دار → ۴۰۹ با پیام فارسی و راهنمای مدیر', async () => {
+    const st = await createStudent(mgr);
+    await mgr.post('/api/appointments', apptBody(MARYAM_ID, quarterHourFromNow(240), 45, [st.id]));
+    const del = await mgr.delete(`/api/students/${st.id}`);
+    expect(del.status).toBe(409);
+    const msg = (del.body as { message?: string }).message ?? '';
+    expect(msg).toContain('نوبت');          // دیگر «appointment_students» خام نیست
+    expect(msg).toContain('حذف با سابقه'); // راهنمای مسیر مدیر
+  });
+
+  it('مدیر با force پروندهٔ سابقه‌دار را کامل حذف می‌کند — نوبت یتیم هم از تقویم پاک می‌شود و کد ملی آزاد', async () => {
+    const nid = makeNationalId();
+    const st = await createStudent(mgr, { national_id: nid });
+    const created = await mgr.post('/api/appointments', apptBody(MARYAM_ID, quarterHourFromNow(240), 45, [st.id]));
+    const appt = (created.body as { data: { id: string } }).data;
+
+    const del = await mgr.delete(`/api/students/${st.id}?force=true`);
+    expect(del.status).toBe(204);
+
+    const back = await mgr.get(`/api/students/${st.id}`);
+    expect(back.status).toBe(404);
+
+    // نوبتِ تک‌دانش‌آموزیِ همین پرونده یتیم شده — باید از تقویم هم رفته باشد
+    const apptBack = await mgr.get(`/api/appointments?id=${appt.id}`);
+    expect(apptBack.status).toBe(404);
+
+    // کد ملی برای ثبت مجدد آزاد شده (دردِ اصلی ثبت اشتباه)
+    const again = await mgr.post('/api/students', {
+      national_id: nid,
+      first_name: 'ثبت مجدد',
+      last_name: 'درست',
+      guardian_phone: '09121117766'
+    });
+    expect(again.status).toBe(201);
+    await mgr.delete(`/api/students/${(again.body as { data: { id: string } }).data.id}`);
+  });
+
+  it('منشی اجازهٔ «حذف با سابقه» ندارد — ۴۰۳ و پرونده دست‌نخورده', async () => {
+    const st = await createStudent(sec);
+    await sec.post('/api/appointments', apptBody(MARYAM_ID, quarterHourFromNow(240), 45, [st.id]));
+    const del = await sec.delete(`/api/students/${st.id}?force=true`);
+    expect(del.status).toBe(403);
+    const back = await sec.get(`/api/students/${st.id}`);
+    expect(back.status).toBe(200); // دست‌نخورده
+  });
+
+  it('سد سخت: پروندهٔ دارای گزارش ارزیابی رسمی حتی با force حذف نمی‌شود — ۴۰۹', async () => {
+    const st = await createStudent(mgr);
+    A.sql.prepare(
+      `INSERT INTO assessments (id, student_id, kind, title, performed_at, status, created_by) VALUES (?, ?, 'initial', 'ارزیابی آزمایشی', '1403-08-01', 'draft', ?)`
+    ).run(`asm-${st.id}`, st.id, MANAGER_ID);
+    const del = await mgr.delete(`/api/students/${st.id}?force=true`);
+    expect(del.status).toBe(409);
+    const back = await mgr.get(`/api/students/${st.id}`);
+    expect(back.status).toBe(200);
+
+    // پیش‌شمارش هم سد سخت را نشان می‌دهد
+    const check = await mgr.get(`/api/students/${st.id}/delete-check`);
+    const data = (check.body as { data: { hardBlocks: Array<{ key: string }>; canForce: boolean } }).data;
+    expect(data.hardBlocks).toHaveLength(1);
+    expect(data.hardBlocks[0].key).toBe('assessment');
   });
 });

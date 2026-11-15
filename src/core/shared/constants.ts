@@ -237,6 +237,9 @@ export const BATCH_MIN_LEAD_HOURS = 12;
 
 export const DIGEST_CRON = '0 4 * * *' as const;
 
+/** سینک اعلان از کنترل‌پلین (قرارداد m1.5) — هر ۱۵ دقیقه؛ با env خالی خاموش است */
+export const CP_SYNC_CRON = '*/15 * * * *' as const;
+
 export const LINK_CODE_LENGTH = 6;
 
 export const DEFAULT_CLINIC_NAME = 'مرکز جامع';
@@ -256,6 +259,8 @@ export const SETTING_KEYS = {
   NOTIFY_BATCH_HOUR: 'notify_batch_hour',
   SCORING_CONFIG: 'scoring_config',
   BOT_USERNAME: 'bot_username',
+  BOT_ABOUT: 'bot_about', // ۱.۲۵.۵۷ — متن «دربارهٔ مرکز» بات، قابل ویرایش توسط کاربر
+  BALE_BOT_TOKEN: 'bale_bot_token', // ۱.۲۵.۵۷ — توکن بات وقتی env نیست، از DB؛ هرگز در پاسخ GET نمی‌رود
   BACKUP_DESTINATIONS: 'backup_destinations', // مقصدهای ارسال پشتیبان به بله (JSON)
   BACKUP_AUTO_SEND: 'backup_auto_send' // پشتیبان خودکار شبانه (JSON)
 } as const;
@@ -277,7 +282,8 @@ export const DEFAULT_SETTINGS = {
   [SETTING_KEYS.SCREENING_TARGETS]: [],
   [SETTING_KEYS.CLINIC_PHONE]: '',
   [SETTING_KEYS.NOTIFY_BATCH_HOUR]: 18,
-  [SETTING_KEYS.BOT_USERNAME]: ''
+  [SETTING_KEYS.BOT_USERNAME]: '',
+  [SETTING_KEYS.BOT_ABOUT]: '' // خالی = متن پیش‌فرض خودِ سامانه در templates
 } as const;
 
 export interface ScreeningTargetConfig {
@@ -423,20 +429,6 @@ export const SEARCH_QUERY_MAX_LENGTH = 60;
 
 export const DAY_NOTE_BODY_MAX = 2000;
 
-export const APPOINTMENT_OPS_STATUSES = [
-  'checked_in',
-  'delayed',
-  'in_session',
-  'completed',
-  'no_show'
-] as const;
-
-export type AppointmentOpsStatus = (typeof APPOINTMENT_OPS_STATUSES)[number];
-
-export const OPS_TERMINAL_STATUSES = ['completed', 'no_show'] as const;
-
-export const OPS_QUEUE_WINDOW_MINUTES = 60;
-
 export const DAY_NOTE_KINDS = ['human', 'system'] as const;
 
 export const NEXT_ACTION_VALUES = ['none', 'follow_up', 'next_appointment', 'contact', 'referral'] as const;
@@ -557,3 +549,61 @@ export const CLEARBOOK_PLAN_STATUS_LABELS: Record<ClearbookPlanStatus, string> =
   active: 'در جریان',
   done: 'تکمیل'
 };
+
+// ─── گزارش باگ سامانه به پشتیبانی CP (بازاعمال ۱.۲۵.۵۱ — مایگریشن 0101) ───
+// قرارداد گیرندهٔ CP (m7): POST /api/node/feedback — NodeFeedbackSubmitSchema.
+// محدوده‌ها عیناً هم‌قرارداد CP است تا گزارش هرگز در سمت CP رد نشود.
+export const BUG_REPORT_AREA_ID_MAX = 60;
+export const BUG_REPORT_AREAS_MAX = 24;
+export const BUG_REPORT_DESCRIPTION_MAX = 2000;
+export const BUG_REPORT_PAGE_MAX = 300;
+export const BUG_REPORT_VERSION_MAX = 40;
+export const BUG_REPORT_REPORTER_MAX = 120;
+export const BUG_REPORT_NODE_ID_MAX = 64;
+export const BUG_REPORT_SEVERITIES = ['minor', 'major', 'critical'] as const;
+
+export type BugReportSeverity = (typeof BUG_REPORT_SEVERITIES)[number];
+
+/** شناسهٔ ماژول‌های گزارش‌پذیر — هم‌قرارداد نقشهٔ برچسب CP («گزارش باگ» پنل شبکه) */
+export const BUG_REPORT_AREAS = [
+  { id: 'appointments', label: 'نوبت‌دهی و تقویم' },
+  { id: 'working-day', label: 'روز کاری' },
+  { id: 'screening', label: 'سنجش روزانه' },
+  { id: 'students', label: 'دانش‌آموزان و پرونده' },
+  { id: 'treatment-plans', label: 'طرح درمان' },
+  { id: 'exercises', label: 'کارت‌های آماده' },
+  { id: 'games', label: 'بازی‌ها' },
+  { id: 'reports', label: 'گزارش‌ها و شاخص‌ها' },
+  { id: 'announcements', label: 'اعلان‌ها' },
+  { id: 'finance', label: 'بودجه و مالی' },
+  { id: 'staff', label: 'کارکنان و دسترسی‌ها' },
+  { id: 'other', label: 'بخش دیگر / کلی' }
+] as const;
+
+export type BugReportAreaId = (typeof BUG_REPORT_AREAS)[number]['id'];
+
+export const BUG_REPORT_AREA_IDS: readonly string[] = BUG_REPORT_AREAS.map((a) => a.id);
+
+export const BUG_REPORT_SEVERITY_LABELS: Record<BugReportSeverity, string> = {
+  minor: 'کم‌اهمیت',
+  major: 'مهم',
+  critical: 'بحرانی'
+};
+
+// ─── ۱.۲۵.۵۹ — کلید فرم‌های سیستمی تازهٔ رجیستری (migration 0104) ───
+export const HOME_MONITOR_EVENT_KEY = 'ce-home-monitor-v2'; // پایش در خانه — هشت زیرمقیاس = هشت سازهٔ صورت‌بندی
+export const CENTER_SURVEY_EVENT_KEY = 'ce-center-survey-v1'; // نظرسنجی عمومی (۱.۲۵.۵۹ — از ۱.۲۵.۶۰ فقط تاریخی؛ ساخت تازه بازنشسته)
+
+// ─── ۱.۲۵.۶۰ — خانوادهٔ نظرسنجی‌های خانواده (ماژول مستقل فقط-مدیر) ───
+/** دو فرم سیستمی ساخت‌یافتهٔ تازه — پایان دوره (ترخیص/اتمام جلسه‌ها) و حین درمان */
+export const SURVEY_DISCHARGE_EVENT_KEY = 'ce-survey-discharge-v1';
+export const SURVEY_PROGRESS_EVENT_KEY = 'ce-survey-progress-v1';
+/** کلیدهای سازندهٔ خانوادهٔ نظرسنجی — فهرست، صف عمومی و KPI همه با همین مجموعه کار می‌کنند */
+export const FAMILY_SURVEY_EVENT_KEYS = [CENTER_SURVEY_EVENT_KEY, SURVEY_DISCHARGE_EVENT_KEY, SURVEY_PROGRESS_EVENT_KEY] as const;
+/** نوع نظرسنجی ← کلید رجیستری؛ «general» فقط برای رویدادهای تاریخی ce-center-survey-v1 */
+export const SURVEY_KIND_EVENT_KEYS = {
+  general: CENTER_SURVEY_EVENT_KEY,
+  discharge: SURVEY_DISCHARGE_EVENT_KEY,
+  progress: SURVEY_PROGRESS_EVENT_KEY
+} as const;
+export type SurveyKind = keyof typeof SURVEY_KIND_EVENT_KEYS;

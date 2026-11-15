@@ -30,7 +30,7 @@ describe('cronMatches', () => {
     expect(cronMatches('0 17 * * 1', new Date('2026-01-18T17:00:00Z'))).toBe(false); // یکشنبه
   });
 
-  it('۳ — فهرست کرون‌ها همان ۴ عبارت wrangler.prod.toml است', () => {
-    expect([...ALL_CRONS].sort()).toEqual(['0 17 * * *', '0 4 * * *', '30 14 * * *', '30 6 * * *']);
+  it('۳ — فهرست کرون‌ها همان ۵ عبارت wrangler.prod.toml است (چهار عبارت اصلی + سینک CP هر ۱۵ دقیقه)', () => {
+    expect([...ALL_CRONS].sort()).toEqual(['*/15 * * * *', '0 17 * * *', '0 4 * * *', '30 14 * * *', '30 6 * * *']);
   });
 });

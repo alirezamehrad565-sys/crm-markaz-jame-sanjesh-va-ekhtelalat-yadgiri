@@ -1,6 +1,9 @@
 import { api, qs } from '../api.js';
 import { fa, enDigits, formatJalaliDateTime, formatJalaliNumeric, formatStoredJalaliNumeric, STUDENT_GRADES, gradeLabel, isPlaceholderNid } from '../format.js';
-import { el, icon, formModal, openModal, confirmModal, toast, toastError, statusBadge, dataTable, skeletonState, emptyState, tabs, callBadge } from '../ui.js';
+import { el, icon, formModal, openModal, confirmModal, toast, toastError, statusBadge, dataTable, skeletonState, emptyState, errorState, tabs, callBadge, lockBtn } from '../ui.js';
+import { openStudentDelete } from '../student-delete.js'; // — حذف کامل پرونده (جریان واحد با فهرست دانش‌آموزان)
+import { SPECIAL_NEED_TYPE_LABELS, SPECIAL_NEED_SEVERITY_LABELS, SPECIAL_NEED_SEVERITY_TONES } from '../taxonomy.js'; /* ۱.۲۵.۰۲ — واژه‌نامهٔ مشترک نیاز ویژه */
+import { openTeacherManager } from '../student-teachers.js'; // — مدیریت معلم‌ها: افزودن/حذف (APIهای POST/DELETE معلم)
 import { session } from '../state.js';
 import { fetchTags, fetchStudentTags, tagChip, openTagEditor } from '../tagging.js';
 import { fetchStudentFocus, focusLabels, openFocusEditor } from '../student-focus.js'; // درخت هدف در پروفایل
@@ -41,21 +44,6 @@ const TIMELINE_FILTERS = [
   { key: 'profile', label: 'پرونده', kinds: 'student_created,case_status,special_need,tags,waitlist' }
 ];
 
-const SPECIAL_NEED_TYPE_LABELS = {
-  dyslexia: 'نارساخوانی (دیس‌لکسی)',
-  dysgraphia: 'نارسانویسی (دیس‌گرافی)',
-  dyscalculia: 'نارساریاضی (دیس‌کالکولی)',
-  adhd: 'بیش‌فعالی و کم‌توجهی',
-  autism: 'طیف اتیسم',
-  speech_language: 'اختلال زبانی و بیان',
-  anxiety: 'اضطراب',
-  motor_coordination: 'اختلال هماهنگی حرکتی',
-  slow_learner: 'دیرآموز',
-  other: 'سایر'
-};
-const SPECIAL_NEED_SEVERITY_LABELS = { mild: 'خفیف', moderate: 'متوسط', severe: 'شدید' };
-const SPECIAL_NEED_SEVERITY_TONES = { mild: 'neutral', moderate: 'warning', severe: 'error' };
-
 const TIMELINE_PAGE = 30;
 
 export async function renderStudentProfile(container, ctx) {
@@ -79,32 +67,39 @@ export async function renderStudentProfile(container, ctx) {
   let noteEvents = [];
   let staff = [];
   let timeline = { data: [], nextAction: null, meta: { hasMore: false } };
-  try {
-    const [schoolsRes, apptRes, tagsRes, allTagsRes, evRes, notesRes, staffRes, tlRes, focusKeysRes, focusLabelMap] = await Promise.all([
-      api.get('/api/schools').catch(() => ({ data: [] })),
-      api.get(`/api/students/${id}/appointments${qs({ limit: 50 })}`),
-      fetchStudentTags(id),
-      fetchTags(),
-      api.get(`/api/students/${id}/case-events${qs({ limit: 200 })}`).catch(() => ({ data: [] })),
-      api.get(`/api/students/${id}/timeline${qs({ kinds: 'session_note', limit: 200 })}`).catch(() => ({ data: [] })),
-      api.get('/api/staff').catch(() => ({ data: [] })),
-      api.get(`/api/students/${id}/timeline${qs({ limit: TIMELINE_PAGE })}`),
-      fetchStudentFocus(id), // 
-      focusLabels() // برچسب فارسی کلیدها از درخت واحد
-    ]);
-    schools = schoolsRes.data;
-    appointments = apptRes.data;
-    studentTags = tagsRes;
-    allTags = allTagsRes;
-    studentFocus = focusKeysRes.map((k) => ({ key: k, fa: focusLabelMap[k] ?? k })); // 
-    caseEvents = evRes.data;
-    noteEvents = notesRes.data;
-    staff = staffRes.data;
-    timeline = tlRes;
-  } catch (err) {
-    // پیش‌تر catch خالی بود: خطای واکشی مثل «پروندهٔ خالی» رندر می‌شد؛ حالا بازخورد دارد
-    toastError(err);
-  }
+  /* UX-ممیزی فاز ۳ (P1 «تا تکمیل ۹ درخواست موازی فقط اسکلت»): درخواست‌های موازی به پس‌زمینه
+     رفتند؛ کروم صفحه (کارت وضعیت + نوار تب‌ها) بلافاصله با دادهٔ خود دانش‌آموز رندر می‌شود و
+     وقتی پاسخ‌ها رسید، کارت و تب‌ها درجا تازه و تب درخواستی با دادهٔ کامل رندر می‌شود. */
+  let auxDone = false;
+  let pendingTab = null;
+  const auxPromise = (async () => {
+    try {
+      const [schoolsRes, apptRes, tagsRes, allTagsRes, evRes, notesRes, staffRes, tlRes, focusKeysRes, focusLabelMap] = await Promise.all([
+        api.get('/api/schools').catch(() => ({ data: [] })),
+        api.get(`/api/students/${id}/appointments${qs({ limit: 50 })}`),
+        fetchStudentTags(id),
+        fetchTags(),
+        api.get(`/api/students/${id}/case-events${qs({ limit: 200 })}`).catch(() => ({ data: [] })),
+        api.get(`/api/students/${id}/timeline${qs({ kinds: 'session_note', limit: 200 })}`).catch(() => ({ data: [] })),
+        api.get('/api/staff').catch(() => ({ data: [] })),
+        api.get(`/api/students/${id}/timeline${qs({ limit: TIMELINE_PAGE })}`),
+        fetchStudentFocus(id), //
+        focusLabels() // برچسب فارسی کلیدها از درخت واحد
+      ]);
+      schools = schoolsRes.data;
+      appointments = apptRes.data;
+      studentTags = tagsRes;
+      allTags = allTagsRes;
+      studentFocus = focusKeysRes.map((k) => ({ key: k, fa: focusLabelMap[k] ?? k })); //
+      caseEvents = evRes.data;
+      noteEvents = notesRes.data;
+      staff = staffRes.data;
+      timeline = tlRes;
+    } catch (err) {
+      // پیش‌تر catch خالی بود: خطای واکشی مثل «پروندهٔ خالی» رندر می‌شد؛ حالا بازخورد دارد
+      toastError(err);
+    }
+  })();
 
   const schoolName = (sid) => schools.find((s) => s.id === sid)?.name ?? null;
 
@@ -115,92 +110,175 @@ export async function renderStudentProfile(container, ctx) {
     ['manager', 'secretary'].includes(session.user.role) ||
     (session.user.role === 'therapist' && Boolean(student.ownerStaffId) && student.ownerStaffId === session.user.staffId)
   );
+  /* ۱.۲۵.۲۴ — تب بازی‌ها: هم‌سطح دسترسی سرور (تجویز/گزارش فقط مدیر/درمانگر)؛
+     chunk مخصوص خودش دارد (import داینامیک در renderGamesTabContent) تا از بار پروفایل سبک بماند */
+  const canSeeGames = session.user && ['manager', 'therapist'].includes(session.user.role);
 
-  const nextActionBlock = buildNextActionBlock(timeline.nextAction);
+  /* ۱.۱۵.۰ — دکمه‌های دایره‌ای سادهٔ اقدام، روی خودِ کارت پرونده (به‌جای کاوش در تب‌ها و منوها):
+     ویرایش · برچسب‌ها · هدف‌ها · معلم · تاریخچهٔ تحصیلی · حذف — همیشه جلوی چشم.
+     هر دکمه با الگوی واحد قفل مشغولی (lockBtn) در برابر اسپم/دوبارکلیک محفوظ است و
+     هر کدام مستقیم API خودش را می‌کوبد: PATCH پرونده، PUT هدف‌ها، POST/DELETE معلم، DELETE پرونده. */
+  function buildCardCircles() {
+    const circle = (iconName, label, onclick, danger = false) =>
+      el('button', {
+        class: `icon-circle${danger ? ' icon-circle--danger' : ''}`,
+        type: 'button', title: label, 'aria-label': label,
+        onclick: (e) => lockBtn(e.currentTarget, onclick)
+      }, icon(iconName, 17));
 
-  const statusCard = el('div', { class: 'card' },
-    el('div', { class: 'card__body' },
-      el('div', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', flexWrap: 'wrap' } },
-        el('div', { class: 'avatar-lg' }, student.firstName.charAt(0)),
-        el('div', { style: { flex: 1, minWidth: 0 } },
-          el('h2', { style: { marginBottom: '6px' } }, `${student.firstName} ${student.lastName}`),
-          el('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' } },
-            statusBadge(student.active ? 'active' : 'inactive'),
-            student.gender ? statusBadge(student.gender) : null,
-            student.grade ? el('span', { class: 'badge badge--neutral' }, gradeLabel(student.grade)) : null,
-            pathwayChip(student.pathway),
-            canEditPathway(student)
-              ? el('button', {
-                  class: 'btn btn--ghost btn--sm',
-                  style: { padding: '2px 8px' },
-                  title: 'تغییر مسیر پرونده — تب تفسیر بالینی بر همین اساس شاخه می‌خورد',
-                  onclick: () => openPathwayModal(student, () => renderStudentProfile(container, ctx))
-                }, icon('edit', 13), 'مسیر')
-              : null,
-            student.ownerName
-              ? el('span', { class: 'badge badge--accent', title: 'مسئول پرونده — سپردن رسمی پرونده به درمانگر' }, `مسئول پرونده: ${student.ownerName}`)
-              : null,
-            student.specialNeedType
-              ? el('span', { class: `badge badge--${student.specialNeedSeverity === 'severe' ? 'error' : 'warning'}`, title: 'نیاز ویژهٔ شناسایی‌شده' },
-                  SPECIAL_NEED_TYPE_LABELS[student.specialNeedType] ?? student.specialNeedType)
-              : null,
-            el('span', { class: 'cell-sub' }, `مدرسه: ${schoolName(student.schoolId) ?? '—'}${student.className ? ` — ${student.className}` : ''}`)
-          )
-        )
-      ),
-      el('div', { class: 'profile-actions' },
-        nextActionBlock,
-        canCreateCaseEvents()
-          ? el('div', { class: 'profile-actions__row' },
-              el('button', {
-                class: 'btn btn--primary btn--sm',
-                onclick: () => openCaseEventForm({ student, onSaved: () => renderStudentProfile(container, ctx) })
-              }, icon('plus', 15), 'ثبت رویداد پرونده'),
-              el('button', {
-                class: 'btn btn--soft btn--sm',
-                onclick: () => openChecklistSendModal({ student, onSent: () => renderStudentProfile(container, ctx) })
-              }, icon('checklist', 15), 'ارسال چک‌لیست با بله'),
-              el('button', {
-                class: 'btn btn--soft btn--sm',
-                onclick: () => openExerciseSendModal({ student, onSent: () => renderStudentProfile(container, ctx) })
-              }, icon('file', 15), 'ارسال تمرین با بله')
+    return el('div', { class: 'card-circles', role: 'group', 'aria-label': 'اقدامات پرونده' },
+      circle('edit', 'ویرایش اطلاعات', () =>
+        openStudentForm({ student, onSaved: onStudentSaved })),
+      canManageTags
+        ? circle('tag', 'برچسب‌ها', async () => {
+            let tags = [];
+            try { tags = await fetchTags(); } catch { tags = []; }
+            openTagEditor({
+              student,
+              tags,
+              current: studentTags,
+              canCreateTag: session.user?.role === 'manager',
+              onSaved: onTagsSaved
+            });
+          })
+        : null,
+      canManageTags
+        ? circle('target', 'هدف‌های شناختی', () =>
+            openFocusEditor({ student, onSaved: onFocusSaved }))
+        : null,
+      circle('users', 'معلم‌های پرونده — افزودن و حذف', () =>
+        openTeacherManager(student, { onChanged: () => rerenderTabIf(['info']) })),
+      circle('school', 'تاریخچهٔ تحصیلی', () =>
+        openEducationHistory(student)), // — ۱.۲۰.۰: تاریخچه چیزی از این نما را عوض نمی‌کند؛ بدون rebuild
+      canManageCase
+        ? circle('trash', 'حذف کامل پرونده', () =>
+            openStudentDelete(student, { onDeleted: () => { location.hash = '#/students'; } }), true)
+        : null
+    );
+  }
+
+  /* کارت وضعیت دو مرحله‌ای: در رندر فوری فقط هویت و بج‌های پایه (دادهٔ خود دانش‌آموز)؛
+     پس از رسیدن دادهٔ موازی، «اقدام بعدی» و ردیف اقدامات هم اضافه می‌شوند. */
+  function buildStatusCard() {
+    const nextActionBlock = auxDone ? buildNextActionBlock(timeline.nextAction) : null;
+    return el('div', { class: 'card' },
+      el('div', { class: 'card__body' },
+        el('div', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', flexWrap: 'wrap' } },
+          el('div', { class: 'avatar-lg' }, student.firstName.charAt(0)),
+          el('div', { style: { flex: 1, minWidth: 0 } },
+            el('h2', { style: { marginBottom: '6px' } }, `${student.firstName} ${student.lastName}`),
+            el('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' } },
+              statusBadge(student.active ? 'active' : 'inactive'),
+              student.gender ? statusBadge(student.gender) : null,
+              student.grade ? el('span', { class: 'badge badge--neutral' }, gradeLabel(student.grade)) : null,
+              pathwayChip(student.pathway),
+              canEditPathway(student)
+                ? el('button', {
+                    class: 'btn btn--ghost btn--sm',
+                    style: { padding: '2px 8px' },
+                    title: 'تغییر مسیر پرونده — تب تفسیر بالینی بر همین اساس شاخه می‌خورد',
+                    onclick: () => openPathwayModal(student, onPathwaySaved)
+                  }, icon('edit', 13), 'مسیر')
+                : null,
+              student.ownerName
+                ? el('span', { class: 'badge badge--accent', title: 'مسئول پرونده — سپردن رسمی پرونده به درمانگر' }, `مسئول پرونده: ${student.ownerName}`)
+                : null,
+              student.specialNeedType
+                ? el('span', { class: `badge badge--${student.specialNeedSeverity === 'severe' ? 'error' : 'warning'}`, title: 'نیاز ویژهٔ شناسایی‌شده' },
+                    SPECIAL_NEED_TYPE_LABELS[student.specialNeedType] ?? student.specialNeedType)
+                : null,
+              el('span', { class: 'cell-sub' }, `مدرسه: ${schoolName(student.schoolId) ?? '—'}${student.className ? ` — ${student.className}` : ''}`)
             )
-          : null,
-        canManageCase ? buildOwnerEditor(student, () => renderStudentProfile(container, ctx)) : null
+          ),
+          buildCardCircles() /* ۱.۱۵.۰ — دایره‌های اقدام گوشهٔ کارت؛ وابسته به دادهٔ موازی نیستند */
+        ),
+        auxDone
+          ? el('div', { class: 'profile-actions' },
+              nextActionBlock,
+              canCreateCaseEvents()
+                ? el('div', { class: 'profile-actions__row' },
+                    el('button', {
+                      class: 'btn btn--primary btn--sm',
+                      onclick: () => openCaseEventForm({ student, onSaved: onCaseEventSaved })
+                    }, icon('plus', 15), 'ثبت رویداد پرونده'),
+                    /* UX-ممیزی: دو دکمهٔ هم‌شکل که فقط در یک واژه فرق داشتند («ارسال چک‌لیست با بله» / «ارسال تمرین با بله»)
+                       در یک منوی «ارسال با بله» ادغام شدند */
+                    baleSendMenu()
+                  )
+                : null,
+              canManageCase ? buildOwnerEditor(student, onOwnerSaved) : null
+            )
+          : null
       )
-    )
-  );
+    );
+  }
 
   const content = el('div', {});
+  let activeTabKey = 'info'; // تب فعال — برای بازسازی نوار پس از رسیدن داده
 
-  function selectTab(key) {
+  function selectTab(key, { silent = false } = {}) {
+    activeTabKey = key;
     tabBar.setActive(key); // kit خودش کلیک را فعال نمی‌کند — صریح فعال می‌کنیم
-    content.replaceChildren(skeletonState('list', 4));
+    if (!silent) content.replaceChildren(skeletonState('list', 4)); /* silent = بازسازی درجای تب فعال (جریان پیوستهٔ ۱.۲۰.۰) */
+    if (!auxDone) { pendingTab = key; return; } // دادهٔ موازی هنوز نرسیده — بعد از رسیدن رندر می‌شود
     const renderer = {
       info: renderInfoTab,
       clinical: renderClinicalTabContent, //
       timeline: renderTimelineTab,
       sessions: renderSessionsTab,
       comms: renderCommsTab,
-      exercises: renderExercisesTabContent
+      exercises: renderExercisesTabContent,
+      games: renderGamesTabContent // ۱.۲۵.۲۴ — میز تجویز بازی در خود پرونده
     }[key];
     (renderer ?? renderInfoTab)(content);
   }
 
-  const tabBar = tabs(
-    [
+  /* UX-ممیزی: منوی «ارسال با بله» — جای دو دکمهٔ دوقلو */
+  function baleSendMenu() {
+    const panel = el('div', { class: 'dd__panel', style: { display: 'none' } });
+    const btn = el('button', { class: 'btn btn--soft btn--sm', type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false' },
+      icon('send', 14), 'ارسال با بله', icon('chevD', 12));
+    const root = el('div', { class: 'dd' }, btn, panel);
+    function close() {
+      panel.style.display = 'none';
+      btn.setAttribute('aria-expanded', 'false');
+      document.removeEventListener('mousedown', outside, true);
+      document.removeEventListener('keydown', esc, true);
+    }
+    function outside(e) { if (!root.contains(e.target)) close(); }
+    function esc(e) { if (e.key === 'Escape') { close(); btn.focus(); } }
+    btn.addEventListener('click', () => {
+      const open = panel.style.display !== 'none';
+      if (open) { close(); return; }
+      panel.replaceChildren(
+        el('button', { class: 'dd__item', onclick: () => { close(); openChecklistSendModal({ student, onSent: onCaseEventSaved }); } }, icon('checklist', 14), el('span', {}, 'چک‌لیست جلسه')), 
+        el('button', { class: 'dd__item', onclick: () => { close(); openExerciseSendModal({ student, onSent: onBaleSent }); } }, icon('file', 14), el('span', {}, 'تمرین‌های دانش‌آموز'))
+      );
+      panel.style.display = 'block';
+      btn.setAttribute('aria-expanded', 'true');
+      document.addEventListener('mousedown', outside, true);
+      document.addEventListener('keydown', esc, true);
+    });
+    return root;
+  }
+
+  function tabItems() {
+    return [
       { key: 'info', label: 'اطلاعات پایه', icon: 'user', onSelect: selectTab },
       ...(canSeeClinical ? [{ key: 'clinical', label: 'تفسیر بالینی', icon: 'brain', onSelect: selectTab }] : []),
       { key: 'timeline', label: 'تاریخچه', icon: 'clock', onSelect: selectTab },
-      { key: 'sessions', label: `جلسات (${fa(appointments.length)})`, icon: 'calendar', onSelect: selectTab },
+      { key: 'sessions', label: auxDone ? `جلسات (${fa(appointments.length)})` : 'جلسات', icon: 'calendar', onSelect: selectTab },
       { key: 'exercises', label: 'تمرین‌ها', icon: 'file', onSelect: selectTab },
+      ...(canSeeGames ? [{ key: 'games', label: 'بازی‌ها', icon: 'gamepad', onSelect: selectTab }] : []), // ۱.۲۵.۲۴
       { key: 'comms', label: 'ارتباطات', icon: 'bot', onSelect: selectTab }
-    ],
-    'info'
-  );
+    ];
+  }
+  let tabBar = tabs(tabItems(), 'info');
 
   const docsMount = el('div', { style: { marginTop: 'var(--sp-4)' } });
-  renderDocsQuickCard(docsMount, student, { onChanged: () => renderStudentProfile(container, ctx) });
+  renderDocsQuickCard(docsMount, student); // — ۱.۲۰.۰: کارت مدارک خودگردان است؛ نیازی به rebuild کل نما ندارد
+
+  let statusCard = buildStatusCard();
 
   container.replaceChildren(
     el('div', { class: 'page-head' },
@@ -217,11 +295,98 @@ export async function renderStudentProfile(container, ctx) {
   const timelineDeepFilter = ctx.query?.filter ?? (requestedTab === 'followups' ? 'followups' : null);
   const knownTabs = ['info', 'timeline', 'sessions', 'comms', 'exercises'];
   if (canSeeClinical) knownTabs.splice(1, 0, 'clinical');
-  if (requestedTab === 'followups') selectTab('timeline');
-  else selectTab(knownTabs.includes(requestedTab) ? requestedTab : 'info');
+  selectTab(requestedTab === 'followups' ? 'timeline' : (knownTabs.includes(requestedTab) ? requestedTab : 'info'));
+
+  /* رسیدن دادهٔ پس‌زمینه: کارت وضعیت و نوار تب‌ها درجا تازه می‌شوند و تب در انتظار (یا تب فعال)
+     با دادهٔ کامل رندر می‌شود. */
+  auxPromise.then(() => {
+    auxDone = true;
+    repaintChrome();
+    const target = pendingTab ?? activeTabKey;
+    pendingTab = null;
+    selectTab(target);
+  });
+
+  /* — ۱.۲۰.۰ جریان پیوستهٔ پروفایل (الگوی ۱.۱۹.۰ روز کاری): هیچ اکشنی دیگر کل نما را re-render نمی‌کند.
+     هر mutation فقط دادهٔ خودش را بی‌صدا تازه می‌کند و کارت وضعیت/نوار تب‌ها درجا عوض می‌شوند؛
+     تب فعال فقط وقتی دوباره رندر می‌شود که دادهٔ آن واقعاً عوض شده — بدون اسکلت کل صفحه و پرش اسکرول. */
+  let refreshSeq = 0;
+  const seqGuard = () => { const s = ++refreshSeq; return () => s === refreshSeq; };
+
+  /* تعویض درجای کارت وضعیت + نوار تب‌ها (همان الگوی رسیدن دادهٔ پس‌زمینه) */
+  function repaintChrome() {
+    const freshCard = buildStatusCard();
+    statusCard.replaceWith(freshCard);
+    statusCard = freshCard;
+    const freshBar = tabs(tabItems(), activeTabKey);
+    tabBar.root.replaceWith(freshBar.root);
+    tabBar = freshBar;
+  }
+
+  /* تب فعال فقط وقتی دوباره رندر می‌شود که دادهٔ آن واقعاً عوض شده — صفحه‌بندی/فیلتر محلی بقیهٔ تب‌ها می‌ماند */
+  function rerenderTabIf(keys) {
+    if (keys.includes(activeTabKey)) selectTab(activeTabKey, { silent: true });
+  }
+
+  async function refreshCore() {
+    const isStale = seqGuard();
+    try { student = (await api.get(`/api/students/${id}`)).data; } catch (err) { toastError(err); return false; }
+    return isStale();
+  }
+
+  async function refreshTagsData() {
+    const isStale = seqGuard();
+    try { studentTags = await fetchStudentTags(id); allTags = await fetchTags(); } catch (err) { toastError(err); return false; }
+    return isStale();
+  }
+
+  async function refreshFocusData() {
+    const isStale = seqGuard();
+    try {
+      const [keys, map] = await Promise.all([fetchStudentFocus(id), focusLabels()]);
+      studentFocus = keys.map((k) => ({ key: k, fa: map[k] ?? k }));
+    } catch (err) { toastError(err); return false; }
+    return isStale();
+  }
+
+  /* رویدادها + صفحهٔ اول تایم‌لاین: nextAction کارت وضعیت هم از همین تایم‌لاین می‌آید */
+  async function refreshEventsData() {
+    const isStale = seqGuard();
+    try {
+      const [evRes, tlRes] = await Promise.all([
+        api.get(`/api/students/${id}/case-events${qs({ limit: 200 })}`).catch(() => ({ data: [] })),
+        api.get(`/api/students/${id}/timeline${qs({ limit: TIMELINE_PAGE })}`)
+      ]);
+      caseEvents = evRes.data;
+      timeline = tlRes;
+    } catch (err) { toastError(err); return false; }
+    return isStale();
+  }
+
+  const onStudentSaved = async () => { if (await refreshCore()) { repaintChrome(); rerenderTabIf(['info', 'comms']); } };
+  const onTagsSaved = async () => { if (await refreshTagsData()) { repaintChrome(); rerenderTabIf(['info']); } };
+  const onFocusSaved = async () => { if (await refreshFocusData()) { repaintChrome(); rerenderTabIf(['info']); } };
+  const onPathwaySaved = async () => { if (await refreshCore()) { repaintChrome(); rerenderTabIf(['info', 'clinical']); } };
+  const onOwnerSaved = async () => { if (await refreshCore()) repaintChrome(); };
+  const onSpecialNeedSaved = async () => { if (await refreshCore()) { repaintChrome(); rerenderTabIf(['info']); } };
+  const onCaseEventSaved = async () => { if (await refreshEventsData()) { repaintChrome(); rerenderTabIf(['timeline', 'sessions']); } };
+  const onBaleSent = async () => { if (await refreshEventsData()) { repaintChrome(); rerenderTabIf(['timeline', 'sessions', 'exercises']); } };
 
   function renderExercisesTabContent(box) {
-    renderExercisesTab(box, { student, onChanged: () => renderStudentProfile(container, ctx) });
+    renderExercisesTab(box, { student, onChanged: async () => { if (await refreshEventsData()) rerenderTabIf(['timeline', 'sessions']); } }); /* ۱.۲۰.۰ */
+  }
+
+  /* ۱.۲۵.۲۴ — تب بازی‌ها: میز تجویز/مأموریت/لینک در خود پرونده؛
+     chunk بازی‌ها فقط با ورود به این تب fetch می‌شود (خارج از بوت و خارج از chunk پروفایل) */
+  function renderGamesTabContent(box) {
+    box.replaceChildren(skeletonState('list', 3));
+    import('../games-console.js')
+      .then((m) => {
+        m.renderRxPanel(box, { childId: student.id, childName: `${student.firstName} ${student.lastName}`, embedded: true });
+      })
+      .catch((err) => {
+        box.replaceChildren(errorState(err, () => renderGamesTabContent(box)));
+      });
   }
 
   function renderClinicalTabContent(box) {
@@ -239,7 +404,7 @@ export async function renderStudentProfile(container, ctx) {
       canManageTags
         ? el('button', {
             class: 'btn btn--soft btn--sm',
-            onclick: () => openFocusEditor({ student, onSaved: () => renderStudentProfile(container, ctx) })
+            onclick: () => openFocusEditor({ student, onSaved: onFocusSaved })
           }, icon('target', 15), studentFocus.length === 0 ? 'افزودن هدف' : 'ویرایش هدف‌ها')
         : null
     );
@@ -258,7 +423,7 @@ export async function renderStudentProfile(container, ctx) {
               tags: allTags,
               current: studentTags,
               canCreateTag: session.user?.role === 'manager',
-              onSaved: () => renderStudentProfile(container, ctx)
+              onSaved: onTagsSaved
             })
           }, icon('tag', 15), studentTags.length === 0 ? 'افزودن برچسب' : 'ویرایش برچسب‌ها')
         : null
@@ -303,14 +468,14 @@ export async function renderStudentProfile(container, ctx) {
             ),
             el('button', {
               class: 'btn btn--soft btn--sm',
-              onclick: () => openEducationHistory(student, { onChanged: () => renderStudentProfile(container, ctx) })
+              onclick: () => openEducationHistory(student) // — ۱.۲۰.۰
             }, icon('eye', 15), 'مشاهده / مدیریت')
           ),
           renderTeachersCard(student, container, ctx),
           el('div', { style: { display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap', marginTop: 'var(--sp-4)' } },
             el('button', {
               class: 'btn btn--soft btn--sm',
-              onclick: () => openStudentForm({ student, onSaved: () => renderStudentProfile(container, ctx) })
+              onclick: () => openStudentForm({ student, onSaved: onStudentSaved })
             }, icon('edit', 15), 'ویرایش اطلاعات'),
             canSendReport
               ? el('button', {
@@ -335,7 +500,7 @@ export async function renderStudentProfile(container, ctx) {
     };
 
     const list = el('div', { class: 'tl-list' });
-    const moreBtn = el('button', { class: 'btn btn--soft btn--sm', type: 'button', style: { marginTop: 'var(--sp-4)' }, onclick: (e) => { e.currentTarget.disabled = true; e.currentTarget.setAttribute('aria-busy', 'true'); loadMore().finally(() => { e.currentTarget.disabled = false; e.currentTarget.removeAttribute('aria-busy'); }); } /* S4-23 */ }, icon('refresh', 15), 'نمایش رویدادهای بیشتر');
+    const moreBtn = el('button', { class: 'btn btn--soft btn--sm', type: 'button', style: { marginTop: 'var(--sp-4)' }, onclick: (e) => { const btn = e.currentTarget; /* F1: currentTarget بعد از dispatch تهی می‌شود — پیش از کار ناهمگام گرفتارش کن */ btn.disabled = true; btn.setAttribute('aria-busy', 'true'); loadMore().finally(() => { btn.disabled = false; btn.removeAttribute('aria-busy'); }); } /* S4-23 */ }, icon('refresh', 15), 'نمایش رویدادهای بیشتر');
     const chips = el('div', { class: 'tl-filters' });
 
     for (const f of TIMELINE_FILTERS) {
@@ -356,24 +521,27 @@ export async function renderStudentProfile(container, ctx) {
       load(false);
     }
 
+    let gen = 0; // F2: گارد نسل — پاسخ کهنهٔ فیلتر عوض‌شده نباید زیر چیپ فعال بنشیند (الگوی waitlist/progress-board)
     async function load(append) {
-      if (state.loading) return;
+      const myGen = ++gen;
       state.loading = true;
       const f = TIMELINE_FILTERS.find((x) => x.key === state.filter);
       const query = { limit: TIMELINE_PAGE, offset: state.offset };
       if (f?.kinds) query.kinds = f.kinds;
       try {
         const res = await api.get(`/api/students/${id}/timeline${qs(query)}`);
+        if (myGen !== gen) return; // F2: پاسخ کهنه — فیلتر/صفحهٔ جدیدتری در پرواز است
         state.events = append ? [...state.events, ...res.data] : res.data;
         state.hasMore = Boolean(res.meta?.hasMore);
         paint();
       } catch (err) {
-        toastError(err);
+        if (myGen === gen) toastError(err);
       }
-      state.loading = false;
+      if (myGen === gen) state.loading = false;
     }
 
     function loadMore() {
+      if (state.loading) return; // بار در پرواز است — «بیشتر» تا پایانش صفحه می‌پرد
       state.offset += TIMELINE_PAGE;
       load(true);
     }
@@ -395,7 +563,7 @@ export async function renderStudentProfile(container, ctx) {
         canCreateCaseEvents()
           ? el('button', {
               class: 'btn btn--soft btn--sm',
-              onclick: () => openCaseEventForm({ student, onSaved: () => renderStudentProfile(container, ctx) })
+              onclick: () => openCaseEventForm({ student, onSaved: onCaseEventSaved })
             }, icon('plus', 15), 'ثبت رویداد پرونده')
           : null
       ),
@@ -425,7 +593,7 @@ export async function renderStudentProfile(container, ctx) {
       ? async () => {
           try {
             const res = await api.get(`/api/case-events/${e.ref.id}`);
-            openCaseEventDetail(res.data, { onChanged: () => renderStudentProfile(container, ctx) });
+            openCaseEventDetail(res.data, { onChanged: onCaseEventSaved });
           } catch (err) {
             toastError(err);
           }
@@ -452,7 +620,7 @@ export async function renderStudentProfile(container, ctx) {
         const t = fillTargetOf({ category: ev.typeCategory, familyFillable: ev.typeFamilyFillable, audience: ev.typeAudience });
         return el('div', { style: { marginTop: '6px' } }, el('span', { class: `badge ${t.badgeClass}` }, t.badge));
       })() : null,
-      link ? el('div', { class: 'tl-item__actor', style: { color: 'var(--primary, #229ED9)' } }, `↖ ${link.label}` /* S4-06 */) : null
+      link ? el('div', { class: 'tl-item__actor', style: { color: 'var(--primary)' } }, `↖ ${link.label}` /* S4-06 */) : null
     );
     if (openAction) card.addEventListener('keydown', (e) => { /* S4-22 */
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openAction(); }
@@ -491,7 +659,7 @@ export async function renderStudentProfile(container, ctx) {
           type: 'button',
           title: evs.length > 1 ? `نمایش رویدادها — آخرین از ${fa(evs.length)} رویداد این جلسه` : 'نمایش رویدادهای این جلسه',
           'aria-label': evs.length > 1 ? `رویدادهای جلسه (${fa(evs.length)} رویداد — گشودن آخرین)` : 'نمایش رویدادهای این جلسه', /* S4-24/S4-25 */
-          onclick: () => openCaseEventDetail(evs[0], { onChanged: () => renderStudentProfile(container, ctx) })
+          onclick: () => openCaseEventDetail(evs[0], { onChanged: onCaseEventSaved })
         }, `رویداد (${fa(evs.length)})`));
       }
       if (hasNote) parts.push(el('span', { class: 'badge badge--neutral' }, 'یادداشت'));
@@ -500,7 +668,7 @@ export async function renderStudentProfile(container, ctx) {
           ? el('button', {
               class: 'btn btn--soft btn--sm',
               title: 'ثبت گزارش برای این جلسه',
-              onclick: () => openCaseEventForm({ student, appointmentId: a.appointmentId, onSaved: () => renderStudentProfile(container, ctx) })
+              onclick: () => openCaseEventForm({ student, appointmentId: a.appointmentId, onSaved: onCaseEventSaved })
             }, icon('plus', 13), 'ثبت گزارش')
           : el('span', { class: 'cell-sub' }, '—');
       }
@@ -514,7 +682,7 @@ export async function renderStudentProfile(container, ctx) {
           canReport
             ? el('button', {
                 class: 'btn btn--soft btn--sm',
-                onclick: () => openCaseEventForm({ student, onSaved: () => renderStudentProfile(container, ctx) })
+                onclick: () => openCaseEventForm({ student, onSaved: onCaseEventSaved })
               }, icon('plus', 15), 'ثبت رویداد پرونده')
             : null
         ),
@@ -544,11 +712,15 @@ export async function renderStudentProfile(container, ctx) {
 
     let familyCard = null;
     let teacherCard = null;
+    let teacherMessageCard = null;
     try {
       familyCard = await buildFamilyInviteCard(student, { canManage: canManageNotify });
       teacherCard = await buildTeacherInviteCard(student, { canManage: canManageNotify });
+      // کارت «یادآوری و اعلان‌ها» (زمان‌بندی اعلان) حذف شد؛ جای آن پیام آزاد به معلم نشست
+      // F3: داخل try — رد شدنش تب ارتباطات را تا ابد روی اسکلت نمی‌گذارد
+      if (canManageNotify) teacherMessageCard = await buildTeacherMessageCard(student);
     } catch (err) {
-      box.replaceChildren(emptyState({ iconName: 'alert', title: 'بارگذاری بخش ارتباطات ناموفق بود', hint: err?.message ?? '' }));
+      box.replaceChildren(errorState(err, () => renderCommsTab(box)));
       return;
     }
 
@@ -563,8 +735,7 @@ export async function renderStudentProfile(container, ctx) {
       )
     );
 
-    // کارت «یادآوری و اعلان‌ها» (زمان‌بندی اعلان) حذف شد؛ جای آن پیام آزاد به معلم نشست
-    const teacherMessageCard = canManageNotify ? await buildTeacherMessageCard(student) : null;
+    // کارت «یادآوری و اعلان‌ها» حذف شد (بالا در try ساخته می‌شود)
 
     box.replaceChildren(
       el('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-4)' } },
@@ -681,7 +852,7 @@ function buildSpecialNeedBlock(student, canManage, container, ctx) {
   );
 
   const editBtn = canManage
-    ? el('button', { class: 'btn btn--soft btn--sm', onclick: () => openSpecialNeedForm(student, () => renderStudentProfile(container, ctx)) },
+    ? el('button', { class: 'btn btn--soft btn--sm', onclick: () => openSpecialNeedForm(student, onSpecialNeedSaved) },
         icon('edit', 15), hasNeed ? 'ویرایش نیاز ویژه' : 'ثبت نیاز ویژه')
     : null;
 
@@ -805,7 +976,7 @@ function openTeacherReportModal(student) {
       (c) => el('button', { class: 'btn btn--ghost', onclick: c }, 'انصراف'),
       (c) => el('button', {
         class: 'btn btn--primary',
-        onclick: async () => {
+        onclick: (e) => lockBtn(e.currentTarget, async () => { /* F4: قفل مشغولی — دوبارکلیک ارسال تکراری نمی‌زند (هم‌الگوی دکمهٔ بله) */
           const text = textarea.value.trim();
           if (text.length < 2) {
             toast('متن گزارش را بنویسید', 'warning');
@@ -818,7 +989,7 @@ function openTeacherReportModal(student) {
           } catch (err) {
             toastError(err);
           }
-        }
+        })
       }, icon('bot', 16), 'ارسال')
     ]
   });
