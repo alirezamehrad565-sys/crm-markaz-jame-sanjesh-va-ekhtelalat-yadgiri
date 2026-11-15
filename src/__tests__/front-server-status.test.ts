@@ -250,9 +250,9 @@ describe('serverAddressView — آدرس سرور محلی برای کارت (خ
     // پورت معتبر بر origin مقدم است
     expect(serverAddressView({ port: 8901 }, 'https://markaz.example.com').address).toBe('http://127.0.0.1:۸۹۰۱');
     // origin بی‌ارزش ('null' بی‌کانال واقعی/تهی) → پیش‌فرض
-    expect(serverAddressView(null, 'null')).toEqual({ address: 'http://127.0.0.1:۸۷۸۷', isDefault: true });
-    expect(serverAddressView(null, '')).toEqual({ address: 'http://127.0.0.1:۸۷۸۷', isDefault: true });
-    expect(serverAddressView(null, 42 as unknown as string)).toEqual({ address: 'http://127.0.0.1:۸۷۸۷', isDefault: true });
+    expect(serverAddressView(null, 'null')).toEqual({ address: 'http://127.0.0.1:۸۷۸۷', copyText: 'http://127.0.0.1:8787', isDefault: true });
+    expect(serverAddressView(null, '')).toEqual({ address: 'http://127.0.0.1:۸۷۸۷', copyText: 'http://127.0.0.1:8787', isDefault: true });
+    expect(serverAddressView(null, 42 as unknown as string)).toEqual({ address: 'http://127.0.0.1:۸۷۸۷', copyText: 'http://127.0.0.1:8787', isDefault: true });
   });
 });
 
