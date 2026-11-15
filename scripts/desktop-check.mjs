@@ -398,7 +398,7 @@ try {
   pinB(path.join(T, 'Cargo.toml'), ['keyring'], 'Cargo.toml');
   pinB(path.join(ROOT, 'public', 'assets', 'js', 'views', 'health-panel.js'), ['cloudSyncStateView'], 'health-panel');
   pinB(path.join(ROOT, 'src', '__tests__', 'front-cloud-sync.test.ts'), ['cloudSyncStateView'], 'آزمون front-cloud-sync.test.ts');
-  pinB(path.join(ROOT, 'src', '__tests__', 'two-instance-sync.test.ts'), ['rowWinner'], 'آزمون two-instance-sync.test.ts');
+  pinB(path.join(IS_DIR, '__tests__', 'two-instance-sync.test.ts'), ['rowWinner'], 'آزمون two-instance-sync.test.ts');
   pinB(path.join(ROOT, 'worker', 'central-bundle.js'), ['instance-sync'], 'worker/central-bundle.js');
 } catch (e) {
   bad(`گیت پین‌های P2 خطا داد: ${e instanceof Error ? e.message : String(e)}`);
