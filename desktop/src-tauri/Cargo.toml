@@ -17,7 +17,16 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 serde_json = "1"
 # rust-f7 — مخزن امن رازهای اتصال ابر (Credential Manager ویندوز؛ در CI لینوکس با secret-service)
-keyring = "3"
+# فاز B — فیچرهای صریح طبق docs.rs/keyring/3.6.3 (آخرین نسخهٔ ۳.x، ۲۰۲۵-۰۷-۲۷؛ کریت بدون
+# فیچر پیش‌فرض است و باید پلتفرم ذخیره‌ساز صریح انتخاب شود):
+#   windows-native       → Credential Store ویندوز (پلتفرم هدف نصاب — secure_store.rs)
+#   sync-secret-service  → مخزن Secret Service دی‌باس روی لینوکس/CI با API همگام
+#                          (get_password/set_password بدون async-runtime)
+#   crypto-rust          → رمزنگاری pure-Rust بستهٔ انتقال secret-service (بدون OpenSSL سیستم)
+#   vendored             → لینک استاتیک کتابخانه‌های لازم در بیلد CI (بدون dev-lib سیستم)
+# نسخه ۳ می‌ماند تا با secure_store.rs موجود سازگار بماند — خط ۴.x (crates.io: ۴.۲.۰)
+# ساختار فیچر متفاوت دارد و مهاجرت آن خارج از فاز B است.
+keyring = { version = "3", features = ["windows-native", "sync-secret-service", "crypto-rust", "vendored"] }
 # v1.26.0 — ماژول کلادفلر (cf_deploy.rs): HTTPS با rustls (بدون OpenSSL) + multipart آپلود ورکر
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "multipart"] }
 # runtime async تائوری روی tokio است — انتظار بین پروب‌های healthz

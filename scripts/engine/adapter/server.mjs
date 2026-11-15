@@ -9,7 +9,7 @@
 //   games: DB, ENV, CF_ACCESS_TEAM_DOMAIN, PUBLIC_BASE_URL, AUTH_SECRET
 // DB = shim کامل D1 روی node:sqlite (./d1.mjs) روی همان فایل پشتهٔ D1 — دادهٔ کاربر حفظ است.
 import { createServer } from 'node:http';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { makeD1 } from './d1.mjs';
@@ -108,6 +108,56 @@ async function writeWebResponse(res, response) {
 const reqHead = (m) => String(m ?? '').toUpperCase() === 'HEAD';
 
 /**
+ * فاز B — CloudFsIO: پل فایل‌سیستم dataDir برای اپ (docs/rust/server-cloud-update-design.md §۲-۴).
+ * باندل ورکر هرگز node:fs import نمی‌کند (باید در workerd هم باندل‌پذیر بماند) — پس فایل‌های
+ * ابری (cloud-config.json + sync-state.json + پشتیبان‌های cloud-sync-pre-*/cloud-sync-clone-*)
+ * فقط از طریق همین آبجکت تزریقی در binding CLOUD_FS خوانده/نوشته می‌شوند؛ در حالت workerd
+ * (توسعه) غایب است → اپ «configured=false» می‌دهد و هم‌گامی ابری خاموش می‌ماند.
+ * سد نام فایل: فقط همین الگوها مجازند — هیچ مسیر دیگری از اپ به dataDir باز نمی‌شود.
+ * نوشتن اتمیک: tmp هم‌نام + rename (هر دو زیر dataDir و یک volume — عین الگوی install-manifest).
+ */
+const CLOUD_FILE_RE = /^(cloud-config\.json|sync-state\.json|cloud-sync-(pre|clone)-[A-Za-z0-9._-]+\.json)$/;
+function makeCloudFsIO(dataDir) {
+  if (!dataDir) return null;
+  const safeName = (name) => typeof name === 'string' && CLOUD_FILE_RE.test(name);
+  return {
+    readText: async (name) => {
+      if (!safeName(name)) throw new Error(`نام فایل ابری مجاز نیست: ${String(name).slice(0, 64)}`);
+      try { return readFileSync(path.join(dataDir, name), 'utf8'); } catch { return null; }
+    },
+    writeText: async (name, text) => {
+      if (!safeName(name)) throw new Error(`نام فایل ابری مجاز نیست: ${String(name).slice(0, 64)}`);
+      const target = path.join(dataDir, name);
+      const tmp = `${target}.tmp`;
+      writeFileSync(tmp, String(text), 'utf8');
+      try {
+        // انتقال اتمیک tmp → مقصد (libuv با REPLACE_EXISTING جایگزین می‌کند؛ هر دو زیر dataDir
+        // و روی یک volume اند) — یا محتوای کامل تازه یا قبلی دست‌نخورده
+        renameSync(tmp, target);
+      } catch (err) {
+        try { unlinkSync(tmp); } catch { /* ماندهٔ tmp باقی نماند */ }
+        throw err;
+      }
+    },
+    remove: async (name) => {
+      if (!safeName(name)) throw new Error(`نام فایل ابری مجاز نیست: ${String(name).slice(0, 64)}`);
+      try { unlinkSync(path.join(dataDir, name)); } catch { /* غایب = حذف‌شده */ }
+    },
+    list: async (prefix) => {
+      try {
+        return readdirSync(dataDir)
+          .filter((n) => typeof n === 'string' && n.startsWith(prefix) && CLOUD_FILE_RE.test(n))
+          .sort()
+          .reverse(); // تازه‌ترین (بزرگ‌ترین مُهر) اول — مصرف چرخش/فهرست
+      } catch {
+        return [];
+      }
+    },
+    dir: () => dataDir,
+  };
+}
+
+/**
  * بالا آوردن هر دو سرویس در همین فرایند. برمی‌گرداند { close } — engine.mjs در
  * ری‌استارت پنل/نگهبان بازی‌ها close و دوباره startAdapterEngine می‌زند.
  */
@@ -121,6 +171,9 @@ export async function startAdapterEngine(opts) {
   }
 
   const DB = makeD1(dbPath, { log });
+  // فاز B — راز ابری passthrough از env پروسهٔ موتور (تزریق پوستهٔ Rust) + پل فایل‌های ابری
+  // CloudFsIO روی dataDir — باندل ورکر هرگز node:fs import نمی‌کند؛ فقط از همین binding می‌خواند
+  const cloudFs = makeCloudFsIO(bindings.dataDir);
   const mainEnv = {
     DB,
     ENV: 'production',
@@ -130,6 +183,8 @@ export async function startAdapterEngine(opts) {
     AUTH_SECRET: bindings.authSecret,
     CENTER_DESKTOP_ENGINE: '1',
     GAMES_HEALTH_URL: bindings.gamesHealthUrl ?? `http://127.0.0.1:${gamesPort}/health`,
+    CLOUD_FS: cloudFs,
+    ENGINE_CLOUD_SECRET: typeof bindings.engineCloudSecret === 'string' ? bindings.engineCloudSecret : '',
   };
   const gamesEnv = {
     DB,

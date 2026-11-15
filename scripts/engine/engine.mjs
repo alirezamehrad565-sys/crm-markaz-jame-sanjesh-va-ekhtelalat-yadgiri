@@ -320,7 +320,17 @@ export async function runEngine(opts) {
       mainBundle: opts.mainBundle ?? path.join(REPO_ROOT, 'worker/bundle.js'),
       gamesBundle: opts.gamesBundle ?? path.join(REPO_ROOT, 'worker/games-bundle.js'),
       publicDir: opts.publicDir ?? path.join(REPO_ROOT, 'public'),
-      bindings: { authSecret, publicBaseUrl: base, gamesHealthUrl: `${gamesBase}/health` },
+      // فاز B — passthrough راز ابری از env پروسهٔ موتور (ENGINE_CLOUD_SECRET که پوستهٔ Rust
+      // پیش از بوت تزریق می‌کند) + مسیر dataDir برای پل فایل‌های ابری CloudFsIO
+      // (cloud-config.json / sync-state.json / پشتیبان‌های cloud-sync-*) — server.mjs همین‌ها
+      // را در bindingهای CLOUD_FS و ENGINE_CLOUD_SECRET اپ می‌بندد؛ حالت workerd غایب = خاموش.
+      bindings: {
+        authSecret,
+        publicBaseUrl: base,
+        gamesHealthUrl: `${gamesBase}/health`,
+        engineCloudSecret: process.env.ENGINE_CLOUD_SECRET ?? '',
+        dataDir: opts.dataDir,
+      },
       log: (m) => console.log(`[engine] ${m}`),
     });
   };

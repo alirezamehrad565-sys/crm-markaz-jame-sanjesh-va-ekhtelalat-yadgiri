@@ -666,6 +666,141 @@ fn open_data_dir(app: tauri::AppHandle) -> Result<(), String> {
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// فاز B — راز اتصال ابری (docs/rust/server-cloud-update-design.md §۲-۳/§۲-۴)
+// راز ENGINE_CLOUD_SECRET هرگز در فایل JSON ساده ذخیره نمی‌شود — فقط در
+// Credential Manager ویندوز / Secret Service از طریق crate keyring (همان الگوی
+// secure_store.rs) و تنها مسیر مصرفش تزریق به env پروسهٔ موتور پیش از بوت است.
+// هیچ secretی در لاگ/audit/پیام فرانت نمی‌آید — کلید نمایش فقط ۴ کاراکتر آخر.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// نام سرویس در مخزن امن سیستم‌عامل — ثابت تا مهاجرت‌ها را بشکند
+const CLOUD_SECRET_SERVICE: &str = "Markaz-Jame-Desktop";
+/// نام کاربر (کلید) راز اتصال ابری در همان سرویس
+const CLOUD_SECRET_USER: &str = "cloud-sync-secret";
+/// نام متغیر محیطی که راز از آن به پروسهٔ موتور می‌رسد (خواننده: engine.mjs)
+const ENGINE_CLOUD_SECRET_VAR: &str = "ENGINE_CLOUD_SECRET";
+/// حداقل طول راز قابل ذخیره — راز کوتاه‌تر با پیام فارسی رد می‌شود
+const CLOUD_SECRET_MIN_LEN: usize = 12;
+/// ماسک کلیدهای کوتاه‌تر از ۴ کاراکتر — هیچ نویسه‌ای لو نمی‌رود
+const CLOUD_SECRET_MASK_ONLY: &str = "●●●●";
+
+/// فاز B — ماسک خالص راز برای نمایش در UI (بدون I/O و بدون ساعت — آزمون‌پذیر):
+/// None/خالی → None؛ کوتاه‌تر از ۴ نویسه → فقط «●●●●»؛ ۴ نویسه و بیشتر →
+/// ۴ کاراکتر آخر با برش یونیکد-امن (روی مرز نویسه، نه بایت — حروف فارسی/ایموجی امن‌اند).
+fn mask_secret(value: Option<&str>) -> Option<String> {
+    let raw = value?;
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let chars: Vec<char> = trimmed.chars().collect();
+    if chars.len() < 4 {
+        return Some(CLOUD_SECRET_MASK_ONLY.to_string());
+    }
+    Some(chars[chars.len() - 4..].iter().collect())
+}
+
+/// فاز B — خواندن راز کامل برای تزریق به env موتور (فقط تزریق؛ هرگز در پاسخ فرمان/لاگ نمی‌آید).
+/// NoEntry (هرگز ست نشده) → None؛ هر خطای دیگر مخزن → None (نیامدن راز نباید بوت را بشکند —
+/// اپ آن‌گاه «secret_present=false» گزارش می‌کند و هم‌گامی ابری خاموش می‌ماند).
+fn read_cloud_secret_for_engine() -> Option<String> {
+    let entry = keyring::Entry::new(CLOUD_SECRET_SERVICE, CLOUD_SECRET_USER)
+        .map_err(|e| format!("دسترسی به مخزن امن ممکن نشد: {e}"))
+        .ok()?;
+    match entry.get_password() {
+        Ok(v) => {
+            let trimmed = v.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        }
+        Err(keyring::Error::NoEntry) => None,
+        Err(_) => None,
+    }
+}
+
+/// فاز B — ثبت بی‌راز کنش‌های راز در dataDir/desktop-audit.log (یک خط: مُهر|دامنه|کنش).
+/// فقط نام کنش ثبت می‌شود — مقدار راز هرگز به این فایل نمی‌رود. بهترین‌تلاش: شکست ثبت
+/// کنش را رد نمی‌کند (راز واقعاً ذخیره/حذف شده و پیام کاربر مستقل از این لاگ است).
+fn append_cloud_audit(data_dir: &Path, action: &str) {
+    use std::io::Write;
+    let line = format!("{}|cloud|{}\n", unix_now(), action);
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(data_dir.join("desktop-audit.log"))
+    {
+        let _ = f.write_all(line.as_bytes());
+    }
+}
+
+/// فاز B — ذخیرهٔ راز اتصال ابری در مخزن امن سیستم‌عامل. خالی/کوتاه‌تر از ۱۲ نویسه → Err فارسی.
+/// اگر موتور همین حالا اجراست (Ready/Degraded) راز ذخیره می‌شود اما تا بوت بعدی اعمال
+/// نمی‌شود — پیام صادقانهٔ «برای اعمال، برنامه را ببندید و باز کنید» برمی‌گردد.
+#[tauri::command]
+fn cloud_secret_set(app: tauri::AppHandle, value: String) -> Result<String, String> {
+    let trimmed = value.trim().to_string();
+    if trimmed.is_empty() {
+        return Err("راز اتصال ابری نمی‌تواند خالی باشد.".to_string());
+    }
+    if trimmed.chars().count() < CLOUD_SECRET_MIN_LEN {
+        return Err(format!(
+            "راز اتصال ابری باید دست‌کم {CLOUD_SECRET_MIN_LEN} کاراکتر باشد."
+        ));
+    }
+    let entry = keyring::Entry::new(CLOUD_SECRET_SERVICE, CLOUD_SECRET_USER)
+        .map_err(|e| format!("دسترسی به مخزن امن ممکن نشد: {e}"))?;
+    entry
+        .set_password(&trimmed)
+        .map_err(|e| format!("ذخیرهٔ راز ممکن نشد: {e}"))?;
+    if let Ok(dir) = app.path().app_data_dir() {
+        append_cloud_audit(&dir, "cloud_secret_set");
+    }
+    let phase = app
+        .state::<AppState>()
+        .phase
+        .lock()
+        .map(|g| g.clone())
+        .unwrap_or(EnginePhase::Booting);
+    if matches!(phase, EnginePhase::Ready { .. } | EnginePhase::Degraded { .. }) {
+        Ok("راز ذخیره شد — برای اعمال، برنامه را ببندید و باز کنید".to_string())
+    } else {
+        Ok("راز ذخیره شد".to_string())
+    }
+}
+
+/// فاز B — خواندن راز برای نمایش در UI: فقط ماسک (۴ کاراکتر آخر یا ●●●●).
+/// راز هرگز کامل از این فرمان بیرون نمی‌رود؛ غایب → null.
+#[tauri::command]
+fn cloud_secret_get() -> Result<Option<String>, String> {
+    let entry = keyring::Entry::new(CLOUD_SECRET_SERVICE, CLOUD_SECRET_USER)
+        .map_err(|e| format!("دسترسی به مخزن امن ممکن نشد: {e}"))?;
+    match entry.get_password() {
+        Ok(v) => Ok(mask_secret(Some(&v))),
+        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(e) => Err(format!("خواندن راز ممکن نشد: {e}")),
+    }
+}
+
+/// فاز B — حذف راز از مخزن امن؛ غایب بودن (NoEntry) هم موفق شمرده می‌شود (حذف دوباره بی‌ضرر).
+#[tauri::command]
+fn cloud_secret_delete(app: tauri::AppHandle) -> Result<(), String> {
+    let entry = keyring::Entry::new(CLOUD_SECRET_SERVICE, CLOUD_SECRET_USER)
+        .map_err(|e| format!("دسترسی به مخزن امن ممکن نشد: {e}"))?;
+    match entry.delete_credential() {
+        Ok(()) => {}
+        Err(keyring::Error::NoEntry) => {}
+        Err(e) => return Err(format!("حذف راز ممکن نشد: {e}")),
+    }
+    if let Ok(dir) = app.path().app_data_dir() {
+        append_cloud_audit(&dir, "cloud_secret_delete");
+    }
+    Ok(())
+}
+
 /// فرمان سلامت پوسته — وضعیت موتور محلی را هم گزارش می‌کند (سازگار با فاز ۲)
 #[tauri::command]
 fn desktop_health(app: tauri::AppHandle) -> serde_json::Value {
@@ -691,6 +826,14 @@ fn spawn_engine_boot(app: tauri::AppHandle) {
     });
     let gen = app.state::<AppState>().generation.load(Ordering::SeqCst);
     std::thread::spawn(move || {
+        // فاز B — تزریق راز ابری به env پروسهٔ موتور، پیش از هر بوت: مخزن امن موجود →
+        // set_var؛ غایب → remove_var (راز کهنهٔ اجرای قبلی/توسعه نباید بی‌حذف بماند).
+        // تنها مصرف read_cloud_secret_for_engine همین‌جاست — راز هرگز در لاگ/audit/پیام
+        // نمی‌آید و موتور آن را فقط به‌عنوان env (ENGINE_CLOUD_SECRET) به اپ می‌رساند.
+        match read_cloud_secret_for_engine() {
+            Some(secret) => std::env::set_var(ENGINE_CLOUD_SECRET_VAR, secret),
+            None => std::env::remove_var(ENGINE_CLOUD_SECRET_VAR),
+        }
         let state = app.state::<AppState>();
         let finish_stale = |state: &AppState| {
             state.generation.load(Ordering::SeqCst) != gen
@@ -794,7 +937,11 @@ pub fn run() {
             engine_restart,
             open_data_dir,
             cf_deploy::cloudflare_deploy,
-            secure_store::desktop_secure_store
+            secure_store::desktop_secure_store,
+            // فاز B — راز اتصال ابری (keyring؛ فقط ماسک به فرانت می‌آید)
+            cloud_secret_set,
+            cloud_secret_get,
+            cloud_secret_delete
         ])
         .run(tauri::generate_context!())
         .expect("خطای راه‌اندازی پوستهٔ دسکتاپ");
@@ -1010,5 +1157,90 @@ mod tests {
         assert_eq!(v["port"].as_u64(), Some(8787));
         assert_eq!(v["gamesPort"].as_u64(), Some(8788));
         assert_eq!(v["degradedReason"].as_str(), Some("games_unhealthy"));
+    }
+
+    // ---------- فاز B — راز اتصال ابری (فقط توابع خالص؛ عملیات واقعی keyring در تست ممنوع) ----------
+
+    use super::{
+        mask_secret, CLOUD_SECRET_MASK_ONLY, CLOUD_SECRET_MIN_LEN, CLOUD_SECRET_SERVICE,
+        CLOUD_SECRET_USER, ENGINE_CLOUD_SECRET_VAR,
+    };
+
+    /// فاز B — ثابت‌های قرارداد راز ابری: نام سرویس/کلید مخزن امن و نام env نباید تغییر کند
+    /// (تغییرشان یعنی رازهای ذخیره‌شدهٔ کاربران بی‌نشانی می‌شوند)
+    #[test]
+    fn cloud_secret_constants_are_stable() {
+        assert_eq!(CLOUD_SECRET_SERVICE, "Markaz-Jame-Desktop");
+        assert_eq!(CLOUD_SECRET_USER, "cloud-sync-secret");
+        assert_eq!(ENGINE_CLOUD_SECRET_VAR, "ENGINE_CLOUD_SECRET");
+        assert_eq!(CLOUD_SECRET_MIN_LEN, 12);
+        assert_eq!(CLOUD_SECRET_MASK_ONLY, "●●●●");
+    }
+
+    /// فاز B — ماسک: None و رشتهٔ خالی/فاصله‌دار → None (UI «تنظیم‌نشده» می‌سازد)
+    #[test]
+    fn mask_secret_none_and_blank_are_none() {
+        assert!(mask_secret(None).is_none());
+        assert!(mask_secret(Some("")).is_none());
+        assert!(mask_secret(Some("    ")).is_none());
+    }
+
+    /// فاز B — ماسک: کوتاه‌تر از ۴ نویسه (۱..۳) → فقط ●●●●؛ هیچ نویسه‌ای لو نمی‌رود
+    #[test]
+    fn mask_secret_short_value_is_fully_hidden() {
+        for short in ["a", "ab", "abc"] {
+            assert_eq!(
+                mask_secret(Some(short)),
+                Some("●●●●".to_string()),
+                "راز «{short}» باید کاملاً پنهان بماند"
+            );
+        }
+    }
+
+    /// فاز B — ماسک: مرز ۴ و ۱۲ — از ۴ نویسه به بالا دقیقاً ۴ کاراکتر آخر می‌آید
+    #[test]
+    fn mask_secret_boundary_at_four_and_twelve() {
+        assert_eq!(mask_secret(Some("abcd")), Some("abcd".to_string()));
+        assert_eq!(mask_secret(Some("abcdefghij12")), Some("ij12".to_string()));
+        assert_eq!(mask_secret(Some("abcdefgh123456")), Some("3456".to_string()));
+    }
+
+    /// فاز B — ماسک یونیکد-امن: حروف فارسی و ایموجی هرگز وسط نویسه بریده نمی‌شوند
+    /// (برش بایتی در این رشته‌ها نویسهٔ شکسته/زبالهٔ UTF-8 می‌سازد)
+    #[test]
+    fn mask_secret_is_unicode_safe() {
+        // ۱۱ نویسهٔ فارسی/ارقام → ۴ کاراکتر آخر: «۲۳۴۵»
+        assert_eq!(mask_secret(Some("رمزقوی۱۲۳۴۵")), Some("۲۳۴۵".to_string()));
+        // ۶ ایموجی (هر کدام ۴ بایت) → ۴ کاراکتر آخر، نه بایت‌های آخر
+        assert_eq!(
+            mask_secret(Some("🔑🔑🔑🔑🔑🔑")),
+            Some("🔑🔑🔑🔑".to_string())
+        );
+        // کوتاه یونیکد: دو نویسهٔ فارسی → ●●●●
+        assert_eq!(mask_secret(Some("رم")), Some("●●●●".to_string()));
+    }
+
+    /// فاز B — خاصیت: ماسک برای هر طولی «هرگز بیش از ۴ کاراکتر لو نمی‌دهد» — خروجی یا
+    /// None است یا ●●●● یا دقیقاً پسوند ۴ کاراکتری ورودی
+    #[test]
+    fn mask_secret_never_leaks_more_than_four_chars() {
+        let alphabet = "الفب0123456789XYZ🔑";
+        for len in 0..=24usize {
+            let input: String = alphabet.chars().take(len).collect();
+            let out = mask_secret(Some(&input));
+            match out {
+                None => assert_eq!(len, 0, "فقط ورودی خالی باید None بدهد"),
+                Some(masked) => {
+                    let count = masked.chars().count();
+                    assert!(count <= 4, "ماسک «{masked}» بیش از ۴ کاراکتر لو می‌دهد");
+                    let tail: String = input.chars().rev().take(4).collect::<Vec<_>>()
+                        .into_iter().rev().collect();
+                    assert!(
+                        masked == "●●●●" || masked == tail,
+                        "ماسک «{masked}» نه ●●●● است نه ۴ کاراکتر آخر «{tail}»"
+                    );
+                }
+            }
+        }
     }
 }
