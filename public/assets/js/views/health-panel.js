@@ -27,6 +27,14 @@
 //       فقط در لایهٔ پیشرفته است. واژگان رسمی UI: Worker→«مرکز ابری»، secret→«کلید اتصال»،
 //       pull→«دریافت اطلاعات»، push→«ارسال اطلاعات»، schema→«نسخهٔ ساختار اطلاعات».
 //       هیچ تغییر قرارداد API و هیچ تغییر نام تابع — فقط متن‌ها، ترتیب نمایش و بازو/بستن.
+// فاز D2 — دو خواست کارفرما پس از v1.27.10: (۱) «کل جریان پیکربندی ابری داخل کارت ابری» — کارت
+//       بی‌اتصال دیگر به #/cloud-setup ناوبری نمی‌کند؛ دکمهٔ «شروع پیکربندی ابری» ناحیهٔ داخلی را
+//       بازو/بسته می‌کند و ویزارد کامل (mountCloudSetup — views/cloud-setup.js) با import پویا
+//       فقط هنگام باز شدن lazy سوار می‌شود؛ پس از «ذخیره و اتصال» ناحیه بسته و کارت با poll فوری
+//       feed به حالت «متصل» می‌رود (مسیر #/cloud-setup فقط دیپ‌لینک می‌ماند). (۲) «منوی کارت سلامت
+//       خیلی طولانیه — ساده شود»: بالای صفحه فقط سه چیز (سلامت یک‌نگاهی + سرور محلی + اتصال ابری)؛
+//       بقیهٔ بخش‌ها زیر آکاردئون واحد «جزئیات پیشرفته» با پیش‌فرض بسته — باز/بسته سشن‌محلی با کلید
+//       hp.advancedOpen (الگوی cs.cloudSetupSkipped ویزارد)؛ عنوان‌های h3 و محتوای بخش‌ها عین قبل.
 import { api } from '../api.js';
 import { el, icon, emptyState, skeletonState, confirmModal, formModal, toast, toastError, lockBtn } from '../ui.js';
 import { fa, formatJalaliDateTime } from '../format.js';
@@ -1270,6 +1278,56 @@ export function cloudAdvancedToggleView(open) {
   return { label: 'جزئیات پیشرفته', hidden: true, expanded: false };
 }
 
+/* ── فاز D2 — دو خواست کارفرما پس از v1.27.10 (همه تابع خالص بی‌DOM — الگوی cloudAdvancedToggleView) ──
+   ۱) «کل جریان پیکربندی ابری داخل کارت ابری»: کارت بی‌اتصال دیگر به صفحهٔ جدا #/cloud-setup نمی‌رود؛
+      دکمهٔ «شروع پیکربندی ابری» ناحیهٔ داخلی را بازو/بسته می‌کند و ویزارد کامل (mountCloudSetup —
+      views/cloud-setup.js) با import پویا فقط هنگام باز شدن lazy سوار می‌شود. مدل دکمه خالص است
+      تا بی‌DOM آزمون شود؛ مسیر #/cloud-setup فقط دیپ‌لینک (لینک پانویس boot/بنر) می‌ماند.
+   ۲) «منوی کارت سلامت خیلی طولانیه — ساده شود»: بالای صفحه فقط سه چیز (سلامت یک‌نگاهی + سرور محلی +
+      اتصال ابری)؛ بقیهٔ بخش‌ها زیر آکاردئون واحد «جزئیات پیشرفته» با پیش‌فرض بسته — باز/بسته
+      سشن‌محلی با کلید hp.advancedOpen (الگوی cs.cloudSetupSkipped ویزارد: sessionStorage، بی‌قفل). */
+
+/** فاز D2 — مدل خالص دکمهٔ ورودی ویزارد در کارت بی‌اتصال: بازو/بستهٔ ناحیهٔ داخلی؛ هیچ ناوبری به
+ *  صفحهٔ جدا برای شروع پیکربندی نوشته نمی‌شود — جریان کامل داخل کارت است (خواست کارفرما). */
+export function cloudSetupEntryToggleView(open) {
+  if (open === true) return { label: 'بستن پیکربندی ابری', hidden: false, expanded: true };
+  return { label: 'شروع پیکربندی ابری', hidden: true, expanded: false };
+}
+
+/** فاز D2 — کلید سشن‌محلی آکاردئون «جزئیات پیشرفته» پنل سلامت (الگوی CLOUD_SETUP_SKIP_KEY ویزارد) */
+export const HEALTH_PANEL_ADVANCED_KEY = 'hp.advancedOpen';
+
+/** نوشتن وضعیت باز آکاردئون در سشن — بی‌storage (حالت خصوصی/node) نرم بی‌قفل می‌ماند */
+export function markAdvancedSectionsOpen(open) {
+  try {
+    if (open === true) globalThis.sessionStorage?.setItem?.(HEALTH_PANEL_ADVANCED_KEY, '1');
+    else globalThis.sessionStorage?.removeItem?.(HEALTH_PANEL_ADVANCED_KEY);
+  } catch { /* سشن‌محلی — بی‌storage هم بی‌کرش */ }
+}
+
+/** خواندن وضعیت باز آکاردئون از سشن — پیش‌فرض بسته (خواست کارفرما: پنل کوتاه) */
+export function advancedSectionsOpenInSession() {
+  try { return globalThis.sessionStorage?.getItem?.(HEALTH_PANEL_ADVANCED_KEY) === '1'; } catch { return false; }
+}
+
+/**
+ * فاز D2 — مدل خالص چیدمان کوتاه‌شدهٔ پنل: سه بخش بالای صفحه همیشه رندر می‌شوند؛ بخش‌های ثانویه
+ * (به همان ترتیب و محتوای قبل + نوار نجات) فقط وقتی آکاردئون باز است در خروجی می‌آیند.
+ * نام‌ها عین عنوان‌های h3/برچسب موجودند — تست‌ها و پین‌ها به بعضی گره خورده‌اند.
+ */
+export function healthPanelLayoutView(advancedOpen) {
+  const open = advancedOpen === true;
+  return {
+    open,
+    toggleLabel: open ? 'بستن جزئیات پیشرفته' : 'جزئیات پیشرفته',
+    advancedHidden: !open,
+    topSections: ['سلامت یک‌نگاهی — پنج سیگنال', 'سرور محلی', 'اتصال ابری'],
+    advancedSections: open
+      ? ['نوار نجات', 'سامانه', 'وضعیت هم‌گامی', 'مصرف مرکز (برآوردی)', 'لینک کنترل‌پلین — شش درگاه', 'هشدارهای فعال', 'گزارش رشد جدول‌ها', 'آخرین drill ثبت‌شده', 'راهنما — چکیدهٔ راهنمای ادمین']
+      : []
+  };
+}
+
 /** پوشش پاسخ درگاه وضعیت اتصال ابری: پاکت {data:…} باز می‌شود؛ بی‌هیچ فیلد شناخته → null (الگوی unwrapQuota) */
 export function unwrapInstanceSyncStatus(payload) {
   const raw = payload && typeof payload === 'object' && payload.data && typeof payload.data === 'object'
@@ -1940,6 +1998,9 @@ export async function renderHealthPanel(outlet) {
     const desktopSecret = cloudSecretChannelAvailable();
     const resultLine = el('div', { class: 'hint-text', style: { marginTop: 'var(--sp-2)', whiteSpace: 'normal' } });
     const body = el('div', { class: 'card__body--flush' });
+    // فاز D2 — ناحیهٔ سوارشدن ویزارد داخل کارت: عمداً بیرون از body تا بازخوانی‌های ۳۰ثانیه‌ای feed
+    // (paint فقط body را عوض می‌کند) ویزاردِ بازِ نیمه‌کاره را نشویند؛ بسته/خالی → گره تهی بی‌اثر
+    const setupHost = el('div', {});
     const card = el('div', { class: 'card card__body--flush', style: { marginBottom: 'var(--sp-4)' } },
       el('div', { class: 'ob-section__head' },
         el('div', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', flexWrap: 'wrap' } },
@@ -1948,7 +2009,8 @@ export async function renderHealthPanel(outlet) {
             'همین دستگاه با مرکز ابری اطلاعات رد و بدل می‌کند — «دریافت اطلاعات» تازه‌ها را از ابر می‌گیرد و «ارسال اطلاعات» کارهای این دستگاه را می‌فرستد؛ وضعیت هر ۳۰ ثانیه و پس از هر کنش تازه می‌شود.')
         )
       ),
-      body
+      body,
+      setupHost
     );
 
     // «دریافت اطلاعات»/«ارسال اطلاعات» — POST run-now + poll فوری؛ در جریان بودن → دکمه غیرفعال (گارد paint)
@@ -2096,6 +2158,62 @@ export async function renderHealthPanel(outlet) {
     };
     paintAdvanced();
 
+    /* فاز D2 — جریان کامل پیکربندی ابری داخل کارت (خواست کارفرما: «کل جریان پیکربندی ابری باید
+       داخل کارت ابریِ پنل سلامت بیاید»): دکمهٔ «شروع پیکربندی ابری» ناحیهٔ داخلی (setupHost) را
+       بازو/بسته می‌کند؛ ویزارد کامل (سه گزینه، فرم‌ها، پیش‌نمایش markaz-، گام رمز یک‌بارمصرف،
+       «ذخیره و اتصال» و پیوند «وب مرکز ابری») با import پویا فقط هنگام باز شدن lazy سوار می‌شود
+       (mountCloudSetup — views/cloud-setup.js — حالت compact). هیچ ناوبری به #/cloud-setup برای
+       شروع نیست — آن مسیر فقط دیپ‌لینک می‌ماند. پس از «ذخیره و اتصال» موفق (done)، ناحیه بسته و
+       کارت با poll فوری feed مشترک به حالت «متصل» می‌رود — توست موفقیت خودِ ویزارد است. */
+    let setupOpen = false;
+    let setupUnmount = null;
+    const setupToggleBtn = el('button', {
+      class: 'btn btn--primary',
+      type: 'button',
+      onclick: () => void toggleSetupArea()
+    });
+    const paintSetupToggle = () => {
+      const t = cloudSetupEntryToggleView(setupOpen);
+      setupToggleBtn.textContent = t.label;
+      setupToggleBtn.setAttribute('aria-expanded', String(t.expanded));
+    };
+    paintSetupToggle();
+
+    async function toggleSetupArea() {
+      if (setupOpen) {
+        setupOpen = false;
+        if (setupUnmount) { setupUnmount(); setupUnmount = null; } // تخریب ویزارد — الگوی unmount
+        paintSetupToggle();
+        return;
+      }
+      setupOpen = true;
+      paintSetupToggle();
+      try {
+        const mod = await import('./cloud-setup.js');
+        if (!setupOpen || !body.isConnected) return; // در فاصلهٔ import بسته/تخریب شده — سوار نشود
+        // تطبیق‌دهندهٔ کوچک deps — همان قرارداد ویزارد: fetch/api یکسان + کانال راز پوستهٔ میز + مودال‌ها
+        setupUnmount = mod.mountCloudSetup(setupHost, {
+          api,
+          invoke: cloudSecretInvoke,
+          toast,
+          confirmModal,
+          formModal
+        }, {
+          compact: true,
+          onDone: () => {
+            setupOpen = false;
+            if (setupUnmount) { const unmount = setupUnmount; setupUnmount = null; unmount(); } // ناحیه بسته شود
+            paintSetupToggle();
+            void pollCloudSyncNow(); // کارت با feed موجود به حالت «متصل» می‌رود
+          }
+        });
+      } catch {
+        setupOpen = false;
+        paintSetupToggle();
+        toast('بارگذاری ویزارد پیکربندی ابری ناموفق بود — دوباره تلاش کنید', 'error');
+      }
+    }
+
     const paint = (status) => {
       // نما رندر دوباره شده (بازخوانی ۶۰ثانیه‌ای کل پنل) — اشتراک کهنه بسته شود
       if (!body.isConnected) {
@@ -2142,13 +2260,14 @@ export async function renderHealthPanel(outlet) {
         )
       ];
       if (!vm.configured) {
-        // بی‌اتصال — مسیر ساخت اتصال در لایهٔ عادی می‌ماند (مدیر تازه‌کار نباید دنبالش بگردد)
+        // بی‌اتصال — مسیر ساخت اتصال در لایهٔ عادی می‌ماند (مدیر تازه‌کار نباید دنبالش بگردد)؛
+        // فاز D2 — دکمه ناوبری نمی‌کند: ناحیهٔ داخلی ویزارد را بازو/بسته می‌کند (جریان کامل داخل کارت)
         rows.push(el('div', { class: 'ob-row' },
           el('div', { class: 'ob-row__main' },
             el('div', { class: 'cell-sub' }, 'با «پیکربندی اولیه» این دستگاه به مرکز ابری وصل می‌شود — چند دقیقه بیشتر طول نمی‌کشد.')),
           // فاز C — ورودی ویزارد «پیکربندی اولیه اتصال ابری» (سه‌گامی: existing/create/فقط محلی)
           el('div', { class: 'ob-row__side' },
-            el('button', { class: 'btn btn--primary', type: 'button', onclick: () => { location.hash = '#/cloud-setup'; } }, 'پیکربندی اولیه…'))
+            setupToggleBtn)
         ));
       }
       /* لایهٔ پیشرفته — جزئیات نشست‌محلی؛ فقط با اتصال رندر می‌شود (الگوی guideSection) */
@@ -2258,20 +2377,16 @@ export async function renderHealthPanel(outlet) {
       );
     }
 
-    root.replaceChildren(
-      el('div', { class: 'page-head' },
-        el('h2', {}, 'پنل سلامت'),
-        el('p', { class: 'hint-text' }, 'وضعیت زندهٔ سامانه و لینک کنترل‌پلین — از زمانِ واقعی آخرین همگام‌سازی و شمارنده‌های جدول‌ها؛ هر ۶۰ ثانیه خودکار بازخوانی می‌شود.')
-      ),
-
+    /* فاز D2 — کوتاه‌سازی پنل (خواست کارفرما: «منوی کارت سلامت خیلی طولانیه — ساده شود»)؛
+       بالای صفحه فقط سه چیز: «سلامت یک‌نگاهی» + کارت «سرور محلی» + کارت «اتصال ابری»؛ بقیهٔ بخش‌ها
+       (به همان ترتیب و محتوای قبل) زیر آکاردئون واحد «جزئیات پیشرفته» با پیش‌فرض بسته جمع می‌شوند —
+       باز/بسته سشن‌محلی (کلید hp.advancedOpen — الگوی cs.cloudSetupSkipped)؛ عنوان‌های h3 عین قبل.
+       نوار نجات هم داخل همین آکاردئون می‌آید تا «فقط سه چیز» در بالای صفحه برقرار بماند (کنش‌هایش
+       با یک باز کردن در دسترس‌اند). هر دو مسیر رندر پوشش داده شد: کارت‌های عادی و کارت‌های
+       fallback (syncCard/quotaCard ناشی از خطای درگاه) همه داخل همین آکاردئون می‌نشینند. */
+    let advancedOpenNow = advancedSectionsOpenInSession();
+    const advancedBody = el('div', { style: { display: 'none' } },
       rescueBarSection(), // ۴-۲ — نوار نجات سه‌دکمه‌ای (راه‌اندازی دوباره / پشتیبان فوری / zip)
-
-      oneGlanceSection(data, sync, quota, lastBackupAt), // ۴-۱ — پنج سیگنال §۴ نقد با اقدام
-
-      // فاز B — دو کارت جدا کنار هم (دو قرارداد جدا — سند §۲-۵): «سرور محلی» (فاز A) + «اتصال ابری» (فاز B)؛
-      // روی نمایشگر باریک خودش می‌شکند (auto-fit) — هیچ تغییری در ساخت کارت سرور فاز A ندادیم
-      el('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 'var(--sp-3)', alignItems: 'start' } },
-        serverSection(), cloudSyncSection()),
 
       el('div', { class: 'card', style: { marginBottom: 'var(--sp-4)' } },
         el('div', { class: 'card__head' },
@@ -2310,7 +2425,49 @@ export async function renderHealthPanel(outlet) {
 
       drillSection(), // EXP-6 — ثبت drill عملیاتی ماهانه (پیوند ۳-۲ و چک‌لیست چاپی ADMIN-GUIDE)
 
-      guideSection(), // ۴-۵ — راهنمای درون‌برنامه‌ای (چکیدهٔ ADMIN-GUIDE — بدون خواندن فایل)
+      guideSection() // ۴-۵ — راهنمای درون‌برنامه‌ای (چکیدهٔ ADMIN-GUIDE — بدون خواندن فایل)
+    );
+    const advancedToggleBtn = el('button', {
+      class: 'btn btn--ghost',
+      type: 'button',
+      onclick: () => {
+        advancedOpenNow = !advancedOpenNow;
+        markAdvancedSectionsOpen(advancedOpenNow); // سشن‌محلی — الگوی skip ویزارد ابری
+        paintAdvancedSections();
+      }
+    });
+    const paintAdvancedSections = () => {
+      const layout = healthPanelLayoutView(advancedOpenNow);
+      advancedToggleBtn.textContent = layout.toggleLabel;
+      advancedToggleBtn.setAttribute('aria-expanded', String(layout.open));
+      advancedBody.style.display = layout.advancedHidden ? 'none' : 'block';
+    };
+    paintAdvancedSections();
+
+    root.replaceChildren(
+      el('div', { class: 'page-head' },
+        el('h2', {}, 'پنل سلامت'),
+        el('p', { class: 'hint-text' }, 'وضعیت زندهٔ سامانه و لینک کنترل‌پلین — از زمانِ واقعی آخرین همگام‌سازی و شمارنده‌های جدول‌ها؛ هر ۶۰ ثانیه خودکار بازخوانی می‌شود.')
+      ),
+
+      oneGlanceSection(data, sync, quota, lastBackupAt), // ۴-۱ — پنج سیگنال §۴ نقد با اقدام
+
+      // فاز B — دو کارت جدا کنار هم (دو قرارداد جدا — سند §۲-۵): «سرور محلی» (فاز A) + «اتصال ابری» (فاز B)؛
+      // روی نمایشگر باریک خودش می‌شکند (auto-fit) — هیچ تغییری در ساخت کارت سرور فاز A ندادیم
+      el('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 'var(--sp-3)', alignItems: 'start' } },
+        serverSection(), cloudSyncSection()),
+
+      // فاز D2 — آکاردئون واحد «جزئیات پیشرفته»: بقیهٔ بخش‌ها با همان ترتیب/محتوای قبل، پیش‌فرض بسته
+      el('div', { class: 'card card__body--flush', style: { marginBottom: 'var(--sp-4)' } },
+        el('div', { class: 'ob-row' },
+          el('div', { class: 'ob-row__main' },
+            el('div', { class: 'cell-main' }, 'بقیهٔ بخش‌های پنل'),
+            el('div', { class: 'cell-sub' }, 'سامانه، وضعیت هم‌گامی، مصرف مرکز، کنترل‌پلین، هشدارها، گزارش رشد جدول‌ها، بازیابی و راهنما — همه سرِ جایشان هستند؛ با «جزئیات پیشرفته» باز می‌شوند.')
+          ),
+          el('div', { class: 'ob-row__side' }, advancedToggleBtn)
+        ),
+        advancedBody
+      ),
 
       el('p', { class: 'hint-text' },
         `آخرین بازخوانی: ${formatJalaliDateTime(data?.now)} — مرجع طراحی: طرح ارتقای بک‌اند §۳-۹ (CP-2/CP-3) و §۵-۳ (ف۴ بهداشت داده).`)

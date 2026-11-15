@@ -427,7 +427,9 @@ function withCloudSetupBanner(dashboardRender) {
         el('div', { class: 'alert__body' },
           el('span', {}, 'این نصب هنوز به ابر وصل نیست — هم‌گامی دوسویه و پشتیبان ابری فعال نیست. پیکربندی یک‌بار با ویزارد انجام می‌شود.'),
           el('div', { class: 'alert__actions' },
-            el('button', { class: 'btn btn--soft btn--sm', onclick: () => { location.hash = '#/cloud-setup'; } }, icon('settings', 14), 'شروع پیکربندی ابری'),
+            // فاز D2 — خواست کارفرما: جریان پیکربندی ابری حالا داخل کارت «اتصال ابری» پنل سلامت است —
+            // دکمه به همان کارت می‌رود (#/health-panel؛ مسیر #/cloud-setup فقط دیپ‌لینک می‌ماند)
+            el('button', { class: 'btn btn--soft btn--sm', onclick: () => { location.hash = '#/health-panel'; } }, icon('settings', 14), 'شروع پیکربندی ابری'),
             el('button', {
               class: 'btn btn--ghost btn--sm',
               onclick: (e) => {

@@ -8,7 +8,11 @@
  * feed وضعیت HTTP است: poll ۳۰ثانیه‌ای + poll فوری پس از هر کنش؛ پاکت ناآشنا نادیده می‌ماند.
  */
 // @ts-ignore — فایل .js فرانت، خارج از include تایپ‌اسکریپت است (import تک‌خطی تا @ts-ignore نشتی را بپوشاند)
-import { cloudSyncStateView, cloudCountsView, cloudSecretMaskView, cloudCardView, cloudSyncErrorKindOf, cloudSyncErrorKindView, cloudSyncStatusMessageView, cloudHumanStatusView, cloudAdvancedView, cloudAdvancedToggleView, unwrapInstanceSyncStatus, cloudSecretInvoke, startCloudSyncFeed, pollCloudSyncNow, subscribeCloudSyncStatus, lastCloudSyncStatus, resetCloudSyncFeedForTests } from '../../public/assets/js/views/health-panel.js';
+import { cloudSyncStateView, cloudCountsView, cloudSecretMaskView, cloudCardView, cloudSyncErrorKindOf, cloudSyncErrorKindView, cloudSyncStatusMessageView, cloudHumanStatusView, cloudAdvancedView, cloudAdvancedToggleView, unwrapInstanceSyncStatus, cloudSecretInvoke, startCloudSyncFeed, pollCloudSyncNow, subscribeCloudSyncStatus, lastCloudSyncStatus, resetCloudSyncFeedForTests, cloudSetupEntryToggleView, healthPanelLayoutView, markAdvancedSectionsOpen, advancedSectionsOpenInSession, HEALTH_PANEL_ADVANCED_KEY } from '../../public/assets/js/views/health-panel.js';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const FRONT = join(__dirname, '../../public/assets/js');
 
 /** پاکت کامل سبز — مرجع مشترک آزمون‌های حالت */
 const FULL_SYNCED = {
@@ -405,5 +409,93 @@ describe('startCloudSyncFeed — feed مشترک وضعیت اتصال ابری 
     } finally {
       resetCloudSyncFeedForTests();
     }
+  });
+});
+
+/* ── فاز D2 — دو خواست کارفرما پس از v1.27.10 (همه مدل خالص بی‌DOM — الگوی cloudAdvancedToggleView):
+   ۱) جریان کامل پیکربندی ابری داخل کارت بی‌اتصال (بدون ناوبری به صفحهٔ جدا)؛
+   ۲) کوتاه‌سازی پنل سلامت: بالای صفحه سه چیز؛ بقیه زیر آکاردئون واحد «جزئیات پیشرفته». ── */
+
+describe('cloudSetupEntryToggleView — دکمهٔ «شروع پیکربندی ابری» کارت بی‌اتصال (بازو/بستهٔ ناحیهٔ داخلی)', () => {
+  it('بسته (پیش‌فرض) → «شروع پیکربندی ابری» با hidden/expanded بسته؛ باز → برچسب «بستن پیکربندی ابری»', () => {
+    expect(cloudSetupEntryToggleView()).toMatchObject({ label: 'شروع پیکربندی ابری', hidden: true, expanded: false });
+    expect(cloudSetupEntryToggleView(false)).toMatchObject({ label: 'شروع پیکربندی ابری', hidden: true, expanded: false });
+    expect(cloudSetupEntryToggleView(true)).toMatchObject({ label: 'بستن پیکربندی ابری', hidden: false, expanded: true });
+  });
+
+  it('سوپ منفی — مدل ورودی ویزارد هیچ ناوبری به صفحهٔ جدا ندارد؛ شاخهٔ بی‌اتصال سورس هم به دکمهٔ داخلی وصل است', () => {
+    for (const open of [false, true]) {
+      const json = JSON.stringify(cloudSetupEntryToggleView(open));
+      expect(json).not.toContain('#/cloud-setup'); // شروع پیکربندی ناوبری ندارد — جریان داخل کارت است
+      expect(json).not.toContain('location.hash');
+    }
+    const src = readFileSync(join(FRONT, 'views/health-panel.js'), 'utf8');
+    // ردیف بی‌اتصال کارت به دکمهٔ سوارکنندهٔ داخلی وصل است (نه به ناوبری)
+    expect(src).toMatch(/'با «پیکربندی اولیه» این دستگاه به مرکز ابری وصل می‌شود[\s\S]{0,400}setupToggleBtn\)/);
+    // ویزارد با import پویا lazy سوار می‌شود (فقط هنگام باز شدن) و compact می‌گیرد
+    expect(src).toMatch(/import\('\.\/cloud-setup\.js'\)/);
+    expect(src).toMatch(/mountCloudSetup\(setupHost/);
+    // مسیر دیپ‌لینک #/cloud-setup فقط در لایهٔ پیشرفتهٔ کارت متصل می‌ماند (deep-link دست‌نخورده)
+    expect(src).toContain("vm.configured ? el('button'");
+  });
+});
+
+describe('healthPanelLayoutView — کوتاه‌سازی پنل: بالای صفحه سه چیز؛ بقیه زیر آکاردئون واحد', () => {
+  it('پیش‌فرض بسته: advancedHidden=true و هیچ بخش ثانویه‌ای در خروجی مدل نمی‌آید؛ سه بخش بالا ثابت‌اند', () => {
+    const closed = healthPanelLayoutView(undefined);
+    expect(closed.open).toBe(false);
+    expect(closed.advancedHidden).toBe(true);
+    expect(closed.toggleLabel).toBe('جزئیات پیشرفته');
+    expect(closed.advancedSections).toEqual([]); // بخش‌های ثانویه فقط وقتی بازند رندر می‌شوند
+    expect(closed.topSections).toEqual(['سلامت یک‌نگاهی — پنج سیگنال', 'سرور محلی', 'اتصال ابری']);
+    expect(healthPanelLayoutView(false).advancedSections).toEqual([]);
+    expect(healthPanelLayoutView('junk' as unknown as boolean).advancedSections).toEqual([]); // ورودی خراب → بسته
+  });
+
+  it('باز: همهٔ بخش‌های ثانویه به همان ترتیب قبل می‌آیند — عنوان‌ها عین h3/برچسب موجود (پین متن)', () => {
+    const open = healthPanelLayoutView(true);
+    expect(open.open).toBe(true);
+    expect(open.advancedHidden).toBe(false);
+    expect(open.toggleLabel).toBe('بستن جزئیات پیشرفته');
+    expect(open.advancedSections).toEqual([
+      'نوار نجات',
+      'سامانه',
+      'وضعیت هم‌گامی',
+      'مصرف مرکز (برآوردی)',
+      'لینک کنترل‌پلین — شش درگاه',
+      'هشدارهای فعال',
+      'گزارش رشد جدول‌ها',
+      'آخرین drill ثبت‌شده',
+      'راهنما — چکیدهٔ راهنمای ادمین'
+    ]);
+  });
+
+  it('فلگ سشن‌محلی hp.advancedOpen — الگوی cs.cloudSetupSkipped: نوشتن/خواندن/پاک‌کردن + بی‌storage بی‌کرش', () => {
+    const g = globalThis as unknown as Record<string, unknown>;
+    const makeStorage = () => {
+      const m = new Map<string, string>();
+      return {
+        getItem: (k: string) => (m.has(k) ? (m.get(k) as string) : null),
+        setItem: (k: string, v: string) => { m.set(k, v); },
+        removeItem: (k: string) => { m.delete(k); }
+      };
+    };
+    const sessionStore = makeStorage();
+    g['sessionStorage'] = sessionStore;
+    try {
+      expect(HEALTH_PANEL_ADVANCED_KEY).toBe('hp.advancedOpen');
+      expect(advancedSectionsOpenInSession()).toBe(false); // پیش‌فرض بسته
+      markAdvancedSectionsOpen(true);
+      expect(advancedSectionsOpenInSession()).toBe(true);
+      expect(sessionStore.getItem('hp.advancedOpen')).toBe('1');
+      markAdvancedSectionsOpen(false);
+      expect(advancedSectionsOpenInSession()).toBe(false);
+      expect(sessionStore.getItem('hp.advancedOpen')).toBeNull(); // فقط سشن — هیچ قفل localStorage
+    } finally {
+      delete g['sessionStorage'];
+    }
+    // بی‌storage (node/حالت خصوصی) → false بی‌کرش — پیش‌فرض بسته می‌ماند
+    expect(advancedSectionsOpenInSession()).toBe(false);
+    expect(() => markAdvancedSectionsOpen(true)).not.toThrow();
   });
 });

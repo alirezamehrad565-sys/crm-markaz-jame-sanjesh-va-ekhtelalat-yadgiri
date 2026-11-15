@@ -325,9 +325,19 @@ export async function connectProvisionedWorker(deps, input) {
   return 'مرکز ابری ساخته شد و اتصال ثبت شد — اولین هم‌گامی فرمان گرفت.';
 }
 
-/* ── رندر ویزارد (DOM) — همهٔ وابستگی‌ها تزریقی؛ پیش‌فرض‌ها = ماژول‌های واقعی ────────── */
-
-export async function renderCloudSetup(root, _ctx, deps = {}) {
+/* ── رندر ویزارد (DOM) — همهٔ وابستگی‌ها تزریقی؛ پیش‌فرض‌ها = ماژول‌های واقعی ──────────
+   فاز D2 (خواست کارفرما: «کل جریان پیکربندی ابری داخل کارت ابریِ پنل سلامت») — رندر به
+   mountCloudSetup(root, deps, opts) منتقل شد: همان state machine و همان بخش‌های
+   choice/existing/create/done/clone، داخل هر root دلخواه. دو میزبان، یک پیاده‌سازی:
+   • renderCloudSetup (مسیر روتر #/cloud-setup — دیپ‌لینک) = فقط سیم‌کشی به همین تابع؛
+   • کارت «اتصال ابری» پنل سلامت (health-panel.js) با opts.compact=true سوار می‌کند —
+     بدون عنوان صفحهٔ h2 و پانویسِ آن (برای کارت)، بقیه عیناً همان.
+   opts.onDone: پس از رسیدن به گام done (ذخیره و اتصال موفق/کلون) یک‌بار صدا زده می‌شود —
+   میزبان با آن ناحیه را می‌بندد و کارت را تازه می‌کند؛ شنوندهٔ خراب هرگز ویزارد را نمی‌کشد.
+   خروجی = تابع unmount (الگوی stopTimer پنل): رندرهای بعدی را خنثی می‌کند و root را خالی
+   می‌گذارد؛ دو بار صدا زدنش هم بی‌خطر است. هیچ تغییر قرارداد API و هیچ منطق بازنویسی‌شده —
+   فقط سیم‌کشی و گارد تخریب. */
+export function mountCloudSetup(root, deps = {}, opts = {}) {
   const d = {
     api: deps.api && typeof deps.api === 'object' ? deps.api : api,
     invoke: typeof deps.invoke === 'function' ? deps.invoke : defaultCloudSecretInvoke,
@@ -336,7 +346,13 @@ export async function renderCloudSetup(root, _ctx, deps = {}) {
     formModal: typeof deps.formModal === 'function' ? deps.formModal : formModal,
     navigate: typeof deps.navigate === 'function' ? deps.navigate : (hash) => { location.hash = hash; }
   };
+  const compact = opts.compact === true;
+  const onDone = typeof opts.onDone === 'function' ? opts.onDone : null;
   const desktopSecret = cloudSecretChannelAvailable();
+
+  // فاز D2 — گارد تخریب: پس از unmount هیچ رندر درجا (paint ناشی از refreshStatus درجای
+  // مانده) روی root بی‌میزبان انجام نمی‌شود — الگوی «نما رندر دوباره شده» پنل سلامت
+  let disposed = false;
 
   const state = {
     step: 'choice',
@@ -352,10 +368,17 @@ export async function renderCloudSetup(root, _ctx, deps = {}) {
     result: null
   };
 
-  const pageHead = el('div', { class: 'page-head' },
+  // عنوان صفحه (h2 + پانویس) فقط برای میزبان تمام‌صفحه (مسیر #/cloud-setup) — حالت compact کارت آن را نمی‌خواهد
+  const pageHead = compact ? null : el('div', { class: 'page-head' },
     el('h2', {}, 'پیکربندی اتصال ابری'),
     el('p', { class: 'hint-text' }, 'ویزارد پیکربندی اولیه — اتصال این دستگاه به مرکز ابری، ساخت مرکز ابری تازه روی حساب کلادفلر خودتان، یا ادامهٔ فقط-محلی. هر زمان از پنل سلامت هم می‌توانید اتصال را بسازید یا عوض کنید.')
   );
+
+  /** سیم‌کشی میزبان — رسیدن به گام done (ذخیره و اتصال موفق / کلون کامل) را اطلاع می‌دهد */
+  function notifyDone() {
+    if (!onDone) return;
+    try { onDone(); } catch { /* شنوندهٔ خراب میزبان هرگز ویزارد را نمی‌کشد */ }
+  }
 
   const resultLine = el('div', { style: { marginBottom: 'var(--sp-4)' }, hidden: true });
 
@@ -460,6 +483,7 @@ export async function renderCloudSetup(root, _ctx, deps = {}) {
       state.step = 'done';
       await refreshStatus();
       paint();
+      notifyDone(); // فاز D2 — میزبان (کارت ابری) ناحیه را می‌بندد و کارت را تازه می‌کند
     } catch (err) {
       const msg = cloudSetupErrorView(err);
       d.toast(msg, 'error');
@@ -501,6 +525,7 @@ export async function renderCloudSetup(root, _ctx, deps = {}) {
         paint();
         await refreshStatus(); // پس از run-now — وضعیت زندهٔ دوم
         paint();
+        notifyDone(); // فاز D2 — میزبان (کارت ابری) ناحیه را می‌بندد و کارت را تازه می‌کند
       }
     });
     // حالت وب — فیلد رمز غیرفعال؛ مقدار هرگز خوانده/فرستاده نمی‌شود (گارد کانال)
@@ -588,6 +613,7 @@ export async function renderCloudSetup(root, _ctx, deps = {}) {
         state.step = 'done';
         await refreshStatus();
         paint();
+        notifyDone(); // فاز D2 — میزبان (کارت ابری) ناحیه را می‌بندد و کارت را تازه می‌کند
       } catch (err) {
         const msg = cloudSetupErrorView(err);
         d.toast(msg, 'error');
@@ -772,8 +798,10 @@ export async function renderCloudSetup(root, _ctx, deps = {}) {
   }
 
   function paint() {
+    if (disposed) return; // فاز D2 — پس از unmount هیچ رندر درجای مانده انجام نمی‌شود
     const v = cloudSetupView(state);
-    const parts = [pageHead];
+    const parts = [];
+    if (!compact && pageHead) parts.push(pageHead); // compact (کارت ابری) — بدون عنوان صفحهٔ h2 و پانویس
     parts.push(resultLine);
     if (v.step === 'choice') parts.push(choiceSection());
     else if (v.step === 'existing') parts.push(existingSection());
@@ -783,4 +811,17 @@ export async function renderCloudSetup(root, _ctx, deps = {}) {
   }
 
   paint();
+
+  /** تخریب سوارشدن — الگوی stopTimer پنل: رندرهای بعدی خنثی و root خالی می‌شود؛ دوبار صدا زدن بی‌خطر است */
+  return function unmountCloudSetup() {
+    disposed = true;
+    root.replaceChildren();
+  };
+}
+
+/* فاز D2 — میزبان تمام‌صفحه (مسیر روتر #/cloud-setup — دیپ‌لینکِ لینک پانویس boot و بنر)
+   فقط سیم‌کشی است: همان root، همان deps، بدون compact؛ منطق ویزارد یک‌جا در mountCloudSetup است.
+   خروجی unmount نادیده گرفته می‌شود — تخریب مسیر روتر با replaceChildren روتر انجام می‌شود. */
+export function renderCloudSetup(root, _ctx, deps = {}) {
+  return mountCloudSetup(root, deps, {});
 }
