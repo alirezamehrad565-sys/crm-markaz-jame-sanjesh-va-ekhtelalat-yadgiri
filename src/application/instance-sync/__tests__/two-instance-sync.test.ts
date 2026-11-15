@@ -1,15 +1,20 @@
 /**
- * e2e هستهٔ هم‌گامی دوسویه instance-sync (فاز B — قرار مأموریت SB بند ۷)
+ * e2e هستهٔ هم‌گامی دوسویه instance-sync (فاز B — قرار مأموریت SB بند ۷ · تنظیم SB2)
  * دو نمونهٔ کامل createTestApp با db جدا (دو «نصب» واقعی با همان schema) — رفت‌وبرگشت فقط از
  * مسیر قرارداد /api/instance-sync (گیت Bearer runtime-secret + X-Device-Id) و هستهٔ service:
  *   ① متقارنی و حاشیه‌های داور (rowWinner/stampHashWinner — تصمیم کارفرما §۲-۴)
- *   ② رفتار triggerهای 0114 (مُهر درج/مُهر به‌روزرسانی/حفظ نویسندهٔ دستی/تومب‌استون)
+ *   ② رفتار triggerهای فقط-میز (local-triggers.sql — مایگریشن 0114 دیگر trigger ندارد:
+ *      سیاست D1-clean؛ db سناریوهای مُهر/تومب‌استون خودش فایل فقط-میز را اعمال می‌کند)
  *   ③ تداخل ردیف (B زودتر ساخته → برندهٔ B) + ردیف conflict با loser_payload + echo همگرا
  *   ④ حذف→تومب‌استون و پذیرش حذف همتا با داور مُهر
  *   ⑤ cursor دوبار → بدون تکرار
  *   ⑥ چانک ۵۲۰ با برش «گروه کامل مُهر»
+ *   ⑦ گارد قرارداد D1: مایگریشن 0114 هیچ CREATE TRIGGER/BEGIN/COMMIT ندارد (رشته‌های دقیق گیت)
  */
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createTestApp } from '../../../test/harness';
 import type { TestApp } from '../../../test/harness';
 import { DEV_AUTH_SECRET } from '@core/auth';
@@ -18,6 +23,21 @@ import { syncPkValueOfRow, syncPkValueSplit, SYNC_TABLES } from '../tables';
 import { PULL_MAX_ROWS_PER_TABLE } from '../service';
 
 // ─── ابزار تست ───
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+/** فایل triggerهای فقط-میز (خارج migrations/ — بوت موتور محلی همین را اعمال می‌کند) */
+const LOCAL_TRIGGERS_SQL = path.resolve(HERE, '..', '..', '..', '..', 'scripts', 'engine', 'local-triggers.sql');
+const MIG_0114_SQL = path.resolve(HERE, '..', '..', '..', '..', 'migrations', '0114_instance_sync.sql');
+
+/**
+ * نمونهٔ تست با triggerهای فقط-میز اعمال‌شده — سناریوهای مُهر/تومب‌استون اکنون وابستهٔ
+ * اعمال صریح local-triggers.sql است، نه وجود trigger در مایگریشن (SB2: مایگریشن‌ها D1-clean).
+ */
+function createTriggeredApp(): TestApp {
+  const A = createTestApp();
+  A.sql.exec(readFileSync(LOCAL_TRIGGERS_SQL, 'utf8'));
+  return A;
+}
 
 const DEV_A = 'dev:aaaa-0001';
 const DEV_B = 'dev:bbbb-0002';
@@ -108,11 +128,11 @@ describe('داور زمانی هم‌گامی (rowWinner/stampHashWinner)', () =
   });
 });
 
-// ─── ② رفتار triggerهای 0114 ───
+// ─── ② رفتار triggerهای فقط-میز (local-triggers.sql — SB2: مایگریشن trigger ندارد) ───
 
-describe('رفتار triggerهای مایگریشن 0114 روی نمونهٔ واقعی', () => {
+describe('رفتار triggerهای فقط-میز روی نمونهٔ واقعی (db تست local-triggers.sql را اعمال می‌کند)', () => {
   it('درج بی‌مُهر → مُهر؛ به‌روزرسانی بی‌مُهر → مُهر تازه؛ مُهر صریح → حفظ (نویسندهٔ دستی و سینک)', () => {
-    const A = createTestApp();
+    const A = createTriggeredApp();
     const id = 'it-trigger-stu-1';
     A.sql
       .prepare(
@@ -133,7 +153,7 @@ describe('رفتار triggerهای مایگریشن 0114 روی نمونهٔ و�
   });
 
   it('حذف → تومب‌استون با pk کانونی «|» روی جدول تک‌pk و چندستونی', () => {
-    const A = createTestApp();
+    const A = createTriggeredApp();
     const id = 'it-tomb-stu-1';
     insertStudent(A, id, 'تومب', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
     A.sql.prepare(`DELETE FROM students WHERE id = ?`).run(id);
@@ -154,6 +174,18 @@ describe('رفتار triggerهای مایگریشن 0114 روی نمونهٔ و�
     A.sql.prepare(`DELETE FROM student_tags WHERE student_id = ? AND tag_id = ?`).run(sid, TAG);
     const tomb2 = A.sql.prepare(`SELECT pk FROM _sync_deleted WHERE table_name = 'student_tags' AND pk = ?`).get(`${sid}|${TAG}`);
     expect(tomb2).toBeTruthy();
+  });
+
+  it('گارد قرارداد D1 (SB2): مایگریشن 0114 هیچ CREATE TRIGGER/BEGIN/COMMIT ندارد — رشته‌های دقیق گیت check-d1-compat', () => {
+    const mig = readFileSync(MIG_0114_SQL, 'utf8');
+    expect(/\bCREATE\s+TRIGGER\b/i.test(mig)).toBe(false);
+    expect(/\bBEGIN\s+(TRANSACTION|DEFERRED|IMMEDIATE|EXCLUSIVE)?\b/i.test(mig)).toBe(false);
+    expect(/\bCOMMIT\b/i.test(mig)).toBe(false);
+
+    // قرینهٔ قرارداد: triggerها واقعاً در فایل فقط-میز‌اند — دقیقاً ۳×N با IF NOT EXISTS (idempotent)
+    const local = readFileSync(LOCAL_TRIGGERS_SQL, 'utf8');
+    expect((local.match(/CREATE\s+TRIGGER\s+IF\s+NOT\s+EXISTS/gi) ?? []).length).toBe(SYNC_TABLES.length * 3);
+    expect(/\bBEGIN\b/.test(local)).toBe(true); // بدنهٔ چنددستوری trigger — فقط node:sqlite، هرگز D1
   });
 });
 
@@ -230,8 +262,9 @@ describe('تداخل دو نمونه: B زودتر ساخته → برندهٔ B
 
 describe('حذف→تومب‌استون: تحویل در pull و اعمال با stampHashWinner', () => {
   it('حذف در A به تومب‌استون می‌نشیند، pull آن را می‌دهد و B با داور مُهر حذف نهایی را می‌پذیرد', async () => {
-    const A = createTestApp();
-    const B = createTestApp();
+    // SB2: تومب‌استونِ حذف محلی فقط با triggerهای فقط-میز ساخته می‌شود — هر دو «نصب» فایل را اعمال می‌کنند
+    const A = createTriggeredApp();
+    const B = createTriggeredApp();
     const id = 'it-delete-stu-1';
     // ردیف در هر دو سو با همان تاریخچه؛ ویرایش دیرهنگامِ همتا پیش از حذف
     insertStudent(A, id, 'حذف‌شدنی', '2026-01-01T00:00:00.000Z', '2026-01-05T00:00:00.000Z');

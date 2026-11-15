@@ -10,6 +10,7 @@ export {
   pull,
   push,
   syncTableOf,
+  recordSyncTombstone,
   PULL_MAX_ROWS_PER_TABLE,
   CONFLICT_PAYLOAD_MAX_BYTES,
   DEVICE_ID_PATTERN,

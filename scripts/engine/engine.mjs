@@ -13,7 +13,7 @@
 // هر دو بایند فقط روی 127.0.0.1 هستند (design.md §۸).
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, openSync, promises as fsPromises, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, openSync, promises as fsPromises, readFileSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -24,6 +24,33 @@ import { applyMigrations } from './apply-migrations.mjs';
 import { ensureDbIntegrityOrRestore, takeSnapshot, writeAuditRow } from './db-snapshot.mjs';
 import { pushHumanEventDb, drainQueueToLog, rotateFileIfNeeded } from './human-log.mjs';
 import { nextAction as gamesNextAction, GAMES_FAIL_THRESHOLD, restartMessage } from './games-watchdog.mjs';
+
+/**
+ * فاز B (مأموریت SB2) — اعمال best-effort triggerهای فقط-میز هم‌گامی پس از مایگریشن‌ها.
+ * مایگریشن‌ها بدون trigger اند (سیاست D1-clean — گیت check-d1-compat ①/⑬)، پس مُهر خودکار
+ * updated_at و تومب‌استون خودکار حذف فقط همین‌جا روی db محلی بالا می‌آید؛ فایل از
+ * scripts/engine/local-triggers.sql می‌آید (idempotent — همهٔ triggerها IF NOT EXISTS دارند).
+ * شکست اعمال بوت را نمی‌کشد: فقط هشدار فارسی و ادامه — بدون trigger هم هم‌گامی کار می‌کند
+ * (مُهر را سرویس‌ها خودشان در SQL می‌نویسند، فقط مُهر خودکار ندارد).
+ * مسیر فقط node-side است: باندل ورکر این فایل را import/exec نمی‌کند.
+ */
+function applyLocalTriggersBestEffort(dbPath) {
+  const file = path.join(REPO_ROOT, 'scripts', 'engine', 'local-triggers.sql');
+  if (!existsSync(file)) {
+    console.log('[engine] local-triggers.sql موجود نیست (باندل نصاب) — مُهر خودکار trigger خاموش؛ رفتار ابر');
+    return;
+  }
+  let db = null;
+  try {
+    db = new DatabaseSync(dbPath);
+    db.exec(readFileSync(file, 'utf8'));
+    console.log('[engine] triggerهای فقط-میز اعمال شد (مُهر خودکار updated_at + تومب‌استون حذف در _sync_deleted)');
+  } catch (err) {
+    console.error(`[engine] هشدار: اعمال triggerهای فقط-میز ناموفق بود — بوت بدون trigger ادامه می‌یابد (هم‌گامی سالم می‌ماند؛ فقط مُهر خودکار ندارد): ${err?.message ?? err}`);
+  } finally {
+    try { db?.close(); } catch { /* بسته است */ }
+  }
+}
 
 export function parseArgs(argv) {
   // v1.27.۰۳ — --engine adapter: اجرای ورکرها در همین فرایند Node (بدون workerd — رفع کرش
@@ -235,6 +262,10 @@ export async function runEngine(opts) {
     process.exit(1);
   }
   console.log(`[engine] مایگریشن‌ها: ${mig.appliedCount} اعمال شد (از ${mig.total})`);
+
+  // ۱٫۲۵) فاز B (SB2) — triggerهای فقط-میز پس از اتمام مایگریشن‌ها روی همین db محلی اعمال می‌شوند
+  // (best-effort — شکست بوت را نمی‌کشد؛ باندل ورکر این مسیر را هرگز نمی‌بیند)
+  applyLocalTriggersBestEffort(dbPath);
 
   // ۱٫۵) بررسی یکپارچگی DB (quick_check) — بعد از باز شدن مایگریشن‌ها، قبل از seed و workerd؛
   // کانکشن باز می‌ماند تا چک‌پوینت‌های WAL (خاموشی/شبانه) از همین هندل بروند

@@ -1,15 +1,21 @@
 #!/usr/bin/env node
-// مولد deterministic مایگریشن 0114 «هستهٔ هم‌گامی دوسویه instance-sync» (فاز B)
-// سند طرح: docs/rust/server-cloud-update-design.md §۲-۴ · قرار مأموریت SB
+// مولد deterministic مایگریشن 0114 «هستهٔ هم‌گامی دوسویه instance-sync» (فاز B — مأموریت SB2)
+// سند طرح: docs/rust/server-cloud-update-design.md §۲-۴ · قرار مأموریت SB/SB2
 // کار مولد:
 //   ۱) اسکیمای نهایی را از migrations/*.sql (به‌ترتیب اعمال) بازمی‌سازد: CREATE + DROP + RENAME
 //      تا فقط جداول «زنده» هدف قرار گیرند (سه جدول staff_attendance/bot_links/network_content
 //      در 0046/0047/0099 بازسازی و از طریق *_new با RENAME برگشته‌اند — نام‌های _new در پایان زنده نیستند).
 //   ۲) جداول دامنه را جدا می‌کند (استثناها با کلاس‌بندی مستند پایین فایل).
-//   ۳) migrations/0114_instance_sync.sql را می‌سازد: سه جدول bookkeeping سینک +
-//      ADD COLUMN updated_at برای جداول فاقد + پسافت + سه trigger برای همهٔ جداول دامنه +
-//      بذر cursor اپوک در _sync_state.
-//   ۴) src/application/instance-sync/tables.ts را با SYNC_TABLES هم‌منبع تولید می‌کند.
+//   ۳) migrations/0114_instance_sync.sql را می‌سازد: سه جدول bookkeeping سینک + ADD COLUMN
+//      updated_at برای جداول فاقد + پسافت + بذر cursor اپوک — بدون هیچ trigger و بدون تراکنش
+//      دستی (سیاست D1-clean: گیت scripts/check-d1-compat.mjs ①/⑬ — بدنهٔ چنددستوری trigger با
+//      جداکنندهٔ «;» در قطعه‌بندی POST /d1/query می‌شکند و D1 هر /query را batch اجرا می‌کند).
+//   ۴) scripts/engine/local-triggers.sql را می‌سازد: همان ۳×N trigger فقط-میز (INSERT-stamp /
+//      UPDATE-stamp / DELETE→تومب‌استون) برای موتور محلی node:sqlite — هرگز وارد migrations/ یا
+//      schema.sql نمی‌شود؛ بوت موتور محلی (scripts/engine/engine.mjs) پس از مایگریشن‌ها اعمالش می‌کند.
+//   ۵) وارسی خودکار پایان کار: با همان regexهای گیت، 0114 باید صفر بخورد (سبز ماندن گیت)؛
+//      local-triggers.sql خارج از migrations/ است و مجاز — فقط شمار درست triggerها می‌سنجیم.
+//   ۶) src/application/instance-sync/tables.ts را با SYNC_TABLES هم‌منبع تولید می‌کند.
 // اجرای دوباره مولد باید بایت‌به‌بایت همان خروجی را بدهد (deterministic: مرتب‌سازی الفبایی، بدون تاریخ روز).
 import { readFileSync, readdirSync, writeFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
@@ -146,23 +152,29 @@ console.log(`جداول زنده: ${live.size} · دامنه (همگام): ${syn
 console.log('دامنه:', syncTables.map((t) => t.name).join(', '));
 console.log('فاقد updated_at:', syncTables.filter((t) => !t.hasUpdatedAt).map((t) => t.name).join(', '));
 
-// ─── تولید SQL مایگریشن 0114 ───
+// ─── تولید SQL مایگریشن 0114 — بدون trigger و بدون تراکنش دستی (سیاست D1-clean) ───
 const num = '0114';
 const out = [];
 out.push(`-- ${num} — فاز B: هستهٔ هم‌گامی دوسویه instance-sync (docs/rust/server-cloud-update-design.md §۲-۴)
--- قرار مأموریت SB (هم‌گامی دو نمونهٔ هم‌schema: ابر D1 ↔ موتور محلی میز). سه جزء:
---   ① سه جدول bookkeeping سینک: _sync_deleted (تومب‌استون حذف‌ها) · _sync_conflicts (دفتر داوری —
---      «هیچ ردیفی بی‌سروصدا نمی‌افتد»: هر رقابت بازنده در این جدول با payload کامل ثبت می‌شود) ·
+-- قرار مأموریت SB2 (D1-clean): مایگریشن فقط-افزودنی با سه جزء — بدون هیچ trigger و بدون تراکنش
+-- دستی (قاعدهٔ مخزن: گیت scripts/check-d1-compat.mjs ①/⑬ — D1 هر /query را batch اجرا می‌کند و
+-- بدنهٔ چنددستوری trigger با جداکنندهٔ «;» در قطعه‌بندی همان‌جا می‌شکند):
+--   ① سه جدول bookkeeping سینک: _sync_deleted (تومب‌استون حذف‌ها با pk کانونی '|') · _sync_conflicts
+--      (دفتر داوری — «هیچ ردیفی بی‌سروصدا نمی‌افتد»: هر رقابت بازنده با payload کامل ثبت می‌شود) ·
 --      _sync_state (cursor هر جدول به‌ازای هر نمونه؛ pull_cursor/push_cursor = JSON {rows, deleted}).
 --   ② ستون updated_at برای جداول دامنهٔ فاقد + پسافت COALESCE(created_at, '${BACKFILL_TS}').
---   ③ سه trigger برای همهٔ جداول دامنه (فهرست دامنه = خروجی مولد scripts/gen-instance-sync-migration.mjs؛
---      هم‌منبع با SYNC_TABLES در src/application/instance-sync/tables.ts):
---        INSERT  WHEN NEW.updated_at IS NULL → مُهر اکنون (نویسندهٔ سینک که مُهر می‌آورد دست‌نخورده)؛
---        UPDATE  WHEN NEW.updated_at IS OLD.updated_at → مُهر اکنون (نویسندهٔ دستیِ بدون مُهر مُهر می‌گیرد؛
---                نویسنده‌ای که updated_at را صریح می‌فرستد — یعنی مسیر سینک — حفظ می‌شود)؛
---        DELETE  → تومب‌استون با pk کانونی (مقادیر pk چندستونی با '|').
+--   ③ بذر cursor اپوک برای همهٔ جداول دامنه (پیش‌فرض نقطهٔ شروع pull/push هر نمونه؛ فهرست دامنه =
+--      خروجی همین مولد — هم‌منبع با SYNC_TABLES در src/application/instance-sync/tables.ts).
+-- انحراف مستند از §۲-۴ (SB2): triggerهای مُهر/تومب‌استون (۶۰ جدول × ۳) از مایگریشن خارج شدند —
+-- ابر بدون trigger کار می‌کند: سرویس‌ها مُهر را خودشان در SQL می‌نویسند (updated_at = datetime('now')
+-- و حذف نرم = deleted_at + updated_at — الگوی src/domain/finance/service.ts)؛ حذف نرمِ دارای
+-- deleted_at خودش از pull بیرون می‌آید و helper تومب‌استون فقط برای DELETEهای سخت است.
+-- نسخهٔ فقط-میزِ همان triggerها در scripts/engine/local-triggers.sql است؛ بوت موتور محلی
+-- (scripts/engine/engine.mjs) پس از مایگریشن‌ها آن را best-effort اعمال می‌کند — باندل ورکر و
+-- استقرار ابری (schema.sql/cf_deploy که فقط migrations/ را می‌بلعد) هرگز آن را نمی‌بینند.
+-- دود رفتاری هر دو حالت (با و بدون trigger): scripts/smoke-instance-sync.mjs.
 -- قاعدهٔ داوری (تصمیم کارفرما ۱۴۰۴/۰۸/۲۴): first-write-wins با داور زمانی — پیاده‌سازی در
--- src/application/instance-sync/winner.ts؛ این مایگریشن فقط زیرساخت مُهر/تومب‌استون است.
+-- src/application/instance-sync/winner.ts؛ این مایگریشن فقط زیرساخت bookkeeping است.
 -- فقط-افزودنی (additive-only)؛ بدون CHECK (الگوی D7)؛ باز-اجرای کل فایل در ALTER TABLE متوقف
 -- می‌شود (SQLite شکل IF NOT EXISTS برای ADD COLUMN ندارد) — دود آن در scripts/smoke-instance-sync.mjs.
 -- مُهرها ISO با میلی‌ثانیه (strftime %f + Z) تا مقایسهٔ رشته‌ای = مقایسهٔ زمانی باشد.
@@ -171,7 +183,7 @@ CREATE TABLE IF NOT EXISTS _sync_deleted (
   table_name TEXT NOT NULL,             -- جدول دامنهٔ مبدأ
   pk         TEXT NOT NULL,             -- pk کانونی: مقادیر pk (چندستونی با '|')
   deleted_at TEXT NOT NULL,             -- مُهر حذف — مبنای داوری تومب‌استون↔ردیف
-  device_id  TEXT,                      -- نمونهٔ حذف‌کننده (trigger خود DB مقدار نمی‌داند → NULL)
+  device_id  TEXT,                      -- نمونهٔ حذف‌کننده (NULL = خود این نمونه با helper/حذف نرم)
   PRIMARY KEY (table_name, pk)
 );
 
@@ -208,40 +220,85 @@ for (const t of syncTables) {
 }
 out.push('');
 
-// سه trigger برای همهٔ جداول دامنه (حذف باید در همه ثبت شود؛ مُهر درج/به‌روزرسانی هم موج سبز می‌ماند)
-// ⚠ در trigger پس از DELETE فقط OLD در دسترس است (NEW تعریف نشده) — pk از OLD خوانده می‌شود.
-for (const t of syncTables) {
-  const pkExpr = t.pk.map((c) => `CAST(OLD.${c} AS TEXT)`).join(` || '|' || `);
-  const pkCols = t.pk.join(', ');
-  out.push(`CREATE TRIGGER IF NOT EXISTS trg_is_${t.name}_ins AFTER INSERT ON ${t.name}
-WHEN NEW.updated_at IS NULL
-BEGIN
-  UPDATE ${t.name} SET updated_at = ${NOW_SQL} WHERE rowid = NEW.rowid;
-END;`);
-  out.push(`CREATE TRIGGER IF NOT EXISTS trg_is_${t.name}_upd AFTER UPDATE ON ${t.name}
-WHEN NEW.updated_at IS OLD.updated_at
-BEGIN
-  UPDATE ${t.name} SET updated_at = ${NOW_SQL} WHERE rowid = NEW.rowid;
-END;`);
-  out.push(`CREATE TRIGGER IF NOT EXISTS trg_is_${t.name}_del AFTER DELETE ON ${t.name}
-BEGIN
-  INSERT INTO _sync_deleted (table_name, pk, deleted_at, device_id)
-  VALUES ('${t.name}', ${pkExpr}, ${NOW_SQL}, NULL)
-  ON CONFLICT(table_name, pk) DO UPDATE SET deleted_at = excluded.deleted_at;
-END;`);
-  out.push('');
-}
-
 // بذر cursor اپوک برای همهٔ جداول همگام
 const epochJson = `{"rows":"${EPOCH}","deleted":"${EPOCH}"}`;
 out.push('-- بذر cursor اپوک برای همهٔ جداول دامنه (پیش‌فرض نقطهٔ شروع pull/push هر نمونه)');
 for (const t of syncTables) {
   out.push(`INSERT OR IGNORE INTO _sync_state (table_name, pull_cursor, push_cursor) VALUES ('${t.name}', '${epochJson}', '${epochJson}');`);
 }
+const migText = out.join('\n') + '\n';
+
+// ─── وارسی خودکار با همان regexهای گیت (قرارداد SB2 بند ۱ — پیش از نوشتن فایل) ───
+const GATE_D1 = [
+  { re: /\bPRAGMA\b/i, label: 'PRAGMA' },
+  { re: /\bBEGIN\s+(TRANSACTION|DEFERRED|IMMEDIATE|EXCLUSIVE)?\b/i, label: 'BEGIN' },
+  { re: /\bCOMMIT\b/i, label: 'COMMIT' },
+  { re: /\bCREATE\s+TRIGGER\b/i, label: 'CREATE TRIGGER' },
+  { re: /\bATTACH\s+DATABASE\b/i, label: 'ATTACH DATABASE' },
+  { re: /\bVACUUM\b/i, label: 'VACUUM' },
+  { re: /\bREINDEX\b/i, label: 'REINDEX' }
+];
+const migHits = GATE_D1.filter((g) => g.re.test(migText));
+if (migHits.length > 0) {
+  throw new Error(`0114 با گیت D1 ناسازگار ماند: ${migHits.map((g) => g.label).join(', ')}`);
+}
+console.log('✓ وارسی گیت: migrations/0114 روی هر ۷ regex گیت check-d1-compat صفر خورد (بند ① و ⑬ سبز)');
+
+// ─── تولید local-triggers.sql — همان ۳×N trigger، فقط برای موتور محلی node:sqlite ───
+// ⚠ در trigger پس از DELETE فقط OLD در دسترس است (NEW تعریف نشده) — pk از OLD خوانده می‌شود.
+const trig = [];
+trig.push(`-- local-triggers.sql — triggerهای فقط-میز هم‌گامی instance-sync (فاز B — مأموریت SB2)
+-- فقط-میز؛ D1 این فایل را هرگز نمی‌بیند — گیت check-d1-compat آن را نمی‌سنجد چون خارج از migrations/ است؛
+-- سیاست بدون-trigger فقط برای مایگریشن‌ها/ابر است.
+-- مولد: scripts/gen-instance-sync-migration.mjs (هم‌منبع با migrations/0114 و SYNC_TABLES در
+-- src/application/instance-sync/tables.ts) — هرگز دستی ویرایش نشود؛ بازتولید = اجرای دوبارهٔ مولد.
+-- اعمال: بوت موتور محلی (scripts/engine/engine.mjs) پس از پایان مایگریشن‌ها روی همان db محلی —
+-- idempotent (همهٔ triggerها IF NOT EXISTS دارند؛ اجرای دوباره بی‌خطا)؛ شکست اعمال بوت را نمی‌کشد:
+-- فقط هشدار فارسی و ادامهٔ بوت (بدون trigger هم هم‌گامی کار می‌کند — مُهر را سرویس‌ها خودشان
+-- می‌نویسند؛ این‌جا فقط مُهر خودکار و تومب‌استون خودکار حذف از دست می‌رود).
+-- مسیر فقط node-side است: باندل ورکر و استقرار ابری این فایل را import/exec نمی‌کنند و تولید
+-- schema.sql/cf_deploy فقط migrations/ را می‌بلعد (local-triggers.sql در scripts/engine/ است).
+-- سه trigger برای هر جدول دامنه (${syncTables.length} جدول → ${syncTables.length * 3} trigger):
+--   INSERT  WHEN NEW.updated_at IS NULL → مُهر اکنون (نویسندهٔ سینک که مُهر می‌آورد دست‌نخورده)؛
+--   UPDATE  WHEN NEW.updated_at IS OLD.updated_at → مُهر اکنون (نویسندهٔ دستیِ بدون مُهر مُهر می‌گیرد؛
+--           نویسنده‌ای که updated_at را صریح می‌فرستد — یعنی مسیر سینک — حفظ می‌شود)؛
+--   DELETE  → تومب‌استون در _sync_deleted با pk کانونی '|'.
+`);
+for (const t of syncTables) {
+  const pkExpr = t.pk.map((c) => `CAST(OLD.${c} AS TEXT)`).join(` || '|' || `);
+  trig.push(`CREATE TRIGGER IF NOT EXISTS trg_is_${t.name}_ins AFTER INSERT ON ${t.name}
+WHEN NEW.updated_at IS NULL
+BEGIN
+  UPDATE ${t.name} SET updated_at = ${NOW_SQL} WHERE rowid = NEW.rowid;
+END;`);
+  trig.push(`CREATE TRIGGER IF NOT EXISTS trg_is_${t.name}_upd AFTER UPDATE ON ${t.name}
+WHEN NEW.updated_at IS OLD.updated_at
+BEGIN
+  UPDATE ${t.name} SET updated_at = ${NOW_SQL} WHERE rowid = NEW.rowid;
+END;`);
+  trig.push(`CREATE TRIGGER IF NOT EXISTS trg_is_${t.name}_del AFTER DELETE ON ${t.name}
+BEGIN
+  INSERT INTO _sync_deleted (table_name, pk, deleted_at, device_id)
+  VALUES ('${t.name}', ${pkExpr}, ${NOW_SQL}, NULL)
+  ON CONFLICT(table_name, pk) DO UPDATE SET deleted_at = excluded.deleted_at;
+END;`);
+  trig.push('');
+}
+const trigText = trig.join('\n') + '\n';
+
+// وارسی فایل دوم — خارج از migrations/ است و مجاز به خوردن regexهای گیت؛ فقط شمار درست triggerها
+const trigCount = (trigText.match(/CREATE\s+TRIGGER\s+IF\s+NOT\s+EXISTS/gi) ?? []).length;
+if (trigCount !== syncTables.length * 3) {
+  throw new Error(`local-triggers.sql ناقص شد: ${trigCount} از ${syncTables.length * 3} trigger`);
+}
+console.log(`✓ وارسی local-triggers.sql: ${trigCount} trigger با IF NOT EXISTS (خارج migrations/ — مجاز به خوردن regexهای گیت)`);
 
 const sqlFile = `migrations/${num}_instance_sync.sql`;
-writeFileSync(path.join(ROOT, sqlFile), out.join('\n') + '\n', 'utf8');
-console.log(`✓ ${sqlFile} — ALTER: ${alters} · trigger: ${syncTables.length * 3} · seed: ${syncTables.length}`);
+writeFileSync(path.join(ROOT, sqlFile), migText, 'utf8');
+const trigFile = 'scripts/engine/local-triggers.sql';
+writeFileSync(path.join(ROOT, trigFile), trigText, 'utf8');
+console.log(`✓ ${sqlFile} — ALTER: ${alters} · trigger: ۰ (D1-clean) · seed: ${syncTables.length}`);
+console.log(`✓ ${trigFile} — trigger: ${trigCount} (فقط-میز؛ هرگز وارد migrations/ یا schema.sql نمی‌شود)`);
 
 // ─── تولید tables.ts هم‌منبع ───
 const metaLines = syncTables.map((t) => `  { table: '${t.name}', pk: [${t.pk.map((p) => `'${p}'`).join(', ')}], hasUpdatedAt: ${t.hasUpdatedAt} }`);

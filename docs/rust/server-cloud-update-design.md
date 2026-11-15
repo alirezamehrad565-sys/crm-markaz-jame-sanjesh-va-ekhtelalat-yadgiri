@@ -118,6 +118,13 @@
 - الزامات schema: ستون `updated_at` در جداول دامنه (مایگریشن تازه برای جداول فاقد) +
   جدول tombstone `_sync_deleted(table, pk, deleted_at, device_id)` برای حذف‌ها +
   `device_id` per install (UUID در dataDir، ثبت در install-manifest.json).
+- انحراف مستند (فاز B — مأموریت SB2): مایگریشن 0114 **بدون trigger** است — سیاست مخزن
+  «مایگریشن‌ها بدون trigger و بدون تراکنش دستی» (گیت check-d1-compat ①/⑬) بر طرح trigger سه‌گانهٔ
+  هر جدول مقدم شد؛ ابر بدون trigger کار می‌کند (سرویس‌ها `updated_at = datetime('now')` و حذف نرم
+  `deleted_at + updated_at` را خودشان می‌نویسند — الگوی finance/service.ts؛ helper
+  `recordSyncTombstone` فقط برای DELETEهای سخت) و نسخهٔ فقط-میز همان triggerها در
+  `scripts/engine/local-triggers.sql` است که بوت موتور محلی پس از مایگریشن‌ها best-effort اعمال
+  می‌کند — این فایل هرگز وارد migrations/ یا schema.sql نمی‌شود.
 - پروتکل `instance-sync` (هر دو سو همان باندل مرکزی را سرو می‌کنند — قرارداد دوسویه):
   `GET /api/instance-sync/state` (cursorها + نسخهٔ schema) ·
   `POST /api/instance-sync/pull` (ردیف‌های updated_at>cursor + tombstoneها، per-table) ·

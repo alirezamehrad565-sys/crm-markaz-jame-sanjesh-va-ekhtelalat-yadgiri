@@ -15,6 +15,9 @@
  *     خود گیت با ۴۰۱ (بی‌سشن) و ۴۰۳ (غیرمدیر) صریح آزمون می‌شود.
  */
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   createTestApp,
   createTestDb,
@@ -41,6 +44,12 @@ import {
 import type { CloudFsIO, CloudSyncDeps } from '../runner';
 
 const SECRET = 'test-secret-123456';
+
+/** SB2 — فایل triggerهای فقط-میز (خارج migrations/)؛ مایگریشن 0114 دیگر trigger ندارد (D1-clean) */
+const LOCAL_TRIGGERS_SQL = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '..', '..', '..', '..', 'scripts', 'engine', 'local-triggers.sql'
+);
 
 // ─── پل فایل‌های ابری درون‌حافظه (عین قرارداد CLOUD_FS adapter) ───
 
@@ -382,6 +391,9 @@ describe('هم‌گامی دوسویه سالم', () => {
     expect(((await runNow(m)).body as RunData).data?.result).toBe('synced');
     expect(m.cloud.appointments().length).toBe(1);
 
+    // SB2: تومب‌استونِ حذف محلی کار triggerهای فقط-میز است — db میز این آزمون فایل را صریح اعمال
+    // می‌کند (رفتار تولید میز: بوت موتور محلی همین را پس از مایگریشن می‌نشاند)
+    m.A.sql.exec(readFileSync(LOCAL_TRIGGERS_SQL, 'utf8'));
     m.A.sql.prepare("DELETE FROM appointments WHERE id = 'appt-del-1'").run(); // trigger → _sync_deleted (مُهر «الان»)
     const body = ((await runNow(m)).body as RunData).data;
     expect(body?.result).toBe('synced');

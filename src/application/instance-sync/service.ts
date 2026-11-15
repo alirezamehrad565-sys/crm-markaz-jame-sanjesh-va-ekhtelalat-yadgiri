@@ -271,6 +271,28 @@ async function localTombstone(db: DbClient, table: string, pkValue: string): Pro
   );
 }
 
+/**
+ * ثبت صریح تومب‌استون در _sync_deleted (فاز B — مأموریت SB2) — برای DELETEهای سختِ آینده
+ * (`DELETE FROM …`) که ردیف را کامل برمی‌دارند.
+ * با الگوی حذف نرمِ مخزن (deleted_at = datetime('now'), updated_at = datetime('now') — نمونه:
+ * src/domain/finance/service.ts) بیشترِ حذف‌ها بدون این helper منتشر می‌شوند: pull ردیفِ
+ * دارای deleted_at را می‌بیند و سمت گیرنده با داور مُهر حذف را اعمال می‌کند؛ این helper فقط
+ * وقتی لازم است که ردیف فیزیکی حذف شود و چیزی برای pull باقی نماند.
+ * pk کانونی همان قرارداد '|'-جمع‌شده است (syncPkValueSplitSafe — تعداد اجزا باید دقیقاً بخورد).
+ */
+export async function recordSyncTombstone(db: DbClient, table: string, pkValue: string, deviceId: string | null): Promise<void> {
+  const meta = syncTableMeta(table);
+  if (!meta) throw new Error(`جدول خارج از قرارداد هم‌گامی: ${table}`);
+  if (syncPkValueSplitSafe(pkValue, meta.pk) === null) {
+    throw new Error(`pk کانونی نامعتبر برای ${table}: ${pkValue}`);
+  }
+  await db.execute(
+    `INSERT INTO _sync_deleted (table_name, pk, deleted_at, device_id) VALUES (?, ?, ?, ?)
+     ON CONFLICT(table_name, pk) DO UPDATE SET deleted_at = excluded.deleted_at, device_id = excluded.device_id`,
+    [meta.table, pkValue, nowIso(), deviceId]
+  );
+}
+
 function conflictWrite(input: {
   table: string;
   pkValue: string;

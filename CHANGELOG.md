@@ -16,9 +16,11 @@
   updated_at)` کوچک‌تر) → تساوی: updated_at کوچک‌تر → تساوی: hash کانونی بزرگ‌تر — متقارن و
   قطعی. بازندهٔ تعارض با **payload کامل** در `_sync_conflicts.loser_payload` آرشیو می‌شود —
   هیچ داده‌ای نمی‌پرد؛ همگرایی echo تضمین می‌کند بازندهٔ push به برنده برسد.
-- **مایگریشن 0114**: ستون `updated_at` + triggerهای مُهر خودکار درج/به‌روزرسانی و
-  تومب‌استون حذف روی ۶۰ جدول هم‌گام + سه جدول `_sync_deleted`/`_sync_conflicts`/`_sync_state`
-  (cursorها تراکنشی — شکست = ادامهٔ امن از سرِ مکان).
+- **مایگریشن 0114 (D1-سازگار)**: ستون `updated_at` + پسافت روی جداول فاقد + سه جدول
+  `_sync_deleted`/`_sync_conflicts`/`_sync_state` (cursorها تراکنشی — شکست = ادامهٔ امن از
+  سرِ مکان)؛ مُهر خودکار درج/به‌روزرسانی و تومب‌استون حذف با ۱۸۰ trigger **فقط-میز** که
+  adapter پس از مایگریشن اعمال می‌کند (`scripts/engine/local-triggers.sql` — D1 هرگز
+  نمی‌بیند؛ سیاست «مایگریشن بدون trigger/BEGIN» گیت check-d1-compat حفظ شد — ۱۳/۱۳ سبز).
 - **رانر میز `runCloudSync`**: سینک زمان‌دار هر ۱۰ دقیقه (پیکربندی‌شدنی، کف ۱ دقیقه) + دکمهٔ
   «هم‌گام‌سازی اکنون»؛ single-flight؛ بکاپ چرخشی (۳ نسخهٔ `cloud-sync-pre-*`) پیش از هر اعمال؛
   schema_match و clock_warning (>۱۲۰ث)؛ audit `cloud.sync` بدون هیچ secret.
