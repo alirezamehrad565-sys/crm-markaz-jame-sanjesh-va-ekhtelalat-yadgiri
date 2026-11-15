@@ -20,7 +20,7 @@ import {
   WEEKDAY_NAMES,
   gradeLabel
 } from '../format.js';
-import { el, icon, openModal, confirmModal, formModal, toast, toastError, statusBadge, emptyState, skeletonState } from '../ui.js';
+import { el, icon, openModal, confirmModal, formModal, toast, toastError, statusBadge, emptyState, skeletonState, lockBtn, collapseRemove } from '../ui.js'; /* ۱.۲۵.۰۲ — collapseRemove از جعبه‌ابزار مشترک (نسخهٔ محلی با ui یکسان بود) */
 import { hueClass, hueDot } from '../staff-hue.js'; // — رنگ ثابت هر درمانگر
 import { sessionTypeOf, sessionTypeChip, sessionTypeOptions } from '../session-type.js'; // — نوع جلسه (جدول ۴)
 import { openCaseEventForm, openCaseEventDetail, canCreateCaseEvents } from '../case-events.js';
@@ -37,6 +37,12 @@ const WORK_CAP = 21 * 60;    // — شیفت عصر فعال شد: بازهٔ ک
 let WORK_PPM = PPM_WORK_WEEK; // در ابتدای هر رندر بر اساس حالت تنظیم می‌شود
 
 let SCALE = null; // { start, end, workStart, workEnd, yOf(m), span(a, b), total }
+
+/* ۱.۲۰.۰ — جریان پیوستهٔ تقویم (الگوی ۱.۱۹.۰ روز کاری): هیچ اکشنی دیگر کل نما را re-render نمی‌کند.
+   بعد از هر mutation فقط همان کارت روی گرید زنده پچ می‌شود (upsertApptCard/removeApptCard) و
+   ناوبری هفته/روز/فیلتر هم فقط بدنهٔ گرید را بی‌صدا تازه می‌کند (refreshGrid) — بدون اسکلت و پرش اسکرول. */
+let VIEW = null; // دستگیره‌های نمای زندهٔ تقویم — در هر لحظه حداکثر یک نمونه
+let gridSeq = 0; // گارد نسل: پاسخ کهنهٔ ناوبری سریع نباید روی گرید تازه بنشیند
 
 function buildScale(visibleYmds, items) {
   const wdSet = new Set(visibleYmds.map((ymd) => iranianWeekdayOfYmd(ymd)));
@@ -87,6 +93,12 @@ function canManage(appt) {
   return r === 'manager' || r === 'secretary' || (r === 'therapist' && session.user.staffId === appt.staffId);
 }
 
+/* ۱.۲۵.۰۱ — ناظر فقط-خواندن: سطح ماژول تا buildDayColumn/apptOnGrid/handleDrop هم بتوانند گارد بگیرند
+   (قبل فقط دکمه‌های نوار ابزار گارد داشتند؛ کلیک روی سلول مودال «نوبت تازه» و درگ کارت به ۴۰۳ سرور می‌افتاد) */
+function isSupervisorRole() {
+  return session.user?.role === 'supervisor';
+}
+
 const state = {
   weekStart: null, // YMD شنبه
   viewMode: null,  // 'week' | 'day' — پیش‌فرض همیشه هفتگی (تصمیم کاربر)؛ نمای روزانه با سوییچ دستی
@@ -102,23 +114,42 @@ const state = {
   centerHours: [] // [{weekday, startMinute, endMinute}]
 };
 
+/* ۱.۱۸.۰ — رنگ/تیک نوبت از حضور واقعی دانش‌آموزان می‌آید (سیستم وضعیت عملیاتی حذف شد):
+   همهٔ حاضر/تأخیر = برگزارشده (is-attended)؛ همه غایب = برگزارنشده (is-noshow). */
+function attStateOf(a) {
+  if (a.status === 'cancelled') return 'cancelled';
+  const rows = (a.students ?? []).filter((s) => s.attendance !== 'cancelled');
+  if (rows.length === 0) return 'none';
+  if (rows.every((s) => s.attendance === 'present' || s.attendance === 'late')) return 'completed';
+  if (rows.every((s) => s.attendance === 'absent')) return 'no_show';
+  return 'none';
+}
+
 function apptStatusClass(a) {
   if (a.status === 'cancelled') return ' is-cancelled';
-  if (a.opsStatus === 'completed') return ' is-attended';
-  if (a.opsStatus === 'no_show') return ' is-noshow';
+  const st = attStateOf(a);
+  if (st === 'completed') return ' is-attended';
+  if (st === 'no_show') return ' is-noshow';
   return '';
 }
 
 const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export async function renderAppointments(container, ctx = {}) {
+  gridSeq++; /* F8: هر رندر تازه (مثلاً setMode → rerender) پاسخ در پروازِ refreshGrid نمونهٔ قبلی را کهنه می‌کند */
   if (ctx.query?.tab === 'waitlist') {
     location.replace('#/waitlist'); // — ماژول مستقل
     return;
   }
 
   if (!state.weekStart) state.weekStart = weekStartOf(tehranTodayYmd());
-  if (!state.viewMode) state.viewMode = 'week'; // — پیش‌فرض هفتگی در همهٔ دستگاه‌ها (تصمیم کاربر)
+  if (!state.viewMode) {
+    /* UX-ممیزی: نمای هفتگی در موبایل = اسکرول افقی ~۳ برابر عرض صفحه؛
+       اولین ورود در دستگاه لمسی/باریک با «روز» شروع می‌شود (انتخاب کاربر در نشست حفظ می‌شود) */
+    const coarse = window.matchMedia?.('(pointer: coarse)')?.matches;
+    const narrow = window.matchMedia?.('(max-width: 640px)')?.matches;
+    state.viewMode = (coarse || narrow) ? 'day' : 'week';
+  }
   if (!state.dayYmd) state.dayYmd = tehranTodayYmd();
   const isTherapist = session.user?.role === 'therapist';
   if (isTherapist) state.staffFilter = session.user.staffId;
@@ -165,6 +196,11 @@ export async function renderAppointments(container, ctx = {}) {
   );
   // فیلتر درمانگر نوار هفته: بیش از ۵ نفر به منوی کشویی می‌رود (همان الگوی تب دانش‌آموزان)؛
   // ردیف چیپ‌ها داخل فلکسِ week-bar با تعداد زیاد درمانگر چیدمان را می‌شکست
+  let dayTitle = null;   // — ۱.۲۰.۰: برچسب زندهٔ روز (refreshGrid فقط متنش را عوض می‌کند)
+  let weekTitle = null;  // — ۱.۲۰.۰: برچسب زندهٔ هفته
+  let undoBtn = null;    // — ۱.۲۰.۰: دکمهٔ برگردان کپی (نمایانی با syncUndoBtn)
+  let staffChipsRoot = null;     // — ۱.۲۰.۰: ریشهٔ چیپ‌های فیلتر برای همگام‌سازی in-place
+  let staffDropdownSync = null;  // — ۱.۲۰.۰: همگام‌ساز دکمهٔ دراپ‌داون فیلتر
   function buildStaffDropdown() {
     const panel = el('div', { class: 'dd__panel', style: { display: 'none' } });
     const btn = el('button',
@@ -174,6 +210,17 @@ export async function renderAppointments(container, ctx = {}) {
       icon('chevL', 13)
     );
     const root = el('div', { class: 'dd' }, btn, panel);
+
+    /* ۱.۲۰.۰ — همگام‌سازی in-place دکمهٔ فیلتر (جای rebuild کل نوار) */
+    function syncDropdownBtn() {
+      btn.classList.toggle('is-active', Boolean(state.staffFilter));
+      btn.replaceChildren(
+        state.staffFilter ? hueDot(state.staffFilter) : null,
+        el('span', {}, state.staffFilter ? staffName(state.staffFilter) : 'همه درمانگرها'),
+        icon('chevL', 13)
+      );
+    }
+    staffDropdownSync = syncDropdownBtn;
 
     function drawPanel() {
       const items = [
@@ -206,33 +253,47 @@ export async function renderAppointments(container, ctx = {}) {
       panel.style.display = 'none';
       document.removeEventListener('mousedown', outside, true);
       state.staffFilter = id;
-      rerender(container);
+      syncDropdownBtn();
+      refreshGrid(); /* ۱.۲۰.۰ — فیلتر فقط گرید را تازه می‌کند؛ نوار و اسکرول سر جایش */
     }
 
     return root;
+  }
+
+  /* ۱.۲۰.۰ — همگام‌سازی in-place ظاهر فیلتر درمانگر بعد از تغییر state.staffFilter */
+  function syncStaffFilterUi() {
+    if (isTherapist) return;
+    if (staffChipsRoot) {
+      for (const chip of staffChipsRoot.querySelectorAll('.staff-chip')) {
+        const on = (chip.dataset.staff ?? '') === state.staffFilter;
+        chip.classList.toggle('is-active', on);
+        chip.setAttribute('aria-pressed', String(on));
+      }
+    }
+    staffDropdownSync?.();
   }
 
   const staffSelect = isTherapist
     ? el('span', { class: 'badge badge--neutral', style: { padding: '6px 10px' } }, `برنامهٔ من — ${staffName(session.user.staffId)}`)
     : state.therapistList.length > 5
       ? buildStaffDropdown()
-      : el(
+      : (staffChipsRoot = el(
         'div',
         { class: 'staff-chips', role: 'group', 'aria-label': 'فیلتر درمانگر' },
         el(
           'button',
-          { class: `staff-chip${state.staffFilter === '' ? ' is-active' : ''}`, type: 'button', 'aria-pressed': String(state.staffFilter === ''), onclick: () => { state.staffFilter = ''; rerender(container); } }, /* S2-02 */
+          { class: `staff-chip${state.staffFilter === '' ? ' is-active' : ''}`, type: 'button', 'aria-pressed': String(state.staffFilter === ''), dataset: { staff: '' }, onclick: () => { state.staffFilter = ''; syncStaffFilterUi(); refreshGrid(); } }, /* S2-02 · ۱.۲۰.۰ */
           'همه'
         ),
         state.therapistList.map((s) =>
           el(
             'button',
-            { class: `staff-chip ${hueClass(s.id)}${state.staffFilter === s.id ? ' is-active' : ''}`, type: 'button', 'aria-pressed': String(state.staffFilter === s.id), onclick: () => { state.staffFilter = s.id; rerender(container); } }, /* S2-02 */
+            { class: `staff-chip ${hueClass(s.id)}${state.staffFilter === s.id ? ' is-active' : ''}`, type: 'button', 'aria-pressed': String(state.staffFilter === s.id), dataset: { staff: s.id }, onclick: () => { state.staffFilter = s.id; syncStaffFilterUi(); refreshGrid(); } }, /* S2-02 · ۱.۲۰.۰ */
             hueDot(s.id),
             s.fullName
           )
         )
-      );
+      ));
   // ناظر فقط-خواندن: دکمهٔ نوشتنی (نوبت جدید/کپی هفته) از نوار تقویم حذف می‌شود
   const isSupervisor = session.user?.role === 'supervisor';
   const newBtn = isSupervisor
@@ -242,21 +303,19 @@ export async function renderAppointments(container, ctx = {}) {
   const bar = el('div', { class: 'week-bar' },
     modeSeg,
     ...(isDay ? [
-      el('button', { class: 'btn btn--ghost btn--icon', 'aria-label': 'روز قبل', onclick: () => { state.dayYmd = addDaysYmd(state.dayYmd, -1); rerender(container); } }, icon('chevR', 18)),
-      el('button', { class: 'btn btn--ghost btn--sm', onclick: () => { state.dayYmd = tehranTodayYmd(); rerender(container); } }, 'امروز'),
-      el('button', { class: 'btn btn--ghost btn--icon', 'aria-label': 'روز بعد', onclick: () => { state.dayYmd = addDaysYmd(state.dayYmd, 1); rerender(container); } }, icon('chevL', 18)),
-      el('div', { class: 'week-bar__title' }, formatJalaliFull(state.dayYmd))
+      el('button', { class: 'btn btn--ghost btn--icon', 'aria-label': 'روز قبل', onclick: () => { state.dayYmd = addDaysYmd(state.dayYmd, -1); refreshGrid(); } }, icon('chevR', 18)), /* ۱.۲۰.۰ */
+      el('button', { class: 'btn btn--ghost btn--sm', onclick: () => { state.dayYmd = tehranTodayYmd(); refreshGrid(); } }, 'امروز'), /* ۱.۲۰.۰ */
+      el('button', { class: 'btn btn--ghost btn--icon', 'aria-label': 'روز بعد', onclick: () => { state.dayYmd = addDaysYmd(state.dayYmd, 1); refreshGrid(); } }, icon('chevL', 18)), /* ۱.۲۰.۰ */
+      dayTitle = el('div', { class: 'week-bar__title' }, formatJalaliFull(state.dayYmd))
     ] : [
       el('button', { class: 'btn btn--ghost btn--icon', 'aria-label': 'هفته قبل', onclick: () => shiftWeek(-1) }, icon('chevR', 18)),
-      el('button', { class: 'btn btn--ghost btn--sm', onclick: () => { state.weekStart = weekStartOf(tehranTodayYmd()); rerender(container); } }, 'این هفته'),
+      el('button', { class: 'btn btn--ghost btn--sm', onclick: () => { state.weekStart = weekStartOf(tehranTodayYmd()); refreshGrid(); } }, 'این هفته'), /* ۱.۲۰.۰ */
       el('button', { class: 'btn btn--ghost btn--icon', 'aria-label': 'هفته بعد', onclick: () => shiftWeek(1) }, icon('chevL', 18)),
-      el('div', { class: 'week-bar__title' }, weekLabel),
+      weekTitle = el('div', { class: 'week-bar__title' }, weekLabel),
       el('div', { class: 'spacer' }),
-      state.lastBatchId && !isSupervisor
-        ? el('button', { class: 'btn btn--ghost btn--sm', onclick: undoLastCopy }, icon('undo', 16), 'برگردان آخرین کپی')
-        : null,
+      undoBtn = el('button', { class: 'btn btn--ghost btn--sm', onclick: (e) => lockBtn(e.currentTarget, undoLastCopy) /* F7: قفل مشغولی — دوبارکلیک undo دوبار اجرا نمی‌کند */, style: state.lastBatchId && !isSupervisor ? null : { display: 'none' } }, icon('undo', 16), 'برگردان آخرین کپی'), /* ۱.۲۰.۰ — همیشه ساخته می‌شود؛ نمایانی با syncUndoBtn */
       !isSupervisor
-        ? el('button', { class: 'btn btn--ghost btn--sm', onclick: copyPrevWeek }, icon('copy', 16), 'کپی از هفته قبل')
+        ? el('button', { class: 'btn btn--ghost btn--sm', onclick: (e) => lockBtn(e.currentTarget, copyPrevWeek) /* F7: قفل مشغولی — دوبارکلیک کپی دوبار اجرا نمی‌کند */ }, icon('copy', 16), 'کپی از هفته قبل')
         : null
     ]),
     isDay ? el('div', { class: 'spacer' }) : null,
@@ -264,17 +323,79 @@ export async function renderAppointments(container, ctx = {}) {
     newBtn // برای ناظر null است
   );
 
-  const today = tehranTodayYmd();
-  const byDay = groupByDay(appointments);
-
-  const visibleYmds = isDay
-    ? [state.dayYmd]
-    : Array.from({ length: 7 }, (_, i) => addDaysYmd(state.weekStart, i));
-  SCALE = buildScale(visibleYmds, isDay ? (byDay.get(state.dayYmd) ?? []) : appointments);
-
+  /* — ۱.۲۰.۰: گرید و راهنمای رنگ در ظرف‌های ماندگار ساخته می‌شوند؛
+     refreshGrid فقط همین دو را بازسازی می‌کند (بدون اسکلت، بدون تغییر نوار و اسکرول). */
+  const legendEl = el('div', {});
   const gridInner = el('div', { class: 'grid-inner' });
 
-  if (isDay) {
+  VIEW = { container, legendEl, gridInner, countEls: new Map(), isDay, refreshGrid };
+
+  container.replaceChildren(
+    ...[
+      bar,
+      legendEl,
+      !isDay ? el('div', { class: 'swipe-hint is-week' }, icon('chevL', 14), 'برای دیدن روزهای دیگر بکشید — جابه‌جایی نوبت روی لمس از «ویرایش زمان» داخل جزئیات') : null,
+      el('div', { class: 'grid-wrap' }, el('div', { class: 'grid-scroll' }, gridInner))
+    ].filter(Boolean)
+  );
+
+  drawGrid(appointments);
+  autoScrollToWorkingHours();
+
+  function currentRange() {
+    const anchor = state.viewMode === 'day' ? state.dayYmd : state.weekStart;
+    const ws = weekStartOf(anchor);
+    const we = addDaysYmd(ws, 6);
+    return { ws, we, from: tehranDayRange(ws).start, to: tehranDayRange(we).end };
+  }
+
+  /* — تازه‌سازی بی‌صدای گرید: ناوبری روز/هفته/فیلتر و عملیات‌های انبوه فقط همین را صدا می‌زنند
+     (۱.۲۰.۰ — بدون اسکلت، بدون rebuild نوار، بدون پرش اسکرول) */
+  async function refreshGrid() {
+    const seq = ++gridSeq;
+    const r = currentRange();
+    let appts;
+    try {
+      appts = (await api.get(`/api/appointments${qs({ from: r.from, to: r.to, staff_id: state.staffFilter || undefined })}`)).data;
+    } catch (err) {
+      toastError(err);
+      return;
+    }
+    if (seq !== gridSeq || VIEW?.container !== container || !container.isConnected) return; // پاسخ کهنه / نمای عوض‌شده
+    if (state.viewMode === 'day') { if (dayTitle) dayTitle.textContent = formatJalaliFull(state.dayYmd); }
+    else if (weekTitle) weekTitle.textContent = `${formatJalaliShort(r.ws)} تا ${formatJalaliShort(r.we)}`;
+    syncUndoBtn();
+    syncStaffFilterUi();
+    drawGrid(appts);
+  }
+
+  function syncUndoBtn() {
+    if (undoBtn) undoBtn.style.display = state.lastBatchId && !isSupervisor ? '' : 'none';
+  }
+
+  /* بازسازی فقط بدنهٔ گرید + راهنمای رنگ (۱.۲۰.۰) */
+  function drawGrid(appts) {
+    const isDayNow = state.viewMode === 'day';
+    VIEW.isDay = isDayNow;
+    VIEW.countEls = new Map();
+    const today = tehranTodayYmd();
+    const byDay = groupByDay(appts);
+
+    const visibleYmds = isDayNow
+      ? [state.dayYmd]
+      : Array.from({ length: 7 }, (_, i) => addDaysYmd(state.weekStart, i));
+    SCALE = buildScale(visibleYmds, isDayNow ? (byDay.get(state.dayYmd) ?? []) : appts);
+
+    /* شمارندهٔ زندهٔ هر سرستون — پچ‌های درجا فقط متن همین span را عوض می‌کنند */
+    const countEl = (key, text) => {
+      const s = el('span', {}, text);
+      VIEW.countEls.set(key, s);
+      return s;
+    };
+
+    gridInner.replaceChildren();
+
+    if (isDayNow) {
     const dayItems = byDay.get(state.dayYmd) ?? [];
     const dayStaff = state.staffFilter
       ? state.therapistList.filter((s) => s.id === state.staffFilter)
@@ -308,7 +429,7 @@ export async function renderAppointments(container, ctx = {}) {
       gridInner.appendChild(
         el('div', { class: 'grid-head grid-head--staff' },
           el('span', { style: { display: 'inline-flex', alignItems: 'center', gap: '6px' } }, isOther ? null : hueDot(s.id, 9), s.fullName),
-          el('span', { class: 'grid-head__date' }, `${fa(items.length)} نوبت`)
+          el('span', { class: 'grid-head__date' }, countEl(`${state.dayYmd}|${s.id}`, `${fa(items.length)} نوبت`))
         )
       );
     }
@@ -316,7 +437,7 @@ export async function renderAppointments(container, ctx = {}) {
     for (const s of cols) {
       const isOther = s.id === '_other';
       const items = isOther ? leftovers : dayItems.filter((a) => a.staffId === s.id);
-      gridInner.appendChild(buildDayColumn(state.dayYmd, items, state.dayYmd === today, { showStaffName: false }));
+      gridInner.appendChild(buildDayColumn(state.dayYmd, items, state.dayYmd === today, { showStaffName: false, staff: s.id }));
     }
   } else {
     gridInner.style.gridTemplateColumns = '';
@@ -345,7 +466,8 @@ export async function renderAppointments(container, ctx = {}) {
         el('div', { class: `grid-head${isToday ? ' is-today' : ''}` },
           WEEKDAY_NAMES[iranianWeekdayOfYmd(ymd)],
           el('span', { class: 'grid-head__date' },
-            `${relativeDayLabel(ymd) ? relativeDayLabel(ymd) + ' · ' : ''}${formatJalaliShort(ymd)} · ${fa(items.length)} نوبت`)
+            `${relativeDayLabel(ymd) ? relativeDayLabel(ymd) + ' · ' : ''}${formatJalaliShort(ymd)}`,
+            countEl(ymd, ` · ${fa(items.length)} نوبت`))
         )
       );
     }
@@ -355,7 +477,7 @@ export async function renderAppointments(container, ctx = {}) {
     }
   }
 
-  const visibleHues = new Set(appointments.filter((a) => !state.staffFilter).map((a) => a.staffId));
+  const visibleHues = new Set(appts.filter((a) => !state.staffFilter).map((a) => a.staffId));
   const legend = !isTherapist && visibleHues.size > 1
     ? el(
         'div',
@@ -367,21 +489,13 @@ export async function renderAppointments(container, ctx = {}) {
         el('span', { class: 'appt-legend__item' }, icon('x', 12), 'نیامد')
       )
     : null;
-
-  container.replaceChildren(
-    ...[
-      bar,
-      legend,
-      !isDay ? el('div', { class: 'swipe-hint is-week' }, icon('chevL', 14), 'برای دیدن روزهای دیگر بکشید — جابه‌جایی نوبت روی لمس از «ویرایش زمان» داخل جزئیات') : null,
-      el('div', { class: 'grid-wrap' }, el('div', { class: 'grid-scroll' }, gridInner))
-    ].filter(Boolean)
-  );
-
-  autoScrollToWorkingHours();
+  legendEl.replaceChildren(...(legend ? [legend] : []));
+  }
 
   function autoScrollToWorkingHours() {
     if (window.scrollY > 120) return; // بعد از عملیات‌های درون‌صفحه صفحه را نجاتک
-    const weekday = iranianWeekdayOfYmd(isDay ? state.dayYmd : today);
+    const today = tehranTodayYmd();
+    const weekday = iranianWeekdayOfYmd(state.viewMode === 'day' ? state.dayYmd : today);
     const ranges = state.centerHours.filter((r) => r.weekday === weekday);
     const startMin = ranges.length > 0 ? Math.min(...ranges.map((r) => r.startMinute)) : 8 * 60;
     const anchor = Math.max(SCALE.start, startMin - 30);
@@ -393,7 +507,7 @@ export async function renderAppointments(container, ctx = {}) {
 
   function shiftWeek(n) {
     state.weekStart = addDaysYmd(state.weekStart, n * 7);
-    rerender(container);
+    refreshGrid(); /* ۱.۲۰.۰ — بدون اسکلت */
   }
 
   function setMode(m) {
@@ -413,7 +527,9 @@ export async function renderAppointments(container, ctx = {}) {
 
 function buildDayColumn(ymd, items, isToday, opts = {}) {
   const showStaffName = opts.showStaffName !== false;
-  const col = el('div', { class: `grid-day${isToday ? ' is-today' : ''}` });
+  const ds = { ymd }; // — ۱.۲۰.۰: ستون با ymd/staff شناس‌پذیر می‌شود تا پچ درجا بتواند پیدایش کند
+  if (opts.staff) ds.staff = opts.staff;
+  const col = el('div', { class: `grid-day${isToday ? ' is-today' : ''}`, dataset: ds });
 
   for (const off of offRanges(ymd)) {
     col.appendChild(el('div', { class: 'grid-off', style: { top: `${off.top}px`, height: `${off.height}px` } }));
@@ -426,7 +542,7 @@ function buildDayColumn(ymd, items, isToday, opts = {}) {
       dataset: { minute: String(m), ymd }
       /* S2-01: سلول عمداً فوکوس‌پذیر نیست — صدها تاب‌استاپ می‌ساخت؛ ساخت نوبت با کیبورد از دکمهٔ «نوبت تازه» نوار ابزار و کارت‌های فوکوس‌پذیر می‌گذرد */
     });
-    cell.addEventListener('click', () => openQuickCreate(ymd, m));
+    cell.addEventListener('click', () => { if (!isSupervisorRole()) openQuickCreate(ymd, m); }); /* ۱.۲۵.۰۱ — ناظر: ساخت نوبت ندارد */
     cell.addEventListener('dragover', (e) => { e.preventDefault(); cell.classList.add('drop-target'); });
     cell.addEventListener('dragleave', () => cell.classList.remove('drop-target'));
     cell.addEventListener('drop', (e) => {
@@ -511,8 +627,8 @@ function apptOnGrid(a, ymd, opts = {}) {
     {
       class: `grid-appt${apptStatusClass(a)} ${hueClass(a.staffId)}`,
       style: { top: `${top}px`, height: `${height}px` },
-      draggable: 'true',
-      dataset: { id: a.id, version: String(a.version), ymd },
+      draggable: isSupervisorRole() ? null : 'true', /* ۱.۲۵.۰۱ — ناظر: جابه‌جایی نوبت ندارد */
+      dataset: { id: a.id, version: String(a.version), ymd, start: a.startAt },
       title: titleLines.join('\n'),
       /* S2-01: کارت تقویم با کیبورد باز می‌شود */
       role: 'button',
@@ -520,7 +636,7 @@ function apptOnGrid(a, ymd, opts = {}) {
       'aria-label': titleLines.join(' — ')
     },
     el('span', { class: 'grid-appt__time' },
-      a.opsStatus === 'completed' && a.status !== 'cancelled' ? el('span', { class: 'appt-tick' }, icon('check', 10)) : null,
+      attStateOf(a) === 'completed' ? el('span', { class: 'appt-tick' }, icon('check', 10)) : null,
       a.note ? el('span', { class: 'grid-appt__noted', title: a.note }) : null,
       `${fa(tehranTimeOfIso(a.startAt))} – ${fa(tehranTimeOfIso(a.endAt))}`
     ),
@@ -535,37 +651,16 @@ function apptOnGrid(a, ymd, opts = {}) {
   card.addEventListener('keydown', (e) => { /* S2-01 */
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetailModal(a.id); }
   });
-  card.addEventListener('dragstart', (e) => {
-    e.dataTransfer.setData('text/plain', JSON.stringify({ id: a.id, version: a.version, fromYmd: ymd }));
-    e.dataTransfer.effectAllowed = 'move';
-    card.classList.add('is-dragging');
-  });
-  card.addEventListener('dragend', () => card.classList.remove('is-dragging'));
+  if (!isSupervisorRole()) { /* ۱.۲۵.۰۱ — ناظر: شنونده‌های درگ کلاً سوار نمی‌شوند */
+    card.addEventListener('dragstart', (e) => {
+      e.dataTransfer.setData('text/plain', JSON.stringify({ id: a.id, version: a.version, fromYmd: ymd }));
+      e.dataTransfer.effectAllowed = 'move';
+      card.classList.add('is-dragging');
+    });
+    card.addEventListener('dragend', () => card.classList.remove('is-dragging'));
+  }
 
   return card;
-}
-
-/* A10: FLIP سه‌خطی vanilla — درگ نوبت قبلاً کل اوتلت را از صفر رندر می‌کرد و کارت «پرش» می‌زد.
-   قبل از رندر جای کارت را می‌گیریم؛ بعد از رندر کارت جدید را از فاصلهٔ عمودی معکوس به جای خودش پرواز می‌دهیم. */
-function flipMoveAppointment(id, rerenderFn) {
-  const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
-  const prev = document.querySelector(`.grid-appt[data-id="${CSS.escape(String(id))}"]`);
-  const prevTop = prev?.getBoundingClientRect().top ?? null;
-  rerenderFn();
-  if (reduce || prevTop == null) return;
-  requestAnimationFrame(() => {
-    const next = document.querySelector(`.grid-appt[data-id="${CSS.escape(String(id))}"]`);
-    if (!next) return;
-    const dy = prevTop - next.getBoundingClientRect().top;
-    if (Math.abs(dy) < 2) return;
-    next.style.transition = 'none';
-    next.style.transform = `translateY(${dy}px)`;
-    requestAnimationFrame(() => {
-      next.style.transition = 'transform var(--normal)';
-      next.style.transform = '';
-      next.addEventListener('transitionend', () => { next.style.transition = ''; }, { once: true });
-    });
-  });
 }
 
 async function handleDrop(e, targetYmd, cellMinute, cell) {
@@ -589,10 +684,9 @@ async function handleDrop(e, targetYmd, cellMinute, cell) {
       const res = await api.patch(`/api/appointments/${payload.id}/move`, { start_at: newStartAt, version: payload.version });
       toast(`نوبت به ${fa(minuteToLabel(snapped))} جابه‌جا شد`, 'success');
       if (res.warnings?.length) toast(`${fa(res.warnings.length)} تداخل نرم — جابه‌جایی انجام شد`, 'warning', 6000);
-      flipMoveAppointment(payload.id, () => rerender(document.getElementById('outlet'))); /* A10 */
+      if (!upsertApptCard(res.data, { animate: true })) await VIEW?.refreshGrid?.(); /* ۱.۲۰.۰ — کارت درجا پرواز می‌کند؛ نه اوتلت، نه refetch */
     } catch (err) {
-      toastError(err);
-      rerender(document.getElementById('outlet'));
+      toastError(err); /* ۱.۲۰.۰ — DOM دست‌نخورده مانده؛ نیازی به بازسازی نیست */
     }
   } else {
     let a;
@@ -620,6 +714,84 @@ function errorView(err) {
 
 function rerender(container) {
   renderAppointments(container);
+}
+
+/* — ۱.۲۰.۰ جعبه‌ابزار پچ درجای گرید (همان زبان ۱.۱۹.۰ روز کاری) — */
+function findGridCol(ymd, staffId) {
+  if (!VIEW || !VIEW.container.isConnected) return null;
+  const esc = CSS.escape;
+  if (VIEW.isDay) {
+    return VIEW.gridInner.querySelector(`.grid-day[data-ymd="${esc(ymd)}"][data-staff="${esc(staffId ?? '')}"]`)
+      ?? VIEW.gridInner.querySelector(`.grid-day[data-ymd="${esc(ymd)}"][data-staff="_other"]`);
+  }
+  return VIEW.gridInner.querySelector(`.grid-day[data-ymd="${esc(ymd)}"]`);
+}
+
+function apptFitsScale(a) {
+  if (!SCALE) return false;
+  const s = timeToMinute(tehranTimeOfIso(a.startAt));
+  let e = timeToMinute(tehranTimeOfIso(a.endAt));
+  if (isoToYmd(a.endAt) !== isoToYmd(a.startAt)) e += 1440;
+  return s >= SCALE.start && e <= SCALE.end;
+}
+
+function updateColCount(col) {
+  if (!VIEW || !col?.isConnected) return;
+  const key = VIEW.isDay ? `${col.dataset.ymd}|${col.dataset.staff}` : col.dataset.ymd;
+  const elc = VIEW.countEls.get(key);
+  if (!elc) return;
+  const n = col.querySelectorAll(':scope > .grid-appt').length;
+  elc.textContent = VIEW.isDay ? `${fa(n)} نوبت` : ` · ${fa(n)} نوبت`;
+}
+
+function insertApptSorted(col, card, a) {
+  const next = [...col.querySelectorAll(':scope > .grid-appt')].find((c) => c.dataset.start && c.dataset.start > a.startAt);
+  if (next) col.insertBefore(card, next);
+  else col.appendChild(card);
+}
+
+/* پرواز FLIP تک‌کارت — جایگزین flipMoveAppointment قدیمی که کل اوتلت را رندر می‌کرد */
+function flyFrom(card, prevTop) {
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) return;
+  requestAnimationFrame(() => {
+    const dy = prevTop - card.getBoundingClientRect().top;
+    if (Math.abs(dy) < 2) return;
+    card.style.transition = 'none';
+    card.style.transform = `translateY(${dy}px)`;
+    requestAnimationFrame(() => {
+      card.style.transition = 'transform var(--normal)';
+      card.style.transform = '';
+      card.addEventListener('transitionend', () => { card.style.transition = ''; }, { once: true });
+    });
+  });
+}
+
+/* ساخت/به‌روزرسانی یک کارت نوبت روی گرید زنده؛ false یعنی خارج از دید/مقیاس است → refreshGrid */
+function upsertApptCard(a, { animate = false } = {}) {
+  if (!VIEW || !SCALE || !a?.id) return false;
+  const ymd = isoToYmd(a.startAt);
+  const col = findGridCol(ymd, a.staffId);
+  if (!col || !apptFitsScale(a)) return false;
+  const old = VIEW.gridInner.querySelector(`.grid-appt[data-id="${CSS.escape(String(a.id))}"]`);
+  const oldCol = old?.parentElement ?? null;
+  const oldTop = old?.getBoundingClientRect().top ?? null;
+  const card = apptOnGrid(a, ymd, { showStaffName: !VIEW.isDay });
+  if (old) old.remove();
+  insertApptSorted(col, card, a);
+  if (oldCol && oldCol !== col) updateColCount(oldCol);
+  updateColCount(col);
+  if (animate && oldTop != null) flyFrom(card, oldTop);
+  return true;
+}
+
+function removeApptCard(id) {
+  if (!VIEW || !VIEW.container.isConnected || id == null) return false;
+  const card = VIEW.gridInner.querySelector(`.grid-appt[data-id="${CSS.escape(String(id))}"]`);
+  if (!card) return false;
+  const col = card.parentElement;
+  collapseRemove(card);
+  updateColCount(col);
+  return true;
 }
 
 function weekStartOf(ymd) {
@@ -716,7 +888,7 @@ function openCreateModal(container, preset = {}) {
       if (res.warnings?.length) {
         toast(`${fa(res.warnings.length)} تداخل زمانی نرم شناسایی شد (نوبت ثبت ماند)`, 'warning', 6000);
       }
-      rerender(container);
+      if (!upsertApptCard(res.data)) await VIEW?.refreshGrid?.(); /* ۱.۲۰.۰ — کارت نو همان لحظه روی گرید می‌نشیند */
     }
   });
 
@@ -774,6 +946,15 @@ async function openDetailModal(appointmentId) {
   } catch (err) {
     toastError(err);
     return;
+  }
+
+  /* ۱.۲۰.۰ — بعد از تغییر حضور/دانش‌آموزان، کارت همین نوبت روی گرید بی‌صدا پچ می‌شود
+     (رفع stale کهن: قبلاً گرید تا ناوبری بعدی قدیمی می‌ماند) */
+  async function syncGridCard() {
+    try {
+      const fresh = (await api.get(`/api/appointments${qs({ id: a.id })}`)).data;
+      if (!upsertApptCard(fresh)) await VIEW?.refreshGrid?.();
+    } catch { /* بی‌صدا — گرید در ناوبری بعدی تازه می‌شود */ }
   }
 
   const studentsBox = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px' } });
@@ -904,10 +1085,14 @@ async function openDetailModal(appointmentId) {
                 style: { width: 'auto', padding: '4px 8px', fontSize: 'var(--fs-sm)' },
                 'aria-label': `وضعیت حضور ${state.studentNames.get(s.studentId) ?? ''}`, /* S2-08 */
                 onchange: async (e) => {
+                  const prev = s.attendance ?? 'pending'; /* F6: آخرین مقدار ذخیره‌شده برای برگرداندن انتخاب در خطا */
                   try {
                     await api.patch(`/api/attendance/${a.id}/${s.studentId}`, { status: e.target.value });
+                    s.attendance = e.target.value; /* F6: مدل محلی همگام بماند تا revert بعدی مقدار درست را دارد */
                     toast('وضعیت حضور ثبت شد', 'success');
+                    syncGridCard(); /* ۱.۲۰.۰ — تیک/رنگ کارت همان لحظه */
                   } catch (err) {
+                    e.target.value = prev; /* F6: وضعیت ردشده روی select نماند */
                     toastError(err);
                   }
                 }
@@ -926,6 +1111,7 @@ async function openDetailModal(appointmentId) {
                 try {
                   await api.del(`/api/appointments/${a.id}/students/${s.studentId}`);
                   toast('دانش‌آموز از نوبت حذف شد', 'success');
+                  syncGridCard(); /* ۱.۲۰.۰ */
                   close();
                   setTimeout(() => openDetailModal(a.id), 100);
                 } catch (err) {
@@ -964,6 +1150,7 @@ async function openDetailModal(appointmentId) {
                 try {
                   await api.post(`/api/appointments/${a.id}/students`, { student_id: s.id });
                   toast('دانش‌آموز اضافه شد', 'success');
+                  syncGridCard(); /* ۱.۲۰.۰ */
                   close();
                   setTimeout(() => openDetailModal(a.id), 100);
                 } catch (err) {
@@ -1004,10 +1191,10 @@ async function openDetailModal(appointmentId) {
               onclick: async () => {
                 if (!(await confirmModal({ title: 'برگرداندن نوبت', message: 'این نوبت دوباره به وضعیت «برنامه‌ریزی‌شده» برمی‌گردد و اعلان آن صف می‌شود. ادامه می‌دهید؟', confirmLabel: 'برگردان' }))) return;
                 try {
-                  await api.post(`/api/appointments/${a.id}/restore`, { version: a.version });
+                  const res = await api.post(`/api/appointments/${a.id}/restore`, { version: a.version });
                   toast('نوبت دوباره برقرار شد', 'success');
                   closeRoot();
-                  rerender(document.getElementById('outlet'));
+                  if (!upsertApptCard(res.data, { animate: true })) await VIEW?.refreshGrid?.(); /* ۱.۲۰.۰ */
                 } catch (err) {
                   toastError(err);
                 }
@@ -1021,10 +1208,10 @@ async function openDetailModal(appointmentId) {
               onclick: async () => {
                 if (!(await confirmModal({ title: 'لغو نوبت', message: 'این نوبت لغو خواهد شد. آیا مطمئن هستید؟', confirmLabel: 'لغو نوبت', danger: true }))) return;
                 try {
-                  await api.post(`/api/appointments/${a.id}/cancel`, { version: a.version });
+                  const res = await api.post(`/api/appointments/${a.id}/cancel`, { version: a.version });
                   toast('نوبت لغو شد (اعلان لغو صف شد)', 'success');
                   closeRoot();
-                  rerender(document.getElementById('outlet'));
+                  if (!upsertApptCard(res.data, { animate: true })) await VIEW?.refreshGrid?.(); /* ۱.۲۰.۰ */
                 } catch (err) {
                   toastError(err);
                 }
@@ -1047,7 +1234,7 @@ async function openDetailModal(appointmentId) {
                   await api.del(`/api/appointments/${a.id}`);
                   toast('نوبت حذف شد', 'success');
                   closeRoot();
-                  rerender(document.getElementById('outlet'));
+                  if (!removeApptCard(a.id)) await VIEW?.refreshGrid?.(); /* ۱.۲۰.۰ — جمع‌شدن انیمیشنی کارت */
                 } catch (err) {
                   toastError(err);
                 }
@@ -1100,10 +1287,11 @@ function openEditModal(a, currentDuration, preset = {}) {
           end_at: tehranYmdMinuteToIso(newYmd, newStartMinute + newDuration),
           version: current.version
         });
+        current = res.data ?? current; /* ۱.۲۰.۰ — نسخهٔ تازه برای پچ درجا */
         if (res.warnings?.length) toast(`${fa(res.warnings.length)} تداخل نرم — مدت تغییر کرد`, 'warning', 6000);
       }
       toast('نوبت به‌روزرسانی شد', 'success');
-      rerender(document.getElementById('outlet'));
+      if (!upsertApptCard(current, { animate: true })) await VIEW?.refreshGrid?.(); /* ۱.۲۰.۰ */
     }
   });
 }
@@ -1125,7 +1313,7 @@ async function copyPrevWeek() {
     state.lastBatchId = res.data.batchId;
     try { sessionStorage.setItem('cs.lastBatchId', state.lastBatchId); } catch { /* خصوصی */ } /* S2-09 */
     toast(`${fa(res.data.copied)} نوبت کپی شد${res.data.conflicts?.length ? ` — ${fa(res.data.conflicts.length)} تداخل` : ''}`, res.data.conflicts?.length ? 'warning' : 'success', 6000);
-    rerender(document.getElementById('outlet'));
+    await VIEW?.refreshGrid?.(); /* ۱.۲۰.۰ — بدون اسکلت؛ دکمهٔ برگردان با syncUndoBtn ظاهر می‌شود */
   } catch (err) {
     toastError(err);
   }
@@ -1137,7 +1325,8 @@ async function undoLastCopy() {
     const res = await api.post(`/api/appointments/copy-week/${state.lastBatchId}/undo`);
     toast(`${fa(res.data.removed)} نوبت برگردانده شد`, 'success');
     state.lastBatchId = null;
-    rerender(document.getElementById('outlet'));
+    try { sessionStorage.removeItem('cs.lastBatchId'); } catch { /* خصوصی */ } /* F5: بعد از reload دکمهٔ برگردان برای دستهٔ انجام‌شده دوباره ظاهر نشود */
+    await VIEW?.refreshGrid?.(); /* ۱.۲۰.۰ */
   } catch (err) {
     toastError(err);
   }

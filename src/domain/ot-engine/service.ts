@@ -1,6 +1,8 @@
 import type { AuthContext } from '@core/shared';
 import { NEED_PROTOCOL_SUGGESTIONS, STUDENT_PROTOCOL_LABELS, type StudentProtocol } from '@core/shared';
+import { SNAP_IV_CUTOFFS, SCARED_CUTOFFS } from '@domain/clinical-engine/instruments'; /* ۱.۲۵.۰۶ — تک‌منبع برش‌ها (کپی محلی حذف) */
 import type { DbClient } from '@core/db';
+import { inParamChunks, inPlaceholders } from '@core/db/in-chunks'; // ۱.۲۵.۷۲ — دروازهٔ IN-list (بدهی ف۶ ⑧)
 import { ForbiddenError, NotFoundError, ValidationError } from '@core/errors';
 import type { AuditWriter } from '@core/audit';
 import type { Logger } from '@core/logger';
@@ -34,7 +36,8 @@ export const NEEDS_TEXT_MAX = 4000;
 export const NEEDS_PLAN_MAX = 300;
 
 const ANAMNESIS_KEYS = ['ce-anamnesis-v3', 'ce-anamnesis-v2', 'anamnesis'];
-const BEHAVIORAL_KEYS = ['sdq-parent', 'ce-sdq-t-v1', 'ce-snap-iv-p-v1', 'ce-snap-iv-t-v1', 'ce-scared-p-v1', 'ce-dcdq-v1'];
+/* ۱.۲۵.۵۹ — ce-sdq-p-v1 جانشین sdq-parent است (قدیمی غیرفعال شد؛ رویدادهایش می‌مانند) */
+const BEHAVIORAL_KEYS = ['sdq-parent', 'ce-sdq-p-v1', 'ce-sdq-t-v1', 'ce-snap-iv-p-v1', 'ce-snap-iv-t-v1', 'ce-scared-p-v1', 'ce-dcdq-v1'];
 const WECHSLER_KEYS = ['ce-wechsler-w4-v1', 'wechsler'];
 
 const NEEDS_EVENT_KEY = 'ce-needs-v1';
@@ -45,13 +48,11 @@ const SLD_CHECKLIST_EVENT_KEYS = ['ce-sld-read-v1', 'ce-sld-wri-v1', 'ce-sld-cal
 const REHAB_PATHWAY_ORDER = ['anamnesis', 'skills', 'needs'] as const;
 
 const SUSPICION_EVENT_KEY = 'ce-clinical-suspicion-v1';
-const SNAP_CUTOFFS = {
-  parent: { ia: { warn: 11, danger: 16 }, hi: { danger: 13 } },
-  teacher: { ia: { warn: 14, danger: 16 }, hi: { danger: 11 } }
-} as const;
-const SCARED_DANGER = 25;
-const SCARED_WARN_MIN = 20;
-const SCARED_STRONG = 30;
+/* ۱.۲۵.۰۶ — SNAP_CUTOFFS/SCARED_* محلی حذف شد؛ از instruments.ts می‌خواند (همان عددها، یک منبع) */
+const SNAP_CUTOFFS = SNAP_IV_CUTOFFS;
+const SCARED_DANGER = SCARED_CUTOFFS.danger;
+const SCARED_WARN_MIN = SCARED_CUTOFFS.warnMin;
+const SCARED_STRONG = SCARED_CUTOFFS.strong;
 const SUSPICION_LEVEL_LABELS: Record<string, string> = {
   watch: 'قابل پایش',
   high: 'محتمل — شواهد هم‌گرا'
@@ -234,7 +235,7 @@ function computeSuspicion(behavioralEvents: StageEventRow[], decisionEvent: Stag
       }
       continue;
     }
-    if (toolKey === 'sdq-parent' || toolKey === 'ce-sdq-t-v1') {
+    if (toolKey === 'sdq-parent' || toolKey === 'ce-sdq-p-v1' || toolKey === 'ce-sdq-t-v1') {
       const src = sourceFa(toolKey);
       if (subscaleColorOf(event, 'hyper') === 'danger') {
         hits.push({ construct: 'adhd', level: 'high', source: sourceOf(toolKey), text: `بیش‌فعالی در SDQ ${src} پرخطر گزارش شده است` });
@@ -481,7 +482,7 @@ export function createOtEngineService(deps: OtEngineDeps) {
         WHERE e.student_id = ? AND e.status = 'completed' AND e.deleted_at IS NULL
           AND t.key IN (${keys.map(() => '?').join(', ')})
         ORDER BY e.occurred_at DESC, e.created_at DESC
-        LIMIT 200`,
+        LIMIT 200`, // IN-bounded: keys از ثابت‌های ماژول (BEHAVIORAL/WECHSLER/SUSPICION) است
       [studentId, ...keys]
     );
     return rows.map((r) => ({
@@ -948,21 +949,29 @@ export function createOtEngineService(deps: OtEngineDeps) {
     const ids = [...bySkill.keys()];
     if (ids.length === 0) throw new ValidationError('حداقل یک مهارت با وضعیت لازم است');
 
-    const validRows = await db.query<{ id: string }>(
-      `SELECT id FROM ot_skills WHERE id IN (${ids.map(() => '?').join(', ')})`,
-      ids
-    );
+    /* ۱.۲۵.۷۲ — تکه‌بندی ۹۰تایی: ids از بدنهٔ درخواست است (به‌روزرسانی دسته‌جمعی مهارت‌ها — سقف ۱۰۰ بایند D1) */
+    const validRows: { id: string }[] = [];
+    for (const chunk of inParamChunks(ids)) {
+      validRows.push(...await db.query<{ id: string }>(
+        `SELECT id FROM ot_skills WHERE id IN (${inPlaceholders(chunk.length)})`,
+        chunk
+      ));
+    }
     const valid = new Set(validRows.map((r) => r.id));
     const unknown = ids.filter((x) => !valid.has(x));
     if (unknown.length > 0) throw new ValidationError(`شناسهٔ مهارت نامعتبر: ${unknown[0]}`);
 
-    const prevRows = await db.query<{ skill_id: string; status: string }>(
-      `SELECT skill_id, status
+    /* ۱.۲۵.۷۲ — تکه‌بندی ۹۰تایی؛ هر مهارت در یک تکه است پس «آخرین وضعیت» هر مهارت حفظ می‌شود */
+    const prevRows: { skill_id: string; status: string }[] = [];
+    for (const chunk of inParamChunks(ids)) {
+      prevRows.push(...await db.query<{ skill_id: string; status: string }>(
+        `SELECT skill_id, status
          FROM ot_progress
-        WHERE student_id = ? AND skill_id IN (${ids.map(() => '?').join(', ')})
+        WHERE student_id = ? AND skill_id IN (${inPlaceholders(chunk.length)})
         ORDER BY occurred_at ASC, created_at ASC, rowid ASC`,
-      [studentId, ...ids]
-    );
+        [studentId, ...chunk]
+      ));
+    }
     const prevLatest = new Map<string, string>();
     for (const r of prevRows) prevLatest.set(r.skill_id, r.status); // آخرین ردیف هر مهارت
     const masteryConfirmed = ids.filter((id) => {

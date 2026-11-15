@@ -1,5 +1,6 @@
 import type { TagCategory, TagRecord, TagRef } from '@core/shared';
 import { ConflictError, NotFoundError } from '@core/errors';
+import { inParamChunks, inPlaceholders } from '@core/db/in-chunks'; // ۱.۲۵.۷۲ — دروازهٔ IN-list (بدهی ف۶ ⑧)
 import { diffStudentTags, normalizeTagName } from './pure';
 import type { ListTagsFilters, NewTagInput, TagDeps, TagService } from './types';
 
@@ -137,11 +138,14 @@ export function createTagService(deps: TagDeps): TagService {
         const unique = [...new Set(tagIds)];
 
         if (unique.length > 0) {
-          const placeholders = unique.map(() => '?').join(', ');
-          const found = await tx.query<{ id: string }>(
-            `SELECT id FROM tags WHERE active = 1 AND id IN (${placeholders})`,
-            unique
-          );
+          /* ۱.۲۵.۷۲ — تکه‌بندی ۹۰تایی: tagIds از بدنهٔ درخواست است (سقف ۱۰۰ بایند D1) */
+          const found: { id: string }[] = [];
+          for (const chunk of inParamChunks(unique)) {
+            found.push(...await tx.query<{ id: string }>(
+              `SELECT id FROM tags WHERE active = 1 AND id IN (${inPlaceholders(chunk.length)})`,
+              chunk
+            ));
+          }
           if (found.length !== unique.length) throw new NotFoundError('برچسب');
         }
 
@@ -151,14 +155,17 @@ export function createTagService(deps: TagDeps): TagService {
             WHERE st.student_id = ? AND t.active = 1`,
           [studentId]
         );
-        const nextRows =
-          unique.length > 0
-            ? await tx.query<TagRow>(
-                `SELECT t.id, t.name, t.category, t.color, t.active
-                   FROM tags t WHERE t.active = 1 AND t.id IN (${unique.map(() => '?').join(', ')})`,
-                unique
-              )
-            : [];
+        const nextRows: TagRow[] = [];
+        if (unique.length > 0) {
+          /* ۱.۲۵.۷۲ — تکه‌بندی ۹۰تایی */
+          for (const chunk of inParamChunks(unique)) {
+            nextRows.push(...await tx.query<TagRow>(
+              `SELECT t.id, t.name, t.category, t.color, t.active
+                   FROM tags t WHERE t.active = 1 AND t.id IN (${inPlaceholders(chunk.length)})`,
+              chunk
+            ));
+          }
+        }
 
         const current = currentRows.map(rowToRef);
         const next = nextRows.map(rowToRef);

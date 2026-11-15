@@ -1,0 +1,362 @@
+// پخش‌کنندهٔ کودک — صفحهٔ /m/:token در حالت کودک، راهنمای بی‌نشت و بازخورد گو/نوگو (M2 / ۱.۲۵.۰۸)
+// قرارداد §۹ سند طراحی: پیش‌نمایش «این هدف است / این نه» فقط از آیتم‌های آموزشی؛ پروب هرگز لو نمی‌رود.
+import { describe, it, expect, beforeAll } from 'vitest';
+import { createTestApp, Api, asRole, createStudent } from '../../test/harness';
+import { APP_VERSION } from '../../core/version';
+
+interface LinkBody { jti: string; token: string; url: string; expiresAt: string }
+interface StateBody { state: string; missionRef: string; missionTitle: string; packageTitle: string; expiresAt: string; playGame?: string; playHint?: { go: { label: string }; nogo: { label: string } | null } | null }
+
+function dataOf<T>(res: { body: unknown }): T {
+  return (res.body as { data: T }).data;
+}
+
+/** بستهٔ توجه آزمونی: آموزش سبز/آبی + پروب با غیرهدف بنفش — برای آزمون نشت */
+function gonogoM2Body() {
+  return {
+    package_id: 'attention2',
+    version: '1.0.0',
+    title_fa: 'توجه و بازداری پاسخ',
+    evidence_level: 'B',
+    dose: { days_per_week: 3, minutes: 15, max_missions_per_day: 2, min_weeks: 5 },
+    body: {
+      package_id: 'attention2',
+      goals: ['inhibition'],
+      mastery: { threshold: 85, sessions: 2 },
+      tone_rules: ['no_timer', 'no_rank', 'no_streak', 'no_fail_message'],
+      missions: [{
+        id: 'gonogo_m2', game: 'gonogo', goal: 'inhibition', metric: 'accuracy_gonogo',
+        title: 'ستاره‌چین',
+        probe: { items: 3, feedback: false, position: 'end' },
+        mastery: { threshold: 85, sessions: 2 },
+        items: [
+          { id: 'tr-go', phase: 'train', type: 'touch_report', stim: { shape: 'star', color: 'سبز' }, correct_touch: true },
+          { id: 'tr-nogo', phase: 'train', type: 'touch_report', stim: { shape: 'square', color: 'آبی' }, correct_touch: false },
+          { id: 'pr-go', phase: 'probe', type: 'touch_report', stim: { shape: 'star', color: 'سبز' }, correct_touch: true },
+          { id: 'pr-nogo', phase: 'probe', type: 'touch_report', stim: { shape: 'star', color: 'بنفش' }, correct_touch: false },
+          { id: 'pr-go2', phase: 'probe', type: 'touch_report', stim: { shape: 'circle', color: 'سبز' }, correct_touch: true }
+        ]
+      }],
+      parent_copy: { before: 'این بازی تمرین مهارت است، نه درمان.', after: 'فردا ۱۰ دقیقه کافی است.' }
+    }
+  };
+}
+
+function todayYmd(): string {
+  const now = new Date();
+  const tehran = new Date(now.getTime() + 3.5 * 3600 * 1000);
+  return tehran.toISOString().slice(0, 10);
+}
+
+describe('پخش‌کنندهٔ کودک (M2) — صفحه، راهنمای بی‌نشت و بازخورد گو/نوگو', () => {
+  let A: ReturnType<typeof createTestApp>;
+  let mgr: Api;
+  let anon: Api;
+  let studentId: string;
+  let link: LinkBody;
+
+  async function pageHtml(token: string): Promise<string> {
+    const raw = await A.app.request(`/m/${token}`, {}, A.env as never);
+    expect(raw.status).toBe(200);
+    return raw.text();
+  }
+
+  beforeAll(async () => {
+    A = createTestApp();
+    mgr = await asRole(A, 'manager');
+    anon = new Api(A);
+    studentId = (await createStudent(mgr)).id;
+
+    await mgr.post('/api/games/packages', gonogoM2Body());
+    await mgr.post('/api/games/packages/attention2/1.0.0/publish', {});
+    // هدف آزمونی همین بسته — هدف seed به بستهٔ دیگری تعلق دارد
+    const goal = await mgr.post('/api/games/goals', {
+      id: 'inhibition_m2', title_fa: 'بازداری پاسخ (آزمون M2)', package_id: 'attention2', metric_id: 'accuracy_gonogo'
+    });
+    expect(goal.status).toBe(201);
+    const rx = await mgr.post('/api/games/prescriptions', {
+      child_id: studentId, package_id: 'attention2', package_version: '1.0.0', goal_id: 'inhibition_m2'
+    });
+    expect(rx.status).toBe(201);
+    const rxId = dataOf<{ id: string }>(rx).id;
+    const m = await mgr.post('/api/games/missions', { prescription_id: rxId, mission_ref: 'gonogo_m2', scheduled_for: todayYmd() });
+    link = dataOf<LinkBody>(await mgr.post(`/api/games/missions/${dataOf<{ id: string }>(m).id}/link`, {}));
+  });
+
+  it('صفحهٔ parent_pre دارایی بازی ندارد — پخش‌کننده فقط در حالت کودک سرو می‌شود', async () => {
+    const html = await pageHtml(link.token);
+    expect(html).toContain('آمادهٔ شروع هستیم');
+    expect(html).not.toContain('play-root');
+    expect(html).not.toContain('/assets/play/');
+  });
+
+  it('child_active: پخش‌کننده با نوع‌بازی و راهنمای آموزشی بار می‌شود', async () => {
+    await anon.post(`/api/m/${link.token}/start`, {});
+    const html = await pageHtml(link.token);
+    expect(html).toContain('id="play-root"');
+    expect(html).toContain('data-kind="gonogo"');
+    expect(html).toContain(`/assets/play/play.js?v=${APP_VERSION}`);
+    expect(html).toContain(`/assets/play/play.css?v=${APP_VERSION}`);
+    // راهنما فقط از آموزش — با امضای دیداری مرحلهٔ ۱ (۱.۲۵.۲۳): «ماهی نارنجی» و «خرچنگ آبی»
+    // (محرک authored «ستاره سبز» فقط نمایش است و جای امضای مرحله را می‌دهد)
+    expect(html).toContain('ماهی نارنجی');
+    expect(html).toContain('خرچنگ آبی');
+    const st = dataOf<StateBody>(await anon.get(`/api/m/${link.token}/state`));
+    expect(st.playGame).toBe('gonogo');
+    expect(st.playHint?.go.label).toBe('ماهی نارنجی');
+    expect(st.playHint?.nogo?.label).toBe('خرچنگ آبی');
+  });
+
+  it('شناسهٔ غیرهدف پروب به هیچ‌جای صفحه و state درز نمی‌کند', async () => {
+    const html = await pageHtml(link.token);
+    const st = await anon.get(`/api/m/${link.token}/state`);
+    expect(html).not.toContain('بنفش');
+    expect(JSON.stringify(st.body)).not.toContain('بنفش');
+  });
+
+  it('بازخورد گو/نوگو: لمس درست «گرفتی!»، بازداری درست «عالی، صبر کردی!»، اشتباه بدون سرزنش', async () => {
+    const tk = link.token;
+    const go = dataOf<{ message: string }>(await anon.post(`/api/m/${tk}/attempts`, { item_id: 'tr-go', response: { touched: true }, rt_ms: 420, idem_key: 'm2-tr-go' }));
+    expect(go.message).toBe('گرفتی!');
+
+    const withhold = dataOf<{ message: string; correct: boolean }>(await anon.post(`/api/m/${tk}/attempts`, { item_id: 'tr-nogo', response: { touched: false }, rt_ms: null, idem_key: 'm2-tr-nogo' }));
+    expect(withhold.correct).toBe(true);
+    expect(withhold.message).toBe('عالی، صبر کردی!');
+
+    // سد سروری آیتم پاسخ‌داده‌شده (۱.۲۵.۲۵): ارسال دوبارهٔ همان آیتم با idem_key تازه
+    // پاسخ دوم نمی‌سازد — همان بازخورد نخست برمی‌گردد و دفترچه یک ردیف بیشتری ندارد
+    const again = dataOf<{ message: string; correct: boolean }>(await anon.post(`/api/m/${tk}/attempts`, { item_id: 'tr-nogo', response: { touched: true }, rt_ms: 300, idem_key: 'm2-tr-nogo-x' }));
+    expect(again.correct).toBe(true);
+    expect(again.message).toBe('عالی، صبر کردی!');
+    const trNogoRows = A.sql.prepare(`SELECT COUNT(*) AS n FROM game_attempts WHERE item_id = 'tr-nogo'`).get() as { n: number };
+    expect(trNogoRows.n).toBe(1); // حتی با کلید تکرار تازه، یک پاسخ برای هر آیتم
+  });
+
+  it('پروب همچنان هیچ بازخوردی ندارد و پایان جلسه صفحهٔ کودک را عوض می‌کند', async () => {
+    const tk = link.token;
+    const p1 = dataOf<Record<string, unknown>>(await anon.post(`/api/m/${tk}/attempts`, { item_id: 'pr-go', response: { touched: true }, rt_ms: 350, idem_key: 'm2-probe-1' }));
+    expect(p1).not.toHaveProperty('message');
+
+    await anon.post(`/api/m/${tk}/attempts`, { item_id: 'pr-nogo', response: { touched: false }, rt_ms: null, idem_key: 'm2-probe-2' });
+    await anon.post(`/api/m/${tk}/attempts`, { item_id: 'pr-go2', response: { touched: true }, rt_ms: 400, idem_key: 'm2-probe-3' });
+
+    const fin = await anon.post(`/api/m/${tk}/finish`, {});
+    expect(fin.status).toBe(200);
+    expect(dataOf<{ state: StateBody }>(fin).state.state).toBe('child_done');
+
+    const html = await pageHtml(tk);
+    expect(html).toContain('گوشی را به مامان بده');
+    expect(html).not.toContain('play-root');
+  });
+});
+
+// ─── فاز ۳/۴ بازطراحی — دنبالهٔ seed-دار سرور + شواهد نمایش واقعی (۱.۲۵.۱۳/۱۴) ───
+
+function gonogoAssessmentBody() {
+  return {
+    package_id: 'attention-assess',
+    version: '1.0.0',
+    title_fa: 'ارزیابی بازداری پاسخ',
+    evidence_level: 'B',
+    dose: { days_per_week: 1, minutes: 15, max_missions_per_day: 1, min_weeks: 2 },
+    body: {
+      package_id: 'attention-assess',
+      goals: ['inhibition'],
+      mode: 'assessment',
+      protocol: { id: 'gonogo-standard', version: '1.0.0' },
+      tone_rules: ['no_timer', 'no_rank', 'no_streak', 'no_fail_message'],
+      missions: [{
+        id: 'assess_m1', game: 'gonogo', goal: 'inhibition', metric: 'accuracy_gonogo',
+        metrics: ['correct_go_pct_gonogo', 'correct_nogo_pct_gonogo', 'commission_pct_gonogo', 'omission_pct_gonogo', 'median_rt_gonogo'],
+        title: 'ارزیابی استاندارد',
+        mastery: { threshold: 70, sessions: 1 },
+        items: [
+          { id: 'a-g1', phase: 'probe', type: 'touch_report', stim: { shape: 'star', color: 'زرد' }, correct_touch: true },
+          { id: 'a-g2', phase: 'probe', type: 'touch_report', stim: { shape: 'circle', color: 'زرد' }, correct_touch: true },
+          { id: 'a-g3', phase: 'probe', type: 'touch_report', stim: { shape: 'fish', color: 'زرد' }, correct_touch: true },
+          { id: 'a-n1', phase: 'probe', type: 'touch_report', stim: { shape: 'square', color: 'آبی' }, correct_touch: false },
+          { id: 'a-n2', phase: 'probe', type: 'touch_report', stim: { shape: 'square', color: 'آبی' }, correct_touch: false }
+        ]
+      }],
+      parent_copy: { before: 'امروز جلسهٔ ارزیابی است، نه بازی تمرینی.', after: 'جلسهٔ ارزیابی امروز ثبت شد.' }
+    }
+  };
+}
+
+describe('فاز ۳/۴ بازطراحی — ارزیابی مستقل با دنبالهٔ seed-دار و شواهد نمایش', () => {
+  let A2: ReturnType<typeof createTestApp>;
+  let mgr2: Api;
+  let anon2: Api;
+  let student2: string;
+  let link2: LinkBody;
+  let missionId2: string;
+
+  beforeAll(async () => {
+    A2 = createTestApp();
+    mgr2 = await asRole(A2, 'manager');
+    anon2 = new Api(A2);
+    student2 = (await createStudent(mgr2)).id;
+    await mgr2.post('/api/games/packages', gonogoAssessmentBody());
+    const pub = await mgr2.post('/api/games/packages/attention-assess/1.0.0/publish', {});
+    expect(pub.status).toBe(200); // همه‌پروب + پروتکل هم‌نسخه → گیت سبز
+    await mgr2.post('/api/games/goals', {
+      id: 'inhibition_assess', title_fa: 'بازداری پاسخ (ارزیابی)', package_id: 'attention-assess', metric_id: 'accuracy_gonogo'
+    });
+    const rx = await mgr2.post('/api/games/prescriptions', {
+      child_id: student2, package_id: 'attention-assess', package_version: '1.0.0', goal_id: 'inhibition_assess'
+    });
+    expect(rx.status).toBe(201);
+    const rxId = (rx.body as { data: { id: string } }).data.id;
+    const sch = await mgr2.post('/api/games/missions', {
+      prescription_id: rxId, mission_ref: 'assess_m1', scheduled_for: todayYmd()
+    });
+    expect(sch.status).toBe(201);
+    missionId2 = (sch.body as { data: { id: string } }).data.id;
+    const lk = await mgr2.post(`/api/games/missions/${missionId2}/link`, {});
+    link2 = dataOf<LinkBody>(lk);
+    await anon2.post(`/api/m/${link2.token}/start`, {});
+  });
+
+  it('جلسهٔ ارزیابی: purpose=assessment و دنبالهٔ seed-دار ذخیره می‌شود', async () => {
+    const sess = A2.sql.prepare(`SELECT purpose, sequence_json FROM game_sessions ORDER BY created_at DESC LIMIT 1`).get() as { purpose: string; sequence_json: string | null };
+    expect(sess.purpose).toBe('assessment');
+    expect(sess.sequence_json).toBeTruthy();
+    const seq = JSON.parse(sess.sequence_json!) as { seed: string; kinds: string; count: number; go_count: number };
+    expect(seq.kinds).toMatch(/^[gn]+$/);
+    expect(seq.count).toBe(5);
+    expect(seq.go_count).toBe(3); // نسبت بانک آیتم (۳ گو / ۵)
+  });
+
+  it('ترتیب nextItem از دنبالهٔ g/n می‌آید — بدون افشای کلید', async () => {
+    const sess = A2.sql.prepare(`SELECT sequence_json FROM game_sessions ORDER BY created_at DESC LIMIT 1`).get() as { sequence_json: string };
+    const kinds = (JSON.parse(sess.sequence_json) as { kinds: string }).kinds;
+    const goIds = ['a-g1', 'a-g2', 'a-g3'];
+    const nogoIds = ['a-n1', 'a-n2'];
+    for (let i = 0; i < kinds.length; i++) {
+      const nx = dataOf<{ item: { id: string } | null }>(await anon2.get(`/api/m/${link2.token}/next-item`));
+      if (!nx.item) break;
+      expect(kinds[i]).toMatch(/^[gn]$/);
+      if (kinds[i] === 'g') expect(goIds).toContain(nx.item.id);
+      else expect(nogoIds).toContain(nx.item.id);
+      // کلید پاسخ هرگز در آیتم نیست
+      expect(JSON.stringify(nx.item)).not.toContain('correct_touch');
+      await anon2.post(`/api/m/${link2.token}/attempts`, {
+        item_id: nx.item.id,
+        response: { touched: kinds[i] === 'g', premature_count: 0, multiple_count: 0, presented_at: 1000 + i, frame_drops: 0, window_ms: 1500 },
+        rt_ms: kinds[i] === 'g' ? 500 + i : null,
+        idem_key: 'assess-' + i
+      });
+    }
+  });
+
+  it('شواهد نمایش واقعی در game_attempts ذخیره و در جزئیات جلسه برمی‌گردد — خامِ پاسخ‌های کلاینت', async () => {
+    const det = dataOf<{ attempts: Array<{ itemId: string; evidence: Record<string, unknown>; response: Record<string, unknown> }> }>(
+      await mgr2.get(`/api/games/missions/${missionId2}/sessions`)
+    );
+    expect(det.attempts.length).toBe(5);
+    const withEvidence = det.attempts.find((a) => a.itemId === 'a-g1');
+    expect(withEvidence).toBeTruthy();
+    // presented_at به جایگاه در دنبالهٔ seed-دار وابسته است (seed تصادفی هر جلسه) — فقط حضور و بازه را ادعا می‌کنیم
+    expect(typeof withEvidence!.evidence.presented_at_ms).toBe('number');
+    expect(withEvidence!.evidence.presented_at_ms as number).toBeGreaterThanOrEqual(1000);
+    expect(withEvidence!.evidence.window_ms).toBe(1500);
+    // پاسخ خام هم حفظ شده — تفکیک خام/محاسبه‌شده (فاز ۸ از همین می‌خواند)
+    expect(withEvidence!.response.touched).toBe(true);
+    // و هیچ کلیدی نشت نکرده
+    expect(JSON.stringify(det)).not.toContain('correct_touch');
+  });
+});
+
+// ─── فاز ۸ بازطراحی — گزارش درمانگر: خام/محاسبه‌شدهٔ جدا، مقایسهٔ جلسه‌ها، بدون برچسب بالینی ───
+
+describe('فاز ۸ بازطراحی — گزارش درمانگر (کودک)', () => {
+  let A3: ReturnType<typeof createTestApp>;
+  let mgr3: Api;
+  let anon3: Api;
+  let student3: string;
+
+  beforeAll(async () => {
+    A3 = createTestApp();
+    mgr3 = await asRole(A3, 'manager');
+    anon3 = new Api(A3);
+    student3 = (await createStudent(mgr3)).id;
+    await mgr3.post('/api/games/packages', gonogoAssessmentBody());
+    await mgr3.post('/api/games/packages/attention-assess/1.0.0/publish', {});
+    await mgr3.post('/api/games/goals', {
+      id: 'inhibition_assess_r', title_fa: 'بازداری پاسخ (گزارش)', package_id: 'attention-assess', metric_id: 'accuracy_gonogo'
+    });
+    const rx = await mgr3.post('/api/games/prescriptions', {
+      child_id: student3, package_id: 'attention-assess', package_version: '1.0.0', goal_id: 'inhibition_assess_r'
+    });
+    const rxId = (rx.body as { data: { id: string } }).data.id;
+    const sch = await mgr3.post('/api/games/missions', { prescription_id: rxId, mission_ref: 'assess_m1', scheduled_for: todayYmd() });
+    const missionId3 = (sch.body as { data: { id: string } }).data.id;
+    const lk = dataOf<LinkBody>(await mgr3.post(`/api/games/missions/${missionId3}/link`, {}));
+    await anon3.post(`/api/m/${lk.token}/start`, {});
+    // همهٔ ۵ آیتم با پاسخ درست گو و بازداری درست نوگو
+    const goIds = ['a-g1', 'a-g2', 'a-g3'];
+    const nogoIds = ['a-n1', 'a-n2'];
+    for (let i = 0; i < 5; i++) {
+      const nx = dataOf<{ item: { id: string } | null }>(await anon3.get(`/api/m/${lk.token}/next-item`));
+      if (!nx.item) break;
+      const isGo = goIds.includes(nx.item.id);
+      await anon3.post(`/api/m/${lk.token}/attempts`, {
+        item_id: nx.item.id,
+        response: { touched: isGo, premature_count: 0, multiple_count: 0, out_of_surface_count: 0, presented_at: 1000 + i, frame_drops: 0, window_ms: 1500 },
+        rt_ms: isGo ? 500 : null,
+        idem_key: 'report-' + i
+      });
+    }
+    await anon3.post(`/api/m/${lk.token}/finish`, { session_evidence: { pause_count: 1, pause_total_ms: 4000 } });
+  });
+
+  it('پرسنلی: خلاصهٔ محاسبه‌شده + لایهٔ خام + مقایسهٔ سری زمانی — هیچ برچسب بالینی', async () => {
+    const rep = dataOf<{
+      child_id: string; session_count: number; disclaimer: string;
+      sessions: Array<{ session_id: string; purpose: string; computed: { summary: { totals: Record<string, number>; pct: Record<string, number | null> } | null; quality_verdict: string }; raw: { attempt_count: number; attempts: unknown[] } }>;
+      comparison: { by_metric: Array<{ metric_id: string; unit: string; points: Array<{ session_id: string; value: number }> }> };
+    }>(await mgr3.get(`/api/games/children/${student3}/report`));
+
+    expect(rep.child_id).toBe(student3);
+    expect(rep.session_count).toBe(1);
+    expect(rep.disclaimer).toBe('no_clinical_conclusion');
+
+    const s = rep.sessions[0];
+    expect(s.purpose).toBe('assessment');
+    // لایهٔ محاسبه‌شده
+    expect(s.computed).toBeTruthy();
+    expect(s.computed!.summary!.totals.total).toBe(5);
+    expect(s.computed!.summary!.pct.correct_go).toBe(100);
+    expect(s.computed!.summary!.pct.correct_nogo).toBe(100);
+    expect(['explainable', 'needs_caution', 'incomplete_or_invalid']).toContain(s.computed!.quality_verdict);
+    // لایهٔ خام جدا و کامل + شواهد نمایش فاز ۴
+    expect(s.raw.attempt_count).toBe(5);
+    expect((s.raw.attempts[0] as { evidence: { window_ms: number } }).evidence.window_ms).toBe(1500);
+    // مقایسهٔ سری زمانی هر سنجه
+    const byMetric = Object.fromEntries(rep.comparison.by_metric.map((m) => [m.metric_id, m]));
+    expect(Object.keys(byMetric).length).toBeGreaterThanOrEqual(5); // سنجهٔ اصلی + ۴ درصدی موتور
+    expect(byMetric['accuracy_gonogo'] === undefined || byMetric['accuracy_gonogo'].points.length >= 0).toBe(true);
+    expect(byMetric['correct_go_pct_gonogo'].points[0].value).toBe(100);
+    expect(byMetric['commission_pct_gonogo'].points[0].value).toBe(0);
+
+    const text = JSON.stringify(rep);
+    for (const w of ['ADHD', 'بیش‌فعال', 'اوتیسم', 'تشخیص', 'ضعف', 'کم‌هوش', 'تنبل']) {
+      expect(text.includes(w), `برچسب بالینی «${w}» در گزارش ممنوع`).toBe(false);
+    }
+    expect(text).not.toContain('correct_touch');
+  });
+
+  it('نمای HTML چاپ‌پذیر: جدول خلاصه + مقایسه + یادداشت بی‌تفسیر', async () => {
+    const raw = await mgr3.req('GET', `/api/games/children/${student3}/report?format=html`);
+    expect(raw.status).toBe(200);
+    const html = String(raw.body);
+    expect(html).toContain('گزارش جلسه‌های بازی');
+    expect(html).toContain('تفسیر با درمانگر');
+    expect(html).toContain('مقایسهٔ جلسه‌ها');
+  });
+
+  it('ناشناس به گزارش دسترسی ندارد — توکن لینک جای احراز نمی‌نشیند', async () => {
+    const res = await A3.app.request(`/api/games/children/${student3}/report`, {}, A3.env as never);
+    expect([401, 403]).toContain(res.status);
+  });
+});

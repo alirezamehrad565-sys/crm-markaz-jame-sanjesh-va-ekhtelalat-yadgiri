@@ -4,10 +4,10 @@ import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@
 import type { AuditWriter } from '@core/audit';
 import type { Logger } from '@core/logger';
 import type { DbClient } from '@core/db';
-import { rowToAppointment, rowToStudent, selectAppointmentById, selectAppointments, selectStudentsOfAppointments } from './repository';
+import { inParamChunks, inPlaceholders } from '@core/db/in-chunks'; // ۱.۲۵.۷۲ — دروازهٔ IN-list (بدهی ف۶ ⑧)
+import { rowToAppointment, rowToStudent, selectAppointmentById, selectAppointments, selectStudentsOfAppointments, APPOINTMENT_STUDENT_QUERY_CHUNK } from './repository';
 import type { AppointmentRow, AppointmentStudentRow } from './repository';
-import type { Appointment, AppointmentDeps, AppointmentLifecycleObserver, AppointmentOpsObserver, AppointmentOpsStatus, AppointmentService, AppointmentUpdatePatch, CopyWeekInput, CopyWeekResult, ListFilters, MyStudent, NewAppointmentInput } from './types';
-import { canTransitionOps, opsFromDb, opsTransitionMessage } from './pure';
+import type { Appointment, AppointmentDeps, AppointmentLifecycleObserver, AppointmentService, AppointmentUpdatePatch, CopyWeekInput, CopyWeekResult, ListFilters, MyStudent, NewAppointmentInput } from './types';
 import { copyWeek as copyWeekImpl, undoCopyWeek as undoCopyWeekImpl } from './week-copy';
 
 interface ConflictChecker {
@@ -47,17 +47,20 @@ async function assertStudentsInScope(
   studentIds: string[]
 ): Promise<void> {
   if (actor.role !== 'therapist' || studentIds.length === 0) return;
-  const placeholders = studentIds.map(() => '?').join(', ');
-  const outside = await reader.query<{ id: string }>(
-    `SELECT s.id FROM students s
-      WHERE s.id IN (${placeholders})
+  /* ۱.۲۵.۷۲ — تکه‌بندی ۹۰تایی: studentIds از بدنهٔ درخواست است (ویرایش دسته‌جمعی می‌تواند >۱۰۰ باشد — سقف ۱۰۰ بایند D1)؛ بیرون‌مرزی = اجتماع بیرونِ هر تکه */
+  const outside: { id: string }[] = [];
+  for (const chunk of inParamChunks(studentIds)) {
+    outside.push(...await reader.query<{ id: string }>(
+      `SELECT s.id FROM students s
+      WHERE s.id IN (${inPlaceholders(chunk.length)})
         AND NOT EXISTS (
           SELECT 1 FROM appointments a
             JOIN appointment_students asn ON asn.appointment_id = a.id
            WHERE a.staff_id = ? AND asn.student_id = s.id
         )`,
-    [...studentIds, actor.staffId]
-  );
+      [...chunk, actor.staffId]
+    ));
+  }
   if (outside.length > 0) {
     throw new ForbiddenError('نوبت‌دهی درمانگر فقط برای دانش‌آموزانِ خودِ او مجاز است');
   }
@@ -77,7 +80,6 @@ export function createAppointmentService(deps: AppointmentDeps): AppointmentServ
   const { db, audit, logger } = deps;
   let conflictEngine: ConflictChecker | null = null;
   let lifecycleObserver: AppointmentLifecycleObserver | null = null;
-  let opsObserver: AppointmentOpsObserver | null = null;
 
   const logNotify = logger.child('appointment.notify');
 
@@ -108,10 +110,6 @@ export function createAppointmentService(deps: AppointmentDeps): AppointmentServ
       lifecycleObserver = observer;
     },
 
-    setOpsObserver(observer: AppointmentOpsObserver): void {
-      opsObserver = observer;
-    },
-
     async getById(id: string): Promise<Appointment | null> {
       const q = selectAppointmentById(id);
       const row = await db.queryOne<AppointmentRow>(q.sql, q.params);
@@ -131,13 +129,18 @@ export function createAppointmentService(deps: AppointmentDeps): AppointmentServ
       if (rows.length === 0) return [];
 
       const ids = rows.map((r) => r.id);
-      const { sql: ssql, params: sparams } = selectStudentsOfAppointments(ids);
-      const studentRows = await db.query<AppointmentStudentRow>(ssql, sparams);
+      // ف۵ — رفع باگ کشف baseline بار: سقف ۱۰۰ پارامتر bind در D1 («too many SQL variables» روی
+      // پنجرهٔ >۱۰۰ نوبت) — پرس‌وجوی دانش‌آموزان تکه‌تکه ۹۰تایی؛ گروه‌بندی در نقشه، ترتیب درون
+      // هر نوبت دست‌نخورده (هر نوبت همیشه در یک تکه است و هر تکه ORDER BY student_id دارد)
       const byAppointment = new Map<string, AppointmentStudentRow[]>();
-      for (const s of studentRows) {
-        const list = byAppointment.get(s.appointment_id) ?? [];
-        list.push(s);
-        byAppointment.set(s.appointment_id, list);
+      for (let i = 0; i < ids.length; i += APPOINTMENT_STUDENT_QUERY_CHUNK) {
+        const { sql: ssql, params: sparams } = selectStudentsOfAppointments(ids.slice(i, i + APPOINTMENT_STUDENT_QUERY_CHUNK));
+        const studentRows = await db.query<AppointmentStudentRow>(ssql, sparams);
+        for (const s of studentRows) {
+          const list = byAppointment.get(s.appointment_id) ?? [];
+          list.push(s);
+          byAppointment.set(s.appointment_id, list);
+        }
       }
       return rows.map((r) => rowToAppointment(r, (byAppointment.get(r.id) ?? []).map(rowToStudent)));
     },
@@ -237,7 +240,6 @@ export function createAppointmentService(deps: AppointmentDeps): AppointmentServ
         startAt: input.startAt,
         endAt: input.endAt,
         status: 'scheduled',
-        opsStatus: null,
         sessionType: input.sessionType ?? null,
         note: input.note ?? null,
         version: 1,
@@ -510,64 +512,6 @@ export function createAppointmentService(deps: AppointmentDeps): AppointmentServ
       });
 
       logger.child('appointment.delete').info('appointment.deleted', { id });
-    },
-
-    async setOpsStatus(id: string, opsStatus: AppointmentOpsStatus, actor: AuthContext): Promise<Appointment> {
-      const { result, changed, studentIds, from } = await db.transaction(async (tx) => {
-        const q = selectAppointmentById(id);
-        const row = await tx.queryOne<AppointmentRow>(q.sql, q.params);
-        if (!row) throw new NotFoundError('نوبت');
-        assertAppointmentScope(actor, row.staff_id); // — درمانگر فقط نوبت‌های خودش؛ دفتر آزاد
-        if (row.status === 'cancelled') {
-          throw new ConflictError('نوبت لغوشده وضعیت عملیاتی نمی‌گیرد');
-        }
-
-        const from = opsFromDb(row.ops_status);
-        if (from !== opsStatus && !canTransitionOps(from, opsStatus)) {
-          throw new ConflictError(opsTransitionMessage(from, opsStatus));
-        }
-
-        if (from !== opsStatus) {
-          await tx.execute(
-            `UPDATE appointments SET ops_status = ?, updated_at = datetime('now') WHERE id = ?`,
-            [opsStatus, id]
-          );
-          await audit.logInTransaction(tx, {
-            actorId: actor.staffId,
-            action: 'appointment.ops_status.changed',
-            resourceType: 'appointment',
-            resourceId: id,
-            changes: { ops_status: { from: row.ops_status, to: opsStatus } }
-          });
-        }
-
-        const students = await loadStudents(tx, id);
-        const merged = from !== opsStatus ? { ...row, ops_status: opsStatus } : row;
-        return {
-          result: rowToAppointment(merged as AppointmentRow, students.map(rowToStudent)),
-          changed: from !== opsStatus,
-          studentIds: students.map((s) => s.student_id),
-          from
-        };
-      });
-
-      if (opsObserver && changed) {
-        try {
-          await opsObserver.onOpsStatusChanged(
-            result,
-            studentIds.map((studentId) => ({ studentId })),
-            from === 'none' ? null : from,
-            opsStatus
-          );
-        } catch (err) {
-          logger.child('appointment.ops').warn('ops.observer.failed', {
-            appointmentId: id,
-            error: err instanceof Error ? err.message : String(err)
-          });
-        }
-      }
-
-      return result;
     },
 
     async restore(id: string, version: number, actor: AuthContext): Promise<Appointment> {

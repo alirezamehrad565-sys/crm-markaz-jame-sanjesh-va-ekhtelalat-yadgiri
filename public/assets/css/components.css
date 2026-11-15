@@ -35,6 +35,25 @@ html[dir='ltr'] .ico--flip svg { transform: none; }
   transform: none;
 }
 
+/* ۱.۱۲.۰ — قفل مشغولی دکمه: با lockBtn فعال می‌شود (disabled + aria-busy + چرخ‌ندهٔ کوچک
+   کنار برچسب) تا دوبارکلیک/اسپم هم در سطح UI و هم در سطح API مهار شود.
+   فقط transform/opacity — بدون جابه‌جایی layout (زبان حرکت سطح ۱–۲). */
+.btn.is-busy { cursor: progress; }
+.btn.is-busy::before {
+  content: '';
+  width: 0.95em;
+  height: 0.95em;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-inline-end-color: transparent;
+  animation: btn-spin 0.7s linear infinite;
+}
+@keyframes btn-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .btn.is-busy::before { animation-duration: 2.4s; }
+}
+
 .btn--primary {
   background: var(--grad-primary, var(--primary));
   color: var(--on-primary);
@@ -77,6 +96,26 @@ html[dir='ltr'] .ico--flip svg { transform: none; }
 .btn--sm { padding: 5px var(--sp-3); font-size: var(--fs-sm); } /* قرصی مثل btn اصلی */
 /* سلکت هم‌اندازهٔ btn--sm (مثل ردیف «مسئول پرونده» در پروفایل دانش‌آموز) */
 .select--sm { padding-block: 5px; font-size: var(--fs-sm); border-radius: var(--radius-sm); }
+
+/* ۱.۲۵.۲۶ — ردیف نتایج جستجوی دانش‌آموز (دراپ‌داون): اندازهٔ درست لمسی، جای درست متن،
+   فقط نام دانش‌آموز — یک زبان با فهرست‌های منوی ردیفی */
+button.search-row {
+  display: block;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  border-block-end: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-1);
+  font: inherit;
+  font-size: var(--fs-md);
+  text-align: start;
+  cursor: pointer;
+  min-height: 42px; /* کف لمسی */
+}
+button.search-row:last-child { border-block-end: none; }
+button.search-row:hover { background: var(--primary-soft); }
+button.search-row:active { background: color-mix(in srgb, var(--primary-soft) 70%, var(--primary) 12%); }
 .btn--icon {
   width: 40px;
   height: 40px;
@@ -371,6 +410,7 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   flex-shrink: 0;
 }
 .dot--success { background: var(--success); }
+.dot--warning { background: var(--warning); } /* ف۶ — کارت «وضعیت هم‌گامی» پنل سلامت: جبرانی/خارج از خط */
 .dot--error   { background: var(--error); }
 .dot--neutral { background: var(--text-3); }
 
@@ -391,12 +431,14 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   display: flex;
   gap: var(--sp-3);
   align-items: flex-start;
+  flex-wrap: wrap; /* UX-ممیزی گلایهٔ ۱: در عرض کم، دکمه به ردیف بعدی می‌رود نه له‌شدن متن */
   padding: var(--sp-3) var(--sp-4);
   border-radius: var(--radius);
   font-size: var(--fs-sm);
   line-height: var(--lh-body, 1.8); /* F1: ۱٫۷ → بدنه */
   border: 1px solid transparent;
 }
+.alert > .ico { margin-top: 2px; }
 .alert--warning { background: var(--warning-soft); color: var(--on-warning-soft); border-color: color-mix(in srgb, var(--warning) 30%, transparent); } /* warning روی soft ۲٫۶۹ بود؛ قرارداد */
 .alert--error   { background: var(--error-soft);   color: var(--error);   border-color: color-mix(in srgb, var(--error) 30%, transparent); }
 .alert--info    { background: var(--primary-soft); color: var(--on-primary-soft); border-color: color-mix(in srgb, var(--primary) 25%, transparent); }
@@ -667,7 +709,10 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   from { opacity: 0; transform: translateY(24px); }
 }
 
-@media (max-width: 640px) {
+/* iOS Safari: هر ورودیِ متن با font-size <16px هنگام فوکوس زوم می‌کند — کف 16px روی همهٔ
+   دستگاه‌های لمسی (تبلت ≥640px هم پوشش داده شود؛ قاعدهٔ skill طراحی: base 16px).
+   لَپ‌های scoped فونت‌ریز (sess-note/ot-skill) در انتهای views.css روی لمس اصلاح می‌شوند. */
+@media (pointer: coarse) {
   .input, .select, .textarea { font-size: 16px; }
 }
 
@@ -683,6 +728,15 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   .tab { padding: 12px 16px; }
   .btn--sm { padding: 8px var(--sp-3); }
   .select--sm { padding-block: 8px; }
+  /* UX-ممیزی الگوی ۳: تکمیل اهداف لمسی زیر ۲۴px (کف WCAG 2.5.8 AA) روی لمس */
+  .row-menu__btn { width: 32px; height: 32px; }
+  .row-menu__item { min-height: 38px; }
+  .call-badge { width: 32px; height: 32px; }
+  .tag-del { width: 24px; height: 24px; }
+  .tag-chip__x { width: 22px; height: 22px; }
+  .combo__clear { width: 26px; height: 26px; }
+  .toast__close { width: 30px; height: 30px; }
+  .att-seg__btn { min-height: 38px; min-width: 44px; }
 }
 
 .tag-chip, .tag-toggle {
@@ -1043,7 +1097,7 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
 }
 .jdate__day.is-selected {
   background: var(--primary);
-  color: var(--on-primary, #fff);
+  color: var(--on-primary);
   font-weight: 700;
 }
 .jdate__hint { font-size: var(--fs-xs); color: var(--text-3); text-align: center; }
@@ -1197,13 +1251,131 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   grid-template-columns: minmax(0, 1fr);
 }
 @media (min-width: 1080px) {
+  /* ۱.۲۵.۵۰ — دو پنجرهٔ ثبت روزانه در دسکتاپ هم‌اندازه‌اند (قبلاً ۵fr/۷fr نامتقارن بود) */
   .sanj-daily {
-    grid-template-columns: minmax(360px, 5fr) minmax(0, 7fr);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     align-items: start;
   }
   .sanj-daily__composer {
     position: sticky;
     top: calc(var(--topbar-h) + var(--sp-4));
+  }
+}
+
+/* ۱.۲۵.۵۰/۵۷ — فیلدهای اختیاری زیر ثبت سریع: تاریخ تولد + نمرهٔ آمادگی تحصیلی (از ۳۴) + توضیحات */
+.sanj-extra {
+  display: grid;
+  gap: var(--sp-3);
+  grid-template-columns: minmax(0, 1fr);
+  padding: var(--sp-3);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-2, transparent);
+}
+@media (min-width: 720px) {
+  .sanj-extra {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+.sanj-extra .field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.sanj-extra .field > .cell-sub {
+  font-weight: 600;
+}
+.sanj-extra__opt {
+  font-weight: 400;
+  opacity: 0.75;
+}
+
+/* ۱.۲۵.۵۷ — کشوی توضیح بسیار کم‌رنگ (الگوی «کلی ①»: توضیح بلند جمع شود، در دسترس بماند) */
+.hint-collapse {
+  margin: 0 0 var(--sp-3);
+  border: 0;
+}
+.hint-collapse > summary {
+  list-style: none;
+  cursor: pointer;
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  opacity: 0.72;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  user-select: none;
+}
+.hint-collapse > summary::-webkit-details-marker { display: none; }
+.hint-collapse > summary::after {
+  content: '';
+  width: 0;
+  height: 0;
+  border-inline-start: 4px solid currentColor;
+  border-block: 3.5px solid transparent;
+  transform: rotate(-90deg); /* RTL: فلش رو به پایین در حالت بسته */
+  transition: transform 0.15s ease;
+}
+.hint-collapse[open] > summary::after { transform: rotate(90deg); }
+.hint-collapse > summary:hover { opacity: 1; }
+.hint-collapse > .hint-text {
+  margin: var(--sp-2) 0 0;
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+}
+
+/* ۱.۲۵.۵۷ — دفتر روزبه‌روز تک‌نفرهٔ حضور همکاران (فقط روزهای کاری هر همکار) */
+.att-ledger {
+  display: grid;
+  gap: var(--sp-3);
+}
+.att-ledger__row {
+  display: grid;
+  grid-template-columns: minmax(150px, 220px) minmax(0, 1fr);
+  gap: var(--sp-3);
+  align-items: start;
+  padding-block: var(--sp-2);
+}
+.att-ledger__row + .att-ledger__row {
+  border-top: 1px dashed var(--border);
+}
+.att-ledger__person {
+  display: grid;
+  gap: 2px;
+  padding-top: 2px;
+}
+.att-ledger__person b {
+  font-size: var(--fs-sm);
+}
+.att-ledger__strip {
+  display: flex;
+  gap: var(--sp-2);
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+.att-ledger__cell {
+  display: grid;
+  gap: 3px;
+  justify-items: center;
+  min-width: 34px;
+  padding: 4px 6px;
+  border-radius: var(--radius-2, 8px);
+  background: var(--surface-2, transparent);
+}
+.att-ledger__day {
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  white-space: nowrap;
+}
+@media (max-width: 640px) {
+  .att-ledger__row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .att-ledger__person {
+    display: flex;
+    align-items: baseline;
+    gap: var(--sp-2);
   }
 }
 
@@ -1500,6 +1672,7 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   position: fixed;
   z-index: var(--z-row-menu); /* توکن ۹۰ (S11-04) */
   min-width: 172px;
+  max-width: calc(100vw - 16px); /* ۱.۱۴.۰: هرگز از لبه‌های دید بیرون نزند */
   padding: 6px;
   background: var(--surface); /* توکن‌شد (قبلاً --surface-1 ناموجود با fallback) */
   border: 1px solid var(--border);
@@ -1587,3 +1760,16 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   min-width: 0;
 }
 .field__labelrow .field__label { margin: 0; }
+
+/* ── ۱.۲۵.۶۳ — گزارش به پشتیبانی: قرص شدت + ردیف کارت‌مانند + بلوک پاسخ (CSS وعدهٔ ۱.۲۵.۵۷ اکنون واقعاً این‌جاست؛ خواست کارفرما: UI/UX درست و حسابی) ── */
+.bug-sev { position: relative; display: inline-flex; cursor: pointer; }
+.bug-sev input { position: absolute; inset: 0; opacity: 0; cursor: pointer; margin: 0; }
+.bug-sev span { display: inline-block; border: 1px solid var(--border); background: var(--surface-2); color: var(--text-2); border-radius: var(--radius-full); padding: 4px 14px; font-size: var(--fs-sm); font-weight: 600; transition: background var(--fast), border-color var(--fast), color var(--fast); }
+.bug-sev:hover > span { border-color: var(--primary); color: var(--primary); }
+.bug-sev input:checked + span { background: var(--primary-soft); border-color: var(--primary); color: var(--primary); }
+.bug-sev input:focus-visible + span { outline: 2px solid var(--primary); outline-offset: 2px; }
+.bug-row { display: grid; gap: var(--sp-2); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-2); padding: var(--sp-3); transition: border-color var(--fast); }
+.bug-row:hover { border-color: color-mix(in srgb, var(--primary) 35%, var(--border)); }
+.bug-row__head { display: flex; gap: var(--sp-2); flex-wrap: wrap; align-items: center; }
+.bug-reply { border-inline-start: 3px solid var(--success); background: var(--success-soft); border-radius: var(--radius-2); padding: var(--sp-2) var(--sp-3); display: grid; gap: var(--sp-1); }
+@media (max-width: 480px) { .bug-actions .btn--primary { width: 100%; justify-content: center; } }

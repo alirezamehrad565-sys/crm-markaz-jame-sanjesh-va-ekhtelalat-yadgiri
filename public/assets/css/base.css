@@ -29,6 +29,14 @@
   line-gap-override: 0%;
 }
 
+/* WCAG 2.4.11 (Focus Not Obscured — AA): با پیمایش/فوکوس صفحه‌ای، عنصرِ فوکوس‌شده
+   هرگز زیر topbar چسبان (60px) پنهان نماند + بازخورد لمسی بومی iOS خاموش (زبان فشار A21 جایگزین دارد) */
+html {
+  scroll-padding-top: calc(var(--topbar-h, 60px) + 12px);
+  scroll-padding-bottom: 12px;
+  -webkit-tap-highlight-color: transparent;
+}
+
 :root {
   --lh-body: 1.8;    /* متن بدنهٔ فارسی — خوانایی */
   --lh-heading: 1.4; /* عنوان‌ها (h1–h4، card/tab titleها) */
@@ -314,7 +322,7 @@
 
 .num, .kpi__value, .grid-appt__time, .wd-tl__time, .hero-score__value,
 .score-tile__value, .lb-score b, .spark__num, .goal-mini__val,
-.tl-strip__label, .staff-chip__count {
+.staff-chip__count {
   font-variant-numeric: tabular-nums lining-nums;
   font-feature-settings: 'tnum' 1;
 }
@@ -327,6 +335,12 @@
 
 html {
   -webkit-text-size-adjust: 100%;
+  /* UX روانی ناوبری (۱.۱۲.۰): نوار اسکرول بدنه با ورود/خروج صفحات کوتاه‌بلند ظاهر و
+     محو می‌شد → عرض viewport ۸px تغییر می‌کرد و کل پوسته (سایدبار) تکان می‌خورد.
+     overflow-y: scroll = گود نوار همیشه رزرو (مرورگرهای کلاسیک ویندوز)؛
+     scrollbar-gutter: stable = همان تضمین برای Chrome با اسکرول‌بار overlay. */
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
 }
 
 body {
@@ -627,6 +641,9 @@ textarea {
   max-width: 1280px;
   width: 100%;
   margin: 0 auto;
+  /* UX روانی ناوبری (۱.۱۲.۰): در فاصلهٔ خالی‌شدن اوتلت تا رسیدن اسکلت/نمای بعد،
+     ارتفاع صفحه فرو نمی‌ریزد → نوار اسکرول و ارتفاع پوسته ثابت می‌ماند */
+  min-height: 58vh;
 }
 
 @keyframes view-in {
@@ -634,6 +651,10 @@ textarea {
   to { opacity: 1; transform: none; }
 }
 .view-enter { animation: view-in var(--normal) both; }
+/* ۱.۱۴.۰ — View Transitions تعویض نما حذف شد (به درخواست کاربر بازگشت به رفتار ۱.۱۲.۰):
+   در VT، تا آماده‌شدن نمای جدید، اسنپ‌شات روی صفحه می‌ماند و تعامل بلعیده می‌شد —
+   روی شبکهٔ کند هر تعویض تا ۱.۵ ثانیه «کلیک‌خور» نبود و دکمه‌ها «باز نمی‌شدند».
+   رفتار برگشته: تعویض فوری + view-enter (فید ملایم) — بدون هیچ پنجرهٔ بی‌پاسخی. */
 
 @media (hover: hover) {
   .card--lift { transition: transform var(--fast), box-shadow var(--fast); }
@@ -697,7 +718,8 @@ textarea {
     position: fixed;
     inset-inline-start: 0;
     top: 0;
-    height: 100vh; /* دراپر موبایل تمام‌قد (override شناوری دسکتاپ) */
+    height: 100vh; /* دراپر موبایل تمام‌قد (override شناوری دسکتاپ) — fallback */
+    height: 100dvh; /* iOS: نوار آدرس پویا — ارتفاع واقعی viewport */
     width: min(300px, 84vw);
     transform: translateX(-100%);
     opacity: 0;
@@ -729,6 +751,18 @@ textarea {
     border: 1px solid var(--border);
     background: var(--surface);
   }
+  .sidebar__close {
+    display: grid;
+    place-items: center;
+    width: 34px; height: 34px;
+    margin-inline-start: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--text-2);
+    flex-shrink: 0;
+  }
+  .sidebar__close:hover { background: var(--surface-2); color: var(--text); }
   .content { padding: var(--sp-4); }
   .topbar { padding: 0 var(--sp-4); }
 }
@@ -761,8 +795,23 @@ textarea {
 .nav__label {
   display: flex; align-items: center; gap: 8px;
   font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.02em; /* S11-18: برچسب گروه منو، کف ۱۲px */
-  color: var(--text-3);
+  color: var(--text-2); /* UX-ممیزی گلایهٔ ۵: text-3 عملاً دیده نمی‌شد — یک پله پررنگ‌تر */
   padding: var(--sp-4) var(--sp-3) var(--sp-1);
+}
+
+/* UX-ممیزی گلایهٔ ۵: گروه‌های منو = آکاردئون (details/summary بومی — دسترس‌پذیر بدون JS) */
+.nav__group > summary.nav__label { cursor: pointer; user-select: none; list-style: none; }
+.nav__group > summary.nav__label::-webkit-details-marker { display: none; }
+.nav__group > summary.nav__label:hover { color: var(--text); }
+.nav__group-chev { display: inline-flex; color: var(--text-3); transition: transform var(--fast); flex-shrink: 0; }
+.nav__group[open] > summary.nav__label .nav__group-chev { transform: rotate(180deg); }
+
+/* UX-ممیزی گلایهٔ ۵: دکمهٔ ✕ دراور موبایل (در دسکتاپ پنهان)
+   رفع باگ ۱.۰۷.۱: قاعدهٔ بدون scope «display:none» بعد از بلوک @media (max-width:920px)
+   می‌آمد و با هم‌ارزشی سرانتخابی، قاعدهٔ display:grid همان بلوک را خنثی می‌کرد —
+   نتیجه: ✕ در موبایل هم هرگز دیده نمی‌شد. اکنون پنهان‌سازی فقط به دسکتاپ محدود شد. */
+@media (min-width: 921px) {
+  .sidebar__close { display: none; }
 }
 
 /* F4: اتصال حروف فارسی را نشکن */
@@ -811,6 +860,11 @@ html[lang='fa'] .nav__label { letter-spacing: 0; }
 }
 .topbar__user { padding-inline: 8px 14px; }
 .topbar__user .badge { font-size: var(--fs-2xs); padding: 1px 8px; } /* S11-12: بج نقش کاربر، کف ۱۲px */
+
+@media (max-width: 520px) {
+  /* ۱.۲۵.۱۰ — خرده‌راه: crumb دیگر «طرح د…» بریده نمی‌شود — فشرده‌تر و با فونت کوچک‌تر */
+  .topbar__crumb { gap: 4px; font-size: var(--fs-xs); }
+}
 
 @media (max-width: 920px) {
   .sidebar { box-shadow: var(--shadow-sidebar); }

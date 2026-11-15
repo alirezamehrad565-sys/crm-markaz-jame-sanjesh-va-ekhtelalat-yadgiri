@@ -1,12 +1,13 @@
 import { api } from '../api.js';
-import { el, icon, toast, toastError, confirmModal, openModal, emptyState, loadingState, errorState } from '../ui.js';
+import { el, icon, toast, toastError, confirmModal, openModal, emptyState, loadingState, errorState, skeletonState, rowMenu, lockBtn } from '../ui.js';
 import {
   fa,
   tehranTodayYmd,
   toJalali,
   toGregorian,
   JALALI_MONTHS,
-  formatJalaliNumeric
+  formatJalaliNumeric,
+  sizeLabel /* ۱.۲۵.۰۲ — یکسان‌سازی sizeLabel */
 } from '../format.js';
 import { jalaliDateInput } from '../jalali-picker.js';
 import { openExcelImport } from '../excel-import.js'; // درون‌ریزی اکسل تقویم اجرایی
@@ -36,14 +37,6 @@ function localMime(file) {
   if (t && t !== 'application/octet-stream') return t;
   const ext = (file.name || '').split('.').pop()?.toLowerCase() ?? '';
   return EXT_MIME_FALLBACK[ext] ?? t ?? 'application/octet-stream';
-}
-function sizeLabel(bytes) {
-  if (!bytes && bytes !== 0) return '';
-  if (bytes >= 1024 * 1024) {
-    const mb = bytes / (1024 * 1024);
-    return `${fa(mb >= 10 ? Math.round(mb) : Math.round(mb * 10) / 10)} مگابایت`;
-  }
-  return bytes >= 1024 ? `${fa(Math.round(bytes / 1024))} کیلوبایت` : `${fa(bytes)} بایت`;
 }
 function isImageFile(file) { return String(localMime(file) ?? '').startsWith('image/'); }
 
@@ -100,7 +93,8 @@ const filters = { year: null, tag: null, from: '', to: '', q: '' };
 const urlCache = new Map(); // `${entryId}/${fileId}` → objectURL
 let _shellBody = null;
 let _toolbar = null;
-let _docCtl = null; // شنیده‌های سطح سند نوار ابزار (چاپ/Escape) — با rebuild کنسل می‌شود
+let _els = { yearChips: null, tagChips: null }; // — ۱.۲۲.۰: ارجاع زون چیپ‌ها برای به‌روزرسانی درجا (نوار ابزار هرگز rebuild نمی‌شود)
+let gen = 0; // — F1: گارد نسل واکشی (الگوی waitlist) — پاسخ کهنهٔ چیپ/برچسب/جستجو/تاریخ نباید روی entries/hasMore بنشیند
 
 async function fileObjectUrl(entryId, fileId) {
   const key = `${entryId}/${fileId}`;
@@ -173,10 +167,12 @@ async function uploadChunked(entryId, file, onPct) {
 // ─── نقطهٔ ورود ویو ───
 
 export async function renderClearbook(container) {
-  container.replaceChildren(loadingState());
+  /* UX-ممیزی P1 کلر بوک دسکتاپ: اسکلت به‌جای اسپینر تنها + سقف زمانی — دیگر «در حال بارگذاری» بی‌پایان نمی‌ماند */
+  container.replaceChildren(skeletonState('cards', 3));
+  const withTimeout = (p, ms, message) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(message)), ms))]);
   try {
     const [plansRes, tagsRes, yearsRes] = await Promise.all([
-      api.get('/api/clearbook/plans'),
+      withTimeout(api.get('/api/clearbook/plans'), 20000, 'خواندن داده‌های کلر بوک بیش از حد طول کشید — دوباره تلاش کنید.'),
       api.get('/api/clearbook/tags'),
       api.get('/api/clearbook/years')
     ]);
@@ -211,15 +207,17 @@ export async function renderClearbook(container) {
 
 // ─── نوار ابزار ───
 
-function buildToolbar() {
-  const yearChips = el('div', { class: 'cb-chips', role: 'group', 'aria-label': 'سال تحصیلی' });
+/* ۱.۲۲.۰ — چیپ‌های سال/برچسب به توابع سازندهٔ مستقل جدا شدند تا paintChips بتواند
+   فقط فرزندان همین دو زون را عوض کند — جستجو و تاریخ‌گیرها همان گره می‌مانند
+   و فوکوس/مکان‌نما هرگز نمی‌افتد (پایان _toolbar.replaceWith(buildToolbar())). */
+function yearChipButtons() {
   const allChip = el('button', {
     class: `chip cb-chip${filters.year === null ? ' is-active' : ''}`,
     onclick: () => { filters.year = null; filters.from = ''; filters.to = ''; refreshAll(); }
   }, 'همه سال‌ها');
-  yearChips.appendChild(allChip);
+  const out = [allChip];
   for (const y of yearList) {
-    yearChips.appendChild(el('button', {
+    out.push(el('button', {
       class: `chip cb-chip${filters.year === y ? ' is-active' : ''}`,
       onclick: () => {
         filters.year = y;
@@ -230,16 +228,27 @@ function buildToolbar() {
       }
     }, schoolYearLabel(y)));
   }
+  return out;
+}
 
-  const tagChips = el('div', { class: 'cb-chips', role: 'group', 'aria-label': 'برچسب‌ها' });
-  for (const t of tagList) {
-    tagChips.appendChild(el('button', {
-      class: `chip cb-chip cb-chip--tag${filters.tag === t.tag ? ' is-active' : ''}`,
-      title: `${fa(t.count)} رویداد`,
-      onclick: () => { filters.tag = filters.tag === t.tag ? null : t.tag; refreshAll(); }
-    }, icon('tag', 12), t.tag));
-  }
+function tagChipButtons() {
+  return tagList.map((t) => el('button', {
+    class: `chip cb-chip cb-chip--tag${filters.tag === t.tag ? ' is-active' : ''}`,
+    title: `${fa(t.count)} رویداد`,
+    onclick: () => { filters.tag = filters.tag === t.tag ? null : t.tag; refreshAll(); }
+  }, icon('tag', 12), t.tag));
+}
 
+function paintChips() {
+  _els.yearChips?.replaceChildren(...yearChipButtons());
+  _els.tagChips?.replaceChildren(...tagChipButtons());
+}
+
+function buildToolbar() {
+  const yearChips = el('div', { class: 'cb-chips', role: 'group', 'aria-label': 'سال تحصیلی' }, ...yearChipButtons());
+  const tagChips = el('div', { class: 'cb-chips', role: 'group', 'aria-label': 'برچسب‌ها' }, ...tagChipButtons());
+  _els.yearChips = yearChips;
+  _els.tagChips = tagChips;
   const fromPicker = jalaliDateInput({ value: filters.from, onChange: (v) => { filters.from = v; } });
   const toPicker = jalaliDateInput({ value: filters.to, onChange: (v) => { filters.to = v; } });
 
@@ -262,25 +271,8 @@ function buildToolbar() {
     onclick: () => { filters.year = null; refreshAll(); }
   }, icon('filter', 14), 'اعمال بازه');
 
-  const printWrap = el('div', { class: 'cb-print-menu' });
-  const printBtn = el('button', { class: 'btn btn--soft btn--sm', onclick: togglePrintMenu }, icon('printer', 15), 'چاپ');
-  const menu = el('div', { class: 'cb-print-menu__pop', hidden: true },
-    el('button', { class: 'cb-print-menu__item', onclick: () => { togglePrintMenu(); printAlbum(); } },
-      icon('book', 16), el('span', {}, el('b', {}, 'آلبوم فعالیت‌ها'), el('small', {}, 'جلد + عکس‌ها با کپشن — خروجی کلر بوک'))),
-    el('button', { class: 'cb-print-menu__item', onclick: () => { togglePrintMenu(); printCalendar(); } },
-      icon('clipboard', 16), el('span', {}, el('b', {}, 'تقویم اجرایی'), el('small', {}, 'جدول رسمی فازها برای اداره')))
-  );
-  function togglePrintMenu() { menu.hidden = !menu.hidden; }
-  // شنیدهٔ سطح سند: با بازسازی نوار ابزار، شنیدهٔ قبلی با AbortController جمع می‌شود (نبود نشت)
-  _docCtl?.abort();
-  _docCtl = new AbortController();
-  document.addEventListener('click', (e) => {
-    if (!printWrap.contains(e.target)) menu.hidden = true;
-  }, { signal: _docCtl.signal });
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') menu.hidden = true;
-  }, { signal: _docCtl.signal });
-  printWrap.append(printBtn, menu);
+  /* UX-ممیزی فاز ۳: پنج دکمهٔ سربرگ (تقویم/درون‌ریزی/فاز جدید/رویداد جدید/چاپ) →
+     یک CTA اصلی («رویداد جدید») + منوی «⋯»؛ دو خروجی چاپ هم در همین منو ادغام شدند */
 
   const filtersPanel = el('div', { class: 'cb-filters print-hide' },
     el('div', { class: 'cb-fgroup' },
@@ -312,11 +304,18 @@ function buildToolbar() {
           el('h2', { class: 'page-head__title' }, 'کلر بوک مرکز'),
           el('p', { class: 'page-head__desc' }, 'برنامهٔ سالانه و شواهد اجرا — هر فاز را با عکس و مستند زنده کنید')),
         el('div', { class: 'spacer' }),
-        el('button', { class: 'btn btn--soft btn--sm', onclick: openPlansManager }, icon('clipboard', 14), 'تقویم اجرایی'),
-        el('button', { class: 'btn btn--soft btn--sm', title: 'ورود دسته‌ای فازهای تقویم اجرایی از فایل اکسل', onclick: () => openExcelImport({ entity: 'clearbook-plans', onDone: () => refreshAll() }) }, icon('upload', 14), 'درون‌ریزی اکسل'),
-        el('button', { class: 'btn btn--soft btn--sm', onclick: () => openPlanModal() }, icon('target', 14), 'فاز جدید'),
         el('button', { class: 'btn btn--primary btn--sm', onclick: () => openEntryModal() }, icon('plus', 14), 'رویداد جدید'),
-        printWrap
+        rowMenu({
+          label: 'ابزارها و چاپ کلر بوک',
+          items: [
+            { icon: 'clipboard', label: 'تقویم اجرایی', onclick: () => openPlansManager() },
+            { icon: 'upload', label: 'درون‌ریزی اکسل فازها', onclick: () => openExcelImport({ entity: 'clearbook-plans', onDone: () => refreshAll() }) },
+            { icon: 'target', label: 'فاز جدید', onclick: () => openPlanModal() },
+            { sep: true },
+            { icon: 'book', label: 'چاپ آلبوم فعالیت‌ها', onclick: () => openAlbumLayoutModal() },
+            { icon: 'printer', label: 'چاپ تقویم اجرایی', onclick: () => printCalendar() }
+          ]
+        })
       )
     ),
     filtersPanel
@@ -327,24 +326,47 @@ function buildToolbar() {
 // ─── بارگذاری و ترسیم خط زمانی ───
 
 async function refreshAll() {
+  /* ۱.۲۲.۰: دیگر نوار ابزار replaceWith نمی‌شود — فقط چیپ‌ها درجا رنگ می‌شوند و
+     خط زمانی بی‌صدا (بدون اسکلت) همگام می‌شود. */
+  const myGen = ++gen; // — F1: گارد نسل — تعویض سریع چیپ‌ها نباید پاسخِ کهنه را حاکم کند
   try {
     const [plansRes, tagsRes, yearsRes] = await Promise.all([
       api.get('/api/clearbook/plans'),
       api.get('/api/clearbook/tags'),
       api.get('/api/clearbook/years')
     ]);
+    if (myGen !== gen) return; // — نسل تازه‌تری در راه است؛ این پاسخ دور ریخته می‌شود
     plans = plansRes.data ?? [];
     tagList = tagsRes.data ?? [];
     yearList = yearsRes.data ?? [];
     if (filters.year !== null && !yearList.includes(filters.year)) yearList.unshift(filters.year);
   } catch (err) {
+    if (myGen !== gen) return;
     toastError(err);
   }
-  _toolbar.replaceWith(buildToolbar());
-  await refreshEntries({ reset: true });
+  if (myGen !== gen) return;
+  paintChips();
+  await refreshEntries({ reset: true, silent: true });
 }
 
-async function refreshEntries({ reset = false, append = false } = {}) {
+/* همگام‌سازی سبک شمارنده‌ها (برچسب‌ها + شواهد فازها) پس از mutationهای رویداد —
+   فقط چیپ‌ها و خط زمانی از کش تازه می‌شوند؛ بدون GET خط زمانی و بدون اسکلت */
+async function syncMetaQuiet() {
+  try {
+    const [plansRes, tagsRes] = await Promise.all([
+      api.get('/api/clearbook/plans'),
+      api.get('/api/clearbook/tags')
+    ]);
+    plans = plansRes.data ?? [];
+    tagList = tagsRes.data ?? [];
+  } catch { /* بی‌صدا — کش قبلی می‌ماند */ }
+  paintChips();
+  drawTimeline();
+}
+
+async function refreshEntries({ reset = false, append = false, silent = false } = {}) {
+  /* ۱.۲۲.۰: گزینهٔ silent — بدون فلش «در حال بارگذاری»؛ محتوای فعلی می‌ماند تا پاسخ برسد
+     (جریان پیوسته: فیلتر/چیپ/return از مودال هیچ‌وقت خالی نمی‌بیند) */
   if (reset) entryOffset = 0;
   const params = {};
   if (filters.from) params.from = filters.from;
@@ -355,15 +377,18 @@ async function refreshEntries({ reset = false, append = false } = {}) {
   params.offset = append ? entryOffset : 0;
   const query = Object.entries(params).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&');
 
-  if (!append) _shellBody?.replaceChildren(loadingState('در حال بارگذاری خط زمانی…'));
+  const myGen = ++gen; // — F1: گارد نسل — پاسخ کهنه (حتی append قدیمی «نمایش بیشتر») هیچ‌وقت وضعیت را بازنویسی/الحاق نمی‌کند
+  if (!append && !silent) _shellBody?.replaceChildren(loadingState('در حال بارگذاری خط زمانی…'));
   try {
     const res = await api.get(`/api/clearbook/entries?${query}`);
+    if (myGen !== gen) return;
     const items = res.data ?? [];
     hasMore = Boolean(res.meta?.hasMore);
     entries = append ? entries.concat(items) : items;
     entryOffset = entries.length;
     drawTimeline();
   } catch (err) {
+    if (myGen !== gen) return;
     _shellBody?.replaceChildren(errorState(err, () => refreshEntries({ reset: true })));
   }
 }
@@ -405,8 +430,38 @@ function emptySlot() {
   return el('div', { class: 'cb-empty-slot' }, 'فعالیتی در این ماه ثبت نشده است');
 }
 
+/* — F4: ترسیم دوبارهٔ خط زمانی (کپشن/حذف عکس/حذف رویداد) کل بدنه را rebuild می‌کند و
+   جزئیاتِ بازِ بقیهٔ کارت‌ها را می‌بندد — پیش از ترسیم ثبت و بعد از ترسیم بازگردانی می‌شود */
+function snapshotExpandedCards() {
+  const out = new Set();
+  for (const card of _shellBody?.querySelectorAll('.cb-card[data-id]') ?? []) {
+    const details = card.querySelector('.cb-plan__details');
+    if (details && !details.hidden) { out.add(card.dataset.id); continue; }
+    const toggle = card.querySelector('.cb-morelink');
+    if (toggle && toggle.textContent === 'جمع کردن') out.add(card.dataset.id); // متن بلند رویداد باز است
+  }
+  return out;
+}
+
+function restoreExpandedCards(expandedIds) {
+  if (!expandedIds || expandedIds.size === 0) return;
+  for (const card of _shellBody?.querySelectorAll('.cb-card[data-id]') ?? []) {
+    if (!expandedIds.has(card.dataset.id)) continue;
+    const details = card.querySelector('.cb-plan__details');
+    if (details) { details.hidden = false; continue; }
+    const toggle = card.querySelector('.cb-morelink');
+    const p = card.querySelector('.cb-card__body');
+    const entry = entries.find((x) => String(x.id) === card.dataset.id);
+    if (toggle && p && entry?.body && entry.body.length > 220) {
+      p.textContent = entry.body; // بازگشت به متن کامل — همان کاری که «نمایش کامل» می‌کند
+      toggle.textContent = 'جمع کردن';
+    }
+  }
+}
+
 function drawTimeline() {
   if (!_shellBody) return;
+  const expandedCards = snapshotExpandedCards(); // — F4
   const todayYmd = tehranTodayYmd();
   const planItems = plansInRange().map((p) => ({ kind: 'plan', date: p.fromDate, plan: p }));
   const entryItems = entries.map((e) => ({ kind: 'entry', date: e.eventDate, entry: e }));
@@ -489,6 +544,7 @@ function drawTimeline() {
     ));
   }
   _shellBody.replaceChildren(wrap);
+  restoreExpandedCards(expandedCards); // — F4
 }
 
 // ─── کارت‌ها ───
@@ -540,19 +596,21 @@ function planCard(p, order, total, todayYmd) {
     el('button', {
       class: 'btn btn--ghost btn--icon btn--sm cb-danger',
       title: 'حذف فاز', 'aria-label': 'حذف فاز',
-      onclick: async () => {
+      onclick: async (e) => lockBtn(e.currentTarget, async () => {
         const ok = await confirmModal({ title: 'حذف فاز برنامه', message: `فاز «${p.title}» حذف شود؟ رویدادهای ثبت‌شده حذف نمی‌شوند و فقط اتصالشان باز می‌شود.`, confirmLabel: 'حذف', danger: true });
         if (!ok) return;
         try {
           await api.del(`/api/clearbook/plans/${p.id}`);
+          plans = plans.filter((x) => x.id !== p.id);
           toast('فاز حذف شد', 'success');
-          refreshAll();
+          drawTimeline(); // — کارت فاز همان لحظه جمع می‌شود؛ اتصال رویدادها درجا باز می‌شود
+          syncMetaQuiet();
         } catch (err) { toastError(err); }
-      }
+      })
     }, icon('trash', 14))
   );
 
-  return el('article', { class: `cb-card cb-card--plan is-${p.status}${hasEvidence ? ' has-evidence' : ''} cv-block` } /* E2: رندر کارت‌های زیر فولد تعویق می‌شود */,
+  return el('article', { class: `cb-card cb-card--plan is-${p.status}${hasEvidence ? ' has-evidence' : ''} cv-block`, dataset: { id: String(p.id) } } /* E2 + ۱.۲۲.۰: شناسه برای پچ درجای */,
     head,
     evidence,
     details,
@@ -629,19 +687,21 @@ function entryCard(e) {
     el('button', {
       class: 'btn btn--ghost btn--icon btn--sm cb-danger',
       title: 'حذف رویداد', 'aria-label': 'حذف رویداد',
-      onclick: async () => {
+      onclick: async (e) => lockBtn(e.currentTarget, async () => {
         const ok = await confirmModal({ title: 'حذف رویداد', message: `رویداد «${e.title}» و همهٔ عکس‌ها و مستنداتش حذف شود؟`, confirmLabel: 'حذف', danger: true });
         if (!ok) return;
         try {
           await api.del(`/api/clearbook/entries/${e.id}`);
+          entries = entries.filter((x) => x.id !== e.id);
           toast('رویداد حذف شد', 'success');
-          refreshAll();
+          drawTimeline(); // — کارت همان لحظه جمع می‌شود
+          syncMetaQuiet(); // شمارندهٔ برچسب‌ها و شواهد فازها بی‌صدا تازه می‌شود
         } catch (err) { toastError(err); }
-      }
+      })
     }, icon('trash', 14))
   );
 
-  return el('article', { class: 'cb-card cb-card--entry cv-block' } /* E2 */, head, tagRow, bodyText, media, actions);
+  return el('article', { class: 'cb-card cb-card--entry cv-block', dataset: { id: String(e.id) } } /* E2 + ۱.۲۲.۰ */, head, tagRow, bodyText, media, actions);
 }
 
 // ─── نمایشگر عکس (کپشن + حذف) ───
@@ -673,27 +733,38 @@ function openImageModal(entry, file) {
       (close) => el('button', { class: 'btn btn--soft', onclick: () => downloadAttachment(entry.id, file) }, icon('download', 15), 'دانلود'),
       (close) => el('button', {
         class: 'btn btn--danger',
-        onclick: async () => {
+        onclick: async (e) => lockBtn(e.currentTarget, async () => {
           const ok = await confirmModal({ title: 'حذف عکس', message: 'این عکس از رویداد حذف شود؟', confirmLabel: 'حذف', danger: true });
           if (!ok) return;
           try {
             await api.del(`/api/clearbook/entries/${entry.id}/files/${file.id}`);
+            const ck = `${entry.id}/${file.id}`; // — F6: نشانی کش‌شدهٔ فایل حذف‌شده هم آزاد شود (کلید یکتا per فایل — revoke امن است)
+            const cu = urlCache.get(ck);
+            if (cu) { URL.revokeObjectURL(cu); urlCache.delete(ck); }
+            const cached = entries.find((x) => x.id === entry.id);
+            if (cached) cached.attachments = cached.attachments.filter((a) => a.id !== file.id);
             toast('عکس حذف شد', 'success');
             close();
-            refreshEntries({ reset: true });
+            drawTimeline(); // — بندانگشتی همان کارت درجا می‌رود؛ بدون اسکلت
+            syncMetaQuiet();
           } catch (err) { toastError(err); }
-        }
+        })
       }, icon('trash', 15), 'حذف عکس'),
       (close) => el('button', {
         class: 'btn btn--primary',
-        onclick: async () => {
+        onclick: async (e) => lockBtn(e.currentTarget, async () => {
           try {
             await api.patch(`/api/clearbook/entries/${entry.id}/files/${file.id}`, { caption: captionInput.value.trim() || null });
+            const cached = entries.find((x) => x.id === entry.id);
+            if (cached) {
+              const att = cached.attachments.find((a) => a.id === file.id);
+              if (att) att.caption = captionInput.value.trim() || null;
+            }
             toast('کپشن ذخیره شد', 'success');
             close();
-            refreshEntries({ reset: true });
+            drawTimeline(); // — کپشن همان کارت درجا
           } catch (err) { toastError(err); }
-        }
+        })
       }, icon('check', 15), 'ذخیره کپشن')
     ]
   });
@@ -780,7 +851,7 @@ function openEntryModal({ entry = null, plan = null } = {}) {
           el('span', { class: 'cb-doc__size' }, sizeLabel(f.size)),
           capInput
         ),
-        el('button', { type: 'button', class: 'btn btn--ghost btn--icon btn--sm', 'aria-label': 'حذف از فهرست', onclick: () => { photos.splice(photos.indexOf(item), 1); row.remove(); } }, icon('x', 14))
+        el('button', { type: 'button', class: 'btn btn--ghost btn--icon btn--sm', 'aria-label': 'حذف از فهرست', onclick: () => { URL.revokeObjectURL(item.url); photos.splice(photos.indexOf(item), 1); row.remove(); } /* F6: نشانی blob ردیف حذف‌شده هم آزاد شود — نه فقط در بستن مودال */ }, icon('x', 14))
       );
       photoList.appendChild(row);
     }
@@ -832,23 +903,30 @@ function openEntryModal({ entry = null, plan = null } = {}) {
       (close) => el('button', { class: 'btn btn--ghost', onclick: () => close() }, 'انصراف'),
       (close) => el('button', {
         class: 'btn btn--primary',
-        onclick: async () => {
+        onclick: (e) => lockBtn(e.currentTarget, async () => { // — F2: قفل مشغولی؛ بارگذاری طولانی عکس/مستند با کلیک دوباره اجرا نمی‌شود
           const title = titleInput.value.trim();
           const eventDate = dateInput.getYmd();
           if (title.length < 2) { toast('عنوان حداقل ۲ نویسه است', 'error'); return; }
           if (!eventDate) { toast('تاریخ رویداد را انتخاب کنید', 'error'); return; }
           if (photos.length + docs.length > 10) { toast('حداکثر ۱۰ فایل در هر بار بارگذاری', 'error'); return; }
 
+          let patchedRecord = null; // — F3: پاسخ پچ ویرایش؛ برای تصمیمِ صرف‌نظر از GET بی‌صدای کل خط زمانی
           try {
             let entryId = entry?.id;
             if (isEdit) {
-              await api.patch(`/api/clearbook/entries/${entryId}`, {
+              const res = await api.patch(`/api/clearbook/entries/${entryId}`, {
                 title,
                 body: bodyInput.value.trim(),
                 event_date: eventDate,
                 plan_id: planSelect.value || null,
                 tags: editor.tags()
               });
+              /* ۱.۲۲.۰: ویرایش = پچ همان کارت از پاسخ سرور (فایل‌ها دست‌نخورده) —
+                 خط زمانی از کش درجا ترسیم می‌شود؛ همگام‌سازی بی‌صدا هم بعداً حاکم می‌شود */
+              const i = entries.findIndex((x) => x.id === entryId);
+              if (i >= 0 && res.data) entries[i] = { ...entries[i], ...res.data };
+              drawTimeline();
+              patchedRecord = res.data;
             } else {
               const created = await api.post('/api/clearbook/entries', {
                 title,
@@ -883,11 +961,22 @@ function openEntryModal({ entry = null, plan = null } = {}) {
 
             toast(isEdit ? 'رویداد به‌روزرسانی شد' : 'رویداد ثبت شد', 'success');
             close();
-            refreshAll();
+            /* ۱.۲۲.۰: پایان rebuild کل نما — فقط خط زمانی بی‌صدا + شمارنده‌ها؛
+               برای «ثبت جدید» به‌خاطر جایگاه سرور و پیوست‌ها، همان GET بی‌صدای خط زمانی
+               — F3: ویرایشِ بدون فایل تازه که هنوز با فیلتر جاری بخواند (بازهٔ تاریخ/برچسب)
+               و بدون جستجوی فعال — کارت از پاسخ سرور درجا پچ شده؛ GET کل خط لازم نیست */
+            const stillMatches = Boolean(patchedRecord) && !filters.q
+              && (!filters.from || patchedRecord.eventDate >= filters.from)
+              && (!filters.to || patchedRecord.eventDate <= filters.to)
+              && (!filters.tag || (patchedRecord.tags ?? []).includes(filters.tag));
+            if (photos.length + docs.length > 0 || !stillMatches) {
+              await refreshEntries({ reset: true, silent: true });
+            }
+            syncMetaQuiet();
           } catch (err) {
             toastError(err);
           }
-        }
+        })
       }, icon('save', 15), isEdit ? 'ذخیره تغییرات' : 'ثبت رویداد')
     ]
   });
@@ -934,7 +1023,7 @@ function openPlanModal({ plan = null } = {}) {
       (close) => el('button', { class: 'btn btn--ghost', onclick: () => close() }, 'انصراف'),
       (close) => el('button', {
         class: 'btn btn--primary',
-        onclick: async () => {
+        onclick: (e) => lockBtn(e.currentTarget, async () => { // — F2: قفل مشغولی دکمهٔ ذخیرهٔ فاز
           const title = titleInput.value.trim();
           const fromDate = fromInput.getYmd();
           if (title.length < 2) { toast('عنوان فاز حداقل ۲ نویسه است', 'error'); return; }
@@ -952,13 +1041,19 @@ function openPlanModal({ plan = null } = {}) {
             tag: tag.length >= 2 ? tag : null
           };
           try {
-            if (isEdit) await api.patch(`/api/clearbook/plans/${plan.id}`, payload);
-            else await api.post('/api/clearbook/plans', payload);
+            if (isEdit) {
+              const res = await api.patch(`/api/clearbook/plans/${plan.id}`, payload);
+              const i = plans.findIndex((x) => x.id === plan.id);
+              if (i >= 0 && res.data) plans[i] = { ...plans[i], ...res.data }; // — ۱.۲۲.۰: پچ درجای کش
+            } else {
+              const res = await api.post('/api/clearbook/plans', payload);
+              if (res.data) plans.push(res.data);
+            }
             toast(isEdit ? 'فاز به‌روزرسانی شد' : 'فاز افزوده شد — روی خط زمانی خاکستری نمایش داده می‌شود', 'success');
             close();
-            refreshAll();
+            drawTimeline(); // — خط زمانی از کش درجا؛ بدون اسکلت و بدون rebuild نوار
           } catch (err) { toastError(err); }
-        }
+        })
       }, icon('save', 15), isEdit ? 'ذخیره تغییرات' : 'افزودن فاز')
     ]
   });
@@ -988,12 +1083,16 @@ function openPlansManager() {
         el('option', { value: 'done' }, STATUS_LABELS.done)
       );
       statusSel.value = p.status;
-      statusSel.addEventListener('change', async () => {
+      statusSel.addEventListener('change', async (e) => {
         try {
           await api.patch(`/api/clearbook/plans/${p.id}`, { status: statusSel.value });
           p.status = statusSel.value;
           toast('وضعیت فاز به‌روزرسانی شد', 'success');
-        } catch (err) { toastError(err); }
+          drawTimeline(); // — ۱.۲۲.۰: کارت فاز روی خط زمانی هم درجا به‌روز شود
+        } catch (err) {
+          statusSel.value = p.status; // — F5: کش مقدار قدیم را دارد؛ سلکت هم به همان برگردد
+          toastError(err);
+        }
       });
 
       const move = async (dir) => {
@@ -1005,6 +1104,7 @@ function openPlansManager() {
           await api.post('/api/clearbook/plans/reorder', { ids });
           await loadPlans();
           draw();
+          drawTimeline(); // — ۱.۲۲.۰: شمارهٔ فازها روی خط زمانی هم درجا
         } catch (err) { toastError(err); }
       };
 
@@ -1027,6 +1127,7 @@ function openPlansManager() {
                 await api.del(`/api/clearbook/plans/${p.id}`);
                 await loadPlans();
                 draw();
+                drawTimeline(); // — ۱.۲۲.۰: کارت فاز روی خط زمانی درجا جمع می‌شود
                 toast('فاز حذف شد', 'success');
               } catch (err) { toastError(err); }
             }
@@ -1053,7 +1154,7 @@ function openPlansManager() {
     actions: [
       (close) => el('button', {
         class: 'btn btn--soft',
-        onclick: async () => {
+        onclick: (e) => lockBtn(e.currentTarget, async () => { // — F2: قفل مشغولی؛ درج دوبارهٔ قالب با کلیک دوم نشود
           const ok = await confirmModal({
             title: 'درج قالب استاندارد',
             message: `۱۲ فاز استاندارد مرکز (مهر ${schoolYearLabel(currentSchoolYear)}) درج شود؟ اگر برای این بازه قبلاً فاز ثبت شده باشد، درج رد می‌شود.`,
@@ -1066,11 +1167,11 @@ function openPlansManager() {
             close();
             refreshAll();
           } catch (err) { toastError(err); }
-        }
+        })
       }, icon('download', 15), 'درج قالب استاندارد'),
       (close) => el('button', {
         class: 'btn btn--soft',
-        onclick: async () => {
+        onclick: (e) => lockBtn(e.currentTarget, async () => { // — F2: قفل مشغولی؛ کپی دوباره با کلیک دوم نشود
           const ok = await confirmModal({
             title: 'کپی تقویم برای سال تحصیلی بعد',
             message: `همهٔ فازهای سال ${schoolYearLabel(currentSchoolYear)} با تاریخ‌های یک‌سال جابه‌جا شده برای سال ${schoolYearLabel(currentSchoolYear + 1)} کپی شود؟ وضعیت‌ها به «برنامه‌ریزی‌شده» برمی‌گردند.`,
@@ -1083,7 +1184,7 @@ function openPlansManager() {
             close();
             refreshAll();
           } catch (err) { toastError(err); }
-        }
+        })
       }, icon('copy', 15), 'کپی برای سال بعد'),
       (close) => el('button', { class: 'btn btn--primary', onclick: () => { close(); openPlanModal(); } }, icon('plus', 15), 'فاز جدید')
     ]
@@ -1091,6 +1192,45 @@ function openPlansManager() {
 }
 
 // ─── چاپ ───
+
+/* ۱.۱۰.۰ — انتخابگر چیدمان کلاژ آلبوم: هر صفحه چند عکس (۲ تا ۴)، بزرگ و وسط‌چین با کپشن */
+function openAlbumLayoutModal() {
+  let perPage = 2;
+  const opts = [
+    { n: 2, label: '۲ عکس در صفحه', hint: 'بزرگ‌ترین حالت — هر عکس نیم‌صفحه' },
+    { n: 3, label: '۳ عکس در صفحه', hint: 'متعادل — سه‌ردیفه' },
+    { n: 4, label: '۴ عکس در صفحه', hint: 'شبکهٔ ۲×۲' }
+  ];
+  const buttons = opts.map((o) => el('button', {
+    type: 'button',
+    class: `cb-album-opt${o.n === perPage ? ' is-active' : ''}`,
+    'aria-pressed': String(o.n === perPage),
+    onclick: () => {
+      perPage = o.n;
+      for (const b of buttons) {
+        const active = Number(b.dataset.n) === perPage;
+        b.classList.toggle('is-active', active);
+        b.setAttribute('aria-pressed', String(active));
+      }
+    },
+    dataset: { n: String(o.n) }
+  }, el('b', {}, o.label), el('span', {}, o.hint)));
+
+  const body = el('div', { class: 'cb-album-opts' },
+    el('p', { class: 'cb-album-opts__desc' },
+      'چیدمان عکس‌ها در صفحات آلبوم را انتخاب کنید — عکس‌ها بزرگ و وسط‌چین می‌افتند و کپشن زیر هر عکس چاپ می‌شود. متن رویدادها و فهرست مستندات همیشه پیش از صفحات عکس می‌آید.'),
+    ...buttons
+  );
+
+  openModal({
+    title: 'چاپ آلبوم فعالیت‌ها',
+    body,
+    actions: [
+      (close) => el('button', { class: 'btn btn--soft', type: 'button', onclick: close }, 'انصراف'),
+      (close) => el('button', { class: 'btn btn--primary', type: 'button', onclick: () => { close(); printAlbum(perPage); } }, icon('printer', 15), 'چاپ آلبوم')
+    ]
+  });
+}
 
 function printRootMount(content) {
   let root = document.getElementById('cb-print-root');
@@ -1138,7 +1278,7 @@ async function fetchAllEntriesForPrint() {
   return all;
 }
 
-async function printAlbum() {
+async function printAlbum(perPage = 2) {
   try {
     toast('در حال آماده‌سازی آلبوم چاپی…');
     const entriesList = await fetchAllEntriesForPrint();
@@ -1195,26 +1335,30 @@ async function printAlbum() {
         ),
         e.body ? el('p', { class: 'cbp-entry__body' }, e.body) : null
       );
+      content.appendChild(block);
       const imgs = e.attachments.filter((a) => a.kind === 'image');
       const docsList = e.attachments.filter((a) => a.kind === 'doc');
       if (imgs.length > 0) {
-        const grid = el('div', { class: 'cbp-grid' });
+        /* ۱.۱۰.۰ — کلاژ آلبوم: عکس‌ها در صفحه‌های Nتایی (۲/۳/۴) بزرگ و وسط‌چین با کپشن زیر عکس؛
+           هر گروه یک صفحهٔ مستقل با شکست چاپ اجباری */
+        const loaded = [];
         for (const img of imgs) {
           try {
-            const url = await fileObjectUrl(e.id, img.id);
-            grid.appendChild(el('figure', { class: 'cbp-fig' },
-              el('img', { src: url, alt: img.caption || img.filename }),
-              img.caption ? el('figcaption', {}, img.caption) : null
-            ));
+            loaded.push({ img, url: await fileObjectUrl(e.id, img.id) });
           } catch { /* عکس در دسترس نبود — رد می‌شود */ }
         }
-        block.appendChild(grid);
+        for (let i = 0; i < loaded.length; i += perPage) {
+          content.appendChild(el('div', { class: `cbp-page cbp-page--${perPage}` },
+            loaded.slice(i, i + perPage).map(({ img, url }) =>
+              el('figure', { class: 'cbp-fig' },
+                el('img', { src: url, alt: img.caption || img.filename }),
+                img.caption ? el('figcaption', {}, img.caption) : null))));
+        }
       }
       if (docsList.length > 0) {
         block.appendChild(el('p', { class: 'cbp-entry__docs' },
           `مستندات پیوست: ${docsList.map((d) => d.filename).join('، ')}`));
       }
-      content.appendChild(block);
     }
 
     const printDom = el('div', {},

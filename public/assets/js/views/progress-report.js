@@ -3,7 +3,7 @@ import {
   fa, enDigits, toGregorian, tehranTodayYmd, toUtcIso, tehranYmdOfIso, addDaysYmd,
   formatJalaliNumeric, formatJalaliDateTime, gradeLabel, escapeHtml
 } from '../format.js';
-import { el, icon, skeletonState, errorState, emptyState, toast } from '../ui.js'; // toast در مسیر چاپ بدون import بود
+import { el, icon, skeletonState, errorState, emptyState, toast, markScrollable } from '../ui.js'; // toast در مسیر چاپ بدون import بود
 import { lineChart, deferredChart } from '../charts.js'; // E3
 import { OT_PROMPT_LEVELS, NEEDS_KEY } from '../ot-checklist.js';
 import { REHAB_FX_KEY, PATH_STATUS_BADGE, PATH_STATUS_LABEL, SESSION_ITEM_LABELS } from '../clinical-content.js';
@@ -309,43 +309,44 @@ function buildChecklistCard(profile) {
         hint: 'پس از فعال‌سازی پروتکل و چک‌لیست مهارتی، وضعیت هر مهارت این‌جا چاپ می‌شود.'
       })));
   }
-  const rows = [];
-  for (const d of profile.domains) {
-    rows.push(el('tr', { class: 'pr-domain-row' },
-      el('td', { colspan: 5, scope: 'rowgroup' }, /* S7-18: سرگروه حیطه */
-        `${d.title} — ${fa(d.mastered)} بلدِ تأییدشده · ${fa(d.masteredPending)} در انتظار تأیید · ${fa(d.withHelp)} با کمک · ${fa(d.notYet)} هنوز نه`)));
-    for (const sk of d.skills) {
-      rows.push(el('tr', null,
-        el('td', {}, sk.title, sk.isPrimary ? null : el('span', { class: 'badge badge--info pr-chip' }, 'مکمل')),
-        el('td', { class: 'cell-sub' }, sk.criterion ?? '—'),
-        el('td', { class: 'is-num' },
-          sk.status
-            ? el('span', { class: `badge ${STATUS_CLS[sk.status] ?? 'badge--neutral'}` }, STATUS_LABELS[sk.status] ?? sk.status)
-            : el('span', { class: 'badge badge--neutral' }, 'ارزیابی نشده')),
-        el('td', { class: 'is-num' },
-          sk.masteryConfirmed
-            ? el('span', { class: 'badge badge--success' }, 'تأییدشده')
-            : sk.status === 'mastered'
-              ? el('span', { class: 'badge badge--warning' }, 'در انتظار جلسهٔ دوم')
-              : '—'),
-        el('td', { class: 'is-num' }, sk.promptLevel ? (OT_PROMPT_LEVELS[sk.promptLevel] ?? sk.promptLevel) : '—')
-      ));
-    }
-  }
+  /* UX-ممیزی گلایهٔ ۲: جدول ۵ستونی (‎۴۹۹px‎) در قاب موبایل (‎۳۰۹px‎) بریده می‌شد —
+     ① هر حیطه آکاردئون شد (صفحهٔ ‎۱۴۰۰۰px‎ بخش‌بخش)؛ ② سرستون چسبان؛
+     ③ موبایل: هر ردیف کارت عمودی می‌شود (data-label)؛ ④ نشانهٔ اسکرول گرادیانی */
+  const COLS = ['حیطه / مهارت', 'ملاک عملکرد', 'وضعیت فعلی', 'تسلط دوجلسه‌ای', 'سطح راهنمای اخیر'];
+  const thead = () => el('thead', null, el('tr', null,
+    COLS.map((c) => el('th', { scope: 'col' }, c))));
+  const skillRow = (sk) => el('tr', null,
+    el('td', { dataset: { label: COLS[0] } }, sk.title, sk.isPrimary ? null : el('span', { class: 'badge badge--info pr-chip' }, 'مکمل')),
+    el('td', { class: 'cell-sub', dataset: { label: COLS[1] } }, sk.criterion ?? '—'),
+    el('td', { class: 'is-num', dataset: { label: COLS[2] } },
+      sk.status
+        ? el('span', { class: `badge ${STATUS_CLS[sk.status] ?? 'badge--neutral'}` }, STATUS_LABELS[sk.status] ?? sk.status)
+        : el('span', { class: 'badge badge--neutral' }, 'ارزیابی نشده')),
+    el('td', { class: 'is-num', dataset: { label: COLS[3] } },
+      sk.masteryConfirmed
+        ? el('span', { class: 'badge badge--success' }, 'تأییدشده')
+        : sk.status === 'mastered'
+          ? el('span', { class: 'badge badge--warning' }, 'در انتظار جلسهٔ دوم')
+          : '—'),
+    el('td', { class: 'is-num', dataset: { label: COLS[4] } }, sk.promptLevel ? (OT_PROMPT_LEVELS[sk.promptLevel] ?? sk.promptLevel) : '—'));
+
+  const domainBlocks = profile.domains.map((d) =>
+    el('details', { class: 'pr-domain', open: true },
+      el('summary', {},
+        el('b', {}, d.title),
+        el('span', { class: 'cell-sub' }, `${fa(d.mastered)} بلدِ تأییدشده · ${fa(d.masteredPending)} در انتظار تأیید · ${fa(d.withHelp)} با کمک · ${fa(d.notYet)} هنوز نه`),
+        el('span', { class: 'pr-domain__chev', 'aria-hidden': 'true' }, icon('chevD', 14))),
+      markScrollable(el('div', { class: 'pr-scroll' },
+        el('table', { class: 'pr-table', 'aria-label': `مهارت‌های حیطهٔ ${d.title}` }, /* S7-18 */
+          thead(),
+          el('tbody', null, ...d.skills.map(skillRow)))))));
+
   return el('div', { class: 'card card--break' },
     el('div', { class: 'card__head' },
       el('div', { class: 'card__title' }, icon('clipboard', 16), 'چک‌لیست مهارتی — وضعیت فعلی'),
       el('span', { class: 'badge badge--info' }, `${fa(profile.totals?.scored ?? 0)} از ${fa(profile.totals?.total ?? 0)} مهارت ارزیابی‌شده`)),
     el('div', { class: 'card__body' },
-      el('div', { class: 'pr-scroll' },
-        el('table', { class: 'pr-table', 'aria-label': 'پایش تسلط مهارت‌ها به تفکیک حیطه' }, /* S7-18 */
-          el('thead', null, el('tr', null,
-            el('th', { scope: 'col' }, 'حیطه / مهارت'),
-            el('th', { scope: 'col' }, 'ملاک عملکرد'),
-            el('th', { scope: 'col' }, 'وضعیت فعلی'),
-            el('th', { scope: 'col' }, 'تسلط دوجلسه‌ای'),
-            el('th', { scope: 'col' }, 'سطح راهنمای اخیر'))),
-          el('tbody', null, ...rows))),
+      ...domainBlocks,
       el('div', { class: 'pr-note' },
         'وضعیت‌ها از آخرین ثبت هر مهارت در جلسات کاردرمانی ذهنی استخراج شده است. «تسلط دوجلسه‌ای» یعنی «بلد است» در دو جلسهٔ متوالی — طبق قاعدهٔ داوری دوجلسه‌ای سامانه؛ سطح راهنما فقط برای وضعیت «با کمک» معنا دارد.')
     )

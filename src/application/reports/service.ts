@@ -241,21 +241,21 @@ export function createReportService(deps: ReportDeps): ReportService {
     async getAdvancedReport(from, to) {
       const range = tehranRange(from, to);
 
-      const apptRows = await db.query<{ start_at: string; status: string; ops_status: string | null }>(
-        `SELECT start_at, status, ops_status FROM appointments
+      const apptRows = await db.query<{ start_at: string; status: string }>(
+        `SELECT start_at, status FROM appointments
           WHERE start_at >= ? AND start_at <= ?`,
         [range.start, range.end]
       );
-      const attRows = await db.query<{ start_at: string; attendance: string; appt_status: string }>(
-        `SELECT a.start_at, s.attendance, a.status AS appt_status
+      const attRows = await db.query<{ appointment_id: string; start_at: string; attendance: string; appt_status: string }>(
+        `SELECT a.id AS appointment_id, a.start_at, s.attendance, a.status AS appt_status
            FROM appointment_students s
            JOIN appointments a ON a.id = s.appointment_id
           WHERE a.start_at >= ? AND a.start_at <= ?`,
         [range.start, range.end]
       );
       const weeks = buildWeeklyTrend(
-        apptRows.map((a) => ({ startAt: a.start_at, status: a.status, opsStatus: a.ops_status })),
-        attRows.map((r) => ({ startAt: r.start_at, attendance: r.attendance, apptStatus: r.appt_status })),
+        apptRows.map((a) => ({ startAt: a.start_at, status: a.status })),
+        attRows.map((r) => ({ appointmentId: r.appointment_id, startAt: r.start_at, attendance: r.attendance, apptStatus: r.appt_status })),
         from,
         to
       );
@@ -269,15 +269,20 @@ export function createReportService(deps: ReportDeps): ReportService {
       );
       const firstAdmitted = new Map<string, string>();
       if (wlIdRows.length > 0) {
-        const auditRows = await db.query<{ resource_id: string; admitted_at: string }>(
-          `SELECT resource_id, MIN(strftime('%Y-%m-%dT%H:%M:%SZ', created_at)) AS admitted_at
-             FROM audit_log
-            WHERE resource_type = 'waitlist' AND action = 'waitlist.admitted'
-              AND resource_id IN (${wlIdRows.map(() => '?').join(',')})
-            GROUP BY resource_id`,
-          wlIdRows.map((r) => r.id)
-        );
-        for (const r of auditRows) firstAdmitted.set(r.resource_id, r.admitted_at);
+        // ف۵ — سقف ۱۰۰ پارامتر bind در D1 (هم‌کلاس باگ کشف baseline بار روی summary):
+        // پرس‌وجوی audit_log تکه‌تکه ۹۰تایی روی admittedهای بی‌کران؛ MIN تکه‌ها همان MIN کل است
+        for (let i = 0; i < wlIdRows.length; i += 90) {
+          const chunk = wlIdRows.slice(i, i + 90);
+          const auditRows = await db.query<{ resource_id: string; admitted_at: string }>(
+            `SELECT resource_id, MIN(strftime('%Y-%m-%dT%H:%M:%SZ', created_at)) AS admitted_at
+               FROM audit_log
+              WHERE resource_type = 'waitlist' AND action = 'waitlist.admitted'
+                AND resource_id IN (${chunk.map(() => '?').join(',')})
+              GROUP BY resource_id`,
+            chunk.map((r) => r.id)
+          ); // IN-bounded: صدا زننده همان حلقهٔ تکهٔ ۹۰تایی ف۵ است (متغیر chunk)
+          for (const r of auditRows) firstAdmitted.set(r.resource_id, r.admitted_at);
+        }
       }
       const waitPairs = wlIdRows
         .filter((r) => firstAdmitted.has(r.id))

@@ -2,6 +2,7 @@ import { NotFoundError } from '@core/errors';
 import { FOLLOWUP_OPEN_STATUSES, STUDENT_GRADES } from '@core/shared';
 import type { AuthContext, SpecialNeedSeverity, SpecialNeedType, StudentCaseStatus } from '@core/shared';
 import type { DbClient } from '@core/db';
+import { inParamChunks, inPlaceholders } from '@core/db/in-chunks'; // ۱.۲۵.۷۲ — دروازهٔ IN-list (بدهی ف۶ ⑧)
 import type {
   AttentionStudent,
   GridFilters,
@@ -79,13 +80,16 @@ export function createSpecialNeedsService(deps: { db: DbClient }): SpecialNeedsS
   async function openFollowupsOf(studentIds: string[]): Promise<Map<string, OpenFollowUpRef[]>> {
     const map = new Map<string, OpenFollowUpRef[]>();
     if (studentIds.length === 0) return map;
-    const ph = studentIds.map(() => '?').join(', ');
-    const rows = await db.query<FollowUpRow>(
-      `SELECT id, student_id, due_at, created_at
+    /* ۱.۲۵.۷۲ — تکه‌بندی ۹۰تایی؛ هر دانش‌آموز در یک تکه است (FOLLOWUP_OPEN_STATUSES ثابت ماژول است) */
+    const rows: FollowUpRow[] = [];
+    for (const chunk of inParamChunks(studentIds)) {
+      rows.push(...await db.query<FollowUpRow>(
+        `SELECT id, student_id, due_at, created_at
          FROM followups
-        WHERE student_id IN (${ph}) AND status IN (${FOLLOWUP_OPEN_STATUSES.map(() => '?').join(', ')})`,
-      [...studentIds, ...FOLLOWUP_OPEN_STATUSES]
-    );
+        WHERE student_id IN (${inPlaceholders(chunk.length)}) AND status IN (${FOLLOWUP_OPEN_STATUSES.map(() => '?').join(', ')})`,
+        [...chunk, ...FOLLOWUP_OPEN_STATUSES] // IN-bounded: FOLLOWUP_OPEN_STATUSES ثابت ماژول است (۱.۲۵.۷۲)
+      ));
+    }
     for (const r of rows) {
       const list = map.get(r.student_id) ?? [];
       list.push({ id: r.id, dueAt: isoOf(r.due_at), createdAt: isoOf(r.created_at) ?? r.created_at });
@@ -97,17 +101,20 @@ export function createSpecialNeedsService(deps: { db: DbClient }): SpecialNeedsS
   async function sessionsOf(studentIds: string[], nowIso: string): Promise<Map<string, SessionRow>> {
     const map = new Map<string, SessionRow>();
     if (studentIds.length === 0) return map;
-    const ph = studentIds.map(() => '?').join(', ');
-    const rows = await db.query<{ student_id: string; last_past: string | null; next_upcoming: string | null }>(
-      `SELECT a_s.student_id AS student_id,
+    /* ۱.۲۵.۷۲ — تکه‌بندی ۹۰تایی؛ GROUP BY هر دانش‌آموز درون تکهٔ خودش کامل است */
+    const rows: { student_id: string; last_past: string | null; next_upcoming: string | null }[] = [];
+    for (const chunk of inParamChunks(studentIds)) {
+      rows.push(...await db.query<{ student_id: string; last_past: string | null; next_upcoming: string | null }>(
+        `SELECT a_s.student_id AS student_id,
               MAX(CASE WHEN a.start_at <= ? AND a.status != 'cancelled' THEN a.start_at END) AS last_past,
               MIN(CASE WHEN a.start_at > ? AND a.status = 'scheduled' THEN a.start_at END) AS next_upcoming
          FROM appointment_students a_s
          JOIN appointments a ON a.id = a_s.appointment_id
-        WHERE a_s.student_id IN (${ph})
+        WHERE a_s.student_id IN (${inPlaceholders(chunk.length)})
         GROUP BY a_s.student_id`,
-      [nowIso, nowIso, ...studentIds]
-    );
+        [nowIso, nowIso, ...chunk]
+      ));
+    }
     for (const r of rows) map.set(r.student_id, r);
     return map;
   }

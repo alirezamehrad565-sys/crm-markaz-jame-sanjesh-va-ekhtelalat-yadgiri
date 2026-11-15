@@ -1,5 +1,10 @@
 import type { AppHono } from '@core/shared';
-import { ReplaceCenterHoursSchema, ScoringConfigSchema, UpdateSettingsSchema } from '@core/shared';
+import {
+  BotTokenUpdateSchema,
+  ReplaceCenterHoursSchema,
+  ScoringConfigSchema,
+  UpdateSettingsSchema
+} from '@core/shared';
 import { getAuthContext, requireRole } from '@core/auth';
 import type { SettingsService } from './service';
 
@@ -24,11 +29,26 @@ export function registerSettingsRoutes(app: AppHono, service: SettingsService): 
         clinicPhone: body.clinic_phone,
         notifyBatchHour: body.notify_batch_hour,
         botUsername: body.bot_username,
+        botAbout: body.bot_about, // ۱.۲۵.۵۷ — متن «دربارهٔ مرکز» بات
         screeningTargets: body.screening_targets
       },
       actor
     );
     return c.json({ data }, 200);
+  });
+
+  /* ۱.۲۵.۵۷ — ثبت/پاک‌کردن توکن بات بله مستقیم توسط کاربر (مدیر).
+     توکن در DB می‌نشیند (env اولویت دارد)، هرگز در پاسخ GET نمی‌رود و
+     audit فقط «configured» را ثبت می‌کند. پاسخ همیشه بی‌توکن است. */
+  app.put('/api/settings/bot-token', requireRole('manager'), async (c) => {
+    const actor = getAuthContext(c);
+    const body = BotTokenUpdateSchema.parse(await c.req.json<unknown>());
+    if ('clear' in body) {
+      await service.setBaleBotToken(null, actor);
+      return c.json({ data: { configured: false, cleared: true } }, 200);
+    }
+    await service.setBaleBotToken(body.token, actor);
+    return c.json({ data: { configured: true, cleared: false } }, 200);
   });
 
   app.get('/api/settings/center-hours', async (c) => {

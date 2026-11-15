@@ -2,6 +2,32 @@ import { ERROR_TEXT } from './api.js';
 import { fa } from './format.js';
 import { jalaliDateInput } from './jalali-picker.js';
 
+/* ۱.۲۵.۰۵ — حرکت مشترک از charts.js به ui.js رفت: countUp برای kpi مشترک لازم بود و
+   ui.js نباید charts.js را import می‌کرد (چرخهٔ charts→ui). خود charts.js از اینجا import می‌کند. */
+export function prefersReducedMotion() {
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+export function countUp(el_, value, { duration = 700, formatter = (v) => String(v) } = {}) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    el_.textContent = formatter(value);
+    return;
+  }
+  if (prefersReducedMotion()) {
+    el_.textContent = formatter(value);
+    return;
+  }
+  const start = performance.now();
+  const from = 0;
+  function frame(t) {
+    const p = Math.min((t - start) / duration, 1);
+    const eased = 1 - Math.pow(1 - p, 3); // منحنی حرکت easeOutCubic
+    el_.textContent = formatter(Math.round(from + (value - from) * eased));
+    if (p < 1) requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+
 export function el(tag, attrs = {}, ...children) {
   const node = document.createElement(tag);
   for (const [key, value] of Object.entries(attrs ?? {})) {
@@ -38,7 +64,7 @@ const PATHS = {
   sun: '<circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/>',
   moon: '<path d="M20.5 14.5A8.5 8.5 0 1 1 9.5 3.5a7 7 0 0 0 11 11Z"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
-  edit: '<path d="M14.5 5.5 18.5 9.5 8.5 19.5 4 20l.5-4.5 10-10Z"/><path d=" 7 4 4"/>',
+  edit: '<path d="M14.5 5.5 18.5 9.5 8.5 19.5 4 20l.5-4.5 10-10Z"/><path d="m13 7 4 4"/>',
   trash: '<path d="M4 6.5h16M9.5 6V4.5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1V6M6.5 6.5l.8 12a2 2 0 0 0 2 1.9h5.4a2 2 0 0 0 2-1.9l.8-12"/><path d="M10 10.5v5M14 10.5v5"/>',
   check: '<path d="m4.5 12.5 5 5 10-11"/>',
   x: '<path d="M6 6l12 12M18 6 6 18"/>',
@@ -47,12 +73,12 @@ const PATHS = {
   undo: '<path d="M4 9h10a6 6 0 0 1 0 12h-4"/><path d="M8.5 4.5 4 9l4.5 4.5"/>',
   refresh: '<path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 3.5V8h-4.5"/>',
   chevR: '<path d="m9 5 7 7-7 7"/>',
-  chevL: '<path d=" 5-7 7 7 7"/>',
+  chevL: '<path d="m15 5-7 7 7 7"/>',
   chevU: '<path d="m5 15 7-7 7 7"/>', /* I5: جابه‌جایی عمودی فازها با chevron عمودی */
   chevD: '<path d="m5 9 7 7 7-7"/>', /* */
   bot: '<rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 8V4M8 4h8"/><circle cx="9" cy="14" r="1"/><circle cx="15" cy="14" r="1"/>',
-  search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d=" 20-4.4-4.4"/>',
-  logout: '<path d="M9 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h3"/><path d=" 8 4 4-4 4M18 12H8"/>',
+  search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m20 20-4.4-4.4"/>',
+  logout: '<path d="M9 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h3"/><path d="m14 8 4 4-4 4M18 12H8"/>',
   settings: '<circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1Z"/>', /* I9: سگمنت‌های بی‌اثر h0/v0 پاک شد */
   zap: '<path d="M13 2 4.5 13.5H11L10 22l8.5-11.5H12L13 2Z"/>',
   bell: '<path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6Z"/><path d="M10 19a2 2 0 0 0 4 0"/>',
@@ -63,7 +89,7 @@ const PATHS = {
   download: '<path d="M12 4v11M7.5 11.5 12 16l4.5-4.5"/><path d="M4.5 19.5h15"/>',
   upload: '<path d="M12 15V4M7.5 8.5 12 4l4.5 4.5"/><path d="M4.5 19.5h15"/>',
   eye: '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3"/>',
-  clip: '<path d=" 12.5-8.5 8.5a5.5 5.5 0 0 1-7.8-7.8l8.8-8.8a3.7 3.7 0 0 1 5.2 5.2l-8.8 8.8a1.85 1.85 0 0 1-2.6-2.6l8.1-8.1"/>',
+  clip: '<path d="m21 12.5-8.5 8.5a5.5 5.5 0 0 1-7.8-7.8l8.8-8.8a3.7 3.7 0 0 1 5.2 5.2l-8.8 8.8a1.85 1.85 0 0 1-2.6-2.6l8.1-8.1"/>',
   board: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9.5 4v16M15 4v11M5.5 8h1.5M12 8h1.5M17.5 8h1"/>',
   dots: '<circle cx="5" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.4" fill="currentColor" stroke="none"/>',
   phone: '<path d="M21.5 16.7v2.6a1.8 1.8 0 0 1-2 1.8 17.8 17.8 0 0 1-7.8-2.8 17.5 17.5 0 0 1-5.4-5.4A17.8 17.8 0 0 1 3.5 5a1.8 1.8 0 0 1 1.8-2h2.6a1.8 1.8 0 0 1 1.8 1.55c.11.85.32 1.68.62 2.47a1.8 1.8 0 0 1-.4 1.9L8.9 10a14.4 14.4 0 0 0 5.4 5.4l1.08-1.07a1.8 1.8 0 0 1 1.9-.4c.79.3 1.62.51 2.47.62a1.8 1.8 0 0 1 1.55 1.85Z"/>',
@@ -91,16 +117,19 @@ const PATHS = {
   activity: '<path d="M3 12h3.8l2.4-6 4.4 12 2.4-6H21"/>',
   shield: '<path d="M12 3 5 5.8v5.4c0 4.4 3 8.2 7 9.3 4-1.1 7-4.9 7-9.3V5.8L12 3Z"/>',
   brain: '<path d="M12 4.6a3 3 0 0 0-5.6 1.4A3.2 3.2 0 0 0 4 9.1c0 .8.3 1.6.8 2.2a3.3 3.3 0 0 0-.3 1.5c0 1.5 1 2.8 2.4 3.2a3 3 0 0 0 5.1 2V4.6Z"/><path d="M12 4.6a3 3 0 0 1 5.6 1.4A3.2 3.2 0 0 1 20 9.1c0 .8-.3 1.6-.8 2.2.2.5.3 1 .3 1.5 0 1.5-1 2.8-2.4 3.2a3 3 0 0 1-5.1 2"/>',
-  star: '<path d=" 3.8 2.5 5.1 5.6.8-4 4 1 5.6-5.1-2.7-5.1 2.7 1-5.6-4-4 5.6-.8L12 3.8Z"/>',
-  send: '<path d=" 3-9.5 9.5"/><path d="M21 3 15 21l-3.5-8.5L3 9l18-6Z"/>',
+  star: '<path d="m12 3.8 2.5 5.1 5.6.8-4 4 1 5.6-5.1-2.7-5.1 2.7 1-5.6-4-4 5.6-.8L12 3.8Z"/>',
+  send: '<path d="m21 3-9.5 9.5"/><path d="M21 3 15 21l-3.5-8.5L3 9l18-6Z"/>',
   save: '<path d="M5 3.5h10.5L19.5 7.5V19A1.5 1.5 0 0 1 18 20.5H5A1.5 1.5 0 0 1 3.5 19V5A1.5 1.5 0 0 1 5 3.5Z"/><path d="M7.5 3.5V9h7V3.5"/><path d="M7.5 20.5V14h9v6.5"/>',
   message: '<path d="M19.5 4.5h-15a1.5 1.5 0 0 0-1.5 1.5v9.5A1.5 1.5 0 0 0 4.5 17H8v4l5-4h6.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5Z"/>',
-  compass: '<circle cx="12" cy="12" r="9"/><path d=".5 8.5-2 5-5 2 2-5 5-2Z"/>',
+  compass: '<circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5 5-2Z"/>',
   grid: '<rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/>',
   /* I1: سه آیکون مصرف‌شده که تعریف نشده بودند و SVG خالی رندر می‌کردند */
   pause: '<rect x="7" y="5" width="3.5" height="14" rx="1.2"/><rect x="13.5" y="5" width="3.5" height="14" rx="1.2"/>',
   bookmark: '<path d="M6.5 4.5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v16l-5.5-4-5.5 4v-16Z"/>',
-  layers: '<path d=" 3 9 5-9 5-9-5 9-5Z"/><path d="m4.5 13.5 7.5 4.2 7.5-4.2"/><path d="m4.5 17.5 7.5 4.2 7.5-4.2"/>'
+  layers: '<path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m4.5 13.5 7.5 4.2 7.5-4.2"/><path d="m4.5 17.5 7.5 4.2 7.5-4.2"/>',
+  /* ۱.۲۵.۶۳ — آیکن bug واقعی (الگوی Lucide bug) جای عنکبوتِ دستی — خواست کارفرما: آیکن مرتبط با «باگ» درست و حسابی.
+     بدنهٔ بیضی با خط میانی، دو شاخک و شش پا — در سایز ۱۴ تا ۲۰ سایدبار هم خوانا است */
+  bug: '<path d="m8 2 1.88 1.88"/><path d="M14.12 3.88 16 2"/><path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6"/><path d="M12 20v-9"/><path d="M6.53 9C4.6 8.8 3 7.1 3 5"/><path d="M6 13.12H3"/><path d="M7.07 17.07c-1.51.29-2.98.99-4.07 2.93"/><path d="M17.47 9c1.93-.2 3.53-1.9 3.53-4"/><path d="M18 13.12h3"/><path d="M16.93 17.07c1.51.29 2.98.99 4.07 2.93"/>'
 };
 
 /* I4: آیکون‌های جهت‌دار که در RTL باید آینه شوند (فلش برگشت/ارسال LTR-قفل نباشند) */
@@ -111,19 +140,29 @@ export function isKnownIcon(name) {
 }
 
 export function progressRing(value, max, { size = 84, stroke = 8, color = 'var(--primary)', trackColor = 'var(--surface-3)' } = {}) {
+  // — v1.08.0 ریشه‌کنی باگ حلقه: el() با createElement المان HTML می‌سازد و <svg> در فضانام HTML هرگز رندر نمی‌شد؛
+  //   ساخت با createElementNS اجباری است (آیکون‌ها چون از innerHTML می‌آیند سالم‌اند)
+  const NS = 'http://www.w3.org/2000/svg';
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const pct = Math.max(0, Math.min(1, max > 0 ? value / max : 0));
-  const ring = el(
-    'svg',
-    { width: size, height: size, viewBox: `0 0 ${size} ${size}`, 'aria-hidden': 'true', class: 'ring-svg' },
-    el('circle', { cx: size / 2, cy: size / 2, r, fill: 'none', stroke: trackColor, 'stroke-width': stroke }),
-    el('circle', {
-      cx: size / 2, cy: size / 2, r, fill: 'none', stroke: color, 'stroke-width': stroke,
-      'stroke-linecap': 'round', 'stroke-dasharray': String(c), 'stroke-dashoffset': String(c * (1 - pct)),
-      transform: `rotate(-90 ${size / 2} ${size / 2})`, class: 'ring__fill'
-    })
-  );
+  const ring = document.createElementNS(NS, 'svg');
+  ring.setAttribute('width', String(size));
+  ring.setAttribute('height', String(size));
+  ring.setAttribute('viewBox', `0 0 ${size} ${size}`);
+  ring.setAttribute('aria-hidden', 'true');
+  ring.setAttribute('class', 'ring-svg');
+  const circle = (attrs) => {
+    const cn = document.createElementNS(NS, 'circle');
+    for (const [k, v] of Object.entries(attrs)) cn.setAttribute(k, String(v));
+    return cn;
+  };
+  ring.appendChild(circle({ cx: size / 2, cy: size / 2, r, fill: 'none', stroke: trackColor, 'stroke-width': stroke }));
+  ring.appendChild(circle({
+    cx: size / 2, cy: size / 2, r, fill: 'none', stroke: color, 'stroke-width': stroke,
+    'stroke-linecap': 'round', 'stroke-dasharray': String(c), 'stroke-dashoffset': String(c * (1 - pct)),
+    transform: `rotate(-90 ${size / 2} ${size / 2})`, class: 'ring__fill'
+  }));
   // A9: ترنزیشن حلقه مرده بود (مقدار نهایی هنگام insert) — الگوی دونات: از حالت خالی با rAF به هدف
   if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
     const fill = ring.querySelector('.ring__fill');
@@ -133,6 +172,25 @@ export function progressRing(value, max, { size = 84, stroke = 8, color = 'var(-
     }));
   }
   return ring;
+}
+
+/* UX-ممیزی الگوی ۶: محتوای پهن در قاب باریک بدون نشانهٔ اسکرول —
+   کانتینر اسکرول‌شدنی افقی را با گرادیان لبه علامت می‌زند (تا انتهای اسکرول محو می‌شود) */
+export function markScrollable(node) {
+  if (!node || node.dataset.scrollCueBound) return node;
+  node.dataset.scrollCueBound = '1';
+  const update = () => {
+    const over = node.scrollWidth - node.clientWidth > 8;
+    node.classList.toggle('has-scroll-x', over);
+    const pos = Math.abs(node.scrollLeft); /* RTL: scrollLeft منفی/صفر */
+    const atEnd = pos + node.clientWidth >= node.scrollWidth - 8;
+    node.classList.toggle('at-scroll-end', over && atEnd);
+  };
+  node.addEventListener('scroll', update, { passive: true });
+  if (typeof ResizeObserver === 'function') new ResizeObserver(update).observe(node);
+  else window.addEventListener('resize', update);
+  requestAnimationFrame(update);
+  return node;
 }
 
 export function tabs(items, initialKey) {
@@ -149,6 +207,7 @@ export function tabs(items, initialKey) {
     buttons.set(item.key, btn);
     root.appendChild(btn);
   }
+  markScrollable(root);
   const setActive = (key) => {
     for (const [k, btn] of buttons) {
       const on = k === key;
@@ -158,6 +217,7 @@ export function tabs(items, initialKey) {
       // در track اسکرول‌شدنی (موبایل) تب فعال داخل دید بماند
       if (on && btn.isConnected) btn.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     }
+    markScrollable(root);
   };
   // S1-16: کلیدهای جهت روی tablist (RTL: چپ = بعدی) + Home/End
   root.addEventListener('keydown', (e) => {
@@ -230,10 +290,81 @@ export function toastError(err) {
   toast(detail && detail !== msg ? `${msg} — ${detail}` : msg, 'error', 5200);
 }
 
+/* ۱.۱۲.۰ — قفل مشغولی دکمه (ضدِ اسپم/دوبارکلیک).
+   الگوی واحد کل سایت: onclick: (e) => lockBtn(e.currentTarget, async () => { ... })
+   • تا پایان کار ناهمگام، دکمه disabled + aria-busy + چرخ‌نده (.btn.is-busy) می‌گیرد
+   • کلیک دوم در حین کار نادیده گرفته می‌شود (dataset.busy)
+   • restore در finally — حتی در خطا؛ حالت disabled قبلی حفظ می‌شود */
+export async function lockBtn(btn, fn) {
+  if (!btn) return fn();
+  if (btn.dataset.busy === '1') return undefined;
+  btn.dataset.busy = '1';
+  const wasDisabled = btn.disabled;
+  btn.disabled = true;
+  btn.setAttribute('aria-busy', 'true');
+  btn.classList.add('is-busy');
+  try {
+    return await fn();
+  } finally {
+    btn.disabled = wasDisabled;
+    btn.classList.remove('is-busy');
+    btn.removeAttribute('aria-busy');
+    delete btn.dataset.busy;
+  }
+}
+
+/* ۱.۲۱.۰ — حذف نرم با جمع‌شدن ارتفاع (جعبه‌ابزار مشترک جریان پیوسته).
+   الگوی ۱.۱۹/۱.۲۰ (روز کاری/نوبت‌ها) عمومی شد: گره با ارتفاع فعلی جمع می‌شود،
+   کلاس is-resolving محو‌سازی می‌دهد و پس از ۲۶۰ms از DOM خارج می‌شود —
+   هیچ rebuild کل نما؛ همسایه‌ها سرجایشان می‌مانند. */
+/* جمع‌شدن نرم یک عنصر: ارتفاع قفل و با انیمیشن is-resolving برداشته می‌شود (هستهٔ جریان پیوسته).
+   ۱.۲۵.۰۲ — یکسان‌سازی سه نسخهٔ پراکنده (ui/appointments/working-day): جایگاه عنصر (parent/next)
+   پیش از جمع‌شدن ضبط می‌شود و undo() در مسیر خطا عنصر را سر جای قبلی‌اش برمی‌گرداند.
+   بازگشت: { undo } برای عنصر متصل (truthy — سازگار با همهٔ فراخوان‌های قبلی) / false برای عنصر جدا. */
+export function collapseRemove(elm) {
+  if (!elm || !elm.isConnected) return false;
+  const parent = elm.parentElement;
+  const next = elm.nextSibling;
+  elm.style.height = `${Math.round(elm.getBoundingClientRect().height)}px`;
+  elm.style.overflow = 'hidden';
+  elm.style.pointerEvents = 'none';
+  requestAnimationFrame(() => {
+    elm.classList.add('is-resolving');
+    setTimeout(() => elm.remove(), 260);
+  });
+  return {
+    undo() {
+      elm.classList.remove('is-resolving');
+      elm.style.cssText = '';
+      if (parent && !elm.isConnected) parent.insertBefore(elm, next);
+    }
+  };
+}
+
+/* ۱.۲۱.۰ — فلش کوتاه توجه روی گره به‌روزشده (پچ درجای ردیف/کارت) — بدون اسکلت، بدون پرش */
+export function flashNode(elm, cls = 'is-flashed', ms = 1200) {
+  if (!elm || !elm.isConnected) return;
+  elm.classList.add(cls);
+  setTimeout(() => elm.classList.remove(cls), ms);
+}
+
 const modalStack = [];
 let modalSeq = 0; // — شمارندهٔ شناسهٔ یکتای عنوان مودال (aria-labelledby)
 let formFieldSeq = 0; // — شمارندهٔ شناسهٔ یکتای فیلدهای formModal (اتصال label به کنترل)
 let comboSeq = 0; // S11-01: شناسهٔ یکتای listbox هر combobox
+
+/* ۱.۱۴.۰ — ساخت محتوای درونی مودال (سربرگ/بدنه/پانوشت) جدا شد تا «پرکردن بی‌درنگِ پوستهٔ لودینگ»
+   بدون بازسازی گرهٔ مودال ممکن شود؛ aria-labelledby با همان id عنوان حفظ می‌ماند. */
+function modalInner({ titleId, title, body, actions, close }) {
+  return [
+    el('div', { class: 'modal__head' },
+      el('div', { class: 'modal__title', id: titleId }, title),
+      el('button', { class: 'btn btn--ghost btn--icon', 'aria-label': 'بستن', onclick: close }, icon('x', 18))
+    ),
+    el('div', { class: 'modal__body' }, typeof body === 'function' ? body(close) : body),
+    actions.length > 0 ? el('div', { class: 'modal__foot' }, ...actions.map((a) => a(close))) : null
+  ];
+}
 
 export function openModal({ title, body, actions = [], wide = false, onClose }) {
   const prevFocus = document.activeElement; // — برای بازگرداندن فوکوس به فراخوان هنگام بستن
@@ -259,14 +390,7 @@ export function openModal({ title, body, actions = [], wide = false, onClose }) 
   const modal = el(
     'div',
     { class: `modal${wide ? ' modal--wide' : ''}`, role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': titleId },
-    el(
-      'div',
-      { class: 'modal__head' },
-      el('div', { class: 'modal__title', id: titleId }, title),
-      el('button', { class: 'btn btn--ghost btn--icon', 'aria-label': 'بستن', onclick: close }, icon('x', 18))
-    ),
-    el('div', { class: 'modal__body' }, typeof body === 'function' ? body(close) : body),
-    actions.length > 0 ? el('div', { class: 'modal__foot' }, ...actions.map((a) => a(close))) : null
+    modalInner({ titleId, title, body, actions, close })
   );
 
   // — تلهٔ فوکوس: فقط عناصر رندرشده (نه display:none مثل چک‌باکس switch)
@@ -303,6 +427,36 @@ export function openModal({ title, body, actions = [], wide = false, onClose }) 
   if (first) setTimeout(() => first.focus(), 60);
 
   return { close, root: modal };
+}
+
+/* ۱.۱۴.۰ — پرکردن بی‌درنگِ پوستهٔ مودال لودینگ با محتوای واقعی (همان گره، همان overlay):
+   ریشهٔ ریشهٔ کشف باگ «دکمه‌ها باز نمی‌شوند» — اکشن‌هایی که اول await داده می‌کردند و بعد مودال
+   می‌ساختند، در شبکهٔ کند چند ثانیه «سکوتِ مطلق» می‌گذاشتند و اگر کاربر در این فاصله جابه‌جا
+   می‌شد، مودال بی‌زمینه دیرهنگام بالای صفحهٔ دیگری می‌افتاد و همه‌چیز را غیرکلیک می‌کرد.
+   اکنون مودال همان لحظه با اسپینر باز می‌شود و داده که آمد در جا پر می‌شود. */
+export function populateModalShell(shell, { title, body, actions = [], wide }) {
+  if (!shell?.root || !shell.root.isConnected) return;
+  if (wide !== undefined) shell.root.classList.toggle('modal--wide', Boolean(wide));
+  const titleEl = shell.root.querySelector('.modal__title');
+  const titleId = titleEl?.id;
+  shell.root.replaceChildren(...modalInner({ titleId, title: title ?? titleEl?.textContent ?? '', body, actions, close: shell.close }));
+  const first = shell.root.querySelector('.modal__body input, .modal__body select, .modal__body textarea');
+  if (first) setTimeout(() => first.focus(), 60);
+}
+
+export function openModalAsync({ title, loadingText = 'در حال بارگذاری…', wide = false, load }) {
+  const shell = openModal({ title, wide, body: loadingState(loadingText), actions: [] });
+  void Promise.resolve()
+    .then(load)
+    .then((res) => {
+      if (!res || res === shell || !shell.root.isConnected) return;
+      populateModalShell(shell, res);
+    })
+    .catch((err) => {
+      if (shell.root.isConnected) shell.close();
+      toastError(err);
+    });
+  return shell;
 }
 
 export function confirmModal({ title = 'تأیید', message, confirmLabel = 'تأیید', danger = false }) {
@@ -422,7 +576,9 @@ function buildSearchableSelect(f, value, textId) {
   return { root, hiddenInput, text };
 }
 
-export function formModal({ title, fields, initial = {}, submitLabel = 'ذخیره', wide = false, onSubmit, secondary }) {
+/* into (۱.۱۴.۰): پوستهٔ مودال لودینگ از openModalAsync — به‌جای مودال تازه، همین overlay درجا پر می‌شود
+   تا فرم‌هایی که متادیتا می‌خواهند (schools/classes/staff) سکوتِ چندثانیه‌ای نداشته باشند. */
+export function formModal({ title, fields, initial = {}, submitLabel = 'ذخیره', wide = false, onSubmit, secondary, into }) {
   const form = el('form', { class: 'form-grid', novalidate: true });
   const inputs = {};
   const visibleCtl = {}; // — کنترل قابل‌مشاهدهٔ فیلدهای ترکیبی (searchable-select/jalali) برای aria-invalid
@@ -589,7 +745,7 @@ export function formModal({ title, fields, initial = {}, submitLabel = 'ذخیر
         return btn;
       }
     : null;
-  openModal({
+  const modalArgs = {
     title,
     wide,
     body: [form, errBox],
@@ -643,7 +799,12 @@ export function formModal({ title, fields, initial = {}, submitLabel = 'ذخیر
         return submitBtn;
       }
     ]
-  });
+  };
+  if (into) {
+    populateModalShell(into, modalArgs);
+    return { form, shell: into };
+  }
+  openModal(modalArgs);
 
   return { form };
 }
@@ -712,6 +873,32 @@ export function emptyState({ iconName = 'dots', title = 'چیزی اینجا ن�
   );
 }
 
+/* ۱.۲۵.۰۵ — kpi تک‌منبع شد (قبلاً سه نسخهٔ واگرا در reports/dashboard/special-needs کپی شده بود):
+   • null/undefined → «—» (نسخهٔ reports)
+   • عدد → countUp با ارقام فارسی، مگر fmt (نسخهٔ reports)
+   • رشتهٔ آماده (fa(...) یا '—') → متن ثابت (نسخهٔ dashboard)
+   ترتیب DOM همه‌جا: برچسب، مقدار، زیرنویس (kpi__sub) — نسخهٔ special-needs که مقدار را
+   جلوتر می‌گذاشت و زیرنویسش با kpi__hint هیچ قاعدهٔ CSS نداشت، هم‌زمان اصلاح شد. */
+export const KPI_ALERT_RATE = 0.2; /* آستانهٔ بالینی ۲۰٪ نرخ لغو/غیبت — قبلاً در reports (0.2) و dashboard (20) دو واحد و دو عدد بود */
+
+export function kpi(label, value, sub, tone = 'primary', fmt) {
+  let valueEl;
+  if (value === null || value === undefined) {
+    valueEl = el('div', { class: 'kpi__value' }, '—');
+  } else if (typeof value === 'number') {
+    valueEl = el('div', { class: 'kpi__value' }, '۰');
+    if (fmt) valueEl.textContent = fmt(value);
+    else countUp(valueEl, value, { formatter: (v) => fa(v) });
+  } else {
+    valueEl = el('div', { class: 'kpi__value' }, value);
+  }
+  return el('div', { class: `kpi kpi--${tone}` },
+    el('div', { class: 'kpi__label' }, label),
+    valueEl,
+    sub ? el('div', { class: 'kpi__sub' }, sub) : null
+  );
+}
+
 let activeRowMenuClose = null;
 export function rowMenu({ label = 'اقدامات بیشتر', items }) {
   const btn = el('button', {
@@ -728,8 +915,16 @@ export function rowMenu({ label = 'اقدامات بیشتر', items }) {
   );
   const root = el('div', { class: 'row-menu' }, btn, pop);
 
+  /* ۱.۲۵.۵۷ — پورتال به document.body: هر جدّی با transform/content-visibility/fixed
+     می‌شود containing-blockِ position:fixed و منو با موقعیتِ viewport جابه‌جا می‌افتد
+     (جهش و بریدن منوی ⋯ در بازی‌ها و جداول). منو هنگام بازشدن به body منتقل و
+     هنگام بستن به خانه‌اش برگردانده می‌شود؛ عمودش هم به‌جا کِلَمپ می‌شود. */
   function close() {
     pop.hidden = true;
+    if (pop.parentElement !== root) root.appendChild(pop); // بازگشت به خانه — دست‌نخوردگی DOM در حالت بسته
+    pop.style.top = '';
+    pop.style.left = '';
+    pop.style.right = '';
     btn.classList.remove('is-open');
     btn.setAttribute('aria-expanded', 'false');
     document.removeEventListener('click', onDoc, true);
@@ -739,6 +934,7 @@ export function rowMenu({ label = 'اقدامات بیشتر', items }) {
   }
   function open() {
     if (activeRowMenuClose) activeRowMenuClose(); // فقط یک منو در آن واحد
+    document.body.appendChild(pop); // پورتال — بی‌اثرشدن جدّ تغییرشدهٔ fixed
     pop.hidden = false;
     btn.classList.add('is-open');
     btn.setAttribute('aria-expanded', 'true');
@@ -747,11 +943,21 @@ export function rowMenu({ label = 'اقدامات بیشتر', items }) {
     const h = pop.offsetHeight;
     let top = r.bottom + 6;
     if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 6);
+    if (top + h > window.innerHeight - 8) top = Math.max(8, window.innerHeight - h - 8); // کِلَمپ دوم برای منوی بلندتر از فضا
     pop.style.top = `${top}px`;
-    let left = r.left;
-    if (left + w > window.innerWidth - 8) left = window.innerWidth - w - 8;
-    if (left < 8) left = 8;
-    pop.style.left = `${left}px`;
+    /* ۱.۱۴.۰ — لنگر افقی RTL-پایدار: قبلاً فقط با left موقعیت می‌داد؛ در موبایلِ RTL که دکمهٔ ⋯
+       نزدیک لبهٔ راست است، عرضِ واقعیِ منو (برچسب‌های بلند فارسی) از لبهٔ راست بیرون می‌زد و
+       آیکون آیتم‌ها بریده می‌شد. اکنون لنگر به نزدیک‌ترین لبه بسته می‌شود و هرگز از دید نمی‌زند. */
+    pop.style.left = '';
+    pop.style.right = '';
+    const vw = window.innerWidth;
+    const anchorRight = vw - r.right; // فاصلهٔ دکمه تا لبهٔ راست
+    if (anchorRight <= r.left || anchorRight < 180) {
+      // دکمه سمت راست صفحه است (رایج در RTL: ستون «عملیات») — از راست لنگر بزن
+      pop.style.right = `${Math.max(8, anchorRight)}px`;
+    } else {
+      pop.style.left = `${Math.max(8, r.left)}px`;
+    }
     activeRowMenuClose = close;
     setTimeout(() => {
       document.addEventListener('click', onDoc, true);
@@ -759,7 +965,7 @@ export function rowMenu({ label = 'اقدامات بیشتر', items }) {
       document.addEventListener('scroll', onScroll, true);
     }, 0);
   }
-  function onDoc(e) { if (!root.contains(e.target)) close(); }
+  function onDoc(e) { if (!root.contains(e.target) && !pop.contains(e.target)) close(); }
   function onKey(e) { if (e.key === 'Escape') close(); }
   function onScroll() { close(); } // با اسکرول مختصر منوی fixed از دکمه جدا می‌شود — بستن تمیزتر است
 
@@ -845,9 +1051,6 @@ const BADGE_TONES = {
   pending: 'warning',
   present: 'success',
   absent: 'error',
-  checked_in: 'accent',
-  delayed: 'warning',
-  in_session: 'primary',
   completed: 'success',
   no_show: 'error',
   active: 'success',
@@ -878,9 +1081,6 @@ const BADGE_LABELS = {
   pending: 'در انتظار',
   present: 'حاضر',
   absent: 'غایب',
-  checked_in: 'آمد',
-  delayed: 'تأخیر',
-  in_session: 'در جلسه',
   completed: 'انجام شد',
   no_show: 'نیامد',
   active: 'فعال',

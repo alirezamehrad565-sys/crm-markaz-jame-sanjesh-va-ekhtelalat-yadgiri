@@ -1,6 +1,6 @@
 {
   "name": "center-system",
-  "version": "1.05.0",
+  "version": "1.27.9",
   "private": true,
   "type": "module",
   "author": {
@@ -20,23 +20,42 @@
     "migrate:local": "wrangler d1 migrations apply center-system-db --local",
     "migrate:remote": "wrangler d1 migrations apply center-system-db --remote",
     "seed:local": "wrangler d1 execute center-system-db --local --file=scripts/seed-dev.sql",
+    "seed:games": "node scripts/make-scan-seed-sql.mjs && node scripts/make-stroop-seed-sql.mjs && node scripts/make-flanker-seed-sql.mjs && wrangler d1 execute center-system-db --local --file=/tmp/seed-scan.sql && wrangler d1 execute center-system-db --local --file=/tmp/seed-stroop.sql && wrangler d1 execute center-system-db --local --file=/tmp/seed-flanker.sql",
     "bootstrap": "wrangler d1 execute center-system-db --local --file=scripts/bootstrap.sql",
     "bootstrap:remote": "wrangler d1 execute center-system-db --remote --file=scripts/bootstrap.sql",
     "build:selfhost": "node scripts/build-selfhost.mjs",
+    "build:games-worker": "node scripts/build-worker-games.mjs",
+    "smoke:games": "node scripts/games-bundle-smoke.mjs",
+    "desktop:check": "node scripts/desktop-check.mjs",
+    "desktop:icons": "python3 scripts/make-desktop-icons.py",
+    "engine:start": "node scripts/engine/engine.mjs",
+    "engine:smoke": "node scripts/engine/engine-smoke.mjs",
+    "drill:desktop": "node scripts/engine/desktop-drill.mjs",
+    "seed:demo": "node scripts/engine/seed-demo.mjs",
+    "usb:pack": "node scripts/build-usb-pack.mjs",
     "start:selfhost": "node dist/server.js",
     "update": "node scripts/update-remote.mjs",
     "update:dry": "node scripts/update-remote.mjs --dry-run",
-    "backup:remote": "node scripts/update-remote.mjs --backup-only"
+    "backup:remote": "node scripts/update-remote.mjs --backup-only",
+    "restore:drill": "node scripts/restore-drill.mjs",
+    "backup:local": "node scripts/ops/export-local-backup.mjs",
+    "load:baseline": "node scripts/load/baseline.mjs",
+    "check:d1": "node scripts/check-d1-compat.mjs",
+    "build:engine-server": "node scripts/build-engine-server.mjs",
+    "smoke:engine": "node scripts/engine/engine-smoke.mjs",
+    "smoke:engine:adapter": "SMOKE_ENGINE=adapter node scripts/engine/engine-smoke.mjs"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.5",
     "hono": "^4.6.14",
-    "zod": "^3.24.1"
+    "qrcode-generator": "^2.0.4",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250109.0",
     "@types/node": "^22.20.5",
     "esbuild": "^0.28.2",
+    "fast-check": "^4.10.2",
     "typescript": "^5.7.3",
     "vitest": "^2.1.8",
     "web-vitals": "^6.2.3",

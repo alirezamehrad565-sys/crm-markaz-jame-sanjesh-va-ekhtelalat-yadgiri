@@ -50,6 +50,7 @@ const SWR_BASES = ['/api/schools', '/api/staff', '/api/exercises'];
 const SWR_TTL_MS = 240000; // ۴ دقیقه — میانهٔ بازهٔ ۲–۵ دقیقهٔ نقشه
 const swrCache = new Map(); // «GET path?query» → { at, payload }
 const inflight = new Map(); // «GET path?query» → Promise در جریان
+const inflightMut = new Map(); // ۱.۱۲.۰ «M method path body» → Promise در جریان (ضدِ دوبارسپاری)
 
 function swrAllowed(path) {
   const p = path.split('?')[0];
@@ -106,9 +107,20 @@ async function doRequest(method, path, body, signal) {
 
 async function request(method, path, body) {
   if (method !== 'GET') {
-    const data = await doRequest(method, path, body, null);
-    swrCache.clear(); // هر موتاسیون موفق، کش مراجع را باطل می‌کند
-    return data;
+    /* ۱.۱۲.۰ — ضدِ دوبارسپاری سراسری (گلایهٔ «اسپم دکمه»):
+       دو کلیک پشت‌سرهم روی یک دکمه = دو فراخوانی یکسانِ هم‌زمان؛ دومی به همان
+       Promise اول می‌پیوندد → فقط یک نوشتن واقعی رخ می‌دهد حتی اگر نماها
+       خودشان قفل دکمه نداشته باشند. قفل UI در ui.lockBtn است؛ این تورِ ایمنی لایهٔ داده. */
+    const mkey = `M ${method} ${path} ${JSON.stringify(body ?? null)}`;
+    if (inflightMut.has(mkey)) return inflightMut.get(mkey);
+    const mp = doRequest(method, path, body, null)
+      .finally(() => inflightMut.delete(mkey))
+      .then((data) => {
+        swrCache.clear(); // هر موتاسیون موفق، کش مراجع را باطل می‌کند
+        return data;
+      });
+    inflightMut.set(mkey, mp);
+    return mp;
   }
   const key = `GET ${path}`;
   if (inflight.has(key)) return inflight.get(key);
@@ -139,6 +151,16 @@ export const api = {
 };
 
 async function requestForm(method, path, formData) {
+  /* ۱.۱۲.۰ — ضدِ دوبارسپاری آپلود: دوبارکلیک روی «بارگذاری» (شاهد واقعی در تولید:
+     دو ردیف یکسان با یک‌ثانیه اختلاف در docs_files) → کلید از نام+حجم+lastModified فایل‌ها
+     ساخته می‌شود؛ همان فایل‌های همان File object = همان کلید = یک رفت‌وبرگشت. */
+  const sig = [];
+  for (const [k, v] of formData.entries()) {
+    sig.push(v instanceof File ? `${k}:${v.name}:${v.size}:${v.lastModified}` : `${k}:${v}`);
+  }
+  const mkey = `F ${method} ${path} ${sig.join('|')}`;
+  if (inflightMut.has(mkey)) return inflightMut.get(mkey);
+  const p = (async () => {
   const headers = { Accept: 'application/json' };
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -167,6 +189,13 @@ async function requestForm(method, path, formData) {
     throw err;
   }
   return payload ?? {};
+  })();
+  inflightMut.set(mkey, p);
+  try {
+    return await p;
+  } finally {
+    inflightMut.delete(mkey);
+  }
 }
 
 api.postForm = (path, formData) => requestForm('POST', path, formData);

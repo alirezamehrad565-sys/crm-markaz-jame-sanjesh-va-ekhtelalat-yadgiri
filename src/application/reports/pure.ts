@@ -110,10 +110,10 @@ export function safeRateOrNull(num: number, den: number): number | null {
 export interface TrendAppointmentRow {
   startAt: string;
   status: string;
-  opsStatus: string | null;
 }
 
 export interface TrendAttendanceRow {
+  appointmentId: string;
   startAt: string;
   attendance: string;
   apptStatus: string;
@@ -152,8 +152,25 @@ export function buildWeeklyTrend(
     if (!b) continue;
     if (a.status === 'cancelled') b.cancelled++;
     else b.sessions++;
-    if (a.opsStatus === 'completed') b.completed++;
   }
+
+  /* ۱.۱۸.۰ — متریک «جلسات تکمیل‌شده» بر پایهٔ حضور و غیاب بازنویسی شد:
+     نوبت غیرلغو که همهٔ دانش‌آموزانِ غیرلغویش حاضر/تأخیرند = برگزارشده. */
+  const byAppt = new Map<string, TrendAttendanceRow[]>();
+  for (const r of attendance) {
+    if (r.apptStatus === 'cancelled') continue;
+    const list = byAppt.get(r.appointmentId);
+    if (list) list.push(r);
+    else byAppt.set(r.appointmentId, [r]);
+  }
+  for (const rows of byAppt.values()) {
+    const counted = rows.filter((r) => r.attendance !== 'cancelled');
+    if (counted.length === 0) continue;
+    if (!counted.every((r) => r.attendance === 'present' || r.attendance === 'late')) continue;
+    const b = bucketOf(rows[0].startAt);
+    if (b) b.completed++;
+  }
+
   for (const r of attendance) {
     if (r.apptStatus === 'cancelled') continue;
     const b = bucketOf(r.startAt);

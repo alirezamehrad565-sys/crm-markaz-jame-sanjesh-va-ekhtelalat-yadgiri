@@ -1,0 +1,23 @@
+{
+  "data": {
+    "server_time": "2026-11-11T08:30:00.000Z",
+    "items": [
+      {
+        "id": "br-20261110-a1b2c3d4",
+        "status": "read",
+        "reply_text": "پاسخ پشتیبانی شبکه — مایگریشن ۰۰۱۳ سمت CP؛ فیلد updated_at تازه‌تر از since مُهر نود.",
+        "reply_by": "پشتیبانی شبکه",
+        "reply_at": "2026-11-10 14:22:31",
+        "updated_at": "2026-11-10 14:22:31"
+      },
+      {
+        "id": "br-20261109-e5f6a7b8",
+        "status": "new",
+        "reply_text": null,
+        "reply_by": null,
+        "reply_at": null,
+        "updated_at": "2026-11-09 09:05:00"
+      }
+    ]
+  }
+}

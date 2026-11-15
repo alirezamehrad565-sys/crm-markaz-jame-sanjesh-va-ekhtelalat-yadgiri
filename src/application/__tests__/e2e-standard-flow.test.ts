@@ -229,9 +229,19 @@ describe('بات خانواده: «چک‌لیست‌های من» (فلو هم�
     parentNid = s.nationalId;
     expect((await bot(A, tx(parentNid, CHAT_PARENT))).reply).toContain('اتصال انجام شد');
 
-    const types = (await manager.get('/api/case-events/types?active=true')).body as { data: { id: string; title: string }[] };
-    const homeBehavior = types.data.find((x) => x.title.includes('پایش رفتار در خانه'));
-    const created = await manager.post(`/api/students/${studentId}/case-events`, { eventTypeId: homeBehavior!.id, values: {} });
+    /* ۱.۲۵.۵۹ — پایش رفتار در خانه (home_behavior) بازنشسته شد؛ چرخهٔ بات با چک‌لیست هشت‌آیتمی دستی گیت می‌شود
+       (فرم واقعی پایش ۲۴ گویه دارد و در بات عمداً به وب می‌رود — سقف CHECKLIST_BOT_MAX_ITEMS) */
+    const custom = await manager.post('/api/case-events/types', {
+      title: 'پایش کوتاه بات‌آزمون',
+      category: 'checklist',
+      familyFillable: true,
+      audience: 'family',
+      fields: Array.from({ length: 8 }, (_, i) => ({ key: `i${i + 1}`, label: `آیتم ${i + 1}`, type: 'scale', scaleMax: 3, required: true })),
+      bands: [{ max: 9999, label: 'ثبت شد', color: 'ok' }]
+    });
+    expect(custom.status).toBe(201);
+    const typeId = (custom.body as { data: { id: string } }).data.id;
+    const created = await manager.post(`/api/students/${studentId}/case-events`, { eventTypeId: typeId, values: {} });
     expect(created.status).toBe(201);
   });
 

@@ -39,6 +39,7 @@ export interface UpdateSettingsInput {
   clinicPhone?: string;
   notifyBatchHour?: number;
   botUsername?: string;
+  botAbout?: string; // ۱.۲۵.۵۷ — متن «دربارهٔ مرکز» بات؛ خالی = بازگشت به پیش‌فرض
   screeningTargets?: ScreeningTargetConfig[];
 }
 
@@ -58,6 +59,9 @@ export interface SettingsService {
   getBatchHour(): Promise<number>;
   getBotUsername(): Promise<string>;
   setBotUsername(username: string, actor: AuthContext): Promise<string>;
+  getBotAbout(): Promise<string>; // ۱.۲۵.۵۷
+  getBaleBotToken(): Promise<string | null>; // ۱.۲۵.۵۷ — هرگز در پاسخ GET نمی‌رود
+  setBaleBotToken(token: string | null, actor: AuthContext): Promise<void>; // null = پاک‌کردن
   getNotifyFlags(): Promise<{ onCreate: boolean; onMove: boolean; onCancel: boolean; digestEnabled: boolean; waitlistEnabled: boolean; defaultReminderHours: number }>;
   getExerciseBankEnabled(): Promise<boolean>;
   getScreeningTargets(): Promise<ScreeningTargetConfig[]>;
@@ -158,6 +162,8 @@ export function createSettingsService(deps: SettingsDeps): SettingsService {
       const storedPhone = stored.get(SETTING_KEYS.CLINIC_PHONE);
       const storedBatch = stored.get(SETTING_KEYS.NOTIFY_BATCH_HOUR);
       const storedBotUsername = stored.get(SETTING_KEYS.BOT_USERNAME);
+      const storedBotAbout = stored.get(SETTING_KEYS.BOT_ABOUT);
+      const dbBaleToken = await this.getBaleBotToken(); // ۱.۲۵.۵۷ — env یا DB
 
       return {
         centerHours: Array.isArray(hours) ? (hours as CenterHourRange[]) : [...DEFAULT_CENTER_HOURS],
@@ -174,8 +180,9 @@ export function createSettingsService(deps: SettingsDeps): SettingsService {
         notifyBatchHour:
           typeof storedBatch === 'number' ? storedBatch : DEFAULT_SETTINGS[SETTING_KEYS.NOTIFY_BATCH_HOUR],
         botUsername: typeof storedBotUsername === 'string' ? storedBotUsername : DEFAULT_SETTINGS[SETTING_KEYS.BOT_USERNAME],
+        botAbout: typeof storedBotAbout === 'string' ? storedBotAbout : DEFAULT_SETTINGS[SETTING_KEYS.BOT_ABOUT],
         meta: {
-          baleConfigured: deps.baleConfigured,
+          baleConfigured: deps.baleConfigured || dbBaleToken !== null, // ۱.۲۵.۵۷ — env یا DB
           webhookEnabled: deps.webhookEnabled
         }
       };
@@ -214,6 +221,10 @@ export function createSettingsService(deps: SettingsDeps): SettingsService {
       if (input.botUsername !== undefined) {
         await upsertSetting(SETTING_KEYS.BOT_USERNAME, input.botUsername.trim().replace(/^@/, ''), actor);
       }
+      if (input.botAbout !== undefined) {
+        /* ۱.۲۵.۵۷ — خالی = بازگشت به متن پیش‌فرض سامانه */
+        await upsertSetting(SETTING_KEYS.BOT_ABOUT, input.botAbout.trim(), actor);
+      }
       if (input.screeningTargets !== undefined) {
         await upsertSetting(SETTING_KEYS.SCREENING_TARGETS, input.screeningTargets, actor);
       }
@@ -237,6 +248,7 @@ export function createSettingsService(deps: SettingsDeps): SettingsService {
           clinic_phone: { from: before.clinicPhone, to: input.clinicPhone ?? before.clinicPhone },
           notify_batch_hour: { from: before.notifyBatchHour, to: input.notifyBatchHour ?? before.notifyBatchHour },
           bot_username: { from: before.botUsername || null, to: input.botUsername ?? before.botUsername },
+          bot_about: { from: before.botAbout || null, to: input.botAbout ?? before.botAbout },
           screening_targets: {
             from: before.screeningTargets.length,
             to: input.screeningTargets?.length ?? before.screeningTargets.length
@@ -355,6 +367,51 @@ export function createSettingsService(deps: SettingsDeps): SettingsService {
         changes: { bot_username: { from: before || null, to: clean || null } }
       });
       return clean;
+    },
+
+    /* ۱.۲۵.۵۷ — متن «دربارهٔ مرکز» بات؛ خالی = پیش‌فرض سامانه */
+    async getBotAbout(): Promise<string> {
+      const stored = await readAll();
+      const v = stored.get(SETTING_KEYS.BOT_ABOUT);
+      return typeof v === 'string' ? v : '';
+    },
+
+    /* ۱.۲۵.۵۷ — توکن بات از DB؛ فقط برای ساخت کلاینت بات مصرف می‌شود و
+       هرگز در پاسخ GET /api/settings نمی‌رود (meta.baleConfigured فقط بول است). */
+    async getBaleBotToken(): Promise<string | null> {
+      const row = await db.queryOne<SettingRow>(
+        `SELECT value FROM settings WHERE key = ? LIMIT 1`,
+        [SETTING_KEYS.BALE_BOT_TOKEN]
+      );
+      if (!row) return null;
+      try {
+        const parsed = JSON.parse(row.value) as unknown;
+        if (typeof parsed === 'string' && parsed.trim().length > 0) return parsed.trim();
+      } catch {
+        // مقدار خراب = توکن‌ نداریم
+      }
+      return null;
+    },
+
+    /* ۱.۲۵.۵۷ — ثبت/پاک‌کردن توکن؛ audit فقط وضعیت «تنظیم‌شده» را می‌بیند، نه خود توکن را */
+    async setBaleBotToken(token: string | null, actor: AuthContext): Promise<void> {
+      const before = await this.getBaleBotToken();
+      if (token === null) {
+        await db.execute(`DELETE FROM settings WHERE key = ?`, [SETTING_KEYS.BALE_BOT_TOKEN]);
+      } else {
+        await upsertSetting(SETTING_KEYS.BALE_BOT_TOKEN, token.trim(), actor);
+      }
+      const after = await this.getBaleBotToken();
+      await audit.log({
+        actorId: actor.staffId,
+        action: 'settings.bot_token.update',
+        resourceType: 'settings',
+        resourceId: 'bale_bot_token',
+        changes: {
+          configured: { from: before !== null, to: after !== null } // فقط بول — خود توکن هرگز لاگ نمی‌شود
+        }
+      });
+      log.info('bot_token.updated', { configured: after !== null });
     },
 
     async getNotifyFlags() {

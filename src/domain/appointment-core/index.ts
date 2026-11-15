@@ -1,7 +1,5 @@
 export { createAppointmentService } from './service';
 export { registerRoutes } from './routes';
-export { OPS_STATUS_TRANSITIONS, canTransitionOps, opsFromDb, opsTransitionMessage } from './pure';
-export type { OpsFrom } from './pure';
 export type {
   AppointmentDeps,
   AppointmentService,

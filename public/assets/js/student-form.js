@@ -1,5 +1,5 @@
 import { api } from './api.js';
-import { el, formModal, toast, toastError } from './ui.js';
+import { el, formModal, openModalAsync, toast, toastError } from './ui.js';
 import { STUDENT_GRADES, isPlaceholderNid } from './format.js';
 import { STUDENT_PATHWAYS } from './session-type.js'; // — مسیر پرونده
 import { session } from './state.js';
@@ -24,13 +24,30 @@ function canAssignOwner() {
   return session.user?.role === 'manager' || session.user?.role === 'secretary';
 }
 
-export async function openStudentForm({ student = null, archived = false, onSaved } = {}) {
+export function openStudentForm(args = {}) {
+  /* ۱.۱۴.۰ — پوستهٔ لودینگ همان لحظه باز می‌شود؛ schools/classes/staff که آمدند همین overlay درجا
+     به فرم کامل تبدیل می‌شود — بدون سکوتِ چندثانیه‌ای و بدون مودالِ دیرهنگام روی صفحهٔ دیگر
+     (ریشهٔ گزارش «دکمه‌ها باز نمی‌شوند»). */
+  const shell = openModalAsync({
+    title: args.student ? 'ویرایش دانش‌آموز' : 'دانش‌آموز جدید',
+    wide: true,
+    loadingText: 'در حال آماده‌سازی فرم…',
+    load: async () => {
+      await openStudentFormInner({ ...args, into: shell });
+      return shell;
+    }
+  });
+  return shell;
+}
+
+async function openStudentFormInner({ student = null, archived = false, onSaved, into } = {}) {
   const meta = await ensureFormMeta();
   const isEdit = Boolean(student);
   const isOffice = canAssignOwner();
   const isTherapist = session.user?.role === 'therapist';
 
   formModal({
+    into,
     title: isEdit
       ? 'ویرایش دانش‌آموز'
       : archived
@@ -45,7 +62,7 @@ export async function openStudentForm({ student = null, archived = false, onSave
           isPlaceholderNid(student.nationalId)
           ? { name: 'national_id', label: 'کد ملی (ثبت نشده — اختیاری)', ltr: true, hint: 'اگر کد ملی را از خانواده گرفتید این‌جا ثبت کنید — بعد از ثبت قابل تغییر نیست', placeholder: '0012345679' }
           : { name: '_nid', label: 'کد ملی (غیرقابل تغییر)', ltr: true, value: student.nationalId, hint: 'برای تغییر کد ملی با مدیر سامانه تماس بگیرید' }
-        : { name: 'national_id', label: 'کد ملی', required: true, ltr: true, hint: 'کد ۱۰ رقمی معتبر — checksum بررسی می‌شود', placeholder: '0012345679' },
+        : { name: 'national_id', label: 'کد ملی', required: true, ltr: true, hint: 'کد ۱۰ رقمی معتبر — اعتبار آن خودکار بررسی می‌شود', placeholder: '0012345679' },
       { name: 'first_name', label: 'نام', required: true, value: student?.firstName },
       { name: 'last_name', label: 'نام خانوادگی', required: true, value: student?.lastName },
       { name: 'birth_date', label: 'تاریخ تولد', type: 'jalali-date', value: student?.birthDate, hint: 'اختیاری — از تقویم انتخاب کنید' },
