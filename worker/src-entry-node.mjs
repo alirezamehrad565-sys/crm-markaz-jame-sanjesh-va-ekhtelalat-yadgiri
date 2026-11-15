@@ -10,6 +10,8 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { createNodeSyncApp } from '../src/node-sync/app';
+import { createDb } from '../src/core/db/index';
+import { createInstanceSyncApp } from '../src/application/instance-sync/index';
 import { registerAuthRoutes } from '../src/application/auth/routes';
 import { authMiddleware, requireRole, getAuthContext, hashPassword, findStaffByUsername } from '../src/core/auth';
 import { createAuditWriter } from '../src/core/audit';
@@ -50,6 +52,10 @@ function buildCentralApp(env) {
 
   // زیراپ سینک نودها — عین قرارداد m1.5/rust-f4 (هدرها، فهرست سفید، idempotency، گات ۱۵دقیقه)
   app.route('/node', createNodeSyncApp({ db, audit: aw, logger }));
+
+  // فاز B — هستهٔ هم‌گامی دوسویه نمونه‌ها (§۲-۴): هر دو سو همین باندل را سرو می‌کنند؛
+  // احراز Bearer runtime-secret + X-Device-Id درون زیراپ است. مونت یک‌خطی هم‌الگوی /node.
+  app.route('/instance-sync', createInstanceSyncApp({ db: createDb(db), logger }));
 
   // ─── /admin/setup — یک‌بارمصرف با NODE_SETUP_TOKEN ───
   app.post('/admin/setup', async (c) => {

@@ -111,6 +111,8 @@ import { FEATURES } from '@core/shared';
 import { createNodeSyncApp, registerCentralQuotaRoutes, registerCentralNodesMapRoutes } from '../../node-sync/app'; // rust-f4 — زیراپ سینک نودهای دسکتاپ؛ rust-f15 — دید سهمیهٔ روزانه فقط-مدیر؛ EXP-8 — نقشهٔ معماری فقط-مدیر
 import { registerInternalSyncRoutes } from '../../internal-sync'; // rust-f9 — استقرار سینک (فقط-موتور، گیت env)
 import { registerNodeSyncStatusRoute } from '../../node-sync-runner/status'; // rust-f14 — وضعیت سینک نود برای UI میز
+import { createInstanceSyncApp } from '../../application/instance-sync/index'; // فاز B — هستهٔ هم‌گامی دوسویه نمونه‌ها (§۲-۴؛ گیت Bearer runtime-secret خودش)
+import { registerDesktopRoutes } from '@app/instance-sync/desktop-routes'; // فاز B — هم‌گامی میز↔ابر + کلون (سند §۲-۲/§۲-۴)
 
 import { errorHandler, parseApiRateLimitPerMin, makeKeyedRateLimiter, API_RATE_LIMIT_WINDOW_MS } from '@app/http';
 import { RateLimitError } from '@core/errors';
@@ -694,6 +696,13 @@ export function createApp(deps: AppDeps): AppHono {
      درون زیراپ با همان گیت سشن بسته می‌شوند. سند: docs/rust/node-sync.md */
   app.route('/node', createNodeSyncApp({ db: services.db, audit: services.audit, logger: services.logger }));
 
+  /* فاز B — هستهٔ هم‌گامی دوسویه نمونه‌ها (/api/instance-sync/*): «پیش از» گیت authMiddleware
+     ثبت می‌شود — احراز این مسیرها خودش Bearer runtime-secret (helper handshake مرکز↔نمونه‌ها
+     resolveSessionSecret از @core/auth) + هدر X-Device-Id است (سند §۲-۴؛ هر دو سو — ابر و موتور
+     محلی — همین باندل را سرو می‌کنند). مسیرهای UI پنل همین قرارداد، جدا و بعد از گیت‌ها ثبت
+     می‌شوند (registerDesktopRoutes پایین‌تر). */
+  app.route('/api/instance-sync', createInstanceSyncApp({ db: services.db, logger: services.logger }));
+
   app.use('/api/*', authMiddleware());
   app.use('/api/*', supervisorGate(services.audit));
 
@@ -714,6 +723,16 @@ export function createApp(deps: AppDeps): AppHono {
   // فرانت‌اند (runner.mirrorStatus). بعد از گیت‌ها تا سشن بگیرد؛ خودش گیت زمان‌اجرای
   // CENTER_DESKTOP_ENGINE دارد (در تولید وب → ۴۰۴ کم‌دست، باندل یکسان).
   registerNodeSyncStatusRoute(app, { db: services.db, logger: services.logger });
+
+  // فاز B — رانر هم‌گامی میز↔ابر (سند §۲-۲/§۲-۴): شش مسیر UI /api/instance-sync/* + زمان‌بند
+  // دوره‌ای بوت (فقط-فرایند؛ گارد محیط تست در خودش). بعد از گیت‌ها تا سشن بگیرد؛ خودش گیت
+  // CENTER_DESKTOP_ENGINE دارد و تغییرپذیرها فقط-مدیرند (در تولید وب → ۴۰۴ کم‌دست).
+  registerDesktopRoutes(app, {
+    db: services.db,
+    audit: services.audit,
+    logger: services.logger,
+    backup: services.backup
+  });
 
   // rust-f15 — GET /api/central/quota: دید برآورد مصرف روزانهٔ سهمیه (فقط-مدیر؛ گیت سشن + نقش
   // مدیر درون خود روت). بعد از گیت‌های سراسری تا no-store و ۴۰۱ کم‌دست زنجیرهٔ عمومی برقرار بماند.

@@ -23545,9 +23545,9 @@ function authMiddleware() {
         if (!payload2.sid) {
           throw new AuthError("\u062A\u0648\u06A9\u0646 \u0641\u0627\u0642\u062F \u0634\u0646\u0627\u0633\u0647\u0654 \u0646\u0634\u0633\u062A \u0627\u0633\u062A \u2014 \u0648\u0631\u0648\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A");
         }
-        const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+        const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
         const session = await db.prepare("SELECT revoked_at, expires_at FROM auth_sessions WHERE sid = ?").bind(payload2.sid).first();
-        if (!session || session.revoked_at !== null || session.expires_at <= nowIso) {
+        if (!session || session.revoked_at !== null || session.expires_at <= nowIso2) {
           throw new AuthError("\u0646\u0634\u0633\u062A \u0628\u0627\u0637\u0644 \u06CC\u0627 \u0645\u0646\u0642\u0636\u06CC \u0634\u062F\u0647 \u0627\u0633\u062A \u2014 \u0648\u0631\u0648\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A");
         }
         const staff2 = await getStaffById(db, payload2.sub);
@@ -23755,6 +23755,10 @@ function createAuditWriter(db, opts) {
 }
 __name(createAuditWriter, "createAuditWriter");
 
+// src/core/version.ts
+var APP_VERSION = "1.27.7";
+var NODE_MIN_VERSION = "1.26.0";
+
 // src/application/rum/pure.ts
 function makeRateLimiter(max, windowMs) {
   let windowStart = 0;
@@ -23827,6 +23831,7 @@ var NODE_PUSH_DOMAINS = ["usage_summary", "client_errors", "health_ping"];
 var NODE_PULL_DOMAIN_SET = new Set(NODE_PULL_DOMAINS);
 var NODE_PUSH_DOMAIN_SET = new Set(NODE_PUSH_DOMAINS);
 var NODE_PUSH_MIN_INTERVAL_MS = 15 * 6e4;
+var NODE_PUSH_CATCHUP_HEADER = "X-CP-Node-Catchup";
 var NODE_PUSH_MAX_ITEMS = 100;
 var NODE_PUSH_BODY_MAX_BYTES = 256 * 1024;
 var NODE_PULL_DEFAULT_LIMIT = 50;
@@ -24148,6 +24153,51 @@ async function pullNodePage(db, opts) {
   };
 }
 __name(pullNodePage, "pullNodePage");
+var NODE_PULL_ROWS_WRITTEN_EST = 1;
+var NODE_PULL_ROWS_READ_EST = 100;
+var NODE_PUSH_ROWS_WRITTEN_EST = 101;
+var NODE_PUSH_ROWS_READ_EST = 100;
+var LOGIN_ROWS_WRITTEN_EST = 4;
+var LOGIN_ROWS_READ_EST = 10;
+var QUOTA_ESTIMATES = {
+  pull: { rowsWritten: NODE_PULL_ROWS_WRITTEN_EST, rowsRead: NODE_PULL_ROWS_READ_EST },
+  push: { rowsWritten: NODE_PUSH_ROWS_WRITTEN_EST, rowsRead: NODE_PUSH_ROWS_READ_EST },
+  login: { rowsWritten: LOGIN_ROWS_WRITTEN_EST, rowsRead: LOGIN_ROWS_READ_EST }
+};
+function quotaDayUtc(d) {
+  return d.toISOString().slice(0, 10);
+}
+__name(quotaDayUtc, "quotaDayUtc");
+async function bumpQuotaUsage(db, kind, now = /* @__PURE__ */ new Date()) {
+  try {
+    const est = QUOTA_ESTIMATES[kind];
+    await db.execute(
+      `INSERT INTO quota_usage (day, requests, rows_written, rows_read_est)
+       VALUES (?, 1, ?, ?)
+       ON CONFLICT(day) DO UPDATE SET
+         requests = requests + 1,
+         rows_written = rows_written + excluded.rows_written,
+         rows_read_est = rows_read_est + excluded.rows_read_est`,
+      [quotaDayUtc(now), est.rowsWritten, est.rowsRead]
+    );
+  } catch {
+  }
+}
+__name(bumpQuotaUsage, "bumpQuotaUsage");
+async function reconcileDomainCounts(db, domains) {
+  const out = [];
+  for (const domain2 of domains) {
+    const src = PULL_SOURCES.find((s) => s.domain === domain2);
+    if (!src) continue;
+    const row = await db.queryOne(
+      `SELECT COUNT(*) AS n, MAX(${ISO_NORM}) AS mx FROM ${src.from} WHERE ${src.fromWhere}`,
+      []
+    );
+    out.push({ domain: domain2, count: row?.n ?? 0, max_updated_at: row?.mx ?? null });
+  }
+  return out;
+}
+__name(reconcileDomainCounts, "reconcileDomainCounts");
 var NodePushRawItemSchema = external_exports.object({
   id: external_exports.string().min(4).max(120),
   domain: external_exports.string().min(1).max(40),
@@ -24207,6 +24257,58 @@ async function pushNodeEvents(db, nodeCode, items) {
   return { accepted, duplicates: items.length - accepted };
 }
 __name(pushNodeEvents, "pushNodeEvents");
+var NODE_RATE_LIMIT_PER_MIN_DEFAULT = 120;
+var NODE_RATE_LIMIT_PER_MIN_MAX = 1e4;
+var NODE_RATE_LIMIT_WINDOW_MS = 6e4;
+function parseNodeRateLimitPerMin(raw2) {
+  if (raw2 === null || raw2 === void 0 || typeof raw2 === "string" && raw2.trim() === "") {
+    return NODE_RATE_LIMIT_PER_MIN_DEFAULT;
+  }
+  const n = typeof raw2 === "string" ? Number(raw2.trim()) : Number(raw2);
+  if (!Number.isFinite(n) || n < 0) return NODE_RATE_LIMIT_PER_MIN_DEFAULT;
+  if (n === 0) return 0;
+  return Math.min(Math.trunc(n), NODE_RATE_LIMIT_PER_MIN_MAX);
+}
+__name(parseNodeRateLimitPerMin, "parseNodeRateLimitPerMin");
+function makeNodeSlidingWindowLimiter(windowMs, opts) {
+  const maxKeys = opts?.maxKeys ?? 2048;
+  const now = opts?.now ?? (() => Date.now());
+  const buckets = /* @__PURE__ */ new Map();
+  return {
+    allow(key, max) {
+      const at = now();
+      if (!buckets.has(key) && buckets.size >= maxKeys) {
+        for (const [k, ts] of buckets) {
+          const last = ts[ts.length - 1];
+          if (last === void 0 || at - last >= windowMs) buckets.delete(k);
+        }
+        if (buckets.size >= maxKeys) {
+          let oldestKey = null;
+          let oldestAt = Number.POSITIVE_INFINITY;
+          for (const [k, ts] of buckets) {
+            const last = ts[ts.length - 1] ?? Number.NEGATIVE_INFINITY;
+            if (last < oldestAt) {
+              oldestAt = last;
+              oldestKey = k;
+            }
+          }
+          if (oldestKey !== null) buckets.delete(oldestKey);
+        }
+      }
+      const window = buckets.get(key);
+      if (!window) {
+        buckets.set(key, [at]);
+        return true;
+      }
+      while (window.length > 0 && at - window[0] >= windowMs) window.shift();
+      if (window.length >= max) return false;
+      window.push(at);
+      return true;
+    }
+  };
+}
+__name(makeNodeSlidingWindowLimiter, "makeNodeSlidingWindowLimiter");
+var NODE_STALE_AFTER_MS = 24 * 60 * 6e4;
 
 // src/node-sync/app.ts
 function fireAndForget(c, p) {
@@ -24239,6 +24341,37 @@ function createNodeSyncApp(deps) {
       c.header("X-Request-Id", requestId);
     }
   });
+  const nodeLimitWindowMs = deps.rateLimitWindowMs ?? NODE_RATE_LIMIT_WINDOW_MS;
+  const nodeLimiter = makeNodeSlidingWindowLimiter(nodeLimitWindowMs);
+  const nodeRateLimitGuard = /* @__PURE__ */ __name(async (c, next) => {
+    const perMin = parseNodeRateLimitPerMin(c.env?.NODE_RATE_LIMIT_PER_MIN);
+    if (perMin <= 0) return next();
+    const nodeCode = (c.req.header("X-CP-Node-Code") ?? "").trim().slice(0, 120);
+    const ip = (c.req.header("cf-connecting-ip") ?? "unknown").slice(0, 64);
+    const key = nodeCode ? `node:${perMin}:${nodeCode}` : `anon:${perMin}:${ip}`;
+    if (!nodeLimiter.allow(key, perMin)) {
+      const retryAfterS = Math.ceil(nodeLimitWindowMs / 1e3);
+      c.header("Retry-After", String(retryAfterS));
+      try {
+        await audit2.log({
+          actorId: nodeCode || "anonymous",
+          action: "node.rate_limited",
+          resourceType: "node",
+          resourceId: nodeCode || "unauthenticated",
+          changes: { path: { from: null, to: c.req.path } }
+        });
+      } catch {
+      }
+      throw new RateLimitError(
+        retryAfterS,
+        "\u062A\u0639\u062F\u0627\u062F \u062F\u0631\u062E\u0648\u0627\u0633\u062A\u200C\u0647\u0627\u06CC \u0646\u0648\u062F \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0645\u062C\u0627\u0632 \u0627\u0633\u062A \u2014 \u0628\u0639\u062F\u0627\u064B \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F"
+      );
+    }
+    return next();
+  }, "nodeRateLimitGuard");
+  app.use("/pull", nodeRateLimitGuard);
+  app.use("/push", nodeRateLimitGuard);
+  app.use("/reconcile", nodeRateLimitGuard);
   const limiter = makeKeyedRateLimiter(API_RATE_LIMIT_WINDOW_MS);
   app.use("*", async (c, next) => {
     if (c.req.method !== "POST" && c.req.method !== "PUT" && c.req.method !== "PATCH" && c.req.method !== "DELETE") {
@@ -24270,10 +24403,11 @@ function createNodeSyncApp(deps) {
     return null;
   }
   __name(authNode, "authNode");
-  const authFailed = /* @__PURE__ */ __name((c) => c.json({ error: "NODE_AUTH_FAILED", message: "\u0627\u0639\u062A\u0628\u0627\u0631 \u0646\u0648\u062F \u067E\u0630\u06CC\u0631\u0641\u062A\u0647 \u0646\u0634\u062F" }, 401), "authFailed");
+  const authFailed2 = /* @__PURE__ */ __name((c) => c.json({ error: "NODE_AUTH_FAILED", message: "\u0627\u0639\u062A\u0628\u0627\u0631 \u0646\u0648\u062F \u067E\u0630\u06CC\u0631\u0641\u062A\u0647 \u0646\u0634\u062F" }, 401), "authFailed");
   app.get("/pull", async (c) => {
     const node2 = await authNode(c);
-    if (!node2) return authFailed(c);
+    if (!node2) return authFailed2(c);
+    await bumpQuotaUsage(db, "pull", now());
     const rawDomains = (c.req.query("domains") ?? "").split(",").map((d) => d.trim().toLowerCase()).filter((d) => d.length > 0);
     const unknownDomains = [...new Set(rawDomains.filter((d) => !NODE_PULL_DOMAIN_SET.has(d)))];
     if (unknownDomains.length > 0) {
@@ -24293,22 +24427,61 @@ function createNodeSyncApp(deps) {
     }
     const parsedLimit = Number.parseInt(c.req.query("limit") ?? "", 10);
     const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, NODE_PULL_MAX_LIMIT) : NODE_PULL_DEFAULT_LIMIT;
+    const at = now().toISOString();
     const page = await pullNodePage(db, { domains, cursor, limit });
     fireAndForget(c, stampNodePull(db, node2.node_code, now()).catch(() => void 0));
     return c.json(
-      { data: { items: page.items, next_cursor: page.next_cursor, server_time: now().toISOString() } },
+      {
+        data: {
+          items: page.items,
+          next_cursor: page.next_cursor,
+          server_time: at,
+          server_ts: at,
+          center_version: APP_VERSION,
+          min_node_version: NODE_MIN_VERSION
+        }
+      },
       200
     );
   });
+  app.get("/reconcile", async (c) => {
+    const node2 = await authNode(c);
+    if (!node2) return authFailed2(c);
+    const rawDomains = (c.req.query("domains") ?? "").split(",").map((d) => d.trim().toLowerCase()).filter((d) => d.length > 0);
+    const unknownDomains = [...new Set(rawDomains.filter((d) => !NODE_PULL_DOMAIN_SET.has(d)))];
+    if (unknownDomains.length > 0) {
+      return c.json(
+        {
+          error: "NODE_DOMAIN_FORBIDDEN",
+          message: "\u062F\u0627\u0645\u0646\u0647\u0654 \u062F\u0631\u062E\u0648\u0627\u0633\u062A\u06CC \u0628\u06CC\u0631\u0648\u0646 \u0641\u0647\u0631\u0633\u062A \u0633\u0641\u06CC\u062F reconcile \u0627\u0633\u062A",
+          details: { domains: unknownDomains }
+        },
+        400
+      );
+    }
+    const domains = rawDomains.length > 0 ? rawDomains : [...NODE_PULL_DOMAINS];
+    const statuses = await reconcileDomainCounts(db, domains);
+    return c.json({ server_ts: now().toISOString(), domains: statuses }, 200);
+  });
   app.post("/push", async (c) => {
     const node2 = await authNode(c);
-    if (!node2) return authFailed(c);
+    if (!node2) return authFailed2(c);
+    const catchUpDeclared = c.req.header(NODE_PUSH_CATCHUP_HEADER) === "1";
     const at = now();
-    if (!shouldAttemptNodePush(node2.last_push_attempt_at, at, minIntervalMs)) {
+    const handshake = {
+      server_ts: at.toISOString(),
+      center_version: APP_VERSION,
+      min_node_version: NODE_MIN_VERSION
+    };
+    if (!catchUpDeclared && !shouldAttemptNodePush(node2.last_push_attempt_at, at, minIntervalMs)) {
       const lastT = Date.parse(node2.last_push_attempt_at ?? "");
       const retryAfterS = Number.isNaN(lastT) ? null : Math.max(0, Math.ceil((lastT + minIntervalMs - at.getTime()) / 1e3));
-      return c.json({ data: { accepted: 0, duplicates: 0, throttled: true, retry_after_s: retryAfterS } }, 200);
+      return c.json(
+        { data: { accepted: 0, duplicates: 0, throttled: true, retry_after_s: retryAfterS, ...handshake } },
+        200
+      );
     }
+    await bumpQuotaUsage(db, "push", now());
     const contentLength = Number.parseInt(c.req.header("content-length") ?? "0", 10) || 0;
     if (contentLength > NODE_PUSH_BODY_MAX_BYTES) {
       return c.json({ error: "NODE_BODY_TOO_LARGE", message: "\u062D\u062C\u0645 \u0628\u062F\u0646\u0647\u0654 push \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0645\u062C\u0627\u0632 \u0627\u0633\u062A" }, 400);
@@ -24331,7 +24504,10 @@ function createNodeSyncApp(deps) {
     const outcome = await pushNodeEvents(db, node2.node_code, items);
     await stampNodePushOk(db, node2.node_code, at).catch(() => void 0);
     log.info("node_sync.push", { node: node2.node_code, accepted: outcome.accepted, duplicates: outcome.duplicates });
-    return c.json({ data: { accepted: outcome.accepted, duplicates: outcome.duplicates, throttled: false } }, 200);
+    return c.json(
+      { data: { accepted: outcome.accepted, duplicates: outcome.duplicates, throttled: false, ...handshake } },
+      200
+    );
   });
   app.post("/register", authMiddleware(), requireRole("manager"), async (c) => {
     const actor = getAuthContext(c);
@@ -24389,6 +24565,642 @@ function createNodeSyncApp(deps) {
 }
 __name(createNodeSyncApp, "createNodeSyncApp");
 
+// src/core/db/client.ts
+function createDb(d1, logger2) {
+  const base = {
+    async query(sql, params = []) {
+      const stmt = d1.prepare(sql).bind(...params);
+      const res = await stmt.all();
+      return res.results ?? [];
+    },
+    async queryOne(sql, params = []) {
+      const rows = await base.query(sql, params);
+      return rows.length > 0 ? rows[0] : null;
+    },
+    async execute(sql, params = []) {
+      return d1.prepare(sql).bind(...params).run();
+    },
+    prepare(sql, params = []) {
+      return d1.prepare(sql).bind(...params);
+    },
+    async batch(statements) {
+      if (statements.length === 0) return [];
+      return d1.batch(statements);
+    },
+    async transaction(fn) {
+      const statements = [];
+      const tx = {
+        query: /* @__PURE__ */ __name((sql, params = []) => base.query(sql, params), "query"),
+        queryOne: /* @__PURE__ */ __name((sql, params = []) => base.queryOne(sql, params), "queryOne"),
+        prepare: /* @__PURE__ */ __name((sql, params = []) => base.prepare(sql, params), "prepare"),
+        execute: /* @__PURE__ */ __name((sql, params = []) => {
+          statements.push(d1.prepare(sql).bind(...params));
+          return Promise.resolve({ success: true, meta: {} });
+        }, "execute"),
+        batch: /* @__PURE__ */ __name((stmts) => {
+          statements.push(...stmts);
+          return Promise.resolve([]);
+        }, "batch"),
+        transaction: /* @__PURE__ */ __name((fn2) => fn2(tx), "transaction")
+      };
+      const result = await fn(tx);
+      if (statements.length > 0) {
+        try {
+          await d1.batch(statements);
+        } catch (err) {
+          logger2?.error("transaction.batch.failed", {
+            statementCount: statements.length,
+            error: err instanceof Error ? err.message : "unknown"
+          });
+          throw err;
+        }
+      }
+      return result;
+    }
+  };
+  return base;
+}
+__name(createDb, "createDb");
+
+// src/application/instance-sync/tables.ts
+var SYNC_TABLES = [
+  { table: "announcements", pk: ["id"], hasUpdatedAt: true },
+  { table: "appointment_students", pk: ["appointment_id", "student_id"], hasUpdatedAt: false },
+  { table: "appointments", pk: ["id"], hasUpdatedAt: true },
+  { table: "assessments", pk: ["id"], hasUpdatedAt: true },
+  { table: "bug_reports", pk: ["id"], hasUpdatedAt: false },
+  { table: "case_event_types", pk: ["id"], hasUpdatedAt: true },
+  { table: "case_events", pk: ["id"], hasUpdatedAt: true },
+  { table: "classes", pk: ["id"], hasUpdatedAt: false },
+  { table: "clearbook_entries", pk: ["id"], hasUpdatedAt: true },
+  { table: "clearbook_entry_tags", pk: ["entry_id", "tag"], hasUpdatedAt: false },
+  { table: "clearbook_plans", pk: ["id"], hasUpdatedAt: true },
+  { table: "committee_items", pk: ["id"], hasUpdatedAt: true },
+  { table: "committee_meetings", pk: ["id"], hasUpdatedAt: true },
+  { table: "content_score_report", pk: ["source_table", "source_id"], hasUpdatedAt: true },
+  { table: "day_notes", pk: ["id"], hasUpdatedAt: false },
+  { table: "docs", pk: ["id"], hasUpdatedAt: true },
+  { table: "document_requests", pk: ["id"], hasUpdatedAt: false },
+  { table: "exercise_assignments", pk: ["id"], hasUpdatedAt: false },
+  { table: "exercise_batches", pk: ["id"], hasUpdatedAt: false },
+  { table: "exercise_focus_links", pk: ["exercise_id", "focus_key"], hasUpdatedAt: false },
+  { table: "exercise_package_items", pk: ["package_id", "exercise_id"], hasUpdatedAt: false },
+  { table: "exercise_package_tags", pk: ["package_id", "tag_id"], hasUpdatedAt: false },
+  { table: "exercise_packages", pk: ["id"], hasUpdatedAt: true },
+  { table: "exercise_submissions", pk: ["id"], hasUpdatedAt: false },
+  { table: "exercise_tags", pk: ["exercise_id", "tag_id"], hasUpdatedAt: false },
+  { table: "exercises", pk: ["id"], hasUpdatedAt: true },
+  { table: "finance_budgets", pk: ["id"], hasUpdatedAt: true },
+  { table: "finance_donations", pk: ["id"], hasUpdatedAt: true },
+  { table: "finance_invoices", pk: ["id"], hasUpdatedAt: true },
+  { table: "followups", pk: ["id"], hasUpdatedAt: true },
+  { table: "game_adherence", pk: ["mission_id"], hasUpdatedAt: false },
+  { table: "game_attempts", pk: ["id"], hasUpdatedAt: false },
+  { table: "game_goals", pk: ["id"], hasUpdatedAt: false },
+  { table: "game_links", pk: ["jti"], hasUpdatedAt: false },
+  { table: "game_metrics", pk: ["id"], hasUpdatedAt: false },
+  { table: "game_missions", pk: ["id"], hasUpdatedAt: false },
+  { table: "game_packages", pk: ["id", "version"], hasUpdatedAt: true },
+  { table: "game_prescriptions", pk: ["id"], hasUpdatedAt: true },
+  { table: "intervention_paths", pk: ["id"], hasUpdatedAt: true },
+  { table: "knowledge_items", pk: ["id"], hasUpdatedAt: true },
+  { table: "network_content", pk: ["id"], hasUpdatedAt: true },
+  { table: "notification_prefs", pk: ["student_id"], hasUpdatedAt: true },
+  { table: "ot_progress", pk: ["id"], hasUpdatedAt: false },
+  { table: "ot_skills", pk: ["id"], hasUpdatedAt: false },
+  { table: "pathway_probes", pk: ["id"], hasUpdatedAt: true },
+  { table: "pathway_sessions", pk: ["id"], hasUpdatedAt: true },
+  { table: "pathway_templates", pk: ["id"], hasUpdatedAt: true },
+  { table: "schools", pk: ["id"], hasUpdatedAt: false },
+  { table: "screening_entries", pk: ["id"], hasUpdatedAt: true },
+  { table: "staff", pk: ["id"], hasUpdatedAt: false },
+  { table: "staff_attendance", pk: ["id"], hasUpdatedAt: true },
+  { table: "student_education_history", pk: ["id"], hasUpdatedAt: false },
+  { table: "student_focus_links", pk: ["student_id", "focus_key"], hasUpdatedAt: false },
+  { table: "student_tags", pk: ["student_id", "tag_id"], hasUpdatedAt: false },
+  { table: "student_teachers", pk: ["id"], hasUpdatedAt: false },
+  { table: "students", pk: ["id"], hasUpdatedAt: false },
+  { table: "tags", pk: ["id"], hasUpdatedAt: false },
+  { table: "todos", pk: ["id"], hasUpdatedAt: true },
+  { table: "waitlist", pk: ["id"], hasUpdatedAt: true },
+  { table: "working_hours", pk: ["id"], hasUpdatedAt: true }
+];
+var SYNC_TABLE_MAP = new Map(SYNC_TABLES.map((t) => [t.table, t]));
+function syncPkValueOfRow(row, pk) {
+  return pk.map((k) => row[k] === null || row[k] === void 0 ? "" : String(row[k])).join("|");
+}
+__name(syncPkValueOfRow, "syncPkValueOfRow");
+var EPOCH_STAMP = "1970-01-01T00:00:00.000Z";
+
+// src/application/instance-sync/winner.ts
+function canonicalJson(value) {
+  if (value === null || typeof value !== "object") return JSON.stringify(value ?? null);
+  if (Array.isArray(value)) return `[${value.map((v) => canonicalJson(v)).join(",")}]`;
+  const keys = Object.keys(value).sort();
+  const body = keys.map((k) => {
+    const v = value[k];
+    return `${JSON.stringify(k)}:${canonicalJson(v)}`;
+  }).join(",");
+  return `{${body}}`;
+}
+__name(canonicalJson, "canonicalJson");
+async function syncHash(value) {
+  const data = new TextEncoder().encode(canonicalJson(value));
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+__name(syncHash, "syncHash");
+function formationStampOf(row) {
+  return row.created_at ?? row.updated_at ?? null;
+}
+__name(formationStampOf, "formationStampOf");
+function compareStamps(a, b) {
+  if (a === b) return 0;
+  if (a === null) return 1;
+  if (b === null) return -1;
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+__name(compareStamps, "compareStamps");
+async function rowWinner(a, b) {
+  const formation = compareStamps(formationStampOf(a), formationStampOf(b));
+  if (formation !== 0) return formation < 0 ? "a" : "b";
+  const updated = compareStamps(a.updated_at ?? null, b.updated_at ?? null);
+  if (updated !== 0) return updated < 0 ? "a" : "b";
+  const [hashA, hashB] = await Promise.all([syncHash(a), syncHash(b)]);
+  if (hashA === hashB) return "a";
+  return hashA > hashB ? "a" : "b";
+}
+__name(rowWinner, "rowWinner");
+function stampHashWinner(a, b) {
+  const cmp = compareStamps(a.stamp, b.stamp);
+  if (cmp !== 0) return cmp < 0 ? "a" : "b";
+  if (a.hash === b.hash) return "a";
+  return a.hash > b.hash ? "a" : "b";
+}
+__name(stampHashWinner, "stampHashWinner");
+function tombstoneCanonical(table, pk, deletedAt) {
+  return { deleted_at: deletedAt, pk, table_name: table };
+}
+__name(tombstoneCanonical, "tombstoneCanonical");
+function parseCursorPair(raw2) {
+  if (raw2) {
+    try {
+      const parsed = JSON.parse(raw2);
+      if (typeof parsed.rows === "string" && typeof parsed.deleted === "string") {
+        return { rows: parsed.rows, deleted: parsed.deleted };
+      }
+    } catch {
+    }
+  }
+  return { rows: EPOCH_STAMP, deleted: EPOCH_STAMP };
+}
+__name(parseCursorPair, "parseCursorPair");
+
+// src/application/instance-sync/service.ts
+var PULL_MAX_ROWS_PER_TABLE = 500;
+var CONFLICT_PAYLOAD_MAX_BYTES = 64 * 1024;
+var DEVICE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{2,63}$/;
+var nowIso = /* @__PURE__ */ __name(() => (/* @__PURE__ */ new Date()).toISOString(), "nowIso");
+function assertSafeIdent(name) {
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) throw new Error(`\u0634\u0646\u0627\u0633\u0647\u0654 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0628\u0631\u0627\u06CC SQL: ${name}`);
+  return name;
+}
+__name(assertSafeIdent, "assertSafeIdent");
+function bindValue(v) {
+  if (v === void 0) return null;
+  if (typeof v === "boolean") return v ? 1 : 0;
+  if (v === null || typeof v === "string" || typeof v === "number" || typeof v === "bigint") return v;
+  return String(v);
+}
+__name(bindValue, "bindValue");
+async function columnsOf(db, table) {
+  const rows = await db.query(
+    `PRAGMA table_info(${assertSafeIdent(table)})`
+  );
+  return rows.map((r) => ({ name: r.name, notnull: Number(r.notnull), dflt: r.dflt_value, pk: Number(r.pk) }));
+}
+__name(columnsOf, "columnsOf");
+function maxStamp(current, values) {
+  return values.reduce((m, v) => v > m ? v : m, current);
+}
+__name(maxStamp, "maxStamp");
+function truncateLoserPayload(json2) {
+  if (Buffer.byteLength(json2, "utf8") <= CONFLICT_PAYLOAD_MAX_BYTES) return json2;
+  const marker = JSON.stringify({ __truncated: true, full_bytes: Buffer.byteLength(json2, "utf8") });
+  const budget = CONFLICT_PAYLOAD_MAX_BYTES - Buffer.byteLength(marker, "utf8") - 64;
+  let head = json2.slice(0, Math.max(budget, 0));
+  while (Buffer.byteLength(head, "utf8") > budget) head = head.slice(0, Math.floor(head.length * 0.9));
+  return JSON.stringify({ __truncated: true, full_bytes: Buffer.byteLength(json2, "utf8"), head });
+}
+__name(truncateLoserPayload, "truncateLoserPayload");
+async function instanceState(db, deviceId) {
+  const rows = await db.query(
+    `SELECT table_name, pull_cursor, push_cursor FROM _sync_state`
+  );
+  const cursors = {};
+  for (const meta3 of SYNC_TABLES) {
+    const rec = rows.find((r) => r.table_name === meta3.table);
+    cursors[meta3.table] = {
+      pull: parseCursorPair(rec?.pull_cursor),
+      push: parseCursorPair(rec?.push_cursor)
+    };
+  }
+  let appliedMigrations = null;
+  try {
+    const rec = await db.queryOne(`SELECT COUNT(*) AS n FROM d1_migrations`);
+    appliedMigrations = rec ? Number(rec.n) : null;
+  } catch {
+    appliedMigrations = null;
+  }
+  return { device_id: deviceId, applied_migrations: appliedMigrations, cursors, table_count: SYNC_TABLES.length };
+}
+__name(instanceState, "instanceState");
+async function completeStampGroup(db, table, stampCol, pkOrder, rows) {
+  if (rows.length !== PULL_MAX_ROWS_PER_TABLE) return rows;
+  const lastStamp = rows[rows.length - 1][stampCol];
+  if (typeof lastStamp !== "string") return rows;
+  const group = await db.query(
+    `SELECT * FROM ${assertSafeIdent(table)} WHERE ${assertSafeIdent(stampCol)} = ? ORDER BY ${pkOrder} ASC`,
+    [lastStamp]
+  );
+  return [...rows.filter((r) => r[stampCol] !== lastStamp), ...group];
+}
+__name(completeStampGroup, "completeStampGroup");
+async function pull(db, since) {
+  const out = {};
+  for (const meta3 of SYNC_TABLES) {
+    const table = assertSafeIdent(meta3.table);
+    const pkOrder = meta3.pk.map(assertSafeIdent).join(", ");
+    const sincePair = since.tables?.[meta3.table];
+    const cursorRows = typeof sincePair?.rows === "string" ? sincePair.rows : EPOCH_STAMP;
+    const cursorDeleted = typeof sincePair?.deleted === "string" ? sincePair.deleted : EPOCH_STAMP;
+    const rows = await db.query(
+      `SELECT * FROM ${table} WHERE updated_at IS NOT NULL AND updated_at > ? ORDER BY updated_at ASC, ${pkOrder} ASC LIMIT ?`,
+      [cursorRows, PULL_MAX_ROWS_PER_TABLE]
+    );
+    const completed = await completeStampGroup(db, table, "updated_at", pkOrder, rows);
+    let deletedRows = await db.query(
+      `SELECT table_name, pk, deleted_at, device_id FROM _sync_deleted WHERE table_name = ? AND deleted_at > ? ORDER BY deleted_at ASC, pk ASC LIMIT ?`,
+      [meta3.table, cursorDeleted, PULL_MAX_ROWS_PER_TABLE]
+    );
+    if (deletedRows.length === PULL_MAX_ROWS_PER_TABLE) {
+      const lastStamp = deletedRows[deletedRows.length - 1].deleted_at;
+      const group = await db.query(
+        `SELECT table_name, pk, deleted_at, device_id FROM _sync_deleted WHERE table_name = ? AND deleted_at = ? ORDER BY pk ASC`,
+        [meta3.table, lastStamp]
+      );
+      deletedRows = [...deletedRows.filter((r) => r.deleted_at !== lastStamp), ...group];
+    }
+    out[meta3.table] = {
+      rows: completed,
+      deleted: deletedRows,
+      next_cursors: {
+        rows: maxStamp(cursorRows, completed.map((r) => String(r.updated_at ?? ""))),
+        deleted: maxStamp(cursorDeleted, deletedRows.map((r) => r.deleted_at))
+      }
+    };
+  }
+  return { tables: out };
+}
+__name(pull, "pull");
+function wherePk(pk) {
+  return pk.map((c) => `${assertSafeIdent(c)} = ?`).join(" AND ");
+}
+__name(wherePk, "wherePk");
+async function fetchRow(db, table, pk, pkValue) {
+  const parts = syncPkValueSplitSafe(pkValue, pk);
+  if (!parts) return null;
+  const rows = await db.query(
+    `SELECT * FROM ${assertSafeIdent(table)} WHERE ${wherePk(pk)}`,
+    parts.map(bindValue)
+  );
+  return rows[0] ?? null;
+}
+__name(fetchRow, "fetchRow");
+function syncPkValueSplitSafe(pkValue, pk) {
+  const parts = pkValue.split("|");
+  if (parts.length !== pk.length || parts.some((p) => p === "")) return null;
+  return parts;
+}
+__name(syncPkValueSplitSafe, "syncPkValueSplitSafe");
+async function localTombstone(db, table, pkValue) {
+  return db.queryOne(
+    `SELECT pk, deleted_at, device_id FROM _sync_deleted WHERE table_name = ? AND pk = ?`,
+    [table, pkValue]
+  );
+}
+__name(localTombstone, "localTombstone");
+function conflictWrite(input2) {
+  return {
+    sql: `INSERT INTO _sync_conflicts (table_name, pk, winner_side, winner_updated_at, loser_updated_at, resolved_at, detail, loser_payload, device_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    params: [
+      input2.table,
+      input2.pkValue,
+      input2.winnerSide,
+      input2.winnerStamp,
+      input2.loserStamp,
+      nowIso(),
+      JSON.stringify({ rule: input2.rule, table: input2.table, pk: input2.pkValue }),
+      truncateLoserPayload(input2.loserJson),
+      input2.deviceId
+    ]
+  };
+}
+__name(conflictWrite, "conflictWrite");
+function upsertRowWrite(table, columns, pk, row) {
+  const cols = columns.map((c) => assertSafeIdent(c.name));
+  const pkSet = new Set(pk);
+  const conflictTarget = pk.map(assertSafeIdent).join(", ");
+  const updateSet = columns.filter((c) => !pkSet.has(c.name)).map((c) => `${assertSafeIdent(c.name)} = excluded.${assertSafeIdent(c.name)}`).join(", ");
+  const placeholders = cols.map(() => "?").join(", ");
+  return {
+    sql: `INSERT INTO ${assertSafeIdent(table)} (${cols.join(", ")}) VALUES (${placeholders})
+          ON CONFLICT(${conflictTarget}) DO UPDATE SET ${updateSet}`,
+    params: cols.map((c) => bindValue(row[c]))
+  };
+}
+__name(upsertRowWrite, "upsertRowWrite");
+function replaceRowWrite(table, columns, row) {
+  const cols = columns.map((c) => assertSafeIdent(c.name));
+  const placeholders = cols.map(() => "?").join(", ");
+  return {
+    sql: `INSERT OR REPLACE INTO ${assertSafeIdent(table)} (${cols.join(", ")}) VALUES (${placeholders})`,
+    params: cols.map((c) => bindValue(row[c]))
+  };
+}
+__name(replaceRowWrite, "replaceRowWrite");
+function deleteRowWrite(table, pk, pkValue) {
+  return { sql: `DELETE FROM ${assertSafeIdent(table)} WHERE ${wherePk(pk)}`, params: syncPkValueSplitSafe(pkValue, pk).map(bindValue) };
+}
+__name(deleteRowWrite, "deleteRowWrite");
+function tombstoneUpsertWrite(item) {
+  return {
+    sql: `INSERT INTO _sync_deleted (table_name, pk, deleted_at, device_id) VALUES (?, ?, ?, ?)
+          ON CONFLICT(table_name, pk) DO UPDATE SET deleted_at = excluded.deleted_at, device_id = excluded.device_id`,
+    params: [item.table, item.pk, item.deleted_at, item.device_id]
+  };
+}
+__name(tombstoneUpsertWrite, "tombstoneUpsertWrite");
+function tombstoneDeleteWrite(table, pkValue) {
+  return { sql: `DELETE FROM _sync_deleted WHERE table_name = ? AND pk = ?`, params: [table, pkValue] };
+}
+__name(tombstoneDeleteWrite, "tombstoneDeleteWrite");
+async function push(db, deviceId, payload) {
+  const result = { device_id: deviceId, tables: {}, applied: 0 };
+  const writes = [];
+  for (const meta3 of SYNC_TABLES) {
+    const tablePayload = payload.tables?.[meta3.table];
+    const outcome = { echo: {}, conflicts: 0, upserts: 0, rejected: [] };
+    result.tables[meta3.table] = outcome;
+    if (!tablePayload || !tablePayload.rows?.length && !tablePayload.deleted?.length) continue;
+    const table = assertSafeIdent(meta3.table);
+    const columns = await columnsOf(db, table);
+    const colNames = new Set(columns.map((c) => c.name));
+    const requiredCols = columns.filter((c) => c.notnull === 1 && c.pk === 0 && c.dflt === null).map((c) => c.name);
+    for (const raw2 of tablePayload.rows ?? []) {
+      if (typeof raw2 !== "object" || raw2 === null) {
+        outcome.rejected.push({ pk: "?", reason: "ROW_INVALID" });
+        continue;
+      }
+      const row = raw2;
+      const pkValue = syncPkValueOfRow(row, meta3.pk);
+      if (pkValue.split("|").length !== meta3.pk.length || pkValue.split("|").some((p) => p === "")) {
+        outcome.rejected.push({ pk: pkValue || "?", reason: "PK_NAKAMEL" });
+        continue;
+      }
+      const unknownCol = Object.keys(row).find((k) => !colNames.has(k));
+      if (unknownCol) {
+        outcome.rejected.push({ pk: pkValue, reason: `COLUMN_NASHENAKHTE:${unknownCol}` });
+        continue;
+      }
+      const missingRequired = requiredCols.find((c) => row[c] === void 0 || row[c] === null);
+      if (missingRequired) {
+        outcome.rejected.push({ pk: pkValue, reason: `STOON_ELZAMI:${missingRequired}` });
+        continue;
+      }
+      const local = await fetchRow(db, meta3.table, meta3.pk, pkValue);
+      const localTomb = await localTombstone(db, meta3.table, pkValue);
+      if (local !== null) {
+        const side = await rowWinner(local, row);
+        const sameHash = await syncHash(local) === await syncHash(row);
+        if (side === "b") {
+          if (sameHash) {
+            outcome.echo[pkValue] = row;
+            continue;
+          }
+          writes.push(conflictWrite({
+            table: meta3.table,
+            pkValue,
+            winnerSide: "remote",
+            winnerStamp: row.updated_at ?? null,
+            loserStamp: local.updated_at ?? null,
+            rule: "rowWinner",
+            loserJson: JSON.stringify(local),
+            deviceId
+          }));
+          outcome.conflicts += 1;
+          const stampsEqual = typeof row.updated_at === "string" && typeof local.updated_at === "string" && row.updated_at === local.updated_at;
+          writes.push(stampsEqual ? replaceRowWrite(meta3.table, columns, row) : upsertRowWrite(meta3.table, columns, meta3.pk, row));
+          if (localTomb) writes.push(tombstoneDeleteWrite(meta3.table, pkValue));
+          outcome.echo[pkValue] = row;
+          outcome.upserts += 1;
+        } else {
+          if (!sameHash) {
+            writes.push(conflictWrite({
+              table: meta3.table,
+              pkValue,
+              winnerSide: "local",
+              winnerStamp: local.updated_at ?? null,
+              loserStamp: row.updated_at ?? null,
+              rule: "rowWinner",
+              loserJson: JSON.stringify(row),
+              deviceId
+            }));
+            outcome.conflicts += 1;
+          }
+          outcome.echo[pkValue] = local;
+        }
+      } else if (localTomb !== null) {
+        const tombEntity = { stamp: localTomb.deleted_at, hash: await syncHash(tombstoneCanonical(meta3.table, pkValue, localTomb.deleted_at)) };
+        const rowEntity = { stamp: row.updated_at ?? null, hash: await syncHash(row) };
+        if (stampHashWinner(tombEntity, rowEntity) === "a") {
+          outcome.echo[pkValue] = null;
+        } else {
+          writes.push(replaceRowWrite(meta3.table, columns, row));
+          writes.push(tombstoneDeleteWrite(meta3.table, pkValue));
+          outcome.echo[pkValue] = row;
+          outcome.upserts += 1;
+        }
+      } else {
+        writes.push(replaceRowWrite(meta3.table, columns, row));
+        outcome.echo[pkValue] = row;
+        outcome.upserts += 1;
+      }
+    }
+    for (const item of tablePayload.deleted ?? []) {
+      if (!item || typeof item.pk !== "string" || item.pk === "" || typeof item.deleted_at !== "string") {
+        outcome.rejected.push({ pk: item?.pk ?? "?", reason: "TOMB_INVALID" });
+        continue;
+      }
+      if (syncPkValueSplitSafe(item.pk, meta3.pk) === null) {
+        outcome.rejected.push({ pk: item.pk, reason: "PK_NAKHANI" });
+        continue;
+      }
+      const localTomb = await localTombstone(db, meta3.table, item.pk);
+      const local = await fetchRow(db, meta3.table, meta3.pk, item.pk);
+      const incomingTomb = { table_name: meta3.table, pk: item.pk, deleted_at: item.deleted_at };
+      const incomingEntity = { stamp: item.deleted_at, hash: await syncHash(incomingTomb) };
+      if (local !== null) {
+        const rowEntity = { stamp: local.updated_at ?? null, hash: await syncHash(local) };
+        if (stampHashWinner(incomingEntity, rowEntity) === "a") {
+          writes.push(conflictWrite({
+            table: meta3.table,
+            pkValue: item.pk,
+            winnerSide: "tombstone",
+            winnerStamp: item.deleted_at,
+            loserStamp: local.updated_at ?? null,
+            rule: "stampHashWinner",
+            loserJson: JSON.stringify(local),
+            deviceId
+          }));
+          outcome.conflicts += 1;
+          writes.push(deleteRowWrite(meta3.table, meta3.pk, item.pk));
+          writes.push(tombstoneUpsertWrite({ table: meta3.table, pk: item.pk, deleted_at: item.deleted_at, device_id: item.device_id ?? null }));
+          outcome.echo[item.pk] = null;
+          outcome.upserts += 1;
+        } else {
+          writes.push(conflictWrite({
+            table: meta3.table,
+            pkValue: item.pk,
+            winnerSide: "row",
+            winnerStamp: local.updated_at ?? null,
+            loserStamp: item.deleted_at,
+            rule: "stampHashWinner",
+            loserJson: JSON.stringify(incomingTomb),
+            deviceId
+          }));
+          outcome.conflicts += 1;
+          outcome.echo[item.pk] = local;
+        }
+      } else if (localTomb !== null) {
+        const localEntity = { stamp: localTomb.deleted_at, hash: await syncHash(tombstoneCanonical(meta3.table, item.pk, localTomb.deleted_at)) };
+        if (stampHashWinner(incomingEntity, localEntity) === "a") {
+          writes.push(tombstoneUpsertWrite({ table: meta3.table, pk: item.pk, deleted_at: item.deleted_at, device_id: item.device_id ?? null }));
+        }
+        outcome.echo[item.pk] = null;
+      } else {
+        writes.push(tombstoneUpsertWrite({ table: meta3.table, pk: item.pk, deleted_at: item.deleted_at, device_id: item.device_id ?? null }));
+        outcome.echo[item.pk] = null;
+        outcome.upserts += 1;
+      }
+    }
+    result.applied += outcome.upserts;
+  }
+  if (writes.length > 0) {
+    await db.transaction(async (tx) => {
+      for (const w of writes) await tx.execute(w.sql, w.params);
+    });
+  }
+  return result;
+}
+__name(push, "push");
+
+// src/application/instance-sync/routes.ts
+var SinceTableSchema = external_exports.object({
+  rows: external_exports.string().min(10).optional(),
+  deleted: external_exports.string().min(10).optional()
+});
+var PullSchema = external_exports.object({
+  since: external_exports.object({
+    tables: external_exports.record(external_exports.string().min(1).max(64), SinceTableSchema).optional()
+  }).optional()
+});
+var TombstoneSchema = external_exports.object({
+  pk: external_exports.string().min(1).max(512),
+  deleted_at: external_exports.string().min(10).max(40),
+  device_id: external_exports.string().max(64).nullish()
+});
+var PushSchema = external_exports.object({
+  device_id: external_exports.string().min(4).max(64).regex(DEVICE_ID_PATTERN, "\u0634\u0646\u0627\u0633\u0647\u0654 \u0646\u0645\u0648\u0646\u0647 (device_id) \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A"),
+  tables: external_exports.record(
+    external_exports.string().min(1).max(64),
+    external_exports.object({
+      rows: external_exports.array(external_exports.record(external_exports.string().min(1).max(64), external_exports.unknown())).max(1e3).optional(),
+      deleted: external_exports.array(TombstoneSchema).max(1e3).optional()
+    })
+  )
+});
+function bearerToken2(header) {
+  const value = header?.trim();
+  if (!value) return null;
+  return value.startsWith("Bearer ") ? value.slice(7).trim() || null : null;
+}
+__name(bearerToken2, "bearerToken");
+function timingSafeEqualStr(a, b) {
+  const len = Math.max(a.length, b.length);
+  let diff = a.length ^ b.length;
+  for (let i = 0; i < len; i++) diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
+  return diff === 0;
+}
+__name(timingSafeEqualStr, "timingSafeEqualStr");
+var authFailed = /* @__PURE__ */ __name((c) => c.json({ error: "INSTANCE_AUTH_FAILED", message: "\u0627\u0639\u062A\u0628\u0627\u0631 \u0647\u0645\u200C\u06AF\u0627\u0645\u06CC \u0646\u0645\u0648\u0646\u0647 \u067E\u0630\u06CC\u0631\u0641\u062A\u0647 \u0646\u0634\u062F" }, 401), "authFailed");
+function createInstanceSyncApp(deps) {
+  const { db, logger: logger2 } = deps;
+  const log = logger2.child("instance-sync");
+  const app = new Hono3();
+  app.use("*", async (c, next) => {
+    await next();
+    c.header("Cache-Control", "no-store");
+  });
+  async function authorize(c) {
+    const token = bearerToken2(c.req.header("Authorization"));
+    if (!token) return null;
+    const expected = await resolveSessionSecret(c.env);
+    if (!timingSafeEqualStr(token, expected)) {
+      log.warn("instance_sync.auth_failed", {});
+      return null;
+    }
+    const deviceId = (c.req.header("X-Device-Id") ?? "").trim();
+    if (!DEVICE_ID_PATTERN.test(deviceId)) return null;
+    return deviceId;
+  }
+  __name(authorize, "authorize");
+  app.get("/state", async (c) => {
+    const deviceId = await authorize(c);
+    if (deviceId === null) return authFailed(c);
+    const state = await instanceState(db, deviceId);
+    return c.json({ data: state }, 200);
+  });
+  app.post("/pull", async (c) => {
+    const deviceId = await authorize(c);
+    if (deviceId === null) return authFailed(c);
+    const parsed = PullSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: "VALIDATION", message: "\u0628\u062F\u0646\u0647\u0654 pull \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A", issues: parsed.error.issues }, 400);
+    }
+    const since = parsed.data.since ?? {};
+    const result = await pull(db, since);
+    return c.json({ data: result }, 200);
+  });
+  app.post("/push", async (c) => {
+    const deviceId = await authorize(c);
+    if (deviceId === null) return authFailed(c);
+    const parsed = PushSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: "VALIDATION", message: "\u0628\u062F\u0646\u0647\u0654 push \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A", issues: parsed.error.issues }, 400);
+    }
+    const body = parsed.data;
+    if (body.device_id !== deviceId) {
+      return c.json({ error: "DEVICE_MISMATCH", message: "device_id \u0628\u062F\u0646\u0647 \u0628\u0627 \u0647\u062F\u0631 X-Device-Id \u0647\u0645\u200C\u062E\u0648\u0627\u0646 \u0646\u06CC\u0633\u062A" }, 400);
+    }
+    const result = await push(db, body.device_id, body.tables);
+    return c.json({ data: result }, 200);
+  });
+  return app;
+}
+__name(createInstanceSyncApp, "createInstanceSyncApp");
+
 // src/application/auth/routes.ts
 var LOGIN_MAX_FAILURES = 5;
 var LOGIN_IP_MAX_FAILURES = 20;
@@ -24441,6 +25253,7 @@ __name(clearThrottle, "clearThrottle");
 function registerAuthRoutes(app, deps) {
   app.post("/api/auth/login", async (c) => {
     const body = LoginSchema.parse(await c.req.json());
+    await bumpQuotaUsage(createDb(c.env.DB), "login");
     const identity = body.username.trim().toLowerCase();
     const ip = (c.req.header("cf-connecting-ip") ?? "unknown").slice(0, 64);
     const ipKey = `ip:${ip}`;
@@ -24515,11 +25328,11 @@ function registerAuthRoutes(app, deps) {
       { id: staff.id, fullName: staff.full_name, role: staff.role, email: staff.email },
       await resolveSessionSecret(c.env)
     );
-    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+    const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
     await c.env.DB.prepare(
       "INSERT INTO auth_sessions (sid, staff_id, issued_at, expires_at) VALUES (?, ?, ?, ?)"
-    ).bind(sid, staff.id, nowIso, expiresAt).run();
-    await c.env.DB.prepare("DELETE FROM auth_sessions WHERE expires_at < ?").bind(nowIso).run();
+    ).bind(sid, staff.id, nowIso2, expiresAt).run();
+    await c.env.DB.prepare("DELETE FROM auth_sessions WHERE expires_at < ?").bind(nowIso2).run();
     await deps.audit.log({
       actorId: staff.id,
       action: "auth.login",
@@ -24604,6 +25417,7 @@ function buildCentralApp(env) {
   app.get("/healthz", (c) => c.json({ ok: true, service: "markaz-central" }, 200));
   registerAuthRoutes(app, { audit: aw, logger });
   app.route("/node", createNodeSyncApp({ db, audit: aw, logger }));
+  app.route("/instance-sync", createInstanceSyncApp({ db: createDb(db), logger }));
   app.post("/admin/setup", async (c) => {
     try {
       const provided = (c.req.header("X-Setup-Token") ?? "").trim();
