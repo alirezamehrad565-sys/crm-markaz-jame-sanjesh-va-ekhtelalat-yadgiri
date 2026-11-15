@@ -1080,6 +1080,17 @@ export function engineGapShortView(gap) {
 }
 
 /**
+ * ۱.۲۷.۱۳ — استخراج نسخه از پاکت /api/engine/capabilities (تابع خالص — P0-1 ممیزی §۱):
+ * پاکت معلوم {ok:true, version:string} → رشتهٔ نسخه؛ پاکت ناآشنا/کوتاه/خرابی شبکه → null
+ * (بی‌کرش — پنل به منبع قبلی نسخه برمی‌گردد؛ سنت «پنل هرگز نمی‌شکند»).
+ */
+export function engineCapabilitiesVersionView(caps) {
+  if (!caps || caps.ok !== true) return null;
+  if (typeof caps.version !== 'string' || !caps.version.trim()) return null;
+  return caps.version.trim();
+}
+
+/**
  * ۱.۲۷.۱۲ — آدرس سرور محلی برای نمایش در کارت (تابع خالص — خواست کارفرما: «آدرس ۱۲۷.۰.۰.۱
  * نشون نمی‌دهد»): status.port عددی معتبر → http://127.0.0.1:<port> با isDefault=false (پورت با
  * رقم فارسی — هم‌الگوی serverPortsView)؛ وگرنه origin (حالت وب — کانال تائوری نیست) خودش آدرس
@@ -2486,11 +2497,14 @@ export async function renderHealthPanel(outlet) {
   async function reload() {
     // ف۶ + EXP-2 — پنل سلامت، گزارش رشد، وضعیت هم‌گامی و سهمیهٔ مرکز هم‌زمان گرفته می‌شوند؛
     // خرابیِ هر بخش فقط کارت خودش را degraded می‌کند
-    const [healthOut, growthOut, syncOut, quotaOut] = await Promise.allSettled([
+    const [healthOut, growthOut, syncOut, quotaOut, capsOut] = await Promise.allSettled([
       api.get('/api/health/panel'),
       api.get('/api/growth/report'),
       api.get('/api/node-sync/status'),
-      api.get('/api/central/quota')
+      api.get('/api/central/quota'),
+      // ۱.۲۷.۱۳ — پایانهٔ قابلیت‌های موتور (P0-1 ممیزی §۱): عمومی و بی‌احراز؛ خرابیِ آن
+      // فقط کارت نسخه را به منبع قبلی برمی‌گرداند — بقیهٔ پنل هرگز نمی‌شکند
+      api.get('/api/engine/capabilities')
     ]);
     if (healthOut.status === 'rejected') {
       const err = healthOut.reason;
@@ -2516,16 +2530,18 @@ export async function renderHealthPanel(outlet) {
     let lastBackupAt = null;
     try { lastBackupAt = localStorage.getItem('cs.lastBackupAt'); } catch { /* نرم */ }
 
-    // ۱.۲۷.۱۲ — هشدار ناهم‌نسخه‌ای موتور/برنامه: نسخهٔ موتور با اولویت از /api/health/panel
-    // (data.version — همان فیلد سیگنال «موتور محلی» پنج‌سیگنال؛ همیشه در دسترس حتی بدون تائوری)؛
-    // فقط اگر آن غایب بود appVersion پاکت engine_status (نسخهٔ اپ کارت سرور). APP_VERSION از
-    // «منبع یکتای نسخه» (src/core/version.ts) با import پویا — الگوی importهای نما به src.
+    // ۱.۲۷.۱۳ — هشدار ناهم‌نسخه‌ای موتور/برنامه: نسخهٔ موتور با اولویت از /api/engine/capabilities
+    // (پایانهٔ قابلیت‌های موتور P0-1 — مستقیم‌ترین سیگنال نسخهٔ موتور؛ عمومی و بی‌احراز)؛
+    // اگر آن در دسترس نبود همان اولویت ۱.۲۷.۱۲ (data.version پنل، سپس appVersion پاکت
+    // engine_status). APP_VERSION از «منبع یکتای نسخه» (src/core/version.ts) با import پویا —
+    // الگوی importهای نما به src.
     let appVersion = null;
     try { appVersion = (await import('../../../../src/core/version.ts')).APP_VERSION ?? null; } catch { /* نرم — بی‌هشدار نسخه */ }
     const feedAppVersion = lastServerStatus()?.appVersion;
-    const engineVersionText = typeof data?.version === 'string' && data.version
-      ? data.version
-      : (typeof feedAppVersion === 'string' && feedAppVersion ? feedAppVersion : null);
+    const caps = capsOut.status === 'fulfilled' ? capsOut.value : null;
+    const engineVersionText = engineCapabilitiesVersionView(caps)
+      || (typeof data?.version === 'string' && data.version ? data.version : null)
+      || (typeof feedAppVersion === 'string' && feedAppVersion ? feedAppVersion : null);
     const engineGap = engineAppVersionGapView(engineVersionText, appVersion);
 
     const dbOk = data?.db?.ok;

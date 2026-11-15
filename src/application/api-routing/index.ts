@@ -71,6 +71,7 @@ import type { ClientErrorsService } from '@app/client-errors';
 import { createHealthService, registerHealthRoutes } from '@app/health'; // ۱.۲۵.۶۷ — پنل سلامت (CP-3 ف۱)
 import type { HealthService } from '@app/health';
 import { registerSystemRoutes, registerSystemPublicRoutes, isRestartScheduled } from '@app/system'; // ۱.۲۶.۴ — دکمه‌های نجات (۴-۲) + بستهٔ خطا
+import { registerEngineCapabilitiesRoutes } from '@app/engine-capabilities'; // ۱.۲۷.۱۳ — پایانهٔ قابلیت‌های موتور (P0-1 ممیزی §۱)
 import { createGrowthService, registerGrowthRoutes } from '@app/growth'; // ف۴ — گزارش رشد جدول‌ها (بهداشت داده)
 import type { GrowthService } from '@app/growth';
 import { createContentScoreService, registerContentScoreRoutes } from '@domain/content-score'; // ۱.۲۵.۴۸ m6 — امتیاز شناسنامه
@@ -690,6 +691,12 @@ export function createApp(deps: AppDeps): AppHono {
 
   // ۱.۲۶.۴ — وضعیت مُهر ری‌استارت برای ناظر بیرونی (قبل از گیت auth؛ ناظر سشن اپ ندارد)
   registerSystemPublicRoutes(app, { db: services.db });
+
+  // ۱.۲۷.۱۳ — پایانهٔ قابلیت‌های موتور (P0-1 ممیزی §۱): عمومی و سبک، پیش از گیت auth —
+  // پوستهٔ Rust و صفحهٔ بوت سشن اپ ندارند؛ پاسخ فقط نسخهٔ باندل + نقشهٔ مسیرهای عمومی است
+  // (بدون هیچ دادهٔ کاربر — سنت حداقلی EXP-4). خودآزمایی بوت (P0-2) همین نسخه را با
+  // CARGO_PKG_VERSION مقایسه می‌کند و هشدار ناهم‌نسخه‌ای پنل سلامت با اولویت از همین می‌خورد.
+  registerEngineCapabilitiesRoutes(app);
 
   /* rust-f4 — زیراپ سینک نودهای دسکتاپ (/node/*): «پیش از» گیت authMiddleware ثبت می‌شود
      (زنجیرهٔ عمومی §۵)؛ احراز مسیرهای نودی خودش node_code+node_key است و مسیرهای مدیریتی

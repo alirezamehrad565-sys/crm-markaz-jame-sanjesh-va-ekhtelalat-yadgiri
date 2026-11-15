@@ -86,7 +86,7 @@ describe('گیت ۱.۲۵.۰۱ — نماها برای ناظر اکشن نوشت
 });
 
 describe('گیت ۱.۲۵.۰۱ — هم‌نسخه‌ای انتشار', () => {
-  const APP_VERSION = '1.27.12';
+  const APP_VERSION = '1.27.13';
 
   test('version.ts = ?v=های index.html = VERSION سوورکر', () => {
     expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toContain(`APP_VERSION = '${APP_VERSION}'`);
