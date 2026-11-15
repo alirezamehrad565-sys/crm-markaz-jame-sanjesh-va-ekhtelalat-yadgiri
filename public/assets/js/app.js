@@ -56,8 +56,10 @@ window.addEventListener('unhandledrejection', (e) => {
 import { session } from './state.js';
 import { initRum } from './rum.js'; // تله‌متری بی‌نام کارایی (بدون IP/UA — قانون PII design.md)
 // فاز A — نشانگر سربرگ «سرور محلی» از feed مشترک پوسته (engine:status + poll ۳۰ثانیه‌ای) تغذیه می‌شود؛
-// تابع نگاشت حالت→رنگ/برچسب همان خالصِ پنل سلامت است (serverStateView — یک منبع، دو لایه)
-import { serverStateView, installServerStatusFeed, subscribeServerStatus } from './views/health-panel.js';
+// تابع نگاشت حالت→رنگ/برچسب همان خالصِ پنل سلامت است (serverStateView — یک منبع، دو لایه).
+// (۱.۲۷.۰۸) منبع = views/server-pill.js — ماژول کوچک بوت؛ کل پنل سلامت با import پویای مسیر
+// روت (#/health-panel) lazy می‌ماند (گیت بودجهٔ کارایی: boot_js_gz/eager_modules).
+import { serverStateView, installServerStatusFeed, subscribeServerStatus } from './views/server-pill.js';
 
 // ثبت ناظرهای CWV در نخستین فرصت؛ گزارشگرها buffered هستند و رویدادهای پیش از این هم می‌گیرند
 initRum();

@@ -910,54 +910,22 @@ export function drillRecordView(record, nowMs = Date.now()) {
 }
 
 /* ── فاز A — لایه‌های دوگانهٔ نشانگر «سرور محلی» (طرح docs/rust/server-cloud-update-design.md §۱) ──
-   قرارداد پوسته ↔ فرانت: رویداد engine:status + فرمان‌های invoke: engine_status / engine_restart /
-   open_data_dir — پاکت JSON: {state, port, gamesPort, startedAtUnix, lastEventAtUnix, degradedReason,
-   appVersion}. حالت‌ها = واژگان واقعی lib.rs: Booting/Ready/Degraded/Failed/Restarting (+
-   Validating/Starting/Recovering از قرارداد §۱-۱ برای آینده). لایهٔ اول در boot-dist/index.html (pill بوت — id: boot-server-pill)؛ این فایل
-   لایهٔ دوم است: تابع نگاشت خالص serverStateView + کارت «سرور محلی» پنل سلامت + pill سربرگ (نصب از
-   app.js با همان feed مشترک). نگاشت دلیل‌های Degraded تابع خالص جدای خودش است (degradedReasonView).
-   همه‌چیز گاردشده است: بیرون پوستهٔ دسکتاپ (مرورگر/آزمون) feed و کارت به «حالت وب» می‌افتند و
-   SPA هرگز نمی‌شکند — الگوی installEngineWatchdogBanner بالای همین فایل. */
+   (۱.۲۷.۰۸) سه‌تاییِ لازمِ pill — نگاشت خالص serverStateView/degradedReasonView + feed مشترک
+   وضعیت — به views/server-pill.js منتقل شد تا کل این فایلِ سنگین از گراف بوت خارج بماند
+   (گیت بودجهٔ کارایی: pill باید در بوت باشد، پنل نه). app.js فقط server-pill.js را استاتیک
+   import می‌کند و خود پنل سلامت همان‌طور که قبل‌تر بود با import پویای مسیر روت
+   (#/health-panel) lazy می‌ماند. نام‌ها این‌جا هم صادر می‌شوند تا آزمون‌ها و پین‌های
+   قرارداد بی‌تغییر بمانند؛ کارت «سرور محلی» و کارت «اتصال ابری» با همان feed می‌نشینند. */
 
-const SERVER_STATE_VIEWS = {
-  Ready: { badge: 'badge--success', dot: 'dot--success', label: 'سرور محلی در حال اجرا' },
-  Degraded: { badge: 'badge--warning', dot: 'dot--warning', label: 'سرور محلی ناتمام' },
-  Failed: { badge: 'badge--error', dot: 'dot--error', label: 'سرور بالا نیامد' },
-  // «در حال راه‌اندازی…» — زردِ ملایم پالت (بج هشدار)؛ خاکستریِ خنثی فقط برای «وضعیت نامشخص» نگه داشته شده
-  Booting: { badge: 'badge--warning', dot: 'dot--warning', label: 'در حال راه‌اندازی…' },
-  Validating: { badge: 'badge--warning', dot: 'dot--warning', label: 'در حال راه‌اندازی…' },
-  Starting: { badge: 'badge--warning', dot: 'dot--warning', label: 'در حال راه‌اندازی…' },
-  // طرح §۱-۳: قرمز Failed/Recovering — موتور هنوز در دسترس نیست تا بازیابی تمام شود
-  Recovering: { badge: 'badge--error', dot: 'dot--error', label: 'در حال بازیابی…' },
-  // Restarting = حالت واقعی سورسِ امروز (رویداد engine:restarting نگهبان در lib.rs) — زرد
-  // «در حال بازیابی…»، هم‌لحن با بنر نگهبان (engine:restarting در EXP-4 بالای همین فایل)
-  Restarting: { badge: 'badge--warning', dot: 'dot--warning', label: 'در حال بازیابی…' }
+import {
+  degradedReasonView, serverStateView, unwrapEngineStatus,
+  installServerStatusFeed, subscribeServerStatus, lastServerStatus, resetServerStatusFeedForTests
+} from './server-pill.js';
+
+export {
+  degradedReasonView, serverStateView, unwrapEngineStatus,
+  installServerStatusFeed, subscribeServerStatus, lastServerStatus, resetServerStatusFeedForTests
 };
-
-const SERVER_STATE_UNKNOWN = { badge: 'badge--neutral', dot: 'dot--neutral', label: 'وضعیت نامشخص' };
-
-const DEGRADED_REASON_VIEWS = {
-  games_unhealthy: 'ورکر بازی‌ها ناسالم'
-};
-
-/** دلیل Degraded → فارسی؛ دلیل ناشناخته/غایب → «دلیل نامشخص» (تابع خالص جدای خودش) */
-export function degradedReasonView(reason) {
-  return DEGRADED_REASON_VIEWS[reason] ?? 'دلیل نامشخص';
-}
-
-/**
- * فاز A — حالت FSM موتور → برچسب فارسی/کلاس رنگ (تابع خالص — بدون DOM؛ الگوی syncStateView).
- * Ready سبز «سرور محلی در حال اجرا»؛ Degraded زرد با دلیل فارسی؛ Failed قرمز «سرور بالا نیامد»؛
- * Booting/Validating/Starting «در حال راه‌اندازی…» زرد؛ Recovering قرمز و Restarting زرد
- * «در حال بازیابی…»؛ حالت ناشناخته/غایب → خنثی «وضعیت نامشخص» بی‌کرش.
- */
-export function serverStateView(state, degradedReason) {
-  const base = SERVER_STATE_VIEWS[state] ?? SERVER_STATE_UNKNOWN;
-  if (state === 'Degraded') {
-    return { ...base, label: `${base.label} — ${degradedReasonView(degradedReason)}` };
-  }
-  return base;
-}
 
 /** پاکت وضعیت → خط پورت‌ها با رقم فارسی؛ پورت غایب/خراب → «—» */
 export function serverPortsView(status) {
@@ -1028,81 +996,8 @@ export async function copyTextToClipboard(text) {
   } catch { return false; }
 }
 
-/** پاکت رویداد/فرمان وضعیت → پاک‌سازی‌شده؛ پاکت ناآشنا (هیچ فیلد شناخته) → null (الگوی unwrapQuota) */
-export function unwrapEngineStatus(payload) {
-  const raw = payload && typeof payload === 'object' ? payload : null;
-  if (!raw) return null;
-  const known = ['state', 'port', 'gamesPort', 'startedAtUnix', 'lastEventAtUnix', 'degradedReason', 'appVersion']
-    .some((k) => k in raw);
-  return known ? raw : null;
-}
-
-const SERVER_STATUS_POLL_MS = 30_000; // بازخوانی ۳۰ثانیه‌ای — هم‌ریتم دوپینگ نگه‌دارندهٔ پوسته (طرح §۱-۱)
-const SERVER_STATUS_EVENT = 'engine:status';
-const SERVER_STATUS_COMMAND = 'engine_status';
-
-let serverStatusFeedInstalled = false;
-let serverStatusFeedTimer = null;
-let lastServerStatusPayload = null;
-const serverStatusCallbacks = new Set();
-
-function notifyServerStatus(payload) {
-  const clean = unwrapEngineStatus(payload);
-  if (!clean) return; // پاکت ناآشنا — وضعیت قبلی دست‌نخورده می‌ماند
-  lastServerStatusPayload = clean;
-  for (const cb of [...serverStatusCallbacks]) {
-    try { cb(clean); } catch { /* شنوندهٔ خراب هرگز feed را نمی‌کشد */ }
-  }
-}
-
-async function pollEngineStatusOnce(invokeFn) {
-  try {
-    notifyServerStatus(await invokeFn(SERVER_STATUS_COMMAND));
-  } catch { /* فرمان هنوز مستقر نیست یا IPC رد شد — نرم؛ poll ادامه می‌یابد */ }
-}
-
-/**
- * فاز A — نصب یک‌بارهٔ feed مشترک وضعیت سرور: شنیدن رویداد engine:status + poll هر ۳۰ثانیه با
- * invoke engine_status. خروجی و گارد عین الگوی installEngineWatchdogBanner — بیرون پوستهٔ
- * دسکتاپ (مرورگر/آزمون) نصب نمی‌شود و هیچ throwی ندارد. کارت پنل سلامت و pill سربرگ هر دو
- * با subscribeServerStatus روی همین feed می‌نشینند (یک poll، چند شنونده).
- */
-export function installServerStatusFeed() {
-  if (serverStatusFeedInstalled) return { installed: true };
-  try {
-    const tauri = globalThis.__TAURI__;
-    const listen = tauri && tauri.event && typeof tauri.event.listen === 'function' ? tauri.event.listen : null;
-    const invoke = tauri && typeof tauri.invoke === 'function' ? tauri.invoke : null;
-    if (!listen && !invoke) return { installed: false, reason: 'no-tauri-channel' };
-    serverStatusFeedInstalled = true;
-    if (listen) {
-      void (async () => {
-        try { await listen(SERVER_STATUS_EVENT, (ev) => notifyServerStatus(ev?.payload)); }
-        catch { /* IPC گوش‌دادن ناموفق — poll تنها کافی است */ }
-      })();
-    }
-    void pollEngineStatusOnce(invoke ?? (async () => null));
-    serverStatusFeedTimer = setInterval(() => void pollEngineStatusOnce(invoke ?? (async () => null)), SERVER_STATUS_POLL_MS);
-    return { installed: true };
-  } catch {
-    return { installed: false, reason: 'unexpected' };
-  }
-}
-
-/** اشتراک شنوندهٔ وضعیت — آخرین وضعیت شناخته‌شده بلافاصله می‌رسد؛ خروجی تابع لغو اشتراک */
-export function subscribeServerStatus(cb) {
-  if (typeof cb !== 'function') return () => {};
-  serverStatusCallbacks.add(cb);
-  if (lastServerStatusPayload) {
-    try { cb(lastServerStatusPayload); } catch { /* نرم */ }
-  }
-  return () => serverStatusCallbacks.delete(cb);
-}
-
-/** آخرین وضعیت پاک‌سازی‌شدهٔ پاکت engine_status — برای رندر نخست کارت (غایب → null) */
-export function lastServerStatus() {
-  return lastServerStatusPayload;
-}
+/* (۱.۲۷.۰۸) پاکت‌سنج unwrapEngineStatus و feed مشترک وضعیت سرور به views/server-pill.js
+   رفت‌اند (خروج از گراف بوت) — همین‌جا از همان ماژول صادر و مصرف می‌شوند. */
 
 /**
  * فاز A — فرمان پوستهٔ میز با گارد کامل (engine_restart / open_data_dir / …):
@@ -1117,14 +1012,6 @@ export async function engineInvoke(command) {
   } catch (err) {
     return { ok: false, reason: err?.message != null ? String(err.message) : String(err ?? 'خطای نامشخص') };
   }
-}
-
-/** بازنشانی feed — فقط آزمون */
-export function resetServerStatusFeedForTests() {
-  serverStatusFeedInstalled = false;
-  if (serverStatusFeedTimer) { clearInterval(serverStatusFeedTimer); serverStatusFeedTimer = null; }
-  serverStatusCallbacks.clear();
-  lastServerStatusPayload = null;
 }
 
 /* ── فاز B — قرارداد «اتصال ابری» (سند §۲-۵؛ هم‌گامی دوسویهٔ میز↔ابر instance-sync) ────────
