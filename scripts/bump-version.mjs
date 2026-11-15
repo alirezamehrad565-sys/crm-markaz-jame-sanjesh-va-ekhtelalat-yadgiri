@@ -28,6 +28,7 @@ const files = [
   'src/__tests__/front-ux-pro-max.test.ts',
   'package.json',
   'package-lock.json',
+  'public/sw.js', // سوورکر ریشه — گیت «هم‌نسخه‌ای انتشار» (۱.۲۵.۰۱) نسخهٔ نسخهٔ آن را پین کرده
   'desktop/src-tauri/tauri.conf.json',
   'desktop/src-tauri/Cargo.toml',
   'desktop/src-tauri/resources/engine/public/sw.js',
