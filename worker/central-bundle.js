@@ -23756,7 +23756,7 @@ function createAuditWriter(db, opts) {
 __name(createAuditWriter, "createAuditWriter");
 
 // src/core/version.ts
-var APP_VERSION = "1.27.7";
+var APP_VERSION = "1.27.8";
 var NODE_MIN_VERSION = "1.26.0";
 
 // src/application/rum/pure.ts
@@ -25194,7 +25194,7 @@ function createInstanceSyncApp(deps) {
     if (body.device_id !== deviceId) {
       return c.json({ error: "DEVICE_MISMATCH", message: "device_id \u0628\u062F\u0646\u0647 \u0628\u0627 \u0647\u062F\u0631 X-Device-Id \u0647\u0645\u200C\u062E\u0648\u0627\u0646 \u0646\u06CC\u0633\u062A" }, 400);
     }
-    const result = await push(db, body.device_id, body.tables);
+    const result = await push(db, body.device_id, { tables: body.tables });
     return c.json({ data: result }, 200);
   });
   return app;
