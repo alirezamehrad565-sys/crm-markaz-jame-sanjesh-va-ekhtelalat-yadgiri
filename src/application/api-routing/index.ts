@@ -16,6 +16,7 @@ import { createConflictEngine } from '@domain/conflict-engine';
 import type { ConflictEngine } from '@domain/conflict-engine';
 import { createAppointmentService, registerRoutes as appointmentRoutes } from '@domain/appointment-core';
 import type { AppointmentService } from '@domain/appointment-core';
+import { createAssessmentBlockService, registerAssessmentBlockRoutes } from '@domain/assessment-blocks'; // ۱.۲۷.۱۴ — بلوک نوبت سنجش (خواست کارفرما)
 import { createAttendanceService, registerRoutes as attendanceRoutes } from '@domain/attendance';
 import type { AttendanceService } from '@domain/attendance';
 import { createStaffAttendanceService, registerStaffAttendanceRoutes as staffAttendanceRoutes } from '@domain/attendance';
@@ -752,6 +753,9 @@ export function createApp(deps: AppDeps): AppHono {
   app.get('/api/me', (c) => c.json({ data: c.get('authContext') }, 200));
 
   appointmentRoutes(app, services.appointments);
+  // ۱.۲۷.۱۴ — بلوک نوبت سنجش: GET همهٔ احرازشده‌ها (سایهٔ تقویم) + POST/DELETE فقط مدیر؛
+  // سدِ سختِ ثبت/جابه‌جایی داخل سرویس نوبت (assertNoAssessmentBlockInRange) است
+  registerAssessmentBlockRoutes(app, createAssessmentBlockService({ db: services.db, audit: services.audit, logger: services.logger }));
   attendanceRoutes(app, services.attendance);
   staffAttendanceRoutes(app, services.staffAttendance); //: حضور و غیاب همکاران
   registerWorkingDayRoutes(app, services.workingDay); //: بورد روز کاری

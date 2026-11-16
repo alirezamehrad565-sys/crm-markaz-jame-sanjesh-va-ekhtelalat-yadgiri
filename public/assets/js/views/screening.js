@@ -1,4 +1,5 @@
 import { api, qs } from '../api.js';
+import { csvRow, downloadCsv } from '../csv-rtl.js'; // ۱.۲۷.۱۴ — خروجی CSV راست‌چین جدولی (خواست کارفرما)
 import {
   fa,
   tehranTodayYmd,
@@ -908,6 +909,11 @@ function buildEntriesTable(entries) {
         key: 'creator',
         label: 'ثبت‌کننده',
         render: (e) => el('span', { class: 'cell-sub' }, e.creatorName ?? '—')
+      },
+      {
+        key: 'note',
+        label: 'جزئیات', /* ۱.۲۷.۱۴ — خواست کارفرما: جزئیاتِ ثبت‌شده آخرِ جدول می‌نشیند */
+        render: (e) => el('span', { class: 'cell-sub', style: { whiteSpace: 'pre-wrap' }, title: e.note ?? '' }, e.note ?? '—')
       }
     ],
     rows: entries,
@@ -918,7 +924,9 @@ function buildEntriesTable(entries) {
 /* —— ۱.۲۵.۵۰ — خروجی CSV گزارش مدیر: هر برچسب یک ستون مستقل (جدول محوری).
    ترتیب ستون‌های برچسب: شش برچسب ثابت به ترتیب canonical (فقط آن‌هایی که در بازه حضور دارند)،
    سپس برچسب‌های آزاد به ترتیب بیشترین تکرار. خانهٔ هر ستون برچسب: «✓» اگر ردیف آن برچسب را دارد، وگرنه خالی.
-   ستون‌های تاریخ تولد و نمرهٔ آمادگی تحصیلی هم (در صورت ثبت) کنار ردیف می‌نشینند. —— */
+   ستون‌های تاریخ تولد و نمرهٔ آمادگی تحصیلی هم (در صورت ثبت) کنار ردیف می‌نشینند.
+   ۱.۲۷.۱۴ — خواست کارفرما: خروجی راست‌چین جدولی (csv-rtl: BOM + RLM روی سلول متنی؛ سلول
+   عددی عدد می‌ماند) و ستون «جزئیات» — همان note فرم ثبت سنجش — به‌عنوان آخرین ستون. —— */
 function exportCsv(entries, range) {
   const present = new Set();
   const counts = new Map();
@@ -942,7 +950,8 @@ function exportCsv(entries, range) {
     'ثبت‌کننده',
     'تاریخ تولد',
     'نمره آمادگی تحصیلی',
-    ...tagColumns
+    ...tagColumns,
+    'جزئیات' /* ۱.۲۷.۱۴ — آخرین ستون جدول */
   ];
   const rows = entries.map((e) => [
     e.name,
@@ -951,18 +960,13 @@ function exportCsv(entries, range) {
     e.creatorName ?? '',
     e.birthDate ? formatJalaliNumeric(e.birthDate) : '',
     e.readinessScore === null || e.readinessScore === undefined ? '' : e.readinessScore,
-    ...tagColumns.map((t) => (e.tags.includes(t) ? '✓' : ''))
+    ...tagColumns.map((t) => (e.tags.includes(t) ? '✓' : '')),
+    e.note ?? ''
   ]);
-  const csv = '\uFEFF' + [header, ...rows]
-    .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','))
-    .join('\r\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `sanjesh-${range.from || 'all'}-${range.to || tehranTodayYmd()}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadCsv(`sanjesh-${range.from || 'all'}-${range.to || tehranTodayYmd()}`, [
+    csvRow(header),
+    ...rows.map(csvRow)
+  ]);
   toast('فایل CSV دانلود شد', 'success');
 }
 

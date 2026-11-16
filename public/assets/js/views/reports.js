@@ -1,4 +1,5 @@
 import { api, qs } from '../api.js';
+import { csvRow, downloadCsv } from '../csv-rtl.js'; // ۱.۲۷.۱۴ — خروجی CSV راست‌چین جدولی (خواست کارفرما)
 import { fa, addDaysYmd, formatJalaliNumeric, iranianWeekdayOfYmd, tehranTodayYmd, toJalali, WEEKDAY_NAMES } from '../format.js';
 import { el, icon, skeletonState, errorState, dataTable, emptyState, toast, kpi, KPI_ALERT_RATE, statusBadge, markScrollable } from '../ui.js'; /* ۱.۲۵.۰۵ — kpi/آستانه تک‌منبع · ۱.۲۵.۵۶ — statusBadge برای نقش همکار · B7 — markScrollable */
 import { jalaliDateInput } from '../jalali-picker.js';
@@ -479,33 +480,25 @@ function buildAdvancedBody(adv, pct, days) {
 }
 
 function exportCsv(adv) {
-  const esc = (v) => {
-    const s = String(v ?? '');
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-  };
+  /* ۱.۲۷.۱۴ — خواست کارفرما: خروجی راست‌چین جدولی (csv-rtl: BOM + RLM روی سلول متنی؛
+     سلول عددی عدد می‌ماند) — سه سکشن # هم‌ساخت قبل حفظ شده، همه به‌صورت ردیف جدول. */
   const lines = [];
-  lines.push('# روند هفتگی');
-  lines.push(['هفته (شنبه)', 'جلسات', 'برگزارشده', 'لغوشده', 'نرخ حضور'].map(esc).join(','));
+  lines.push(csvRow(['# روند هفتگی']));
+  lines.push(csvRow(['هفته (شنبه)', 'جلسات', 'برگزارشده', 'لغوشده', 'نرخ حضور']));
   for (const w of adv.weeks) {
-    lines.push([w.weekStart, w.sessions, w.completed, w.cancelled, w.attendanceRate ?? ''].map(esc).join(','));
+    lines.push(csvRow([w.weekStart, w.sessions, w.completed, w.cancelled, w.attendanceRate ?? '']));
   }
   lines.push('');
-  lines.push('# قیف لیست انتظار');
-  lines.push(['کل', 'در صف', 'نوبت‌داده‌شده', 'پذیرش‌شده', 'ردشده', 'عدم حضور', 'لغوشده', 'میانگین انتظار (روز)', 'نرخ تبدیل'].map(esc).join(','));
-  lines.push([adv.waitlist.total, adv.waitlist.open, adv.waitlist.scheduled, adv.waitlist.admitted, adv.waitlist.rejected, adv.waitlist.noShow, adv.waitlist.cancelled, adv.waitlist.avgWaitDays ?? '', adv.waitlist.conversionRate ?? ''].map(esc).join(','));
+  lines.push(csvRow(['# قیف لیست انتظار']));
+  lines.push(csvRow(['کل', 'در صف', 'نوبت‌داده‌شده', 'پذیرش‌شده', 'ردشده', 'عدم حضور', 'لغوشده', 'میانگین انتظار (روز)', 'نرخ تبدیل']));
+  lines.push(csvRow([adv.waitlist.total, adv.waitlist.open, adv.waitlist.scheduled, adv.waitlist.admitted, adv.waitlist.rejected, adv.waitlist.noShow, adv.waitlist.cancelled, adv.waitlist.avgWaitDays ?? '', adv.waitlist.conversionRate ?? '']));
   lines.push('');
-  lines.push('# پوشش‌ها');
-  lines.push(['پوشش گزارش پرونده', adv.assessments.withAny, adv.assessments.activeStudents, adv.assessments.coverageRate ?? ''].map(esc).join(','));
-  lines.push(['پوشش گزارش جلسه', adv.sessionNotes.withNote, adv.sessionNotes.sessions, adv.sessionNotes.coverageRate ?? ''].map(esc).join(','));
-  lines.push(['مصوبات کمیسیون', adv.committee.approved, adv.committee.itemsTotal, adv.committee.approvalRate ?? ''].map(esc).join(','));
+  lines.push(csvRow(['# پوشش‌ها']));
+  lines.push(csvRow(['پوشش گزارش پرونده', adv.assessments.withAny, adv.assessments.activeStudents, adv.assessments.coverageRate ?? '']));
+  lines.push(csvRow(['پوشش گزارش جلسه', adv.sessionNotes.withNote, adv.sessionNotes.sessions, adv.sessionNotes.coverageRate ?? '']));
+  lines.push(csvRow(['مصوبات کمیسیون', adv.committee.approved, adv.committee.itemsTotal, adv.committee.approvalRate ?? '']));
 
-  const blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `advanced-report-${adv.from}_${adv.to}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadCsv(`advanced-report-${adv.from}_${adv.to}`, lines);
   toast('فایل CSV دانلود شد', 'success');
 }
 
@@ -712,17 +705,15 @@ function buildAttendanceBody(model) {
 }
 
 function exportAttendanceCsv(model) {
-  const esc = (v) => {
-    const s = String(v ?? '');
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-  };
+  /* ۱.۲۷.۱۴ — خواست کارفرما: خروجی راست‌چین جدولی (csv-rtl: BOM + RLM روی سلول متنی؛
+     سلول عددی/نشانهٔ خالی دست‌نخورده) — ساختار دفتر روزبه‌روز + راهنما هم‌ساخت قبل. */
   const lines = [];
-  lines.push(`# دفتر حضور و غیاب همکاران — از ${formatJalaliNumeric(model.from)} تا ${formatJalaliNumeric(model.to)}`);
-  lines.push(['همکار', 'نقش', 'روزهای کاری', ...model.days.map((d) => jalaliTick(d)), 'حاضر', 'تأخیر', 'غایب', 'مرخصی', 'بیماری', 'ثبت‌نشده'].map(esc).join(','));
+  lines.push(csvRow([`# دفتر حضور و غیاب همکاران — از ${formatJalaliNumeric(model.from)} تا ${formatJalaliNumeric(model.to)}`]));
+  lines.push(csvRow(['همکار', 'نقش', 'روزهای کاری', ...model.days.map((d) => jalaliTick(d)), 'حاضر', 'تأخیر', 'غایب', 'مرخصی', 'بیماری', 'ثبت‌نشده']));
   for (const p of model.people) {
     /* ۱.۲۵.۵۷ — ستون روزها: فقط روزهای کاریِ خودِ همکار مقدار دارد؛ روزِ غیرِکاری خالی می‌ماند */
     const dayMark = new Map(p.days.map((d, i) => [d, p.marks[i]]));
-    lines.push([
+    lines.push(csvRow([
       p.name,
       STAFF_ROLE_FA[p.role] ?? p.role,
       p.days.length,
@@ -732,17 +723,11 @@ function exportAttendanceCsv(model) {
         return st ? (STAFF_ATT_SYM[st] ?? st) : '—';
       }),
       p.counts.present, p.counts.late, p.counts.absent, p.counts.leave, p.counts.sick, p.counts.unmarked
-    ].map(esc).join(','));
+    ]));
   }
   lines.push('');
-  lines.push('# راهنما: ✓ حاضر · ت تأخیر · غ غایب · م مرخصی · ب بیماری · — ثبت‌نشده · سلول خالی = روزِ غیرِکاریِ آن همکار');
+  lines.push(csvRow(['# راهنما: ✓ حاضر · ت تأخیر · غ غایب · م مرخصی · ب بیماری · — ثبت‌نشده · سلول خالی = روزِ غیرِکاریِ آن همکار']));
 
-  const blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `staff-attendance-${model.from}_${model.to}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadCsv(`staff-attendance-${model.from}_${model.to}`, lines);
   toast('فایل CSV دانلود شد', 'success');
 }

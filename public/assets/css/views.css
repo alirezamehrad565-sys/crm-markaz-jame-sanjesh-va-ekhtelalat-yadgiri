@@ -249,6 +249,35 @@
 }
 .grid-day.is-today .grid-off { opacity: 0.55; }
 
+/* ۱.۲۷.۱۴ — سایهٔ بلوک نوبت سنجش (رزرو مدیر): راه‌راه کهربایی متمایز از ساعت غیرکاری؛
+   روی سلول‌ها قابل‌دیدن است و کلیک/درگ همکار با پیام فارسی به سد سرور می‌رسد */
+.grid-assess {
+  position: absolute;
+  inset-inline: 0;
+  background: repeating-linear-gradient(
+    -45deg,
+    color-mix(in srgb, var(--warn) 22%, transparent) 0 6px,
+    transparent 6px 12px
+  );
+  border-block: 1px dashed color-mix(in srgb, var(--warn) 55%, transparent);
+  pointer-events: none;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow: hidden;
+}
+.grid-assess__label {
+  margin-top: 2px;
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+  color: color-mix(in srgb, var(--warn) 85%, var(--text-1));
+  background: color-mix(in srgb, var(--surface-1) 78%, transparent);
+  border-radius: 4px;
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
 .grid-appt {
   position: absolute;
   inset-inline: 4px;
