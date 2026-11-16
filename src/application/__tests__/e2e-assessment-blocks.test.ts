@@ -1,8 +1,9 @@
-// آزمون‌های بلوک نوبت سنجش (۱.۲۵.۷۶ — خواست کارفرما):
+// آزمون‌های بلوک نوبت سنجش (۱.۲۵.۷۶/۷۷ — خواست کارفرما):
 // GET همهٔ احرازشده‌ها · POST/DELETE فقط-مدیر · سد سخت ثبت/جابه‌جایی نوبت در بازهٔ سنجش
-// (درمانگر ۴۰۰ پیام فارسی «سنجش») · معافیت مدیر · آزاد شدن بازه پس از حذف
+// (۴۰۰ پیام فارسی «سنجش») · ۱.۲۵.۷۷: سد بر پایهٔ «درمانگرِ درگیر» و برای همهٔ نقش‌ها حتی
+// مدیر؛ بلوک بدون فهرست = سدِ زمانی برای درمانگر/منشی · آزاد شدن بازه پس از حذف
 import { describe, it, expect, beforeAll } from 'vitest';
-import { createTestApp, Api, asRole, createStudent, apptBody, ALI_ID } from '../../test/harness';
+import { createTestApp, Api, asRole, createStudent, apptBody, ALI_ID, MARYAM_ID } from '../../test/harness';
 import { tehranTodayYmd, tehranMinuteWindow, addDaysYmd } from '@core/shared';
 
 let manager: Api;
@@ -87,13 +88,57 @@ describe('بلوک نوبت سنجش — RBAC و قرارداد', () => {
     expect((await t.post('/api/appointments', apptBody(ALI_ID, win.start, 60, [st.id]))).status).toBe(201);
   });
 
-  it('G6: مدیر معاف است — جلسهٔ خودِ سنجش را می‌تواند نوبت‌گذاری کند', async () => {
+  it('G6: سدِ درمانگرِ درگیر برای همهٔ نقش‌ها — مدیر هم ۴۰۰ می‌گیرد (۱.۲۵.۷۷ خواست کارفرما)', async () => {
     const A = createTestApp();
     const m = await asRole(A, 'manager');
     await m.post('/api/assessment-blocks', { date: D, start_minute: 600, end_minute: 720, therapist_ids: [ALI_ID] });
     const st = await createStudent(m);
     const win = tehranMinuteWindow(D, 630, 690); // کاملاً درون بازه
-    expect((await m.post('/api/appointments', apptBody(ALI_ID, win.start, 60, [st.id]))).status).toBe(201);
+    const res = await m.post('/api/appointments', apptBody(ALI_ID, win.start, 60, [st.id]));
+    expect(res.status).toBe(400);
+    expect(errMessageOf(res)).toContain('سنجش');
+  });
+
+  it('G6b: درمانگرِ غیردرگیر در همان بازه آزاد است — ثبت توسط مدیر ۲۰۱ (۱.۲۵.۷۷)', async () => {
+    const A = createTestApp();
+    const m = await asRole(A, 'manager');
+    await m.post('/api/assessment-blocks', { date: D, start_minute: 600, end_minute: 720, therapist_ids: [ALI_ID] });
+    const st = await createStudent(m);
+    const win = tehranMinuteWindow(D, 630, 690); // کاملاً درون بازه
+    expect((await m.post('/api/appointments', apptBody(MARYAM_ID, win.start, 60, [st.id]))).status).toBe(201);
+  });
+
+  it('G10: منشی برای درمانگرِ درگیر ۴۰۰ و برای غیردرگیر ۲۰۱ (۱.۲۵.۷۷)', async () => {
+    const A = createTestApp();
+    const m = await asRole(A, 'manager');
+    const s = await asRole(A, 'secretary');
+    const st = await createStudent(m);
+    await m.post('/api/assessment-blocks', { date: D, start_minute: 600, end_minute: 720, therapist_ids: [ALI_ID] });
+    const win = tehranMinuteWindow(D, 630, 690); // کاملاً درون بازه
+    const blocked = await s.post('/api/appointments', apptBody(ALI_ID, win.start, 60, [st.id]));
+    expect(blocked.status).toBe(400);
+    expect(errMessageOf(blocked)).toContain('سنجش');
+    expect((await s.post('/api/appointments', apptBody(MARYAM_ID, win.start, 60, [st.id]))).status).toBe(201);
+  });
+
+  it('G11: کپی هفته — نوبتِ درمانگرِ درگیر به درون بازهٔ سنجش کپی نمی‌شود (تداخل assessment_block) (۱.۲۵.۷۷)', async () => {
+    const A = createTestApp();
+    const m = await asRole(A, 'manager');
+    const st = await createStudent(m);
+    const srcMonday = '2030-01-07'; // دوشنبه
+    const tgtMonday = '2030-01-14'; // دوشنبهٔ بعد
+    const srcWin = tehranMinuteWindow(srcMonday, 570, 630); // ۰۹:۳۰–۱۰:۳۰ تهران
+    expect((await m.post('/api/appointments', apptBody(ALI_ID, srcWin.start, 60, [st.id]))).status).toBe(201);
+    expect((await m.post('/api/appointments', apptBody(MARYAM_ID, srcWin.start, 60, [st.id]))).status).toBe(201);
+    // بازهٔ سنجش دوشنبهٔ هدف، همان ساعت — فقط علی درگیر است
+    await m.post('/api/assessment-blocks', { date: tgtMonday, start_minute: 570, end_minute: 690, therapist_ids: [ALI_ID] });
+    const copy = await m.post('/api/appointments/copy-week', { source_monday: srcMonday, target_monday: tgtMonday });
+    expect(copy.status).toBe(200);
+    const result = (copy.body as { data: { copied: number; conflicts: Array<{ type: string; staffId: string }> } }).data;
+    expect(result.copied).toBe(1); // مریم — بدون بلوک — کپی شده است
+    expect(result.conflicts).toHaveLength(1);
+    expect(result.conflicts[0].type).toBe('assessment_block');
+    expect(result.conflicts[0].staffId).toBe(ALI_ID);
   });
 
   it('G7: جابه‌جایی نوبتِ موجودِ درمانگر به درون بازه — ۴۰۰', async () => {

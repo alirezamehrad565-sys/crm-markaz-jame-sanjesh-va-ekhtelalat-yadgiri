@@ -115,10 +115,17 @@ const state = {
   blocks: [] // ۱.۲۵.۷۶ — بلوک‌های نوبت سنجش (رزرو مدیر): [{id, date, startMinute, endMinute, therapistIds, note}]
 };
 
-/* ۱.۲۵.۷۶ — آیا این سلول درون بازهٔ رزرو سنجش است؟ (گارد کلیک/درگ سلول برای همکاران؛
-   سدِ نهایی سمت سرور است — assertNoAssessmentBlockInRange — این فقط پیش‌بازخورد UX است) */
-function isBlockedMinute(ymd, minute) {
-  return state.blocks.some((b) => b.date === ymd && minute >= b.startMinute && minute < b.endMinute);
+/* ۱.۲۵.۷۷ — آیا این دقیقه برای «این درمانگر» بسته است؟ گارد نمایشی کلیک/درگ/فرم؛ سدِ نهایی
+   سمت سرور است (findAssessmentBlockConflict — هم‌قرارداد با آن). بلوک با فهرست درمانگر →
+   فقط نوبتِ همان درمانگرها سد می‌شود و برای همهٔ نقش‌ها حتی مدیر (خواست کارفرما)؛ بلوک بدون
+   فهرست = سدِ زمانیِ کل بازه برای همکاران (مدیر/ناظر معاف — رفتار ۱.۲۵.۷۶). */
+function isBlockedMinute(ymd, minute, staffId) {
+  const role = session.user?.role;
+  return state.blocks.some((b) => {
+    if (b.date !== ymd || minute < b.startMinute || minute >= b.endMinute) return false;
+    if (b.therapistIds.length > 0) return !!staffId && b.therapistIds.includes(staffId);
+    return role !== 'manager' && role !== 'supervisor';
+  });
 }
 
 /* ۱.۲۵.۷۶ — بارگیری دوبارهٔ بلوک‌ها پس از ثبت/حذف (خرابی نرم — سایهٔ تقویم خالی می‌ماند) */
@@ -583,9 +590,10 @@ function buildDayColumn(ymd, items, isToday, opts = {}) {
       /* S2-01: سلول عمداً فوکوس‌پذیر نیست — صدها تاب‌استاپ می‌ساخت؛ ساخت نوبت با کیبورد از دکمهٔ «نوبت تازه» نوار ابزار و کارت‌های فوکوس‌پذیر می‌گذرد */
     });
     cell.addEventListener('click', () => {
-      // ۱.۲۵.۷۶ — پیش‌بازخورد بلوک سنجش: همکار قبل از باز شدن فرم می‌فهمد بازه رزرو است
+      // ۱.۲۵.۷۷ — پیش‌بازخورد بلوک سنجش بر پایهٔ درمانگرِ درگیر (staffFilter = هدف در نمای
+      // تک-همکار)؛ در نمای همه‌همکاران، فرمِ ثبت سد را می‌گذارد
       // (سدِ نهایی سمت سرور است — همین گارد فقط پیام فارسیِ فوری می‌دهد)
-      if (!isSupervisorRole() && isBlockedMinute(ymd, m)) {
+      if (!isSupervisorRole() && isBlockedMinute(ymd, m, state.staffFilter)) {
         toast('این بازه برای «سنجش» رزرو شده است — ثبت نوبت در این زمان ممکن نیست؛ با مدیر هماهنگ کنید', 'warning');
         return;
       }
@@ -701,7 +709,7 @@ function apptOnGrid(a, ymd, opts = {}) {
   });
   if (!isSupervisorRole()) { /* ۱.۲۵.۰۱ — ناظر: شنونده‌های درگ کلاً سوار نمی‌شوند */
     card.addEventListener('dragstart', (e) => {
-      e.dataTransfer.setData('text/plain', JSON.stringify({ id: a.id, version: a.version, fromYmd: ymd }));
+      e.dataTransfer.setData('text/plain', JSON.stringify({ id: a.id, version: a.version, fromYmd: ymd, staffId: a.staffId })); /* ۱.۲۵.۷۷ — staffId برای گارد بلوک سنجش */
       e.dataTransfer.effectAllowed = 'move';
       card.classList.add('is-dragging');
     });
@@ -712,11 +720,6 @@ function apptOnGrid(a, ymd, opts = {}) {
 }
 
 async function handleDrop(e, targetYmd, cellMinute, cell) {
-  // ۱.۲۵.۷۶ — پیش‌بازخورد بلوک سنجش در درگ: پیام فوری؛ سد نهایی سمت سرور می‌ماند
-  if (!isSupervisorRole() && isBlockedMinute(targetYmd, cellMinute)) {
-    toast('این بازه برای «سنجش» رزرو شده است — جابه‌جایی نوبت به این زمان ممکن نیست؛ با مدیر هماهنگ کنید', 'warning');
-    return;
-  }
   let payload;
   try {
     payload = JSON.parse(e.dataTransfer.getData('text/plain'));
@@ -724,6 +727,11 @@ async function handleDrop(e, targetYmd, cellMinute, cell) {
     return;
   }
   if (!payload?.id) return;
+  // ۱.۲۵.۷۷ — پیش‌بازخورد بلوک سنجش بر پایهٔ درمانگرِ درگیرِ نوبتِ کشیده‌شده؛ سد نهایی سمت سرور می‌ماند
+  if (isBlockedMinute(targetYmd, cellMinute, payload.staffId)) {
+    toast('این بازه برای «سنجش» رزرو شده است — جابه‌جایی نوبت به این زمان ممکن نیست؛ با مدیر هماهنگ کنید', 'warning');
+    return;
+  }
 
   const rect = cell.getBoundingClientRect();
   const offsetY = e.clientY - rect.top;
@@ -1037,6 +1045,12 @@ function openCreateModal(container, preset = {}) {
       const startAt = tehranYmdMinuteToIso(ymd, startMinute);
       const endAt = tehranYmdMinuteToIso(ymd, startMinute + Number(values.duration));
       state.lastDuration = Number(values.duration);
+      // ۱.۲۵.۷۷ — سد نمایشی بلوک سنجش: نوبتِ درمانگرِ درگیر در بازهٔ رزرو ثبت نمی‌شود (سد نهایی سرور است)
+      for (let m = startMinute; m < startMinute + Number(values.duration); m += 15) {
+        if (isBlockedMinute(ymd, m, values.staff_id)) {
+          throw new Error('این بازه برای «سنجش» رزرو شده است — نوبت‌گیریِ درمانگرِ درگیر در این زمان ممکن نیست');
+        }
+      }
       const res = await api.post('/api/appointments', {
         staff_id: values.staff_id,
         start_at: startAt,
@@ -1433,6 +1447,12 @@ function openEditModal(a, currentDuration, preset = {}) {
       const newStartMinute = timeToMinute(values.start);
       const newStartAt = tehranYmdMinuteToIso(newYmd, newStartMinute);
       const newDuration = Number(values.duration);
+      // ۱.۲۵.۷۷ — سد نمایشی بلوک سنجش در ویرایش: پنجرهٔ تازهٔ نوبتِ درمانگرِ درگیر نباید در بازه بیفتد
+      for (let m = newStartMinute; m < newStartMinute + newDuration; m += 15) {
+        if (isBlockedMinute(newYmd, m, a.staffId)) {
+          throw new Error('این بازه برای «سنجش» رزرو شده است — نوبت‌گیریِ درمانگرِ درگیر در این زمان ممکن نیست');
+        }
+      }
       const oldStartMinute = timeToMinute(tehranTimeOfIso(a.startAt));
       const oldYmd = isoToYmd(a.startAt);
       const oldDuration = Math.round((Date.parse(a.endAt) - Date.parse(a.startAt)) / 60000);

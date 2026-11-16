@@ -39,11 +39,13 @@ export interface AuthContext {
 }
 
 export interface ConflictWarning {
-  type: 'overlap';
-  appointmentId: string;
+  /* ۱.۲۵.۷۷ — نوع سوم «assessment_block»: نوبت به بازهٔ رزرو سنجش برخورد (بلوک سنجش نوبتِ
+     موجودِ روی مبدأ ندارد — فیلدهای existing/appointmentId فقط برای overlap پر می‌شوند) */
+  type: 'overlap' | 'assessment_block';
+  appointmentId?: string;
   staffId: string;
-  existingStartAt: string;
-  existingEndAt: string;
+  existingStartAt?: string;
+  existingEndAt?: string;
   proposedStartAt: string;
   proposedEndAt: string;
 }

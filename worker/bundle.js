@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.76";
+var APP_VERSION = "1.25.77";
 
 // node_modules/zod/v4/classic/external.js
 var external_exports = {};
@@ -26170,11 +26170,10 @@ function tehranYmdsSpanned(startAt, endAt) {
   return [...out];
 }
 __name(tehranYmdsSpanned, "tehranYmdsSpanned");
-async function assertNoAssessmentBlockInRange(db, window, actor) {
-  if (actor.role === "manager" || actor.role === "supervisor") return;
+async function findAssessmentBlockConflict(db, window, targetStaffId) {
   const startMs = Date.parse(window.startAt);
   const endMs = Date.parse(window.endAt);
-  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return;
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return null;
   for (const ymd of tehranYmdsSpanned(window.startAt, window.endAt)) {
     const rows = await db.query(
       "SELECT * FROM assessment_blocks WHERE block_date = ? AND deleted_at IS NULL",
@@ -26184,13 +26183,33 @@ async function assertNoAssessmentBlockInRange(db, window, actor) {
       const blockWin = tehranMinuteWindow(ymd, row.start_minute, row.end_minute);
       const blockStart = Date.parse(blockWin.start);
       const blockEnd = Date.parse(blockWin.end);
-      if (blockStart < endMs && blockEnd > startMs) {
-        throw new ValidationError(
-          `\u0627\u06CC\u0646 \u0628\u0627\u0632\u0647 \u0628\u0631\u0627\u06CC \xAB\u0633\u0646\u062C\u0634\xBB \u0631\u0632\u0631\u0648 \u0634\u062F\u0647 \u0627\u0633\u062A (${minuteToLabel(row.start_minute)} \u062A\u0627 ${minuteToLabel(row.end_minute)}) \u2014 \u062B\u0628\u062A \u06CC\u0627 \u062C\u0627\u0628\u0647\u200C\u062C\u0627\u06CC\u06CC \u0646\u0648\u0628\u062A \u062F\u0631 \u0627\u06CC\u0646 \u0632\u0645\u0627\u0646 \u0645\u0645\u06A9\u0646 \u0646\u06CC\u0633\u062A\u061B \u0628\u0627 \u0645\u062F\u06CC\u0631 \u0647\u0645\u0627\u0647\u0646\u06AF \u06A9\u0646\u06CC\u062F.`
-        );
+      if (blockStart >= endMs || blockEnd <= startMs) continue;
+      const block = rowToBlock(row);
+      if (block.therapistIds.length > 0) {
+        if (targetStaffId && block.therapistIds.includes(targetStaffId)) {
+          return { block, kind: "involved" };
+        }
+        continue;
       }
+      return { block, kind: "time_only" };
     }
   }
+  return null;
+}
+__name(findAssessmentBlockConflict, "findAssessmentBlockConflict");
+async function assertNoAssessmentBlockInRange(db, window, actor, targetStaffId) {
+  const hit = await findAssessmentBlockConflict(db, window, targetStaffId);
+  if (!hit) return;
+  const when = `(${minuteToLabel(hit.block.startMinute)} \u062A\u0627 ${minuteToLabel(hit.block.endMinute)})`;
+  if (hit.kind === "involved") {
+    throw new ValidationError(
+      `\u0627\u06CC\u0646 \u0628\u0627\u0632\u0647 \u0628\u0631\u0627\u06CC \xAB\u0633\u0646\u062C\u0634\xBB \u0631\u0632\u0631\u0648 \u0634\u062F\u0647 \u0627\u0633\u062A ${when} \u2014 \u0646\u0648\u0628\u062A\u200C\u06AF\u06CC\u0631\u06CC\u0650 \u062F\u0631\u0645\u0627\u0646\u06AF\u0631\u0650 \u062F\u0631\u06AF\u06CC\u0631 \u062F\u0631 \u0627\u06CC\u0646 \u0632\u0645\u0627\u0646 \u0645\u0645\u06A9\u0646 \u0646\u06CC\u0633\u062A.`
+    );
+  }
+  if (actor.role === "manager" || actor.role === "supervisor") return;
+  throw new ValidationError(
+    `\u0627\u06CC\u0646 \u0628\u0627\u0632\u0647 \u0628\u0631\u0627\u06CC \xAB\u0633\u0646\u062C\u0634\xBB \u0631\u0632\u0631\u0648 \u0634\u062F\u0647 \u0627\u0633\u062A ${when} \u2014 \u062B\u0628\u062A \u06CC\u0627 \u062C\u0627\u0628\u0647\u200C\u062C\u0627\u06CC\u06CC \u0646\u0648\u0628\u062A \u062F\u0631 \u0627\u06CC\u0646 \u0632\u0645\u0627\u0646 \u0645\u0645\u06A9\u0646 \u0646\u06CC\u0633\u062A\u061B \u0628\u0627 \u0645\u062F\u06CC\u0631 \u0647\u0645\u0627\u0647\u0646\u06AF \u06A9\u0646\u06CC\u062F.`
+  );
 }
 __name(assertNoAssessmentBlockInRange, "assertNoAssessmentBlockInRange");
 function createAssessmentBlockService(deps) {
@@ -26462,6 +26481,16 @@ async function copyWeek(ctx) {
       });
       continue;
     }
+    const blockHit = await findAssessmentBlockConflict(db, { startAt: newStart, endAt: newEnd }, row.staff_id);
+    if (blockHit && (blockHit.kind === "involved" || actor.role !== "manager" && actor.role !== "supervisor")) {
+      conflicts.push({
+        type: "assessment_block",
+        staffId: row.staff_id,
+        proposedStartAt: newStart,
+        proposedEndAt: newEnd
+      });
+      continue;
+    }
     toCopy.push({ row, startAt: newStart, endAt: newEnd });
   }
   if (input2.dryRun) {
@@ -26700,7 +26729,7 @@ function createAppointmentService(deps) {
       }
       assertAppointmentScope(actor, input2.staffId);
       await assertStudentsInScope(tx, actor, input2.students.map((s) => s.studentId));
-      await assertNoAssessmentBlockInRange(tx, { startAt: input2.startAt, endAt: input2.endAt }, actor);
+      await assertNoAssessmentBlockInRange(tx, { startAt: input2.startAt, endAt: input2.endAt }, actor, input2.staffId);
       const id = crypto.randomUUID();
       await tx.execute(
         `INSERT INTO appointments (id, staff_id, start_at, end_at, status, session_type, note, version, created_by)
@@ -26803,7 +26832,7 @@ function createAppointmentService(deps) {
       const durationMin = (Date.parse(current.endAt) - Date.parse(current.startAt)) / 6e4;
       const newEndAt = addMinutes(newStartAt, durationMin);
       await db.transaction(async (tx) => {
-        await assertNoAssessmentBlockInRange(tx, { startAt: newStartAt, endAt: newEndAt }, actor);
+        await assertNoAssessmentBlockInRange(tx, { startAt: newStartAt, endAt: newEndAt }, actor, current.staffId);
         await tx.execute(
           `UPDATE appointments SET start_at = ?, end_at = ?, version = version + 1, updated_at = datetime('now') WHERE id = ? AND version = ?`,
           [newStartAt, newEndAt, id, version2]
@@ -26846,7 +26875,7 @@ function createAppointmentService(deps) {
         throw new ValidationError("\u0632\u0645\u0627\u0646 \u067E\u0627\u06CC\u0627\u0646 \u0628\u0627\u06CC\u062F \u0631\u0648\u06CC \u0634\u0628\u06A9\u0647 \u06F1\u06F5 \u062F\u0642\u06CC\u0642\u0647\u200C\u0627\u06CC \u0628\u0627\u0634\u062F");
       }
       await db.transaction(async (tx) => {
-        await assertNoAssessmentBlockInRange(tx, { startAt: current.startAt, endAt: newEndAt }, actor);
+        await assertNoAssessmentBlockInRange(tx, { startAt: current.startAt, endAt: newEndAt }, actor, current.staffId);
         await tx.execute(
           `UPDATE appointments SET end_at = ?, version = version + 1, updated_at = datetime('now') WHERE id = ? AND version = ?`,
           [newEndAt, id, version2]

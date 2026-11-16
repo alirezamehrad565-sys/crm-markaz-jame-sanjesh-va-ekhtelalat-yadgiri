@@ -1,9 +1,10 @@
 // src/domain/assessment-blocks/service.ts — ۱.۲۵.۷۶ بلوک نوبت سنجش (خواست کارفرما)
 //
-// مدیر بازهٔ «از ساعت — تا ساعت» برای سنجش رزرو می‌کند و درمانگران درگیر را ثبت می‌کند؛
-// در این بازه همکاران (درمانگر/منشی) نمی‌توانند نوبت ثبت یا جابه‌جا کنند. سدِ سخت همین‌جاست:
-// assertNoAssessmentBlockInRange در create/move/resize سرویس نوبت صدا زده می‌شود و
-// ValidationError فارسی می‌دهد. مدیر/ناظر معاف‌اند — خودشان جلسهٔ سنجش را نوبت‌گذاری می‌کنند.
+// مدیر بازهٔ «از ساعت — تا ساعت» برای سنجش رزرو می‌کند و درمانگران درگیر را ثبت می‌کند.
+// ۱.۲۵.۷۷ — خواست کارفرما: بلوک با فهرست درمانگر، فقط نوبتِ همان درمانگرها را سد می‌کند و
+// این سد برای «هیچ نقشی» رد شدنی نیست — حتی مدیر/ناظر (سنجشِ خودِ مدیر، خودِ همین بلوک است).
+// بلوک بدون فهرست = سدِ زمانیِ کل بازه برای درمانگر/منشی (رفتار ۱.۲۵.۷۶؛ مدیر/ناظر معاف).
+// سدِ سخت در create/move/resize سرویس نوبت و نرم (تداخل شمرده‌شده) در کپی هفته اعمال می‌شود.
 //
 // تداخل با آفست ثابت +3:30 تهران محاسبه می‌شود (tehranMinuteWindow — سامانه DST ندارد،
 // هم‌قرارداد tehranDayRange). بلوک‌ها فقط برای «آیندهٔ ثبت» سد هستند؛ نوبت‌های موجود دست‌نخورده
@@ -40,7 +41,7 @@ function rowToBlock(r: BlockRow): AssessmentBlock {
     const parsed: unknown = JSON.parse(r.therapist_ids ?? '[]');
     if (Array.isArray(parsed)) therapistIds = parsed.filter((x): x is string => typeof x === 'string');
   } catch {
-    therapistIds = []; // ردیف خراب → خالی؛ سدِ زمانی به therapist_ids وابسته نیست
+    therapistIds = []; // ردیف خراب → خالی؛ سد به حالت «بدون فهرست» می‌افتد (سدِ زمانی محافظه‌کارانه)
   }
   return {
     id: r.id,
@@ -65,20 +66,22 @@ function tehranYmdsSpanned(startAt: string, endAt: string): string[] {
   return [...out];
 }
 
+/** نخستین تداخل بلوک سنجش با پنجرهٔ پیشنهادی — خالص برای مصرف سدِ سخت و کپی هفته */
+export type AssessmentBlockConflictHit = { block: AssessmentBlock; kind: 'involved' | 'time_only' };
+
 /**
- * سد سخت بلوک سنجش — در create/move/resize سرویس نوبت صدا زده می‌شود. اگر پنجرهٔ پیشنهادی
- * با هر بلوک فعال هم‌پوشانی داشت برای درمانگر/منشی ValidationError فارسی می‌دهد؛ مدیر/ناظر
- * معاف‌اند. پنجرهٔ نامعتبر/ناقص → بی‌صدا رد می‌شود (سد هرگز مسیر عادی را نمی‌شکند).
+ * جست‌وجوی تداخل پنجرهٔ پیشنهادی با بلوک‌های فعال سنجش (۱.۲۵.۷۷ — خواست کارفرما):
+ * بلوک با فهرست درمانگر → فقط وقتی «درمانگرِ درگیر» همان هدفِ نوبت است تداخل می‌شمارد (kind: involved)؛
+ * بلوک بدون فهرست → تداخلِ زمانیِ کل بازه (kind: time_only). پنجرهٔ نامعتبر/ناقص → null.
  */
-export async function assertNoAssessmentBlockInRange(
+export async function findAssessmentBlockConflict(
   db: DbClient,
   window: { startAt: string; endAt: string },
-  actor: AuthContext
-): Promise<void> {
-  if (actor.role === 'manager' || actor.role === 'supervisor') return;
+  targetStaffId?: string
+): Promise<AssessmentBlockConflictHit | null> {
   const startMs = Date.parse(window.startAt);
   const endMs = Date.parse(window.endAt);
-  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return;
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return null;
   for (const ymd of tehranYmdsSpanned(window.startAt, window.endAt)) {
     const rows = await db.query<BlockRow>(
       'SELECT * FROM assessment_blocks WHERE block_date = ? AND deleted_at IS NULL',
@@ -88,13 +91,43 @@ export async function assertNoAssessmentBlockInRange(
       const blockWin = tehranMinuteWindow(ymd, row.start_minute, row.end_minute);
       const blockStart = Date.parse(blockWin.start);
       const blockEnd = Date.parse(blockWin.end);
-      if (blockStart < endMs && blockEnd > startMs) {
-        throw new ValidationError(
-          `این بازه برای «سنجش» رزرو شده است (${minuteToLabel(row.start_minute)} تا ${minuteToLabel(row.end_minute)}) — ثبت یا جابه‌جایی نوبت در این زمان ممکن نیست؛ با مدیر هماهنگ کنید.`
-        );
+      if (blockStart >= endMs || blockEnd <= startMs) continue;
+      const block = rowToBlock(row);
+      if (block.therapistIds.length > 0) {
+        if (targetStaffId && block.therapistIds.includes(targetStaffId)) {
+          return { block, kind: 'involved' };
+        }
+        continue; // درمانگرِ غیردرگیر — آزاد (خواست کارفرمای ۱.۲۵.۷۷)
       }
+      return { block, kind: 'time_only' };
     }
   }
+  return null;
+}
+
+/**
+ * سد سخت بلوک سنجش — در create/move/resize سرویس نوبت صدا زده می‌شود. نوبتِ درمانگرِ درگیرِ
+ * بازهٔ سنجش برای هیچ نقشی ثبت/جابه‌جا/کش‌دادنی نیست (۱.۲۵.۷۷ — خواست کارفرما)؛ بلوک بدون
+ * فهرست برای درمانگر/منشی سدِ زمانی است و مدیر/ناظر معاف‌اند. پیام فارسی ValidationError.
+ */
+export async function assertNoAssessmentBlockInRange(
+  db: DbClient,
+  window: { startAt: string; endAt: string },
+  actor: AuthContext,
+  targetStaffId?: string
+): Promise<void> {
+  const hit = await findAssessmentBlockConflict(db, window, targetStaffId);
+  if (!hit) return;
+  const when = `(${minuteToLabel(hit.block.startMinute)} تا ${minuteToLabel(hit.block.endMinute)})`;
+  if (hit.kind === 'involved') {
+    throw new ValidationError(
+      `این بازه برای «سنجش» رزرو شده است ${when} — نوبت‌گیریِ درمانگرِ درگیر در این زمان ممکن نیست.`
+    );
+  }
+  if (actor.role === 'manager' || actor.role === 'supervisor') return; // معافیت جلسهٔ خودِ سنجش (بلوک بدون فهرست)
+  throw new ValidationError(
+    `این بازه برای «سنجش» رزرو شده است ${when} — ثبت یا جابه‌جایی نوبت در این زمان ممکن نیست؛ با مدیر هماهنگ کنید.`
+  );
 }
 
 export function createAssessmentBlockService(deps: AssessmentBlockDeps) {

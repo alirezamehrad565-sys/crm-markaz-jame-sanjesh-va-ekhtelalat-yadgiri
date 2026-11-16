@@ -1,5 +1,5 @@
 import { api, qs } from '../api.js';
-import { csvRow, downloadCsv } from '../csv-rtl.js'; // ۱.۲۵.۷۶ — خروجی CSV راست‌چین جدولی (خواست کارفرما)
+import { csvTable, downloadCsv } from '../csv-rtl.js'; // ۱.۲۵.۷۶/۷۷ — خروجی CSV راست‌چین جدولی + هم‌عرضی ستون‌ها (خواست کارفرما)
 import {
   fa,
   tehranTodayYmd,
@@ -963,10 +963,10 @@ function exportCsv(entries, range) {
     ...tagColumns.map((t) => (e.tags.includes(t) ? '✓' : '')),
     e.note ?? ''
   ]);
-  downloadCsv(`sanjesh-${range.from || 'all'}-${range.to || tehranTodayYmd()}`, [
-    csvRow(header),
-    ...rows.map(csvRow)
-  ]);
+  downloadCsv(`sanjesh-${range.from || 'all'}-${range.to || tehranTodayYmd()}`, csvTable([
+    header,
+    ...rows
+  ]));
   toast('فایل CSV دانلود شد', 'success');
 }
 

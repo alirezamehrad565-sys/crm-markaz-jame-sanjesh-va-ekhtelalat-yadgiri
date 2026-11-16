@@ -209,9 +209,9 @@ export function createAppointmentService(deps: AppointmentDeps): AppointmentServ
 
       assertAppointmentScope(actor, input.staffId);
       await assertStudentsInScope(tx, actor, input.students.map((s) => s.studentId));
-      // ۱.۲۵.۷۶ — سد سخت بلوک سنجش (خواست کارفرما): در بازهٔ رزرو سنجش، ثبت نوبت برای
-      // درمانگر/منشی ممکن نیست (مدیر/ناظر معاف — خودشان جلسهٔ سنجش را نوبت‌گذاری می‌کنند)
-      await assertNoAssessmentBlockInRange(tx, { startAt: input.startAt, endAt: input.endAt }, actor);
+      // ۱.۲۵.۷۷ — سد سخت بلوک سنجش (خواست کارفرما): نوبتِ درمانگرِ درگیر برای هیچ نقشی ثبت
+      // نمی‌شود؛ بلوک بدون فهرست درمانگر = سدِ زمانی برای درمانگر/منشی (مدیر/ناظر معاف)
+      await assertNoAssessmentBlockInRange(tx, { startAt: input.startAt, endAt: input.endAt }, actor, input.staffId);
 
       const id = crypto.randomUUID();
       await tx.execute(
@@ -326,8 +326,8 @@ export function createAppointmentService(deps: AppointmentDeps): AppointmentServ
       const newEndAt = addMinutes(newStartAt, durationMin);
 
       await db.transaction(async (tx) => {
-        // ۱.۲۵.۷۶ — سد سخت بلوک سنجش: جابه‌جایی نوبتِ درمانگر/منشی به درون بازهٔ سنجش ممنوع است
-        await assertNoAssessmentBlockInRange(tx, { startAt: newStartAt, endAt: newEndAt }, actor);
+        // ۱.۲۵.۷۷ — سد سخت بلوک سنجش: جابه‌جایی نوبتِ درمانگرِ درگیر به درون بازهٔ سنجش ممنوع است
+        await assertNoAssessmentBlockInRange(tx, { startAt: newStartAt, endAt: newEndAt }, actor, current.staffId);
         await tx.execute(
           `UPDATE appointments SET start_at = ?, end_at = ?, version = version + 1, updated_at = datetime('now') WHERE id = ? AND version = ?`,
           [newStartAt, newEndAt, id, version]
@@ -376,8 +376,8 @@ export function createAppointmentService(deps: AppointmentDeps): AppointmentServ
       }
 
       await db.transaction(async (tx) => {
-        // ۱.۲۵.۷۶ — سد سخت بلوک سنجش: کشیدن پایان نوبت به درون بازهٔ سنجش ممنوع است
-        await assertNoAssessmentBlockInRange(tx, { startAt: current.startAt, endAt: newEndAt }, actor);
+        // ۱.۲۵.۷۷ — سد سخت بلوک سنجش: کشیدن پایان نوبتِ درمانگرِ درگیر به درون بازهٔ سنجش ممنوع است
+        await assertNoAssessmentBlockInRange(tx, { startAt: current.startAt, endAt: newEndAt }, actor, current.staffId);
         await tx.execute(
           `UPDATE appointments SET end_at = ?, version = version + 1, updated_at = datetime('now') WHERE id = ? AND version = ?`,
           [newEndAt, id, version]
