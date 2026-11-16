@@ -1979,7 +1979,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.75";
+var APP_VERSION = "1.25.76";
 
 // node_modules/zod/v4/classic/external.js
 var external_exports = {};
@@ -22691,6 +22691,16 @@ var NewAppointmentSchema = external_exports.object({
     message: `\u0645\u062F\u062A \u0646\u0648\u0628\u062A \u0628\u0627\u06CC\u062F \u0628\u06CC\u0646 ${MIN_APPOINTMENT_MINUTES} \u062A\u0627 ${MAX_APPOINTMENT_MINUTES} \u062F\u0642\u06CC\u0642\u0647 \u0628\u0627\u0634\u062F`
   }
 );
+var AssessmentBlockCreateSchema = external_exports.object({
+  date: external_exports.string().regex(/^\d{4}-\d{2}-\d{2}$/, "\u062A\u0627\u0631\u06CC\u062E \u0628\u0627\u06CC\u062F \u0634\u06A9\u0644 YYYY-MM-DD \u0628\u0627\u0634\u062F"),
+  start_minute: external_exports.number().int().min(0).max(1439),
+  end_minute: external_exports.number().int().min(1).max(1440),
+  therapist_ids: external_exports.array(UuidSchema).max(30).default([]),
+  note: external_exports.string().max(500).nullish()
+}).refine((v) => v.end_minute > v.start_minute, {
+  message: "\u067E\u0627\u06CC\u0627\u0646 \u0628\u0627\u0632\u0647\u0654 \u0633\u0646\u062C\u0634 \u0628\u0627\u06CC\u062F \u0628\u0639\u062F \u0627\u0632 \u0634\u0631\u0648\u0639 \u0622\u0646 \u0628\u0627\u0634\u062F",
+  path: ["end_minute"]
+});
 var UpdateAppointmentSchema = external_exports.object({
   note: external_exports.string().max(2e3).nullish(),
   version: external_exports.number().int().positive()

@@ -26,8 +26,12 @@ describe('گیت فرانت ۱.۲۵.۵۶ — خواسته‌های چهارگا�
 
   test('خروجی CSV حضور: BOM + دفتر روزبه‌روز + نام فایل staff-attendance + نمادهای وضعیت', () => {
     expect(reports).toMatch(/function exportAttendanceCsv\(model\)/);
-    expect(reports).toContain("new Blob(['\\uFEFF' + lines.join('\\r\\n')]");
-    expect(reports).toContain('`staff-attendance-${model.from}_${model.to}.csv`');
+    // ۱.۲۷.۱۴ — BOM و پسوند .csv در helper مشترک csv-rtl.js متمرکز شد (راست‌چین جدولی)
+    expect(reports).toMatch(/from '\.\.\/csv-rtl\.js'/);
+    expect(reports).toContain('downloadCsv(`staff-attendance-${model.from}_${model.to}`');
+    const csvRtl = read('csv-rtl.js'); // read() خودش پیشوند js/ می‌گذارد
+    expect(csvRtl).toContain("'\\uFEFF' + lines.join('\\r\\n')");
+    expect(csvRtl).toContain("endsWith('.csv')");
     expect(reports).toMatch(/# دفتر حضور و غیاب همکاران/);
     /* هم‌واژگان ماژول حضور همکاران (working-day) */
     expect(reports).toMatch(/present:\s*'حاضر',\s*absent:\s*'غایب',\s*late:\s*'تأخیر',\s*leave:\s*'مرخصی',\s*sick:\s*'بیماری'/);

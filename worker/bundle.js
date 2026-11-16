@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.75";
+var APP_VERSION = "1.25.76";
 
 // node_modules/zod/v4/classic/external.js
 var external_exports = {};
@@ -22586,6 +22586,20 @@ function tehranTimeLabel(isoUtc) {
   return `${pad2(tehran.getUTCHours())}:${pad2(tehran.getUTCMinutes())}`;
 }
 __name(tehranTimeLabel, "tehranTimeLabel");
+function tehranMinuteWindow(ymd, fromMinute, toMinute) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) {
+    throw new Error(`INVALID_DATE: ${ymd}`);
+  }
+  if (!Number.isFinite(fromMinute) || !Number.isFinite(toMinute) || fromMinute < 0 || toMinute <= 0 || toMinute > 1440 || toMinute <= fromMinute) {
+    throw new Error(`INVALID_MINUTE_RANGE: ${fromMinute}-${toMinute}`);
+  }
+  const base = Date.parse(`${ymd}T00:00:00.000Z`) - TEHRAN_OFFSET_MS;
+  return {
+    start: new Date(base + fromMinute * 6e4).toISOString(),
+    end: new Date(base + toMinute * 6e4).toISOString()
+  };
+}
+__name(tehranMinuteWindow, "tehranMinuteWindow");
 function addDaysYmd(ymd, days) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) {
     throw new Error(`INVALID_DATE: ${ymd}`);
@@ -22708,6 +22722,10 @@ function faDigits(input2) {
   return String(input2).replace(/\d/g, (d) => fa2[Number(d)]);
 }
 __name(faDigits, "faDigits");
+function minuteToLabel(minute) {
+  return `${pad2(Math.floor(minute / 60))}:${pad2(minute % 60)}`;
+}
+__name(minuteToLabel, "minuteToLabel");
 function jalaliLabel(ymd) {
   const [gy, gm, gd] = ymd.split("-").map(Number);
   const j = toJalaliParts(gy, gm, gd);
@@ -22764,6 +22782,16 @@ var NewAppointmentSchema = external_exports.object({
     message: `\u0645\u062F\u062A \u0646\u0648\u0628\u062A \u0628\u0627\u06CC\u062F \u0628\u06CC\u0646 ${MIN_APPOINTMENT_MINUTES} \u062A\u0627 ${MAX_APPOINTMENT_MINUTES} \u062F\u0642\u06CC\u0642\u0647 \u0628\u0627\u0634\u062F`
   }
 );
+var AssessmentBlockCreateSchema = external_exports.object({
+  date: external_exports.string().regex(/^\d{4}-\d{2}-\d{2}$/, "\u062A\u0627\u0631\u06CC\u062E \u0628\u0627\u06CC\u062F \u0634\u06A9\u0644 YYYY-MM-DD \u0628\u0627\u0634\u062F"),
+  start_minute: external_exports.number().int().min(0).max(1439),
+  end_minute: external_exports.number().int().min(1).max(1440),
+  therapist_ids: external_exports.array(UuidSchema).max(30).default([]),
+  note: external_exports.string().max(500).nullish()
+}).refine((v) => v.end_minute > v.start_minute, {
+  message: "\u067E\u0627\u06CC\u0627\u0646 \u0628\u0627\u0632\u0647\u0654 \u0633\u0646\u062C\u0634 \u0628\u0627\u06CC\u062F \u0628\u0639\u062F \u0627\u0632 \u0634\u0631\u0648\u0639 \u0622\u0646 \u0628\u0627\u0634\u062F",
+  path: ["end_minute"]
+});
 var UpdateAppointmentSchema = external_exports.object({
   note: external_exports.string().max(2e3).nullish(),
   version: external_exports.number().int().positive()
@@ -26110,6 +26138,173 @@ function inPlaceholders(count) {
 }
 __name(inPlaceholders, "inPlaceholders");
 
+// src/domain/assessment-blocks/service.ts
+var newId = /* @__PURE__ */ __name(() => crypto.randomUUID(), "newId");
+function rowToBlock(r) {
+  let therapistIds = [];
+  try {
+    const parsed = JSON.parse(r.therapist_ids ?? "[]");
+    if (Array.isArray(parsed)) therapistIds = parsed.filter((x) => typeof x === "string");
+  } catch {
+    therapistIds = [];
+  }
+  return {
+    id: r.id,
+    date: r.block_date,
+    startMinute: r.start_minute,
+    endMinute: r.end_minute,
+    therapistIds,
+    note: r.note ?? null,
+    version: r.version,
+    createdBy: r.created_by ?? null,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at
+  };
+}
+__name(rowToBlock, "rowToBlock");
+function tehranYmdsSpanned(startAt, endAt) {
+  const out = /* @__PURE__ */ new Set();
+  out.add(tehranYmdOf(startAt));
+  const innerEnd = new Date(Math.max(Date.parse(endAt) - 1, Date.parse(startAt))).toISOString();
+  out.add(tehranYmdOf(innerEnd));
+  return [...out];
+}
+__name(tehranYmdsSpanned, "tehranYmdsSpanned");
+async function assertNoAssessmentBlockInRange(db, window, actor) {
+  if (actor.role === "manager" || actor.role === "supervisor") return;
+  const startMs = Date.parse(window.startAt);
+  const endMs = Date.parse(window.endAt);
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return;
+  for (const ymd of tehranYmdsSpanned(window.startAt, window.endAt)) {
+    const rows = await db.query(
+      "SELECT * FROM assessment_blocks WHERE block_date = ? AND deleted_at IS NULL",
+      [ymd]
+    );
+    for (const row of rows) {
+      const blockWin = tehranMinuteWindow(ymd, row.start_minute, row.end_minute);
+      const blockStart = Date.parse(blockWin.start);
+      const blockEnd = Date.parse(blockWin.end);
+      if (blockStart < endMs && blockEnd > startMs) {
+        throw new ValidationError(
+          `\u0627\u06CC\u0646 \u0628\u0627\u0632\u0647 \u0628\u0631\u0627\u06CC \xAB\u0633\u0646\u062C\u0634\xBB \u0631\u0632\u0631\u0648 \u0634\u062F\u0647 \u0627\u0633\u062A (${minuteToLabel(row.start_minute)} \u062A\u0627 ${minuteToLabel(row.end_minute)}) \u2014 \u062B\u0628\u062A \u06CC\u0627 \u062C\u0627\u0628\u0647\u200C\u062C\u0627\u06CC\u06CC \u0646\u0648\u0628\u062A \u062F\u0631 \u0627\u06CC\u0646 \u0632\u0645\u0627\u0646 \u0645\u0645\u06A9\u0646 \u0646\u06CC\u0633\u062A\u061B \u0628\u0627 \u0645\u062F\u06CC\u0631 \u0647\u0645\u0627\u0647\u0646\u06AF \u06A9\u0646\u06CC\u062F.`
+        );
+      }
+    }
+  }
+}
+__name(assertNoAssessmentBlockInRange, "assertNoAssessmentBlockInRange");
+function createAssessmentBlockService(deps) {
+  const { db, audit, logger } = deps;
+  const service = {
+    async create(input2, actor) {
+      if (input2.endMinute <= input2.startMinute) {
+        throw new ValidationError("\u067E\u0627\u06CC\u0627\u0646 \u0628\u0627\u0632\u0647\u0654 \u0633\u0646\u062C\u0634 \u0628\u0627\u06CC\u062F \u0628\u0639\u062F \u0627\u0632 \u0634\u0631\u0648\u0639 \u0622\u0646 \u0628\u0627\u0634\u062F");
+      }
+      if (input2.therapistIds.length > 0) {
+        let knownCount = 0;
+        for (const chunk of inParamChunks(input2.therapistIds)) {
+          const known = await db.query(
+            `SELECT id FROM staff WHERE id IN (${inPlaceholders(chunk.length)})`,
+            chunk
+          );
+          knownCount += known.length;
+        }
+        if (knownCount !== input2.therapistIds.length) {
+          throw new ValidationError("\u06CC\u06A9 \u06CC\u0627 \u0686\u0646\u062F \u062F\u0631\u0645\u0627\u0646\u06AF\u0631\u0650 \u062F\u0631\u06AF\u06CC\u0631 \u062F\u0631 \u0641\u0647\u0631\u0633\u062A \u0647\u0645\u06A9\u0627\u0631\u0627\u0646 \u0646\u06CC\u0633\u062A");
+        }
+      }
+      const id = newId();
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      await db.execute(
+        `INSERT INTO assessment_blocks (id, block_date, start_minute, end_minute, therapist_ids, note, version, created_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
+        [id, input2.date, input2.startMinute, input2.endMinute, JSON.stringify(input2.therapistIds), input2.note ?? null, actor.staffId, now, now]
+      );
+      await audit.log({
+        actorId: actor.staffId,
+        action: "assessment_block.create",
+        resourceType: "assessment_block",
+        resourceId: id,
+        changes: {
+          date: { from: null, to: input2.date },
+          window: { from: null, to: `${minuteToLabel(input2.startMinute)}-${minuteToLabel(input2.endMinute)}` },
+          therapist_ids: { from: null, to: input2.therapistIds }
+        }
+      });
+      logger.child("assessment-blocks").info("block.created", { date: input2.date });
+      return {
+        id,
+        date: input2.date,
+        startMinute: input2.startMinute,
+        endMinute: input2.endMinute,
+        therapistIds: input2.therapistIds,
+        note: input2.note ?? null,
+        version: 1,
+        createdBy: actor.staffId,
+        createdAt: now,
+        updatedAt: now
+      };
+    },
+    async list(from, to) {
+      const rows = await db.query(
+        "SELECT * FROM assessment_blocks WHERE deleted_at IS NULL AND block_date >= ? AND block_date <= ? ORDER BY block_date, start_minute",
+        [from ?? "0000-01-01", to ?? "9999-12-31"]
+      );
+      return rows.map(rowToBlock);
+    },
+    async remove(id, actor) {
+      const row = await db.queryOne("SELECT * FROM assessment_blocks WHERE id = ? AND deleted_at IS NULL", [id]);
+      if (!row) throw new NotFoundError("\u0628\u0644\u0648\u06A9 \u0633\u0646\u062C\u0634");
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      await db.execute(
+        `UPDATE assessment_blocks SET deleted_at = ?, updated_at = ?, version = version + 1 WHERE id = ?`,
+        [now, now, id]
+      );
+      await audit.log({
+        actorId: actor.staffId,
+        action: "assessment_block.remove",
+        resourceType: "assessment_block",
+        resourceId: id,
+        changes: {
+          date: { from: row.block_date, to: row.block_date }
+        }
+      });
+    }
+  };
+  return service;
+}
+__name(createAssessmentBlockService, "createAssessmentBlockService");
+
+// src/domain/assessment-blocks/routes.ts
+function registerAssessmentBlockRoutes(app, service) {
+  app.get("/api/assessment-blocks", async (c) => {
+    getAuthContext(c);
+    const items = await service.list(c.req.query("from") || void 0, c.req.query("to") || void 0);
+    return c.json({ data: items }, 200);
+  });
+  app.post("/api/assessment-blocks", requireRole("manager"), async (c) => {
+    const actor = getAuthContext(c);
+    const body = AssessmentBlockCreateSchema.parse(await c.req.json());
+    const block = await service.create(
+      {
+        date: body.date,
+        startMinute: body.start_minute,
+        endMinute: body.end_minute,
+        therapistIds: body.therapist_ids,
+        note: body.note ?? null
+      },
+      actor
+    );
+    return c.json({ data: block }, 201);
+  });
+  app.delete("/api/assessment-blocks/:id", requireRole("manager"), async (c) => {
+    const actor = getAuthContext(c);
+    await service.remove(c.req.param("id"), actor);
+    return c.body(null, 204);
+  });
+}
+__name(registerAssessmentBlockRoutes, "registerAssessmentBlockRoutes");
+
 // src/domain/appointment-core/repository.ts
 function rowToAppointment(row, students) {
   return {
@@ -26274,15 +26469,15 @@ async function copyWeek(ctx) {
   }
   await db.transaction(async (tx) => {
     for (const item of toCopy) {
-      const newId = crypto.randomUUID();
+      const newId2 = crypto.randomUUID();
       await tx.execute(
         `INSERT INTO appointments (id, staff_id, start_at, end_at, status, session_type, note, version, batch_id, created_by)
          VALUES (?, ?, ?, ?, 'scheduled', ?, ?, 1, ?, ?)`,
-        [newId, item.row.staff_id, item.startAt, item.endAt, item.row.session_type, item.row.note, batchId, actor.staffId]
+        [newId2, item.row.staff_id, item.startAt, item.endAt, item.row.session_type, item.row.note, batchId, actor.staffId]
       );
       for (const s of studentsByAppt.get(item.row.id) ?? []) {
         await tx.execute(`INSERT INTO appointment_students (appointment_id, student_id, facet_id) VALUES (?, ?, ?)`, [
-          newId,
+          newId2,
           s.student_id,
           s.facet_id
         ]);
@@ -26505,6 +26700,7 @@ function createAppointmentService(deps) {
       }
       assertAppointmentScope(actor, input2.staffId);
       await assertStudentsInScope(tx, actor, input2.students.map((s) => s.studentId));
+      await assertNoAssessmentBlockInRange(tx, { startAt: input2.startAt, endAt: input2.endAt }, actor);
       const id = crypto.randomUUID();
       await tx.execute(
         `INSERT INTO appointments (id, staff_id, start_at, end_at, status, session_type, note, version, created_by)
@@ -26607,6 +26803,7 @@ function createAppointmentService(deps) {
       const durationMin = (Date.parse(current.endAt) - Date.parse(current.startAt)) / 6e4;
       const newEndAt = addMinutes(newStartAt, durationMin);
       await db.transaction(async (tx) => {
+        await assertNoAssessmentBlockInRange(tx, { startAt: newStartAt, endAt: newEndAt }, actor);
         await tx.execute(
           `UPDATE appointments SET start_at = ?, end_at = ?, version = version + 1, updated_at = datetime('now') WHERE id = ? AND version = ?`,
           [newStartAt, newEndAt, id, version2]
@@ -26649,6 +26846,7 @@ function createAppointmentService(deps) {
         throw new ValidationError("\u0632\u0645\u0627\u0646 \u067E\u0627\u06CC\u0627\u0646 \u0628\u0627\u06CC\u062F \u0631\u0648\u06CC \u0634\u0628\u06A9\u0647 \u06F1\u06F5 \u062F\u0642\u06CC\u0642\u0647\u200C\u0627\u06CC \u0628\u0627\u0634\u062F");
       }
       await db.transaction(async (tx) => {
+        await assertNoAssessmentBlockInRange(tx, { startAt: current.startAt, endAt: newEndAt }, actor);
         await tx.execute(
           `UPDATE appointments SET end_at = ?, version = version + 1, updated_at = datetime('now') WHERE id = ? AND version = ?`,
           [newEndAt, id, version2]
@@ -28822,20 +29020,20 @@ function createStudentProfileService(deps) {
       const entryId = await db.transaction(async (tx) => {
         const student = await tx.queryOne(`SELECT id FROM students WHERE id = ?`, [studentId]);
         if (!student) throw new NotFoundError("\u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632");
-        const newId = crypto.randomUUID();
+        const newId2 = crypto.randomUUID();
         await tx.execute(
           `INSERT INTO student_education_history (id, student_id, study_year, school_name, level, notes, created_by, created_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%d %H:%M:%f','now'))`,
-          [newId, studentId, input2.studyYear, input2.schoolName ?? null, input2.level ?? null, input2.notes ?? null, actor.staffId ?? null]
+          [newId2, studentId, input2.studyYear, input2.schoolName ?? null, input2.level ?? null, input2.notes ?? null, actor.staffId ?? null]
         );
         await audit.logInTransaction(tx, {
           actorId: actor.staffId,
           action: "student.education_history.add",
           resourceType: "student",
           resourceId: studentId,
-          changes: { entry_id: { from: null, to: newId }, study_year: { from: null, to: input2.studyYear } }
+          changes: { entry_id: { from: null, to: newId2 }, study_year: { from: null, to: input2.studyYear } }
         });
-        return newId;
+        return newId2;
       });
       logger.child("student").info("student.education_history.added", { studentId });
       const row = await db.queryOne(
@@ -28889,19 +29087,19 @@ function createStudentProfileService(deps) {
           [studentId, name]
         );
         if (dup) throw new ConflictError("\u0627\u06CC\u0646 \u0645\u0639\u0644\u0645 \u0642\u0628\u0644\u0627\u064B \u0631\u0648\u06CC \u067E\u0631\u0648\u0646\u062F\u0647 \u062B\u0628\u062A \u0634\u062F\u0647 \u0627\u0633\u062A");
-        const newId = crypto.randomUUID();
+        const newId2 = crypto.randomUUID();
         await tx.execute(
           `INSERT INTO student_teachers (id, student_id, name, class_label, contact) VALUES (?, ?, ?, ?, ?)`,
-          [newId, studentId, name, classLabel, contact]
+          [newId2, studentId, name, classLabel, contact]
         );
         await audit.logInTransaction(tx, {
           actorId: actor.staffId,
           action: "student.teachers.add",
           resourceType: "student",
           resourceId: studentId,
-          changes: { teacher_id: { from: null, to: newId }, name: { from: null, to: name } }
+          changes: { teacher_id: { from: null, to: newId2 }, name: { from: null, to: name } }
         });
-        return newId;
+        return newId2;
       });
       logger.child("student").info("student.teachers.added", { studentId });
       const row = await db.queryOne(
@@ -72900,6 +73098,7 @@ function createApp(deps) {
   registerLogoutRoute(app, { audit: services.audit, logger: services.logger });
   app.get("/api/me", (c) => c.json({ data: c.get("authContext") }, 200));
   registerRoutes(app, services.appointments);
+  registerAssessmentBlockRoutes(app, createAssessmentBlockService({ db: services.db, audit: services.audit, logger: services.logger }));
   registerRoutes2(app, services.attendance);
   registerStaffAttendanceRoutes(app, services.staffAttendance);
   registerWorkingDayRoutes(app, services.workingDay);

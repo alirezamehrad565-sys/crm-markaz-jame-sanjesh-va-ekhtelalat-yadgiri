@@ -47,8 +47,9 @@ describe('گیت ۱.۲۵.۰۱ — نماها برای ناظر اکشن نوشت
   test('تقویم نوبت‌ها: کلیک سلول و درگ کارت برای ناظر خاموش', () => {
     const appt = read('views/appointments.js');
     expect(appt).toMatch(/function isSupervisorRole\(\)/);
-    // کلیک روی سلول → ساخت نوبت؛ برای ناظر no-op
-    expect(appt).toMatch(/cell\.addEventListener\('click', \(\) => \{ if \(!isSupervisorRole\(\)\) openQuickCreate/);
+    // کلیک روی سلول → ساخت نوبت؛ برای ناظر no-op (۱.۲۵.۷۶: گارد بلوک سنجش هم قبلش می‌آید)
+    expect(appt).toMatch(/cell\.addEventListener\('click', \(\) => \{\s*\/\/ ۱\.۲۵\.۷۶/);
+    expect(appt).toMatch(/if \(!isSupervisorRole\(\)\) openQuickCreate\(ymd, m\);/);
     // درگ کارت: attribute و شنونده‌ها شرطی
     expect(appt).toMatch(/draggable: isSupervisorRole\(\) \? null : 'true'/);
     expect(appt).toMatch(/if \(!isSupervisorRole\(\)\) \{[\s\S]*?card\.addEventListener\('dragstart'/);
@@ -84,7 +85,7 @@ describe('گیت ۱.۲۵.۰۱ — نماها برای ناظر اکشن نوشت
 });
 
 describe('گیت ۱.۲۵.۰۱ — هم‌نسخه‌ای انتشار', () => {
-  const APP_VERSION = '1.25.75';
+  const APP_VERSION = '1.25.76'; // با بامپ ۱.۲۵.۷۶ به‌روز می‌شود
 
   test('version.ts = ?v=های index.html = VERSION سوورکر', () => {
     expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toContain(`APP_VERSION = '${APP_VERSION}'`);

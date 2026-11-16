@@ -96,6 +96,10 @@ async function probe(bundlePath) {
     let norm = text;
     try { norm = JSON.stringify(JSON.parse(text)); } catch { /* متن خام */ }
     norm = norm.replace(/"ts":"[^"]*"/g, '"ts":"<TS>"');
+    // ۱.۲۵.۷۶ — مُهرهای پسونددار هم رفتار نیستند (server_ts در /health، boot_ts در بازی‌ها)؛
+    // بدون این دو، جفت‌پروبِ سالم به‌خاطر چند صد میلی‌ثانیه فاصلهٔ اجرا قرمز کاذب می‌شد
+    norm = norm.replace(/"server_ts":"[^"]*"/g, '"server_ts":"<TS>"');
+    norm = norm.replace(/"boot_ts":"[^"]*"/g, '"boot_ts":"<TS>"');
     // ۱.۲۵.۴۰ — مُهرهای زمانی seed بین دو اجرا فرق می‌کنند؛ رفتار نیستند
     norm = norm.replace(/"createdAt":"[^"]*"/g, '"createdAt":"<TS>"');
     norm = norm.replace(/"started_at":"[^"]*"/g, '"started_at":"<TS>"');
