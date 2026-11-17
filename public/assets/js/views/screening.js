@@ -58,7 +58,8 @@ let state = {
   customTo: '',
   search: '',
   tagFilter: [],
-  editingId: null
+  editingId: null,
+  dailyDay: '' /* ۱.۲۵.۷۸ — روزِ انتخابی تب ثبت: '' = امروز؛ «روز قبل» با هر کلیک عقب‌تر می‌رود (خواست کارفرما: ویرایش سوابق) */
 };
 
 let tabGen = 0; // — گارد نسل تب (الگوی router.js): پاسخِ دیرِ تب کهنه اجازه ندارد بدنهٔ تب تازه را بازنویسی کند
@@ -124,11 +125,16 @@ function normalBadge() {
 async function renderDailyTab(box, container, myGen) {
   box.replaceChildren(skeletonState('table', 5));
   const today = tehranTodayYmd();
+  /* ۱.۲۵.۷۸ — فلوی ویرایش سوابق (خواست کارفرما): «روز قبل» با هر کلیک یک روز عقب می‌رود و
+     ثبت/ویرایش/حذف روی همان روز کار می‌کند — سرور از همیشه dayِ گذشته را می‌پذیرد (قالب معتبر کافی است).
+     «روز بعد» فقط تا امروز جلو می‌رود؛ ثبت سنجش برای آینده معنا ندارد. */
+  const selected = state.dailyDay && /^\d{4}-\d{2}-\d{2}$/.test(state.dailyDay) ? state.dailyDay : today;
+  const isToday = selected === today;
 
   let result, tagSummary;
   try {
     const [r, t] = await Promise.all([
-      api.get(`/api/screening${qs({ from: today, to: today })}`),
+      api.get(`/api/screening${qs({ from: selected, to: selected })}`),
       api.get('/api/screening/tags')
     ]);
     result = r.data;
@@ -315,7 +321,9 @@ async function renderDailyTab(box, container, myGen) {
   const syncComposerMode = () => {
     const editing = Boolean(state.editingId);
     const cur = editing ? entries.find((e) => e.id === state.editingId) : null;
-    headTitle.textContent = editing ? `ویرایش: ${cur?.name ?? ''}` : 'ثبت سریع روز سنجش';
+    headTitle.textContent = editing
+      ? `ویرایش: ${cur?.name ?? ''}`
+      : isToday ? 'ثبت سریع روز سنجش' : `ثبت در روز انتخابی — ${WEEKDAY_NAMES[iranianWeekdayOfYmd(selected)]} ${formatJalaliShort(selected)}`; /* ۱.۲۵.۷۸ */
     submitBtn.replaceChildren(icon(editing ? 'check' : 'plus', 16), editing ? 'ذخیرهٔ تغییرات' : 'ثبت در روز سنجش');
     cancelBtn.style.display = editing ? '' : 'none';
     input.placeholder = editing ? 'نام و فامیل…' : 'نام و فامیل دانش‌آموز… مثلاً: آوا محمدی'; /* H5 */
@@ -394,8 +402,10 @@ async function renderDailyTab(box, container, myGen) {
         ? [emptyState({
             illo: illoScreening, /* ۱.۲۵.۰۵ */
             iconName: 'student',
-            title: 'امروز هنوز کسی ثبت نشده است',
-            hint: 'نام و فامیل را در باکس بالا بنویسید و برچسب بزنید — تمام.'
+            title: isToday ? 'امروز هنوز کسی ثبت نشده است' : 'این روز سنجشی ثبت نشده است', /* ۱.۲۵.۷۸ — روزِ انتخابی */
+            hint: isToday
+              ? 'نام و فامیل را در باکس بالا بنویسید و برچسب بزنید — تمام.'
+              : 'ثبتِ جاافتادهٔ همین روز از فرم بالا ممکن است — فرم روی همین روز کار می‌کند.'
           })]
         : [el('div', { class: 'sanj-rows' }, ...entries.map((e) => rowEl(e)))])
     );
@@ -483,13 +493,13 @@ async function renderDailyTab(box, container, myGen) {
         return;
       }
       if (entries.some((e) => e.name === parsed.name)) {
-        toast(`«${parsed.name}» امروز قبلاً ثبت شده — برای تغییر برچسب‌ها از ویرایش استفاده کنید`, 'warning');
+        toast(`«${parsed.name}» در این روز قبلاً ثبت شده — برای تغییر برچسب‌ها از ویرایش استفاده کنید`, 'warning'); /* ۱.۲۵.۷۸ — روزِ انتخابی */
         return;
       }
       const res = await api.post('/api/screening', {
         name: parsed.name,
         tags,
-        day: today,
+        day: selected, /* ۱.۲۵.۷۸ — ثبت در روزِ انتخابی؛ سوابق روزهای گذشته هم قابل ثبت است */
         birth_date: extra.birthDate,
         readiness_score: extra.readinessScore,
         note: extra.note
@@ -523,7 +533,7 @@ async function renderDailyTab(box, container, myGen) {
 
   const listCard = el('div', { class: 'card', style: { marginTop: 'var(--sp-4)' } },
     el('div', { class: 'card__head' },
-      el('div', { class: 'card__title' }, 'لیست روز سنجش امروز'),
+      el('div', { class: 'card__title' }, isToday ? 'لیست روز سنجش امروز' : `لیست روز سنجش — ${formatJalaliFull(selected)}`), /* ۱.۲۵.۷۸ */
       listCount
     ),
     rowsZone
@@ -548,10 +558,29 @@ async function renderDailyTab(box, container, myGen) {
     )
   );
 
+  /* ۱.۲۵.۷۸ — ناوبری روز ثبت: «روز قبل» (کلیک دوباره = روزِ قبل‌تر) + «روز بعد» تا امروز؛
+     در روزهای گذشته راهنمای ویرایش سوابق زیر نوار می‌آید (اشتباه/جاافتاده همین‌جا اصلاح می‌شود) */
+  const rerenderDay = () => { void renderDailyTab(box, container, ++tabGen); };
+  const dayNav = el('div', { class: 'toolbar', style: { justifyContent: 'center', gap: '10px', marginBottom: 'var(--sp-3)' } },
+    el('button', { class: 'btn btn--ghost btn--sm', 'aria-label': 'رفتن به روز قبل', onclick: () => { state.dailyDay = addDaysYmd(selected, -1); rerenderDay(); } },
+      icon('chevR', 15), 'روز قبل'),
+    el('span', { class: 'cell-main', style: { fontWeight: 700 } },
+      isToday ? 'امروز' : `${WEEKDAY_NAMES[iranianWeekdayOfYmd(selected)]} — ${formatJalaliFull(selected)}`),
+    el('button', {
+      class: 'btn btn--ghost btn--sm',
+      'aria-label': 'رفتن به روز بعد',
+      disabled: isToday ? true : null,
+      onclick: () => { state.dailyDay = addDaysYmd(selected, 1); rerenderDay(); }
+    }, 'روز بعد', icon('chevL', 15)),
+    isToday ? null : el('button', { class: 'btn btn--soft btn--sm', onclick: () => { state.dailyDay = ''; rerenderDay(); } }, 'بازگشت به امروز')
+  );
+  const dayHint = isToday ? null : el('p', { class: 'sanj-hint', style: { textAlign: 'center', margin: '0 0 var(--sp-3)' } },
+    'شما سوابقِ گذشته را مرور می‌کنید — ثبتِ جاافتاده یا اصلاحِ اشتباهِ همین روز از فرم پایین ممکن است.');
+
   composerCard.classList.add('sanj-daily__composer');
   paintCounts();
   paintRows();
-  box.replaceChildren(el('div', { class: 'sanj-daily' }, composerCard, listCard));
+  box.replaceChildren(el('div', {}, dayNav, dayHint, el('div', { class: 'sanj-daily' }, composerCard, listCard)));
   if (state.editingId) input.focus();
 }
 
@@ -776,15 +805,18 @@ async function renderManagerTab(box, container, myGen) {
       )
     );
 
-    const followUps = entries.filter((e) => e.tags.some((t) => REFERRALS.includes(t)));
+    /* ۱.۲۵.۷۸ — خواست کارفرما: کارت پیگیری/«ثبت در لیست انتظار» فقط «ارجاع هوش» را نشان می‌دهد؛
+       ارجاع بینایی/شنوایی (و جسمی‌حرکتی) به متخصصِ خودشان می‌رود و در این کارت فهرست نمی‌شود */
+    const IQ_REFERRAL = 'ارجاع هوش';
+    const followUps = entries.filter((e) => e.tags.includes(IQ_REFERRAL));
     const followCard = el('div', { class: 'card', style: { marginTop: 'var(--sp-4)' } },
       el('div', { class: 'card__head' },
-        el('div', { class: 'card__title' }, 'نیازمند پیگیری (ارجاع تخصصی)'),
+        el('div', { class: 'card__title' }, 'نیازمند پیگیری (ارجاع هوش)'),
         el('span', { class: `badge ${followUps.length > 0 ? 'badge--error' : 'badge--success'}` }, fa(followUps.length))
       ),
       el('div', { class: 'card__body' },
         followUps.length === 0
-          ? emptyState({ iconName: 'check', title: 'در این بازه مورد ارجاعی وجود ندارد', hint: 'موارد ارجاع‌شده به متخصص برای تماس با خانواده اینجا فهرست می‌شوند.' })
+          ? emptyState({ iconName: 'check', title: 'در این بازه مورد ارجاع هوش وجود ندارد', hint: 'نوآموزانِ ارجاع‌شده به آزمون هوش برای تماس با خانواده و ثبت در لیست انتظار مرکز اینجا فهرست می‌شوند.' })
           : el('div', { class: 'sanj-rows' },
               ...followUps.map((e) =>
                 el('div', { class: 'sanj-row' },
@@ -793,7 +825,7 @@ async function renderManagerTab(box, container, myGen) {
                     el('span', { class: 'cell-sub' }, formatJalaliShort(e.day))
                   ),
                   el('div', { class: 'sanj-row__tags' },
-                    e.tags.filter((t) => REFERRALS.includes(t)).map((t) => tagBadge(t))
+                    e.tags.filter((t) => t === IQ_REFERRAL).map((t) => tagBadge(t))
                   ),
                   el('div', { class: 'sanj-row__actions' },
                     el('button', {
@@ -970,7 +1002,14 @@ function exportCsv(entries, range) {
   toast('فایل CSV دانلود شد', 'success');
 }
 
-export async function renderScreening(container) {
+export async function renderScreening(container, ctx = {}) {
+  /* ۱.۲۵.۷۸ — لینک عمیق از ویجت روز کاری: #/screening?day=YYYY-MM-DD → تب ثبت روی همان روز
+     (فلوی ویرایش سوابق کارفرما: از «روز قبل»ِ روز کاری مستقیم به ویرایش آن روز می‌رسد) */
+  const linkDay = ctx?.query?.day;
+  if (linkDay && /^\d{4}-\d{2}-\d{2}$/.test(linkDay)) {
+    state.dailyDay = linkDay;
+    state.tab = 'daily';
+  }
   const head = el('div', { class: 'page-head' },
     el('div', { class: 'page-head__title' }, 'سنجش روزانه'),
     el('span', { class: 'badge badge--neutral', title: 'غربال نوآموزان بدو ورود به دبستان' },
@@ -1058,9 +1097,9 @@ export async function renderScreeningDayWidget(box, ymd) {
       canWrite
         ? el('button', {
             class: 'btn btn--soft btn--sm',
-            title: 'رفتن به ماژول سنجش روزانه',
-            onclick: () => { location.hash = '#/screening'; }
-          }, icon('plus', 14), 'ثبت / مدیریت')
+            title: 'ثبت / ویرایش سوابق همین روز در ماژول سنجش روزانه — روزهای عقب‌تر با «روز قبل»', /* ۱.۲۵.۷۸ */
+            onclick: () => { location.hash = `#/screening?day=${ymd}`; } /* ۱.۲۵.۷۸ — لینک عمیق: تب ثبت روی همین روز باز می‌شود */
+          }, icon('edit', 14), 'ثبت / ویرایش')
         : null
     )
   );

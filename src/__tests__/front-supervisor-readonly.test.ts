@@ -85,7 +85,7 @@ describe('گیت ۱.۲۵.۰۱ — نماها برای ناظر اکشن نوشت
 });
 
 describe('گیت ۱.۲۵.۰۱ — هم‌نسخه‌ای انتشار', () => {
-  const APP_VERSION = '1.25.77'; // با بامپ ۱.۲۵.۷۷ به‌روز می‌شود
+  const APP_VERSION = '1.25.78'; // با بامپ ۱.۲۵.۷۸ به‌روز می‌شود
 
   test('version.ts = ?v=های index.html = VERSION سوورکر', () => {
     expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toContain(`APP_VERSION = '${APP_VERSION}'`);

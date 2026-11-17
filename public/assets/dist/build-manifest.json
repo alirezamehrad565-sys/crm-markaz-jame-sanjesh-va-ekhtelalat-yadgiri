@@ -1,6 +1,6 @@
 {
   "_comment": "مانیفست باندل کلاینت؛ گات بودجه (perf-budget.mjs) از این می‌خواند. فایل ساخته‌شده است — دستی ویرایش نشود.",
-  "boot": "boot.ZTDG3PKS.js",
+  "boot": "boot.OTQWI4QZ.js",
   "bootImports": [
     "chunk.5TPOINOP.js",
     "chunk.3ELOCRLD.js",
@@ -27,9 +27,9 @@
       "role": "lazy"
     },
     {
-      "name": "boot.ZTDG3PKS.js",
+      "name": "boot.OTQWI4QZ.js",
       "raw": 74736,
-      "gz": 24462,
+      "gz": 24465,
       "role": "boot"
     },
     {
@@ -249,9 +249,9 @@
       "role": "lazy"
     },
     {
-      "name": "screening.TO6XHPVP.js",
-      "raw": 24553,
-      "gz": 8286,
+      "name": "screening.UIK7UYQE.js",
+      "raw": 26155,
+      "gz": 8771,
       "role": "lazy"
     },
     {
@@ -297,15 +297,15 @@
       "role": "lazy"
     },
     {
-      "name": "working-day.R3ZKZRPY.js",
+      "name": "working-day.Z3T5GXAD.js",
       "raw": 30956,
-      "gz": 9847,
+      "gz": 9849,
       "role": "lazy"
     }
   ],
   "totals": {
     "files": 49,
-    "raw": 1090139,
-    "gz": 355804
+    "raw": 1091741,
+    "gz": 356294
   }
 }
