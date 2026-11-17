@@ -566,20 +566,28 @@ function buildDayColumn(ymd, items, isToday, opts = {}) {
     col.appendChild(el('div', { class: 'grid-off', style: { top: `${off.top}px`, height: `${off.height}px` } }));
   }
 
-  // ۱.۲۵.۷۶ — سایهٔ بلوک سنجش: بازهٔ رزرو مدیر با راه‌راه کهربایی روی ستونِ روز؛
-  // برچسب درون نوار ساعت را نشان می‌دهد و tooltip جزئیات را
+  /* ۱.۲۵.۷۹ — بازطراحی فلوی نوبت سنجش (خواست کارفرما): هر درمانگرِ درگیر «کارت گرد معمولی»
+     هم‌شکل بقیهٔ کارت‌های تقویم دارد — قابل درگ/دراپ (مدیر) و کلیک → مودال جزئیات با حذف.
+     ردیف بدون درمانگر (سد زمانیِ کل بازه) مثل قبل سایهٔ راه‌راه می‌ماند. */
   for (const b of state.blocks) {
     if (b.date !== ymd) continue;
-    const bs = Math.max(b.startMinute, SCALE.start);
-    const be = Math.min(b.endMinute, SCALE.end);
-    if (be <= bs) continue;
-    col.appendChild(el('div', {
-      class: 'grid-assess',
-      style: { top: `${SCALE.yOf(bs)}px`, height: `${SCALE.span(bs, be)}px` },
-      title: `سنجش ${minuteToLabel(b.startMinute)}–${minuteToLabel(b.endMinute)}${b.note ? ' — ' + b.note : ''}${b.therapistIds.length ? ` · ${fa(b.therapistIds.length)} درمانگر درگیر` : ''}`
-    },
-      el('span', { class: 'grid-assess__label' }, `سنجش ${minuteToLabel(b.startMinute)}–${minuteToLabel(b.endMinute)}`)
-    ));
+    if (b.therapistIds.length === 0) {
+      const bs = Math.max(b.startMinute, SCALE.start);
+      const be = Math.min(b.endMinute, SCALE.end);
+      if (be <= bs) continue;
+      col.appendChild(el('div', {
+        class: 'grid-assess',
+        style: { top: `${SCALE.yOf(bs)}px`, height: `${SCALE.span(bs, be)}px` },
+        title: `سنجش ${minuteToLabel(b.startMinute)}–${minuteToLabel(b.endMinute)}${b.note ? ' — ' + b.note : ''}`
+      },
+        el('span', { class: 'grid-assess__label' }, `سنجش ${minuteToLabel(b.startMinute)}–${minuteToLabel(b.endMinute)}`)
+      ));
+      continue;
+    }
+    for (const sid of b.therapistIds) {
+      if (opts.staff && opts.staff !== sid) continue; // نمای روزانه: کارت در ستونِ همان درمانگر می‌نشیند
+      col.appendChild(assessCardOnGrid(b, sid, ymd, opts));
+    }
   }
 
   for (let m = SCALE.start; m < SCALE.end; m += CELL_MINUTES) {
@@ -719,6 +727,65 @@ function apptOnGrid(a, ymd, opts = {}) {
   return card;
 }
 
+/* ۱.۲۵.۷۹ — کارت نوبت سنجش روی گرید: هم‌شکل و هم‌سایز کارت نوبت عادی (grid-appt) با تن
+   کهرباییِ سنجش و رنگِ همان درمانگر (hueClass) — درگ‌پذیر فقط برای مدیر، کلیک/Enter برای همه
+   → مودال جزئیات. payload درگ با kind: 'assessment-block' از نوبت عادی تفکیک می‌شود. */
+function assessCardOnGrid(b, therapistId, ymd, opts = {}) {
+  const showStaffName = opts.showStaffName !== false;
+  const isManager = session.user?.role === 'manager';
+  const top = Math.max(0, SCALE.yOf(Math.max(b.startMinute, SCALE.start)));
+  const height = Math.max(28, SCALE.span(b.startMinute, b.endMinute) - 3);
+  const tall = height >= 56;
+  const titleLines = [
+    `نوبت سنجش — ${staffName(therapistId)}`,
+    `${minuteToLabel(b.startMinute)} تا ${minuteToLabel(b.endMinute)}`,
+    ...(b.note ? [b.note] : [])
+  ];
+
+  const card = el(
+    'div',
+    {
+      class: `grid-appt grid-appt--assess ${hueClass(therapistId)}`,
+      style: { top: `${top}px`, height: `${height}px` },
+      draggable: isManager ? 'true' : null,
+      dataset: { blockId: b.id, version: String(b.version) }, /* blockId — از نوبت عادی تفکیک؛ helpers کارت نوبت آن را نمی‌بینند */
+      title: titleLines.join('\n'),
+      role: 'button',
+      tabindex: '0',
+      'aria-label': titleLines.join(' — ')
+    },
+    el('span', { class: 'grid-appt__time' },
+      b.note ? el('span', { class: 'grid-appt__noted', title: b.note }) : null,
+      `سنجش ${minuteToLabel(b.startMinute)}–${minuteToLabel(b.endMinute)}`
+    ),
+    tall && showStaffName ? el('span', { class: 'grid-appt__title' }, staffName(therapistId)) : null,
+    tall ? el('span', { class: 'grid-appt__stu' }, b.note ?? 'رزرو مدیر برای سنجش') : null
+  );
+
+  card.addEventListener('click', () => openAssessmentBlockDetailModal(b.id));
+  card.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openAssessmentBlockDetailModal(b.id); }
+  });
+  if (isManager) {
+    card.addEventListener('dragstart', (e) => {
+      e.dataTransfer.setData('text/plain', JSON.stringify({
+        kind: 'assessment-block', /* ۱.۲۵.۷۹ — تمایز از نوبت عادی در handleDrop */
+        id: b.id,
+        version: b.version,
+        fromYmd: ymd,
+        fromMinute: b.startMinute,
+        staffId: therapistId,
+        dur: b.endMinute - b.startMinute
+      }));
+      e.dataTransfer.effectAllowed = 'move';
+      card.classList.add('is-dragging');
+    });
+    card.addEventListener('dragend', () => card.classList.remove('is-dragging'));
+  }
+
+  return card;
+}
+
 async function handleDrop(e, targetYmd, cellMinute, cell) {
   let payload;
   try {
@@ -727,6 +794,44 @@ async function handleDrop(e, targetYmd, cellMinute, cell) {
     return;
   }
   if (!payload?.id) return;
+
+  /* ۱.۲۵.۷۹ — دراپ کارت سنجش: جابه‌جایی روز/ساعت (هر دو نما) و پرتاب به ستون درمانگر دیگر
+     (نمای روزانه). سدِ isBlockedMinute فقط برای نوبت‌های عادی است — بلوک‌ها روی هم سد نمی‌خورند
+     (پاریتی با create). قفل نسخه سمت سرور؛ خطا فقط toast می‌شود و DOM دست‌نخورده می‌ماند. */
+  if (payload.kind === 'assessment-block') {
+    if (session.user?.role !== 'manager') return;
+    const rect = cell.getBoundingClientRect();
+    const offsetY = e.clientY - rect.top;
+    const inner = Math.floor(((offsetY / Math.max(rect.height, 1)) * CELL_MINUTES) / 15) * 15;
+    const newMinute = Math.min(cellMinute + inner, 24 * 60 - 15);
+    const snapped = Math.round(newMinute / 15) * 15;
+    const dur = Math.max(15, Math.min(480, Number(payload.dur) || 60));
+    const endMinute = Math.min(1440, snapped + dur);
+    const targetStaff =
+      cell.dataset.staff && cell.dataset.staff !== '_other' && cell.dataset.staff !== payload.staffId
+        ? cell.dataset.staff
+        : undefined;
+    if (targetYmd === payload.fromYmd && snapped === payload.fromMinute && !targetStaff) return; // درگ بی‌اثر
+    try {
+      await api.patch(`/api/assessment-blocks/${payload.id}`, {
+        date: targetYmd,
+        start_minute: snapped,
+        end_minute: endMinute,
+        ...(targetStaff ? { staff_id: targetStaff } : {}),
+        version: payload.version
+      });
+      toast(
+        `بازهٔ سنجش به ${fa(minuteToLabel(snapped))} جابه‌جا شد${targetStaff ? ` — درمانگر: ${staffName(targetStaff)}` : ''}`,
+        'success'
+      );
+      await reloadBlocks();
+      await VIEW?.refreshGrid?.();
+    } catch (err) {
+      toastError(err);
+    }
+    return;
+  }
+
   // ۱.۲۵.۷۷ — پیش‌بازخورد بلوک سنجش بر پایهٔ درمانگرِ درگیرِ نوبتِ کشیده‌شده؛ سد نهایی سمت سرور می‌ماند
   if (isBlockedMinute(targetYmd, cellMinute, payload.staffId)) {
     toast('این بازه برای «سنجش» رزرو شده است — جابه‌جایی نوبت به این زمان ممکن نیست؛ با مدیر هماهنگ کنید', 'warning');
@@ -801,7 +906,7 @@ function updateColCount(col) {
   const key = VIEW.isDay ? `${col.dataset.ymd}|${col.dataset.staff}` : col.dataset.ymd;
   const elc = VIEW.countEls.get(key);
   if (!elc) return;
-  const n = col.querySelectorAll(':scope > .grid-appt').length;
+  const n = col.querySelectorAll(':scope > .grid-appt:not(.grid-appt--assess)').length; /* ۱.۲۵.۷۹ — کارت سنجش در شمارندهٔ نوبت نمی‌آید */
   elc.textContent = VIEW.isDay ? `${fa(n)} نوبت` : ` · ${fa(n)} نوبت`;
 }
 
@@ -909,14 +1014,20 @@ function openAssessmentBlockModal(container) {
       const startMinute = timeToMinute(values.start);
       const endMinute = timeToMinute(values.end);
       if (endMinute <= startMinute) throw new Error('«تا ساعت» باید بعد از «از ساعت» باشد');
-      await api.post('/api/assessment-blocks', {
+      const res = await api.post('/api/assessment-blocks', {
         date: ymd,
         start_minute: startMinute,
         end_minute: endMinute,
         therapist_ids: [...pickedTherapists],
         note: values.note || undefined
       });
-      toast('بازهٔ سنجش رزرو شد — در این زمان ثبت نوبتِ همکاران بسته است', 'success');
+      const cards = Array.isArray(res.data) ? res.data.length : 1;
+      toast(
+        cards > 1
+          ? `${fa(cards)} کارت نوبت سنجش ثبت شد — برای هر درمانگر یک کارت مستقل روی تقویم نشست`
+          : 'بازهٔ سنجش رزرو شد — در این زمان ثبت نوبتِ همکاران بسته است',
+        'success'
+      );
       await reloadBlocks();
       await VIEW?.refreshGrid?.();
     }
@@ -925,7 +1036,7 @@ function openAssessmentBlockModal(container) {
   setTimeout(() => {
     const form = document.querySelector('.modal .form-grid');
     if (!form) return;
-    // ① درمانگران درگیر — چیپ‌های چندانتخابی از فهرست درمانگران فعال
+    // ① درمانگران درگیر — چیپ‌های چندانتخابی؛ ۱.۲۵.۷۹: برای هر نفر یک کارت مستقل ثبت می‌شود
     const chipRow = el('div', { class: 'chip-row', role: 'group', 'aria-label': 'درمانگران درگیر' });
     const drawChips = () => {
       for (const chip of chipRow.querySelectorAll('.chip')) {
@@ -944,52 +1055,93 @@ function openAssessmentBlockModal(container) {
       }, hueDot(t.id), t.fullName));
     }
     form.appendChild(el('div', { class: 'field span-2' },
-      el('label', { class: 'field__label' }, 'درمانگران درگیر (اختیاری — ثبت و نمایش)'),
+      el('label', { class: 'field__label' }, 'درمانگران درگیر — برای هر نفر یک کارت مستقل ثبت می‌شود (اختیاری)'),
       chipRow
     ));
-    // ② فهرست بازه‌های رزروشده + حذف — همان مودال تا مدیر همه‌چیز را یک‌جا ببیند
-    const listWrap = el('div', { class: 'field span-2' },
-      el('label', { class: 'field__label' }, 'بازه‌های رزروشدهٔ سنجش'));
-    const drawList = () => {
-      for (const old of [...listWrap.querySelectorAll('.assess-row')]) old.remove();
-      if (state.blocks.length === 0) {
-        listWrap.appendChild(el('div', { class: 'assess-row', style: { padding: '4px 0' } },
-          el('span', { class: 'cell-sub' }, 'تاکنون بازه‌ای رزرو نشده است')));
+  }, 50);
+}
+
+/* ۱.۲۵.۷۹ — مودال جزئیات کارت سنجش (خواست کارفرما): کلیک روی کارت → بازه/درمانگر + نوشتن
+   جزئیات (PATCH note) + «حذف بازهٔ سنجش» از همین مودال — دیگر حذف از فرم «نوبت سنجش» نیست. */
+function openAssessmentBlockDetailModal(blockId) {
+  const b = state.blocks.find((x) => x.id === blockId);
+  if (!b) {
+    toast('این بازه قبلاً حذف شده است', 'warning');
+    void VIEW?.refreshGrid?.();
+    return;
+  }
+  const isManager = session.user?.role === 'manager';
+  const durationMin = b.endMinute - b.startMinute;
+
+  const noteTa = el('textarea', {
+    class: 'textarea',
+    rows: 3,
+    maxlength: 500,
+    placeholder: 'جزئیات بازهٔ سنجش (اختیاری — مثلاً ابزار، نام ارزیاب یا مهدکودک مبدأ)…',
+    style: { width: '100%', resize: 'vertical', minHeight: '56px' },
+    'aria-label': 'جزئیات بازهٔ سنجش'
+  });
+  noteTa.value = b.note ?? '';
+
+  const saveNoteBtn = el('button', {
+    class: 'btn btn--primary btn--sm',
+    onclick: async (e) => {
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      try {
+        const res = await api.patch(`/api/assessment-blocks/${b.id}`, { note: noteTa.value || null, version: b.version });
+        Object.assign(b, res.data); /* نسخهٔ تازه برای ذخیرهٔ بعدی — قفل خوش‌بینانه نمی‌خورد */
+        toast('جزئیات بازهٔ سنجش ذخیره شد', 'success', 2200);
+      } catch (err) {
+        toastError(err);
+        btn.disabled = false;
       }
-      for (const b of state.blocks) {
-        listWrap.appendChild(el('div', {
-          class: 'assess-row',
-          style: { display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--surface-3)', padding: '6px 0' }
-        },
-          el('span', { class: 'cell-sub', style: { flex: '1' } },
-            `${formatJalaliShort(b.date)} — ${minuteToLabel(b.startMinute)} تا ${minuteToLabel(b.endMinute)} · ${fa(b.therapistIds.length)} درمانگر درگیر${b.note ? ' · ' + b.note : ''}`),
-          el('button', {
-            class: 'btn btn--soft btn--sm',
+    }
+  }, icon('check', 14), 'ذخیره جزئیات');
+
+  openModal({
+    title: `نوبت سنجش — ${formatJalaliFull(b.date)}`,
+    body: [
+      el('div', { class: 'info-list' },
+        row('بازه', `${fa(minuteToLabel(b.startMinute))} تا ${fa(minuteToLabel(b.endMinute))} (${durationLabel(durationMin)})`),
+        b.therapistIds.length > 0
+          ? row('درمانگر درگیر', b.therapistIds.map((id) => staffName(id)).join('، '))
+          : row('نوع سد', 'سد زمانی کل بازه — بدون درمانگر مشخص'),
+        b.note ? row('جزئیات فعلی', b.note) : null
+      ),
+      isManager
+        ? el('div', { class: 'field' },
+            el('label', { class: 'field__label' }, 'جزئیات — نوشتن/ویرایش'),
+            noteTa,
+            el('div', { style: { display: 'flex', justifyContent: 'flex-end', marginTop: '6px' } }, saveNoteBtn)
+          )
+        : null
+    ].filter(Boolean),
+    actions: [
+      isManager
+        ? (closeRoot) => el('button', {
+            class: 'btn btn--danger',
             onclick: async () => {
-              const ok = await confirmModal({
+              if (!(await confirmModal({
                 title: 'حذف بازهٔ سنجش',
                 message: 'این بازه آزاد می‌شود و همکاران می‌توانند دوباره در آن نوبت بگیرند.',
                 confirmLabel: 'حذف کن',
                 danger: true
-              });
-              if (!ok) return;
+              }))) return;
               try {
                 await api.del(`/api/assessment-blocks/${b.id}`);
-                toast('بازهٔ سنجش حذف شد', 'success');
+                toast('بازهٔ سنجش حذف شد — کارت از تقویم برداشته شد', 'success');
+                closeRoot();
                 await reloadBlocks();
-                drawList();
                 await VIEW?.refreshGrid?.();
               } catch (err) {
                 toastError(err);
               }
             }
-          }, 'حذف')
-        ));
-      }
-    };
-    drawList();
-    form.appendChild(listWrap);
-  }, 50);
+          }, icon('trash', 16), 'حذف بازهٔ سنجش')
+        : null
+    ].filter(Boolean)
+  });
 }
 
 function openCreateModal(container, preset = {}) {

@@ -93,7 +93,7 @@ describe('گیت فرانت ۱.۲۵.۷۶ — بازطراحی مستقل ماژ�
     expect(view).toMatch(/جزئیات پاسخ/);
   });
 
-  test('⑥ پین نسخه: ۱.۲۵.۷۸', () => {
-    expect(version).toMatch(/APP_VERSION = '1\.25\.78'/);
+  test('⑥ پین نسخه: ۱.۲۵.۷۹', () => {
+    expect(version).toMatch(/APP_VERSION = '1\.25\.79'/);
   });
 });

@@ -9,14 +9,14 @@
 // تداخل با آفست ثابت +3:30 تهران محاسبه می‌شود (tehranMinuteWindow — سامانه DST ندارد،
 // هم‌قرارداد tehranDayRange). بلوک‌ها فقط برای «آیندهٔ ثبت» سد هستند؛ نوبت‌های موجود دست‌نخورده
 // می‌مانند (مدیر خودش لغو/جابه‌جا می‌کند).
-import { NotFoundError, ValidationError } from '@core/errors';
+import { ConflictError, NotFoundError, ValidationError } from '@core/errors';
 import { tehranMinuteWindow, tehranYmdOf, minuteToLabel } from '@core/shared';
 import { inParamChunks, inPlaceholders } from '@core/db/in-chunks'; // ۱.۲۵.۷۶ — دروازهٔ IN-list (هم‌الگوی appointment-core)
 import type { AuthContext } from '@core/shared';
 import type { AuditWriter } from '@core/audit';
 import type { Logger } from '@core/logger';
 import type { DbClient } from '@core/db';
-import type { AssessmentBlock, AssessmentBlockCreateInput, AssessmentBlockDeps } from './types';
+import type { AssessmentBlock, AssessmentBlockCreateInput, AssessmentBlockDeps, AssessmentBlockPatchInput } from './types';
 
 /** id مانند بقیهٔ domain با crypto جهانی (هم‌الگوی appointment-core — سازگار Workers و Node) */
 const newId = (): string => crypto.randomUUID();
@@ -134,56 +134,138 @@ export function createAssessmentBlockService(deps: AssessmentBlockDeps) {
   const { db, audit, logger } = deps;
 
   const service = {
-    async create(input: AssessmentBlockCreateInput, actor: AuthContext): Promise<AssessmentBlock> {
+    async create(
+      input: AssessmentBlockCreateInput,
+      actor: AuthContext
+    ): Promise<AssessmentBlock[]> {
       if (input.endMinute <= input.startMinute) {
         throw new ValidationError('پایان بازهٔ سنجش باید بعد از شروع آن باشد');
       }
-      if (input.therapistIds.length > 0) {
+      /* ۱.۲۵.۷۹ — فن‌اوت (خواست کارفرما: کارت گرد درگ‌پذیر به‌ازای هر درمانگر): تکراری‌ها حذف و
+         برای هر درمانگر یک ردیف مستقل ثبت می‌شود تا کارتش روی تقویم جدا درگ/حذف شود؛
+         فهرست خالی = یک ردیف سدِ زمانیِ کل بازه (رفتار ۱.۲۵.۷۶ — سایهٔ راه‌راه). */
+      const therapistIds = [...new Set(input.therapistIds)];
+      if (therapistIds.length > 0) {
         // درمانگران درگیر باید همکار واقعی باشند — فرم از فهرست فعال پر می‌شود؛ این هم لایهٔ دوم است.
         // تکه‌بندی ۹۰تایی (دروازهٔ IN-list — هم‌الگوی assertStudentsInScope در appointment-core)
         let knownCount = 0;
-        for (const chunk of inParamChunks(input.therapistIds)) {
+        for (const chunk of inParamChunks(therapistIds)) {
           const known = await db.query<{ id: string }>(
             `SELECT id FROM staff WHERE id IN (${inPlaceholders(chunk.length)})`,
             chunk
           );
           knownCount += known.length;
         }
-        if (knownCount !== input.therapistIds.length) {
+        if (knownCount !== therapistIds.length) {
           throw new ValidationError('یک یا چند درمانگرِ درگیر در فهرست همکاران نیست');
         }
       }
-      const id = newId();
       const now = new Date().toISOString();
-      await db.execute(
-        `INSERT INTO assessment_blocks (id, block_date, start_minute, end_minute, therapist_ids, note, version, created_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
-        [id, input.date, input.startMinute, input.endMinute, JSON.stringify(input.therapistIds), input.note ?? null, actor.staffId, now, now]
-      );
-      await audit.log({
-        actorId: actor.staffId,
-        action: 'assessment_block.create',
-        resourceType: 'assessment_block',
-        resourceId: id,
-        changes: {
-          date: { from: null, to: input.date },
-          window: { from: null, to: `${minuteToLabel(input.startMinute)}-${minuteToLabel(input.endMinute)}` },
-          therapist_ids: { from: null, to: input.therapistIds }
+      const created: AssessmentBlock[] = [];
+      /* هر ردیف = یک درمانگر (کارت مستقل)؛ فهرست خالی = یک ردیف سدِ زمانیِ کل بازه */
+      const perTherapistRows: string[][] = therapistIds.length > 0 ? therapistIds.map((t) => [t]) : [[]];
+      await db.transaction(async (tx) => {
+        for (const single of perTherapistRows) {
+          const id = newId();
+          await tx.execute(
+            `INSERT INTO assessment_blocks (id, block_date, start_minute, end_minute, therapist_ids, note, version, created_by, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
+            [id, input.date, input.startMinute, input.endMinute, JSON.stringify(single), input.note ?? null, actor.staffId, now, now]
+          );
+          await audit.logInTransaction(tx, {
+            actorId: actor.staffId,
+            action: 'assessment_block.create',
+            resourceType: 'assessment_block',
+            resourceId: id,
+            changes: {
+              date: { from: null, to: input.date },
+              window: { from: null, to: `${minuteToLabel(input.startMinute)}-${minuteToLabel(input.endMinute)}` },
+              therapist_ids: { from: null, to: single }
+            }
+          });
+          created.push({
+            id,
+            date: input.date,
+            startMinute: input.startMinute,
+            endMinute: input.endMinute,
+            therapistIds: single,
+            note: input.note ?? null,
+            version: 1,
+            createdBy: actor.staffId,
+            createdAt: now,
+            updatedAt: now
+          });
         }
       });
-      logger.child('assessment-blocks').info('block.created', { date: input.date });
-      return {
-        id,
-        date: input.date,
-        startMinute: input.startMinute,
-        endMinute: input.endMinute,
-        therapistIds: input.therapistIds,
-        note: input.note ?? null,
-        version: 1,
-        createdBy: actor.staffId,
-        createdAt: now,
-        updatedAt: now
-      };
+      logger.child('assessment-blocks').info('block.created', { date: input.date, cards: created.length });
+      return created;
+    },
+
+    /* ۱.۲۵.۷۹ — پچ کارت سنجش (خواست کارفرما): درگ/دراپ روی تقویم، کش‌دادن پایان، پرتاب به
+       ستون درمانگر دیگر و ذخیرهٔ جزئیات از مودال کلیکِ کارت — قفل خوش‌بینانهٔ نسخه، هم‌الگوی
+       update/move سرویس نوبت. سدِ نوبت‌ها (findAssessmentBlockConflict) از ردیفِ به‌روزشده
+       خودکار پیروی می‌کند؛ تداخل بین خودِ بلوک‌ها مثل قبل آزاد است (پاریتی با create). */
+    async update(
+      id: string,
+      patch: AssessmentBlockPatchInput,
+      actor: AuthContext
+    ): Promise<AssessmentBlock> {
+      const row = await db.queryOne<BlockRow>(
+        'SELECT * FROM assessment_blocks WHERE id = ? AND deleted_at IS NULL',
+        [id]
+      );
+      if (!row) throw new NotFoundError('بلوک سنجش');
+      if (row.version !== patch.version) {
+        throw new ConflictError('این بازهٔ سنجش همین الان توسط کاربر دیگری تغییر کرد.', row.version);
+      }
+
+      const date = patch.date ?? row.block_date;
+      const startMinute = patch.startMinute ?? row.start_minute;
+      const endMinute = patch.endMinute ?? row.end_minute;
+      if (endMinute <= startMinute) {
+        throw new ValidationError('پایان بازهٔ سنجش باید بعد از شروع آن باشد');
+      }
+      const prevIds = rowToBlock(row).therapistIds;
+      const therapistIds = patch.staffId !== undefined ? [patch.staffId] : prevIds;
+      if (patch.staffId !== undefined) {
+        const known = await db.queryOne<{ id: string }>('SELECT id FROM staff WHERE id = ?', [patch.staffId]);
+        if (!known) throw new ValidationError('درمانگرِ مقصد در فهرست همکاران نیست');
+      }
+      const note =
+        patch.note === undefined
+          ? (row.note ?? null)
+          : (patch.note ?? '').trim().length > 0
+            ? (patch.note as string).trim()
+            : null;
+      const now = new Date().toISOString();
+
+      await db.transaction(async (tx) => {
+        await tx.execute(
+          `UPDATE assessment_blocks
+             SET block_date = ?, start_minute = ?, end_minute = ?, therapist_ids = ?, note = ?, version = version + 1, updated_at = ?
+           WHERE id = ?`,
+          [date, startMinute, endMinute, JSON.stringify(therapistIds), note, now, id]
+        );
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: 'assessment_block.update',
+          resourceType: 'assessment_block',
+          resourceId: id,
+          changes: {
+            date: { from: row.block_date, to: date },
+            window: {
+              from: `${minuteToLabel(row.start_minute)}-${minuteToLabel(row.end_minute)}`,
+              to: `${minuteToLabel(startMinute)}-${minuteToLabel(endMinute)}`
+            },
+            therapist_ids: { from: prevIds, to: therapistIds },
+            note: { from: row.note, to: note }
+          }
+        });
+      });
+
+      logger.child('assessment-blocks').info('block.updated', { id, movedDay: date !== row.block_date });
+      const fresh = await db.queryOne<BlockRow>('SELECT * FROM assessment_blocks WHERE id = ?', [id]);
+      return rowToBlock(fresh!);
     },
 
     async list(from?: string, to?: string): Promise<AssessmentBlock[]> {

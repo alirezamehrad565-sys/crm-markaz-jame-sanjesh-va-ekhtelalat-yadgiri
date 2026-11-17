@@ -39,7 +39,7 @@ describe('بلوک نوبت سنجش — RBAC و قرارداد', () => {
     expect((await therapist.delete('/api/assessment-blocks/some-id')).status).toBe(403);
   });
 
-  it('G3: ثبت بازه با قرارداد کامل — ۲۰۱ + شکل داده؛ ورودی بد → ۴۰۰', async () => {
+  it('G3: ثبت بازه با قرارداد کامل — ۲۰۱ + شکل داده (آرایهٔ فن‌اوت‌شده)؛ ورودی بد → ۴۰۰', async () => {
     const res = await manager.post('/api/assessment-blocks', {
       date: D,
       start_minute: 600,
@@ -48,7 +48,10 @@ describe('بلوک نوبت سنجش — RBAC و قرارداد', () => {
       note: 'وژومتر — ارزیابی پروندهٔ نوآموزان'
     });
     expect(res.status).toBe(201);
-    const b = dataOf<{ date: string; startMinute: number; endMinute: number; therapistIds: string[]; note: string | null; version: number }>(res);
+    /* ۱.۲۵.۷۹ — فن‌اوت: برای هر درمانگر یک ردیف/کارت مستقل؛ خروجی آرایه است */
+    const arr = dataOf<Array<{ id: string; date: string; startMinute: number; endMinute: number; therapistIds: string[]; note: string | null; version: number }>>(res);
+    expect(arr).toHaveLength(1);
+    const b = arr[0];
     expect(b.date).toBe(D);
     expect(b.startMinute).toBe(600);
     expect(b.endMinute).toBe(720);
@@ -166,10 +169,8 @@ describe('بلوک نوبت سنجش — RBAC و قرارداد', () => {
     const st = await createStudent(m);
     const intro = tehranMinuteWindow(D, 840, 900); // معرفی دانش‌آموز به سکوپ درمانگر
     await m.post('/api/appointments', apptBody(ALI_ID, intro.start, 60, [st.id]));
-    const created = dataOf<{ id: string }>(
-      await m.post('/api/assessment-blocks', { date: D, start_minute: 600, end_minute: 720 })
-    );
-    expect((await m.delete(`/api/assessment-blocks/${created.id}`)).status).toBe(204);
+    const created = dataOf<{ id: string }[]>(await m.post('/api/assessment-blocks', { date: D, start_minute: 600, end_minute: 720 }));
+    expect((await m.delete(`/api/assessment-blocks/${created[0].id}`)).status).toBe(204);
     const win = tehranMinuteWindow(D, 600, 660);
     expect((await t.post('/api/appointments', apptBody(ALI_ID, win.start, 60, [st.id]))).status).toBe(201);
   });
@@ -182,5 +183,86 @@ describe('بلوک نوبت سنجش — RBAC و قرارداد', () => {
     const onlyToday = dataOf<{ date: string }[]>(await m.get(`/api/assessment-blocks?from=${D}&to=${D}`));
     expect(onlyToday).toHaveLength(1);
     expect(onlyToday[0].date).toBe(D);
+  });
+
+  it('G16: ساخت چنددرمانگره فن‌اوت می‌شود — برای هر درمانگر یک کارت مستقل (۱.۲۵.۷۹ خواست کارفرما)', async () => {
+    const A = createTestApp();
+    const m = await asRole(A, 'manager');
+    const res = await m.post('/api/assessment-blocks', { date: D, start_minute: 600, end_minute: 660, therapist_ids: [ALI_ID, MARYAM_ID] });
+    expect(res.status).toBe(201);
+    const arr = dataOf<{ id: string; therapistIds: string[]; version: number }[]>(res);
+    expect(arr).toHaveLength(2);
+    expect(arr.map((x) => x.therapistIds[0]).sort()).toEqual([ALI_ID, MARYAM_ID].sort());
+    // دو کارت مستقل = دو ردیف تک‌درمانگره در فهرست
+    const list = dataOf<{ id: string; therapistIds: string[] }[]>(await m.get(`/api/assessment-blocks?from=${D}&to=${D}`));
+    const singles = list.filter((x) => x.therapistIds.length === 1);
+    expect(singles.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('G12: PATCH کارت — جابه‌جایی روز/ساعت (درگ‌اند‌دراپ)؛ سدِ سخت از ردیف به‌روزشده پیروی می‌کند (۱.۲۵.۷۹)', async () => {
+    const A = createTestApp();
+    const m = await asRole(A, 'manager');
+    const t = await asRole(A, 'therapist');
+    const st = await createStudent(m);
+    const intro = tehranMinuteWindow(D, 840, 900); // معرفی دانش‌آموز به سکوپ درمانگر
+    expect((await m.post('/api/appointments', apptBody(ALI_ID, intro.start, 60, [st.id]))).status).toBe(201);
+    const [b] = dataOf<{ id: string; version: number }[]>(
+      await m.post('/api/assessment-blocks', { date: D, start_minute: 600, end_minute: 720, therapist_ids: [ALI_ID] })
+    );
+    // جابه‌جایی روی خود روز + کش‌دادن
+    const moved = await m.patch(`/api/assessment-blocks/${b.id}`, { start_minute: 660, end_minute: 780, version: b.version });
+    expect(moved.status).toBe(200);
+    const mb = dataOf<{ id: string; startMinute: number; endMinute: number; version: number }>(moved);
+    expect(mb.startMinute).toBe(660);
+    expect(mb.endMinute).toBe(780);
+    expect(mb.version).toBe(2);
+    // درون بازهٔ جدید برای درمانگرِ درگیر سد است
+    const win = tehranMinuteWindow(D, 690, 750);
+    const blocked = await t.post('/api/appointments', apptBody(ALI_ID, win.start, 60, [st.id]));
+    expect(blocked.status).toBe(400);
+    expect(errMessageOf(blocked)).toContain('سنجش');
+    // جابه‌جایی به فردا (درگ روی ستون روز دیگر)
+    const tomorrow = addDaysYmd(D, 1);
+    expect((await m.patch(`/api/assessment-blocks/${b.id}`, { date: tomorrow, version: mb.version })).status).toBe(200);
+    const list = dataOf<{ id: string; date: string }[]>(await m.get(`/api/assessment-blocks?from=${tomorrow}&to=${tomorrow}`));
+    expect(list.some((x) => x.id === mb.id)).toBe(true);
+  });
+
+  it('G13: PATCH staff_id — پرتاب کارت به ستون درمانگر دیگر؛ سد هم‌راهش می‌رود (۱.۲۵.۷۹)', async () => {
+    const A = createTestApp();
+    const m = await asRole(A, 'manager');
+    const st = await createStudent(m);
+    const [b] = dataOf<{ id: string; version: number }[]>(
+      await m.post('/api/assessment-blocks', { date: D, start_minute: 600, end_minute: 660, therapist_ids: [ALI_ID] })
+    );
+    const moved = await m.patch(`/api/assessment-blocks/${b.id}`, { staff_id: MARYAM_ID, version: b.version });
+    expect(moved.status).toBe(200);
+    expect(dataOf<{ therapistIds: string[] }>(moved).therapistIds).toEqual([MARYAM_ID]);
+    const win = tehranMinuteWindow(D, 630, 690); // کاملاً درون بازه
+    // علی حالا آزاد است — منشی/مدیر می‌تواند نوبت بدهد
+    expect((await m.post('/api/appointments', apptBody(ALI_ID, win.start, 60, [st.id]))).status).toBe(201);
+    // مریم حالا درمانگرِ درگیر است — حتی برای مدیر ۴۰۰ (رفتار ۱.۲۵.۷۷)
+    const blocked = await m.post('/api/appointments', apptBody(MARYAM_ID, win.start, 60, [st.id]));
+    expect(blocked.status).toBe(400);
+    expect(errMessageOf(blocked)).toContain('سنجش');
+  });
+
+  it('G14: قفل نسخه و RBAC پچ — نسخهٔ کهنه ۴۰۹؛ درمانگر/منشی ۴۰۳؛ جزئیات ذخیره می‌شود (۱.۲۵.۷۹)', async () => {
+    const A = createTestApp();
+    const m = await asRole(A, 'manager');
+    const s = await asRole(A, 'secretary');
+    const t = await asRole(A, 'therapist');
+    const [b] = dataOf<{ id: string; version: number }[]>(
+      await m.post('/api/assessment-blocks', { date: D, start_minute: 600, end_minute: 660 })
+    );
+    expect((await t.patch(`/api/assessment-blocks/${b.id}`, { note: 'x', version: b.version })).status).toBe(403);
+    expect((await s.patch(`/api/assessment-blocks/${b.id}`, { note: 'x', version: b.version })).status).toBe(403);
+    expect((await m.patch(`/api/assessment-blocks/${b.id}`, { note: 'x', version: b.version + 5 })).status).toBe(409);
+    // نوشتن جزئیات از مودال کلیکِ کارت
+    const noteRes = await m.patch(`/api/assessment-blocks/${b.id}`, { note: 'اتاق سنجش ۲', version: b.version });
+    expect(noteRes.status).toBe(200);
+    expect(dataOf<{ note: string | null }>(noteRes).note).toBe('اتاق سنجش ۲');
+    // پایانِ قبل از شروع با پچ → ۴۰۰
+    expect((await m.patch(`/api/assessment-blocks/${b.id}`, { start_minute: 600, end_minute: 500, version: b.version })).status).toBe(400);
   });
 });

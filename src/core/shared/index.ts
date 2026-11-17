@@ -30,6 +30,7 @@ export {
   MarkAttendanceSchema,
   MoveAppointmentSchema,
   AssessmentBlockCreateSchema,
+  AssessmentBlockPatchSchema, /* ۱.۲۵.۷۹ — پچ کارت نوبت سنجش (درگ/جزئیات) */
   NationalIdSchema,
   NewAppointmentSchema,
   NewAppointmentSchema as AppointmentSchema,
