@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.27.15";
+var APP_VERSION = "1.27.16";
 var NODE_MIN_VERSION = "1.26.0";
 
 // node_modules/zod/v4/classic/external.js
@@ -26579,6 +26579,16 @@ async function copyWeek(ctx) {
         staffId: row.staff_id,
         existingStartAt: overlap.start_at,
         existingEndAt: overlap.end_at,
+        proposedStartAt: newStart,
+        proposedEndAt: newEnd
+      });
+      continue;
+    }
+    const blockHit = await findAssessmentBlockConflict(db, { startAt: newStart, endAt: newEnd }, row.staff_id);
+    if (blockHit && (blockHit.kind === "involved" || actor.role !== "manager" && actor.role !== "supervisor")) {
+      conflicts.push({
+        type: "assessment_block",
+        staffId: row.staff_id,
         proposedStartAt: newStart,
         proposedEndAt: newEnd
       });
