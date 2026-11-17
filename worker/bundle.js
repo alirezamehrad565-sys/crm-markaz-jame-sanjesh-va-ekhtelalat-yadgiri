@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.27.14";
+var APP_VERSION = "1.27.15";
 var NODE_MIN_VERSION = "1.26.0";
 
 // node_modules/zod/v4/classic/external.js
@@ -22793,6 +22793,17 @@ var AssessmentBlockCreateSchema = external_exports.object({
   message: "\u067E\u0627\u06CC\u0627\u0646 \u0628\u0627\u0632\u0647\u0654 \u0633\u0646\u062C\u0634 \u0628\u0627\u06CC\u062F \u0628\u0639\u062F \u0627\u0632 \u0634\u0631\u0648\u0639 \u0622\u0646 \u0628\u0627\u0634\u062F",
   path: ["end_minute"]
 });
+var AssessmentBlockPatchSchema = external_exports.object({
+  date: external_exports.string().regex(/^\d{4}-\d{2}-\d{2}$/, "\u062A\u0627\u0631\u06CC\u062E \u0628\u0627\u06CC\u062F \u0634\u06A9\u0644 YYYY-MM-DD \u0628\u0627\u0634\u062F").optional(),
+  start_minute: external_exports.number().int().min(0).max(1439).optional(),
+  end_minute: external_exports.number().int().min(1).max(1440).optional(),
+  staff_id: UuidSchema.optional(),
+  note: external_exports.string().max(500).nullish(),
+  version: external_exports.number().int().positive()
+}).refine(
+  (v) => v.start_minute === void 0 || v.end_minute === void 0 || v.end_minute > v.start_minute,
+  { message: "\u067E\u0627\u06CC\u0627\u0646 \u0628\u0627\u0632\u0647\u0654 \u0633\u0646\u062C\u0634 \u0628\u0627\u06CC\u062F \u0628\u0639\u062F \u0627\u0632 \u0634\u0631\u0648\u0639 \u0622\u0646 \u0628\u0627\u0634\u062F", path: ["end_minute"] }
+);
 var UpdateAppointmentSchema = external_exports.object({
   note: external_exports.string().max(2e3).nullish(),
   version: external_exports.number().int().positive()
@@ -26183,11 +26194,10 @@ function tehranYmdsSpanned(startAt, endAt) {
   return [...out];
 }
 __name(tehranYmdsSpanned, "tehranYmdsSpanned");
-async function assertNoAssessmentBlockInRange(db, window, actor) {
-  if (actor.role === "manager" || actor.role === "supervisor") return;
+async function findAssessmentBlockConflict(db, window, targetStaffId) {
   const startMs = Date.parse(window.startAt);
   const endMs = Date.parse(window.endAt);
-  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return;
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return null;
   for (const ymd of tehranYmdsSpanned(window.startAt, window.endAt)) {
     const rows = await db.query(
       "SELECT * FROM assessment_blocks WHERE block_date = ? AND deleted_at IS NULL",
@@ -26197,13 +26207,33 @@ async function assertNoAssessmentBlockInRange(db, window, actor) {
       const blockWin = tehranMinuteWindow(ymd, row.start_minute, row.end_minute);
       const blockStart = Date.parse(blockWin.start);
       const blockEnd = Date.parse(blockWin.end);
-      if (blockStart < endMs && blockEnd > startMs) {
-        throw new ValidationError(
-          `\u0627\u06CC\u0646 \u0628\u0627\u0632\u0647 \u0628\u0631\u0627\u06CC \xAB\u0633\u0646\u062C\u0634\xBB \u0631\u0632\u0631\u0648 \u0634\u062F\u0647 \u0627\u0633\u062A (${minuteToLabel(row.start_minute)} \u062A\u0627 ${minuteToLabel(row.end_minute)}) \u2014 \u062B\u0628\u062A \u06CC\u0627 \u062C\u0627\u0628\u0647\u200C\u062C\u0627\u06CC\u06CC \u0646\u0648\u0628\u062A \u062F\u0631 \u0627\u06CC\u0646 \u0632\u0645\u0627\u0646 \u0645\u0645\u06A9\u0646 \u0646\u06CC\u0633\u062A\u061B \u0628\u0627 \u0645\u062F\u06CC\u0631 \u0647\u0645\u0627\u0647\u0646\u06AF \u06A9\u0646\u06CC\u062F.`
-        );
+      if (blockStart >= endMs || blockEnd <= startMs) continue;
+      const block = rowToBlock(row);
+      if (block.therapistIds.length > 0) {
+        if (targetStaffId && block.therapistIds.includes(targetStaffId)) {
+          return { block, kind: "involved" };
+        }
+        continue;
       }
+      return { block, kind: "time_only" };
     }
   }
+  return null;
+}
+__name(findAssessmentBlockConflict, "findAssessmentBlockConflict");
+async function assertNoAssessmentBlockInRange(db, window, actor, targetStaffId) {
+  const hit = await findAssessmentBlockConflict(db, window, targetStaffId);
+  if (!hit) return;
+  const when = `(${minuteToLabel(hit.block.startMinute)} \u062A\u0627 ${minuteToLabel(hit.block.endMinute)})`;
+  if (hit.kind === "involved") {
+    throw new ValidationError(
+      `\u0627\u06CC\u0646 \u0628\u0627\u0632\u0647 \u0628\u0631\u0627\u06CC \xAB\u0633\u0646\u062C\u0634\xBB \u0631\u0632\u0631\u0648 \u0634\u062F\u0647 \u0627\u0633\u062A ${when} \u2014 \u0646\u0648\u0628\u062A\u200C\u06AF\u06CC\u0631\u06CC\u0650 \u062F\u0631\u0645\u0627\u0646\u06AF\u0631\u0650 \u062F\u0631\u06AF\u06CC\u0631 \u062F\u0631 \u0627\u06CC\u0646 \u0632\u0645\u0627\u0646 \u0645\u0645\u06A9\u0646 \u0646\u06CC\u0633\u062A.`
+    );
+  }
+  if (actor.role === "manager" || actor.role === "supervisor") return;
+  throw new ValidationError(
+    `\u0627\u06CC\u0646 \u0628\u0627\u0632\u0647 \u0628\u0631\u0627\u06CC \xAB\u0633\u0646\u062C\u0634\xBB \u0631\u0632\u0631\u0648 \u0634\u062F\u0647 \u0627\u0633\u062A ${when} \u2014 \u062B\u0628\u062A \u06CC\u0627 \u062C\u0627\u0628\u0647\u200C\u062C\u0627\u06CC\u06CC \u0646\u0648\u0628\u062A \u062F\u0631 \u0627\u06CC\u0646 \u0632\u0645\u0627\u0646 \u0645\u0645\u06A9\u0646 \u0646\u06CC\u0633\u062A\u061B \u0628\u0627 \u0645\u062F\u06CC\u0631 \u0647\u0645\u0627\u0647\u0646\u06AF \u06A9\u0646\u06CC\u062F.`
+  );
 }
 __name(assertNoAssessmentBlockInRange, "assertNoAssessmentBlockInRange");
 function createAssessmentBlockService(deps) {
@@ -26213,50 +26243,112 @@ function createAssessmentBlockService(deps) {
       if (input2.endMinute <= input2.startMinute) {
         throw new ValidationError("\u067E\u0627\u06CC\u0627\u0646 \u0628\u0627\u0632\u0647\u0654 \u0633\u0646\u062C\u0634 \u0628\u0627\u06CC\u062F \u0628\u0639\u062F \u0627\u0632 \u0634\u0631\u0648\u0639 \u0622\u0646 \u0628\u0627\u0634\u062F");
       }
-      if (input2.therapistIds.length > 0) {
+      const therapistIds = [...new Set(input2.therapistIds)];
+      if (therapistIds.length > 0) {
         let knownCount = 0;
-        for (const chunk of inParamChunks(input2.therapistIds)) {
+        for (const chunk of inParamChunks(therapistIds)) {
           const known = await db.query(
             `SELECT id FROM staff WHERE id IN (${inPlaceholders(chunk.length)})`,
             chunk
           );
           knownCount += known.length;
         }
-        if (knownCount !== input2.therapistIds.length) {
+        if (knownCount !== therapistIds.length) {
           throw new ValidationError("\u06CC\u06A9 \u06CC\u0627 \u0686\u0646\u062F \u062F\u0631\u0645\u0627\u0646\u06AF\u0631\u0650 \u062F\u0631\u06AF\u06CC\u0631 \u062F\u0631 \u0641\u0647\u0631\u0633\u062A \u0647\u0645\u06A9\u0627\u0631\u0627\u0646 \u0646\u06CC\u0633\u062A");
         }
       }
-      const id = newId();
       const now = (/* @__PURE__ */ new Date()).toISOString();
-      await db.execute(
-        `INSERT INTO assessment_blocks (id, block_date, start_minute, end_minute, therapist_ids, note, version, created_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
-        [id, input2.date, input2.startMinute, input2.endMinute, JSON.stringify(input2.therapistIds), input2.note ?? null, actor.staffId, now, now]
-      );
-      await audit.log({
-        actorId: actor.staffId,
-        action: "assessment_block.create",
-        resourceType: "assessment_block",
-        resourceId: id,
-        changes: {
-          date: { from: null, to: input2.date },
-          window: { from: null, to: `${minuteToLabel(input2.startMinute)}-${minuteToLabel(input2.endMinute)}` },
-          therapist_ids: { from: null, to: input2.therapistIds }
+      const created = [];
+      const perTherapistRows = therapistIds.length > 0 ? therapistIds.map((t) => [t]) : [[]];
+      await db.transaction(async (tx) => {
+        for (const single of perTherapistRows) {
+          const id = newId();
+          await tx.execute(
+            `INSERT INTO assessment_blocks (id, block_date, start_minute, end_minute, therapist_ids, note, version, created_by, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
+            [id, input2.date, input2.startMinute, input2.endMinute, JSON.stringify(single), input2.note ?? null, actor.staffId, now, now]
+          );
+          await audit.logInTransaction(tx, {
+            actorId: actor.staffId,
+            action: "assessment_block.create",
+            resourceType: "assessment_block",
+            resourceId: id,
+            changes: {
+              date: { from: null, to: input2.date },
+              window: { from: null, to: `${minuteToLabel(input2.startMinute)}-${minuteToLabel(input2.endMinute)}` },
+              therapist_ids: { from: null, to: single }
+            }
+          });
+          created.push({
+            id,
+            date: input2.date,
+            startMinute: input2.startMinute,
+            endMinute: input2.endMinute,
+            therapistIds: single,
+            note: input2.note ?? null,
+            version: 1,
+            createdBy: actor.staffId,
+            createdAt: now,
+            updatedAt: now
+          });
         }
       });
-      logger.child("assessment-blocks").info("block.created", { date: input2.date });
-      return {
-        id,
-        date: input2.date,
-        startMinute: input2.startMinute,
-        endMinute: input2.endMinute,
-        therapistIds: input2.therapistIds,
-        note: input2.note ?? null,
-        version: 1,
-        createdBy: actor.staffId,
-        createdAt: now,
-        updatedAt: now
-      };
+      logger.child("assessment-blocks").info("block.created", { date: input2.date, cards: created.length });
+      return created;
+    },
+    /* ۱.۲۷.۱۵ — پچ کارت سنجش (خواست کارفرما): درگ/دراپ روی تقویم، کش‌دادن پایان، پرتاب به
+       ستون درمانگر دیگر و ذخیرهٔ جزئیات از مودال کلیکِ کارت — قفل خوش‌بینانهٔ نسخه، هم‌الگوی
+       update/move سرویس نوبت. سدِ نوبت‌ها (findAssessmentBlockConflict) از ردیفِ به‌روزشده
+       خودکار پیروی می‌کند؛ تداخل بین خودِ بلوک‌ها مثل قبل آزاد است (پاریتی با create). */
+    async update(id, patch, actor) {
+      const row = await db.queryOne(
+        "SELECT * FROM assessment_blocks WHERE id = ? AND deleted_at IS NULL",
+        [id]
+      );
+      if (!row) throw new NotFoundError("\u0628\u0644\u0648\u06A9 \u0633\u0646\u062C\u0634");
+      if (row.version !== patch.version) {
+        throw new ConflictError("\u0627\u06CC\u0646 \u0628\u0627\u0632\u0647\u0654 \u0633\u0646\u062C\u0634 \u0647\u0645\u06CC\u0646 \u0627\u0644\u0627\u0646 \u062A\u0648\u0633\u0637 \u06A9\u0627\u0631\u0628\u0631 \u062F\u06CC\u06AF\u0631\u06CC \u062A\u063A\u06CC\u06CC\u0631 \u06A9\u0631\u062F.", row.version);
+      }
+      const date5 = patch.date ?? row.block_date;
+      const startMinute = patch.startMinute ?? row.start_minute;
+      const endMinute = patch.endMinute ?? row.end_minute;
+      if (endMinute <= startMinute) {
+        throw new ValidationError("\u067E\u0627\u06CC\u0627\u0646 \u0628\u0627\u0632\u0647\u0654 \u0633\u0646\u062C\u0634 \u0628\u0627\u06CC\u062F \u0628\u0639\u062F \u0627\u0632 \u0634\u0631\u0648\u0639 \u0622\u0646 \u0628\u0627\u0634\u062F");
+      }
+      const prevIds = rowToBlock(row).therapistIds;
+      const therapistIds = patch.staffId !== void 0 ? [patch.staffId] : prevIds;
+      if (patch.staffId !== void 0) {
+        const known = await db.queryOne("SELECT id FROM staff WHERE id = ?", [patch.staffId]);
+        if (!known) throw new ValidationError("\u062F\u0631\u0645\u0627\u0646\u06AF\u0631\u0650 \u0645\u0642\u0635\u062F \u062F\u0631 \u0641\u0647\u0631\u0633\u062A \u0647\u0645\u06A9\u0627\u0631\u0627\u0646 \u0646\u06CC\u0633\u062A");
+      }
+      const note = patch.note === void 0 ? row.note ?? null : (patch.note ?? "").trim().length > 0 ? patch.note.trim() : null;
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      await db.transaction(async (tx) => {
+        await tx.execute(
+          `UPDATE assessment_blocks
+             SET block_date = ?, start_minute = ?, end_minute = ?, therapist_ids = ?, note = ?, version = version + 1, updated_at = ?
+           WHERE id = ?`,
+          [date5, startMinute, endMinute, JSON.stringify(therapistIds), note, now, id]
+        );
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: "assessment_block.update",
+          resourceType: "assessment_block",
+          resourceId: id,
+          changes: {
+            date: { from: row.block_date, to: date5 },
+            window: {
+              from: `${minuteToLabel(row.start_minute)}-${minuteToLabel(row.end_minute)}`,
+              to: `${minuteToLabel(startMinute)}-${minuteToLabel(endMinute)}`
+            },
+            therapist_ids: { from: prevIds, to: therapistIds },
+            note: { from: row.note, to: note }
+          }
+        });
+      });
+      logger.child("assessment-blocks").info("block.updated", { id, movedDay: date5 !== row.block_date });
+      const fresh = await db.queryOne("SELECT * FROM assessment_blocks WHERE id = ?", [id]);
+      return rowToBlock(fresh);
     },
     async list(from, to) {
       const rows = await db.query(
@@ -26298,7 +26390,7 @@ function registerAssessmentBlockRoutes(app, service) {
   app.post("/api/assessment-blocks", requireRole("manager"), async (c) => {
     const actor = getAuthContext(c);
     const body = AssessmentBlockCreateSchema.parse(await c.req.json());
-    const block = await service.create(
+    const blocks = await service.create(
       {
         date: body.date,
         startMinute: body.start_minute,
@@ -26308,7 +26400,24 @@ function registerAssessmentBlockRoutes(app, service) {
       },
       actor
     );
-    return c.json({ data: block }, 201);
+    return c.json({ data: blocks }, 201);
+  });
+  app.patch("/api/assessment-blocks/:id", requireRole("manager"), async (c) => {
+    const actor = getAuthContext(c);
+    const body = AssessmentBlockPatchSchema.parse(await c.req.json());
+    const block = await service.update(
+      c.req.param("id"),
+      {
+        date: body.date,
+        startMinute: body.start_minute,
+        endMinute: body.end_minute,
+        staffId: body.staff_id,
+        note: body.note === void 0 ? void 0 : body.note ?? null,
+        version: body.version
+      },
+      actor
+    );
+    return c.json({ data: block }, 200);
   });
   app.delete("/api/assessment-blocks/:id", requireRole("manager"), async (c) => {
     const actor = getAuthContext(c);
@@ -26713,7 +26822,7 @@ function createAppointmentService(deps) {
       }
       assertAppointmentScope(actor, input2.staffId);
       await assertStudentsInScope(tx, actor, input2.students.map((s) => s.studentId));
-      await assertNoAssessmentBlockInRange(tx, { startAt: input2.startAt, endAt: input2.endAt }, actor);
+      await assertNoAssessmentBlockInRange(tx, { startAt: input2.startAt, endAt: input2.endAt }, actor, input2.staffId);
       const id = crypto.randomUUID();
       await tx.execute(
         `INSERT INTO appointments (id, staff_id, start_at, end_at, status, session_type, note, version, created_by)
@@ -26816,7 +26925,7 @@ function createAppointmentService(deps) {
       const durationMin = (Date.parse(current.endAt) - Date.parse(current.startAt)) / 6e4;
       const newEndAt = addMinutes(newStartAt, durationMin);
       await db.transaction(async (tx) => {
-        await assertNoAssessmentBlockInRange(tx, { startAt: newStartAt, endAt: newEndAt }, actor);
+        await assertNoAssessmentBlockInRange(tx, { startAt: newStartAt, endAt: newEndAt }, actor, current.staffId);
         await tx.execute(
           `UPDATE appointments SET start_at = ?, end_at = ?, version = version + 1, updated_at = datetime('now') WHERE id = ? AND version = ?`,
           [newStartAt, newEndAt, id, version2]
@@ -26859,7 +26968,7 @@ function createAppointmentService(deps) {
         throw new ValidationError("\u0632\u0645\u0627\u0646 \u067E\u0627\u06CC\u0627\u0646 \u0628\u0627\u06CC\u062F \u0631\u0648\u06CC \u0634\u0628\u06A9\u0647 \u06F1\u06F5 \u062F\u0642\u06CC\u0642\u0647\u200C\u0627\u06CC \u0628\u0627\u0634\u062F");
       }
       await db.transaction(async (tx) => {
-        await assertNoAssessmentBlockInRange(tx, { startAt: current.startAt, endAt: newEndAt }, actor);
+        await assertNoAssessmentBlockInRange(tx, { startAt: current.startAt, endAt: newEndAt }, actor, current.staffId);
         await tx.execute(
           `UPDATE appointments SET end_at = ?, version = version + 1, updated_at = datetime('now') WHERE id = ? AND version = ?`,
           [newEndAt, id, version2]

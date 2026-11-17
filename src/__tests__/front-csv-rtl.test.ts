@@ -60,7 +60,7 @@ describe('پین‌های سیم‌کشی خروجی‌های CSV', () => {
     const src = read('public/assets/js/views/appointments.js');
     expect(src).toMatch(/api\.get\('\/api\/assessment-blocks'\)/);
     expect(src).toMatch(/openAssessmentBlockModal/);
-    expect(src).toMatch(/isBlockedMinute\(ymd, m\)/);
+    expect(src).toMatch(/isBlockedMinute\(ymd, m, state\.staffFilter\)/);
     expect(src).toMatch(/api\.post\('\/api\/assessment-blocks'/);
     expect(src).toMatch(/'نوبت سنجش'/);
   });
