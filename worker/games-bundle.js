@@ -1979,7 +1979,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.27.14";
+var APP_VERSION = "1.27.20";
 
 // node_modules/zod/v4/classic/external.js
 var external_exports = {};
@@ -22432,8 +22432,6 @@ var DEFAULT_CENTER_HOURS = [
   { weekday: 3, startMinute: 9 * 60, endMinute: 17 * 60 },
   { weekday: 4, startMinute: 9 * 60, endMinute: 13 * 60 }
 ];
-var CALENDAR_DAY_START_MINUTE = 6 * 60;
-var CALENDAR_DAY_END_MINUTE = 22 * 60;
 var ANNOUNCEMENT_TITLE_MAX = 120;
 var ANNOUNCEMENT_BODY_MAX = 2e3;
 var KNOWLEDGE_TITLE_MAX = 140;
@@ -22701,6 +22699,17 @@ var AssessmentBlockCreateSchema = external_exports.object({
   message: "\u067E\u0627\u06CC\u0627\u0646 \u0628\u0627\u0632\u0647\u0654 \u0633\u0646\u062C\u0634 \u0628\u0627\u06CC\u062F \u0628\u0639\u062F \u0627\u0632 \u0634\u0631\u0648\u0639 \u0622\u0646 \u0628\u0627\u0634\u062F",
   path: ["end_minute"]
 });
+var AssessmentBlockPatchSchema = external_exports.object({
+  date: external_exports.string().regex(/^\d{4}-\d{2}-\d{2}$/, "\u062A\u0627\u0631\u06CC\u062E \u0628\u0627\u06CC\u062F \u0634\u06A9\u0644 YYYY-MM-DD \u0628\u0627\u0634\u062F").optional(),
+  start_minute: external_exports.number().int().min(0).max(1439).optional(),
+  end_minute: external_exports.number().int().min(1).max(1440).optional(),
+  staff_id: UuidSchema.optional(),
+  note: external_exports.string().max(500).nullish(),
+  version: external_exports.number().int().positive()
+}).refine(
+  (v) => v.start_minute === void 0 || v.end_minute === void 0 || v.end_minute > v.start_minute,
+  { message: "\u067E\u0627\u06CC\u0627\u0646 \u0628\u0627\u0632\u0647\u0654 \u0633\u0646\u062C\u0634 \u0628\u0627\u06CC\u062F \u0628\u0639\u062F \u0627\u0632 \u0634\u0631\u0648\u0639 \u0622\u0646 \u0628\u0627\u0634\u062F", path: ["end_minute"] }
+);
 var UpdateAppointmentSchema = external_exports.object({
   note: external_exports.string().max(2e3).nullish(),
   version: external_exports.number().int().positive()
@@ -25654,7 +25663,6 @@ __name(stageOutcomeFor, "stageOutcomeFor");
 var NUMLINE_STAGE_MAX2 = GAME_KINDS.numline.levers.bank_caps;
 var SCAN_STAGE_THRESHOLDS = accuracyThresholdsOf(GAME_KINDS.scan.stage_rule);
 var SCAN_STAGE_MAX_TILES2 = GAME_KINDS.scan.levers.bank_caps;
-var ACCURACY_STAGE_THRESHOLDS = accuracyThresholdsOf(GAME_KINDS.stroop.stage_rule);
 var STROOP_STAGE_BANDS2 = GAME_KINDS.stroop.levers.bank_bands;
 var FLANKER_STAGE_MAX_DECOYS2 = GAME_KINDS.flanker.levers.bank_caps;
 var FLANKER_STAGE_BANDS2 = GAME_KINDS.flanker.levers.bank_bands;
@@ -25728,7 +25736,6 @@ function stageStimViewOf(stim, correctTouch, stageId) {
   return { ...base, ...correctTouch ? v.go : v.nogo };
 }
 __name(stageStimViewOf, "stageStimViewOf");
-var SEQ_MEMORY_STAGE_THRESHOLDS = accuracyThresholdsOf(GAME_KINDS.corsi.stage_rule);
 var CORSI_STAGE_MAX_SPAN2 = GAME_KINDS.corsi.levers.bank_caps;
 var SPAN_STAGE_MAX_DIGITS2 = GAME_KINDS.span.levers.bank_caps;
 var SIMON_STAGE_MAX_SPAN2 = GAME_KINDS.simon.levers.bank_caps;

@@ -1,6 +1,6 @@
 {
   "name": "center-system",
-  "version": "1.27.19",
+  "version": "1.27.20",
   "private": true,
   "type": "module",
   "author": {
@@ -9,7 +9,7 @@
   },
   "description": "سامانهٔ مدیریت مرکز جامع سنجش و اختلالات یادگیری (CRM، نوبت‌دهی، پروندهٔ بالینی) — Cloudflare Workers + D1 + Hono",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "node scripts/dev-lan.mjs",
     "predev": "node scripts/build-client.mjs",
     "build:client": "node scripts/build-client.mjs",
     "deploy": "wrangler deploy",

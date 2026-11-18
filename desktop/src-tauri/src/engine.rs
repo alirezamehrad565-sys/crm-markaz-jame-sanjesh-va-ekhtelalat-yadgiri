@@ -45,6 +45,11 @@ use crate::engine_watchdog::{next_action, now_ms, RestartRecord, WatchdogAction,
 /// پورت پیش‌فرض موتور محلی — همان devUrl پوسته (tauri.conf.json)
 const DEFAULT_PORT: u16 = 8787;
 
+/// بایند پیش‌فرض موتور — v1.27.20: شبکهٔ محلی (خواست کارفرما: موبایل‌های هم‌شبکه استفاده کنند).
+/// پرچم `--bind` به adapter پاس می‌شود؛ محدودسازی لوکال = تغییر همین ثابت به 127.0.0.1.
+/// adapter روی 0.0.0.0 در بوت، نشانی هر کارت LAN را لاگ می‌کند و PUBLIC_BASE_URL از کارت LAN اول می‌آید.
+const DEFAULT_BIND: &str = "0.0.0.0";
+
 /// پورت پیش‌فرض سرویس بازی‌ها — به موتور «درخواست» می‌شود؛ اگر اشغال بود موتور پورت دیگری
 /// می‌گیرد و نهایی را در engine-config.json می‌نویسد (Rust همان را می‌خواند).
 const DEFAULT_GAMES_PORT: u16 = 8788;
@@ -362,6 +367,8 @@ fn spawn_engine(plan: &EngineLaunch) -> Result<EngineChild, String> {
         .arg(&plan.data_dir)
         .arg("--port")
         .arg(DEFAULT_PORT.to_string())
+        .arg("--bind")
+        .arg(DEFAULT_BIND)
         .arg("--games-port")
         .arg(DEFAULT_GAMES_PORT.to_string())
         .arg("--main-bundle")

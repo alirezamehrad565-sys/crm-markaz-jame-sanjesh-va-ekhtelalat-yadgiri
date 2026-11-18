@@ -13,6 +13,7 @@ import { existsSync, readdirSync, readFileSync, renameSync, statSync, unlinkSync
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { makeD1 } from './d1.mjs';
+import { bootUrlsOf, defaultPublicBaseOf } from './lan.mjs'; // v1.27.20 — بایند LAN + نشانی موبایل‌ها
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -282,7 +283,7 @@ export async function startAdapterEngine(opts) {
     ENV: 'production',
     CF_ACCESS_TEAM_DOMAIN: bindings.cfAccessTeamDomain ?? '',
     CLINIC_NAME: bindings.clinicName ?? 'مرکز جامع',
-    PUBLIC_BASE_URL: bindings.publicBaseUrl ?? `http://127.0.0.1:${port}`,
+    PUBLIC_BASE_URL: bindings.publicBaseUrl ?? defaultPublicBaseOf(host, port),
     AUTH_SECRET: bindings.authSecret,
     CENTER_DESKTOP_ENGINE: '1',
     GAMES_HEALTH_URL: bindings.gamesHealthUrl ?? `http://127.0.0.1:${gamesPort}/health`,
@@ -296,7 +297,7 @@ export async function startAdapterEngine(opts) {
     DB,
     ENV: 'production',
     CF_ACCESS_TEAM_DOMAIN: bindings.cfAccessTeamDomain ?? '',
-    PUBLIC_BASE_URL: bindings.publicBaseUrl ?? `http://127.0.0.1:${port}`,
+    PUBLIC_BASE_URL: bindings.publicBaseUrl ?? defaultPublicBaseOf(host, port),
     AUTH_SECRET: bindings.authSecret,
   };
 
@@ -371,6 +372,12 @@ export async function startAdapterEngine(opts) {
   } catch (err) {
     try { mainServer.close(); mainServer.closeAllConnections(); } catch { /* بهترین‌تلاش */ }
     throw err;
+  }
+
+  // v1.27.20 — نشانی‌های بوت: با بایند LAN نشانی موبایل‌ها چاپ می‌شود + خط راهنمای فایروال
+  for (const url of bootUrlsOf(host, port)) log?.(`نشانی سرویس اصلی: ${url}`);
+  if (host === '0.0.0.0' || host === '::') {
+    log?.('اگر از موبایل/دستگاه دیگر باز نشد: در فایروال ویندوز برای Node (یا پورت 8787) اجازهٔ ورودی بدهید');
   }
 
   return {

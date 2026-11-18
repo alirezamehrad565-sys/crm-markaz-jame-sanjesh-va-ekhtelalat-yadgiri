@@ -33,6 +33,7 @@ const files = [
   'src/__tests__/front-12561.test.ts',
   'src/__tests__/front-supervisor-readonly.test.ts',
   'src/__tests__/front-ux-pro-max.test.ts',
+  'src/__tests__/front-12581.test.ts', // v1.27.20 — پین APP_VERSION گیت پیش‌نمایش خانواده (با بامپ خودکار مُهر شود)
   'package.json',
   'package-lock.json',
   'public/sw.js', // سوورکر ریشه — گیت «هم‌نسخه‌ای انتشار» (۱.۲۵.۰۱) نسخهٔ نسخهٔ آن را پین کرده

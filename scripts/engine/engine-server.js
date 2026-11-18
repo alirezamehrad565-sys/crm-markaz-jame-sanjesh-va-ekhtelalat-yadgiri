@@ -104,7 +104,7 @@ var init_seed_demo = __esm({
 import { spawn } from "node:child_process";
 import { randomBytes as randomBytes2 } from "node:crypto";
 import { existsSync as existsSync5, mkdirSync as mkdirSync4, openSync as openSync2, promises as fsPromises, readFileSync as readFileSync4, readdirSync as readdirSync4, writeFileSync as writeFileSync3 } from "node:fs";
-import { networkInterfaces, tmpdir } from "node:os";
+import { networkInterfaces as networkInterfaces2, tmpdir } from "node:os";
 import { createServer as createServer2 } from "node:net";
 import path6 from "node:path";
 import { DatabaseSync as DatabaseSync5 } from "node:sqlite";
@@ -1592,6 +1592,58 @@ function makeD1(dbPath, { log } = {}) {
   };
 }
 
+// scripts/engine/adapter/lan.mjs
+import { networkInterfaces } from "node:os";
+var LAN_PREFIX_RANK = [
+  ["192.168.", 0],
+  ["10.", 1]
+];
+function isPrivateLanIPv4(addr) {
+  if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(addr)) return false;
+  if (addr.startsWith("127.")) return false;
+  if (addr.startsWith("169.254.")) return false;
+  if (addr.startsWith("172.")) {
+    const second = Number(addr.split(".")[1]);
+    return second >= 16 && second <= 31;
+  }
+  return addr.startsWith("192.168.") || addr.startsWith("10.");
+}
+function prefixRank(addr) {
+  for (const [prefix, rank] of LAN_PREFIX_RANK) {
+    if (addr.startsWith(prefix)) return rank;
+  }
+  return 2;
+}
+function lanIPv4sOf(getInterfaces = networkInterfaces) {
+  const seen = /* @__PURE__ */ new Set();
+  for (const list of Object.values(getInterfaces() ?? {})) {
+    for (const ni of list ?? []) {
+      if (!ni || ni.family !== "IPv4" && ni.family !== 4 || ni.internal) continue;
+      if (!isPrivateLanIPv4(ni.address)) continue;
+      seen.add(ni.address);
+    }
+  }
+  return [...seen].sort((a, b) => prefixRank(a) - prefixRank(b));
+}
+function primaryLanIp(getInterfaces = networkInterfaces) {
+  return lanIPv4sOf(getInterfaces)[0] ?? null;
+}
+function bootUrlsOf(host, port, getInterfaces = networkInterfaces) {
+  if (host === "127.0.0.1" || host === "localhost") return [`http://127.0.0.1:${port}`];
+  if (host !== "0.0.0.0" && host !== "::") return [`http://${host}:${port}`];
+  const urls = lanIPv4sOf(getInterfaces).map((ip) => `http://${ip}:${port}`);
+  urls.push(`http://127.0.0.1:${port}`);
+  return urls;
+}
+function defaultPublicBaseOf(host, port, getInterfaces = networkInterfaces) {
+  if (host === "127.0.0.1" || host === "localhost") return `http://127.0.0.1:${port}`;
+  if (host === "0.0.0.0" || host === "::") {
+    const ip = primaryLanIp(getInterfaces);
+    return ip ? `http://${ip}:${port}` : `http://127.0.0.1:${port}`;
+  }
+  return `http://${host}:${port}`;
+}
+
 // scripts/engine/adapter/server.mjs
 var MIME = {
   ".html": "text/html; charset=utf-8",
@@ -1842,7 +1894,7 @@ async function startAdapterEngine(opts2) {
     ENV: "production",
     CF_ACCESS_TEAM_DOMAIN: bindings.cfAccessTeamDomain ?? "",
     CLINIC_NAME: bindings.clinicName ?? "مرکز جامع",
-    PUBLIC_BASE_URL: bindings.publicBaseUrl ?? `http://127.0.0.1:${port}`,
+    PUBLIC_BASE_URL: bindings.publicBaseUrl ?? defaultPublicBaseOf(host, port),
     AUTH_SECRET: bindings.authSecret,
     CENTER_DESKTOP_ENGINE: "1",
     GAMES_HEALTH_URL: bindings.gamesHealthUrl ?? `http://127.0.0.1:${gamesPort}/health`,
@@ -1856,7 +1908,7 @@ async function startAdapterEngine(opts2) {
     DB,
     ENV: "production",
     CF_ACCESS_TEAM_DOMAIN: bindings.cfAccessTeamDomain ?? "",
-    PUBLIC_BASE_URL: bindings.publicBaseUrl ?? `http://127.0.0.1:${port}`,
+    PUBLIC_BASE_URL: bindings.publicBaseUrl ?? defaultPublicBaseOf(host, port),
     AUTH_SECRET: bindings.authSecret
   };
   const makeCtx = () => {
@@ -1937,6 +1989,10 @@ async function startAdapterEngine(opts2) {
     } catch {
     }
     throw err;
+  }
+  for (const url of bootUrlsOf(host, port)) log?.(`نشانی سرویس اصلی: ${url}`);
+  if (host === "0.0.0.0" || host === "::") {
+    log?.("اگر از موبایل/دستگاه دیگر باز نشد: در فایروال ویندوز برای Node (یا پورت 8787) اجازهٔ ورودی بدهید");
   }
   return {
     close: async () => {
@@ -2406,7 +2462,7 @@ var FA_DIGITS3 = "۰۱۲۳۴۵۶۷۸۹";
 var faNum3 = (n) => String(n).replace(/\d/g, (d) => FA_DIGITS3[Number(d)]);
 function lanUrls(port) {
   try {
-    return Object.values(networkInterfaces()).flat().filter((n) => n && !n.internal && n.family === "IPv4" && n.address).map((n) => `http://${n.address}:${port}`);
+    return Object.values(networkInterfaces2()).flat().filter((n) => n && !n.internal && n.family === "IPv4" && n.address).map((n) => `http://${n.address}:${port}`);
   } catch {
     return [];
   }
