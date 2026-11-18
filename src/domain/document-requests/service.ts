@@ -70,6 +70,7 @@ function parseStoredDocPayload(raw: string): { tags: string[]; recipients: DocRe
       return { tags, recipients: recipients.length > 0 ? recipients : ['family'] };
     }
   } catch {
+    /* نرم — پاکت خراب → پیش‌فرض */
   }
   return { tags: [], recipients: ['family'] };
 }

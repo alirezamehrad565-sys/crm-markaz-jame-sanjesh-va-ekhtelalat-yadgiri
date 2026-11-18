@@ -249,6 +249,47 @@
 }
 .grid-day.is-today .grid-off { opacity: 0.55; }
 
+/* ۱.۲۷.۱۴ — سایهٔ بلوک نوبت سنجش (رزرو مدیر): راه‌راه کهربایی متمایز از ساعت غیرکاری؛
+   روی سلول‌ها قابل‌دیدن است و کلیک/درگ همکار با پیام فارسی به سد سرور می‌رسد */
+.grid-assess {
+  position: absolute;
+  inset-inline: 0;
+  background: repeating-linear-gradient(
+    -45deg,
+    color-mix(in srgb, var(--warn) 22%, transparent) 0 6px,
+    transparent 6px 12px
+  );
+  border-block: 1px dashed color-mix(in srgb, var(--warn) 55%, transparent);
+  pointer-events: none;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow: hidden;
+}
+.grid-assess__label {
+  margin-top: 2px;
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+  color: color-mix(in srgb, var(--warn) 85%, var(--text-1));
+  background: color-mix(in srgb, var(--surface-1) 78%, transparent);
+  border-radius: 4px;
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
+/* ۱.۲۷.۱۵ — کارت نوبت سنجش: هم‌شکل بقیهٔ کارت‌ها (گرد، هم‌سایز، درگ‌پذیر) با تن کهربایی؛
+   رنگ حاشیه از hueClass همان درمانگر می‌آید و بدنه کهربایی ملایم می‌ماند تا «سنجش» از نوبت
+   عادی جدا دیده شود. ردیفِ بدون درمانگر هنوز با .grid-assess (سایهٔ راه‌راه) نمایش داده می‌شود. */
+.grid-appt--assess {
+  background: color-mix(in srgb, var(--warn) 14%, var(--surface-1));
+  border-inline-start: 4px solid var(--warn);
+}
+.grid-appt--assess:hover {
+  border-color: color-mix(in srgb, var(--warn) 70%, transparent);
+  border-inline-start-color: var(--warn);
+}
+
 .grid-appt {
   position: absolute;
   inset-inline: 4px;

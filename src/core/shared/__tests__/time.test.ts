@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addDaysYmd, tehranTimeLabel } from '../time';
+import { addDaysYmd, tehranTimeLabel, tehranMinuteWindow } from '../time';
 
 describe('tehranTimeLabel (pure)', () => {
   it('T1: 06:00Z → 09:30 تهران', () => {
@@ -39,5 +39,26 @@ describe('addDaysYmd (pure)', () => {
 
   it('T9: قالب نامعتبر → خطا', () => {
     expect(() => addDaysYmd('2026/10/12', 1)).toThrow('INVALID_DATE');
+  });
+});
+
+describe('tehranMinuteWindow — پنجرهٔ دقیقه‌محور تهران (۱.۲۷.۱۴ بلوک سنجش)', () => {
+  it('W1: ۱۰:۰۰–۱۱:۰۰ تهران → بازهٔ UTC با آفست ثابت -3:30', () => {
+    const w = tehranMinuteWindow('2026-10-05', 600, 660);
+    expect(w.start).toBe('2026-10-05T06:30:00.000Z'); // نیمه‌شب تهران = ۲۰:۳۰ روز قبل UTC
+    expect(w.end).toBe('2026-10-05T07:30:00.000Z');
+  });
+
+  it('W2: پنجرهٔ نیمه‌شب‌گذر (۲۳:۰۰ تا ۲۴:۰۰) در همان روز تهران می‌ماند', () => {
+    const w = tehranMinuteWindow('2026-10-05', 1380, 1440);
+    expect(w.start).toBe('2026-10-05T19:30:00.000Z');
+    expect(w.end).toBe('2026-10-05T20:30:00.000Z');
+  });
+
+  it('W3: ورودی نامعتبر → خطا (تاریخ بدشکل / بازهٔ وارونه / خارج 0..1440)', () => {
+    expect(() => tehranMinuteWindow('2026/10/05', 600, 660)).toThrow('INVALID_DATE');
+    expect(() => tehranMinuteWindow('2026-10-05', 660, 600)).toThrow('INVALID_MINUTE_RANGE');
+    expect(() => tehranMinuteWindow('2026-10-05', 600, 1500)).toThrow('INVALID_MINUTE_RANGE');
+    expect(() => tehranMinuteWindow('2026-10-05', 0, 0)).toThrow('INVALID_MINUTE_RANGE');
   });
 });

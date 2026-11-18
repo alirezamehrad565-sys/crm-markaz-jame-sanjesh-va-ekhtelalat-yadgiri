@@ -28,4 +28,3 @@ export declare function wechslerFromEvent(payload: unknown): unknown;
 
 export declare function ageYearsFromBirthDate(birthDate: string | null | undefined): number | undefined;
 
-export declare const __tables: Record<string, unknown>;

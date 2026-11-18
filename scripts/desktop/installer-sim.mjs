@@ -145,6 +145,18 @@ if (!CORRUPT && !failed) {
       } catch (e) {
         bad(`سرو استاتیک شکست خورد — ${e.message}`);
       }
+      // ۱.۲۷.۱۳ — پروب پایانهٔ قابلیت‌های موتور (P0-1): مسیر عمومی و بی‌احراز؛ نسخهٔ باندل
+      // زنده باید با APP_VERSION منبع یکتا یکی باشد — خودآزمایی نسخهٔ موتور/برنامه در بوت واقعی
+      try {
+        const appVersion = readFileSync(path.join(ROOT, 'src', 'core', 'version.ts'), 'utf8').match(/APP_VERSION = '([^']+)'/)?.[1];
+        const res = await fetch(`http://127.0.0.1:${cfg.port}/api/engine/capabilities`);
+        const caps = await res.json();
+        res.ok && caps?.ok === true && appVersion && caps.version === appVersion
+          ? ok(`/api/engine/capabilities ۲۰۰ داد و نسخهٔ موتور (${caps.version}) با APP_VERSION یکی است`)
+          : bad(`پایانهٔ قابلیت‌ها ناهم‌گام است — status=${res.status} version=${caps?.version} انتظار=${appVersion} (باندل worker/bundle.js کهنه است؟)`);
+      } catch (e) {
+        bad(`/api/engine/capabilities در دسترس نیست — ${e.message} (باندل کهنه؟ build:worker را اجرا کنید)`);
+      }
     } else {
       bad(`engine-config.json در مهلت ${CONFIG_TIMEOUT_MS / 1000} ثانیه نیامد — بوت شبیه‌ساز شکست`);
       try {

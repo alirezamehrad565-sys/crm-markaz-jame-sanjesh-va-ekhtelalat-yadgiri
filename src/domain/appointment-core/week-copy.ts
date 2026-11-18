@@ -5,6 +5,7 @@ import type { AuditWriter } from '@core/audit';
 import type { Logger } from '@core/logger';
 import type { DbClient } from '@core/db';
 import { inParamChunks, inPlaceholders } from '@core/db/in-chunks'; // ۱.۲۵.۷۲ — دروازهٔ IN-list (بدهی ف۶ ⑧)
+import { findAssessmentBlockConflict } from '@domain/assessment-blocks'; // ۱.۲۷.۱۵ — سد بلوک سنجش در کپی هفته (نرم، هم‌الگوی تداخل)
 import type { AppointmentRow } from './repository';
 import type { CopyWeekInput, CopyWeekResult } from './types';
 
@@ -94,6 +95,18 @@ export async function copyWeek(ctx: WeekCopyCtx & { input: CopyWeekInput }): Pro
         staffId: row.staff_id,
         existingStartAt: overlap.start_at,
         existingEndAt: overlap.end_at,
+        proposedStartAt: newStart,
+        proposedEndAt: newEnd
+      });
+      continue;
+    }
+    // ۱.۲۷.۱۵ — سد بلوک سنجش: نوبتِ درمانگرِ درگیر به درون بازهٔ رزرو کپی نمی‌شود؛
+    // هم‌قرارداد سدِ تکی: بلوک با فهرست برای همهٔ نقش‌ها، بلوک بدون فهرست برای درمانگر/منشی
+    const blockHit = await findAssessmentBlockConflict(db, { startAt: newStart, endAt: newEnd }, row.staff_id);
+    if (blockHit && (blockHit.kind === 'involved' || (actor.role !== 'manager' && actor.role !== 'supervisor'))) {
+      conflicts.push({
+        type: 'assessment_block',
+        staffId: row.staff_id,
         proposedStartAt: newStart,
         proposedEndAt: newEnd
       });

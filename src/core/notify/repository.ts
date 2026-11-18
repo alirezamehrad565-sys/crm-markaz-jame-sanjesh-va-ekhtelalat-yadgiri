@@ -47,33 +47,6 @@ export interface BotLinkRow {
   updated_at: string;
 }
 
-export function rowToNotification(row: NotificationRow): NotificationRecord {
-  let payload: TemplateVars = {};
-  try {
-    payload = JSON.parse(row.payload) as TemplateVars;
-  } catch {
-    payload = {};
-  }
-  return {
-    id: row.id,
-    channel: row.channel as NotificationChannel,
-    template: row.template as NotificationTemplateId,
-    recipient: row.recipient,
-    studentId: row.student_id,
-    appointmentId: row.appointment_id,
-    staffId: row.staff_id,
-    payload,
-    status: row.status as NotificationStatus,
-    attempts: row.attempts,
-    lastError: row.last_error,
-    dedupKey: row.dedup_key,
-    sendAt: row.send_at,
-    sentAt: row.sent_at,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at
-  };
-}
-
 export function rowToPrefs(row: PrefsRow): NotificationPrefs {
   return {
     studentId: row.student_id,

@@ -28,6 +28,10 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      # v1.27.۱۹ — گیت هم‌مِهری نسخه‌ها پیش از هر مونتاژ: منشأ گزارش کارفرما (CARGO_PKG_VERSION
+      # جامانده روی ۱.۲۷.۱۴ → گیت «نصب ارتقا ناقص» پوسته بوت نصاب تازه را نمی‌گذراند)
+      - name: گیت هم‌مِهری نسخه‌ها (check-versions)
+        run: node scripts/check-versions.mjs
       - name: مونتاژ رانتایم نصاب لینوکس — سایدکار workerd (tauri-build در کامپایل هم externalBin را الزامی می‌داند)
         run: |
           npm ci
@@ -52,6 +56,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      # v1.27.۱۹ — گیت هم‌مِهری نسخه‌ها پیش از بیلد نصاب ویندوز (عین جاب لینوکس)
+      - name: گیت هم‌مِهری نسخه‌ها (check-versions)
+        run: node scripts/check-versions.mjs
       - name: نصب وابستگی‌ها و ساخت کلاینت (پر کردن frontendDist)
         run: |
           npm ci

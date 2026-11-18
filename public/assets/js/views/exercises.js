@@ -96,6 +96,7 @@ async function loadStaff() {
     staffNames.clear();
     for (const s of staffList) staffNames.set(s.id, s.fullName);
   } catch {
+    /* نرم — فهرست درمانگر اختیاری است؛ نام‌ها خالی می‌مانند */
   }
 }
 

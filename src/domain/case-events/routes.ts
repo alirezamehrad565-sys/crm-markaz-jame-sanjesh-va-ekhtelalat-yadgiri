@@ -1,8 +1,11 @@
-import type { AppHono } from '@core/shared';
-import { getAuthContext, requireRole } from '@core/auth';
-import { CaseEventTypeInputSchema, CaseEventTypeUpdateSchema, SurveyCreateSchema, teacherBindingOfPayload } from './pure';
+import type { AppHono, AppBindings } from '@core/shared';
+import { getAuthContext, requireRole, verifySessionJwt, resolveSessionSecret, getStaffById } from '@core/auth';
+import type { StaffRow } from '@core/auth';
+import { AuthError, ForbiddenError, ValidationError } from '@core/errors';
+import { CaseEventTypeInputSchema, CaseEventTypeUpdateSchema, SurveyCreateSchema, teacherBindingOfPayload, analyzeChecklist, buildSummary } from './pure';
 import type { CaseEventsService, CaseEventTypeInput } from './types';
-import { renderFillFormPage } from './public-form';
+import { renderFillFormPage, familySectionsOf } from './public-form';
+import { renderPreviewPage, renderPreviewErrorPage } from './preview-form';
 
 export function registerCaseEventsRoutes(app: AppHono, service: CaseEventsService): void {
 
@@ -271,28 +274,11 @@ export function registerCaseEventPublicRoutes(
       } catch { /* اسنپ‌شات معیوب = بدون بنر؛ فرم کامل عادی رندر می‌شود */ }
     }
 
+    /* ۱.۲۵.۸۱ — بخش‌بندی فرم خانواده به تابع مشترک familySectionsOf منتقل شد؛ پیش‌نمایش
+       فرم‌ساز (نقطه‌های پایانی preview پایین) از همین یک تابع می‌خواند تا «پیش‌نمایش = عین
+       چیزی که خانواده می‌بیند» یک قاعدهٔ یکتا بماند. */
     const subscaleName = new Map((type?.subscales ?? []).map((s) => [s.id, s.name] as const));
-    const sections: { title: string | null; items: { key: string; label: string; kind?: 'scale' | 'single' | 'longtext'; scaleMax?: number; scoredOptions?: { label: string }[]; scaleLabels?: string[]; hint?: string | null; teacherLabel?: string | null; teacherHint?: string | null }[] }[] = [];
-    for (const f of type?.fields ?? []) {
-      if (f.type !== 'scale' && f.type !== 'single' && f.type !== 'longtext') continue; // — آیتم نمره‌دار + متن آزاد به گیرنده می‌رسد
-      const title = f.subscaleId ? subscaleName.get(f.subscaleId) ?? null : null;
-      const item = {
-        key: f.key, label: f.label,
-        kind: (f.type === 'longtext' ? 'longtext' : f.type) as 'scale' | 'single' | 'longtext',
-        scaleMax: f.scaleMax,
-        scoredOptions: f.scoredOptions?.map((o) => ({ label: o.label })),
-        scaleLabels: f.scaleLabels,
-        hint: f.hint ?? null,
-        teacherLabel: f.teacherLabel ?? null,
-        teacherHint: f.teacherHint ?? null
-      };
-      const last = sections[sections.length - 1];
-      if (last && last.title === title) {
-        last.items.push(item);
-      } else {
-        sections.push({ title, items: [item] });
-      }
-    }
+    const sections = familySectionsOf(type?.fields ?? [], type?.subscales ?? null);
     /* ترتیب کانون‌محور: بخش‌های درگیر اول — بقیه به ترتیب کتابخانه */
     sections.sort((a, b) => {
       const keyOf = (s: { title: string | null }) => [...subscaleName.entries()].find(([, n]) => n === s.title)?.[0] ?? null;
@@ -338,6 +324,112 @@ export function registerCaseEventPublicRoutes(
       const code = message.includes('مهلت') ? 410 : 409;
       return c.json({ error: { code: 'CONFLICT', message } }, code);
     }
+  });
+
+  /* ۱.۲۵.۸۱ — «پیش‌نمایش از نگاه خانواده» در فرم‌ساز (خواست کارفرما): همکار با یک کلیک می‌بیند
+     خانواده دقیقاً چه صفحه‌ای می‌بیند، فرم را تا آخر پر می‌کند و «چه جوابی می‌دهد» — همان
+     تحلیلی که پس از ارسال واقعی در پرونده ثبت می‌شود. قراردادهای سخت:
+     ① هیچ نوشتنی — نه db، نه audit، نه sync؛ فقط رندر HTML و محاسبهٔ خالص (analyzeChecklist).
+     ② مسیر زیر /public است (میدل‌ور auth فقط /api را می‌پوشاند) پس توکن نشست کارمند در بدنه
+        می‌آید و عین مسیر Bearer میدل‌ور تأیید می‌شود: verifySessionJwt + کارمند فعال + نقش مجاز.
+     ③ توکن فقط در پاسخِ همان تبِ خود همکار برمی‌گردد (no-store، noindex) — هیچ لاگی از آن نیست. */
+  const STAFF_ROLES = ['manager', 'secretary', 'therapist'];
+  async function previewStaffOf(env: AppBindings, token: string): Promise<StaffRow> {
+    if (!token) throw new AuthError('توکن دسترسی موجود نیست');
+    const payload = await verifySessionJwt(token, await resolveSessionSecret(env));
+    if (!payload) throw new AuthError('توکن دسترسی نامعتبر است');
+    const staff = await getStaffById(env.DB, payload.sub);
+    if (!staff || staff.active !== 1) throw new AuthError('کاربر یافت نشد یا غیرفعال است');
+    if (!STAFF_ROLES.includes(staff.role)) {
+      throw new ForbiddenError('نقش کاربر مجاز نیست');
+    }
+    return staff;
+  }
+
+  app.post('/public/case-events/preview', async (c) => {
+    let definition: unknown = null;
+    let token = '';
+    const ct = c.req.header('content-type') ?? '';
+    if (ct.includes('application/json')) {
+      const body = await c.req.json<{ definition?: unknown; token?: string }>().catch(() => null);
+      definition = body?.definition ?? null;
+      token = String(body?.token ?? '');
+    } else {
+      const form = await c.req.formData().catch(() => null);
+      token = String(form?.get('token') ?? '');
+      try { definition = JSON.parse(String(form?.get('definition') ?? 'null')); }
+      catch { definition = null; }
+    }
+    await previewStaffOf(c.env, token);
+    const parsed = CaseEventTypeInputSchema.safeParse(definition);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      const where = issue.path.length > 0 ? ` (فیلد: ${issue.path.join('.')})` : '';
+      return c.html(renderPreviewErrorPage('تعریف قالب هنوز کامل نیست', `${issue.message}${where} — پیش‌نمایش فقط برای تعریف کامل معنا دارد.`), 400);
+    }
+    return new Response(renderPreviewPage(parsed.data as CaseEventTypeInput, token), {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'no-store',
+        'X-Robots-Tag': 'noindex, nofollow'
+      }
+    });
+  });
+
+  app.post('/public/case-events/preview/analyze', async (c) => {
+    const body = await c.req.json<{ token?: string; definition?: unknown; answers?: Record<string, number | string> }>().catch(() => null);
+    if (!body) {
+      return c.json({ error: { code: 'BAD_REQUEST', message: 'درخواست نامعتبر است' } }, 400);
+    }
+    await previewStaffOf(c.env, String(body.token ?? ''));
+    const parsed = CaseEventTypeInputSchema.safeParse(body.definition);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      const where = issue.path.length > 0 ? ` (${issue.path.join('.')})` : '';
+      return c.json({ error: { code: 'VALIDATION', message: `${issue.message}${where}` } }, 400);
+    }
+    const def = parsed.data as CaseEventTypeInput;
+    const values = body.answers ?? {};
+    const displayPayload = (): Record<string, { value: string; label: string }> => {
+      const payload: Record<string, { value: string; label: string }> = {};
+      for (const f of def.fields) {
+        const raw = values[f.key];
+        if (raw === undefined || raw === null || String(raw).trim() === '') continue; // اختیاری خالی ثبت نمی‌شود
+        const display = f.type === 'single' ? (f.scoredOptions?.[Number(raw)]?.label ?? String(raw)) : String(raw);
+        payload[f.key] = { value: display, label: f.label };
+      }
+      return payload;
+    };
+    if (def.category !== 'checklist') {
+      return c.json({
+        ok: true, analysis: null, summary: null, payload: displayPayload(),
+        note: 'این قالب خانواده‌پرکن نیست — نمرهٔ خودکار فقط برای چک‌لیست خانواده ساخته می‌شود.'
+      }, 200);
+    }
+    /* عین مسیر fillByFamily (service.ts) — بدون هیچ نوشتنی: الزامی‌ها، نگاشت عددی، تحلیل و
+       summary. نتیجه = دقیقاً همان شیئی که در ستون analysis پرونده می‌نشیند. */
+    const scoredKeys = new Set(def.fields.filter((f) => f.type === 'scale' || f.type === 'single').map((f) => f.key));
+    for (const f of def.fields) {
+      if (f.type === 'longtext' || f.type === 'text') {
+        if (f.required && String(values[f.key] ?? '').trim() === '') {
+          throw new ValidationError(`آیتم «${f.label}» بی‌پاسخ مانده است`);
+        }
+        continue;
+      }
+      if (values[f.key] === undefined || values[f.key] === null) {
+        throw new ValidationError(`آیتم «${f.label}» بی‌پاسخ مانده است`);
+      }
+    }
+    const numericValues: Record<string, number> = Object.fromEntries(
+      Object.entries(values)
+        .filter(([k]) => scoredKeys.has(k))
+        .map(([k, v]) => [k, Number(v)])
+    );
+    const analysis = analyzeChecklist(def.fields, def.bands ?? null, numericValues, def.subscales ?? null);
+    const payload = displayPayload();
+    const summary = buildSummary(payload, analysis);
+    return c.json({ ok: true, analysis, summary, payload }, 200);
   });
 }
 

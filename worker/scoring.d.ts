@@ -18,13 +18,6 @@ export interface ContentScore {
   total: number;
 }
 
-export interface Level {
-  min: number;
-  key: string;
-  label: string;
-  badge: string;
-}
-
 export interface BoardRow {
   staffId: string;
   fullName: string;

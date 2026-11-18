@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.27.4";
+var APP_VERSION = "1.27.19";
 var NODE_MIN_VERSION = "1.26.0";
 
 // node_modules/zod/v4/classic/external.js
@@ -22310,8 +22310,6 @@ var DEFAULT_CENTER_HOURS = [
   { weekday: 3, startMinute: 9 * 60, endMinute: 17 * 60 },
   { weekday: 4, startMinute: 9 * 60, endMinute: 13 * 60 }
 ];
-var CALENDAR_DAY_START_MINUTE = 6 * 60;
-var CALENDAR_DAY_END_MINUTE = 22 * 60;
 var ANNOUNCEMENT_TITLE_MAX = 120;
 var ANNOUNCEMENT_BODY_MAX = 2e3;
 var KNOWLEDGE_TITLE_MAX = 140;
@@ -22587,6 +22585,20 @@ function tehranTimeLabel(isoUtc) {
   return `${pad2(tehran.getUTCHours())}:${pad2(tehran.getUTCMinutes())}`;
 }
 __name(tehranTimeLabel, "tehranTimeLabel");
+function tehranMinuteWindow(ymd, fromMinute, toMinute) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) {
+    throw new Error(`INVALID_DATE: ${ymd}`);
+  }
+  if (!Number.isFinite(fromMinute) || !Number.isFinite(toMinute) || fromMinute < 0 || toMinute <= 0 || toMinute > 1440 || toMinute <= fromMinute) {
+    throw new Error(`INVALID_MINUTE_RANGE: ${fromMinute}-${toMinute}`);
+  }
+  const base = Date.parse(`${ymd}T00:00:00.000Z`) - TEHRAN_OFFSET_MS;
+  return {
+    start: new Date(base + fromMinute * 6e4).toISOString(),
+    end: new Date(base + toMinute * 6e4).toISOString()
+  };
+}
+__name(tehranMinuteWindow, "tehranMinuteWindow");
 function addDaysYmd(ymd, days) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) {
     throw new Error(`INVALID_DATE: ${ymd}`);
@@ -22709,6 +22721,10 @@ function faDigits(input2) {
   return String(input2).replace(/\d/g, (d) => fa2[Number(d)]);
 }
 __name(faDigits, "faDigits");
+function minuteToLabel(minute) {
+  return `${pad2(Math.floor(minute / 60))}:${pad2(minute % 60)}`;
+}
+__name(minuteToLabel, "minuteToLabel");
 function jalaliLabel(ymd) {
   const [gy, gm, gd] = ymd.split("-").map(Number);
   const j = toJalaliParts(gy, gm, gd);
@@ -22764,6 +22780,27 @@ var NewAppointmentSchema = external_exports.object({
   {
     message: `\u0645\u062F\u062A \u0646\u0648\u0628\u062A \u0628\u0627\u06CC\u062F \u0628\u06CC\u0646 ${MIN_APPOINTMENT_MINUTES} \u062A\u0627 ${MAX_APPOINTMENT_MINUTES} \u062F\u0642\u06CC\u0642\u0647 \u0628\u0627\u0634\u062F`
   }
+);
+var AssessmentBlockCreateSchema = external_exports.object({
+  date: external_exports.string().regex(/^\d{4}-\d{2}-\d{2}$/, "\u062A\u0627\u0631\u06CC\u062E \u0628\u0627\u06CC\u062F \u0634\u06A9\u0644 YYYY-MM-DD \u0628\u0627\u0634\u062F"),
+  start_minute: external_exports.number().int().min(0).max(1439),
+  end_minute: external_exports.number().int().min(1).max(1440),
+  therapist_ids: external_exports.array(UuidSchema).max(30).default([]),
+  note: external_exports.string().max(500).nullish()
+}).refine((v) => v.end_minute > v.start_minute, {
+  message: "\u067E\u0627\u06CC\u0627\u0646 \u0628\u0627\u0632\u0647\u0654 \u0633\u0646\u062C\u0634 \u0628\u0627\u06CC\u062F \u0628\u0639\u062F \u0627\u0632 \u0634\u0631\u0648\u0639 \u0622\u0646 \u0628\u0627\u0634\u062F",
+  path: ["end_minute"]
+});
+var AssessmentBlockPatchSchema = external_exports.object({
+  date: external_exports.string().regex(/^\d{4}-\d{2}-\d{2}$/, "\u062A\u0627\u0631\u06CC\u062E \u0628\u0627\u06CC\u062F \u0634\u06A9\u0644 YYYY-MM-DD \u0628\u0627\u0634\u062F").optional(),
+  start_minute: external_exports.number().int().min(0).max(1439).optional(),
+  end_minute: external_exports.number().int().min(1).max(1440).optional(),
+  staff_id: UuidSchema.optional(),
+  note: external_exports.string().max(500).nullish(),
+  version: external_exports.number().int().positive()
+}).refine(
+  (v) => v.start_minute === void 0 || v.end_minute === void 0 || v.end_minute > v.start_minute,
+  { message: "\u067E\u0627\u06CC\u0627\u0646 \u0628\u0627\u0632\u0647\u0654 \u0633\u0646\u062C\u0634 \u0628\u0627\u06CC\u062F \u0628\u0639\u062F \u0627\u0632 \u0634\u0631\u0648\u0639 \u0622\u0646 \u0628\u0627\u0634\u062F", path: ["end_minute"] }
 );
 var UpdateAppointmentSchema = external_exports.object({
   note: external_exports.string().max(2e3).nullish(),
@@ -23812,9 +23849,9 @@ function authMiddleware() {
         if (!payload2.sid) {
           throw new AuthError("\u062A\u0648\u06A9\u0646 \u0641\u0627\u0642\u062F \u0634\u0646\u0627\u0633\u0647\u0654 \u0646\u0634\u0633\u062A \u0627\u0633\u062A \u2014 \u0648\u0631\u0648\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A");
         }
-        const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+        const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
         const session = await db.prepare("SELECT revoked_at, expires_at FROM auth_sessions WHERE sid = ?").bind(payload2.sid).first();
-        if (!session || session.revoked_at !== null || session.expires_at <= nowIso) {
+        if (!session || session.revoked_at !== null || session.expires_at <= nowIso2) {
           throw new AuthError("\u0646\u0634\u0633\u062A \u0628\u0627\u0637\u0644 \u06CC\u0627 \u0645\u0646\u0642\u0636\u06CC \u0634\u062F\u0647 \u0627\u0633\u062A \u2014 \u0648\u0631\u0648\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A");
         }
         const staff2 = await getStaffById(db, payload2.sub);
@@ -24961,7 +24998,7 @@ function selectNotifications(filters) {
   };
 }
 __name(selectNotifications, "selectNotifications");
-function selectPendingNotifications(limit, maxAttempts, nowIso) {
+function selectPendingNotifications(limit, maxAttempts, nowIso2) {
   return {
     sql: `SELECT ${NOTIFICATION_COLS}
             FROM notifications
@@ -24969,71 +25006,71 @@ function selectPendingNotifications(limit, maxAttempts, nowIso) {
              AND (send_at IS NULL OR send_at <= ?)
            ORDER BY created_at
            LIMIT ?`,
-    params: [maxAttempts, nowIso, limit]
+    params: [maxAttempts, nowIso2, limit]
   };
 }
 __name(selectPendingNotifications, "selectPendingNotifications");
-function releaseNotificationById(id, nowIso) {
+function releaseNotificationById(id, nowIso2) {
   return {
     sql: `UPDATE notifications
              SET send_at = NULL, attempts = 0, status = 'pending', updated_at = ?
            WHERE id = ? AND status IN ('pending', 'failed')`,
-    params: [nowIso, id]
+    params: [nowIso2, id]
   };
 }
 __name(releaseNotificationById, "releaseNotificationById");
-function releaseAllDrafts(nowIso) {
+function releaseAllDrafts(nowIso2) {
   return {
     sql: `UPDATE notifications
              SET send_at = NULL, updated_at = ?
            WHERE status = 'pending' AND send_at IS NOT NULL`,
-    params: [nowIso]
+    params: [nowIso2]
   };
 }
 __name(releaseAllDrafts, "releaseAllDrafts");
-function stalePendingToSkipped(maxAttempts, nowIso) {
+function stalePendingToSkipped(maxAttempts, nowIso2) {
   return {
     sql: `UPDATE notifications
              SET status = 'skipped', last_error = 'MAX_ATTEMPTS', updated_at = ?
            WHERE status = 'pending' AND attempts >= ?`,
-    params: [nowIso, maxAttempts]
+    params: [nowIso2, maxAttempts]
   };
 }
 __name(stalePendingToSkipped, "stalePendingToSkipped");
-function markNotificationSent(id, externalId, nowIso) {
+function markNotificationSent(id, externalId, nowIso2) {
   return {
     sql: `UPDATE notifications
              SET status = 'sent', sent_at = ?, last_error = NULL,
                  attempts = attempts + 1, updated_at = ?
            WHERE id = ?`,
-    params: [nowIso, nowIso, id]
+    params: [nowIso2, nowIso2, id]
   };
 }
 __name(markNotificationSent, "markNotificationSent");
-function markNotificationFailed(id, error62, nowIso) {
+function markNotificationFailed(id, error62, nowIso2) {
   return {
     sql: `UPDATE notifications
              SET status = 'failed', last_error = ?, attempts = attempts + 1, updated_at = ?
            WHERE id = ?`,
-    params: [error62.slice(0, 500), nowIso, id]
+    params: [error62.slice(0, 500), nowIso2, id]
   };
 }
 __name(markNotificationFailed, "markNotificationFailed");
-function markNotificationSkipped(id, reason, nowIso) {
+function markNotificationSkipped(id, reason, nowIso2) {
   return {
     sql: `UPDATE notifications
              SET status = 'skipped', last_error = ?, updated_at = ?
            WHERE id = ? AND status = 'pending'`,
-    params: [reason.slice(0, 500), nowIso, id]
+    params: [reason.slice(0, 500), nowIso2, id]
   };
 }
 __name(markNotificationSkipped, "markNotificationSkipped");
-function retryFailedNotifications(limit, nowIso) {
+function retryFailedNotifications(limit, nowIso2) {
   return {
     sql: `UPDATE notifications
              SET status = 'pending', updated_at = ?
            WHERE id IN (SELECT id FROM notifications WHERE status = 'failed' ORDER BY created_at LIMIT ?)`,
-    params: [nowIso, limit]
+    params: [nowIso2, limit]
   };
 }
 __name(retryFailedNotifications, "retryFailedNotifications");
@@ -25116,12 +25153,12 @@ function selectBotLinks(filters) {
   };
 }
 __name(selectBotLinks, "selectBotLinks");
-function linkBotLink(id, chatId, nowIso) {
+function linkBotLink(id, chatId, nowIso2) {
   return {
     sql: `UPDATE bot_links
              SET status = 'linked', chat_id = ?, updated_at = ?
            WHERE id = ?`,
-    params: [chatId, nowIso, id]
+    params: [chatId, nowIso2, id]
   };
 }
 __name(linkBotLink, "linkBotLink");
@@ -25204,12 +25241,12 @@ function selectStaffLinks(filters) {
   };
 }
 __name(selectStaffLinks, "selectStaffLinks");
-function linkStaffLink(id, chatId, nowIso) {
+function linkStaffLink(id, chatId, nowIso2) {
   return {
     sql: `UPDATE staff_bot_links
              SET status = 'linked', chat_id = ?, updated_at = ?
            WHERE id = ?`,
-    params: [chatId, nowIso, id]
+    params: [chatId, nowIso2, id]
   };
 }
 __name(linkStaffLink, "linkStaffLink");
@@ -25272,12 +25309,12 @@ function selectClassLinks(filters) {
   };
 }
 __name(selectClassLinks, "selectClassLinks");
-function linkClassLink(id, chatId, nowIso) {
+function linkClassLink(id, chatId, nowIso2) {
   return {
     sql: `UPDATE class_bot_links
              SET status = 'linked', chat_id = ?, updated_at = ?
            WHERE id = ? AND status != 'revoked'`,
-    params: [chatId, nowIso, id]
+    params: [chatId, nowIso2, id]
   };
 }
 __name(linkClassLink, "linkClassLink");
@@ -25369,7 +25406,7 @@ function createNotifyService(deps) {
       return channels.get(name) ?? null;
     },
     async enqueue(input2) {
-      const nowIso = now().toISOString();
+      const nowIso2 = now().toISOString();
       if (input2.dedupKey) {
         const existing = await db.queryOne(
           "SELECT id FROM notifications WHERE dedup_key = ?",
@@ -25392,7 +25429,7 @@ function createNotifyService(deps) {
               payload: input2.payload,
               dedupKey: input2.dedupKey ?? null,
               sendAt: input2.sendAt ?? null,
-              nowIso
+              nowIso: nowIso2
             })
           )
         );
@@ -25406,23 +25443,23 @@ function createNotifyService(deps) {
       }
     },
     async dispatchPending(limit = 50) {
-      const nowIso = now().toISOString();
+      const nowIso2 = now().toISOString();
       const summary = { processed: 0, sent: 0, failed: 0, skipped: 0 };
-      await db.execute(...spreadInsert(stalePendingToSkipped(maxAttempts, nowIso)));
-      const pending = await db.query(...spreadInsert(selectPendingNotifications(limit, maxAttempts, nowIso))).then((rows) => rows.map(rowFromDb));
+      await db.execute(...spreadInsert(stalePendingToSkipped(maxAttempts, nowIso2)));
+      const pending = await db.query(...spreadInsert(selectPendingNotifications(limit, maxAttempts, nowIso2))).then((rows) => rows.map(rowFromDb));
       for (const row of pending) {
         summary.processed += 1;
         const channel = channels.get(row.channel);
         if (!channel) {
           await db.execute(
-            ...spreadInsert(markNotificationFailed(row.id, "CHANNEL_UNAVAILABLE", nowIso))
+            ...spreadInsert(markNotificationFailed(row.id, "CHANNEL_UNAVAILABLE", nowIso2))
           );
           summary.failed += 1;
           continue;
         }
         if (!row.recipient) {
           await db.execute(
-            ...spreadInsert(markNotificationSkipped(row.id, "NO_RECIPIENT", nowIso))
+            ...spreadInsert(markNotificationSkipped(row.id, "NO_RECIPIENT", nowIso2))
           );
           summary.skipped += 1;
           continue;
@@ -25441,12 +25478,12 @@ function createNotifyService(deps) {
         }
         if (result.ok) {
           await db.execute(
-            ...spreadInsert(markNotificationSent(row.id, result.externalId ?? null, nowIso))
+            ...spreadInsert(markNotificationSent(row.id, result.externalId ?? null, nowIso2))
           );
           summary.sent += 1;
         } else {
           await db.execute(
-            ...spreadInsert(markNotificationFailed(row.id, result.error ?? "SEND_FAILED", nowIso))
+            ...spreadInsert(markNotificationFailed(row.id, result.error ?? "SEND_FAILED", nowIso2))
           );
           summary.failed += 1;
           log.warn("dispatch.failed", { id: row.id, channel: row.channel, error: result.error });
@@ -26123,6 +26160,271 @@ function inPlaceholders(count) {
 }
 __name(inPlaceholders, "inPlaceholders");
 
+// src/domain/assessment-blocks/service.ts
+var newId = /* @__PURE__ */ __name(() => crypto.randomUUID(), "newId");
+function rowToBlock(r) {
+  let therapistIds = [];
+  try {
+    const parsed = JSON.parse(r.therapist_ids ?? "[]");
+    if (Array.isArray(parsed)) therapistIds = parsed.filter((x) => typeof x === "string");
+  } catch {
+    therapistIds = [];
+  }
+  return {
+    id: r.id,
+    date: r.block_date,
+    startMinute: r.start_minute,
+    endMinute: r.end_minute,
+    therapistIds,
+    note: r.note ?? null,
+    version: r.version,
+    createdBy: r.created_by ?? null,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at
+  };
+}
+__name(rowToBlock, "rowToBlock");
+function tehranYmdsSpanned(startAt, endAt) {
+  const out = /* @__PURE__ */ new Set();
+  out.add(tehranYmdOf(startAt));
+  const innerEnd = new Date(Math.max(Date.parse(endAt) - 1, Date.parse(startAt))).toISOString();
+  out.add(tehranYmdOf(innerEnd));
+  return [...out];
+}
+__name(tehranYmdsSpanned, "tehranYmdsSpanned");
+async function findAssessmentBlockConflict(db, window, targetStaffId) {
+  const startMs = Date.parse(window.startAt);
+  const endMs = Date.parse(window.endAt);
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return null;
+  for (const ymd of tehranYmdsSpanned(window.startAt, window.endAt)) {
+    const rows = await db.query(
+      "SELECT * FROM assessment_blocks WHERE block_date = ? AND deleted_at IS NULL",
+      [ymd]
+    );
+    for (const row of rows) {
+      const blockWin = tehranMinuteWindow(ymd, row.start_minute, row.end_minute);
+      const blockStart = Date.parse(blockWin.start);
+      const blockEnd = Date.parse(blockWin.end);
+      if (blockStart >= endMs || blockEnd <= startMs) continue;
+      const block = rowToBlock(row);
+      if (block.therapistIds.length > 0) {
+        if (targetStaffId && block.therapistIds.includes(targetStaffId)) {
+          return { block, kind: "involved" };
+        }
+        continue;
+      }
+      return { block, kind: "time_only" };
+    }
+  }
+  return null;
+}
+__name(findAssessmentBlockConflict, "findAssessmentBlockConflict");
+async function assertNoAssessmentBlockInRange(db, window, actor, targetStaffId) {
+  const hit = await findAssessmentBlockConflict(db, window, targetStaffId);
+  if (!hit) return;
+  const when = `(${minuteToLabel(hit.block.startMinute)} \u062A\u0627 ${minuteToLabel(hit.block.endMinute)})`;
+  if (hit.kind === "involved") {
+    throw new ValidationError(
+      `\u0627\u06CC\u0646 \u0628\u0627\u0632\u0647 \u0628\u0631\u0627\u06CC \xAB\u0633\u0646\u062C\u0634\xBB \u0631\u0632\u0631\u0648 \u0634\u062F\u0647 \u0627\u0633\u062A ${when} \u2014 \u0646\u0648\u0628\u062A\u200C\u06AF\u06CC\u0631\u06CC\u0650 \u062F\u0631\u0645\u0627\u0646\u06AF\u0631\u0650 \u062F\u0631\u06AF\u06CC\u0631 \u062F\u0631 \u0627\u06CC\u0646 \u0632\u0645\u0627\u0646 \u0645\u0645\u06A9\u0646 \u0646\u06CC\u0633\u062A.`
+    );
+  }
+  if (actor.role === "manager" || actor.role === "supervisor") return;
+  throw new ValidationError(
+    `\u0627\u06CC\u0646 \u0628\u0627\u0632\u0647 \u0628\u0631\u0627\u06CC \xAB\u0633\u0646\u062C\u0634\xBB \u0631\u0632\u0631\u0648 \u0634\u062F\u0647 \u0627\u0633\u062A ${when} \u2014 \u062B\u0628\u062A \u06CC\u0627 \u062C\u0627\u0628\u0647\u200C\u062C\u0627\u06CC\u06CC \u0646\u0648\u0628\u062A \u062F\u0631 \u0627\u06CC\u0646 \u0632\u0645\u0627\u0646 \u0645\u0645\u06A9\u0646 \u0646\u06CC\u0633\u062A\u061B \u0628\u0627 \u0645\u062F\u06CC\u0631 \u0647\u0645\u0627\u0647\u0646\u06AF \u06A9\u0646\u06CC\u062F.`
+  );
+}
+__name(assertNoAssessmentBlockInRange, "assertNoAssessmentBlockInRange");
+function createAssessmentBlockService(deps) {
+  const { db, audit, logger } = deps;
+  const service = {
+    async create(input2, actor) {
+      if (input2.endMinute <= input2.startMinute) {
+        throw new ValidationError("\u067E\u0627\u06CC\u0627\u0646 \u0628\u0627\u0632\u0647\u0654 \u0633\u0646\u062C\u0634 \u0628\u0627\u06CC\u062F \u0628\u0639\u062F \u0627\u0632 \u0634\u0631\u0648\u0639 \u0622\u0646 \u0628\u0627\u0634\u062F");
+      }
+      const therapistIds = [...new Set(input2.therapistIds)];
+      if (therapistIds.length > 0) {
+        let knownCount = 0;
+        for (const chunk of inParamChunks(therapistIds)) {
+          const known = await db.query(
+            `SELECT id FROM staff WHERE id IN (${inPlaceholders(chunk.length)})`,
+            chunk
+          );
+          knownCount += known.length;
+        }
+        if (knownCount !== therapistIds.length) {
+          throw new ValidationError("\u06CC\u06A9 \u06CC\u0627 \u0686\u0646\u062F \u062F\u0631\u0645\u0627\u0646\u06AF\u0631\u0650 \u062F\u0631\u06AF\u06CC\u0631 \u062F\u0631 \u0641\u0647\u0631\u0633\u062A \u0647\u0645\u06A9\u0627\u0631\u0627\u0646 \u0646\u06CC\u0633\u062A");
+        }
+      }
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      const created = [];
+      const perTherapistRows = therapistIds.length > 0 ? therapistIds.map((t) => [t]) : [[]];
+      await db.transaction(async (tx) => {
+        for (const single of perTherapistRows) {
+          const id = newId();
+          await tx.execute(
+            `INSERT INTO assessment_blocks (id, block_date, start_minute, end_minute, therapist_ids, note, version, created_by, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
+            [id, input2.date, input2.startMinute, input2.endMinute, JSON.stringify(single), input2.note ?? null, actor.staffId, now, now]
+          );
+          await audit.logInTransaction(tx, {
+            actorId: actor.staffId,
+            action: "assessment_block.create",
+            resourceType: "assessment_block",
+            resourceId: id,
+            changes: {
+              date: { from: null, to: input2.date },
+              window: { from: null, to: `${minuteToLabel(input2.startMinute)}-${minuteToLabel(input2.endMinute)}` },
+              therapist_ids: { from: null, to: single }
+            }
+          });
+          created.push({
+            id,
+            date: input2.date,
+            startMinute: input2.startMinute,
+            endMinute: input2.endMinute,
+            therapistIds: single,
+            note: input2.note ?? null,
+            version: 1,
+            createdBy: actor.staffId,
+            createdAt: now,
+            updatedAt: now
+          });
+        }
+      });
+      logger.child("assessment-blocks").info("block.created", { date: input2.date, cards: created.length });
+      return created;
+    },
+    /* ۱.۲۷.۱۵ — پچ کارت سنجش (خواست کارفرما): درگ/دراپ روی تقویم، کش‌دادن پایان، پرتاب به
+       ستون درمانگر دیگر و ذخیرهٔ جزئیات از مودال کلیکِ کارت — قفل خوش‌بینانهٔ نسخه، هم‌الگوی
+       update/move سرویس نوبت. سدِ نوبت‌ها (findAssessmentBlockConflict) از ردیفِ به‌روزشده
+       خودکار پیروی می‌کند؛ تداخل بین خودِ بلوک‌ها مثل قبل آزاد است (پاریتی با create). */
+    async update(id, patch, actor) {
+      const row = await db.queryOne(
+        "SELECT * FROM assessment_blocks WHERE id = ? AND deleted_at IS NULL",
+        [id]
+      );
+      if (!row) throw new NotFoundError("\u0628\u0644\u0648\u06A9 \u0633\u0646\u062C\u0634");
+      if (row.version !== patch.version) {
+        throw new ConflictError("\u0627\u06CC\u0646 \u0628\u0627\u0632\u0647\u0654 \u0633\u0646\u062C\u0634 \u0647\u0645\u06CC\u0646 \u0627\u0644\u0627\u0646 \u062A\u0648\u0633\u0637 \u06A9\u0627\u0631\u0628\u0631 \u062F\u06CC\u06AF\u0631\u06CC \u062A\u063A\u06CC\u06CC\u0631 \u06A9\u0631\u062F.", row.version);
+      }
+      const date5 = patch.date ?? row.block_date;
+      const startMinute = patch.startMinute ?? row.start_minute;
+      const endMinute = patch.endMinute ?? row.end_minute;
+      if (endMinute <= startMinute) {
+        throw new ValidationError("\u067E\u0627\u06CC\u0627\u0646 \u0628\u0627\u0632\u0647\u0654 \u0633\u0646\u062C\u0634 \u0628\u0627\u06CC\u062F \u0628\u0639\u062F \u0627\u0632 \u0634\u0631\u0648\u0639 \u0622\u0646 \u0628\u0627\u0634\u062F");
+      }
+      const prevIds = rowToBlock(row).therapistIds;
+      const therapistIds = patch.staffId !== void 0 ? [patch.staffId] : prevIds;
+      if (patch.staffId !== void 0) {
+        const known = await db.queryOne("SELECT id FROM staff WHERE id = ?", [patch.staffId]);
+        if (!known) throw new ValidationError("\u062F\u0631\u0645\u0627\u0646\u06AF\u0631\u0650 \u0645\u0642\u0635\u062F \u062F\u0631 \u0641\u0647\u0631\u0633\u062A \u0647\u0645\u06A9\u0627\u0631\u0627\u0646 \u0646\u06CC\u0633\u062A");
+      }
+      const note = patch.note === void 0 ? row.note ?? null : (patch.note ?? "").trim().length > 0 ? patch.note.trim() : null;
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      await db.transaction(async (tx) => {
+        await tx.execute(
+          `UPDATE assessment_blocks
+             SET block_date = ?, start_minute = ?, end_minute = ?, therapist_ids = ?, note = ?, version = version + 1, updated_at = ?
+           WHERE id = ?`,
+          [date5, startMinute, endMinute, JSON.stringify(therapistIds), note, now, id]
+        );
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: "assessment_block.update",
+          resourceType: "assessment_block",
+          resourceId: id,
+          changes: {
+            date: { from: row.block_date, to: date5 },
+            window: {
+              from: `${minuteToLabel(row.start_minute)}-${minuteToLabel(row.end_minute)}`,
+              to: `${minuteToLabel(startMinute)}-${minuteToLabel(endMinute)}`
+            },
+            therapist_ids: { from: prevIds, to: therapistIds },
+            note: { from: row.note, to: note }
+          }
+        });
+      });
+      logger.child("assessment-blocks").info("block.updated", { id, movedDay: date5 !== row.block_date });
+      const fresh = await db.queryOne("SELECT * FROM assessment_blocks WHERE id = ?", [id]);
+      return rowToBlock(fresh);
+    },
+    async list(from, to) {
+      const rows = await db.query(
+        "SELECT * FROM assessment_blocks WHERE deleted_at IS NULL AND block_date >= ? AND block_date <= ? ORDER BY block_date, start_minute",
+        [from ?? "0000-01-01", to ?? "9999-12-31"]
+      );
+      return rows.map(rowToBlock);
+    },
+    async remove(id, actor) {
+      const row = await db.queryOne("SELECT * FROM assessment_blocks WHERE id = ? AND deleted_at IS NULL", [id]);
+      if (!row) throw new NotFoundError("\u0628\u0644\u0648\u06A9 \u0633\u0646\u062C\u0634");
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      await db.execute(
+        `UPDATE assessment_blocks SET deleted_at = ?, updated_at = ?, version = version + 1 WHERE id = ?`,
+        [now, now, id]
+      );
+      await audit.log({
+        actorId: actor.staffId,
+        action: "assessment_block.remove",
+        resourceType: "assessment_block",
+        resourceId: id,
+        changes: {
+          date: { from: row.block_date, to: row.block_date }
+        }
+      });
+    }
+  };
+  return service;
+}
+__name(createAssessmentBlockService, "createAssessmentBlockService");
+
+// src/domain/assessment-blocks/routes.ts
+function registerAssessmentBlockRoutes(app, service) {
+  app.get("/api/assessment-blocks", async (c) => {
+    getAuthContext(c);
+    const items = await service.list(c.req.query("from") || void 0, c.req.query("to") || void 0);
+    return c.json({ data: items }, 200);
+  });
+  app.post("/api/assessment-blocks", requireRole("manager"), async (c) => {
+    const actor = getAuthContext(c);
+    const body = AssessmentBlockCreateSchema.parse(await c.req.json());
+    const blocks = await service.create(
+      {
+        date: body.date,
+        startMinute: body.start_minute,
+        endMinute: body.end_minute,
+        therapistIds: body.therapist_ids,
+        note: body.note ?? null
+      },
+      actor
+    );
+    return c.json({ data: blocks }, 201);
+  });
+  app.patch("/api/assessment-blocks/:id", requireRole("manager"), async (c) => {
+    const actor = getAuthContext(c);
+    const body = AssessmentBlockPatchSchema.parse(await c.req.json());
+    const block = await service.update(
+      c.req.param("id"),
+      {
+        date: body.date,
+        startMinute: body.start_minute,
+        endMinute: body.end_minute,
+        staffId: body.staff_id,
+        note: body.note === void 0 ? void 0 : body.note ?? null,
+        version: body.version
+      },
+      actor
+    );
+    return c.json({ data: block }, 200);
+  });
+  app.delete("/api/assessment-blocks/:id", requireRole("manager"), async (c) => {
+    const actor = getAuthContext(c);
+    await service.remove(c.req.param("id"), actor);
+    return c.body(null, 204);
+  });
+}
+__name(registerAssessmentBlockRoutes, "registerAssessmentBlockRoutes");
+
 // src/domain/appointment-core/repository.ts
 function rowToAppointment(row, students) {
   return {
@@ -26280,6 +26582,16 @@ async function copyWeek(ctx) {
       });
       continue;
     }
+    const blockHit = await findAssessmentBlockConflict(db, { startAt: newStart, endAt: newEnd }, row.staff_id);
+    if (blockHit && (blockHit.kind === "involved" || actor.role !== "manager" && actor.role !== "supervisor")) {
+      conflicts.push({
+        type: "assessment_block",
+        staffId: row.staff_id,
+        proposedStartAt: newStart,
+        proposedEndAt: newEnd
+      });
+      continue;
+    }
     toCopy.push({ row, startAt: newStart, endAt: newEnd });
   }
   if (input2.dryRun) {
@@ -26287,15 +26599,15 @@ async function copyWeek(ctx) {
   }
   await db.transaction(async (tx) => {
     for (const item of toCopy) {
-      const newId = crypto.randomUUID();
+      const newId2 = crypto.randomUUID();
       await tx.execute(
         `INSERT INTO appointments (id, staff_id, start_at, end_at, status, session_type, note, version, batch_id, created_by)
          VALUES (?, ?, ?, ?, 'scheduled', ?, ?, 1, ?, ?)`,
-        [newId, item.row.staff_id, item.startAt, item.endAt, item.row.session_type, item.row.note, batchId, actor.staffId]
+        [newId2, item.row.staff_id, item.startAt, item.endAt, item.row.session_type, item.row.note, batchId, actor.staffId]
       );
       for (const s of studentsByAppt.get(item.row.id) ?? []) {
         await tx.execute(`INSERT INTO appointment_students (appointment_id, student_id, facet_id) VALUES (?, ?, ?)`, [
-          newId,
+          newId2,
           s.student_id,
           s.facet_id
         ]);
@@ -26518,6 +26830,7 @@ function createAppointmentService(deps) {
       }
       assertAppointmentScope(actor, input2.staffId);
       await assertStudentsInScope(tx, actor, input2.students.map((s) => s.studentId));
+      await assertNoAssessmentBlockInRange(tx, { startAt: input2.startAt, endAt: input2.endAt }, actor, input2.staffId);
       const id = crypto.randomUUID();
       await tx.execute(
         `INSERT INTO appointments (id, staff_id, start_at, end_at, status, session_type, note, version, created_by)
@@ -26620,6 +26933,7 @@ function createAppointmentService(deps) {
       const durationMin = (Date.parse(current.endAt) - Date.parse(current.startAt)) / 6e4;
       const newEndAt = addMinutes(newStartAt, durationMin);
       await db.transaction(async (tx) => {
+        await assertNoAssessmentBlockInRange(tx, { startAt: newStartAt, endAt: newEndAt }, actor, current.staffId);
         await tx.execute(
           `UPDATE appointments SET start_at = ?, end_at = ?, version = version + 1, updated_at = datetime('now') WHERE id = ? AND version = ?`,
           [newStartAt, newEndAt, id, version2]
@@ -26662,6 +26976,7 @@ function createAppointmentService(deps) {
         throw new ValidationError("\u0632\u0645\u0627\u0646 \u067E\u0627\u06CC\u0627\u0646 \u0628\u0627\u06CC\u062F \u0631\u0648\u06CC \u0634\u0628\u06A9\u0647 \u06F1\u06F5 \u062F\u0642\u06CC\u0642\u0647\u200C\u0627\u06CC \u0628\u0627\u0634\u062F");
       }
       await db.transaction(async (tx) => {
+        await assertNoAssessmentBlockInRange(tx, { startAt: current.startAt, endAt: newEndAt }, actor, current.staffId);
         await tx.execute(
           `UPDATE appointments SET end_at = ?, version = version + 1, updated_at = datetime('now') WHERE id = ? AND version = ?`,
           [newEndAt, id, version2]
@@ -27048,7 +27363,7 @@ function createAttendanceService(deps) {
       return { appointmentId, studentId, status };
     },
     async listPending(staffId) {
-      const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+      const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
       const sql = `
         SELECT s.appointment_id, s.student_id, st.first_name || ' ' || st.last_name AS student_name,
                a.staff_id, a.start_at, a.end_at
@@ -27061,7 +27376,7 @@ function createAttendanceService(deps) {
            ${staffId ? "AND a.staff_id = ?" : ""}
          ORDER BY a.start_at DESC
          LIMIT 200`;
-      const params = staffId ? [nowIso, staffId] : [nowIso];
+      const params = staffId ? [nowIso2, staffId] : [nowIso2];
       const rows = await db.query(sql, params);
       return rows.map((r) => ({
         appointmentId: r.appointment_id,
@@ -27244,14 +27559,14 @@ function createStaffAttendanceService(deps) {
         `SELECT id, staff_id, date, status, note, updated_at FROM staff_attendance WHERE staff_id = ? AND date = ?`,
         [input2.staffId, input2.date]
       );
-      const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+      const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
       let recordId = "";
       await db.transaction(async (tx) => {
         if (existing) {
           recordId = existing.id;
           await tx.execute(
             `UPDATE staff_attendance SET status = ?, note = COALESCE(?, note), updated_at = ? WHERE id = ?`,
-            [input2.status, input2.note ?? null, nowIso, existing.id]
+            [input2.status, input2.note ?? null, nowIso2, existing.id]
           );
           await audit.logInTransaction(tx, {
             actorId: actor.staffId,
@@ -27267,7 +27582,7 @@ function createStaffAttendanceService(deps) {
           await tx.execute(
             `INSERT INTO staff_attendance (id, staff_id, date, status, note, created_at, updated_at)
              VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [recordId, input2.staffId, input2.date, input2.status, input2.note ?? null, nowIso, nowIso]
+            [recordId, input2.staffId, input2.date, input2.status, input2.note ?? null, nowIso2, nowIso2]
           );
           await audit.logInTransaction(tx, {
             actorId: actor.staffId,
@@ -28227,7 +28542,7 @@ function createStudentProfileService(deps) {
         if (!owner || owner.active !== 1) throw new NotFoundError("\u0647\u0645\u06A9\u0627\u0631");
       }
       const active = input2.archived ? 0 : 1;
-      const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+      const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
       await tx.execute(
         `INSERT INTO students (id, national_id, first_name, last_name, birth_date, gender, grade, school_id, class_id,
                                guardian_name, guardian_relation, guardian_phone, owner_staff_id, active, pathway)
@@ -28283,7 +28598,7 @@ function createStudentProfileService(deps) {
         active: active === 1,
         ownerStaffId: input2.ownerStaffId ?? null,
         pathway: input2.pathway ?? null,
-        createdAt: nowIso
+        createdAt: nowIso2
       };
       return student;
     },
@@ -28653,9 +28968,9 @@ function createStudentProfileService(deps) {
         if (count > 0) blocks.push({ key, label: STUDENT_DELETE_LABELS[key] ?? key, count });
       }
       const asm = await db.queryOne(`SELECT COUNT(*) AS cnt FROM assessments WHERE student_id = ?`, [id]);
-      if ((asm?.cnt ?? 0) > 0) hardBlocks.push({ key: "assessment", label: STUDENT_DELETE_LABELS.assessment, count: asm.cnt });
+      if (asm && asm.cnt > 0) hardBlocks.push({ key: "assessment", label: STUDENT_DELETE_LABELS.assessment, count: asm.cnt });
       const don = await db.queryOne(`SELECT COUNT(*) AS cnt FROM finance_donations WHERE student_id = ?`, [id]);
-      if ((don?.cnt ?? 0) > 0) hardBlocks.push({ key: "donation", label: STUDENT_DELETE_LABELS.donation, count: don.cnt });
+      if (don && don.cnt > 0) hardBlocks.push({ key: "donation", label: STUDENT_DELETE_LABELS.donation, count: don.cnt });
       return {
         studentId: id,
         fullName,
@@ -28835,20 +29150,20 @@ function createStudentProfileService(deps) {
       const entryId = await db.transaction(async (tx) => {
         const student = await tx.queryOne(`SELECT id FROM students WHERE id = ?`, [studentId]);
         if (!student) throw new NotFoundError("\u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632");
-        const newId = crypto.randomUUID();
+        const newId2 = crypto.randomUUID();
         await tx.execute(
           `INSERT INTO student_education_history (id, student_id, study_year, school_name, level, notes, created_by, created_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%d %H:%M:%f','now'))`,
-          [newId, studentId, input2.studyYear, input2.schoolName ?? null, input2.level ?? null, input2.notes ?? null, actor.staffId ?? null]
+          [newId2, studentId, input2.studyYear, input2.schoolName ?? null, input2.level ?? null, input2.notes ?? null, actor.staffId ?? null]
         );
         await audit.logInTransaction(tx, {
           actorId: actor.staffId,
           action: "student.education_history.add",
           resourceType: "student",
           resourceId: studentId,
-          changes: { entry_id: { from: null, to: newId }, study_year: { from: null, to: input2.studyYear } }
+          changes: { entry_id: { from: null, to: newId2 }, study_year: { from: null, to: input2.studyYear } }
         });
-        return newId;
+        return newId2;
       });
       logger.child("student").info("student.education_history.added", { studentId });
       const row = await db.queryOne(
@@ -28902,19 +29217,19 @@ function createStudentProfileService(deps) {
           [studentId, name]
         );
         if (dup) throw new ConflictError("\u0627\u06CC\u0646 \u0645\u0639\u0644\u0645 \u0642\u0628\u0644\u0627\u064B \u0631\u0648\u06CC \u067E\u0631\u0648\u0646\u062F\u0647 \u062B\u0628\u062A \u0634\u062F\u0647 \u0627\u0633\u062A");
-        const newId = crypto.randomUUID();
+        const newId2 = crypto.randomUUID();
         await tx.execute(
           `INSERT INTO student_teachers (id, student_id, name, class_label, contact) VALUES (?, ?, ?, ?, ?)`,
-          [newId, studentId, name, classLabel, contact]
+          [newId2, studentId, name, classLabel, contact]
         );
         await audit.logInTransaction(tx, {
           actorId: actor.staffId,
           action: "student.teachers.add",
           resourceType: "student",
           resourceId: studentId,
-          changes: { teacher_id: { from: null, to: newId }, name: { from: null, to: name } }
+          changes: { teacher_id: { from: null, to: newId2 }, name: { from: null, to: name } }
         });
-        return newId;
+        return newId2;
       });
       logger.child("student").info("student.teachers.added", { studentId });
       const row = await db.queryOne(
@@ -29921,8 +30236,8 @@ function createStudentTimelineService(db) {
       const merged = mergeTimelineEvents(raw2);
       const filtered = filterTimelineEvents(merged, filters);
       const { page: page2, hasMore } = paginateTimeline(filtered, filters.limit, filters.offset);
-      const nowIso = (/* @__PURE__ */ new Date()).toISOString();
-      const nextApptRow = appts.filter((a) => a.status === "scheduled" && a.start_at > nowIso).sort((a, b) => a.start_at < b.start_at ? -1 : 1)[0] ?? null;
+      const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
+      const nextApptRow = appts.filter((a) => a.status === "scheduled" && a.start_at > nowIso2).sort((a, b) => a.start_at < b.start_at ? -1 : 1)[0] ?? null;
       const nextAppt = nextApptRow ? { id: nextApptRow.id, startAt: nextApptRow.start_at, staffName: nextApptRow.staff_name } : null;
       const openFus = followups.filter((f) => FOLLOWUP_OPEN_STATUSES.includes(f.status)).map((f) => ({ id: f.id, title: f.title, dueAt: f.due_at }));
       const nextAction = deriveNextAction(nextAppt, openFus);
@@ -29995,8 +30310,8 @@ var ATTENTION_REASONS = [
 var DAY_MS2 = 864e5;
 var LONG_OPEN_FOLLOWUP_DAYS = 30;
 var RECENT_SESSION_DAYS = 30;
-function deriveAttentionReasons(input2, nowIso) {
-  const now = Date.parse(nowIso);
+function deriveAttentionReasons(input2, nowIso2) {
+  const now = Date.parse(nowIso2);
   const computed = [];
   const hasOverdue = input2.openFollowups.some((f) => f.dueAt !== null && Date.parse(f.dueAt) < now);
   if (hasOverdue) computed.push("overdue_followup");
@@ -30104,7 +30419,7 @@ function createSpecialNeedsService(deps) {
     return map2;
   }
   __name(openFollowupsOf, "openFollowupsOf");
-  async function sessionsOf(studentIds, nowIso) {
+  async function sessionsOf(studentIds, nowIso2) {
     const map2 = /* @__PURE__ */ new Map();
     if (studentIds.length === 0) return map2;
     const rows = [];
@@ -30117,14 +30432,14 @@ function createSpecialNeedsService(deps) {
          JOIN appointments a ON a.id = a_s.appointment_id
         WHERE a_s.student_id IN (${inPlaceholders(chunk.length)})
         GROUP BY a_s.student_id`,
-        [nowIso, nowIso, ...chunk]
+        [nowIso2, nowIso2, ...chunk]
       ));
     }
     for (const r of rows) map2.set(r.student_id, r);
     return map2;
   }
   __name(sessionsOf, "sessionsOf");
-  function toAttentionStudent(row, nowIso, fus, sessions) {
+  function toAttentionStudent(row, nowIso2, fus, sessions) {
     const reasons = deriveAttentionReasons(
       {
         caseStatus: row.case_status ?? null,
@@ -30133,7 +30448,7 @@ function createSpecialNeedsService(deps) {
         nextSessionAt: sessions?.next_upcoming ?? null,
         openFollowups: fus
       },
-      nowIso
+      nowIso2
     );
     return {
       student: {
@@ -30156,7 +30471,7 @@ function createSpecialNeedsService(deps) {
   __name(toAttentionStudent, "toAttentionStudent");
   return {
     async grid(filters, _actor) {
-      const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+      const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
       const conditions = [`s.active = 1`, `s.special_need_type IS NOT NULL`];
       const params = [];
       if (filters.schoolId) {
@@ -30204,7 +30519,7 @@ function createSpecialNeedsService(deps) {
       );
       const specialIds = specialRows.map((r) => r.id);
       const fus = await openFollowupsOf(specialIds);
-      const sessions = await sessionsOf(specialIds, nowIso);
+      const sessions = await sessionsOf(specialIds, nowIso2);
       const schoolMap = /* @__PURE__ */ new Map();
       const cellKey = /* @__PURE__ */ __name((grade) => grade ?? "\u2014", "cellKey");
       const gradesSet = /* @__PURE__ */ new Set();
@@ -30237,7 +30552,7 @@ function createSpecialNeedsService(deps) {
         addSpecial(row.totals, s.special_need_severity ?? null);
         const { student, reasons } = toAttentionStudent(
           s,
-          nowIso,
+          nowIso2,
           fus.get(s.id) ?? [],
           sessions.get(s.id)
         );
@@ -30251,7 +30566,7 @@ function createSpecialNeedsService(deps) {
       const overall = [...schoolMap.values()].reduce((acc, r) => mergeCells(acc, r.totals), emptyCell());
       const attentionSorted = sortAttentionStudents(attention);
       return {
-        generatedAt: nowIso,
+        generatedAt: nowIso2,
         grades: sortGrades(gradesSet, STUDENT_GRADES),
         schools: [...schoolMap.values()].sort((a, b) => {
           const an = a.schoolName ?? "";
@@ -30264,7 +30579,7 @@ function createSpecialNeedsService(deps) {
       };
     },
     async schoolOverview(schoolId, _actor) {
-      const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+      const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
       const school = await db.queryOne(
         `SELECT id, name, kind, active FROM schools WHERE id = ?`,
         [schoolId]
@@ -30305,7 +30620,7 @@ function createSpecialNeedsService(deps) {
           WHERE c.school_id = ? AND c.active = 1 AND l.status = 'linked'`,
         [schoolId]
       );
-      const now = Date.parse(nowIso);
+      const now = Date.parse(nowIso2);
       const from30 = new Date(now - 30 * 864e5).toISOString();
       const from60 = new Date(now - 60 * 864e5).toISOString();
       const sessionsLast30 = await count(
@@ -30314,7 +30629,7 @@ function createSpecialNeedsService(deps) {
            JOIN appointment_students a_s ON a_s.appointment_id = a.id
            JOIN students s ON s.id = a_s.student_id
           WHERE s.school_id = ? AND a.status != 'cancelled' AND a.start_at > ? AND a.start_at <= ?`,
-        [schoolId, from30, nowIso]
+        [schoolId, from30, nowIso2]
       );
       const sessionsPrev30 = await count(
         `SELECT COUNT(DISTINCT a.id) AS n
@@ -30339,10 +30654,10 @@ function createSpecialNeedsService(deps) {
       );
       const ids = specialRows.map((r) => r.id);
       const fus = await openFollowupsOf(ids);
-      const sessions = await sessionsOf(ids, nowIso);
+      const sessions = await sessionsOf(ids, nowIso2);
       const attention = [];
       for (const s of specialRows) {
-        const { student, reasons } = toAttentionStudent(s, nowIso, fus.get(s.id) ?? [], sessions.get(s.id));
+        const { student, reasons } = toAttentionStudent(s, nowIso2, fus.get(s.id) ?? [], sessions.get(s.id));
         if (reasons.length > 0) attention.push(student);
       }
       return {
@@ -31215,8 +31530,8 @@ function followUpGroupOf(row, now = /* @__PURE__ */ new Date()) {
   if (!row.dueAt) return "open";
   const due = Date.parse(row.dueAt);
   if (Number.isNaN(due)) return "open";
-  const { nowIso, todayEnd, weekEnd } = groupBoundaries(now);
-  if (due < Date.parse(nowIso)) return "overdue";
+  const { nowIso: nowIso2, todayEnd, weekEnd } = groupBoundaries(now);
+  if (due < Date.parse(nowIso2)) return "overdue";
   if (due <= Date.parse(todayEnd)) return "today";
   if (due <= Date.parse(weekEnd)) return "week";
   return "future";
@@ -31275,14 +31590,14 @@ function createFollowUpsService(deps) {
   function groupCondition(group, params) {
     if (group === "all") return "1=1";
     if (!group || group === "open") return `f.status IN (${OPEN_LIST})`;
-    const { nowIso, todayEnd, weekEnd } = groupBoundaries(/* @__PURE__ */ new Date());
+    const { nowIso: nowIso2, todayEnd, weekEnd } = groupBoundaries(/* @__PURE__ */ new Date());
     const dated = `f.status IN (${OPEN_LIST}) AND f.due_at IS NOT NULL`;
     if (group === "overdue") {
-      params.push(nowIso);
+      params.push(nowIso2);
       return `${dated} AND f.due_at < ?`;
     }
     if (group === "today") {
-      params.push(nowIso, todayEnd);
+      params.push(nowIso2, todayEnd);
       return `${dated} AND f.due_at >= ? AND f.due_at <= ?`;
     }
     if (group === "week") {
@@ -31314,7 +31629,7 @@ function createFollowUpsService(deps) {
         due_at: { from: null, to: dueAt }
       }
     });
-    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+    const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
     return {
       id,
       entityType: input2.entityType,
@@ -31329,8 +31644,8 @@ function createFollowUpsService(deps) {
       dueAt,
       status: "open",
       completedAt: null,
-      createdAt: nowIso,
-      updatedAt: nowIso
+      createdAt: nowIso2,
+      updatedAt: nowIso2
     };
   }
   __name(insertWithinTx, "insertWithinTx");
@@ -38072,7 +38387,7 @@ function profileSignals(result) {
   if (!result || result.ok === false || !snap)
     return [];
   const out = [];
-  const push = /* @__PURE__ */ __name((domain2, key, value, fa2) => {
+  const push2 = /* @__PURE__ */ __name((domain2, key, value, fa2) => {
     out.push({ domain: domain2, key, value: Math.max(0, Math.min(1, value)), source: "wechsler", fa: fa2 });
   }, "push");
   const subScaled = /* @__PURE__ */ __name((code) => {
@@ -38081,12 +38396,12 @@ function profileSignals(result) {
   }, "subScaled");
   if (typeof snap.fsiq === "number") {
     const bandEntry = FSIQ_BANDS.find((b) => snap.fsiq >= b.min && snap.fsiq <= b.max) ?? FSIQ_BANDS[FSIQ_BANDS.length - 1];
-    push("cognitive_level", "cog_level.fsiq_band", 1, `\u0647\u0648\u0634\u200C\u0628\u0647\u0631 \u06A9\u0644 ${faNum3(snap.fsiq)} \u062F\u0631 ${bandEntry.fa} \u0642\u0631\u0627\u0631 \u062F\u0627\u0631\u062F.`);
+    push2("cognitive_level", "cog_level.fsiq_band", 1, `\u0647\u0648\u0634\u200C\u0628\u0647\u0631 \u06A9\u0644 ${faNum3(snap.fsiq)} \u062F\u0631 ${bandEntry.fa} \u0642\u0631\u0627\u0631 \u062F\u0627\u0631\u062F.`);
   }
   const scatter = snap.indexScatter ?? 0;
-  push("cognitive_level", "cog_level.index_scatter", scatter / 23, `\u067E\u0631\u0627\u06A9\u0646\u062F\u06AF\u06CC \u0628\u06CC\u0646\u200C\u0634\u0627\u062E\u0635\u06CC ${faNum3(scatter)} \u0646\u0645\u0631\u0647 \u0627\u0633\u062A (\u0633\u0642\u0641 \u062A\u0641\u0633\u06CC\u0631 \u0648\u0627\u062D\u062F \u06F2\u06F3).`);
+  push2("cognitive_level", "cog_level.index_scatter", scatter / 23, `\u067E\u0631\u0627\u06A9\u0646\u062F\u06AF\u06CC \u0628\u06CC\u0646\u200C\u0634\u0627\u062E\u0635\u06CC ${faNum3(scatter)} \u0646\u0645\u0631\u0647 \u0627\u0633\u062A (\u0633\u0642\u0641 \u062A\u0641\u0633\u06CC\u0631 \u0648\u0627\u062D\u062F \u06F2\u06F3).`);
   if (scatter >= 23) {
-    push("validity", "validity.scatter", scatter / 23, `\u067E\u0631\u0627\u06A9\u0646\u062F\u06AF\u06CC \u0628\u06CC\u0646\u200C\u0634\u0627\u062E\u0635\u06CC ${faNum3(scatter)} \u0646\u0645\u0631\u0647 \u0627\u0633\u062A (\u2265\u06F2\u06F3): \u0647\u0648\u0634\u200C\u0628\u0647\u0631 \u06A9\u0644 \u062A\u0635\u0648\u06CC\u0631 \u0648\u0627\u062D\u062F\u06CC \u0627\u0632 \u062A\u0648\u0627\u0646 \u06A9\u0644\u06CC \u0646\u0645\u06CC\u200C\u062F\u0647\u062F \u0648 \u062A\u0641\u0633\u06CC\u0631 \u0628\u0647 \u0633\u0637\u062D \u0634\u0627\u062E\u0635\u200C\u0647\u0627 \u0645\u0646\u062A\u0642\u0644 \u0645\u06CC\u200C\u0634\u0648\u062F.`);
+    push2("validity", "validity.scatter", scatter / 23, `\u067E\u0631\u0627\u06A9\u0646\u062F\u06AF\u06CC \u0628\u06CC\u0646\u200C\u0634\u0627\u062E\u0635\u06CC ${faNum3(scatter)} \u0646\u0645\u0631\u0647 \u0627\u0633\u062A (\u2265\u06F2\u06F3): \u0647\u0648\u0634\u200C\u0628\u0647\u0631 \u06A9\u0644 \u062A\u0635\u0648\u06CC\u0631 \u0648\u0627\u062D\u062F\u06CC \u0627\u0632 \u062A\u0648\u0627\u0646 \u06A9\u0644\u06CC \u0646\u0645\u06CC\u200C\u062F\u0647\u062F \u0648 \u062A\u0641\u0633\u06CC\u0631 \u0628\u0647 \u0633\u0637\u062D \u0634\u0627\u062E\u0635\u200C\u0647\u0627 \u0645\u0646\u062A\u0642\u0644 \u0645\u06CC\u200C\u0634\u0648\u062F.`);
   }
   const patternValue = /* @__PURE__ */ __name((codes) => {
     const vals = codes.map((c) => subScaled(c) ?? 0);
@@ -38098,14 +38413,14 @@ function profileSignals(result) {
     const s = subScaled(c);
     return s !== null && s <= 7;
   })) {
-    push("academic", "profile.acid", patternValue(acidCodes), "\u0627\u0644\u06AF\u0648\u06CC ACID \u0641\u0639\u0627\u0644 \u0627\u0633\u062A: \u062D\u0633\u0627\u0628\u060C \u0631\u0645\u0632\u06AF\u0631\u062F\u0627\u0646\u06CC\u060C \u0627\u0637\u0644\u0627\u0639\u0627\u062A \u0648 \u0641\u0631\u0627\u062E\u0646\u0627\u06CC \u0627\u0631\u0642\u0627\u0645 \u0647\u0645\u200C\u0632\u0645\u0627\u0646 \u0636\u0639\u06CC\u0641\u200C\u0627\u0646\u062F \u2014 \u0646\u0634\u0627\u0646\u0647\u0654 \u06A9\u0644\u0627\u0633\u06CC\u06A9 \u0641\u0634\u0627\u0631 \u0628\u0631 \u0641\u0631\u0627\u06CC\u0646\u062F \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC.");
+    push2("academic", "profile.acid", patternValue(acidCodes), "\u0627\u0644\u06AF\u0648\u06CC ACID \u0641\u0639\u0627\u0644 \u0627\u0633\u062A: \u062D\u0633\u0627\u0628\u060C \u0631\u0645\u0632\u06AF\u0631\u062F\u0627\u0646\u06CC\u060C \u0627\u0637\u0644\u0627\u0639\u0627\u062A \u0648 \u0641\u0631\u0627\u062E\u0646\u0627\u06CC \u0627\u0631\u0642\u0627\u0645 \u0647\u0645\u200C\u0632\u0645\u0627\u0646 \u0636\u0639\u06CC\u0641\u200C\u0627\u0646\u062F \u2014 \u0646\u0634\u0627\u0646\u0647\u0654 \u06A9\u0644\u0627\u0633\u06CC\u06A9 \u0641\u0634\u0627\u0631 \u0628\u0631 \u0641\u0631\u0627\u06CC\u0646\u062F \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC.");
   }
   const cadCodes = ["AR", "CD", "DS"];
   if (cadCodes.every((c) => {
     const s = subScaled(c);
     return s !== null && s <= 7;
   })) {
-    push("attention", "profile.cad", patternValue(cadCodes), "\u0627\u0644\u06AF\u0648\u06CC CAD \u0641\u0639\u0627\u0644 \u0627\u0633\u062A: \u062D\u0633\u0627\u0628\u060C \u0631\u0645\u0632\u06AF\u0631\u062F\u0627\u0646\u06CC \u0648 \u0641\u0631\u0627\u062E\u0646\u0627\u06CC \u0627\u0631\u0642\u0627\u0645 \u0647\u0645\u200C\u0632\u0645\u0627\u0646 \u0636\u0639\u06CC\u0641\u200C\u0627\u0646\u062F \u2014 \u0646\u0634\u0627\u0646\u0647\u0654 \u0641\u0634\u0627\u0631 \u0628\u0631 \u062D\u0627\u0641\u0638\u0647\u0654 \u0641\u0639\u0627\u0644 \u0648 \u062A\u0645\u0631\u06A9\u0632 \u062F\u0631 \u06A9\u0627\u0631 \u0639\u062F\u062F\u06CC.");
+    push2("attention", "profile.cad", patternValue(cadCodes), "\u0627\u0644\u06AF\u0648\u06CC CAD \u0641\u0639\u0627\u0644 \u0627\u0633\u062A: \u062D\u0633\u0627\u0628\u060C \u0631\u0645\u0632\u06AF\u0631\u062F\u0627\u0646\u06CC \u0648 \u0641\u0631\u0627\u062E\u0646\u0627\u06CC \u0627\u0631\u0642\u0627\u0645 \u0647\u0645\u200C\u0632\u0645\u0627\u0646 \u0636\u0639\u06CC\u0641\u200C\u0627\u0646\u062F \u2014 \u0646\u0634\u0627\u0646\u0647\u0654 \u0641\u0634\u0627\u0631 \u0628\u0631 \u062D\u0627\u0641\u0638\u0647\u0654 \u0641\u0639\u0627\u0644 \u0648 \u062A\u0645\u0631\u06A9\u0632 \u062F\u0631 \u06A9\u0627\u0631 \u0639\u062F\u062F\u06CC.");
   }
   for (const row of snap.s5rows ?? []) {
     if (row.strength !== WEAKNESS && row.strength !== STRENGTH)
@@ -38114,16 +38429,16 @@ function profileSignals(result) {
     const absDiff = Math.abs(num(row.diff));
     const intensity = absDiff / 10;
     if (row.strength === WEAKNESS) {
-      push("cognitive_level", `cog_level.step5_weak.${row.key}`, intensity, `\u06AF\u0627\u0645 \u06F5 \u067E\u0631\u0648\u0641\u0627\u06CC\u0644 \u0634\u062E\u0635\u06CC: ${faName} \u0646\u0633\u0628\u062A \u0628\u0647 \u0645\u06CC\u0627\u0646\u06AF\u06CC\u0646 \u0634\u0627\u062E\u0635\u200C\u0647\u0627\u06CC \u062E\u0648\u062F ${faNum3(absDiff)} \u0646\u0645\u0631\u0647 \u0636\u0639\u0641 \u062F\u0627\u0631\u062F (\u0622\u0633\u062A\u0627\u0646\u0647\u0654 ${faNum3(row.cut)}).`);
+      push2("cognitive_level", `cog_level.step5_weak.${row.key}`, intensity, `\u06AF\u0627\u0645 \u06F5 \u067E\u0631\u0648\u0641\u0627\u06CC\u0644 \u0634\u062E\u0635\u06CC: ${faName} \u0646\u0633\u0628\u062A \u0628\u0647 \u0645\u06CC\u0627\u0646\u06AF\u06CC\u0646 \u0634\u0627\u062E\u0635\u200C\u0647\u0627\u06CC \u062E\u0648\u062F ${faNum3(absDiff)} \u0646\u0645\u0631\u0647 \u0636\u0639\u0641 \u062F\u0627\u0631\u062F (\u0622\u0633\u062A\u0627\u0646\u0647\u0654 ${faNum3(row.cut)}).`);
     } else {
-      push("cognitive_level", `cog_level.step5_strong.${row.key}`, intensity, `\u06AF\u0627\u0645 \u06F5 \u067E\u0631\u0648\u0641\u0627\u06CC\u0644 \u0634\u062E\u0635\u06CC: ${faName} \u0646\u0633\u0628\u062A \u0628\u0647 \u0645\u06CC\u0627\u0646\u06AF\u06CC\u0646 \u0634\u0627\u062E\u0635\u200C\u0647\u0627\u06CC \u062E\u0648\u062F ${faNum3(absDiff)} \u0646\u0645\u0631\u0647 \u0642\u0648\u062A \u062F\u0627\u0631\u062F (\u0622\u0633\u062A\u0627\u0646\u0647\u0654 ${faNum3(row.cut)}).`);
+      push2("cognitive_level", `cog_level.step5_strong.${row.key}`, intensity, `\u06AF\u0627\u0645 \u06F5 \u067E\u0631\u0648\u0641\u0627\u06CC\u0644 \u0634\u062E\u0635\u06CC: ${faName} \u0646\u0633\u0628\u062A \u0628\u0647 \u0645\u06CC\u0627\u0646\u06AF\u06CC\u0646 \u0634\u0627\u062E\u0635\u200C\u0647\u0627\u06CC \u062E\u0648\u062F ${faNum3(absDiff)} \u0646\u0645\u0631\u0647 \u0642\u0648\u062A \u062F\u0627\u0631\u062F (\u0622\u0633\u062A\u0627\u0646\u0647\u0654 ${faNum3(row.cut)}).`);
     }
   }
   if (analysis?.gai && analysis.gai.validity === INVALID2) {
-    push("validity", "cog_level.gai_invalid", 1, `\u0634\u0627\u062E\u0635 \u062A\u0648\u0627\u0646\u0627\u06CC\u06CC \u06A9\u0644\u06CC (GAI) \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A: \u0627\u062E\u062A\u0644\u0627\u0641 VCI \u0648 PRI \u0628\u0631\u0627\u0628\u0631 ${faNum3(num(analysis.gai.diff))} \u0646\u0645\u0631\u0647 \u0648 \u0628\u06CC\u0634 \u0627\u0632 \u0633\u0642\u0641 \u0645\u062C\u0627\u0632 \u06F2\u06F3 \u0627\u0633\u062A.`);
+    push2("validity", "cog_level.gai_invalid", 1, `\u0634\u0627\u062E\u0635 \u062A\u0648\u0627\u0646\u0627\u06CC\u06CC \u06A9\u0644\u06CC (GAI) \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A: \u0627\u062E\u062A\u0644\u0627\u0641 VCI \u0648 PRI \u0628\u0631\u0627\u0628\u0631 ${faNum3(num(analysis.gai.diff))} \u0646\u0645\u0631\u0647 \u0648 \u0628\u06CC\u0634 \u0627\u0632 \u0633\u0642\u0641 \u0645\u062C\u0627\u0632 \u06F2\u06F3 \u0627\u0633\u062A.`);
   }
   if ((snap.substitutes ?? []).length) {
-    push("validity", "validity.substitute_index", 1, `\u0634\u0627\u062E\u0635 ${snap.substitutes.join(" \u0648 ")} \u0628\u0627 \u0632\u06CC\u0631\u0622\u0632\u0645\u0648\u0646 \u062C\u0627\u0646\u0634\u06CC\u0646 \u0633\u0627\u062E\u062A\u0647 \u0634\u062F\u0647 \u0627\u0633\u062A\u061B \u062A\u0641\u0633\u06CC\u0631 \u0628\u0627 \u0627\u062D\u062A\u06CC\u0627\u0637 \u0627\u0646\u062C\u0627\u0645 \u0634\u0648\u062F.`);
+    push2("validity", "validity.substitute_index", 1, `\u0634\u0627\u062E\u0635 ${snap.substitutes.join(" \u0648 ")} \u0628\u0627 \u0632\u06CC\u0631\u0622\u0632\u0645\u0648\u0646 \u062C\u0627\u0646\u0634\u06CC\u0646 \u0633\u0627\u062E\u062A\u0647 \u0634\u062F\u0647 \u0627\u0633\u062A\u061B \u062A\u0641\u0633\u06CC\u0631 \u0628\u0627 \u0627\u062D\u062A\u06CC\u0627\u0637 \u0627\u0646\u062C\u0627\u0645 \u0634\u0648\u062F.`);
   }
   out.sort((a, b) => {
     if (a.key !== b.key)
@@ -39540,7 +39855,7 @@ function createCaseEventsService(deps) {
         `SELECT fill_token FROM case_events WHERE id = ?`,
         [id]
       );
-      return Boolean(row?.fill_token) && row.fill_token === token;
+      return row?.fill_token === token;
     },
     async mintFillLink(id, publicBaseUrl) {
       const row = await db.queryOne(
@@ -39654,7 +39969,7 @@ function createCaseEventsService(deps) {
       }
       const base = deps.publicBaseUrl?.trim() || null;
       const created = [];
-      const nowIso = now().toISOString();
+      const nowIso2 = now().toISOString();
       const fillExpires = new Date(now().getTime() + fillExpiryHours * 36e5).toISOString();
       for (const studentId of ids) {
         await assertStudent(studentId);
@@ -39665,7 +39980,7 @@ function createCaseEventsService(deps) {
             `INSERT INTO case_events (id, event_type_id, student_id, staff_id, appointment_id, occurred_at,
                                       status, payload, analysis, summary, fill_token, fill_expires_at, created_by, created_at, updated_at)
              VALUES (?, ?, ?, ?, NULL, ?, 'pending_family', NULL, NULL, NULL, ?, ?, ?, ?, ?)`,
-            [id, type.id, studentId, therapistId ?? actor.staffId, nowIso, token, fillExpires, actor.staffId, nowIso, nowIso]
+            [id, type.id, studentId, therapistId ?? actor.staffId, nowIso2, token, fillExpires, actor.staffId, nowIso2, nowIso2]
           );
           await audit.logInTransaction(tx, {
             actorId: actor.staffId,
@@ -39687,8 +40002,8 @@ function createCaseEventsService(deps) {
           therapistId: therapistId ?? actor.staffId,
           therapistName: null,
           status: "pending_family",
-          occurredAt: nowIso,
-          createdAt: nowIso,
+          occurredAt: nowIso2,
+          createdAt: nowIso2,
           fillExpiresAt: fillExpires,
           sentAt: null,
           link: base ? `${base.replace(/\/+$/, "")}/public/case-events/${id}/fill?token=${token}` : null,
@@ -41763,15 +42078,15 @@ function lintTexts(obj, path = "parent_copy") {
 __name(lintTexts, "lintTexts");
 function collectLetters(item) {
   const out = [];
-  const push = /* @__PURE__ */ __name((v) => {
+  const push2 = /* @__PURE__ */ __name((v) => {
     if (typeof v === "string") out.push(...Array.from(v));
     else if (v && typeof v === "object" && !Array.isArray(v)) {
-      for (const x of Object.values(v)) push(x);
-    } else if (Array.isArray(v)) for (const x of v) push(x);
+      for (const x of Object.values(v)) push2(x);
+    } else if (Array.isArray(v)) for (const x of v) push2(x);
   }, "push");
-  push(item.prompt);
-  push(item.stim);
-  for (const o of item.options ?? []) push(o.label);
+  push2(item.prompt);
+  push2(item.stim);
+  for (const o of item.options ?? []) push2(o.label);
   return out.filter((ch) => /[\u0600-\u06FF]/.test(ch));
 }
 __name(collectLetters, "collectLetters");
@@ -42009,7 +42324,6 @@ __name(stageOutcomeFor, "stageOutcomeFor");
 var NUMLINE_STAGE_MAX2 = GAME_KINDS.numline.levers.bank_caps;
 var SCAN_STAGE_THRESHOLDS = accuracyThresholdsOf(GAME_KINDS.scan.stage_rule);
 var SCAN_STAGE_MAX_TILES2 = GAME_KINDS.scan.levers.bank_caps;
-var ACCURACY_STAGE_THRESHOLDS = accuracyThresholdsOf(GAME_KINDS.stroop.stage_rule);
 var STROOP_STAGE_BANDS2 = GAME_KINDS.stroop.levers.bank_bands;
 var FLANKER_STAGE_MAX_DECOYS2 = GAME_KINDS.flanker.levers.bank_caps;
 var FLANKER_STAGE_BANDS2 = GAME_KINDS.flanker.levers.bank_bands;
@@ -42083,7 +42397,6 @@ function stageStimViewOf(stim, correctTouch, stageId) {
   return { ...base, ...correctTouch ? v.go : v.nogo };
 }
 __name(stageStimViewOf, "stageStimViewOf");
-var SEQ_MEMORY_STAGE_THRESHOLDS = accuracyThresholdsOf(GAME_KINDS.corsi.stage_rule);
 var CORSI_STAGE_MAX_SPAN2 = GAME_KINDS.corsi.levers.bank_caps;
 var SPAN_STAGE_MAX_DIGITS2 = GAME_KINDS.span.levers.bank_caps;
 var SIMON_STAGE_MAX_SPAN2 = GAME_KINDS.simon.levers.bank_caps;
@@ -43825,11 +44138,11 @@ function createGamesService(deps) {
     const session = requireSessionIn(res, ["child_active"]);
     const mission = missionConfigOf(res);
     const attempts = await db.query(`SELECT * FROM game_attempts WHERE session_id = ? ORDER BY created_at`, [session.id]);
-    const nowIso = isoOf2(now());
+    const nowIso2 = isoOf2(now());
     const finishKind = gameKindOf(mission.game);
     const finishStage = finishKind !== "gonogo" ? stageById("7-12", session.stage_id, finishKind) : null;
     const finishTotal = finishStage ? mission.items.filter((it) => itemInStageFor(finishKind, it, finishStage.id)).length : mission.items.length;
-    const activity = [res.session?.started_at ?? null, ...attempts.map((a) => a.created_at), nowIso].filter((v) => typeof v === "string").map((v) => new Date(v).getTime());
+    const activity = [res.session?.started_at ?? null, ...attempts.map((a) => a.created_at), nowIso2].filter((v) => typeof v === "string").map((v) => new Date(v).getTime());
     const validity = decideValidity(activity, attempts.length, finishTotal);
     const metricIds = mission.metrics && mission.metrics.length > 0 ? mission.metrics : [mission.metric];
     const scoredRows = attempts.map((a) => ({
@@ -43874,7 +44187,7 @@ function createGamesService(deps) {
               metric: outcome.metricId,
               value: outcome.value,
               unit: unitFa(outcome.unit),
-              takenAt: nowIso,
+              takenAt: nowIso2,
               note: `\u0628\u0627\u0632\u06CC \xAB${mission.title ?? mission.id}\xBB \u2014 \u062C\u0644\u0633\u0647\u0654 \u0628\u0627\u0632\u06CC ${session.id.slice(0, 8)}${validity === "partial" ? " (\u0646\u0627\u0642\u0635)" : ""} \u2014 \u062E\u0648\u062F\u06A9\u0627\u0631`
             }, actor);
             outcome.injected = true;
@@ -43923,7 +44236,7 @@ function createGamesService(deps) {
     }
     await db.execute(
       `UPDATE game_sessions SET state = 'child_done', validity = ?, ended_at = ?, last_activity_at = ?, metrics_json = ?, summary_json = ?, quality_json = ? WHERE id = ?`,
-      [validity, nowIso, nowIso, metrics.length > 0 ? JSON.stringify(metrics) : null, JSON.stringify(summaryBody), serializeQuality(quality), session.id]
+      [validity, nowIso2, nowIso2, metrics.length > 0 ? JSON.stringify(metrics) : null, JSON.stringify(summaryBody), serializeQuality(quality), session.id]
     );
     const adaptiveEnabled = sessionMode === "training" && res.pkg.body.protocol != null && res.pkg.body.adaptive_enabled !== false;
     if (adaptiveEnabled) {
@@ -43990,16 +44303,16 @@ function createGamesService(deps) {
       `SELECT confirm1_at, confirm2_at FROM game_adherence WHERE mission_id = ?`,
       [res.mission.id]
     );
-    const nowIso = isoOf2(now());
+    const nowIso2 = isoOf2(now());
     if (!adherence || adherence.confirm1_at === null) {
       await db.execute(
         `INSERT INTO game_adherence (mission_id, confirm1_at) VALUES (?, ?)
          ON CONFLICT(mission_id) DO UPDATE SET confirm1_at = COALESCE(game_adherence.confirm1_at, excluded.confirm1_at)`,
-        [res.mission.id, nowIso]
+        [res.mission.id, nowIso2]
       );
     } else if (adherence.confirm2_at === null) {
-      await db.execute(`UPDATE game_adherence SET confirm2_at = ? WHERE mission_id = ?`, [nowIso, res.mission.id]);
-      await db.execute(`UPDATE game_sessions SET state = 'closed', last_activity_at = ? WHERE id = ?`, [nowIso, session.id]);
+      await db.execute(`UPDATE game_adherence SET confirm2_at = ? WHERE mission_id = ?`, [nowIso2, res.mission.id]);
+      await db.execute(`UPDATE game_sessions SET state = 'closed', last_activity_at = ? WHERE id = ?`, [nowIso2, session.id]);
     }
     const fresh = await resolveLink(token);
     return stateViewOf(fresh);
@@ -50422,7 +50735,7 @@ var FSIQ_BAND_RANGES = [
   { band: "SUPERIOR", min: 120, max: 129, fa: "\u0639\u0627\u0644\u06CC (\u06F1\u06F2\u06F0\u2013\u06F1\u06F2\u06F9)" },
   { band: "GIFTED", min: 130, max: 200, fa: "\u0627\u0633\u062A\u0639\u062F\u0627\u062F (\u06F1\u06F3\u06F0+)" }
 ];
-function fsiqBandOf3(fsiq) {
+function fsiqBandOf2(fsiq) {
   const s = Number(fsiq);
   if (!Number.isFinite(s) || s < 0) return "ID";
   for (const b of FSIQ_BAND_RANGES) {
@@ -50430,7 +50743,7 @@ function fsiqBandOf3(fsiq) {
   }
   return "GIFTED";
 }
-__name(fsiqBandOf3, "fsiqBandOf");
+__name(fsiqBandOf2, "fsiqBandOf");
 function clamp01(v) {
   const n = Number(v);
   if (!Number.isFinite(n)) return 0;
@@ -50461,7 +50774,6 @@ var ASD_B_FULL_CRITERIA = 2;
 var SCARED_SCHOOL_CUTOFF = 3;
 var BIF_IQ_RANGE = { min: 70, max: 85 };
 var FSIQ_BAND_BIF = FSIQ_BAND_RANGES.find((b) => b.band === "BIF");
-var FSIQ_BAND_LOW_BORDER = FSIQ_BAND_RANGES.find((b) => b.band === "LOW_BORDER");
 var ID_PATH_MAX_FSIQ = FSIQ_BAND_BIF.min;
 var SCATTER_UNIFORM_MAX = 23;
 var RULES = [
@@ -50856,35 +51168,35 @@ function anamLabelOf(event, fieldKey) {
 __name(anamLabelOf, "anamLabelOf");
 function collectExclusions(ctx) {
   const hits = [];
-  const push = /* @__PURE__ */ __name((key, strength, evidenceFa) => {
+  const push2 = /* @__PURE__ */ __name((key, strength, evidenceFa) => {
     const def = EXCLUSION_FACTORS.find((f) => f.key === key);
     if (!def) return;
     hits.push({ key, titleFa: def.titleFa, strength, weight: strength === "danger" ? def.weight : def.weight * 0.5, evidenceFa });
   }, "push");
   if (ctx.fsiq !== null && ctx.fsiq <= 70) {
-    push("id_deficit", "danger", `\u0647\u0648\u0634\u200C\u0628\u0647\u0631 \u06A9\u0644 ${String(ctx.fsiq).replace(/[0-9]/g, (d) => "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9"[Number(d)])} (\u06F7\u06F0 \u06CC\u0627 \u06A9\u0645\u062A\u0631)`);
+    push2("id_deficit", "danger", `\u0647\u0648\u0634\u200C\u0628\u0647\u0631 \u06A9\u0644 ${String(ctx.fsiq).replace(/[0-9]/g, (d) => "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9"[Number(d)])} (\u06F7\u06F0 \u06CC\u0627 \u06A9\u0645\u062A\u0631)`);
   } else if (ctx.adaptLow) {
-    push("id_deficit", "warn", "\u0627\u0646\u0637\u0628\u0627\u0642 \u0631\u0648\u0632\u0645\u0631\u0647\u0654 \xAB\u067E\u0627\u06CC\u06CC\u0646\xBB \u062F\u0631 \u0633\u0646\u062C\u0647\u0654 \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u2014 \u0628\u062F\u0648\u0646 \u0647\u0648\u0634\u200C\u0628\u0647\u0631 \u062B\u0628\u062A\u200C\u0634\u062F\u0647");
+    push2("id_deficit", "warn", "\u0627\u0646\u0637\u0628\u0627\u0642 \u0631\u0648\u0632\u0645\u0631\u0647\u0654 \xAB\u067E\u0627\u06CC\u06CC\u0646\xBB \u062F\u0631 \u0633\u0646\u062C\u0647\u0654 \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u2014 \u0628\u062F\u0648\u0646 \u0647\u0648\u0634\u200C\u0628\u0647\u0631 \u062B\u0628\u062A\u200C\u0634\u062F\u0647");
   }
   const sensory = anamLabelOf(ctx.anamV3, "sensory_concern");
   if (sensory !== null && sensory >= 0.67) {
-    push("sensory", sensory >= 1 ? "danger" : "warn", "\u062D\u0633\u0627\u0633\u06CC\u062A \u062D\u0633\u06CC \u062F\u0631 \u0634\u0631\u062D\u200C\u062D\u0627\u0644 \u0628\u0627\u0644\u0627 \u2014 \u0634\u0646\u0648\u0627\u06CC\u06CC/\u0628\u06CC\u0646\u0627\u06CC\u06CC \u0631\u062F \u0646\u0634\u062F\u0647");
+    push2("sensory", sensory >= 1 ? "danger" : "warn", "\u062D\u0633\u0627\u0633\u06CC\u062A \u062D\u0633\u06CC \u062F\u0631 \u0634\u0631\u062D\u200C\u062D\u0627\u0644 \u0628\u0627\u0644\u0627 \u2014 \u0634\u0646\u0648\u0627\u06CC\u06CC/\u0628\u06CC\u0646\u0627\u06CC\u06CC \u0631\u062F \u0646\u0634\u062F\u0647");
   }
   const schoolChange = anamLabelOf(ctx.anamV3, "school_change");
   if (schoolChange !== null && schoolChange >= 0.67) {
-    push("insufficient_education", schoolChange >= 1 ? "danger" : "warn", "\u062A\u063A\u06CC\u06CC\u0631 \u0645\u06A9\u0631\u0631 \u0645\u062F\u0631\u0633\u0647 \u062F\u0631 \u0633\u0647 \u0633\u0627\u0644 \u0627\u062E\u06CC\u0631 \u2014 \u067E\u06CC\u0648\u0633\u062A\u06AF\u06CC \u0622\u0645\u0648\u0632\u0634 \u0645\u062E\u062A\u0644");
+    push2("insufficient_education", schoolChange >= 1 ? "danger" : "warn", "\u062A\u063A\u06CC\u06CC\u0631 \u0645\u06A9\u0631\u0631 \u0645\u062F\u0631\u0633\u0647 \u062F\u0631 \u0633\u0647 \u0633\u0627\u0644 \u0627\u062E\u06CC\u0631 \u2014 \u067E\u06CC\u0648\u0633\u062A\u06AF\u06CC \u0622\u0645\u0648\u0632\u0634 \u0645\u062E\u062A\u0644");
   }
   const absence = anamLabelOf(ctx.anamV3, "absence_level");
   if (absence !== null && absence >= 0.67) {
-    push("absenteeism", absence >= 1 ? "danger" : "warn", "\u063A\u06CC\u0628\u062A \u0637\u0648\u0644\u0627\u0646\u06CC \u0627\u0632 \u0645\u062F\u0631\u0633\u0647 \u062F\u0631 \u0634\u0631\u062D\u200C\u062D\u0627\u0644");
+    push2("absenteeism", absence >= 1 ? "danger" : "warn", "\u063A\u06CC\u0628\u062A \u0637\u0648\u0644\u0627\u0646\u06CC \u0627\u0632 \u0645\u062F\u0631\u0633\u0647 \u062F\u0631 \u0634\u0631\u062D\u200C\u062D\u0627\u0644");
   }
   const homeLang = anamLabelOf(ctx.anamV3, "home_language");
   if (homeLang !== null && homeLang >= 0.5) {
-    push("bilingualism", homeLang >= 1 ? "danger" : "warn", "\u0632\u0628\u0627\u0646 \u06AF\u0641\u062A\u200C\u0648\u06AF\u0648\u06CC \u062E\u0627\u0646\u0647 \u063A\u06CC\u0631\u0641\u0627\u0631\u0633\u06CC/\u062F\u0648\u0632\u0628\u0627\u0646\u0647");
+    push2("bilingualism", homeLang >= 1 ? "danger" : "warn", "\u0632\u0628\u0627\u0646 \u06AF\u0641\u062A\u200C\u0648\u06AF\u0648\u06CC \u062E\u0627\u0646\u0647 \u063A\u06CC\u0631\u0641\u0627\u0631\u0633\u06CC/\u062F\u0648\u0632\u0628\u0627\u0646\u0647");
   }
   const crisis = anamLabelOf(ctx.anamV3, "crisis_event");
   if (crisis !== null && crisis >= 0.5) {
-    push("psychosocial", crisis >= 1 ? "danger" : "warn", "\u0631\u0648\u06CC\u062F\u0627\u062F \u0628\u062D\u0631\u0627\u0646\u06CC \u0627\u062E\u06CC\u0631 \u062F\u0631 \u0634\u0631\u062D\u200C\u062D\u0627\u0644");
+    push2("psychosocial", crisis >= 1 ? "danger" : "warn", "\u0631\u0648\u06CC\u062F\u0627\u062F \u0628\u062D\u0631\u0627\u0646\u06CC \u0627\u062E\u06CC\u0631 \u062F\u0631 \u0634\u0631\u062D\u200C\u062D\u0627\u0644");
   }
   return hits;
 }
@@ -50993,7 +51305,7 @@ function wechslerProfileFactsOf(event) {
   const idxNum = /* @__PURE__ */ __name((x) => typeof x?.scaled === "number" ? x.scaled : null, "idxNum");
   const fsiq = typeof profile?.fsiq === "number" ? profile.fsiq : null;
   const bandRaw = typeof profile?.fsiqBand === "string" ? profile.fsiqBand : null;
-  const band = bandRaw ?? (fsiq !== null ? fsiqBandOf3(fsiq) : null);
+  const band = bandRaw ?? (fsiq !== null ? fsiqBandOf2(fsiq) : null);
   const scatter = typeof profile?.indexScatter === "number" ? profile.indexScatter : null;
   const step5Weak = (profile?.step5?.weaknesses ?? []).filter((k) => typeof k === "string");
   return {
@@ -53284,13 +53596,13 @@ __name3(maxIndexValueOf, "maxIndexValueOf");
 __name23(maxIndexValueOf, "maxIndexValueOf");
 function evaluatePatterns(norm, wInj, levels, otStatuses) {
   const out = [];
-  const push = /* @__PURE__ */ __name23((p) => out.push(p), "push");
+  const push2 = /* @__PURE__ */ __name23((p) => out.push(p), "push");
   const allRows = [...norm.rows, ...wInj.rows];
   const p12Iq = wInj.iqValue !== null && wInj.iqValue <= IQ_ID_MAX;
   const p12Ot = otStatuses.filter((s) => s.delayed).length >= 4;
   const p12Active = p12Iq || p12Ot;
   const p12Ruled = wInj.iqValue !== null && wInj.iqValue > IQ_BIF_MAX && !p12Ot;
-  push({
+  push2({
     key: "P12_GLOBAL_WEAK",
     titleFa: "\u0627\u0641\u062A \u0647\u0645\u0647\u200C\u06AF\u06CC\u0631 \u0634\u0646\u0627\u062E\u062A\u06CC-\u0631\u0634\u062F\u06CC",
     baseRateFa: "\u062D\u062F\u0648\u062F \u06F1 \u062A\u0627 \u06F3 \u062F\u0631\u0635\u062F \u0627\u0632 \u06A9\u0648\u062F\u06A9\u0627\u0646",
@@ -53305,7 +53617,7 @@ function evaluatePatterns(norm, wInj, levels, otStatuses) {
   const visualSupport = otStatuses.some((s) => s.domain === "visual" && s.delayed) || norm.ctx.probeDanger.calc;
   const p8Active = gap2 !== null && gap2 >= NVLD_INDEX_GAP && visualSupport;
   const p8Ruled = gap2 !== null && gap2 < NVLD_INDEX_GAP;
-  push({
+  push2({
     key: "P8_NVLD",
     titleFa: "\u0646\u0627\u0628\u0631\u0627\u0628\u0631\u06CC \u06A9\u0644\u0627\u0645\u06CC/\u063A\u06CC\u0631\u06A9\u0644\u0627\u0645\u06CC",
     baseRateFa: "\u06A9\u0645\u200C\u0634\u0627\u06CC\u0639\u061B \u0622\u0645\u0627\u0631 \u062F\u0642\u06CC\u0642\u06CC \u0645\u0646\u062A\u0634\u0631 \u0646\u0634\u062F\u0647",
@@ -53319,7 +53631,7 @@ function evaluatePatterns(norm, wInj, levels, otStatuses) {
   const learningOrAttention = atLeastLevel(levels, "academic_learning", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647") || atLeastLevel(levels, "attention_exec", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647");
   const p7Active = (gifted || giftedIndex) && learningOrAttention;
   const p7Ruled = !gifted && !giftedIndex;
-  push({
+  push2({
     key: "P7_TWO_E",
     titleFa: "\u0627\u0633\u062A\u0639\u062F\u0627\u062F \u062F\u0648\u06AF\u0627\u0646\u0647",
     baseRateFa: "\u062D\u062F\u0648\u062F \u06F2 \u062A\u0627 \u06F5 \u062F\u0631\u0635\u062F \u0627\u0632 \u06A9\u0648\u062F\u06A9\u0627\u0646",
@@ -53330,7 +53642,7 @@ function evaluatePatterns(norm, wInj, levels, otStatuses) {
   });
   const asdDanger = allRows.some((r) => r.toolId === "ce-asd-criteria-v1" && r.danger);
   const p3Active = asdDanger && atLeastLevel(levels, "attention_exec", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647");
-  push({
+  push2({
     key: "P3_ASD_x_ADHD",
     titleFa: "\u0647\u0645\u0631\u0627\u0647\u06CC \u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u0627\u062C\u062A\u0645\u0627\u0639\u06CC-\u0627\u0631\u062A\u0628\u0627\u0637\u06CC \u0648 \u062A\u0648\u062C\u0647",
     baseRateFa: "\u062D\u062F\u0648\u062F \u06F5\u06F0 \u062A\u0627 \u06F7\u06F0 \u062F\u0631\u0635\u062F \u0627\u0632 \u06A9\u0648\u062F\u06A9\u0627\u0646",
@@ -53340,7 +53652,7 @@ function evaluatePatterns(norm, wInj, levels, otStatuses) {
     actionFa: p3Active ? "\u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u0647\u0631 \u062F\u0648 \u0645\u062D\u0648\u0631 \u0628\u0627 \u0627\u062D\u062A\u06CC\u0627\u0637 \u062F\u0631 \u062A\u0641\u06A9\u06CC\u06A9\u061B \u0628\u0631\u0646\u0627\u0645\u0647\u0654 \u0627\u062C\u062A\u0645\u0627\u0639\u06CC-\u0627\u0631\u062A\u0628\u0627\u0637\u06CC \u0648 \u062A\u0648\u062C\u0647 \u0647\u0645\u200C\u0632\u0645\u0627\u0646 \u062F\u06CC\u062F\u0647 \u0634\u0648\u062F." : "\u2014"
   });
   const p1Active = atLeastLevel(levels, "academic_learning", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647") && atLeastLevel(levels, "attention_exec", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647");
-  push({
+  push2({
     key: "P1_SLD_x_ADHD",
     titleFa: "\u0647\u0645\u0631\u0627\u0647\u06CC \u0645\u0634\u06A9\u0644 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u0648 \u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u062A\u0648\u062C\u0647",
     baseRateFa: "\u062D\u062F\u0648\u062F \u06F3\u06F1 \u062A\u0627 \u06F4\u06F5 \u062F\u0631\u0635\u062F \u0627\u0632 \u06A9\u0648\u062F\u06A9\u0627\u0646",
@@ -53351,7 +53663,7 @@ function evaluatePatterns(norm, wInj, levels, otStatuses) {
   });
   const motorSig = allRows.some((r) => r.construct === "motor_coord" && (r.toolId === "ce-dcdq-v1" || r.toolId === OT_PROFILE_TOOL) && r.danger);
   const p2Active = motorSig && atLeastLevel(levels, "attention_exec", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647");
-  push({
+  push2({
     key: "P2_DCD_x_ADHD",
     titleFa: "\u0647\u0645\u0631\u0627\u0647\u06CC \u062F\u0634\u0648\u0627\u0631\u06CC \u0647\u0645\u0627\u0647\u0646\u06AF\u06CC \u062D\u0631\u06A9\u062A\u06CC \u0648 \u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u062A\u0648\u062C\u0647",
     baseRateFa: "\u062D\u062F\u0648\u062F \u06F5\u06F0 \u062F\u0631\u0635\u062F \u0627\u0632 \u06A9\u0648\u062F\u06A9\u0627\u0646",
@@ -53362,7 +53674,7 @@ function evaluatePatterns(norm, wInj, levels, otStatuses) {
   });
   const langSig = allRows.some((r) => r.construct === "language_comm" && r.danger && (r.toolId === "ce-speech-criteria-v1" || r.toolId === WECHSLER_TOOL || r.toolId === OT_PROFILE_TOOL));
   const p5Active = langSig && atLeastLevel(levels, "academic_learning", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647");
-  push({
+  push2({
     key: "P5_LANG_x_SLD",
     titleFa: "\u0647\u0645\u0631\u0627\u0647\u06CC \u0636\u0639\u0641 \u0632\u0628\u0627\u0646\u06CC \u0648 \u0627\u0641\u062A \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC",
     baseRateFa: "\u062D\u062F\u0648\u062F \u06F3\u06F5 \u062A\u0627 \u06F5\u06F5 \u062F\u0631\u0635\u062F \u0627\u0632 \u06A9\u0648\u062F\u06A9\u0627\u0646",
@@ -53375,7 +53687,7 @@ function evaluatePatterns(norm, wInj, levels, otStatuses) {
   const anyAchievementDanger = norm.ctx.probeDanger.read || norm.ctx.probeDanger.write || norm.ctx.probeDanger.calc || norm.ctx.sldDanger.read || norm.ctx.sldDanger.write || norm.ctx.sldDanger.calc;
   const p6Active = bif && anyAchievementDanger;
   const p6Ruled = wInj.iqValue !== null && !bif && !anyAchievementDanger;
-  push({
+  push2({
     key: "P6_BIF_x_SLD",
     titleFa: "\u0645\u0631\u0632 \u062F\u06CC\u0631\u0622\u0645\u0648\u0632\u06CC \u0647\u0645\u0631\u0627\u0647 \u0627\u0641\u062A \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC",
     baseRateFa: "\u062D\u062F\u0648\u062F \u06F2\u06F5 \u062A\u0627 \u06F4\u06F0 \u062F\u0631\u0635\u062F \u0627\u0632 \u06A9\u0648\u062F\u06A9\u0627\u0646 (\u0628\u0631\u0622\u0648\u0631\u062F \u0645\u0631\u06A9\u0632)",
@@ -53386,7 +53698,7 @@ function evaluatePatterns(norm, wInj, levels, otStatuses) {
   });
   const psiWmiWeak = allRows.some((r) => r.toolId === WECHSLER_TOOL && r.danger && (r.signal.startsWith("wisc_psi") || r.signal.startsWith("wisc_wmi")));
   const p9Active = atLeastLevel(levels, "attention_exec", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647") && psiWmiWeak;
-  push({
+  push2({
     key: "P9_PSI_WMI",
     titleFa: "\u0627\u0641\u062A \u0633\u0631\u0639\u062A \u067E\u0631\u062F\u0627\u0632\u0634/\u062D\u0627\u0641\u0638\u0647\u0654 \u06A9\u0627\u0631\u06CC \u0647\u0645\u0631\u0627\u0647 \u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u062A\u0648\u062C\u0647",
     baseRateFa: "\u062D\u062F\u0648\u062F \u06F3\u06F0 \u062A\u0627 \u06F5\u06F0 \u062F\u0631\u0635\u062F \u0627\u0632 \u06A9\u0648\u062F\u06A9\u0627\u0646 (\u0628\u0631\u0622\u0648\u0631\u062F \u0645\u0631\u06A9\u0632)",
@@ -53397,7 +53709,7 @@ function evaluatePatterns(norm, wInj, levels, otStatuses) {
   });
   const gaiFsGap = wInj.link && wInj.link.fsiq !== null && wInj.link.gai !== null ? wInj.link.gai - wInj.link.fsiq : null;
   const p10Active = gaiFsGap !== null && gaiFsGap >= GAI_FSIQ_GAP;
-  push({
+  push2({
     key: "P10_GAI_GAP",
     titleFa: "\u0634\u06A9\u0627\u0641 \u0638\u0631\u0641\u06CC\u062A \u0627\u0633\u062A\u062F\u0644\u0627\u0644\u06CC \u0648 \u0647\u0648\u0634\u0628\u0647\u0631 \u06A9\u0644\u06CC",
     baseRateFa: "\u062D\u062F\u0648\u062F \u06F1\u06F0 \u062A\u0627 \u06F2\u06F0 \u062F\u0631\u0635\u062F \u0627\u0632 \u06A9\u0648\u062F\u06A9\u0627\u0646 (\u0628\u0631\u0622\u0648\u0631\u062F \u0645\u0631\u06A9\u0632)",
@@ -53407,7 +53719,7 @@ function evaluatePatterns(norm, wInj, levels, otStatuses) {
     actionFa: p10Active ? "\u062F\u0631 \u0647\u062F\u0641\u200C\u06AF\u0630\u0627\u0631\u06CC \u062A\u062D\u0635\u06CC\u0644\u06CC\u060C \u0638\u0631\u0641\u06CC\u062A \u0627\u0633\u062A\u062F\u0644\u0627\u0644\u06CC \u0645\u0644\u0627\u06A9 \u0628\u0627\u0634\u062F \u0646\u0647 \u0647\u0648\u0634\u0628\u0647\u0631 \u06A9\u0644\u06CC." : "\u2014"
   });
   const p4Active = atLeastLevel(levels, "academic_learning", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647") && atLeastLevel(levels, "internalizing", "\u0645\u0631\u0632\u06CC") && (norm.ctx.schPositive || norm.ctx.schoolChanges);
-  push({
+  push2({
     key: "P4_ANXIETY_SECONDARY",
     titleFa: "\u0627\u062D\u062A\u0645\u0627\u0644 \u0646\u06AF\u0631\u0627\u0646\u06CC \u0646\u0627\u0634\u06CC \u0627\u0632 \u062A\u062C\u0631\u0628\u0647\u200C\u0647\u0627\u06CC \u0646\u0627\u0645\u0648\u0641\u0642 \u062A\u062D\u0635\u06CC\u0644\u06CC",
     baseRateFa: "\u062D\u062F\u0648\u062F \u06F2\u06F0 \u062A\u0627 \u06F4\u06F0 \u062F\u0631\u0635\u062F \u0627\u0632 \u06A9\u0648\u062F\u06A9\u0627\u0646 (\u0628\u0631\u0622\u0648\u0631\u062F \u0645\u0631\u06A9\u0632)",
@@ -53418,7 +53730,7 @@ function evaluatePatterns(norm, wInj, levels, otStatuses) {
   });
   const attentionDanger = allRows.some((r) => r.construct === "attention_exec" && r.danger);
   const p11Active = atLeastLevel(levels, "internalizing", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647") && !attentionDanger && norm.ctx.familyStress;
-  push({
+  push2({
     key: "P11_MOOD",
     titleFa: "\u0627\u062D\u062A\u0645\u0627\u0644 \u062A\u0623\u062B\u06CC\u0631 \u0646\u06AF\u0631\u0627\u0646\u06CC/\u063A\u0645 \u0628\u0631 \u062A\u0648\u062C\u0647",
     baseRateFa: "\u062D\u062F\u0648\u062F \u06F1\u06F5 \u062A\u0627 \u06F2\u06F5 \u062F\u0631\u0635\u062F \u0627\u0632 \u06A9\u0648\u062F\u06A9\u0627\u0646 (\u0628\u0631\u0622\u0648\u0631\u062F \u0645\u0631\u06A9\u0632)",
@@ -54363,7 +54675,7 @@ function extractWechslerFacts(event) {
     return v !== null && v <= RECOMMENDER_THRESHOLDS.SUBTEST_WEAK;
   }), "patternActive");
   const fsiq = profile?.fsiq ?? snap?.fsiq ?? manual("fsiq");
-  const fsiqBand = profile?.fsiqBand ?? (fsiq !== null ? fsiqBandOf3(fsiq) : null);
+  const fsiqBand = profile?.fsiqBand ?? (fsiq !== null ? fsiqBandOf2(fsiq) : null);
   const scatter = profile?.indexScatter ?? snap?.indexScatter ?? null;
   const step5Weak = (profile?.step5?.weaknesses ?? []).map((w) => typeof w === "string" ? w : w?.key ?? "").filter((k) => ["VCI", "PRI", "WMI", "PSI"].includes(k));
   const cd = sub("CD");
@@ -54476,7 +54788,7 @@ function recommendChecklistPlan(ctx) {
   const existing = existingToolsOf(ctx.events);
   const builder = new PlanBuilder();
   const fsiq = facts.fsiq;
-  const band = facts.fsiqBand ?? (fsiq !== null ? fsiqBandOf3(fsiq) : null);
+  const band = facts.fsiqBand ?? (fsiq !== null ? fsiqBandOf2(fsiq) : null);
   const maxAbility = [facts.vci, facts.pri].filter((v) => v !== null);
   const abilityMax = maxAbility.length ? Math.max(...maxAbility) : null;
   const gapOf = /* @__PURE__ */ __name((v) => abilityMax !== null && v !== null ? abilityMax - v : null, "gapOf");
@@ -58117,12 +58429,12 @@ function createAnnouncementService(deps) {
         throw new ValidationError("\u062D\u062F\u0627\u0642\u0644 \u06CC\u06A9\u06CC \u0627\u0632 \u0645\u062D\u0644\u200C\u0647\u0627\u06CC \u0646\u0645\u0627\u06CC\u0634 (\u0635\u0641\u062D\u0647 \u0648\u0631\u0648\u062F \u06CC\u0627 \u067E\u0646\u0644) \u0631\u0627 \u0627\u0646\u062A\u062E\u0627\u0628 \u06A9\u0646\u06CC\u062F");
       }
       const id = crypto.randomUUID();
-      const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+      const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
       await db.transaction(async (tx) => {
         await tx.execute(
           `INSERT INTO announcements (id, title, body, show_login, show_panel, active, created_by, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)`,
-          [id, input2.title, input2.body, input2.showLogin ? 1 : 0, input2.showPanel ? 1 : 0, actor.staffId, nowIso, nowIso]
+          [id, input2.title, input2.body, input2.showLogin ? 1 : 0, input2.showPanel ? 1 : 0, actor.staffId, nowIso2, nowIso2]
         );
         await audit.logInTransaction(tx, {
           actorId: actor.staffId,
@@ -58465,12 +58777,12 @@ function createKnowledgeService(deps) {
     },
     async create(input2, actor) {
       const id = crypto.randomUUID();
-      const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+      const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
       await db.transaction(async (tx) => {
         await tx.execute(
           `INSERT INTO knowledge_items (id, title, body, category, pinned, published, created_by, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [id, input2.title, input2.body, input2.category, input2.pinned ? 1 : 0, input2.published ? 1 : 0, actor.staffId, nowIso, nowIso]
+          [id, input2.title, input2.body, input2.category, input2.pinned ? 1 : 0, input2.published ? 1 : 0, actor.staffId, nowIso2, nowIso2]
         );
         await audit.logInTransaction(tx, {
           actorId: actor.staffId,
@@ -59259,14 +59571,14 @@ function createClearbookService(deps) {
     async createEntry(input2, actor) {
       assertOffice(actor);
       const id = crypto.randomUUID();
-      const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+      const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
       const tags = dedupeTags(input2.tags ?? []);
       if (input2.planId) await assertPlanExists(input2.planId);
       await db.transaction(async (tx) => {
         await tx.execute(
           `INSERT INTO clearbook_entries (id, plan_id, title, body, event_date, created_by, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [id, input2.planId, input2.title, input2.body ?? "", input2.eventDate, actor.staffId, nowIso, nowIso]
+          [id, input2.planId, input2.title, input2.body ?? "", input2.eventDate, actor.staffId, nowIso2, nowIso2]
         );
         for (const tag of tags) {
           await tx.execute(`INSERT INTO clearbook_entry_tags (entry_id, tag) VALUES (?, ?)`, [id, tag]);
@@ -60176,7 +60488,7 @@ function createDocsService(deps) {
     async create(input2, actor) {
       assertOffice(actor);
       const id = crypto.randomUUID();
-      const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+      const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
       const title = validateTitle(input2.title);
       const category = validateCategory(input2.category);
       const description = validateDescription(input2.description);
@@ -60185,7 +60497,7 @@ function createDocsService(deps) {
         await tx.execute(
           `INSERT INTO docs (id, title, category, description, tags, created_by, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [id, title, category, description, JSON.stringify(tags), actor.staffId, nowIso, nowIso]
+          [id, title, category, description, JSON.stringify(tags), actor.staffId, nowIso2, nowIso2]
         );
         await audit.logInTransaction(tx, {
           actorId: actor.staffId,
@@ -60623,7 +60935,7 @@ function createCenterKpiService(deps) {
     const toRange = tehranDayRange(todayYmd);
     const fromIso = fromRange.start;
     const toIso = toRange.end;
-    const nowIso = now.toISOString();
+    const nowIso2 = now.toISOString();
     const window = {
       days,
       from_iso: fromIso,
@@ -60655,7 +60967,7 @@ function createCenterKpiService(deps) {
          FROM appointment_students aps
          JOIN appointments a ON a.id = aps.appointment_id
          WHERE aps.attendance = 'pending' AND a.end_at < ?`,
-        [nowIso]
+        [nowIso2]
       ),
       db.query(
         `SELECT start_at, end_at FROM appointments
@@ -60891,7 +61203,7 @@ function createCenterKpiService(deps) {
     };
     return {
       window,
-      generated_at: nowIso,
+      generated_at: nowIso2,
       appointments,
       intervention,
       documentation,
@@ -61924,7 +62236,7 @@ function createContentScoreService(db, audit) {
   return {
     async refresh() {
       const startMs = Date.now();
-      const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+      const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
       const exerciseRows = await db.query(
         `SELECT e.id,
                 (SELECT COUNT(*) FROM pathway_sessions ps JOIN intervention_paths ip ON ip.id = ps.pathway_id
@@ -61946,14 +62258,14 @@ function createContentScoreService(db, audit) {
         []
       );
       const upsert = /* @__PURE__ */ __name((table, id, refs, uses) => {
-        const s = computeItemScore(refs, uses, nowIso);
+        const s = computeItemScore(refs, uses, nowIso2);
         return db.prepare(
           `INSERT INTO content_score_report (source_table, source_id, refs, uses, score, formula_version, generated_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(source_table, source_id) DO UPDATE SET
              refs = excluded.refs, uses = excluded.uses, score = excluded.score,
              formula_version = excluded.formula_version, updated_at = excluded.updated_at`,
-          [table, id, s.refs, s.uses, s.score, SCORE_FORMULA_VERSION, s.generatedAt, nowIso]
+          [table, id, s.refs, s.uses, s.score, SCORE_FORMULA_VERSION, s.generatedAt, nowIso2]
         );
       }, "upsert");
       const statements = [
@@ -62100,12 +62412,12 @@ async function readSettingsIso2(db, key) {
   return null;
 }
 __name(readSettingsIso2, "readSettingsIso");
-async function writeSettings(db, key, iso, updatedBy, nowIso) {
+async function writeSettings(db, key, iso, updatedBy, nowIso2) {
   await db.execute(
     `INSERT INTO settings (key, value, updated_by, updated_at)
      VALUES (?, ?, ?, ?)
      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = excluded.updated_by, updated_at = excluded.updated_at`,
-    [key, JSON.stringify(iso), updatedBy, nowIso]
+    [key, JSON.stringify(iso), updatedBy, nowIso2]
   );
 }
 __name(writeSettings, "writeSettings");
@@ -62121,7 +62433,7 @@ async function stampCpContentAttempt(db, at = /* @__PURE__ */ new Date()) {
 }
 __name(stampCpContentAttempt, "stampCpContentAttempt");
 async function pushQueuedSubmissions(deps) {
-  const { db, log, config: config2, nowIso } = deps;
+  const { db, log, config: config2, nowIso: nowIso2 } = deps;
   const rows = await db.query(
     `SELECT id, kind, title, summary, body, tags, submitted_at, source_ref
      FROM network_content
@@ -62144,7 +62456,7 @@ async function pushQueuedSubmissions(deps) {
       summary: r.summary ?? "",
       body: r.body ?? "",
       tags,
-      submitted_at: r.submitted_at ?? nowIso,
+      submitted_at: r.submitted_at ?? nowIso2,
       source_ref: r.source_ref
     };
   });
@@ -62174,14 +62486,14 @@ async function pushQueuedSubmissions(deps) {
   await db.execute(
     `UPDATE network_content SET status = 'submitted', updated_at = ?
      WHERE origin = 'local' AND status = 'queued' AND id IN (${items.map(() => "?").join(", ")})`,
-    [nowIso, ...items.map((i) => i.id)]
+    [nowIso2, ...items.map((i) => i.id)]
   );
   log.info("cp_content.push", { n: items.length });
   return items.length;
 }
 __name(pushQueuedSubmissions, "pushQueuedSubmissions");
 async function pullCuratedItems(deps) {
-  const { db, log, config: config2, nowIso } = deps;
+  const { db, log, config: config2, nowIso: nowIso2 } = deps;
   const lastIso = await readSettingsIso2(db, CP_CONTENT_SYNC_KEY);
   let sinceIso = null;
   if (lastIso) {
@@ -62273,7 +62585,7 @@ async function pullCuratedItems(deps) {
           JSON.stringify(it.quality ?? {}),
           it.source_center_name ?? it.source_center_code,
           it.status === "retired" ? 0 : 1,
-          nowIso,
+          nowIso2,
           createdBy,
           it.created_at,
           it.updated_at
@@ -62282,7 +62594,7 @@ async function pullCuratedItems(deps) {
     );
     await db.batch(statements);
   }
-  await writeSettings(db, CP_CONTENT_SYNC_KEY, parsed.data.data.server_time, "cp-content", nowIso);
+  await writeSettings(db, CP_CONTENT_SYNC_KEY, parsed.data.data.server_time, "cp-content", nowIso2);
   log.info("cp_content.pull", { n: items.length, received: parsed.data.data.items.length });
   return items.length;
 }
@@ -62330,7 +62642,7 @@ async function runCpContentCycle(deps) {
     return { status: "disabled" };
   }
   const now = deps.now ?? (() => /* @__PURE__ */ new Date());
-  const nowIso = now().toISOString();
+  const nowIso2 = now().toISOString();
   let pushed = 0;
   let applied = 0;
   const errors = [];
@@ -62341,13 +62653,13 @@ async function runCpContentCycle(deps) {
     }
     await stampCpContentAttempt(db, now());
     try {
-      pushed = await pushQueuedSubmissions({ db, log, config: config2, binding: deps.binding, fetchFn: deps.fetchFn, nowIso });
-      await writeSettings(db, CP_CONTENT_PUSH_KEY, nowIso, "cp-content", nowIso);
+      pushed = await pushQueuedSubmissions({ db, log, config: config2, binding: deps.binding, fetchFn: deps.fetchFn, nowIso: nowIso2 });
+      await writeSettings(db, CP_CONTENT_PUSH_KEY, nowIso2, "cp-content", nowIso2);
     } catch (err) {
       errors.push(err instanceof Error ? err.message : String(err));
     }
     try {
-      applied = await pullCuratedItems({ db, log, config: config2, binding: deps.binding, fetchFn: deps.fetchFn, nowIso });
+      applied = await pullCuratedItems({ db, log, config: config2, binding: deps.binding, fetchFn: deps.fetchFn, nowIso: nowIso2 });
     } catch (err) {
       errors.push(err instanceof Error ? err.message : String(err));
     }
@@ -62433,12 +62745,12 @@ async function readSettingsInt(db, key) {
   return null;
 }
 __name(readSettingsInt, "readSettingsInt");
-async function writeSettings2(db, key, jsonValue, nowIso) {
+async function writeSettings2(db, key, jsonValue, nowIso2) {
   await db.execute(
     `INSERT INTO settings (key, value, updated_by, updated_at)
      VALUES (?, ?, 'cp-report', ?)
      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = 'cp-report', updated_at = excluded.updated_at`,
-    [key, jsonValue, nowIso]
+    [key, jsonValue, nowIso2]
   );
 }
 __name(writeSettings2, "writeSettings");
@@ -62498,7 +62810,7 @@ __name(percentile75, "percentile75");
 var RUM_SAMPLE_SQL = `SELECT metric, value FROM rum_events
   WHERE ts >= ? AND metric IN ('LCP','CLS','INP') ORDER BY metric, value LIMIT ${RUM_SAMPLE_CAP}`;
 async function collectKpiBucket(db, now = /* @__PURE__ */ new Date()) {
-  const nowIso = now.toISOString();
+  const nowIso2 = now.toISOString();
   const day = tehranDayRange(tehranTodayYmd(now));
   const [students, appts, overdue, errs, rum] = await Promise.all([
     db.queryOne(
@@ -62516,7 +62828,7 @@ async function collectKpiBucket(db, now = /* @__PURE__ */ new Date()) {
       `SELECT COUNT(*) AS c
        FROM appointment_students aps JOIN appointments a ON a.id = aps.appointment_id
        WHERE aps.attendance = 'pending' AND a.end_at < ?`,
-      [nowIso]
+      [nowIso2]
     ),
     db.queryOne(
       `SELECT COALESCE(SUM(CASE WHEN occurred_at >= datetime('now', '-1 hour') THEN 1 ELSE 0 END), 0) AS h1,
@@ -63169,9 +63481,9 @@ async function pendingPushCount(db, watermark) {
   } catch {
   }
   try {
-    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
-    const hourBucket = `${nowIso.slice(0, 13)}:00:00Z`;
-    const dayBucket = `${nowIso.slice(0, 10)}T00:00:00Z`;
+    const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
+    const hourBucket = `${nowIso2.slice(0, 13)}:00:00Z`;
+    const dayBucket = `${nowIso2.slice(0, 10)}T00:00:00Z`;
     const ahead = /* @__PURE__ */ __name((at) => !watermark || Date.parse(at) > Date.parse(watermark), "ahead");
     if (ahead(hourBucket)) count += 1;
     if (ahead(dayBucket)) count += 1;
@@ -63380,10 +63692,10 @@ async function pendingPushSoft(db, watermark) {
       const row = await db.queryOne("SELECT COUNT(*) AS n FROM client_errors");
       count += Number(row?.n ?? 0);
     }
-    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+    const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
     const ahead = /* @__PURE__ */ __name((at) => !watermark || Date.parse(at) > Date.parse(watermark), "ahead");
-    if (ahead(`${nowIso.slice(0, 13)}:00:00Z`)) count += 1;
-    if (ahead(`${nowIso.slice(0, 10)}T00:00:00Z`)) count += 1;
+    if (ahead(`${nowIso2.slice(0, 13)}:00:00Z`)) count += 1;
+    if (ahead(`${nowIso2.slice(0, 10)}T00:00:00Z`)) count += 1;
     return count;
   } catch {
     return null;
@@ -63548,6 +63860,31 @@ function registerSystemRoutes(app, deps) {
 }
 __name(registerSystemRoutes, "registerSystemRoutes");
 
+// src/application/engine-capabilities/routes.ts
+var ENGINE_PUBLIC_API_MAP = {
+  health: "/health",
+  restartStatus: "/api/system/restart-status",
+  instanceSync: "/api/instance-sync",
+  healthPanel: "/api/health/panel",
+  nodeSyncStatus: "/api/node-sync/status"
+};
+function registerEngineCapabilitiesRoutes(app) {
+  app.get(
+    "/api/engine/capabilities",
+    (c) => c.json(
+      {
+        ok: true,
+        version: APP_VERSION,
+        server_ts: (/* @__PURE__ */ new Date()).toISOString(),
+        api: ENGINE_PUBLIC_API_MAP
+      },
+      200,
+      { "Cache-Control": "no-store" }
+    )
+  );
+}
+__name(registerEngineCapabilitiesRoutes, "registerEngineCapabilitiesRoutes");
+
 // src/application/growth/service.ts
 var GROWTH_SNAPSHOT_SEAL_KEY = "growth.last_snapshot_at";
 var GROWTH_SEAL_HOURS = 24;
@@ -63659,8 +63996,8 @@ function createGrowthService(deps) {
       return { skipped: false, last_snapshot_at: capturedAt, tables: counts.length };
     },
     async report() {
-      const nowIso = (/* @__PURE__ */ new Date()).toISOString();
-      const today = nowIso.slice(0, 10);
+      const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
+      const today = nowIso2.slice(0, 10);
       const base7 = new Date(Date.parse(`${today}T00:00:00Z`) - 7 * 864e5).toISOString().slice(0, 10);
       const base30 = new Date(Date.parse(`${today}T00:00:00Z`) - 30 * 864e5).toISOString().slice(0, 10);
       const liveTables = await listUserTables(db);
@@ -63711,7 +64048,7 @@ function createGrowthService(deps) {
         return a.table_name.localeCompare(b.table_name);
       });
       return {
-        generated_at: nowIso,
+        generated_at: nowIso2,
         last_snapshot_at: lastSnapshotIso,
         snapshot_days: daysRow?.n ?? 0,
         tables: out
@@ -66150,8 +66487,8 @@ function groupByDay(appointments) {
   return [...byDay.entries()].sort(([d1], [d2]) => d1 < d2 ? -1 : d1 > d2 ? 1 : 0).map(([date5, counts]) => ({ date: date5, ...counts }));
 }
 __name(groupByDay, "groupByDay");
-function findNextAppointment(appointments, nowIso) {
-  const now = Date.parse(nowIso);
+function findNextAppointment(appointments, nowIso2) {
+  const now = Date.parse(nowIso2);
   let best = null;
   for (const a of appointments) {
     if (a.status !== "scheduled") continue;
@@ -66258,7 +66595,7 @@ function createDashboardService(deps) {
     async getTodayCards(dateYmd) {
       const date5 = dateYmd || tehranTodayYmd();
       const range = tehranDayRange(date5);
-      const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+      const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
       const [dayAppointments, staffInfo, studentsSummary] = await Promise.all([
         appointments.list({ from: range.start, to: range.end }),
         staffInfoMap(),
@@ -66281,7 +66618,7 @@ function createDashboardService(deps) {
         absenceRate: attendanceStats.absenceRate,
         attendance: attendanceStats,
         activeConflicts,
-        nextAppointment: findNextAppointment(dayAppointments, nowIso),
+        nextAppointment: findNextAppointment(dayAppointments, nowIso2),
         studentsSummary
       };
     },
@@ -69282,17 +69619,17 @@ function createBotCommandsSection(ctx) {
         return { text: renderTemplate("bot_help_guest"), buttons: null };
       }
       const clinicName = await deps.settings.getClinicName();
-      const nowIso = now().toISOString();
+      const nowIso2 = now().toISOString();
       if (owner.kind === "class") {
         const text2 = await this.handleScheduleCommand(chatId, "week");
         return { text: text2, buttons: null };
       }
       if (owner.kind === "staff") {
-        const list = await appointments.list({ staffId: owner.ref_id, from: nowIso, to: addMinutes(nowIso, 7 * 24 * 60) });
+        const list = await appointments.list({ staffId: owner.ref_id, from: nowIso2, to: addMinutes(nowIso2, 7 * 24 * 60) });
         const studentIds2 = [...new Set(list.flatMap((a) => a.students.map((s) => s.studentId)))];
         const names = await studentNamesMap(studentIds2);
         const entries2 = buildScheduleEntries(list, { kind: "staff", names });
-        const title = `\u{1F5D3} \u0646\u0648\u0628\u062A\u200C\u0647\u0627\u06CC \u067E\u06CC\u0634\u200C\u0631\u0648\u06CC \u0634\u0645\u0627 \u2014 \u0627\u0632 ${jalaliFullLabel(tehranYmdOf(nowIso))}`;
+        const title = `\u{1F5D3} \u0646\u0648\u0628\u062A\u200C\u0647\u0627\u06CC \u067E\u06CC\u0634\u200C\u0631\u0648\u06CC \u0634\u0645\u0627 \u2014 \u0627\u0632 ${jalaliFullLabel(tehranYmdOf(nowIso2))}`;
         const text2 = renderScheduleMessage({ title, entries: entries2, clinicName });
         const sorted = [...list].sort((a, b) => a.startAt.localeCompare(b.startAt));
         const buttons = sorted.filter((a) => a.status === "scheduled").slice(0, 8).map((a) => [{ text: `\u0644\u063A\u0648 ${tehranTimeLabel(a.startAt)}`, callbackData: `ask:${a.id}` }]);
@@ -69305,7 +69642,7 @@ function createBotCommandsSection(ctx) {
       const merged = [];
       const seen = /* @__PURE__ */ new Set();
       for (const sid of studentIds) {
-        const list = await appointments.list({ studentId: sid, from: nowIso, to: addMinutes(nowIso, 14 * 24 * 60) });
+        const list = await appointments.list({ studentId: sid, from: nowIso2, to: addMinutes(nowIso2, 14 * 24 * 60) });
         for (const a of list) {
           if (!seen.has(a.id)) {
             seen.add(a.id);
@@ -69491,7 +69828,7 @@ function createBotCommandsSection(ctx) {
       if (!owner) {
         return { text: renderTemplate("bot_unlink_not_connected"), buttons: null };
       }
-      const nowIso = now().toISOString();
+      const nowIso2 = now().toISOString();
       const [familyRes, staffRes, classRes, prefsRes, stateRes] = await Promise.all([
         db.execute(...spreadStmt(unlinkBotLinksByChat(chatId))),
         db.execute(...spreadStmt(unlinkStaffLinksByChat(chatId))),
@@ -70425,13 +70762,13 @@ function createNotifyAppService(deps) {
       return notify.dispatchPending(limit);
     },
     async enqueueUpcomingReminders(nowDate = now(), horizonHours = REMINDER_HORIZON_HOURS) {
-      const nowIso = nowDate.toISOString();
-      const horizonTo = addMinutes(nowIso, horizonHours * 60);
+      const nowIso2 = nowDate.toISOString();
+      const horizonTo = addMinutes(nowIso2, horizonHours * 60);
       const [settingsFlags, clinicName] = await Promise.all([
         deps.settings.getNotifyFlags(),
         deps.settings.getClinicName()
       ]);
-      const upcoming = await appointments.list({ from: nowIso, to: horizonTo });
+      const upcoming = await appointments.list({ from: nowIso2, to: horizonTo });
       const studentIds = [...new Set(upcoming.flatMap((a) => a.students.map((s) => s.studentId)))];
       const prefsRows = studentIds.length > 0 ? await db.query(...spreadStmt(selectPrefsMany(studentIds))) : [];
       const prefsByStudent = /* @__PURE__ */ new Map();
@@ -70448,7 +70785,7 @@ function createNotifyAppService(deps) {
         prefsByStudent,
         studentNames,
         staffNames,
-        nowIso,
+        nowIso: nowIso2,
         horizonHours,
         defaultHoursBefore: settingsFlags.defaultReminderHours,
         clinicName
@@ -70469,7 +70806,7 @@ function createNotifyAppService(deps) {
         if (outcome.duplicate) duplicates += 1;
         else enqueued += 1;
       }
-      const summary = buildEnqueueSummary(plan, enqueued, duplicates, nowIso, horizonTo);
+      const summary = buildEnqueueSummary(plan, enqueued, duplicates, nowIso2, horizonTo);
       log.info("reminders.enqueued", { ...summary });
       await audit.log({
         actorId: "system",
@@ -72701,9 +73038,9 @@ function createReportService(deps) {
       const fuRows = await db.query(
         `SELECT status, due_at, completed_at FROM followups`
       );
-      const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+      const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
       const openFu = fuRows.filter((f) => f.status === "open" || f.status === "in_progress");
-      const overdueFu = openFu.filter((f) => f.due_at !== null && f.due_at < nowIso);
+      const overdueFu = openFu.filter((f) => f.due_at !== null && f.due_at < nowIso2);
       const doneInPeriod = fuRows.filter((f) => f.status === "done" && f.completed_at !== null && f.completed_at >= range.start && f.completed_at <= range.end).length;
       const cancelledInPeriod = fuRows.filter((f) => f.status === "cancelled").length;
       const followups = {
@@ -73777,11 +74114,11 @@ function registerAuthRoutes(app, deps) {
       { id: staff.id, fullName: staff.full_name, role: staff.role, email: staff.email },
       await resolveSessionSecret(c.env)
     );
-    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+    const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
     await c.env.DB.prepare(
       "INSERT INTO auth_sessions (sid, staff_id, issued_at, expires_at) VALUES (?, ?, ?, ?)"
-    ).bind(sid, staff.id, nowIso, expiresAt).run();
-    await c.env.DB.prepare("DELETE FROM auth_sessions WHERE expires_at < ?").bind(nowIso).run();
+    ).bind(sid, staff.id, nowIso2, expiresAt).run();
+    await c.env.DB.prepare("DELETE FROM auth_sessions WHERE expires_at < ?").bind(nowIso2).run();
     await deps.audit.log({
       actorId: staff.id,
       action: "auth.login",
@@ -74029,10 +74366,10 @@ function createNodeSyncApp(deps) {
     return null;
   }
   __name(authNode, "authNode");
-  const authFailed = /* @__PURE__ */ __name((c) => c.json({ error: "NODE_AUTH_FAILED", message: "\u0627\u0639\u062A\u0628\u0627\u0631 \u0646\u0648\u062F \u067E\u0630\u06CC\u0631\u0641\u062A\u0647 \u0646\u0634\u062F" }, 401), "authFailed");
+  const authFailed2 = /* @__PURE__ */ __name((c) => c.json({ error: "NODE_AUTH_FAILED", message: "\u0627\u0639\u062A\u0628\u0627\u0631 \u0646\u0648\u062F \u067E\u0630\u06CC\u0631\u0641\u062A\u0647 \u0646\u0634\u062F" }, 401), "authFailed");
   app.get("/pull", async (c) => {
     const node2 = await authNode(c);
-    if (!node2) return authFailed(c);
+    if (!node2) return authFailed2(c);
     await bumpQuotaUsage(db, "pull", now());
     const rawDomains = (c.req.query("domains") ?? "").split(",").map((d) => d.trim().toLowerCase()).filter((d) => d.length > 0);
     const unknownDomains = [...new Set(rawDomains.filter((d) => !NODE_PULL_DOMAIN_SET.has(d)))];
@@ -74072,7 +74409,7 @@ function createNodeSyncApp(deps) {
   });
   app.get("/reconcile", async (c) => {
     const node2 = await authNode(c);
-    if (!node2) return authFailed(c);
+    if (!node2) return authFailed2(c);
     const rawDomains = (c.req.query("domains") ?? "").split(",").map((d) => d.trim().toLowerCase()).filter((d) => d.length > 0);
     const unknownDomains = [...new Set(rawDomains.filter((d) => !NODE_PULL_DOMAIN_SET.has(d)))];
     if (unknownDomains.length > 0) {
@@ -74091,7 +74428,7 @@ function createNodeSyncApp(deps) {
   });
   app.post("/push", async (c) => {
     const node2 = await authNode(c);
-    if (!node2) return authFailed(c);
+    if (!node2) return authFailed2(c);
     const catchUpDeclared = c.req.header(NODE_PUSH_CATCHUP_HEADER) === "1";
     const at = now();
     const handshake = {
@@ -74595,6 +74932,2251 @@ function registerInternalSyncRoutes(app, deps) {
 }
 __name(registerInternalSyncRoutes, "registerInternalSyncRoutes");
 
+// src/application/instance-sync/tables.ts
+var SYNC_TABLES = [
+  { table: "announcements", pk: ["id"], hasUpdatedAt: true },
+  { table: "appointment_students", pk: ["appointment_id", "student_id"], hasUpdatedAt: false },
+  { table: "appointments", pk: ["id"], hasUpdatedAt: true },
+  { table: "assessments", pk: ["id"], hasUpdatedAt: true },
+  { table: "bug_reports", pk: ["id"], hasUpdatedAt: false },
+  { table: "case_event_types", pk: ["id"], hasUpdatedAt: true },
+  { table: "case_events", pk: ["id"], hasUpdatedAt: true },
+  { table: "classes", pk: ["id"], hasUpdatedAt: false },
+  { table: "clearbook_entries", pk: ["id"], hasUpdatedAt: true },
+  { table: "clearbook_entry_tags", pk: ["entry_id", "tag"], hasUpdatedAt: false },
+  { table: "clearbook_plans", pk: ["id"], hasUpdatedAt: true },
+  { table: "committee_items", pk: ["id"], hasUpdatedAt: true },
+  { table: "committee_meetings", pk: ["id"], hasUpdatedAt: true },
+  { table: "content_score_report", pk: ["source_table", "source_id"], hasUpdatedAt: true },
+  { table: "day_notes", pk: ["id"], hasUpdatedAt: false },
+  { table: "docs", pk: ["id"], hasUpdatedAt: true },
+  { table: "document_requests", pk: ["id"], hasUpdatedAt: false },
+  { table: "exercise_assignments", pk: ["id"], hasUpdatedAt: false },
+  { table: "exercise_batches", pk: ["id"], hasUpdatedAt: false },
+  { table: "exercise_focus_links", pk: ["exercise_id", "focus_key"], hasUpdatedAt: false },
+  { table: "exercise_package_items", pk: ["package_id", "exercise_id"], hasUpdatedAt: false },
+  { table: "exercise_package_tags", pk: ["package_id", "tag_id"], hasUpdatedAt: false },
+  { table: "exercise_packages", pk: ["id"], hasUpdatedAt: true },
+  { table: "exercise_submissions", pk: ["id"], hasUpdatedAt: false },
+  { table: "exercise_tags", pk: ["exercise_id", "tag_id"], hasUpdatedAt: false },
+  { table: "exercises", pk: ["id"], hasUpdatedAt: true },
+  { table: "finance_budgets", pk: ["id"], hasUpdatedAt: true },
+  { table: "finance_donations", pk: ["id"], hasUpdatedAt: true },
+  { table: "finance_invoices", pk: ["id"], hasUpdatedAt: true },
+  { table: "followups", pk: ["id"], hasUpdatedAt: true },
+  { table: "game_adherence", pk: ["mission_id"], hasUpdatedAt: false },
+  { table: "game_attempts", pk: ["id"], hasUpdatedAt: false },
+  { table: "game_goals", pk: ["id"], hasUpdatedAt: false },
+  { table: "game_links", pk: ["jti"], hasUpdatedAt: false },
+  { table: "game_metrics", pk: ["id"], hasUpdatedAt: false },
+  { table: "game_missions", pk: ["id"], hasUpdatedAt: false },
+  { table: "game_packages", pk: ["id", "version"], hasUpdatedAt: true },
+  { table: "game_prescriptions", pk: ["id"], hasUpdatedAt: true },
+  { table: "intervention_paths", pk: ["id"], hasUpdatedAt: true },
+  { table: "knowledge_items", pk: ["id"], hasUpdatedAt: true },
+  { table: "network_content", pk: ["id"], hasUpdatedAt: true },
+  { table: "notification_prefs", pk: ["student_id"], hasUpdatedAt: true },
+  { table: "ot_progress", pk: ["id"], hasUpdatedAt: false },
+  { table: "ot_skills", pk: ["id"], hasUpdatedAt: false },
+  { table: "pathway_probes", pk: ["id"], hasUpdatedAt: true },
+  { table: "pathway_sessions", pk: ["id"], hasUpdatedAt: true },
+  { table: "pathway_templates", pk: ["id"], hasUpdatedAt: true },
+  { table: "schools", pk: ["id"], hasUpdatedAt: false },
+  { table: "screening_entries", pk: ["id"], hasUpdatedAt: true },
+  { table: "staff", pk: ["id"], hasUpdatedAt: false },
+  { table: "staff_attendance", pk: ["id"], hasUpdatedAt: true },
+  { table: "student_education_history", pk: ["id"], hasUpdatedAt: false },
+  { table: "student_focus_links", pk: ["student_id", "focus_key"], hasUpdatedAt: false },
+  { table: "student_tags", pk: ["student_id", "tag_id"], hasUpdatedAt: false },
+  { table: "student_teachers", pk: ["id"], hasUpdatedAt: false },
+  { table: "students", pk: ["id"], hasUpdatedAt: false },
+  { table: "tags", pk: ["id"], hasUpdatedAt: false },
+  { table: "todos", pk: ["id"], hasUpdatedAt: true },
+  { table: "waitlist", pk: ["id"], hasUpdatedAt: true },
+  { table: "working_hours", pk: ["id"], hasUpdatedAt: true }
+];
+var SYNC_TABLE_MAP = new Map(SYNC_TABLES.map((t) => [t.table, t]));
+function syncTableMeta(table) {
+  return SYNC_TABLE_MAP.get(table);
+}
+__name(syncTableMeta, "syncTableMeta");
+function syncPkValueOfRow(row, pk) {
+  return pk.map((k) => row[k] === null || row[k] === void 0 ? "" : String(row[k])).join("|");
+}
+__name(syncPkValueOfRow, "syncPkValueOfRow");
+var EPOCH_STAMP = "1970-01-01T00:00:00.000Z";
+
+// src/application/instance-sync/winner.ts
+function canonicalJson(value) {
+  if (value === null || typeof value !== "object") return JSON.stringify(value ?? null);
+  if (Array.isArray(value)) return `[${value.map((v) => canonicalJson(v)).join(",")}]`;
+  const keys = Object.keys(value).sort();
+  const body = keys.map((k) => {
+    const v = value[k];
+    return `${JSON.stringify(k)}:${canonicalJson(v)}`;
+  }).join(",");
+  return `{${body}}`;
+}
+__name(canonicalJson, "canonicalJson");
+async function syncHash(value) {
+  const data = new TextEncoder().encode(canonicalJson(value));
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+__name(syncHash, "syncHash");
+function formationStampOf(row) {
+  return row.created_at ?? row.updated_at ?? null;
+}
+__name(formationStampOf, "formationStampOf");
+function compareStamps(a, b) {
+  if (a === b) return 0;
+  if (a === null) return 1;
+  if (b === null) return -1;
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+__name(compareStamps, "compareStamps");
+async function rowWinner(a, b) {
+  const formation = compareStamps(formationStampOf(a), formationStampOf(b));
+  if (formation !== 0) return formation < 0 ? "a" : "b";
+  const updated = compareStamps(a.updated_at ?? null, b.updated_at ?? null);
+  if (updated !== 0) return updated < 0 ? "a" : "b";
+  const [hashA, hashB] = await Promise.all([syncHash(a), syncHash(b)]);
+  if (hashA === hashB) return "a";
+  return hashA > hashB ? "a" : "b";
+}
+__name(rowWinner, "rowWinner");
+function stampHashWinner(a, b) {
+  const cmp = compareStamps(a.stamp, b.stamp);
+  if (cmp !== 0) return cmp < 0 ? "a" : "b";
+  if (a.hash === b.hash) return "a";
+  return a.hash > b.hash ? "a" : "b";
+}
+__name(stampHashWinner, "stampHashWinner");
+function tombstoneCanonical(table, pk, deletedAt) {
+  return { deleted_at: deletedAt, pk, table_name: table };
+}
+__name(tombstoneCanonical, "tombstoneCanonical");
+function parseCursorPair(raw2) {
+  if (raw2) {
+    try {
+      const parsed = JSON.parse(raw2);
+      if (typeof parsed.rows === "string" && typeof parsed.deleted === "string") {
+        return { rows: parsed.rows, deleted: parsed.deleted };
+      }
+    } catch {
+    }
+  }
+  return { rows: EPOCH_STAMP, deleted: EPOCH_STAMP };
+}
+__name(parseCursorPair, "parseCursorPair");
+
+// src/application/instance-sync/service.ts
+var PULL_MAX_ROWS_PER_TABLE = 500;
+var CONFLICT_PAYLOAD_MAX_BYTES = 64 * 1024;
+var DEVICE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{2,63}$/;
+var nowIso = /* @__PURE__ */ __name(() => (/* @__PURE__ */ new Date()).toISOString(), "nowIso");
+function assertSafeIdent(name) {
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) throw new Error(`\u0634\u0646\u0627\u0633\u0647\u0654 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0628\u0631\u0627\u06CC SQL: ${name}`);
+  return name;
+}
+__name(assertSafeIdent, "assertSafeIdent");
+function bindValue(v) {
+  if (v === void 0) return null;
+  if (typeof v === "boolean") return v ? 1 : 0;
+  if (v === null || typeof v === "string" || typeof v === "number" || typeof v === "bigint") return v;
+  return String(v);
+}
+__name(bindValue, "bindValue");
+async function columnsOf(db, table) {
+  const rows = await db.query(
+    `PRAGMA table_info(${assertSafeIdent(table)})`
+  );
+  return rows.map((r) => ({ name: r.name, notnull: Number(r.notnull), dflt: r.dflt_value, pk: Number(r.pk) }));
+}
+__name(columnsOf, "columnsOf");
+function maxStamp(current, values) {
+  return values.reduce((m, v) => v > m ? v : m, current);
+}
+__name(maxStamp, "maxStamp");
+function truncateLoserPayload(json3) {
+  if (Buffer.byteLength(json3, "utf8") <= CONFLICT_PAYLOAD_MAX_BYTES) return json3;
+  const marker = JSON.stringify({ __truncated: true, full_bytes: Buffer.byteLength(json3, "utf8") });
+  const budget = CONFLICT_PAYLOAD_MAX_BYTES - Buffer.byteLength(marker, "utf8") - 64;
+  let head = json3.slice(0, Math.max(budget, 0));
+  while (Buffer.byteLength(head, "utf8") > budget) head = head.slice(0, Math.floor(head.length * 0.9));
+  return JSON.stringify({ __truncated: true, full_bytes: Buffer.byteLength(json3, "utf8"), head });
+}
+__name(truncateLoserPayload, "truncateLoserPayload");
+async function instanceState(db, deviceId) {
+  const rows = await db.query(
+    `SELECT table_name, pull_cursor, push_cursor FROM _sync_state`
+  );
+  const cursors = {};
+  for (const meta3 of SYNC_TABLES) {
+    const rec = rows.find((r) => r.table_name === meta3.table);
+    cursors[meta3.table] = {
+      pull: parseCursorPair(rec?.pull_cursor),
+      push: parseCursorPair(rec?.push_cursor)
+    };
+  }
+  let appliedMigrations = null;
+  try {
+    const rec = await db.queryOne(`SELECT COUNT(*) AS n FROM d1_migrations`);
+    appliedMigrations = rec ? Number(rec.n) : null;
+  } catch {
+    appliedMigrations = null;
+  }
+  return { device_id: deviceId, applied_migrations: appliedMigrations, cursors, table_count: SYNC_TABLES.length };
+}
+__name(instanceState, "instanceState");
+async function completeStampGroup(db, table, stampCol, pkOrder, rows) {
+  if (rows.length !== PULL_MAX_ROWS_PER_TABLE) return rows;
+  const lastStamp = rows[rows.length - 1][stampCol];
+  if (typeof lastStamp !== "string") return rows;
+  const group = await db.query(
+    `SELECT * FROM ${assertSafeIdent(table)} WHERE ${assertSafeIdent(stampCol)} = ? ORDER BY ${pkOrder} ASC`,
+    [lastStamp]
+  );
+  return [...rows.filter((r) => r[stampCol] !== lastStamp), ...group];
+}
+__name(completeStampGroup, "completeStampGroup");
+async function pull(db, since) {
+  const out = {};
+  for (const meta3 of SYNC_TABLES) {
+    const table = assertSafeIdent(meta3.table);
+    const pkOrder = meta3.pk.map(assertSafeIdent).join(", ");
+    const sincePair = since.tables?.[meta3.table];
+    const cursorRows = typeof sincePair?.rows === "string" ? sincePair.rows : EPOCH_STAMP;
+    const cursorDeleted = typeof sincePair?.deleted === "string" ? sincePair.deleted : EPOCH_STAMP;
+    const rows = await db.query(
+      `SELECT * FROM ${table} WHERE updated_at IS NOT NULL AND updated_at > ? ORDER BY updated_at ASC, ${pkOrder} ASC LIMIT ?`,
+      [cursorRows, PULL_MAX_ROWS_PER_TABLE]
+    );
+    const completed2 = await completeStampGroup(db, table, "updated_at", pkOrder, rows);
+    let deletedRows = await db.query(
+      `SELECT table_name, pk, deleted_at, device_id FROM _sync_deleted WHERE table_name = ? AND deleted_at > ? ORDER BY deleted_at ASC, pk ASC LIMIT ?`,
+      [meta3.table, cursorDeleted, PULL_MAX_ROWS_PER_TABLE]
+    );
+    if (deletedRows.length === PULL_MAX_ROWS_PER_TABLE) {
+      const lastStamp = deletedRows[deletedRows.length - 1].deleted_at;
+      const group = await db.query(
+        `SELECT table_name, pk, deleted_at, device_id FROM _sync_deleted WHERE table_name = ? AND deleted_at = ? ORDER BY pk ASC`,
+        [meta3.table, lastStamp]
+      );
+      deletedRows = [...deletedRows.filter((r) => r.deleted_at !== lastStamp), ...group];
+    }
+    out[meta3.table] = {
+      rows: completed2,
+      deleted: deletedRows,
+      next_cursors: {
+        rows: maxStamp(cursorRows, completed2.map((r) => String(r.updated_at ?? ""))),
+        deleted: maxStamp(cursorDeleted, deletedRows.map((r) => r.deleted_at))
+      }
+    };
+  }
+  return { tables: out };
+}
+__name(pull, "pull");
+function wherePk(pk) {
+  return pk.map((c) => `${assertSafeIdent(c)} = ?`).join(" AND ");
+}
+__name(wherePk, "wherePk");
+async function fetchRow(db, table, pk, pkValue) {
+  const parts = syncPkValueSplitSafe(pkValue, pk);
+  if (!parts) return null;
+  const rows = await db.query(
+    `SELECT * FROM ${assertSafeIdent(table)} WHERE ${wherePk(pk)}`,
+    parts.map(bindValue)
+  );
+  return rows[0] ?? null;
+}
+__name(fetchRow, "fetchRow");
+function syncPkValueSplitSafe(pkValue, pk) {
+  const parts = pkValue.split("|");
+  if (parts.length !== pk.length || parts.some((p) => p === "")) return null;
+  return parts;
+}
+__name(syncPkValueSplitSafe, "syncPkValueSplitSafe");
+async function localTombstone(db, table, pkValue) {
+  return db.queryOne(
+    `SELECT pk, deleted_at, device_id FROM _sync_deleted WHERE table_name = ? AND pk = ?`,
+    [table, pkValue]
+  );
+}
+__name(localTombstone, "localTombstone");
+function conflictWrite(input2) {
+  return {
+    sql: `INSERT INTO _sync_conflicts (table_name, pk, winner_side, winner_updated_at, loser_updated_at, resolved_at, detail, loser_payload, device_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    params: [
+      input2.table,
+      input2.pkValue,
+      input2.winnerSide,
+      input2.winnerStamp,
+      input2.loserStamp,
+      nowIso(),
+      JSON.stringify({ rule: input2.rule, table: input2.table, pk: input2.pkValue }),
+      truncateLoserPayload(input2.loserJson),
+      input2.deviceId
+    ]
+  };
+}
+__name(conflictWrite, "conflictWrite");
+function upsertRowWrite(table, columns, pk, row) {
+  const cols = columns.map((c) => assertSafeIdent(c.name));
+  const pkSet = new Set(pk);
+  const conflictTarget = pk.map(assertSafeIdent).join(", ");
+  const updateSet = columns.filter((c) => !pkSet.has(c.name)).map((c) => `${assertSafeIdent(c.name)} = excluded.${assertSafeIdent(c.name)}`).join(", ");
+  const placeholders = cols.map(() => "?").join(", ");
+  return {
+    sql: `INSERT INTO ${assertSafeIdent(table)} (${cols.join(", ")}) VALUES (${placeholders})
+          ON CONFLICT(${conflictTarget}) DO UPDATE SET ${updateSet}`,
+    params: cols.map((c) => bindValue(row[c]))
+  };
+}
+__name(upsertRowWrite, "upsertRowWrite");
+function replaceRowWrite(table, columns, row) {
+  const cols = columns.map((c) => assertSafeIdent(c.name));
+  const placeholders = cols.map(() => "?").join(", ");
+  return {
+    sql: `INSERT OR REPLACE INTO ${assertSafeIdent(table)} (${cols.join(", ")}) VALUES (${placeholders})`,
+    params: cols.map((c) => bindValue(row[c]))
+  };
+}
+__name(replaceRowWrite, "replaceRowWrite");
+function deleteRowWrite(table, pk, pkValue) {
+  return { sql: `DELETE FROM ${assertSafeIdent(table)} WHERE ${wherePk(pk)}`, params: syncPkValueSplitSafe(pkValue, pk).map(bindValue) };
+}
+__name(deleteRowWrite, "deleteRowWrite");
+function tombstoneUpsertWrite(item) {
+  return {
+    sql: `INSERT INTO _sync_deleted (table_name, pk, deleted_at, device_id) VALUES (?, ?, ?, ?)
+          ON CONFLICT(table_name, pk) DO UPDATE SET deleted_at = excluded.deleted_at, device_id = excluded.device_id`,
+    params: [item.table, item.pk, item.deleted_at, item.device_id]
+  };
+}
+__name(tombstoneUpsertWrite, "tombstoneUpsertWrite");
+function tombstoneDeleteWrite(table, pkValue) {
+  return { sql: `DELETE FROM _sync_deleted WHERE table_name = ? AND pk = ?`, params: [table, pkValue] };
+}
+__name(tombstoneDeleteWrite, "tombstoneDeleteWrite");
+async function push(db, deviceId, payload) {
+  const result = { device_id: deviceId, tables: {}, applied: 0 };
+  const writes = [];
+  for (const meta3 of SYNC_TABLES) {
+    const tablePayload = payload.tables?.[meta3.table];
+    const outcome = { echo: {}, conflicts: 0, upserts: 0, rejected: [] };
+    result.tables[meta3.table] = outcome;
+    if (!tablePayload || !tablePayload.rows?.length && !tablePayload.deleted?.length) continue;
+    const table = assertSafeIdent(meta3.table);
+    const columns = await columnsOf(db, table);
+    const colNames = new Set(columns.map((c) => c.name));
+    const requiredCols = columns.filter((c) => c.notnull === 1 && c.pk === 0 && c.dflt === null).map((c) => c.name);
+    for (const raw2 of tablePayload.rows ?? []) {
+      if (typeof raw2 !== "object" || raw2 === null) {
+        outcome.rejected.push({ pk: "?", reason: "ROW_INVALID" });
+        continue;
+      }
+      const row = raw2;
+      const pkValue = syncPkValueOfRow(row, meta3.pk);
+      if (pkValue.split("|").length !== meta3.pk.length || pkValue.split("|").some((p) => p === "")) {
+        outcome.rejected.push({ pk: pkValue || "?", reason: "PK_NAKAMEL" });
+        continue;
+      }
+      const unknownCol = Object.keys(row).find((k) => !colNames.has(k));
+      if (unknownCol) {
+        outcome.rejected.push({ pk: pkValue, reason: `COLUMN_NASHENAKHTE:${unknownCol}` });
+        continue;
+      }
+      const missingRequired = requiredCols.find((c) => row[c] === void 0 || row[c] === null);
+      if (missingRequired) {
+        outcome.rejected.push({ pk: pkValue, reason: `STOON_ELZAMI:${missingRequired}` });
+        continue;
+      }
+      const local = await fetchRow(db, meta3.table, meta3.pk, pkValue);
+      const localTomb = await localTombstone(db, meta3.table, pkValue);
+      if (local !== null) {
+        const side = await rowWinner(local, row);
+        const sameHash = await syncHash(local) === await syncHash(row);
+        if (side === "b") {
+          if (sameHash) {
+            outcome.echo[pkValue] = row;
+            continue;
+          }
+          writes.push(conflictWrite({
+            table: meta3.table,
+            pkValue,
+            winnerSide: "remote",
+            winnerStamp: row.updated_at ?? null,
+            loserStamp: local.updated_at ?? null,
+            rule: "rowWinner",
+            loserJson: JSON.stringify(local),
+            deviceId
+          }));
+          outcome.conflicts += 1;
+          const stampsEqual = typeof row.updated_at === "string" && typeof local.updated_at === "string" && row.updated_at === local.updated_at;
+          writes.push(stampsEqual ? replaceRowWrite(meta3.table, columns, row) : upsertRowWrite(meta3.table, columns, meta3.pk, row));
+          if (localTomb) writes.push(tombstoneDeleteWrite(meta3.table, pkValue));
+          outcome.echo[pkValue] = row;
+          outcome.upserts += 1;
+        } else {
+          if (!sameHash) {
+            writes.push(conflictWrite({
+              table: meta3.table,
+              pkValue,
+              winnerSide: "local",
+              winnerStamp: local.updated_at ?? null,
+              loserStamp: row.updated_at ?? null,
+              rule: "rowWinner",
+              loserJson: JSON.stringify(row),
+              deviceId
+            }));
+            outcome.conflicts += 1;
+          }
+          outcome.echo[pkValue] = local;
+        }
+      } else if (localTomb !== null) {
+        const tombEntity = { stamp: localTomb.deleted_at, hash: await syncHash(tombstoneCanonical(meta3.table, pkValue, localTomb.deleted_at)) };
+        const rowEntity = { stamp: row.updated_at ?? null, hash: await syncHash(row) };
+        if (stampHashWinner(tombEntity, rowEntity) === "a") {
+          outcome.echo[pkValue] = null;
+        } else {
+          writes.push(replaceRowWrite(meta3.table, columns, row));
+          writes.push(tombstoneDeleteWrite(meta3.table, pkValue));
+          outcome.echo[pkValue] = row;
+          outcome.upserts += 1;
+        }
+      } else {
+        writes.push(replaceRowWrite(meta3.table, columns, row));
+        outcome.echo[pkValue] = row;
+        outcome.upserts += 1;
+      }
+    }
+    for (const item of tablePayload.deleted ?? []) {
+      if (!item || typeof item.pk !== "string" || item.pk === "" || typeof item.deleted_at !== "string") {
+        outcome.rejected.push({ pk: item?.pk ?? "?", reason: "TOMB_INVALID" });
+        continue;
+      }
+      if (syncPkValueSplitSafe(item.pk, meta3.pk) === null) {
+        outcome.rejected.push({ pk: item.pk, reason: "PK_NAKHANI" });
+        continue;
+      }
+      const localTomb = await localTombstone(db, meta3.table, item.pk);
+      const local = await fetchRow(db, meta3.table, meta3.pk, item.pk);
+      const incomingTomb = { table_name: meta3.table, pk: item.pk, deleted_at: item.deleted_at };
+      const incomingEntity = { stamp: item.deleted_at, hash: await syncHash(incomingTomb) };
+      if (local !== null) {
+        const rowEntity = { stamp: local.updated_at ?? null, hash: await syncHash(local) };
+        if (stampHashWinner(incomingEntity, rowEntity) === "a") {
+          writes.push(conflictWrite({
+            table: meta3.table,
+            pkValue: item.pk,
+            winnerSide: "tombstone",
+            winnerStamp: item.deleted_at,
+            loserStamp: local.updated_at ?? null,
+            rule: "stampHashWinner",
+            loserJson: JSON.stringify(local),
+            deviceId
+          }));
+          outcome.conflicts += 1;
+          writes.push(deleteRowWrite(meta3.table, meta3.pk, item.pk));
+          writes.push(tombstoneUpsertWrite({ table: meta3.table, pk: item.pk, deleted_at: item.deleted_at, device_id: item.device_id ?? null }));
+          outcome.echo[item.pk] = null;
+          outcome.upserts += 1;
+        } else {
+          writes.push(conflictWrite({
+            table: meta3.table,
+            pkValue: item.pk,
+            winnerSide: "row",
+            winnerStamp: local.updated_at ?? null,
+            loserStamp: item.deleted_at,
+            rule: "stampHashWinner",
+            loserJson: JSON.stringify(incomingTomb),
+            deviceId
+          }));
+          outcome.conflicts += 1;
+          outcome.echo[item.pk] = local;
+        }
+      } else if (localTomb !== null) {
+        const localEntity = { stamp: localTomb.deleted_at, hash: await syncHash(tombstoneCanonical(meta3.table, item.pk, localTomb.deleted_at)) };
+        if (stampHashWinner(incomingEntity, localEntity) === "a") {
+          writes.push(tombstoneUpsertWrite({ table: meta3.table, pk: item.pk, deleted_at: item.deleted_at, device_id: item.device_id ?? null }));
+        }
+        outcome.echo[item.pk] = null;
+      } else {
+        writes.push(tombstoneUpsertWrite({ table: meta3.table, pk: item.pk, deleted_at: item.deleted_at, device_id: item.device_id ?? null }));
+        outcome.echo[item.pk] = null;
+        outcome.upserts += 1;
+      }
+    }
+    result.applied += outcome.upserts;
+  }
+  if (writes.length > 0) {
+    await db.transaction(async (tx) => {
+      for (const w of writes) await tx.execute(w.sql, w.params);
+    });
+  }
+  return result;
+}
+__name(push, "push");
+
+// src/application/instance-sync/routes.ts
+var SinceTableSchema = external_exports.object({
+  rows: external_exports.string().min(10).optional(),
+  deleted: external_exports.string().min(10).optional()
+});
+var PullSchema = external_exports.object({
+  since: external_exports.object({
+    tables: external_exports.record(external_exports.string().min(1).max(64), SinceTableSchema).optional()
+  }).optional()
+});
+var TombstoneSchema = external_exports.object({
+  pk: external_exports.string().min(1).max(512),
+  deleted_at: external_exports.string().min(10).max(40),
+  device_id: external_exports.string().max(64).nullish()
+});
+var PushSchema = external_exports.object({
+  device_id: external_exports.string().min(4).max(64).regex(DEVICE_ID_PATTERN, "\u0634\u0646\u0627\u0633\u0647\u0654 \u0646\u0645\u0648\u0646\u0647 (device_id) \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A"),
+  tables: external_exports.record(
+    external_exports.string().min(1).max(64),
+    external_exports.object({
+      rows: external_exports.array(external_exports.record(external_exports.string().min(1).max(64), external_exports.unknown())).max(1e3).optional(),
+      deleted: external_exports.array(TombstoneSchema).max(1e3).optional()
+    })
+  )
+});
+function bearerToken2(header) {
+  const value = header?.trim();
+  if (!value) return null;
+  return value.startsWith("Bearer ") ? value.slice(7).trim() || null : null;
+}
+__name(bearerToken2, "bearerToken");
+function timingSafeEqualStr(a, b) {
+  const len = Math.max(a.length, b.length);
+  let diff = a.length ^ b.length;
+  for (let i = 0; i < len; i++) diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
+  return diff === 0;
+}
+__name(timingSafeEqualStr, "timingSafeEqualStr");
+var authFailed = /* @__PURE__ */ __name((c) => c.json({ error: "INSTANCE_AUTH_FAILED", message: "\u0627\u0639\u062A\u0628\u0627\u0631 \u0647\u0645\u200C\u06AF\u0627\u0645\u06CC \u0646\u0645\u0648\u0646\u0647 \u067E\u0630\u06CC\u0631\u0641\u062A\u0647 \u0646\u0634\u062F" }, 401), "authFailed");
+function createInstanceSyncApp(deps) {
+  const { db, logger } = deps;
+  const log = logger.child("instance-sync");
+  const app = new Hono3();
+  app.use("*", async (c, next) => {
+    await next();
+    c.header("Cache-Control", "no-store");
+  });
+  async function authorize(c) {
+    const token = bearerToken2(c.req.header("Authorization"));
+    if (!token) return null;
+    const expected = await resolveSessionSecret(c.env);
+    if (!timingSafeEqualStr(token, expected)) {
+      log.warn("instance_sync.auth_failed", {});
+      return null;
+    }
+    const deviceId = (c.req.header("X-Device-Id") ?? "").trim();
+    if (!DEVICE_ID_PATTERN.test(deviceId)) return null;
+    return deviceId;
+  }
+  __name(authorize, "authorize");
+  app.get("/state", async (c) => {
+    const deviceId = await authorize(c);
+    if (deviceId === null) return authFailed(c);
+    const state = await instanceState(db, deviceId);
+    return c.json({ data: state }, 200);
+  });
+  app.post("/pull", async (c) => {
+    const deviceId = await authorize(c);
+    if (deviceId === null) return authFailed(c);
+    const parsed = PullSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: "VALIDATION", message: "\u0628\u062F\u0646\u0647\u0654 pull \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A", issues: parsed.error.issues }, 400);
+    }
+    const since = parsed.data.since ?? {};
+    const result = await pull(db, since);
+    return c.json({ data: result }, 200);
+  });
+  app.post("/push", async (c) => {
+    const deviceId = await authorize(c);
+    if (deviceId === null) return authFailed(c);
+    const parsed = PushSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: "VALIDATION", message: "\u0628\u062F\u0646\u0647\u0654 push \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A", issues: parsed.error.issues }, 400);
+    }
+    const body = parsed.data;
+    if (body.device_id !== deviceId) {
+      return c.json({ error: "DEVICE_MISMATCH", message: "device_id \u0628\u062F\u0646\u0647 \u0628\u0627 \u0647\u062F\u0631 X-Device-Id \u0647\u0645\u200C\u062E\u0648\u0627\u0646 \u0646\u06CC\u0633\u062A" }, 400);
+    }
+    const result = await push(db, body.device_id, { tables: body.tables });
+    return c.json({ data: result }, 200);
+  });
+  return app;
+}
+__name(createInstanceSyncApp, "createInstanceSyncApp");
+
+// src/application/instance-sync/assets.ts
+var CF_API_BASE = "https://api.cloudflare.com/client/v4";
+var WEB_ASSETS_MAX_TOTAL_BYTES = 20 * 1024 * 1024;
+var WEB_ASSETS_MAX_FILE_BYTES = 8 * 1024 * 1024;
+function normalizeAssetPath(raw2) {
+  const p = String(raw2).replace(/\\/g, "/");
+  return p.startsWith("/") ? p : `/${p}`;
+}
+__name(normalizeAssetPath, "normalizeAssetPath");
+function base64Of(bytes) {
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 32768) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + 32768));
+  }
+  return btoa(bin);
+}
+__name(base64Of, "base64Of");
+async function sha256Prefix32(bytes) {
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  let hex3 = "";
+  for (const b of new Uint8Array(digest)) hex3 += b.toString(16).padStart(2, "0");
+  return hex3.slice(0, 32);
+}
+__name(sha256Prefix32, "sha256Prefix32");
+function mbOf(bytes) {
+  return (bytes / (1024 * 1024)).toFixed(1);
+}
+__name(mbOf, "mbOf");
+async function readJsonBody(res) {
+  try {
+    return await res.json();
+  } catch {
+    return {};
+  }
+}
+__name(readJsonBody, "readJsonBody");
+function cfFailMessage(prefix, status, errors) {
+  const detail = (Array.isArray(errors) ? errors : []).map((e) => e && typeof e.message === "string" && e.message ? e.message : e && e.code !== void 0 ? `\u06A9\u062F ${e.code}` : "").filter(Boolean).slice(0, 5).join("\u061B ");
+  return detail ? `${prefix} (HTTP ${status}) \u2014 ${detail}` : `${prefix} (HTTP ${status})`;
+}
+__name(cfFailMessage, "cfFailMessage");
+async function buildAssetManifest(files) {
+  const manifest = {};
+  for (const f of files) {
+    if (!f || typeof f.path !== "string" || !(f.bytes instanceof Uint8Array)) continue;
+    manifest[normalizeAssetPath(f.path)] = { hash: await sha256Prefix32(f.bytes), size: f.bytes.length };
+  }
+  return manifest;
+}
+__name(buildAssetManifest, "buildAssetManifest");
+async function uploadWebAssets(deps) {
+  const started = deps.now ?? Date.now;
+  const doFetch = deps.fetchImpl ?? ((input2, i) => fetch(input2, i));
+  const files = Array.isArray(deps.files) ? deps.files : [];
+  if (files.length === 0) {
+    return { ok: true, jwt: "", manifest: {}, fileCount: 0, uploadedCount: 0 };
+  }
+  let totalBytes = 0;
+  for (const f of files) {
+    const size = f?.bytes?.length ?? 0;
+    if (size > WEB_ASSETS_MAX_FILE_BYTES) {
+      return {
+        ok: false,
+        step: "assets-size",
+        kind: "assets_error",
+        message: `\u0641\u0627\u06CC\u0644 \u062F\u0627\u0631\u0627\u06CC\u06CC \xAB${f && typeof f.path === "string" ? normalizeAssetPath(f.path) : "?"}\xBB ${mbOf(size)} \u0645\u06AF\u0627\u0628\u0627\u06CC\u062A \u0627\u0633\u062A \u2014 \u0633\u0642\u0641 \u0647\u0631 \u0641\u0627\u06CC\u0644 8 \u0645\u06AF\u0627\u0628\u0627\u06CC\u062A \u0627\u0633\u062A\u061B \u0641\u0627\u06CC\u0644 \u0628\u0632\u0631\u06AF \u0631\u0627 \u0627\u0632 public \u062D\u0630\u0641 \u06A9\u0646\u06CC\u062F`
+      };
+    }
+    totalBytes += size;
+  }
+  if (totalBytes > WEB_ASSETS_MAX_TOTAL_BYTES) {
+    return {
+      ok: false,
+      step: "assets-size",
+      kind: "assets_error",
+      message: `\u0645\u062C\u0645\u0648\u0639 \u062F\u0627\u0631\u0627\u06CC\u06CC\u200C\u0647\u0627\u06CC \u0648\u0628 ${mbOf(totalBytes)} \u0645\u06AF\u0627\u0628\u0627\u06CC\u062A \u0627\u0633\u062A \u2014 \u0633\u0642\u0641 \u06A9\u0644 20 \u0645\u06AF\u0627\u0628\u0627\u06CC\u062A \u0627\u0633\u062A\u061B \u067E\u0648\u0634\u0647\u0654 public \u0631\u0627 \u0633\u0628\u06A9\u200C\u062A\u0631 \u06A9\u0646\u06CC\u062F`
+    };
+  }
+  const manifest = await buildAssetManifest(files);
+  const bytesByHash = /* @__PURE__ */ new Map();
+  for (const f of files) {
+    const entry = manifest[normalizeAssetPath(f.path)];
+    if (entry) bytesByHash.set(entry.hash, f.bytes);
+  }
+  let sessionRes;
+  try {
+    sessionRes = await doFetch(
+      `${CF_API_BASE}/accounts/${deps.accountId}/workers/scripts/${deps.scriptName}/assets-upload-session`,
+      {
+        method: "POST",
+        headers: { authorization: `Bearer ${deps.token}`, "content-type": "application/json" },
+        body: JSON.stringify({ manifest })
+      }
+    );
+  } catch {
+    return {
+      ok: false,
+      step: "assets-session",
+      kind: "network",
+      message: "\u0627\u062A\u0635\u0627\u0644 \u0628\u0647 api.cloudflare.com \u0628\u0631\u0627\u06CC \u0633\u0634\u0646 \u0622\u067E\u0644\u0648\u062F \u062F\u0627\u0631\u0627\u06CC\u06CC\u200C\u0647\u0627 \u0628\u0631\u0642\u0631\u0627\u0631 \u0646\u0634\u062F \u2014 \u0627\u06CC\u0646\u062A\u0631\u0646\u062A \u0631\u0627 \u0628\u0631\u0631\u0633\u06CC \u06A9\u0646\u06CC\u062F"
+    };
+  }
+  const sessionBody = await readJsonBody(sessionRes);
+  if (!sessionRes.ok || sessionBody.success === false) {
+    return {
+      ok: false,
+      step: "assets-session",
+      kind: "cf_api",
+      message: cfFailMessage("\u0633\u0634\u0646 \u0622\u067E\u0644\u0648\u062F \u062F\u0627\u0631\u0627\u06CC\u06CC\u200C\u0647\u0627\u06CC \u0648\u0628 \u0633\u0627\u062E\u062A\u0647 \u0646\u0634\u062F", sessionRes.status, sessionBody.errors),
+      ...sessionBody.errors && sessionBody.errors.length > 0 ? { errors: sessionBody.errors.slice(0, 5) } : {}
+    };
+  }
+  const sessionResult = sessionBody.result ?? {};
+  const sessionJwt = typeof sessionResult.jwt === "string" && sessionResult.jwt ? sessionResult.jwt : "";
+  const buckets = Array.isArray(sessionResult.buckets) ? sessionResult.buckets.filter((b) => Array.isArray(b) && b.every((h) => typeof h === "string" && h.length > 0)) : null;
+  if (!sessionJwt || !buckets || buckets.length !== sessionResult.buckets.length) {
+    return {
+      ok: false,
+      step: "assets-session",
+      kind: "cf_api",
+      message: "\u067E\u0627\u0633\u062E \u0633\u0634\u0646 \u0622\u067E\u0644\u0648\u062F \u062F\u0627\u0631\u0627\u06CC\u06CC\u200C\u0647\u0627\u06CC \u0648\u0628 \u0645\u0639\u062A\u0628\u0631 \u0646\u0628\u0648\u062F \u2014 jwt \u06CC\u0627 buckets \u063A\u0627\u06CC\u0628 \u0627\u0633\u062A"
+    };
+  }
+  const unknownHash = buckets.flat().filter((h) => !bytesByHash.has(h));
+  if (unknownHash.length > 0) {
+    return {
+      ok: false,
+      step: "assets-session",
+      kind: "cf_api",
+      message: "buckets \u0633\u0634\u0646 hash \u0646\u0627\u0634\u0646\u0627\u062E\u062A\u0647 \u062F\u0627\u0631\u062F \u2014 manifest \u0628\u0627 buckets \u06A9\u0644\u0627\u062F\u0641\u0644\u0631 \u0647\u0645\u200C\u062E\u0648\u0627\u0646 \u0646\u06CC\u0633\u062A"
+    };
+  }
+  deps.log?.(`\u0633\u0634\u0646 \u0622\u067E\u0644\u0648\u062F \u062F\u0627\u0631\u0627\u06CC\u06CC\u200C\u0647\u0627\u06CC \u0648\u0628 \u0633\u0627\u062E\u062A\u0647 \u0634\u062F \u2014 ${files.length} \u0641\u0627\u06CC\u0644 \u062F\u0631 manifest\u060C ${buckets.length} bucket`);
+  let finalJwt = sessionJwt;
+  let uploadedCount = 0;
+  for (let i = 0; i < buckets.length; i += 1) {
+    const form = new FormData();
+    for (const hash2 of buckets[i]) {
+      form.append(hash2, base64Of(bytesByHash.get(hash2)));
+    }
+    let uploadRes;
+    try {
+      uploadRes = await doFetch(`${CF_API_BASE}/accounts/${deps.accountId}/workers/assets/upload?base64=true`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${sessionJwt}` },
+        body: form
+      });
+    } catch {
+      return {
+        ok: false,
+        step: "assets-upload",
+        kind: "network",
+        message: `\u0627\u062A\u0635\u0627\u0644 \u0628\u0631\u0627\u06CC \u0622\u067E\u0644\u0648\u062F bucket ${i + 1} \u0627\u0632 ${buckets.length} \u0628\u0631\u0642\u0631\u0627\u0631 \u0646\u0634\u062F \u2014 \u0627\u06CC\u0646\u062A\u0631\u0646\u062A \u0631\u0627 \u0628\u0631\u0631\u0633\u06CC \u06A9\u0646\u06CC\u062F`
+      };
+    }
+    const uploadBody = await readJsonBody(uploadRes);
+    if (!uploadRes.ok || uploadBody.success === false) {
+      return {
+        ok: false,
+        step: "assets-upload",
+        kind: "cf_api",
+        message: cfFailMessage(
+          `\u0622\u067E\u0644\u0648\u062F \u062F\u0627\u0631\u0627\u06CC\u06CC\u200C\u0647\u0627\u06CC \u0648\u0628 \u062F\u0631 bucket ${i + 1} \u0627\u0632 ${buckets.length} \u0646\u0627\u0645\u0648\u0641\u0642 \u0628\u0648\u062F`,
+          uploadRes.status,
+          uploadBody.errors
+        ),
+        ...uploadBody.errors && uploadBody.errors.length > 0 ? { errors: uploadBody.errors.slice(0, 5) } : {}
+      };
+    }
+    const uploadJwt = uploadBody.result?.jwt;
+    if (typeof uploadJwt === "string" && uploadJwt) finalJwt = uploadJwt;
+    uploadedCount += buckets[i].length;
+  }
+  const ms = Math.max(0, started());
+  deps.log?.(`\u062F\u0627\u0631\u0627\u06CC\u06CC\u200C\u0647\u0627\u06CC \u0648\u0628 \u0622\u067E\u0644\u0648\u062F \u0634\u062F \u2014 ${uploadedCount} \u0627\u0632 ${files.length} \u0641\u0627\u06CC\u0644 \u062F\u0631 ${buckets.length} bucket (${ms}ms)`);
+  return { ok: true, jwt: finalJwt, manifest, fileCount: files.length, uploadedCount };
+}
+__name(uploadWebAssets, "uploadWebAssets");
+
+// src/application/instance-sync/provision.ts
+var CF_API_BASE2 = "https://api.cloudflare.com/client/v4";
+var SCHEMA_CHUNK_BYTES = 64 * 1024;
+var MIGRATION_MARKER = "-- ===== migration: ";
+var HEALTH_TIMEOUT_MS = 3e4;
+var HEALTH_RETRY_MS = 1e3;
+var PROVISION_DEVICE_ID = "provision-check";
+var CENTRAL_MODULE_NAME = "central-worker.js";
+var COMPATIBILITY_DATE = "2025-01-01";
+var WORKER_NAME_PATTERN = /^[a-z][a-z0-9-]{1,61}$/;
+var WORKER_NAME_PREFIX = "markaz-";
+function normalizeWorkerName(raw2) {
+  const input2 = typeof raw2 === "string" ? raw2.trim() : "";
+  if (!input2 || input2 === WORKER_NAME_PREFIX) {
+    return {
+      ok: false,
+      kind: "invalid_name",
+      message: "\u0646\u0627\u0645 \u0648\u0631\u06A9\u0631 \u062E\u0627\u0644\u06CC \u0627\u0633\u062A \u2014 \u06CC\u06A9 \u0646\u0627\u0645 \u0627\u0646\u06AF\u0644\u06CC\u0633\u06CC \u0628\u062F\u0647\u06CC\u062F (\u0645\u062B\u0644\u0627\u064B clinic)\u061B \u067E\u06CC\u0634\u0648\u0646\u062F \xABmarkaz-\xBB \u062E\u0648\u062F\u06A9\u0627\u0631 \u0627\u0636\u0627\u0641\u0647 \u0645\u06CC\u200C\u0634\u0648\u062F"
+    };
+  }
+  const candidate = input2.startsWith(WORKER_NAME_PREFIX) ? input2 : `${WORKER_NAME_PREFIX}${input2}`;
+  if (!WORKER_NAME_PATTERN.test(candidate)) {
+    return {
+      ok: false,
+      kind: "invalid_name",
+      message: "\u0646\u0627\u0645 \u0648\u0631\u06A9\u0631 \u0641\u0642\u0637 \u062D\u0631\u0648\u0641 \u0627\u0646\u06AF\u0644\u06CC\u0633\u06CC \u06A9\u0648\u0686\u06A9\u060C \u0631\u0642\u0645 \u0648 \u062E\u0637 \u062A\u06CC\u0631\u0647 \u0627\u0633\u062A (\u062F\u0633\u062A\u200C\u06A9\u0645 \u06F3 \u0648 \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F6\u06F2 \u06A9\u0627\u0631\u0627\u06A9\u062A\u0631\u060C \u0622\u063A\u0627\u0632 \u0628\u0627 \u062D\u0631\u0641 \u0627\u0646\u06AF\u0644\u06CC\u0633\u06CC) \u2014 \u0646\u0627\u0645 \u0641\u0627\u0631\u0633\u06CC \u06CC\u0627 \u0646\u0645\u0627\u062F\u0647\u0627\u06CC \u062F\u06CC\u06AF\u0631 \u067E\u0630\u06CC\u0631\u0641\u062A\u0647 \u0646\u06CC\u0633\u062A"
+    };
+  }
+  return { ok: true, workerName: candidate, d1Name: `${candidate}-db` };
+}
+__name(normalizeWorkerName, "normalizeWorkerName");
+function base64urlOf(bytes) {
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 1) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+__name(base64urlOf, "base64urlOf");
+function randomSecret2(random) {
+  const bytes = random ? random(32) : crypto.getRandomValues(new Uint8Array(32));
+  return base64urlOf(bytes);
+}
+__name(randomSecret2, "randomSecret");
+function authHeaders(token) {
+  return { authorization: `Bearer ${token}`, "content-type": "application/json" };
+}
+__name(authHeaders, "authHeaders");
+async function callCf(doFetch, path, init) {
+  let res;
+  try {
+    res = await doFetch(`${CF_API_BASE2}${path}`, init);
+  } catch {
+    return { kind: "network", message: "\u0627\u062A\u0635\u0627\u0644 \u0628\u0647 api.cloudflare.com \u0628\u0631\u0642\u0631\u0627\u0631 \u0646\u0634\u062F \u2014 \u0627\u06CC\u0646\u062A\u0631\u0646\u062A \u0631\u0627 \u0628\u0631\u0631\u0633\u06CC \u06A9\u0646\u06CC\u062F" };
+  }
+  let body = {};
+  try {
+    body = await res.json();
+  } catch {
+    body = {};
+  }
+  if (!res.ok || body.success === false) {
+    return { kind: "cf", status: res.status, body };
+  }
+  return { kind: "ok", body };
+}
+__name(callCf, "callCf");
+function cfErrorList(body) {
+  return Array.isArray(body.errors) ? body.errors.slice(0, 5) : [];
+}
+__name(cfErrorList, "cfErrorList");
+function cfFailMessage2(prefix, outcome) {
+  if (outcome.kind === "network") return outcome.message;
+  const detail = cfErrorList(outcome.body).map((e) => e.message ? String(e.message) : `\u06A9\u062F ${e.code ?? "?"}`).filter(Boolean).join("\u061B ");
+  return detail ? `${prefix} (HTTP ${outcome.status}) \u2014 ${detail}` : `${prefix} (HTTP ${outcome.status})`;
+}
+__name(cfFailMessage2, "cfFailMessage");
+function splitStatements(sql) {
+  const out = [];
+  let cur = "";
+  let inSingle = false;
+  let inLineComment = false;
+  let inBlock = false;
+  const chars = [...sql];
+  let i = 0;
+  const peek = /* @__PURE__ */ __name(() => chars[i + 1], "peek");
+  while (i < chars.length) {
+    const ch = chars[i];
+    if (inLineComment) {
+      cur += ch;
+      if (ch === "\n") inLineComment = false;
+      i += 1;
+      continue;
+    }
+    if (inBlock) {
+      cur += ch;
+      if (ch === "*" && peek() === "/") {
+        cur += chars[i + 1];
+        i += 1;
+        inBlock = false;
+      }
+      i += 1;
+      continue;
+    }
+    if (inSingle) {
+      cur += ch;
+      if (ch === "'") {
+        if (peek() === "'") {
+          cur += chars[i + 1];
+          i += 1;
+        } else {
+          inSingle = false;
+        }
+      }
+      i += 1;
+      continue;
+    }
+    if (ch === "-" && peek() === "-") {
+      cur += ch;
+      cur += chars[i + 1];
+      i += 1;
+      inLineComment = true;
+      i += 1;
+      continue;
+    }
+    if (ch === "/" && peek() === "*") {
+      cur += ch;
+      cur += chars[i + 1];
+      i += 1;
+      inBlock = true;
+      i += 1;
+      continue;
+    }
+    if (ch === "'") {
+      inSingle = true;
+      cur += ch;
+      i += 1;
+      continue;
+    }
+    if (ch === ";") {
+      const t2 = cur.trim();
+      if (t2.length > 0) out.push(t2);
+      cur = "";
+      i += 1;
+      continue;
+    }
+    cur += ch;
+    i += 1;
+  }
+  const t = cur.trim();
+  if (t.length > 0) out.push(t);
+  return out;
+}
+__name(splitStatements, "splitStatements");
+function chunkSchemaSql(sql, limitBytes = SCHEMA_CHUNK_BYTES) {
+  const statements = splitStatements(sql);
+  const encoder2 = new TextEncoder();
+  const chunks = [];
+  let cur = "";
+  let curBytes = 0;
+  for (const st of statements) {
+    const stBytes = encoder2.encode(st).length + 2;
+    if (cur.length > 0 && curBytes + stBytes > limitBytes) {
+      chunks.push(cur);
+      cur = "";
+      curBytes = 0;
+    }
+    cur += `${st};
+`;
+    curBytes += stBytes;
+  }
+  if (cur.trim().length > 0) chunks.push(cur);
+  return chunks;
+}
+__name(chunkSchemaSql, "chunkSchemaSql");
+function schemaMigrationCount(schemaSql) {
+  let n = 0;
+  let idx = schemaSql.indexOf(MIGRATION_MARKER);
+  while (idx !== -1) {
+    n += 1;
+    idx = schemaSql.indexOf(MIGRATION_MARKER, idx + MIGRATION_MARKER.length);
+  }
+  return n;
+}
+__name(schemaMigrationCount, "schemaMigrationCount");
+var sleep = /* @__PURE__ */ __name((ms) => new Promise((r) => setTimeout(r, ms)), "sleep");
+async function provisionCloudWorker(deps) {
+  const now = deps.now ?? Date.now;
+  const doFetch = deps.fetchImpl ?? ((input2, i) => fetch(input2, i));
+  const steps = [];
+  const record2 = /* @__PURE__ */ __name((step, startedMs, ok2, detail) => {
+    const entry = { step, ok: ok2, ms: Math.max(0, now() - startedMs) };
+    if (detail !== void 0) entry.detail = detail;
+    steps.push(entry);
+    deps.log?.(`\u06AF\u0627\u0645 ${step}: ${ok2 ? "\u0633\u0628\u0632" : "\u0642\u0631\u0645\u0632"}${detail ? ` \u2014 ${detail}` : ""}`);
+  }, "record");
+  const fail = /* @__PURE__ */ __name((step, kind, message, errors) => {
+    const out = { ok: false, step, kind, message, steps };
+    if (errors && errors.length > 0) out.errors = errors;
+    deps.log?.(`\u0633\u0627\u062E\u062A \u0648\u0631\u06A9\u0631 \u062F\u0631 \u06AF\u0627\u0645 ${step} \u0645\u062A\u0648\u0642\u0641 \u0634\u062F: ${message}`);
+    return out;
+  }, "fail");
+  const failFromOutcome = /* @__PURE__ */ __name((step, t02, prefix, outcome2) => {
+    record2(step, t02, false, outcome2.kind === "cf" ? `HTTP ${outcome2.status}` : void 0);
+    return fail(
+      step,
+      outcome2.kind === "network" ? "network" : "cf_api",
+      cfFailMessage2(prefix, outcome2),
+      outcome2.kind === "cf" ? cfErrorList(outcome2.body) : void 0
+    );
+  }, "failFromOutcome");
+  const nameCheck = normalizeWorkerName(deps.name);
+  if (!nameCheck.ok) {
+    return fail("name", "invalid_name", nameCheck.message);
+  }
+  const workerName = nameCheck.workerName;
+  const d1Name = nameCheck.d1Name;
+  let t0 = now();
+  let outcome = await callCf(doFetch, "/user/tokens/verify", {
+    method: "POST",
+    headers: authHeaders(deps.token)
+  });
+  if (outcome.kind !== "ok") return failFromOutcome("verify", t0, "\u062A\u0648\u06A9\u0646 \u06A9\u0644\u0627\u062F\u0641\u0644\u0631 \u067E\u0630\u06CC\u0631\u0641\u062A\u0647 \u0646\u0634\u062F", outcome);
+  record2("verify", t0, true);
+  t0 = now();
+  outcome = await callCf(doFetch, "/accounts", { headers: authHeaders(deps.token) });
+  if (outcome.kind !== "ok") return failFromOutcome("accounts", t0, "\u0641\u0647\u0631\u0633\u062A \u062D\u0633\u0627\u0628\u200C\u0647\u0627\u06CC \u06A9\u0644\u0627\u062F\u0641\u0644\u0631 \u06AF\u0631\u0641\u062A\u0647 \u0646\u0634\u062F", outcome);
+  const accounts = [];
+  if (Array.isArray(outcome.body.result)) {
+    for (const a of outcome.body.result) {
+      if (a && typeof a === "object" && typeof a.id === "string") {
+        accounts.push({ id: a.id, name: typeof a.name === "string" ? a.name : "" });
+      }
+    }
+  }
+  let accountId = deps.accountId;
+  if (accountId && !accounts.some((a) => a.id === accountId)) {
+    record2("accounts", t0, false, `${accounts.length} \u062D\u0633\u0627\u0628`);
+    return fail(
+      "accounts",
+      "account_mismatch",
+      "\u062D\u0633\u0627\u0628 \u0627\u0646\u062A\u062E\u0627\u0628\u200C\u0634\u062F\u0647 \u062F\u0631 \u0641\u0647\u0631\u0633\u062A \u062D\u0633\u0627\u0628\u200C\u0647\u0627\u06CC\u06CC \u06A9\u0647 \u0627\u06CC\u0646 \u062A\u0648\u06A9\u0646 \u0628\u0647 \u0622\u0646\u200C\u0647\u0627 \u062F\u0633\u062A\u0631\u0633\u06CC \u062F\u0627\u0631\u062F \u0646\u06CC\u0633\u062A \u2014 \u0634\u0646\u0627\u0633\u0647\u0654 \u062D\u0633\u0627\u0628 \u0631\u0627 \u0627\u0632 \u06AF\u0627\u0645 \u0648\u0627\u0631\u0633\u06CC \u062F\u0648\u0628\u0627\u0631\u0647 \u0628\u06AF\u06CC\u0631\u06CC\u062F"
+    );
+  }
+  if (!accountId) {
+    if (accounts.length === 0) {
+      record2("accounts", t0, false, "\u06F0 \u062D\u0633\u0627\u0628");
+      return fail(
+        "accounts",
+        "no_account",
+        "\u0647\u06CC\u0686 \u062D\u0633\u0627\u0628 \u06A9\u0644\u0627\u062F\u0641\u0644\u0631\u06CC \u0628\u0627 \u0627\u06CC\u0646 \u062A\u0648\u06A9\u0646 \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0646\u06CC\u0633\u062A \u2014 \u0645\u062C\u0648\u0632 \xABAccount Settings:Read\xBB \u0631\u0627 \u0628\u0647 \u062A\u0648\u06A9\u0646 \u0627\u0636\u0627\u0641\u0647 \u06A9\u0646\u06CC\u062F"
+      );
+    }
+    if (accounts.length > 1) {
+      record2("accounts", t0, false, `${accounts.length} \u062D\u0633\u0627\u0628`);
+      return fail(
+        "accounts",
+        "multi_account",
+        "\u0627\u06CC\u0646 \u062A\u0648\u06A9\u0646 \u0628\u0647 \u0628\u06CC\u0634 \u0627\u0632 \u06CC\u06A9 \u062D\u0633\u0627\u0628 \u06A9\u0644\u0627\u062F\u0641\u0644\u0631 \u062F\u0633\u062A\u0631\u0633\u06CC \u062F\u0627\u0631\u062F \u2014 \u0646\u062E\u0633\u062A \u06AF\u0627\u0645 \u0648\u0627\u0631\u0633\u06CC \u0631\u0627 \u0628\u0632\u0646\u06CC\u062F \u0648 \u0634\u0646\u0627\u0633\u0647\u0654 \u062D\u0633\u0627\u0628 (accountId) \u0631\u0627 \u0627\u0646\u062A\u062E\u0627\u0628 \u06A9\u0646\u06CC\u062F"
+      );
+    }
+    accountId = accounts[0].id;
+  }
+  record2("accounts", t0, true, `${accounts.length} \u062D\u0633\u0627\u0628`);
+  t0 = now();
+  outcome = await callCf(doFetch, `/accounts/${accountId}/d1/database?name=${encodeURIComponent(d1Name)}`, {
+    headers: authHeaders(deps.token)
+  });
+  if (outcome.kind !== "ok") return failFromOutcome("d1", t0, `\u0628\u0631\u0631\u0633\u06CC \u067E\u0627\u06CC\u06AF\u0627\u0647 D1 \xAB${d1Name}\xBB \u0646\u0627\u0645\u0648\u0641\u0642 \u0628\u0648\u062F`, outcome);
+  let d1Id = null;
+  let d1Existed = false;
+  if (Array.isArray(outcome.body.result)) {
+    for (const db of outcome.body.result) {
+      if (db && typeof db === "object" && db.name === d1Name && typeof db.uuid === "string") {
+        d1Id = db.uuid;
+        d1Existed = true;
+        break;
+      }
+    }
+  }
+  if (!d1Id) {
+    outcome = await callCf(doFetch, `/accounts/${accountId}/d1/database`, {
+      method: "POST",
+      headers: authHeaders(deps.token),
+      body: JSON.stringify({ name: d1Name })
+    });
+    if (outcome.kind !== "ok") return failFromOutcome("d1", t0, `\u0633\u0627\u062E\u062A \u067E\u0627\u06CC\u06AF\u0627\u0647 D1 \xAB${d1Name}\xBB \u0646\u0627\u0645\u0648\u0641\u0642 \u0628\u0648\u062F`, outcome);
+    const created = outcome.body.result;
+    if (!created || typeof created.uuid !== "string") {
+      record2("d1", t0, false);
+      return fail("d1", "cf_api", `\u067E\u0627\u0633\u062E \u0633\u0627\u062E\u062A \u067E\u0627\u06CC\u06AF\u0627\u0647 D1 \xAB${d1Name}\xBB \u0634\u0646\u0627\u0633\u0647\u0654 \u062F\u06CC\u062A\u0627\u0628\u06CC\u0633 \u0646\u062F\u0627\u0634\u062A`);
+    }
+    d1Id = created.uuid;
+  }
+  record2("d1", t0, true, d1Existed ? "\u0645\u0648\u062C\u0648\u062F \u0628\u0648\u062F \u2014 \u0627\u0633\u062A\u0641\u0627\u062F\u0647 \u0634\u062F" : "\u0633\u0627\u062E\u062A\u0647 \u0634\u062F");
+  t0 = now();
+  const chunks = chunkSchemaSql(deps.schemaSql);
+  if (chunks.length === 0) {
+    record2("schema", t0, false);
+    return fail("schema", "cf_api", "\u0627\u0633\u06A9\u06CC\u0645\u0627\u06CC \u0645\u0631\u06A9\u0632\u06CC \u062E\u0627\u0644\u06CC \u0627\u0633\u062A \u2014 \u062F\u0627\u0631\u0627\u06CC\u06CC\u200C\u0647\u0627\u06CC \u0646\u0635\u0628 \u0646\u0627\u0642\u0635\u200C\u0627\u0646\u062F");
+  }
+  for (let i = 0; i < chunks.length; i += 1) {
+    outcome = await callCf(doFetch, `/accounts/${accountId}/d1/database/${d1Id}/query`, {
+      method: "POST",
+      headers: authHeaders(deps.token),
+      body: JSON.stringify({ sql: chunks[i] })
+    });
+    if (outcome.kind !== "ok") {
+      const prefix = `\u0627\u0639\u0645\u0627\u0644 \u0627\u0633\u06A9\u06CC\u0645\u0627 \u062F\u0631 \u0642\u0637\u0639\u0647\u0654 ${i + 1} \u0627\u0632 ${chunks.length} \u0646\u0627\u0645\u0648\u0641\u0642 \u0628\u0648\u062F`;
+      record2("schema", t0, false, `\u0642\u0637\u0639\u0647\u0654 ${i + 1}/${chunks.length}`);
+      return fail(
+        "schema",
+        outcome.kind === "network" ? "network" : "cf_api",
+        outcome.kind === "network" ? `${prefix} \u2014 \u0627\u062A\u0635\u0627\u0644 \u0628\u0647 api.cloudflare.com \u0628\u0631\u0642\u0631\u0627\u0631 \u0646\u0634\u062F` : cfFailMessage2(prefix, outcome),
+        outcome.kind === "cf" ? cfErrorList(outcome.body) : void 0
+      );
+    }
+  }
+  record2("schema", t0, true, `${chunks.length} \u0642\u0637\u0639\u0647`);
+  const webFiles = Array.isArray(deps.webAssets) ? deps.webAssets : [];
+  let assetsJwt = "";
+  if (webFiles.length > 0) {
+    t0 = now();
+    const uploaded = await uploadWebAssets({
+      fetchImpl: doFetch,
+      token: deps.token,
+      accountId,
+      scriptName: workerName,
+      files: webFiles,
+      log: deps.log,
+      now
+    });
+    if (!uploaded.ok) {
+      record2(uploaded.step, t0, false);
+      return fail(uploaded.step, uploaded.kind, uploaded.message, uploaded.errors);
+    }
+    assetsJwt = uploaded.jwt;
+    record2(
+      "assets-upload",
+      t0,
+      true,
+      `${uploaded.uploadedCount} \u0627\u0632 ${uploaded.fileCount} \u0641\u0627\u06CC\u0644 \u0648\u0628 \u0622\u067E\u0644\u0648\u062F \u0634\u062F \u2014 \u062A\u0648\u06A9\u0646 \u062F\u0627\u0631\u0627\u06CC\u06CC \u0628\u0647 \u0645\u062A\u0627\u062F\u06CC\u062A\u0627\u06CC \u06AF\u0627\u0645 \u0628\u0639\u062F \u0645\u06CC\u200C\u0631\u0648\u062F (jwt: ***)`
+    );
+  }
+  t0 = now();
+  const authSecret = randomSecret2(deps.random);
+  const nodeSetupToken = randomSecret2(deps.random);
+  const metadata = {
+    main_module: CENTRAL_MODULE_NAME,
+    compatibility_date: COMPATIBILITY_DATE,
+    bindings: [
+      { type: "d1", name: "DB", id: d1Id },
+      { type: "secret_text", name: "AUTH_SECRET", text: authSecret },
+      { type: "secret_text", name: "NODE_SETUP_TOKEN", text: nodeSetupToken }
+    ],
+    // فاز D1 — دارایی‌های وب فقط وقتی آپلود شدند الصاق می‌شود (SPA؛ بدون binding ASSETS —
+    // workers.dev خودش دارایی‌ها را سرو می‌کند و مسیرهای غیراستاتیک به اسکریپت می‌روند)
+    ...assetsJwt ? {
+      assets: {
+        jwt: assetsJwt,
+        config: { html_handling: "auto-trailing-slash", not_found_handling: "single-page-application" }
+      }
+    } : {}
+  };
+  const form = new FormData();
+  form.append("metadata", new Blob([JSON.stringify(metadata)], { type: "application/json" }));
+  form.append(CENTRAL_MODULE_NAME, new Blob([deps.centralWorker], { type: "application/javascript+module" }), CENTRAL_MODULE_NAME);
+  outcome = await callCf(doFetch, `/accounts/${accountId}/workers/scripts/${workerName}`, {
+    method: "PUT",
+    headers: { authorization: `Bearer ${deps.token}` },
+    // content-type نمی‌آید — مرز multipart خودکار ست می‌شود
+    body: form
+  });
+  if (outcome.kind !== "ok") return failFromOutcome("worker", t0, "\u0622\u067E\u0644\u0648\u062F \u0648\u0631\u06A9\u0631 \u0645\u0631\u06A9\u0632\u06CC \u0646\u0627\u0645\u0648\u0641\u0642 \u0628\u0648\u062F", outcome);
+  record2(
+    "worker",
+    t0,
+    true,
+    assetsJwt ? "\u0628\u0627\u0646\u062F\u0644 \u0645\u0631\u06A9\u0632\u06CC + \u062F\u0627\u0631\u0627\u06CC\u06CC\u200C\u0647\u0627\u06CC \u0648\u0628 \u0622\u067E\u0644\u0648\u062F \u0634\u062F \u2014 binding\u0647\u0627\u06CC DB/AUTH_SECRET/NODE_SETUP_TOKEN \u0633\u062A \u0634\u062F\u0646\u062F (\u0631\u0627\u0632\u0647\u0627: ***)" : "\u0628\u0627\u0646\u062F\u0644 \u0645\u0631\u06A9\u0632\u06CC \u0622\u067E\u0644\u0648\u062F \u0634\u062F \u2014 binding\u0647\u0627\u06CC DB/AUTH_SECRET/NODE_SETUP_TOKEN \u0633\u062A \u0634\u062F\u0646\u062F (\u0631\u0627\u0632\u0647\u0627: ***)"
+  );
+  t0 = now();
+  outcome = await callCf(doFetch, `/accounts/${accountId}/workers/subdomain`, { headers: authHeaders(deps.token) });
+  if (outcome.kind !== "ok") return failFromOutcome("subdomain", t0, "\u0632\u06CC\u0631\u062F\u0627\u0645\u0646\u0647\u0654 workers.dev \u062D\u0633\u0627\u0628 \u06AF\u0631\u0641\u062A\u0647 \u0646\u0634\u062F", outcome);
+  const subdomain = outcome.body.result?.subdomain;
+  if (typeof subdomain !== "string" || !subdomain) {
+    record2("subdomain", t0, false);
+    return fail("subdomain", "cf_api", "\u067E\u0627\u0633\u062E \u0632\u06CC\u0631\u062F\u0627\u0645\u0646\u0647\u0654 workers.dev \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0628\u0648\u062F \u2014 \u0641\u0639\u0627\u0644\u200C\u0633\u0627\u0632\u06CC workers.dev \u062F\u0631 \u062D\u0633\u0627\u0628 \u06A9\u0644\u0627\u062F\u0641\u0644\u0631 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A");
+  }
+  outcome = await callCf(doFetch, `/accounts/${accountId}/workers/scripts/${workerName}/subdomain`, {
+    method: "POST",
+    headers: authHeaders(deps.token),
+    body: JSON.stringify({ enabled: true, previews_disabled: true })
+  });
+  if (outcome.kind !== "ok") return failFromOutcome("subdomain", t0, "\u0641\u0639\u0627\u0644\u200C\u0633\u0627\u0632\u06CC \u062F\u0627\u0645\u0646\u0647\u0654 \u0648\u0631\u06A9\u0631 \u0646\u0627\u0645\u0648\u0641\u0642 \u0628\u0648\u062F", outcome);
+  const workerUrl = `https://${workerName}.${subdomain}.workers.dev`;
+  record2("subdomain", t0, true, workerUrl);
+  t0 = now();
+  const healthStarted = now();
+  let healthy = false;
+  for (; ; ) {
+    try {
+      const res = await doFetch(`${workerUrl}/healthz`, { signal: AbortSignal.timeout(2e3) });
+      if (res.ok) {
+        healthy = true;
+        break;
+      }
+    } catch {
+    }
+    if (now() - healthStarted >= HEALTH_TIMEOUT_MS) break;
+    await sleep(HEALTH_RETRY_MS);
+  }
+  if (!healthy) {
+    record2("health", t0, false);
+    return fail(
+      "health",
+      "health_timeout",
+      `\u0648\u0631\u06A9\u0631 \u0622\u067E\u0644\u0648\u062F \u0634\u062F \u0627\u0645\u0627 /healthz \u067E\u0633 \u0627\u0632 \u06F3\u06F0 \u062B\u0627\u0646\u06CC\u0647 \u0633\u0627\u0644\u0645 \u0646\u0634\u062F \u2014 \u0686\u0646\u062F \u0644\u062D\u0638\u0647 \u0628\u0639\u062F \u062F\u0631 \u067E\u0646\u0644 \u0633\u0644\u0627\u0645\u062A \u067E\u06CC\u06AF\u06CC\u0631\u06CC \u06A9\u0646\u06CC\u062F (${workerUrl})`
+    );
+  }
+  record2("health", t0, true);
+  t0 = now();
+  let stateRes;
+  try {
+    stateRes = await doFetch(`${workerUrl}/api/instance-sync/state`, {
+      headers: { authorization: `Bearer ${authSecret}`, "x-device-id": PROVISION_DEVICE_ID }
+    });
+  } catch {
+    record2("state", t0, false);
+    return fail("state", "network", "\u0648\u0631\u06A9\u0631 \u067E\u0627\u0633\u062E state \u0646\u062F\u0627\u062F \u2014 \u0646\u0634\u0627\u0646\u06CC \u0648\u0631\u06A9\u0631 \u0631\u0627 \u0628\u0631\u0631\u0633\u06CC \u06A9\u0646\u06CC\u062F");
+  }
+  if (!stateRes.ok) {
+    record2("state", t0, false, `HTTP ${stateRes.status}`);
+    return fail(
+      "state",
+      "worker_error",
+      `\u0648\u0627\u0631\u0633\u06CC \u0648\u0636\u0639\u06CC\u062A \u0647\u0645\u200C\u06AF\u0627\u0645\u06CC \u0631\u0648\u06CC \u0648\u0631\u06A9\u0631 \u0646\u0627\u0645\u0648\u0641\u0642 \u0628\u0648\u062F (HTTP ${stateRes.status}) \u2014 \u0631\u0627\u0632 \u0633\u0634\u0646 \u0628\u0647\u200C\u062A\u0627\u0632\u06AF\u06CC \u0633\u062A \u0634\u062F\u0647\u061B \u0686\u0646\u062F \u0644\u062D\u0638\u0647 \u0628\u0639\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u0648\u0627\u0631\u0633\u06CC \u06A9\u0646\u06CC\u062F`
+    );
+  }
+  const stateBody = await stateRes.json().catch(() => null);
+  const applied = typeof stateBody?.data?.applied_migrations === "number" ? stateBody.data.applied_migrations : null;
+  const expected = schemaMigrationCount(deps.schemaSql);
+  if (applied !== null && expected > 0 && applied !== expected) {
+    record2("state", t0, false, `\u0627\u0628\u0631 ${applied} / \u0628\u0627\u0646\u062F\u0644 ${expected}`);
+    return fail(
+      "state",
+      "schema_mismatch",
+      `\u0646\u0633\u062E\u0647\u0654 \u0627\u0633\u06A9\u06CC\u0645\u0627 \u0631\u0648\u06CC \u0627\u0628\u0631 (${applied} \u0645\u0627\u06CC\u06AF\u0631\u06CC\u0634\u0646) \u0628\u0627 \u0628\u0627\u0646\u062F\u0644 \u0646\u0635\u0628 (${expected} \u0645\u0627\u06CC\u06AF\u0631\u06CC\u0634\u0646) \u0647\u0645\u200C\u062E\u0648\u0627\u0646 \u0646\u06CC\u0633\u062A \u2014 \u0646\u0635\u0628 \u062F\u0633\u06A9\u062A\u0627\u067E \u0631\u0627 \u0628\u0647\u200C\u0631\u0648\u0632\u0631\u0633\u0627\u0646\u06CC \u06A9\u0646\u06CC\u062F`
+    );
+  }
+  record2("state", t0, true, applied === null ? "\u0634\u0645\u0627\u0631\u0634 \u0645\u0627\u06CC\u06AF\u0631\u06CC\u0634\u0646 \u0627\u0628\u0631 \u0646\u0627\u0645\u0639\u0644\u0648\u0645 \u2014 \u067E\u0627\u0633\u062E \u0633\u0628\u0632" : `${applied} \u0645\u0627\u06CC\u06AF\u0631\u06CC\u0634\u0646`);
+  let webEnabled = false;
+  if (assetsJwt) {
+    t0 = now();
+    let webRes;
+    try {
+      webRes = await doFetch(`${workerUrl}/`, {
+        headers: { accept: "text/html" },
+        signal: AbortSignal.timeout(2e3)
+      });
+    } catch {
+      record2("web", t0, false);
+      return fail("web", "network", "\u0648\u0631\u06A9\u0631 \u062A\u0627\u0632\u0647 \u067E\u0627\u0633\u062E \u0635\u0641\u062D\u0647\u0654 \u0648\u0628 \u0646\u062F\u0627\u062F \u2014 \u0646\u0634\u0627\u0646\u06CC \u0648\u0631\u06A9\u0631 \u0631\u0627 \u0628\u0631\u0631\u0633\u06CC \u06A9\u0646\u06CC\u062F");
+    }
+    const html = (await webRes.text().catch(() => "")).toLowerCase();
+    if (!webRes.ok || !(html.includes("<!doctype html") || html.includes("<html"))) {
+      record2("web", t0, false, `HTTP ${webRes.status}`);
+      return fail(
+        "web",
+        "worker_error",
+        `\u0635\u0641\u062D\u0647\u0654 \u0648\u0628 \u0631\u0648\u06CC \u0648\u0631\u06A9\u0631 \u0628\u0627\u0644\u0627 \u0646\u06CC\u0627\u0645\u062F (HTTP ${webRes.status}) \u2014 \u062F\u0627\u0631\u0627\u06CC\u06CC\u200C\u0647\u0627\u06CC \u0648\u0628 \u0622\u067E\u0644\u0648\u062F \u0634\u062F\u0647 \u0627\u0645\u0627 GET / \u067E\u0627\u0633\u062E HTML \u0646\u062F\u0627\u062F\u061B \u0686\u0646\u062F \u0644\u062D\u0638\u0647 \u0628\u0639\u062F \u062F\u0631 \u0645\u0631\u0648\u0631\u06AF\u0631 \u0628\u0631\u0631\u0633\u06CC \u06A9\u0646\u06CC\u062F (${workerUrl})`
+      );
+    }
+    record2("web", t0, true, "\u0648\u0628 \u0641\u0639\u0627\u0644 \u2014 index.html \u0633\u0631\u0648 \u0634\u062F");
+    webEnabled = true;
+  } else {
+    deps.log?.("\u0686\u06A9 \u0648\u0628 \u0631\u062F \u0634\u062F \u2014 \u062F\u0627\u0631\u0627\u06CC\u06CC \u0648\u0628\u06CC \u0628\u0631\u0627\u06CC \u0627\u06CC\u0646 \u0633\u0627\u062E\u062A \u0622\u067E\u0644\u0648\u062F \u0646\u0634\u062F");
+  }
+  return { ok: true, workerUrl, authSecret, nodeSetupToken, workerName, d1Name, steps, webEnabled };
+}
+__name(provisionCloudWorker, "provisionCloudWorker");
+async function verifyCloudToken(deps) {
+  const doFetch = deps.fetchImpl ?? ((input2, i) => fetch(input2, i));
+  const outcome = await callCf(doFetch, "/user/tokens/verify", {
+    method: "POST",
+    headers: authHeaders(deps.token)
+  });
+  if (outcome.kind !== "ok") {
+    return {
+      ok: false,
+      step: "verify",
+      kind: outcome.kind === "network" ? "network" : "cf_api",
+      message: cfFailMessage2("\u062A\u0648\u06A9\u0646 \u06A9\u0644\u0627\u062F\u0641\u0644\u0631 \u067E\u0630\u06CC\u0631\u0641\u062A\u0647 \u0646\u0634\u062F", outcome),
+      ...outcome.kind === "cf" && cfErrorList(outcome.body).length > 0 ? { errors: cfErrorList(outcome.body) } : {}
+    };
+  }
+  const accountsOutcome = await callCf(doFetch, "/accounts", { headers: authHeaders(deps.token) });
+  if (accountsOutcome.kind !== "ok") {
+    return {
+      ok: false,
+      step: "accounts",
+      kind: accountsOutcome.kind === "network" ? "network" : "cf_api",
+      message: cfFailMessage2("\u0641\u0647\u0631\u0633\u062A \u062D\u0633\u0627\u0628\u200C\u0647\u0627\u06CC \u06A9\u0644\u0627\u062F\u0641\u0644\u0631 \u06AF\u0631\u0641\u062A\u0647 \u0646\u0634\u062F", accountsOutcome),
+      ...accountsOutcome.kind === "cf" && cfErrorList(accountsOutcome.body).length > 0 ? { errors: cfErrorList(accountsOutcome.body) } : {}
+    };
+  }
+  const accounts = [];
+  if (Array.isArray(accountsOutcome.body.result)) {
+    for (const a of accountsOutcome.body.result) {
+      if (a && typeof a === "object" && typeof a.id === "string") {
+        accounts.push({ id: a.id, name: typeof a.name === "string" ? a.name : "" });
+      }
+    }
+  }
+  if (accounts.length === 0) {
+    return {
+      ok: false,
+      step: "accounts",
+      kind: "no_account",
+      message: "\u0647\u06CC\u0686 \u062D\u0633\u0627\u0628 \u06A9\u0644\u0627\u062F\u0641\u0644\u0631\u06CC \u0628\u0627 \u0627\u06CC\u0646 \u062A\u0648\u06A9\u0646 \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0646\u06CC\u0633\u062A \u2014 \u0645\u062C\u0648\u0632 \xABAccount Settings:Read\xBB \u0631\u0627 \u0628\u0647 \u062A\u0648\u06A9\u0646 \u0627\u0636\u0627\u0641\u0647 \u06A9\u0646\u06CC\u062F"
+    };
+  }
+  deps.log?.(`\u0648\u0627\u0631\u0633\u06CC \u062A\u0648\u06A9\u0646 \u0633\u0628\u0632 \u2014 ${accounts.length} \u062D\u0633\u0627\u0628 \u062F\u0631 \u062F\u0633\u062A\u0631\u0633`);
+  return { ok: true, accounts };
+}
+__name(verifyCloudToken, "verifyCloudToken");
+async function discoverCloudDeployment(deps) {
+  const doFetch = deps.fetchImpl ?? ((input2, i) => fetch(input2, i));
+  const verify = await verifyCloudToken({ token: deps.token, fetchImpl: doFetch, log: deps.log });
+  if (!verify.ok) {
+    return {
+      ok: false,
+      step: verify.step === "verify" ? "verify" : "accounts",
+      kind: verify.kind === "no_account" ? "no_account" : verify.kind,
+      message: verify.message,
+      ...verify.errors ? { errors: verify.errors } : {}
+    };
+  }
+  const workers = [];
+  const databases = [];
+  for (const account of verify.accounts) {
+    const headers = authHeaders(deps.token);
+    const domainsOutcome = await callCf(doFetch, `/accounts/${account.id}/workers/domains`, { headers });
+    if (domainsOutcome.kind === "ok" && Array.isArray(domainsOutcome.body.result)) {
+      const byService = /* @__PURE__ */ new Map();
+      for (const row of domainsOutcome.body.result) {
+        const service = typeof row.service === "string" ? row.service : "";
+        const hostname3 = typeof row.hostname === "string" ? row.hostname : "";
+        if (!service || !hostname3) continue;
+        const urls = byService.get(service) ?? [];
+        urls.push(`https://${hostname3}`);
+        byService.set(service, urls);
+      }
+      for (const [name, urls] of byService) workers.push({ name, account_id: account.id, urls: urls.sort() });
+      deps.log?.(`\u062D\u0633\u0627\u0628 \xAB${account.name || account.id}\xBB: ${byService.size} \u0648\u0631\u06A9\u0631 \u0628\u0627 \u062F\u0627\u0645\u0646\u0647\u0654 \u0639\u0645\u0648\u0645\u06CC`);
+    } else {
+      deps.log?.(`\u062F\u0627\u0645\u0646\u0647\u200C\u0647\u0627\u06CC \u062D\u0633\u0627\u0628 \xAB${account.name || account.id}\xBB \u062E\u0648\u0627\u0646\u062F\u0647 \u0646\u0634\u062F \u2014 \u0628\u062E\u0634 \u0648\u0631\u06A9\u0631\u0647\u0627 \u062E\u0627\u0644\u06CC \u0645\u06CC\u200C\u0645\u0627\u0646\u062F`);
+    }
+    const d1Outcome = await callCf(doFetch, `/accounts/${account.id}/d1/database`, { headers });
+    if (d1Outcome.kind === "ok" && Array.isArray(d1Outcome.body.result)) {
+      for (const row of d1Outcome.body.result) {
+        const id = typeof row.uuid === "string" ? row.uuid : typeof row.id === "string" ? row.id : "";
+        const name = typeof row.name === "string" ? row.name : "";
+        if (!id || !name) continue;
+        databases.push({ name, id, account_id: account.id });
+      }
+      deps.log?.(`\u062D\u0633\u0627\u0628 \xAB${account.name || account.id}\xBB: ${databases.length} \u067E\u0627\u06CC\u06AF\u0627\u0647 D1`);
+    } else {
+      deps.log?.(`\u0641\u0647\u0631\u0633\u062A D1 \u062D\u0633\u0627\u0628 \xAB${account.name || account.id}\xBB \u062E\u0648\u0627\u0646\u062F\u0647 \u0646\u0634\u062F \u2014 \u0628\u062E\u0634 \u067E\u0627\u06CC\u06AF\u0627\u0647\u200C\u0647\u0627 \u062E\u0627\u0644\u06CC \u0645\u06CC\u200C\u0645\u0627\u0646\u062F`);
+    }
+  }
+  return { ok: true, accounts: verify.accounts, workers, databases };
+}
+__name(discoverCloudDeployment, "discoverCloudDeployment");
+
+// src/core/logger/logger.ts
+var LEVEL_WEIGHT = { debug: 10, info: 20, warn: 30, error: 40 };
+function minLevel() {
+  const env = globalThis.ENV ?? "development";
+  return env === "production" ? "info" : "debug";
+}
+__name(minLevel, "minLevel");
+function emit(scope, level, msg, meta3) {
+  if (LEVEL_WEIGHT[level] < LEVEL_WEIGHT[minLevel()]) return;
+  const entry = {
+    ts: (/* @__PURE__ */ new Date()).toISOString(),
+    level,
+    scope,
+    msg,
+    ...meta3 ? { meta: meta3 } : {}
+  };
+  console.log(JSON.stringify(entry));
+}
+__name(emit, "emit");
+function createLogger(scope) {
+  return {
+    debug: /* @__PURE__ */ __name((msg, meta3) => emit(scope, "debug", msg, meta3), "debug"),
+    info: /* @__PURE__ */ __name((msg, meta3) => emit(scope, "info", msg, meta3), "info"),
+    warn: /* @__PURE__ */ __name((msg, meta3) => emit(scope, "warn", msg, meta3), "warn"),
+    error: /* @__PURE__ */ __name((msg, meta3) => emit(scope, "error", msg, meta3), "error"),
+    child: /* @__PURE__ */ __name((subScope) => createLogger(`${scope}.${subScope}`), "child")
+  };
+}
+__name(createLogger, "createLogger");
+
+// src/application/instance-sync/runner.ts
+var SYNC_EPOCH_CURSOR = "1970-01-01T00:00:00.000Z";
+var CLOUD_SYNC_DEFAULT_INTERVAL_MS = 6e5;
+var CLOUD_SYNC_MIN_INTERVAL_MS = 6e4;
+var CLOUD_SYNC_MAX_CLOCK_DRIFT_MS = 12e4;
+var CLOUD_SYNC_BACKUP_KEEP = 3;
+var CLOUD_CONFIG_FILE = "cloud-config.json";
+var CLOUD_SYNC_STATE_FILE = "sync-state.json";
+var CLOUD_SYNC_AUDIT_ACTION = "cloud.sync";
+var CLOUD_CLONE_AUDIT_ACTION = "cloud.clone";
+var CLOUD_UNLINK_AUDIT_ACTION = "cloud.unlink";
+var CLOUD_SYNC_LAST_KEY = "cloudsync:last-sync-v1";
+var EPOCH_PAIR = { rows: SYNC_EPOCH_CURSOR, deleted: SYNC_EPOCH_CURSOR };
+function parseCloudConfigPayload(raw2) {
+  if (!raw2 || typeof raw2 !== "object" || Array.isArray(raw2)) return null;
+  const obj = raw2;
+  const rawUrl = typeof obj.url === "string" ? obj.url.trim() : "";
+  let parsed;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== "https:" || !parsed.hostname) return null;
+  const intervalRaw = typeof obj.interval_ms === "number" ? obj.interval_ms : Number(obj.interval_ms);
+  const interval = Number.isFinite(intervalRaw) && intervalRaw > 0 ? Math.max(CLOUD_SYNC_MIN_INTERVAL_MS, Math.trunc(intervalRaw)) : CLOUD_SYNC_DEFAULT_INTERVAL_MS;
+  const device = typeof obj.device_id === "string" && obj.device_id.trim() ? obj.device_id.trim() : null;
+  return {
+    url: `${parsed.protocol}//${parsed.host}${parsed.pathname.replace(/\/+$/, "")}`,
+    interval_ms: interval,
+    device_id: device
+  };
+}
+__name(parseCloudConfigPayload, "parseCloudConfigPayload");
+async function readCloudConfig(fs) {
+  if (!fs) return null;
+  const text = await fs.readText(CLOUD_CONFIG_FILE).catch(() => null);
+  if (!text) return null;
+  let raw2 = null;
+  try {
+    raw2 = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  const parsed = parseCloudConfigPayload(raw2);
+  if (!parsed) return null;
+  let device_id = parsed.device_id;
+  if (!device_id) {
+    device_id = crypto.randomUUID();
+    try {
+      await fs.writeText(
+        CLOUD_CONFIG_FILE,
+        JSON.stringify({ url: parsed.url, device_id, interval_ms: parsed.interval_ms }, null, 2) + "\n"
+      );
+    } catch {
+    }
+  }
+  return { url: parsed.url, device_id, interval_ms: parsed.interval_ms };
+}
+__name(readCloudConfig, "readCloudConfig");
+var CloudSyncError = class extends Error {
+  constructor(kind, message) {
+    super(message);
+    this.kind = kind;
+    this.name = "CloudSyncError";
+  }
+  kind;
+  static {
+    __name(this, "CloudSyncError");
+  }
+};
+async function readSyncCursors(fs) {
+  const empty = { pull: {}, push: {} };
+  if (!fs) return empty;
+  const text = await fs.readText(CLOUD_SYNC_STATE_FILE).catch(() => null);
+  if (!text) return empty;
+  try {
+    const raw2 = JSON.parse(text);
+    if (!raw2 || typeof raw2 !== "object") return empty;
+    const pick2 = /* @__PURE__ */ __name((v) => v && typeof v === "object" ? v : {}, "pick");
+    return { pull: pick2(raw2.pull), push: pick2(raw2.push) };
+  } catch {
+    return empty;
+  }
+}
+__name(readSyncCursors, "readSyncCursors");
+async function writeSyncCursors(fs, cursors) {
+  if (!fs) return;
+  try {
+    await fs.writeText(CLOUD_SYNC_STATE_FILE, JSON.stringify(cursors, null, 2) + "\n");
+  } catch {
+  }
+}
+__name(writeSyncCursors, "writeSyncCursors");
+function pullCursorOf(cursors, table) {
+  const c = cursors.pull[table];
+  return c && typeof c.rows === "string" && typeof c.deleted === "string" ? c : { ...EPOCH_PAIR };
+}
+__name(pullCursorOf, "pullCursorOf");
+function pushCursorOf(cursors, table) {
+  const c = cursors.push[table];
+  return c && typeof c.rows === "string" && typeof c.deleted === "string" ? c : { ...EPOCH_PAIR };
+}
+__name(pushCursorOf, "pushCursorOf");
+async function applyEcho(db, table, echo, columnsCache) {
+  const meta3 = syncTableMeta(table);
+  if (!meta3 || Object.keys(echo).length === 0) return 0;
+  let cols = columnsCache?.get(table);
+  if (!cols) {
+    const info = await db.query(`PRAGMA table_info("${table}")`);
+    cols = info.map((r) => r.name);
+    columnsCache?.set(table, cols);
+  }
+  const statements = [db.prepare("PRAGMA defer_foreign_keys = ON")];
+  let applied = 0;
+  for (const [pkValue, winner] of Object.entries(echo)) {
+    const parts = pkValue.split("|");
+    if (parts.length !== meta3.pk.length || parts.some((p) => p === "")) continue;
+    if (winner === null || winner === void 0) {
+      statements.push(
+        db.prepare(
+          `DELETE FROM "${table}" WHERE ${meta3.pk.map((c) => `"${c}" = ?`).join(" AND ")}`,
+          parts
+        )
+      );
+      applied += 1;
+      continue;
+    }
+    if (typeof winner !== "object" || Array.isArray(winner)) continue;
+    const row = winner;
+    const colList = cols.map((c) => `"${c}"`).join(", ");
+    const placeholders = cols.map(() => "?").join(", ");
+    statements.push(
+      db.prepare(`INSERT OR REPLACE INTO "${table}" (${colList}) VALUES (${placeholders})`, cols.map((c) => row[c] === void 0 ? null : row[c]))
+    );
+    applied += 1;
+  }
+  if (statements.length > 1) {
+    try {
+      await db.batch(statements);
+    } catch (err) {
+      throw new ValidationError(`\u0627\u0639\u0645\u0627\u0644 echo \u0627\u0628\u0631 \u0631\u0648\u06CC \u062C\u062F\u0648\u0644 \xAB${table}\xBB \u0646\u0627\u0645\u0648\u0641\u0642 \u0628\u0648\u062F: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+  return applied;
+}
+__name(applyEcho, "applyEcho");
+function cloudSecretOf(env) {
+  const raw2 = env?.ENGINE_CLOUD_SECRET;
+  return typeof raw2 === "string" && raw2.trim() ? raw2.trim() : null;
+}
+__name(cloudSecretOf, "cloudSecretOf");
+async function readLastSyncMirror(db) {
+  try {
+    const row = await db.queryOne("SELECT value FROM settings WHERE key = ?", [CLOUD_SYNC_LAST_KEY]);
+    if (!row?.value) return null;
+    const parsed = JSON.parse(row.value);
+    if (!parsed || typeof parsed !== "object" || typeof parsed.result !== "string") return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+__name(readLastSyncMirror, "readLastSyncMirror");
+async function writeLastSyncMirror(db, mirror) {
+  try {
+    await db.execute(
+      `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')`,
+      [CLOUD_SYNC_LAST_KEY, JSON.stringify(mirror)]
+    );
+  } catch {
+  }
+}
+__name(writeLastSyncMirror, "writeLastSyncMirror");
+var cloudSyncInFlight = false;
+function cloudHeaders(call, jsonBody) {
+  const headers = {
+    authorization: `Bearer ${call.secret}`,
+    // راز فقط در سرایند — هرگز در بدنه/لاگ
+    "x-device-id": call.config.device_id
+  };
+  if (jsonBody) headers["content-type"] = "application/json";
+  return headers;
+}
+__name(cloudHeaders, "cloudHeaders");
+async function cloudFetch(call, path, init) {
+  const doFetch = call.deps.fetchCloud ?? ((input2, i) => fetch(input2, i));
+  let res;
+  try {
+    res = await doFetch(`${call.config.url}${path}`, init);
+  } catch {
+    throw new CloudSyncError("offline", "\u0627\u062A\u0635\u0627\u0644 \u0628\u0647 \u0627\u0628\u0631 \u0628\u0631\u0642\u0631\u0627\u0631 \u0646\u0634\u062F \u2014 \u0627\u06CC\u0646\u062A\u0631\u0646\u062A \u06CC\u0627 \u0646\u0634\u0627\u0646\u06CC \u0648\u0631\u06A9\u0631 \u0631\u0627 \u0628\u0631\u0631\u0633\u06CC \u06A9\u0646\u06CC\u062F");
+  }
+  if (res.status === 401 || res.status === 403) {
+    throw new CloudSyncError("auth", "\u0627\u062D\u0631\u0627\u0632 \u0646\u0632\u062F \u0627\u0628\u0631 \u0646\u0627\u0645\u0648\u0641\u0642 \u0628\u0648\u062F \u2014 \u0631\u0627\u0632 \u0627\u062A\u0635\u0627\u0644 \u0627\u0628\u0631\u06CC \u0631\u0627 \u0628\u0647\u200C\u0631\u0648\u0632\u0631\u0633\u0627\u0646\u06CC \u06A9\u0646\u06CC\u062F");
+  }
+  if (!res.ok) {
+    throw new CloudSyncError("offline", `\u0627\u0628\u0631 \u067E\u0627\u0633\u062E \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u062F\u0627\u062F (${res.status})`);
+  }
+  return res;
+}
+__name(cloudFetch, "cloudFetch");
+async function fetchCloudState(call) {
+  const res = await cloudFetch(call, "/api/instance-sync/state", { method: "GET", headers: cloudHeaders(call, false) });
+  const body = unwrapData(await res.json().catch(() => null));
+  const applied = typeof body.applied_migrations === "number" ? body.applied_migrations : null;
+  const dateHeader = res.headers.get("date");
+  const serverMs = dateHeader ? Date.parse(dateHeader) : NaN;
+  return { appliedMigrations: applied, serverTimeMs: Number.isNaN(serverMs) ? null : serverMs };
+}
+__name(fetchCloudState, "fetchCloudState");
+async function pullFromCloud(call, since) {
+  const res = await cloudFetch(call, "/api/instance-sync/pull", {
+    method: "POST",
+    headers: cloudHeaders(call, true),
+    body: JSON.stringify({ since })
+  });
+  const body = unwrapData(await res.json().catch(() => null));
+  if (!body || typeof body.tables !== "object" || body.tables === null) {
+    throw new CloudSyncError("offline", "\u067E\u0627\u0633\u062E pull \u0627\u0628\u0631 \u0634\u06A9\u0644 \u0642\u0631\u0627\u0631\u062F\u0627\u062F\u06CC \u0646\u062F\u0627\u0631\u062F");
+  }
+  return { tables: body.tables };
+}
+__name(pullFromCloud, "pullFromCloud");
+async function pushToCloud(call, payload) {
+  const res = await cloudFetch(call, "/api/instance-sync/push", {
+    method: "POST",
+    headers: cloudHeaders(call, true),
+    body: JSON.stringify({ device_id: call.config.device_id, tables: payload.tables ?? {} })
+  });
+  const body = unwrapData(await res.json().catch(() => null));
+  if (!body || typeof body.tables !== "object" || body.tables === null) {
+    throw new CloudSyncError("offline", "\u067E\u0627\u0633\u062E push \u0627\u0628\u0631 \u0634\u06A9\u0644 \u0642\u0631\u0627\u0631\u062F\u0627\u062F\u06CC \u0646\u062F\u0627\u0631\u062F");
+  }
+  return body;
+}
+__name(pushToCloud, "pushToCloud");
+function unwrapData(body) {
+  if (body && typeof body === "object" && !Array.isArray(body)) {
+    const obj = body;
+    if (obj.data && typeof obj.data === "object" && !Array.isArray(obj.data)) {
+      return obj.data;
+    }
+    return obj;
+  }
+  return {};
+}
+__name(unwrapData, "unwrapData");
+async function readLocalMigrationCount(db) {
+  for (const table of ["_migrations", "d1_migrations", "schema_migrations"]) {
+    try {
+      const row = await db.queryOne(`SELECT COUNT(*) AS n FROM "${table}"`);
+      if (row && Number(row.n) > 0) return Number(row.n);
+    } catch {
+    }
+  }
+  return null;
+}
+__name(readLocalMigrationCount, "readLocalMigrationCount");
+async function writeCloudBackupFile(deps, opts) {
+  if (!deps.fs) throw new ValidationError("\u067E\u0644 \u0641\u0627\u06CC\u0644\u200C\u0647\u0627\u06CC \u0627\u0628\u0631\u06CC (CLOUD_FS) \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0646\u06CC\u0633\u062A \u2014 \u0647\u0645\u200C\u06AF\u0627\u0645\u06CC \u0641\u0642\u0637 \u062F\u0631 \u0645\u0648\u062A\u0648\u0631 \u0645\u062D\u0644\u06CC \u0645\u0639\u0646\u0627 \u062F\u0627\u0631\u062F");
+  if (!deps.backup) throw new ValidationError("\u0633\u0631\u0648\u06CC\u0633 \u067E\u0634\u062A\u06CC\u0628\u0627\u0646 \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0646\u06CC\u0633\u062A \u2014 \u0628\u06A9\u0627\u067E \u067E\u06CC\u0634 \u0627\u0632 \u0627\u0639\u0645\u0627\u0644 \u0645\u0645\u06A9\u0646 \u0646\u0634\u062F");
+  const text = await new Response(deps.backup.buildExportStream(opts.includeFiles)).text();
+  const name = `cloud-sync-${opts.kind}-${opts.now()}-${crypto.randomUUID().slice(0, 8)}.json`;
+  await deps.fs.writeText(name, text);
+  let tables = 0;
+  try {
+    tables = Object.keys(JSON.parse(text).tables ?? {}).length;
+  } catch {
+    tables = 0;
+  }
+  return { name, path: `${deps.fs.dir()}/${name}`, bytes: text.length, tables };
+}
+__name(writeCloudBackupFile, "writeCloudBackupFile");
+async function rotateCloudBackups(deps, keep) {
+  if (!deps.fs) return 0;
+  const names = await deps.fs.list("cloud-sync-pre-").catch(() => []);
+  let removed = 0;
+  for (const name of names.slice(keep)) {
+    await deps.fs.remove(name).catch(() => void 0);
+    removed += 1;
+  }
+  return removed;
+}
+__name(rotateCloudBackups, "rotateCloudBackups");
+async function runCloudSync(deps, trigger) {
+  const started = deps.now?.() ?? Date.now();
+  const base = { kind: "error", pulled: 0, pushed: 0, conflicts_new: 0, duration_ms: 0, error: null };
+  if (cloudSyncInFlight) return { ...base, kind: "in_flight", error: "\u0647\u0645\u200C\u06AF\u0627\u0645\u200C\u0633\u0627\u0632\u06CC \u062F\u0631 \u062C\u0631\u06CC\u0627\u0646 \u0627\u0633\u062A" };
+  cloudSyncInFlight = true;
+  const finish = /* @__PURE__ */ __name((result) => {
+    cloudSyncInFlight = false;
+    return { ...result, duration_ms: result.duration_ms > 0 ? result.duration_ms : (deps.now?.() ?? Date.now()) - started };
+  }, "finish");
+  try {
+    const config2 = await readCloudConfig(deps.fs);
+    if (!config2) return finish({ ...base, kind: "unconfigured", error: "\u0627\u062A\u0635\u0627\u0644 \u0627\u0628\u0631\u06CC \u062A\u0646\u0638\u06CC\u0645 \u0646\u0634\u062F\u0647 \u0627\u0633\u062A" });
+    const secret = cloudSecretOf(deps.env);
+    if (!secret) return finish({ ...base, kind: "no_secret", error: "\u0631\u0627\u0632 \u0627\u062A\u0635\u0627\u0644 \u0627\u0628\u0631\u06CC \u062F\u0631 \u067E\u0648\u0633\u062A\u0647 \u0630\u062E\u06CC\u0631\u0647 \u0646\u0634\u062F\u0647 \u0627\u0633\u062A" });
+    const call = { deps, config: config2, secret };
+    deps.logger.info("cloud.sync.start", { trigger, url: config2.url, device_id: config2.device_id });
+    const columnsCache = /* @__PURE__ */ new Map();
+    const state = await fetchCloudState(call);
+    const nowMs = deps.now?.() ?? Date.now();
+    const clockWarning = state.serverTimeMs !== null && Math.abs(nowMs - state.serverTimeMs) > CLOUD_SYNC_MAX_CLOCK_DRIFT_MS;
+    const localMigrations = await readLocalMigrationCount(deps.db);
+    const schemaMatch = localMigrations !== null && state.appliedMigrations !== null ? localMigrations === state.appliedMigrations : null;
+    if (schemaMatch === false) {
+      return finish(
+        await finishWithMirror(
+          deps,
+          {
+            kind: "error",
+            error: "\u0646\u0633\u062E\u0647\u0654 \u0627\u0633\u06A9\u06CC\u0645\u0627 \u0628\u0627 \u0627\u0628\u0631 \u0647\u0645\u200C\u062E\u0648\u0627\u0646 \u0646\u06CC\u0633\u062A \u2014 \u06CC\u06A9 \u0633\u0648 \u0631\u0627 \u0628\u0647\u200C\u0631\u0648\u0632\u0631\u0633\u0627\u0646\u06CC \u06A9\u0646\u06CC\u062F",
+            pulled: 0,
+            pushed: 0,
+            conflicts_new: 0,
+            clockWarning,
+            schemaMatch
+          },
+          started
+        )
+      );
+    }
+    const cursors = await readSyncCursors(deps.fs);
+    let pulled = 0;
+    let pushed = 0;
+    let conflictsNew = 0;
+    for (let guard = 0; guard < 2e3; guard += 1) {
+      const since = { tables: {} };
+      for (const meta3 of syncTableList()) {
+        since.tables[meta3] = pullCursorOf(cursors, meta3);
+      }
+      const cloud = await pullFromCloud(call, since);
+      const tables = {};
+      const payload = { tables };
+      let items = 0;
+      for (const [table, result2] of Object.entries(cloud.tables)) {
+        const rows = Array.isArray(result2.rows) ? result2.rows : [];
+        const deleted = Array.isArray(result2.deleted) ? result2.deleted : [];
+        items += rows.length + deleted.length;
+        if (rows.length + deleted.length > 0) {
+          tables[table] = { rows, deleted: deleted.map((d) => ({ pk: d.pk, deleted_at: d.deleted_at, device_id: d.device_id })) };
+        }
+      }
+      if (items === 0) break;
+      if (pulled === 0) {
+        await writeCloudBackupFile(deps, { kind: "pre", includeFiles: false, now: deps.now ?? Date.now });
+        await rotateCloudBackups(deps, CLOUD_SYNC_BACKUP_KEEP);
+      }
+      const applied = await push(deps.db, config2.device_id, payload);
+      for (const [table, outcome] of Object.entries(applied.tables)) {
+        conflictsNew += outcome.conflicts;
+        if (outcome.rejected.length > 0) {
+          deps.logger.warn("cloud.sync.pull_rejected", { table, rejected: outcome.rejected.length });
+        }
+      }
+      pulled += items;
+      for (const [table, result2] of Object.entries(cloud.tables)) {
+        const next = result2.next_cursors;
+        if (next && typeof next.rows === "string" && typeof next.deleted === "string") {
+          cursors.pull[table] = next;
+        }
+      }
+      await writeSyncCursors(deps.fs, cursors);
+    }
+    for (let guard = 0; guard < 2e3; guard += 1) {
+      const localSince = { tables: {} };
+      for (const meta3 of syncTableList()) {
+        localSince.tables[meta3] = pushCursorOf(cursors, meta3);
+      }
+      const local = await pull(deps.db, localSince);
+      const tables = {};
+      const payload = { tables };
+      let items = 0;
+      for (const [table, result2] of Object.entries(local.tables)) {
+        const rows = Array.isArray(result2.rows) ? result2.rows : [];
+        const deleted = Array.isArray(result2.deleted) ? result2.deleted : [];
+        items += rows.length + deleted.length;
+        if (rows.length + deleted.length > 0) {
+          tables[table] = { rows, deleted: deleted.map((d) => ({ pk: d.pk, deleted_at: d.deleted_at, device_id: config2.device_id })) };
+        }
+      }
+      if (items === 0) break;
+      const cloudResult = await pushToCloud(call, payload);
+      for (const [table, outcome] of Object.entries(cloudResult.tables)) {
+        const appliedEcho = await applyEcho(deps.db, table, outcome.echo, columnsCache);
+        conflictsNew += outcome.conflicts;
+        if (outcome.rejected.length > 0) {
+          deps.logger.warn("cloud.sync.push_rejected", { table, rejected: outcome.rejected.length });
+        }
+        void appliedEcho;
+      }
+      pushed += items;
+      for (const [table, result2] of Object.entries(local.tables)) {
+        const next = result2.next_cursors;
+        if (next && typeof next.rows === "string" && typeof next.deleted === "string") {
+          cursors.push[table] = next;
+        }
+      }
+      await writeSyncCursors(deps.fs, cursors);
+    }
+    const result = finish(
+      await finishWithMirror(
+        deps,
+        { kind: "synced", error: null, pulled, pushed, conflicts_new: conflictsNew, clockWarning, schemaMatch },
+        started
+      )
+    );
+    deps.logger.info("cloud.sync.done", { trigger, pulled, pushed, conflicts_new: conflictsNew });
+    return result;
+  } catch (err) {
+    if (err instanceof CloudSyncError && err.kind === "offline") {
+      const offline = finish(
+        await finishWithMirror(
+          deps,
+          { kind: "offline", error: err.message, pulled: 0, pushed: 0, conflicts_new: 0, clockWarning: void 0, schemaMatch: void 0 },
+          started
+        )
+      );
+      deps.logger.info("cloud.sync.offline", { trigger, reason: err.message });
+      return offline;
+    }
+    const message = err instanceof Error ? err.message : String(err);
+    deps.logger.warn("cloud.sync.failed", { trigger, error: message });
+    return finish(
+      await finishWithMirror(
+        deps,
+        { kind: "error", error: message, pulled: 0, pushed: 0, conflicts_new: 0, clockWarning: void 0, schemaMatch: void 0 },
+        started
+      )
+    );
+  }
+}
+__name(runCloudSync, "runCloudSync");
+var SYNC_TABLE_NAMES = SYNC_TABLES.map((m) => m.table);
+function syncTableList() {
+  return SYNC_TABLE_NAMES;
+}
+__name(syncTableList, "syncTableList");
+async function finishWithMirror(deps, input2, startedMs) {
+  const duration_ms = (deps.now?.() ?? Date.now()) - startedMs;
+  const previous = await readLastSyncMirror(deps.db).catch(() => null);
+  const mirror = {
+    at: new Date(deps.now?.() ?? Date.now()).toISOString(),
+    result: input2.kind,
+    pulled: input2.pulled,
+    pushed: input2.pushed,
+    conflicts_new: input2.conflicts_new,
+    duration_ms,
+    error: input2.error,
+    // نامعلوم (آفلاین/خطای زودرس) → مقدار پیشین حفظ می‌شود تا پنل آخرین دانش معتبر را بدهد
+    clock_warning: input2.clockWarning ?? previous?.clock_warning ?? false,
+    schema_match: input2.schemaMatch !== void 0 ? input2.schemaMatch : previous?.schema_match ?? null
+  };
+  await writeLastSyncMirror(deps.db, mirror);
+  if (input2.kind !== "offline") {
+    try {
+      await deps.audit.log({
+        actorId: "system",
+        action: CLOUD_SYNC_AUDIT_ACTION,
+        resourceType: "cloud-sync",
+        resourceId: input2.kind,
+        changes: {
+          result: { from: null, to: input2.kind },
+          pulled: { from: null, to: input2.pulled },
+          pushed: { from: null, to: input2.pushed },
+          conflicts_new: { from: null, to: input2.conflicts_new }
+        }
+      });
+    } catch {
+    }
+  }
+  return {
+    kind: input2.kind,
+    pulled: input2.pulled,
+    pushed: input2.pushed,
+    conflicts_new: input2.conflicts_new,
+    duration_ms,
+    error: input2.error
+  };
+}
+__name(finishWithMirror, "finishWithMirror");
+async function cloneFromCloud(deps, opts) {
+  const config2 = await readCloudConfig(deps.fs);
+  if (!config2) throw new ValidationError("\u0627\u062A\u0635\u0627\u0644 \u0627\u0628\u0631\u06CC \u062A\u0646\u0638\u06CC\u0645 \u0646\u0634\u062F\u0647 \u0627\u0633\u062A");
+  const secret = cloudSecretOf(deps.env);
+  if (!secret) throw new ValidationError("\u0631\u0627\u0632 \u0627\u062A\u0635\u0627\u0644 \u0627\u0628\u0631\u06CC \u062F\u0631 \u067E\u0648\u0633\u062A\u0647 \u0630\u062E\u06CC\u0631\u0647 \u0646\u0634\u062F\u0647 \u0627\u0633\u062A");
+  const call = { deps, config: config2, secret };
+  const state = await fetchCloudState(call);
+  const serverTime = state.serverTimeMs !== null ? new Date(state.serverTimeMs).toISOString() : new Date(deps.now?.() ?? Date.now()).toISOString();
+  let localRows = 0;
+  for (const t of ["students", "staff", "appointments"]) {
+    try {
+      const row = await deps.db.queryOne(`SELECT COUNT(*) AS c FROM "${t}"`);
+      localRows += Number(row?.c ?? 0);
+    } catch {
+    }
+  }
+  if (localRows > 0 && opts.confirm !== true) {
+    throw new ConflictError(
+      "\u0631\u0648\u06CC \u062F\u06CC\u062A\u0627\u06CC \u0645\u062D\u0644\u06CC \u063A\u06CC\u0631-\u062E\u0627\u0644\u06CC \u06A9\u0644\u0648\u0646 \u0641\u0642\u0637 \u0628\u0627 \u062A\u0623\u06CC\u06CC\u062F \u0635\u0631\u06CC\u062D \u0627\u0646\u062C\u0627\u0645 \u0645\u06CC\u200C\u0634\u0648\u062F \u2014 \u062F\u06CC\u062A\u0627\u06CC \u0641\u0639\u0644\u06CC \u0628\u0627 \u0628\u06A9\u0627\u067E \u062C\u0627\u06CC\u06AF\u0632\u06CC\u0646 \u062E\u0648\u0627\u0647\u062F \u0634\u062F"
+    );
+  }
+  const res = await cloudFetch(call, "/api/backup/export", { method: "GET", headers: cloudHeaders(call, false) });
+  const text = await res.text();
+  let envelope;
+  try {
+    envelope = JSON.parse(text);
+  } catch {
+    throw new ValidationError("\u062E\u0631\u0648\u062C\u06CC \u0627\u0628\u0631 JSON \u0645\u0639\u062A\u0628\u0631 \u0646\u06CC\u0633\u062A \u2014 \u06A9\u0644\u0648\u0646 \u0645\u062A\u0648\u0642\u0641 \u0634\u062F");
+  }
+  if (!deps.backup) throw new ValidationError("\u0633\u0631\u0648\u06CC\u0633 \u067E\u0634\u062A\u06CC\u0628\u0627\u0646 \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0646\u06CC\u0633\u062A \u2014 \u06A9\u0644\u0648\u0646 \u0645\u0645\u06A9\u0646 \u0646\u0634\u062F");
+  const summary = await deps.backup.inspect(envelope);
+  if (!summary.schemaCompatible) {
+    throw new ValidationError("\u062E\u0631\u0648\u062C\u06CC \u0627\u0628\u0631 \u0628\u0627 \u0627\u0633\u06A9\u06CC\u0645\u0627\u06CC \u0645\u062D\u0644\u06CC \u0647\u0645\u200C\u062E\u0648\u0627\u0646 \u0646\u06CC\u0633\u062A \u2014 \u06A9\u0644\u0648\u0646 \u0645\u062A\u0648\u0642\u0641 \u0634\u062F", { problems: summary.problems });
+  }
+  const backup = await writeCloudBackupFile(deps, { kind: "clone", includeFiles: true, now: deps.now ?? Date.now });
+  const report = await deps.backup.restore({ staffId: "system" }, envelope, { confirmed: true });
+  const cursors = { pull: {}, push: {} };
+  for (const meta3 of syncTableList()) {
+    cursors.pull[meta3] = { rows: serverTime, deleted: serverTime };
+    cursors.push[meta3] = { rows: serverTime, deleted: serverTime };
+  }
+  await writeSyncCursors(deps.fs, cursors);
+  try {
+    await deps.audit.log({
+      actorId: "system",
+      action: CLOUD_CLONE_AUDIT_ACTION,
+      resourceType: "cloud-sync",
+      resourceId: backup.name,
+      changes: {
+        tables: { from: null, to: report.tables.length },
+        rows: { from: null, to: report.totalRows }
+      }
+    });
+  } catch {
+  }
+  deps.logger.info("cloud.clone.done", { tables: report.tables.length, rows: report.totalRows, backup: backup.name });
+  return { ok: true, tables: report.tables.length, rows: report.totalRows, backup_path: backup.path };
+}
+__name(cloneFromCloud, "cloneFromCloud");
+async function unlinkCloudConfig(deps, actorId) {
+  if (!deps.fs) throw new ValidationError("\u067E\u0644 \u0641\u0627\u06CC\u0644\u200C\u0647\u0627\u06CC \u0627\u0628\u0631\u06CC \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0646\u06CC\u0633\u062A");
+  await deps.fs.remove(CLOUD_CONFIG_FILE);
+  try {
+    await deps.audit.log({
+      actorId,
+      action: CLOUD_UNLINK_AUDIT_ACTION,
+      resourceType: "cloud-sync",
+      resourceId: CLOUD_CONFIG_FILE,
+      changes: { unlinked: { from: null, to: true } }
+    });
+  } catch {
+  }
+  deps.logger.info("cloud.unlink.done", { actorId });
+}
+__name(unlinkCloudConfig, "unlinkCloudConfig");
+async function buildCloudSyncStatus(deps) {
+  const config2 = await readCloudConfig(deps.fs).catch(() => null);
+  const mirror = await readLastSyncMirror(deps.db).catch(() => null);
+  let conflictsTotal = 0;
+  try {
+    const row = await deps.db.queryOne("SELECT COUNT(*) AS c FROM _sync_conflicts");
+    conflictsTotal = Number(row?.c ?? 0);
+  } catch {
+    conflictsTotal = 0;
+  }
+  return {
+    configured: Boolean(config2),
+    url: config2?.url ?? null,
+    device_id: config2?.device_id ?? null,
+    secret_present: cloudSecretOf(deps.env) !== null,
+    running: cloudSyncInFlight,
+    interval_ms: config2?.interval_ms ?? null,
+    last_sync: mirror ? {
+      at: mirror.at,
+      result: mirror.result,
+      pulled: mirror.pulled,
+      pushed: mirror.pushed,
+      conflicts_new: mirror.conflicts_new,
+      duration_ms: mirror.duration_ms,
+      error: mirror.error
+    } : null,
+    conflicts_total: conflictsTotal,
+    clock_warning: mirror?.clock_warning === true,
+    schema_match: mirror?.schema_match ?? null
+  };
+}
+__name(buildCloudSyncStatus, "buildCloudSyncStatus");
+async function listCloudBackups(deps) {
+  if (!deps.fs) return { dir: "", backups: [] };
+  const [pres, clones] = await Promise.all([
+    deps.fs.list("cloud-sync-pre-").catch(() => []),
+    deps.fs.list("cloud-sync-clone-").catch(() => [])
+  ]);
+  return {
+    dir: deps.fs.dir(),
+    backups: [...pres.map((name) => ({ name, kind: "pre" })), ...clones.map((name) => ({ name, kind: "clone" }))]
+  };
+}
+__name(listCloudBackups, "listCloudBackups");
+var capturedEnvHolder = { env: null };
+function captureCloudEnv(env) {
+  if (env && typeof env === "object") capturedEnvHolder.env = env;
+}
+__name(captureCloudEnv, "captureCloudEnv");
+var schedulerArmed = false;
+function startCloudSyncScheduler(makeDeps, logger) {
+  if (schedulerArmed) return;
+  schedulerArmed = true;
+  if (process.env.VITEST || process.env.NODE_ENV === "test") {
+    logger.info("cloud.sync.scheduler.disabled", { reason: "\u0645\u062D\u06CC\u0637 \u062A\u0633\u062A \u2014 \u0628\u062F\u0648\u0646 \u062A\u0627\u06CC\u0645\u0631" });
+    return;
+  }
+  const schedule = /* @__PURE__ */ __name((ms) => {
+    const t = setTimeout(() => {
+      void tick().catch(() => void 0);
+    }, Math.max(CLOUD_SYNC_MIN_INTERVAL_MS, ms));
+    if (typeof t.unref === "function") t.unref();
+  }, "schedule");
+  const tick = /* @__PURE__ */ __name(async () => {
+    const env = capturedEnvHolder.env;
+    if (!env) {
+      schedule(CLOUD_SYNC_DEFAULT_INTERVAL_MS);
+      return;
+    }
+    const deps = makeDeps(env);
+    try {
+      const config2 = await readCloudConfig(deps.fs);
+      if (!config2 || !cloudSecretOf(env)) {
+        schedule(CLOUD_SYNC_DEFAULT_INTERVAL_MS);
+        return;
+      }
+      await runCloudSync(deps, "auto");
+      const fresh = await readCloudConfig(deps.fs);
+      schedule(fresh?.interval_ms ?? CLOUD_SYNC_DEFAULT_INTERVAL_MS);
+    } catch (err) {
+      logger.warn("cloud.sync.tick_failed", { error: err instanceof Error ? err.message : String(err) });
+      schedule(CLOUD_SYNC_DEFAULT_INTERVAL_MS);
+    }
+  }, "tick");
+  schedule(CLOUD_SYNC_DEFAULT_INTERVAL_MS);
+  logger.info("cloud.sync.scheduler.armed", {});
+}
+__name(startCloudSyncScheduler, "startCloudSyncScheduler");
+
+// src/application/instance-sync/desktop-routes.ts
+function requireDesktopEngine3(c) {
+  if (c.env?.CENTER_DESKTOP_ENGINE !== "1") {
+    throw new NotFoundError("\u0645\u0633\u06CC\u0631 \u06CC\u0627\u0641\u062A \u0646\u0634\u062F");
+  }
+}
+__name(requireDesktopEngine3, "requireDesktopEngine");
+function envOf(c) {
+  return c.env ?? {};
+}
+__name(envOf, "envOf");
+function cloudFsOf(env) {
+  const fs = env.CLOUD_FS;
+  return fs && typeof fs === "object" ? fs : null;
+}
+__name(cloudFsOf, "cloudFsOf");
+function cloudProvisionOf(env) {
+  const p = env.CLOUD_PROVISION;
+  if (!p || typeof p !== "object") return null;
+  const io = p;
+  return typeof io.readCentralWorker === "function" && typeof io.readSchemaSql === "function" ? p : null;
+}
+__name(cloudProvisionOf, "cloudProvisionOf");
+function fetchImplOf(env) {
+  const f = env.CLOUD_FETCH;
+  return typeof f === "function" ? f : void 0;
+}
+__name(fetchImplOf, "fetchImplOf");
+function requestDeps(c, deps) {
+  const env = envOf(c);
+  captureCloudEnv(env);
+  return {
+    db: deps.db,
+    audit: deps.audit,
+    logger: deps.logger.child("instance-sync"),
+    fs: cloudFsOf(env),
+    env,
+    backup: deps.backup ?? null,
+    // CLOUD_FETCH فقط در آزمون ست می‌شود (ابر فیک) — در تولید غایب است و fetch سراسری مصرف می‌شود
+    fetchCloud: typeof env.CLOUD_FETCH === "function" ? env.CLOUD_FETCH : void 0
+  };
+}
+__name(requestDeps, "requestDeps");
+function schedulerDepsFromEnv(env) {
+  const db = createDb(env.DB);
+  const audit = createAuditWriter(db);
+  const logger = createLogger("cloud-sync");
+  const backup = createBackupService({ db, audit, logger, baleToken: null, sender: null });
+  return { db, audit, logger, fs: cloudFsOf(env), env, backup };
+}
+__name(schedulerDepsFromEnv, "schedulerDepsFromEnv");
+var CloudConfigSchema = external_exports.object({
+  url: external_exports.string().min(1, "\u0646\u0634\u0627\u0646\u06CC \u0627\u0628\u0631 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A"),
+  interval_ms: external_exports.number().int().positive().optional()
+});
+var CloneSchema = external_exports.object({
+  confirm: external_exports.boolean().optional()
+});
+var ProvisionVerifySchema = external_exports.object({
+  token: external_exports.string().min(1, "\u062A\u0648\u06A9\u0646 \u06A9\u0644\u0627\u062F\u0641\u0644\u0631 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A")
+});
+var DiscoverSchema = external_exports.object({
+  token: external_exports.string().min(1, "\u062A\u0648\u06A9\u0646 \u06A9\u0644\u0627\u062F\u0641\u0644\u0631 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A")
+});
+var ProvisionSchema = external_exports.object({
+  token: external_exports.string().min(1, "\u062A\u0648\u06A9\u0646 \u06A9\u0644\u0627\u062F\u0641\u0644\u0631 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A"),
+  accountId: external_exports.string().min(1).optional(),
+  name: external_exports.string().min(1, "\u0646\u0627\u0645 \u0648\u0631\u06A9\u0631 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A")
+});
+function cloudError(c, err) {
+  const kind = err instanceof Error && "kind" in err ? String(err.kind) : "offline";
+  const message = err instanceof Error ? err.message : "\u062E\u0637\u0627\u06CC \u0646\u0627\u0634\u0646\u0627\u062E\u062A\u0647\u0654 \u0627\u062A\u0635\u0627\u0644 \u0627\u0628\u0631\u06CC";
+  return c.json({ error: kind === "auth" ? "CLOUD_AUTH" : "CLOUD_OFFLINE", message }, 502);
+}
+__name(cloudError, "cloudError");
+function registerDesktopRoutes(app, deps) {
+  startCloudSyncScheduler(schedulerDepsFromEnv, deps.logger);
+  app.get("/api/instance-sync/status", async (c) => {
+    requireDesktopEngine3(c);
+    getAuthContext(c);
+    const status = await buildCloudSyncStatus(requestDeps(c, deps));
+    return c.json({ data: status }, 200);
+  });
+  app.post("/api/instance-sync/run-now", requireRole("manager"), async (c) => {
+    requireDesktopEngine3(c);
+    getAuthContext(c);
+    const result = await runCloudSync(requestDeps(c, deps), "manual");
+    if (result.kind === "in_flight") {
+      return c.json({ error: "CLOUD_SYNC_IN_FLIGHT", message: "\u0647\u0645\u200C\u06AF\u0627\u0645\u200C\u0633\u0627\u0632\u06CC \u0627\u0628\u0631\u06CC \u062F\u0631 \u062C\u0631\u06CC\u0627\u0646 \u0627\u0633\u062A \u2014 \u0686\u0646\u062F \u0644\u062D\u0638\u0647 \u0628\u0639\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F" }, 409);
+    }
+    if (result.kind === "unconfigured" || result.kind === "no_secret") {
+      return c.json(
+        { error: result.kind === "no_secret" ? "CLOUD_NO_SECRET" : "CLOUD_UNCONFIGURED", message: result.error ?? "\u0627\u062A\u0635\u0627\u0644 \u0627\u0628\u0631\u06CC \u0622\u0645\u0627\u062F\u0647 \u0646\u06CC\u0633\u062A" },
+        400
+      );
+    }
+    return c.json(
+      { data: { result: result.kind, pulled: result.pulled, pushed: result.pushed, conflicts_new: result.conflicts_new, duration_ms: result.duration_ms, error: result.error } },
+      200
+    );
+  });
+  app.post("/api/instance-sync/config", requireRole("manager"), async (c) => {
+    requireDesktopEngine3(c);
+    const actor = getAuthContext(c);
+    const parsed = CloudConfigSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: "VALIDATION_ERROR", message: "\u067E\u06CC\u06A9\u0631\u0628\u0646\u062F\u06CC \u0627\u062A\u0635\u0627\u0644 \u0627\u0628\u0631\u06CC \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A" }, 400);
+    }
+    const cloudDeps = requestDeps(c, deps);
+    if (!cloudDeps.fs) {
+      return c.json({ error: "CLOUD_FS_UNAVAILABLE", message: "\u067E\u0644 \u0641\u0627\u06CC\u0644\u200C\u0647\u0627\u06CC \u0627\u0628\u0631\u06CC \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0646\u06CC\u0633\u062A \u2014 \u0647\u0645\u200C\u06AF\u0627\u0645\u06CC \u0627\u0628\u0631\u06CC \u0641\u0642\u0637 \u062F\u0631 \u0645\u0648\u062A\u0648\u0631 \u0645\u062D\u0644\u06CC \u0645\u0639\u0646\u0627 \u062F\u0627\u0631\u062F" }, 400);
+    }
+    const normalized = parseCloudConfigPayload({ url: parsed.data.url, interval_ms: parsed.data.interval_ms });
+    if (!normalized) {
+      return c.json({ error: "CLOUD_URL_INVALID", message: "\u0646\u0634\u0627\u0646\u06CC \u0627\u0628\u0631 \u0628\u0627\u06CC\u062F \u06CC\u06A9 \u0646\u0634\u0627\u0646\u06CC https \u0645\u0639\u062A\u0628\u0631 \u0628\u0627\u0634\u062F" }, 400);
+    }
+    const existing = await readCloudConfig(cloudDeps.fs).catch(() => null);
+    const config2 = {
+      url: normalized.url,
+      device_id: existing?.device_id ?? crypto.randomUUID(),
+      interval_ms: normalized.interval_ms
+    };
+    await cloudDeps.fs.writeText("cloud-config.json", JSON.stringify(config2, null, 2) + "\n");
+    cloudDeps.logger.info("cloud.config.saved", { staffId: actor.staffId, url: config2.url, interval_ms: config2.interval_ms });
+    return c.json({ data: { ok: true, url: config2.url, device_id: config2.device_id, interval_ms: config2.interval_ms } }, 200);
+  });
+  app.delete("/api/instance-sync/config", requireRole("manager"), async (c) => {
+    requireDesktopEngine3(c);
+    const actor = getAuthContext(c);
+    const cloudDeps = requestDeps(c, deps);
+    await unlinkCloudConfig(cloudDeps, actor.staffId);
+    return c.json({ data: { ok: true, cursors_kept: true } }, 200);
+  });
+  app.post("/api/instance-sync/clone", requireRole("manager"), async (c) => {
+    requireDesktopEngine3(c);
+    getAuthContext(c);
+    const parsed = CloneSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: "VALIDATION_ERROR", message: "\u0628\u062F\u0646\u0647\u0654 \u06A9\u0644\u0648\u0646 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A" }, 400);
+    }
+    const cloudDeps = requestDeps(c, deps);
+    try {
+      const outcome = await cloneFromCloud(cloudDeps, { confirm: parsed.data.confirm === true });
+      return c.json({ data: outcome }, 200);
+    } catch (err) {
+      if (err instanceof Error && err.name === "CloudSyncError") return cloudError(c, err);
+      throw err;
+    }
+  });
+  app.get("/api/instance-sync/backups", async (c) => {
+    requireDesktopEngine3(c);
+    getAuthContext(c);
+    const listing = await listCloudBackups(requestDeps(c, deps));
+    return c.json({ data: listing }, 200);
+  });
+  app.post("/api/instance-sync/provision/verify", requireRole("manager"), async (c) => {
+    getAuthContext(c);
+    const parsed = ProvisionVerifySchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: "VALIDATION_ERROR", message: "\u0628\u062F\u0646\u0647\u0654 \u0648\u0627\u0631\u0633\u06CC \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A \u2014 token \u0644\u0627\u0632\u0645 \u0627\u0633\u062A" }, 400);
+    }
+    const result = await verifyCloudToken({
+      fetchImpl: fetchImplOf(envOf(c)),
+      token: parsed.data.token
+    });
+    if (!result.ok) {
+      return c.json(
+        { error: "CLOUD_PROVISION_FAILED", message: result.message, data: { step: result.step, errors: result.errors ?? [] } },
+        400
+      );
+    }
+    return c.json({ data: { accounts: result.accounts } }, 200);
+  });
+  app.post("/api/instance-sync/provision/discover", requireRole("manager"), async (c) => {
+    getAuthContext(c);
+    const parsed = DiscoverSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: "VALIDATION_ERROR", message: "\u0628\u062F\u0646\u0647\u0654 \u06A9\u0634\u0641 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A \u2014 token \u0644\u0627\u0632\u0645 \u0627\u0633\u062A" }, 400);
+    }
+    const result = await discoverCloudDeployment({
+      fetchImpl: fetchImplOf(envOf(c)),
+      token: parsed.data.token
+    });
+    if (!result.ok) {
+      return c.json(
+        { error: "CLOUD_DISCOVER_FAILED", message: result.message, data: { step: result.step, errors: result.errors ?? [] } },
+        400
+      );
+    }
+    return c.json(
+      { data: { accounts: result.accounts, workers: result.workers, databases: result.databases } },
+      200
+    );
+  });
+  app.post("/api/instance-sync/provision", requireRole("manager"), async (c) => {
+    const actor = getAuthContext(c);
+    const parsed = ProvisionSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: "VALIDATION_ERROR", message: "\u0628\u062F\u0646\u0647\u0654 \u0633\u0627\u062E\u062A \u0648\u0631\u06A9\u0631 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A \u2014 token \u0648 name \u0644\u0627\u0632\u0645 \u0627\u0633\u062A" }, 400);
+    }
+    const provision = cloudProvisionOf(envOf(c));
+    if (!provision) {
+      return c.json({ error: "CLOUD_PROVISION_UNAVAILABLE", message: "\u0633\u0627\u062E\u062A \u0648\u0631\u06A9\u0631 \u0641\u0642\u0637 \u062F\u0631 \u0646\u0633\u062E\u0647\u0654 \u062F\u0633\u06A9\u062A\u0627\u067E \u0645\u0645\u06A9\u0646 \u0627\u0633\u062A" }, 501);
+    }
+    const [centralWorker, schemaSql] = await Promise.all([provision.readCentralWorker(), provision.readSchemaSql()]);
+    if (!centralWorker || !schemaSql) {
+      return c.json(
+        { error: "CLOUD_PROVISION_UNAVAILABLE", message: "\u0628\u0627\u0646\u062F\u0644 \u0645\u0631\u06A9\u0632\u06CC \u06CC\u0627 \u0627\u0633\u06A9\u06CC\u0645\u0627\u06CC \u0646\u0635\u0628 \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0646\u06CC\u0633\u062A \u2014 \u0633\u0627\u062E\u062A \u0648\u0631\u06A9\u0631 \u0645\u0645\u06A9\u0646 \u0646\u0634\u062F" },
+        501
+      );
+    }
+    const webAssets = provision.readWebAssets ? await provision.readWebAssets() : null;
+    const result = await provisionCloudWorker({
+      fetchImpl: fetchImplOf(envOf(c)),
+      centralWorker,
+      schemaSql,
+      webAssets,
+      name: parsed.data.name,
+      token: parsed.data.token,
+      accountId: parsed.data.accountId,
+      log: /* @__PURE__ */ __name((message) => deps.logger.info("cloud.provision.step", { staffId: actor.staffId, detail: message }), "log")
+    });
+    if (!result.ok) {
+      return c.json(
+        { error: "CLOUD_PROVISION_FAILED", message: result.message, data: { step: result.step, steps: result.steps } },
+        400
+      );
+    }
+    return c.json({ data: result }, 200);
+  });
+}
+__name(registerDesktopRoutes, "registerDesktopRoutes");
+
 // src/application/api-routing/index.ts
 function createServices(deps) {
   const { db, audit, logger } = deps;
@@ -74976,17 +77558,26 @@ function createApp(deps) {
   registerAuthRoutes(app, { audit: services.audit, logger: services.logger });
   registerSetupStatusRoutes(app, { logger: services.logger });
   registerSystemPublicRoutes(app, { db: services.db });
+  registerEngineCapabilitiesRoutes(app);
   app.route("/node", createNodeSyncApp({ db: services.db, audit: services.audit, logger: services.logger }));
+  app.route("/api/instance-sync", createInstanceSyncApp({ db: services.db, logger: services.logger }));
   app.use("/api/*", authMiddleware());
   app.use("/api/*", supervisorGate(services.audit));
   registerLogoutRoute(app, { audit: services.audit, logger: services.logger });
   registerSetupCompleteRoutes(app, { db: services.db, audit: services.audit, logger: services.logger });
   registerInternalSyncRoutes(app, { db: services.db, logger: services.logger });
   registerNodeSyncStatusRoute(app, { db: services.db, logger: services.logger });
+  registerDesktopRoutes(app, {
+    db: services.db,
+    audit: services.audit,
+    logger: services.logger,
+    backup: services.backup
+  });
   registerCentralQuotaRoutes(app, { db: services.db });
   registerCentralNodesMapRoutes(app, { db: services.db });
   app.get("/api/me", (c) => c.json({ data: c.get("authContext") }, 200));
   registerRoutes(app, services.appointments);
+  registerAssessmentBlockRoutes(app, createAssessmentBlockService({ db: services.db, audit: services.audit, logger: services.logger }));
   registerRoutes2(app, services.attendance);
   registerStaffAttendanceRoutes(app, services.staffAttendance);
   registerWorkingDayRoutes(app, services.workingDay);
@@ -75113,36 +77704,6 @@ function createApp(deps) {
   return app;
 }
 __name(createApp, "createApp");
-
-// src/core/logger/logger.ts
-var LEVEL_WEIGHT = { debug: 10, info: 20, warn: 30, error: 40 };
-function minLevel() {
-  const env = globalThis.ENV ?? "development";
-  return env === "production" ? "info" : "debug";
-}
-__name(minLevel, "minLevel");
-function emit(scope, level, msg, meta3) {
-  if (LEVEL_WEIGHT[level] < LEVEL_WEIGHT[minLevel()]) return;
-  const entry = {
-    ts: (/* @__PURE__ */ new Date()).toISOString(),
-    level,
-    scope,
-    msg,
-    ...meta3 ? { meta: meta3 } : {}
-  };
-  console.log(JSON.stringify(entry));
-}
-__name(emit, "emit");
-function createLogger(scope) {
-  return {
-    debug: /* @__PURE__ */ __name((msg, meta3) => emit(scope, "debug", msg, meta3), "debug"),
-    info: /* @__PURE__ */ __name((msg, meta3) => emit(scope, "info", msg, meta3), "info"),
-    warn: /* @__PURE__ */ __name((msg, meta3) => emit(scope, "warn", msg, meta3), "warn"),
-    error: /* @__PURE__ */ __name((msg, meta3) => emit(scope, "error", msg, meta3), "error"),
-    child: /* @__PURE__ */ __name((subScope) => createLogger(`${scope}.${subScope}`), "child")
-  };
-}
-__name(createLogger, "createLogger");
 
 // src/index.ts
 var BALE_TOKEN_CACHE_TTL_MS = 6e4;
