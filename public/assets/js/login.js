@@ -29,6 +29,7 @@ async function drawPublicAnnouncements(box) {
       )
     );
   } catch {
+    /* نرم — بنر اعلان اختیاری است */
   }
 }
 

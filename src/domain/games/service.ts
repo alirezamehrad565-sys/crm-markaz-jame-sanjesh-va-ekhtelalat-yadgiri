@@ -1110,7 +1110,7 @@ export function createGamesService(deps: GamesDeps): GamesService {
       const history: AdaptiveSessionInput[] = [];
       for (const r of rows) {
         if (r.adaptive_json) {
-          const d = parseJson<AdaptiveDecision>(r.adaptive_json, null as unknown as AdaptiveDecision);
+          const d = parseJson<AdaptiveDecision | null>(r.adaptive_json, null);
           if (d && typeof d.action === 'string') decision = d;
         }
         const sum = parseJson<{ totals?: Record<string, number>; pct?: Record<string, number | null>; rt?: { median: number | null; cv: number | null }; behavior?: { premature_total?: number } } | null>(r.summary_json, null);

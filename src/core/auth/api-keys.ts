@@ -55,5 +55,6 @@ export async function touchApiKeyLastUsed(db: D1Database, id: string): Promise<v
       .bind(id)
       .run();
   } catch {
+    /* نرم — لمس آخرین-استفادهٔ کلید حیاتی نیست */
   }
 }

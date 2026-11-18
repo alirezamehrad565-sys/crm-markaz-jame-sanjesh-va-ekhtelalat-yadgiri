@@ -60,6 +60,7 @@ async function clearThrottle(db: D1Database, identity: string): Promise<void> {
   try {
     await db.prepare('DELETE FROM login_throttle WHERE identity = ? OR window_start <= ?').bind(identity, windowFloorIso()).run();
   } catch {
+    /* نرم — پاک‌کردن سنجهٔ محدودساز پس از ورود موفق حیاتی نیست؛ پنجره به‌هرحال می‌گذرد */
   }
 }
 

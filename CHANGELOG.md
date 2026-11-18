@@ -2,6 +2,36 @@
 
 قالب بر اساس [Keep a Changelog](https://keepachangelog.com/) و نسخه‌گذاری معنایی (SemVer).
 
+## [۱.۲۵.۸۰] — no-slop: پاک‌سازی نظام‌مند کدبیس (اسکیل skill-no-slop)
+
+منشأ: خواست کارفرما — «کد بیس رو تمیز کن». اسکن هشت‌دامی با چهار عامل پژوهشی موازی + پیاده‌سازی مرکزی؛ همهٔ گیت‌ها سبز، رفتار محصول دست‌نخورده:
+
+### Removed (کد مرده — ۳۱۸ خط در ۴۷ فایل)
+
+- **۶۳ نماد کاملاً مرده** (صفر مصرف در کل مخزن، تأیید grep+tsc): ثابت‌های باریل-فقط در constants (STAFF_ATTENDANCE_TODAY_ONLY، MAX_CLASSES_PER_SCHOOL، TODO_LIST_LIMIT، KNOWLEDGE_CATEGORY_LABELS، PROTOCOL_*، BUG_REPORT_*، DISPLAY_TIMEZONE، CALENDAR_DAY_*، STUDENT_PATHWAY_LABELS)، شش اسکیمای zod بی‌مصرف (AppointmentStatus/AttendanceStatus/SearchQuery/TodoBox/TodoStatus/WaitlistStatus)، چهار تیپ مرده در types، توابع مرده (sessionTypeOf، paginate، resetJwksCache، rowToNotification، kpiShareFa، latestAnamnesisKeyOf، fsiqBandFaOf، dsmOf هم‌خانواده‌ها، jalaliYearOfYmd/jalaliYearBounds، آستانه‌های مردهٔ stages، bugReportOpportunistic، NODE_DB_CONTRACT_DOC، createTestDb) و **شش alias مردهٔ وکسلر** (analyzeWechsler/analyzeWechslerForm/wechslerHookErrorMessage/WECHSLER_EVENT_KEY/wechslerSubtestCodes/wechslerAgeRange) — ماژول وکسلر حالا فقط باریل خالص است.
+- d.ts ها: `__tables` صورت‌بندی مورد + `Level` امتیازدهی. خطوط re-export مرده در پنج باریل.
+
+### Changed (تیپ ضعیف → قوی)
+
+- `NORMS: Record<string, any>` → شکل ساختاری مشخص؛ `as unknown as ScoringWeights` → ساخت با `Partial<ScoringWeights> & Record<string, number>`؛ `null as unknown as AdaptiveDecision` → `parseJson<AdaptiveDecision | null>`؛ دو گارد دوبل زائد ساده شد (case-events fill_token، student-profile hardBlocks).
+
+### Fixed (slop)
+
+- خط `console.log('DEBUG-EV:…')` از آزمون scoring حذف شد.
+- working-day: نتیجهٔ «خطا» دیگر در `monthApptsCache` کش نمی‌شود (نقطه‌های تقویم تا یک دقیقه خالی نمی‌مانند) — تیک بعدی دوباره تلاش می‌کند.
+- ۱۵ catch بی‌کامنت → کامنت نیت نرم‌فیل به سبک خانه (رفتار دست‌نخورده).
+
+### Flagged (تصمیم با کارفرما — دست نخورد)
+
+- قابلیت پارک‌شدهٔ apiKeys: `FEATURES.apiKeys=false` سمت سرور + `API_KEYS_UI_ENABLED=false` سمت کلاینت → ~۳۰۰ خط مسیر مرده (middleware/api-routing/keys routes + drawKeys در settings) — حذف یا احیا؟
+- ~۲۱ اسکریپت یک‌بارمصرف (qa/seed سازنده‌ها) بدون ارجاع از package.json/CI (فقط make-stroop پین-آزمون است).
+- ~۵۵ re-export فقط-نمادین (Deps/تایپ‌های سرویس) بدون مصرف بیرونی — به‌عنوان API مستند مانده‌اند.
+- چرخه‌های import: صفر چرخهٔ value؛ ۷ چرخهٔ type-only (مجاز طبق قرارداد خانه) — پیشنهاد: جداسازی NotifyAppDeps به notify/types.ts.
+
+### گیت‌ها
+
+tsc صفر · vitest ۲۳۲۷/۲۳۲۷ (۲۰۵ فایل — همان پایه، صفر شکست) · بامپ شش‌نقطه‌ای ۱.۲۵.۷۹→۱.۲۵.۸۰
+
 ## [۱.۲۵.۷۹] — بازطراحی نوبت سنجش در تقویم: کارت گرد درگ‌پذیر به‌ازای هر درمانگر
 
 منشأ: خواست کارفرما — «فلوی جدید نوبت سنجش توی ماژول تقویم جالب نیست؛ باید تبدیل به یک کارت معمولی گرد عین بقیه کارت‌ها بشه؛ هر درمانگر درگیر؛ قابل درگ‌اند‌دراپ؛ با یک دکمه بشه برای چند درمانگر نوبت سنجش تعیین کرد؛ برای حذف هم به‌جای فرم نوبت سنجش جدید، با کلیک روی نوبت مودال جزئیات باز بشه و از آنجا کارت حذف بشه».

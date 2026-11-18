@@ -29,7 +29,6 @@ export type DayNoteKind = (typeof DAY_NOTE_KINDS)[number];
 export type NextAction = (typeof NEXT_ACTION_VALUES)[number];
 export type AttendanceStatus = (typeof ATTENDANCE_STATUS)[keyof typeof ATTENDANCE_STATUS];
 export type SchoolKind = (typeof SCHOOL_KINDS)[number];
-export type StudentGrade = (typeof STUDENT_GRADES)[number];
 
 export interface AuthContext {
   staffId: string;
@@ -82,10 +81,6 @@ export interface NewAppointmentInput {
   students: { studentId: string; facetId?: string }[];
   note?: string | null;
   sessionType?: import('./constants').SessionTypeKey | null;
-}
-
-export interface AppointmentUpdateInput {
-  note?: string | null;
 }
 
 export interface CopyWeekInput {
@@ -237,11 +232,6 @@ export interface ClassBotLinkRecord {
   deepLink?: string | null;
 }
 
-export type ChatOwner =
-  | { kind: 'student'; studentId: string }
-  | { kind: 'staff'; staffId: string }
-  | { kind: 'class'; classId: string };
-
 export interface CenterHourRange {
   weekday: number;      // 0 = شنبه … 6 = جمعه
   startMinute: number;  // دقیقه از نیمه‌شب تهران
@@ -328,13 +318,6 @@ export interface SearchGroup {
 export interface GlobalSearchResult {
   query: string;
   groups: SearchGroup[];
-}
-
-export interface DispatchResult {
-  id: string;
-  ok: boolean;
-  skipped?: boolean;
-  error?: string;
 }
 
 export interface DispatchSummary {

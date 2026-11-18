@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.25.79";
+var APP_VERSION = "1.25.80";
 
 // node_modules/zod/v4/classic/external.js
 var external_exports = {};
@@ -22309,8 +22309,6 @@ var DEFAULT_CENTER_HOURS = [
   { weekday: 3, startMinute: 9 * 60, endMinute: 17 * 60 },
   { weekday: 4, startMinute: 9 * 60, endMinute: 13 * 60 }
 ];
-var CALENDAR_DAY_START_MINUTE = 6 * 60;
-var CALENDAR_DAY_END_MINUTE = 22 * 60;
 var ANNOUNCEMENT_TITLE_MAX = 120;
 var ANNOUNCEMENT_BODY_MAX = 2e3;
 var KNOWLEDGE_TITLE_MAX = 140;
@@ -28957,9 +28955,9 @@ function createStudentProfileService(deps) {
         if (count > 0) blocks.push({ key, label: STUDENT_DELETE_LABELS[key] ?? key, count });
       }
       const asm = await db.queryOne(`SELECT COUNT(*) AS cnt FROM assessments WHERE student_id = ?`, [id]);
-      if ((asm?.cnt ?? 0) > 0) hardBlocks.push({ key: "assessment", label: STUDENT_DELETE_LABELS.assessment, count: asm.cnt });
+      if (asm && asm.cnt > 0) hardBlocks.push({ key: "assessment", label: STUDENT_DELETE_LABELS.assessment, count: asm.cnt });
       const don = await db.queryOne(`SELECT COUNT(*) AS cnt FROM finance_donations WHERE student_id = ?`, [id]);
-      if ((don?.cnt ?? 0) > 0) hardBlocks.push({ key: "donation", label: STUDENT_DELETE_LABELS.donation, count: don.cnt });
+      if (don && don.cnt > 0) hardBlocks.push({ key: "donation", label: STUDENT_DELETE_LABELS.donation, count: don.cnt });
       return {
         studentId: id,
         fullName,
@@ -39844,7 +39842,7 @@ function createCaseEventsService(deps) {
         `SELECT fill_token FROM case_events WHERE id = ?`,
         [id]
       );
-      return Boolean(row?.fill_token) && row.fill_token === token;
+      return row?.fill_token === token;
     },
     async mintFillLink(id, publicBaseUrl) {
       const row = await db.queryOne(
@@ -42313,7 +42311,6 @@ __name(stageOutcomeFor, "stageOutcomeFor");
 var NUMLINE_STAGE_MAX2 = GAME_KINDS.numline.levers.bank_caps;
 var SCAN_STAGE_THRESHOLDS = accuracyThresholdsOf(GAME_KINDS.scan.stage_rule);
 var SCAN_STAGE_MAX_TILES2 = GAME_KINDS.scan.levers.bank_caps;
-var ACCURACY_STAGE_THRESHOLDS = accuracyThresholdsOf(GAME_KINDS.stroop.stage_rule);
 var STROOP_STAGE_BANDS2 = GAME_KINDS.stroop.levers.bank_bands;
 var FLANKER_STAGE_MAX_DECOYS2 = GAME_KINDS.flanker.levers.bank_caps;
 var FLANKER_STAGE_BANDS2 = GAME_KINDS.flanker.levers.bank_bands;
@@ -42387,7 +42384,6 @@ function stageStimViewOf(stim, correctTouch, stageId) {
   return { ...base, ...correctTouch ? v.go : v.nogo };
 }
 __name(stageStimViewOf, "stageStimViewOf");
-var SEQ_MEMORY_STAGE_THRESHOLDS = accuracyThresholdsOf(GAME_KINDS.corsi.stage_rule);
 var CORSI_STAGE_MAX_SPAN2 = GAME_KINDS.corsi.levers.bank_caps;
 var SPAN_STAGE_MAX_DIGITS2 = GAME_KINDS.span.levers.bank_caps;
 var SIMON_STAGE_MAX_SPAN2 = GAME_KINDS.simon.levers.bank_caps;
@@ -50726,7 +50722,7 @@ var FSIQ_BAND_RANGES = [
   { band: "SUPERIOR", min: 120, max: 129, fa: "\u0639\u0627\u0644\u06CC (\u06F1\u06F2\u06F0\u2013\u06F1\u06F2\u06F9)" },
   { band: "GIFTED", min: 130, max: 200, fa: "\u0627\u0633\u062A\u0639\u062F\u0627\u062F (\u06F1\u06F3\u06F0+)" }
 ];
-function fsiqBandOf3(fsiq) {
+function fsiqBandOf2(fsiq) {
   const s = Number(fsiq);
   if (!Number.isFinite(s) || s < 0) return "ID";
   for (const b of FSIQ_BAND_RANGES) {
@@ -50734,7 +50730,7 @@ function fsiqBandOf3(fsiq) {
   }
   return "GIFTED";
 }
-__name(fsiqBandOf3, "fsiqBandOf");
+__name(fsiqBandOf2, "fsiqBandOf");
 function clamp01(v) {
   const n = Number(v);
   if (!Number.isFinite(n)) return 0;
@@ -50765,7 +50761,6 @@ var ASD_B_FULL_CRITERIA = 2;
 var SCARED_SCHOOL_CUTOFF = 3;
 var BIF_IQ_RANGE = { min: 70, max: 85 };
 var FSIQ_BAND_BIF = FSIQ_BAND_RANGES.find((b) => b.band === "BIF");
-var FSIQ_BAND_LOW_BORDER = FSIQ_BAND_RANGES.find((b) => b.band === "LOW_BORDER");
 var ID_PATH_MAX_FSIQ = FSIQ_BAND_BIF.min;
 var SCATTER_UNIFORM_MAX = 23;
 var RULES = [
@@ -51297,7 +51292,7 @@ function wechslerProfileFactsOf(event) {
   const idxNum = /* @__PURE__ */ __name((x) => typeof x?.scaled === "number" ? x.scaled : null, "idxNum");
   const fsiq = typeof profile?.fsiq === "number" ? profile.fsiq : null;
   const bandRaw = typeof profile?.fsiqBand === "string" ? profile.fsiqBand : null;
-  const band = bandRaw ?? (fsiq !== null ? fsiqBandOf3(fsiq) : null);
+  const band = bandRaw ?? (fsiq !== null ? fsiqBandOf2(fsiq) : null);
   const scatter = typeof profile?.indexScatter === "number" ? profile.indexScatter : null;
   const step5Weak = (profile?.step5?.weaknesses ?? []).filter((k) => typeof k === "string");
   return {
@@ -54667,7 +54662,7 @@ function extractWechslerFacts(event) {
     return v !== null && v <= RECOMMENDER_THRESHOLDS.SUBTEST_WEAK;
   }), "patternActive");
   const fsiq = profile?.fsiq ?? snap?.fsiq ?? manual("fsiq");
-  const fsiqBand = profile?.fsiqBand ?? (fsiq !== null ? fsiqBandOf3(fsiq) : null);
+  const fsiqBand = profile?.fsiqBand ?? (fsiq !== null ? fsiqBandOf2(fsiq) : null);
   const scatter = profile?.indexScatter ?? snap?.indexScatter ?? null;
   const step5Weak = (profile?.step5?.weaknesses ?? []).map((w) => typeof w === "string" ? w : w?.key ?? "").filter((k) => ["VCI", "PRI", "WMI", "PSI"].includes(k));
   const cd = sub("CD");
@@ -54780,7 +54775,7 @@ function recommendChecklistPlan(ctx) {
   const existing = existingToolsOf(ctx.events);
   const builder = new PlanBuilder();
   const fsiq = facts.fsiq;
-  const band = facts.fsiqBand ?? (fsiq !== null ? fsiqBandOf3(fsiq) : null);
+  const band = facts.fsiqBand ?? (fsiq !== null ? fsiqBandOf2(fsiq) : null);
   const maxAbility = [facts.vci, facts.pri].filter((v) => v !== null);
   const abilityMax = maxAbility.length ? Math.max(...maxAbility) : null;
   const gapOf = /* @__PURE__ */ __name((v) => abilityMax !== null && v !== null ? abilityMax - v : null, "gapOf");
