@@ -50,7 +50,7 @@ describe('گیت ۱.۲۵.۰۱ — نماها برای ناظر اکشن نوشت
     const appt = read('views/appointments.js');
     expect(appt).toMatch(/function isSupervisorRole\(\)/);
     // کلیک روی سلول → ساخت نوبت؛ برای ناظر no-op (۱.۲۷.۱۴: گارد بلوک سنجش هم قبلش می‌آید)
-    expect(appt).toMatch(/cell\.addEventListener\('click', \(\) => \{\s*\/\/ ۱\.۲۷\.۱۵/);
+    expect(appt).toMatch(/cell\.addEventListener\('click', \(\) => \{\s*\/\/ ۱\.۲۷\.۱۴/);
     expect(appt).toMatch(/if \(!isSupervisorRole\(\)\) openQuickCreate\(ymd, m\);/);
     // درگ کارت: attribute و شنونده‌ها شرطی
     expect(appt).toMatch(/draggable: isSupervisorRole\(\) \? null : 'true'/);
@@ -87,7 +87,7 @@ describe('گیت ۱.۲۵.۰۱ — نماها برای ناظر اکشن نوشت
 });
 
 describe('گیت ۱.۲۵.۰۱ — هم‌نسخه‌ای انتشار', () => {
-  const APP_VERSION = '1.27.19';
+  const APP_VERSION = '1.27.14';
 
   test('version.ts = ?v=های index.html = VERSION سوورکر', () => {
     expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toContain(`APP_VERSION = '${APP_VERSION}'`);

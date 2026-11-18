@@ -20,13 +20,12 @@ import type { TestApp, Api } from '../../../test/harness';
 import {
   provisionCloudWorker,
   verifyCloudToken,
-  discoverCloudDeployment,
   normalizeWorkerName,
   chunkSchemaSql,
   schemaMigrationCount,
   SCHEMA_CHUNK_BYTES
 } from '../provision';
-import type { CloudProvisionIO, DiscoverResult, ProvisionResult, VerifyCloudResult } from '../provision';
+import type { CloudProvisionIO, ProvisionResult, VerifyCloudResult } from '../provision';
 import { buildAssetManifest } from '../assets';
 import type { WebAssetFile } from '../assets';
 
@@ -138,19 +137,6 @@ function makeCfFake(opts: FakeOptions = {}) {
           ? { success: true, result: [{ uuid: 'db-existing', name: `${WORKER_NAME}-db` }] }
           : { success: true, result: [] }
       );
-    }
-    // فاز E (۱.۲۷.۱۸) — شاخه‌های کشف: دامنه‌های عمومی ورکرها + فهرست D1 (بدون query)
-    if (url === `${CF_BASE}/accounts/${ACCOUNT_ID}/workers/domains` && method === 'GET') {
-      return Response.json({
-        success: true,
-        result: [
-          { hostname: `${WORKER_NAME}.${SUBDOMAIN}.workers.dev`, service: WORKER_NAME },
-          { hostname: 'markaz-clinic.example.com', service: WORKER_NAME }
-        ]
-      });
-    }
-    if (url === `${CF_BASE}/accounts/${ACCOUNT_ID}/d1/database` && method === 'GET') {
-      return Response.json({ success: true, result: [{ uuid: 'db-existing', name: `${WORKER_NAME}-db` }] });
     }
     if (url === `${CF_BASE}/accounts/${ACCOUNT_ID}/d1/database` && method === 'POST') {
       return Response.json({ success: true, result: { uuid: 'db-new', name: `${WORKER_NAME}-db` } });
@@ -789,75 +775,5 @@ describe('مسیرهای provision در desktop-routes', () => {
   it('لاگر silentLogger در مسیر مستقیم هم بی‌راز می‌ماند — سانتی‌نل ساده', () => {
     // redaction در provision.ts تضمین شده؛ این سانتی‌نل فقط ثابت می‌کند ماژول بدون خطا بار می‌شود
     expect(silentLogger('t')).toBeTruthy();
-  });
-});
-
-// ─── فاز E (۱.۲۷.۱۸) — کشف استقرار ابری موجود با توکن (خواست کارفرما: «ورکر رو پیدا کنه») ───
-
-describe('کشف استقرار ابری موجود (discoverCloudDeployment)', () => {
-  it('مسیر موفق — گروه‌بندی دامنه‌ها بر پایهٔ ورکر + فهرست D1؛ توکن در پاسخ/لاگ نمی‌آید', async () => {
-    const fake = makeCfFake();
-    const logs: string[] = [];
-    const result: DiscoverResult = await discoverCloudDeployment({
-      fetchImpl: fake.fetchImpl,
-      token: TOKEN,
-      log: (m) => logs.push(m)
-    });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.accounts).toEqual([{ id: ACCOUNT_ID, name: ACCOUNT_NAME }]);
-    expect(result.workers).toEqual([
-      {
-        name: WORKER_NAME,
-        account_id: ACCOUNT_ID,
-        // مرتب‌سازی الفبایی — دامنهٔ سفارشی قبل از workers.dev
-        urls: [`https://markaz-clinic.example.com`, `https://${WORKER_NAME}.${SUBDOMAIN}.workers.dev`]
-      }
-    ]);
-    expect(result.databases).toEqual([{ name: `${WORKER_NAME}-db`, id: 'db-existing', account_id: ACCOUNT_ID }]);
-    expect(JSON.stringify(result)).not.toContain(TOKEN);
-    expect(logs.join('\n')).not.toContain(TOKEN);
-    // ترتیب فراخوانی: وارسی → حساب → دامنه‌ها → D1
-    const urls = fake.calls.map((c) => c.url);
-    expect(urls.indexOf(`${CF_BASE}/user/tokens/verify`)).toBeLessThan(urls.indexOf(`${CF_BASE}/accounts`));
-    expect(urls.some((u) => u.endsWith('/workers/domains'))).toBe(true);
-    expect(urls.includes(`${CF_BASE}/accounts/${ACCOUNT_ID}/d1/database`)).toBe(true);
-  });
-
-  it('شکست اختیاری دامنه‌ها → ok با بخش ورکرها خالی؛ D1 همچنان خوانده می‌شود', async () => {
-    const fake = makeCfFake({ failMatch: '/workers/domains' });
-    const result = await discoverCloudDeployment({ fetchImpl: fake.fetchImpl, token: TOKEN });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.workers).toEqual([]);
-    expect(result.databases).toEqual([{ name: `${WORKER_NAME}-db`, id: 'db-existing', account_id: ACCOUNT_ID }]);
-  });
-
-  it('توکن باطل → ناموفق step=verify با پیام فارسی؛ بدون هیچ فراخوانی دامنه/D1', async () => {
-    const fake = makeCfFake({ failMatch: '/user/tokens/verify' });
-    const result = await discoverCloudDeployment({ fetchImpl: fake.fetchImpl, token: TOKEN });
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.step).toBe('verify');
-    expect(fake.calls.some((c) => c.url.includes('/workers/domains'))).toBe(false);
-    expect(fake.calls.some((c) => c.url.includes('/d1/database'))).toBe(false);
-  });
-});
-
-describe('مسیر کشف از TestApp (provision/discover)', () => {
-  it('مدیر → ۲۰۰ با workers/databases؛ غیرمدیر ۴۰۳؛ بی‌بدنه ۴۰۰؛ بدون secret در پاسخ', async () => {
-    const fake = makeCfFake();
-    const { api, A } = await mountEnv({ CENTER_DESKTOP_ENGINE: '1', CLOUD_FETCH: fake.fetchImpl });
-    const res = await api.post('/api/instance-sync/provision/discover', { token: TOKEN });
-    expect(res.status).toBe(200);
-    const data = (res.body as { data: { workers: unknown[]; databases: unknown[]; accounts: unknown[] } }).data;
-    expect(data.workers).toHaveLength(1);
-    expect(data.databases).toHaveLength(1);
-    expect(JSON.stringify(res.body)).not.toContain(TOKEN);
-    const secretary = await asRole(A, 'secretary');
-    expect((await secretary.post('/api/instance-sync/provision/discover', { token: TOKEN })).status).toBe(403);
-    const noBody = await api.post('/api/instance-sync/provision/discover', {});
-    expect(noBody.status).toBe(400);
-    expect((noBody.body as { error: string }).error).toBe('VALIDATION_ERROR');
   });
 });

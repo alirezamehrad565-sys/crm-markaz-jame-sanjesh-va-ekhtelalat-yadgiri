@@ -151,7 +151,6 @@ export function supervisorGate(audit: { log(entry: { actorId: string; action: st
           changes: { role: { from: null, to: 'supervisor' } }
         });
       } catch {
-        /* نرم — سونامهٔ «ردِ ناظر» حیاتی نیست؛ شکست DB نباید مسیر ۴۰۳ را بشکند */
       }
       throw new ForbiddenError('حساب ناظر فقط خواندنی است — ثبت یا تغییر اطلاعات مجاز نیست');
     }

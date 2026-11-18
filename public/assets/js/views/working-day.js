@@ -319,7 +319,6 @@ async function softRefresh() {
     monthApptsCache.clear(); // — بورد عوض شده؛ نقاط تقویم هم از دادهٔ تازه پر شوند
     await renderWorkingDay(currentContainer, { silent: true, keepScroll: true });
   } catch {
-    /* نرم — پایش بی‌صدا؛ تیک بعدی دوباره تلاش می‌کند */
   }
 }
 
@@ -502,7 +501,6 @@ async function fetchMonthAppts(view) {
   try {
     list = (await api.get(`/api/appointments${qs(params)}`)).data ?? [];
   } catch {
-    return list; /* نرم — خطای واکشی کش نمی‌شود تا تیک بعدی دوباره تلاش کند */
   }
   monthApptsCache.set(key, { at: Date.now(), list });
   return list;

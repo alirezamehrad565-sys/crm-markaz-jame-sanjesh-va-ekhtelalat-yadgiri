@@ -1,4 +1,4 @@
-import { api, getToken } from '../api.js';
+import { api } from '../api.js';
 import { fa, formatJalaliDateTime } from '../format.js';
 import { el, icon, openModal, formModal, confirmModal, toast, toastError, emptyState, errorState, skeletonState, scienceNote, rowMenu, collapseRemove, flashNode, lockBtn } from '../ui.js'; /* ۱.۲۲.۰ — collapseRemove/flashNode/lockBtn برای جریان پیوسته */
 import { TOOL_GUIDES } from '../clinical-content.js';
@@ -567,11 +567,6 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
     wide: true,
     body: el('div', {}),
     actions: [
-      (closeModal) => el('button', { /* ۱.۲۵.۸۱ — خواست کارفرما: پیش‌نمایش از نگاه خانواده */
-        class: 'btn btn--soft',
-        type: 'button',
-        onclick: () => openFamilyPreview()
-      }, icon('eye', 16), 'پیش‌نمایش از نگاه خانواده'),
       (closeModal) => el('button', {
         class: 'btn btn--primary',
         onclick: (e) => lockBtn(e.currentTarget, () => save(closeModal)) /* ۱.۲۲.۲ (F12) — قفل مشغولی: دوبارکلیک قالب تکراری نمی‌سازد */
@@ -806,40 +801,6 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
     );
   }
 
-  /* ۱.۲۵.۸۱ — تعریف قالب از حالت همین‌لحظهٔ ادیتور (حتی ذخیره‌نشده) — save و پیش‌نمایش
-     هر دو از همین یک سازنده می‌خوانند تا «پیش‌نمایش = عین چیزی که ذخیره می‌شود». */
-  function definitionPayload() {
-    return {
-      title: v(st.title),
-      category: st.category,
-      icon: v(st.icon) || null,
-      familyFillable: st.category === 'checklist' ? Boolean(st.familyFillable) : false,
-      fields: st.fields,
-      bands: st.category === 'checklist' ? (st.bands ?? null) : null,
-      subscales: st.category === 'checklist' ? (st.subscales && st.subscales.length > 0 ? st.subscales : null) : null,
-      tags: [...st.tags],
-      audience: st.category === 'checklist' ? st.audience : 'family'
-    };
-  }
-
-  /* ۱.۲۵.۸۱ — «پیش‌نمایش از نگاه خانواده» (خواست کارفرما): تعریفِ در حال طراحی با فرم POST
-     در تب تازه باز می‌شود؛ صفحهٔ بازشده عین فرم خانواده است و پر کردنش هیچ جایی ذخیره
-     نمی‌شود (تحلیل خالص سمت سرور). فرم مخفی = تنها راه گذاشتن تعریف بزرگ در بدنهٔ POST
-     با تب تازه؛ توکن نشست در بدنه می‌آید چون مسیر /public سرِتیتِ هدر Authorization است. */
-  function openFamilyPreview() {
-    if (v(st.title).length < 2 || st.fields.length === 0) {
-      toast('برای پیش‌نمایش، عنوان قالب و حداقل یک آیتم لازم است', 'error');
-      return;
-    }
-    const hidden = (name, value) => el('input', { type: 'hidden', name, value });
-    const form = el('form', { method: 'POST', action: '/public/case-events/preview', target: '_blank', style: { display: 'none' } },
-      hidden('definition', JSON.stringify(definitionPayload())),
-      hidden('token', getToken() ?? ''));
-    document.body.appendChild(form);
-    form.submit();
-    setTimeout(() => form.remove(), 2000);
-  }
-
   async function save(closeModal) {
     if (v(st.title).length < 2) { toast('عنوان قالب الزامی است', 'error'); return; }
     if (st.fields.length === 0) { toast('حداقل یک آیتم فرم لازم است', 'error'); return; }
@@ -855,7 +816,17 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
         return;
       }
     }
-    const payload = definitionPayload();
+    const payload = {
+      title: v(st.title),
+      category: st.category,
+      icon: v(st.icon) || null,
+      familyFillable: st.category === 'checklist' ? Boolean(st.familyFillable) : false,
+      fields: st.fields,
+      bands: st.category === 'checklist' ? (st.bands ?? null) : null,
+      subscales: st.category === 'checklist' ? (st.subscales && st.subscales.length > 0 ? st.subscales : null) : null,
+      tags: [...st.tags],
+      audience: st.category === 'checklist' ? st.audience : 'family'
+    };
     try {
       if (isEdit) {
         const res = await api.patch(`/api/case-events/types/${type.id}`, payload); /* ۱.۲۲.۰ — بدنهٔ پاسخ سرور برای پچ درجای همان کارت */

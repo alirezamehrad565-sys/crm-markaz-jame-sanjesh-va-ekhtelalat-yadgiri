@@ -264,8 +264,7 @@ export function makeWebAssetsReader(publicDir) {
  * ری‌استارت پنل/نگهبان بازی‌ها close و دوباره startAdapterEngine می‌زند.
  */
 export async function startAdapterEngine(opts) {
-  const { port, gamesPort, dbPath, mainBundle, gamesBundle, publicDir, log, bind } = opts;
-  const host = bind ?? '127.0.0.1'; // v1.27.۱۸ — بایند شبکه‌ای (0.0.0.0) از موتور؛ پیش‌فرض لوکال
+  const { port, gamesPort, dbPath, mainBundle, gamesBundle, publicDir, log } = opts;
   const bindings = opts.bindings ?? {};
   const mainMod = await import(pathToFileURL(mainBundle).href);
   const gamesMod = await import(pathToFileURL(gamesBundle).href);
@@ -359,7 +358,7 @@ export async function startAdapterEngine(opts) {
 
   const listen = (srv, p, name) => new Promise((resolve, reject) => {
     srv.once('error', reject);
-    srv.listen(p, host, () => {
+    srv.listen(p, '127.0.0.1', () => {
       log?.(`سرویس ${name} روی پورت ${p} راه افتاد`);
       resolve();
     });

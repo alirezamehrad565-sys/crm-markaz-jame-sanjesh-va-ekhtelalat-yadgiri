@@ -310,7 +310,6 @@ export function renderDocsQuickCard(mount, student, { onChanged } = {}) {
       requests = reqRes.data ?? [];
       docs = docsRes.data ?? [];
     } catch {
-      /* نرم — فهرست اختیاری است */
     }
     const requestOfId = new Map(requests.map((r) => [r.id, r]));
     const openRequests = requests.filter((r) => r.status !== 'closed');

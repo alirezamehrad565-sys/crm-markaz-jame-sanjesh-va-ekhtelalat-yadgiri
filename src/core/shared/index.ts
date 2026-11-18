@@ -30,7 +30,6 @@ export {
   MarkAttendanceSchema,
   MoveAppointmentSchema,
   AssessmentBlockCreateSchema,
-  AssessmentBlockPatchSchema, /* ۱.۲۷.۱۵ — پچ کارت نوبت سنجش (درگ/جزئیات) */
   NationalIdSchema,
   NewAppointmentSchema,
   NewAppointmentSchema as AppointmentSchema,
@@ -120,6 +119,7 @@ export type {
   Appointment,
   AppointmentStatus,
   AppointmentStudent,
+  AppointmentUpdateInput,
   AttendanceStatus,
   AttendanceStats,
   AuthContext,
@@ -143,11 +143,13 @@ export type {
   ApiKeyRecord,
   StaffBotLinkRecord,
   ClassBotLinkRecord,
+  ChatOwner,
   CenterHourRange,
   CenterSettings,
   ScoringWeights,
   ScoringConfig,
   DayNoteKind,
+  DispatchResult,
   DispatchSummary,
   NewAppointmentInput,
   NextAction,
@@ -195,6 +197,7 @@ export type {
   WorkingDayStaffColumn,
   WorkingDaySessionStats,
   WorkingDayBoard,
+  StudentGrade,
   WaitlistBadge,
   WaitlistEntry,
   WaitlistPriority,
@@ -223,6 +226,7 @@ export {
   FOLLOWUP_STATUSES,
   FOLLOWUP_TITLE_MAX,
   TODO_BOXES,
+  TODO_LIST_LIMIT,
   TODO_CHECKLIST_ITEM_MAX,
   TODO_CHECKLIST_MAX,
   TODO_NOTE_MAX,
@@ -230,6 +234,8 @@ export {
   TODO_STATUSES,
   TODO_TITLE_MAX,
   ATTENDANCE_STATUS,
+  CALENDAR_DAY_END_MINUTE,
+  CALENDAR_DAY_START_MINUTE,
   DEFAULT_CENTER_HOURS,
   DEFAULT_CLINIC_NAME,
   DEFAULT_PAGE_SIZE,
@@ -237,6 +243,7 @@ export {
   DEFAULT_SETTINGS,
   CP_SYNC_CRON,
   DIGEST_CRON,
+  DISPLAY_TIMEZONE,
   LINK_CODE_LENGTH,
   MAX_APPOINTMENT_MINUTES,
   MAX_DISPATCH_ATTEMPTS,
@@ -261,6 +268,7 @@ export {
   STAFF_ATTENDANCE_MAX_RANGE_DAYS,
   STAFF_ATTENDANCE_NOTE_MAX,
   STAFF_ATTENDANCE_STATUSES,
+  STAFF_ATTENDANCE_TODAY_ONLY,
   STAFF_PASSWORD_MAX,
   STAFF_PASSWORD_MIN,
   STAFF_PHONE_MAX,
@@ -270,10 +278,12 @@ export {
   TEHRAN_OFFSET_MINUTES,
   CLASS_NAME_MAX,
   TEACHER_NAME_MAX,
+  MAX_CLASSES_PER_SCHOOL,
   ANNOUNCEMENT_BODY_MAX,
   ANNOUNCEMENT_TITLE_MAX,
   KNOWLEDGE_BODY_MAX,
   KNOWLEDGE_CATEGORIES,
+  KNOWLEDGE_CATEGORY_LABELS,
   KNOWLEDGE_TITLE_MAX,
   ALLOWED_FILE_MIME_TYPES,
   MAX_FILE_BYTES,
@@ -336,9 +346,12 @@ export {
   BUG_REPORT_DESCRIPTION_MAX,
   BUG_REPORT_PAGE_MAX,
   BUG_REPORT_VERSION_MAX,
+  BUG_REPORT_REPORTER_MAX,
+  BUG_REPORT_NODE_ID_MAX,
   BUG_REPORT_SEVERITIES,
   BUG_REPORT_AREAS,
   BUG_REPORT_AREA_IDS,
+  BUG_REPORT_SEVERITY_LABELS,
   HOME_MONITOR_EVENT_KEY,
   CENTER_SURVEY_EVENT_KEY,
   SURVEY_DISCHARGE_EVENT_KEY,
@@ -378,18 +391,22 @@ export type { SpecialNeedType, SpecialNeedSeverity } from './constants';
 
 export type { ClearbookPlanStatus } from './constants';
 
-export type { BugReportSeverity, } from './constants';
+export type { BugReportSeverity, BugReportAreaId } from './constants';
 
 export {
   SESSION_TYPES,
   SESSION_TYPE_KEYS,
+  sessionTypeOf,
   STUDENT_PATHWAYS,
+  STUDENT_PATHWAY_LABELS
 } from './constants';
 export type { SessionTypeKey, StudentPathway } from './constants';
 
 export {
   STUDENT_PROTOCOLS,
   STUDENT_PROTOCOL_LABELS,
+  PROTOCOL_DEFAULT_SESSION_TYPE,
+  PROTOCOL_STEPS,
   NEED_PROTOCOL_SUGGESTIONS
 } from './constants';
 export type { StudentProtocol } from './constants';

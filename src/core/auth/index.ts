@@ -1,6 +1,7 @@
 export { authMiddleware, requireRole, getAuthContext, supervisorGate } from './middleware';
 export { getStaffById, listStaff, resolveStaffByEmail } from './staff';
 export type { StaffRow } from './staff';
+export { resetJwksCache } from './jwt';
 export type { AccessJwtPayload } from './jwt';
 export { generateApiKey, hashApiKey, looksLikeApiKey } from './api-keys';
 export type { GeneratedApiKey } from './api-keys';

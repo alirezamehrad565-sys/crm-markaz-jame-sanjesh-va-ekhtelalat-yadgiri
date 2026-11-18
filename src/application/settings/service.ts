@@ -90,13 +90,13 @@ function sanitizeWeight(v: unknown, max = 10_000): number | undefined {
 }
 
 function defaultScoringWeights(): ScoringWeights {
-  const w: Partial<ScoringWeights> & Record<string, number> = {};
+  const w: Record<string, number> = {};
   for (const x of [...CONTENT_FORMULA.production, ...CONTENT_FORMULA.usage, ...CONTENT_FORMULA.reference]) {
     w[x.key] = x.weight;
   }
   w.baseAction = 1; // — هر اقدام پایه ۱ امتیاز
   w.adminCap = ADMIN_USAGE_CAP;
-  return w as ScoringWeights;
+  return w as unknown as ScoringWeights;
 }
 
 function mergeScoringWeights(stored: unknown): ScoringWeights {
@@ -329,7 +329,6 @@ export function createSettingsService(deps: SettingsDeps): SettingsService {
           const parsed = JSON.parse(row.value) as unknown;
           if (typeof parsed === 'string' && parsed.trim().length > 0) return parsed;
         } catch {
-          /* نرم — مقدار خراب در تنظیمات → پیش‌فرض */
         }
       }
       return deps.envClinicName ?? DEFAULT_SETTINGS[SETTING_KEYS.CLINIC_NAME];

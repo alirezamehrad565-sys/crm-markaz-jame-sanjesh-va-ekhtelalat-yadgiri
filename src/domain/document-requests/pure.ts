@@ -17,10 +17,21 @@ export const DOC_TAG_LEGACY_LABELS: Record<string, string> = {
 
 const PRESET_KEYS = Object.keys(DOC_TAG_PRESET_LABELS) as DocTagKey[];
 
+export const DOC_RECIPIENT_LABELS: Record<DocRecipient, string> = {
+  family: 'خانواده',
+  teacher: 'معلم'
+};
+
 export const DOC_TAG_MAX_CHARS = 40;
 export const DOC_TAGS_MAX = 8;
 
 export const DOC_NOTE_MAX = 500;
+
+export const DOC_REQUEST_STATUS_LABELS: Record<string, string> = {
+  sent: 'در انتظار مدارک',
+  received: 'مدارک رسید',
+  closed: 'بسته‌شده'
+};
 
 export function docTagLabel(tag: string): string {
   return DOC_TAG_PRESET_LABELS[tag as DocTagKey] ?? DOC_TAG_LEGACY_LABELS[tag] ?? tag;

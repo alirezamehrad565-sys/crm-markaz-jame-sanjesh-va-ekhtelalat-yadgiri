@@ -210,6 +210,17 @@ export async function runBugReportForward(deps: {
   return { status: 'done', sent, failed, remaining, pulled };
 }
 
+/** دروازهٔ فرصت‌طلب روی ترافیک زنده — بدون env کامل = صفر بار اضافه */
+export async function bugReportOpportunistic(deps: {
+  db: DbClient;
+  logger: Logger;
+  config: BugReportForwardConfig;
+  binding?: Fetcher | null;
+  fetchFn?: typeof fetch;
+  now?: () => Date;
+}): Promise<BugReportForwardResult> {
+  return runBugReportForward(deps);
+}
 
 function silentAudit() {
   return {
