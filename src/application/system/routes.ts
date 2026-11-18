@@ -5,7 +5,11 @@
 //    سمت node و engine.rs سمت Rust) آن را می‌بیند، workerd را تمیز خاموش و دوباره بالا
 //    می‌آورد و چون خروج عمدی است، واچ‌داگ آن را کرش حساب نمی‌کند (همان مهر ۱.۲۶.۲).
 // ② GET /api/support/error-package — بستهٔ گزارش خطا (zip بدون dep) برای ارسال به پشتیبانی.
-// هر دو با همان احراز سشن پنل (requireRole('manager')) — هم‌الگوی /api/health/panel.
+// ③ GET /api/system/lan (۱.۲۷.۲۱) — نشانی واقعی سرور محلی روی شبکه: IPهای LAN دستگاه +
+//    پورت‌های واقعی همین بوت، از بایندینگ LAN_INFO که adapter دسکتاپ در بوت می‌سازد (lan.mjs).
+//    هدف کارفرما: موبایلِ همان وای‌فای/مودم همان نشانی چاپ‌شده در بوت را از پنل نجات بگیرد —
+//    کارت «سرور محلی» دیگر به 127.0.0.1 بسنده نمی‌کند. در استقرار وب بایندینگ غایب است → lan:null.
+// هر سه با همان احراز سشن پنل (requireRole('manager')) — هم‌الگوی /api/health/panel.
 import type { AppHono } from '@core/shared';
 import { getAuthContext, requireRole } from '@core/auth';
 import { humanizeError } from '@core/errors';
@@ -32,6 +36,41 @@ export interface SystemRoutesDeps {
   audit: AuditWriter;
   logger: Logger;
   envName?: string | null;
+}
+
+/**
+ * ۱.۲۷.۲۱ — پارس دفاعی بایندینگ LAN_INFO (رشتهٔ JSON از adapter دسکتاپ):
+ * غایب/خراب/ناقص → null تا کارت پنل «کشف نشد» نرم بگیرد و هیچ‌گاه نشکند.
+ * شکل موردانتظار: {host, port, games_port, lan_ips[], main_urls[], local_url,
+ *                  games_urls[], games_local_url, boot_at}
+ */
+export function parseLanInfo(raw: unknown): {
+  host: string; port: number; games_port: number;
+  lan_ips: string[]; main_urls: string[]; local_url: string;
+  games_urls: string[]; games_local_url: string; boot_at: string | null;
+} | null {
+  if (typeof raw !== 'string' || !raw) return null;
+  let p: unknown = null;
+  try { p = JSON.parse(raw); } catch { return null; }
+  if (!p || typeof p !== 'object') return null;
+  const o = p as Record<string, unknown>;
+  const port = Number(o.port);
+  const gamesPort = Number(o.games_port);
+  if (!Number.isFinite(port) || port <= 0) return null;
+  const ips = Array.isArray(o.lan_ips) ? o.lan_ips.filter((x): x is string => typeof x === 'string' && !!x) : [];
+  const urls = Array.isArray(o.main_urls) ? o.main_urls.filter((x): x is string => typeof x === 'string' && !!x) : [];
+  const gameUrls = Array.isArray(o.games_urls) ? o.games_urls.filter((x): x is string => typeof x === 'string' && !!x) : [];
+  return {
+    host: typeof o.host === 'string' && o.host ? o.host : '0.0.0.0',
+    port,
+    games_port: Number.isFinite(gamesPort) && gamesPort > 0 ? gamesPort : 0,
+    lan_ips: ips,
+    main_urls: urls,
+    local_url: typeof o.local_url === 'string' && o.local_url ? o.local_url : `http://127.0.0.1:${port}`,
+    games_urls: gameUrls,
+    games_local_url: typeof o.games_local_url === 'string' && o.games_local_url ? o.games_local_url : '',
+    boot_at: typeof o.boot_at === 'string' && o.boot_at ? o.boot_at : null
+  };
 }
 
 /**
@@ -113,5 +152,12 @@ export function registerSystemRoutes(app: AppHono, deps: SystemRoutesDeps): void
         'Cache-Control': 'no-store'
       }
     });
+  });
+
+  // ③ نشانی سرور محلی روی شبکه (۱.۲۷.۲۱) — از بایندینگ LAN_INFO adapter دسکتاپ؛
+  //    در استقرار وب بایندینگ غایب است → lan:null (کارت پنل نرم می‌افتد — قرارداد degraded).
+  app.get('/api/system/lan', requireRole('manager'), async (c) => {
+    const lan = parseLanInfo(c.env?.LAN_INFO);
+    return c.json({ ok: true, lan }, 200, { 'Cache-Control': 'no-store' });
   });
 }

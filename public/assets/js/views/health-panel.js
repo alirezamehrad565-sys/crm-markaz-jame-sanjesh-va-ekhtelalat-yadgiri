@@ -1,48 +1,24 @@
-// نمای «پنل سلامت» (۱.۲۵.۶۷ — ف۱ طرح ارتقا، CP-2/CP-3): وضعیت سامانه + شش درگاه لینک CP
-// همهٔ داده از GET /api/health/panel (فقط‌مدیر) — مُهرهای settings و COUNTهای واقعی، بدون زیرساخت تازه
-// ف۴ — بخش «گزارش رشد جدول‌ها» افزوده شد: GET /api/growth/report فقط‌مدیر — شمارش شبانهٔ کرون + سیاست نگه‌داری
-// ف۵ — بخش «هشدارهای فعال» افزوده شد: رانش مُهر تلاش/موفقیت + جهش خطاهای مرورگر (P0-3 حداقلی)
-// ف۶ — بخش «وضعیت هم‌گامی» افزوده شد: GET /api/node-sync/status فقط‌مدیر — حالت جبرانی/خارج از خط/خطا/انتظار
-//       با نگاشت رنگ (syncStateView) + شمارِ رکوردهای محفوظ در انتظار ارسال + توقفِ نسخهٔ ناسازگار؛
-//       خرابیِ درگاه فقط همین کارت را degraded می‌کند («وضعیت هم‌گامی نامشخص») و با همان بازخوانی ۶۰ثانیه‌ای پنل تازه می‌شود
-// موج ۱ — قرارداد v2: هشدار زرد اختلاف ساعت با مرکز (clock_warning) · خط سبز «هم‌گام شد؛
-//       N رکورد رسید» در پنجرهٔ ۱۰دقیقه‌ای پس از جبران (last_catchup) · ردیف قرمز ناسازگاری
-//       نسخهٔ یکپارچه با شماره‌های هندشیک (version.compatible=false یا mode=paused_version)
-// EXP-1 — قرارداد v3: ردیف آشتی‌ساز از فیلد reconciliation — سبز «همهٔ دامنه‌ها هم‌شمار» در
-//       پنجرهٔ ۱۰دقیقه‌ای، زرد «ناهم‌خوانی در K دامنه» با جزئیات دامنه‌ها (فقط-گزارش)
-// EXP-2 — کارت «مصرف مرکز (برآوردی)»: GET /api/central/quota فقط-مدیر — سه شاخص رنگی
-//       (درخواست‌ها/نوشتن‌ها/خواندن‌ها) + ورود ناموفق ۲۴ ساعت؛ خرابی = خاکستری «دریافت نشد»
-// EXP-4 — بنر نگهبان موتور: رویدادهای Tauri (engine:restarting/restored/down) با گارد کامل —
-//       بیرون پوستهٔ دسکتاپ (مرورگر/آزمون) کل کانال no-op است و SPA هرگز نمی‌شکند
-// موج ۴ — افزوده‌های تجربهٔ ادمین (همه در همین نمای جدا از مسیر؛ بدون هیچ تغییر ناوبری):
-//       ۴-۲ نوار نجات سه‌دکمه‌ای (restart/پشتیبان/zip) · ۴-۱ پنج سیگنال §۴ نقد با سه رنگ و
-//       دکمهٔ اقدام · EXP-6 ثبت drill عملیاتی (nodesync:ops-drill-v1) · ۴-۵ راهنمای درون‌برنامه‌ای
-//       (چکیدهٔ دستی ADMIN-GUIDE — بدون خواندن فایل در زمان اجرا)
-// فاز B — کارت «اتصال ابری» (سند §۲-۵ طرح server-cloud-update-design): GET /api/instance-sync/status
-//       فقط‌مدیر — وضعیت + آخرین هم‌گامی دوطرفه + تعارض‌ها + پیکربندی/حذف/کلون؛ فرمان‌های راز
-//       (cloud_secret_set/get/delete) فقط روی پوستهٔ میز — Credential Manager، هرگز فایل JSON
-// فاز D1 — «انسانی‌سازی» (خواست کارفرما): کارت «اتصال ابری» دو-لایه شد — لایهٔ عادی فقط خط وضعیت
-//       انسانی + دو دکمهٔ «دریافت اطلاعات»/«ارسال اطلاعات» + «همگام‌سازی خودکار» + بازو/بستنِ
-//       «جزئیات پیشرفته» (پیش‌فرض بسته)؛ جزئیات فنی (نسخهٔ ساختار اطلاعات، تعارض، تاریخچهٔ خطاها)
-//       فقط در لایهٔ پیشرفته است. واژگان رسمی UI: Worker→«مرکز ابری»، secret→«کلید اتصال»،
-//       pull→«دریافت اطلاعات»، push→«ارسال اطلاعات»، schema→«نسخهٔ ساختار اطلاعات».
-//       هیچ تغییر قرارداد API و هیچ تغییر نام تابع — فقط متن‌ها، ترتیب نمایش و بازو/بستن.
-// فاز D2 — دو خواست کارفرما پس از v1.27.10: (۱) «کل جریان پیکربندی ابری داخل کارت ابری» — کارت
-//       بی‌اتصال دیگر به #/cloud-setup ناوبری نمی‌کند؛ دکمهٔ «شروع پیکربندی ابری» ناحیهٔ داخلی را
-//       بازو/بسته می‌کند و ویزارد کامل (mountCloudSetup — views/cloud-setup.js) با import پویا
-//       فقط هنگام باز شدن lazy سوار می‌شود؛ پس از «ذخیره و اتصال» ناحیه بسته و کارت با poll فوری
-//       feed به حالت «متصل» می‌رود (مسیر #/cloud-setup فقط دیپ‌لینک می‌ماند). (۲) «منوی کارت سلامت
-//       خیلی طولانیه — ساده شود»: بالای صفحه فقط سه چیز (سلامت یک‌نگاهی + سرور محلی + اتصال ابری)؛
-//       بقیهٔ بخش‌ها زیر آکاردئون واحد «جزئیات پیشرفته» با پیش‌فرض بسته — باز/بسته سشن‌محلی با کلید
-//       hp.advancedOpen (الگوی cs.cloudSetupSkipped ویزارد)؛ عنوان‌های h3 و محتوای بخش‌ها عین قبل.
-// ۱.۲۷.۱۲ — دو اشکال کارفرما از v1.27.11 + خودتوضیحی موتور کهنه: (۱) کارت‌های «سرور محلی»/
-//       «اتصال ابری» هنگام ساخت خالی می‌ماندند — paint دو پارامتری شد (status, isInitial)؛ پرِ
-//       اولیه با بدنهٔ جدا از DOM هم می‌نشیند و گارد «اشتراک کهنه» فقط برای emitهای feed می‌ماند.
-//       (۲) کارت سرور ردیف «آدرس محلی» گرفت (serverAddressView — پورت واقعی یا پیش‌فرض ۸۷۸۷؛
-//       حالت وب origin) با دکمهٔ «کپی آدرس». (۳) هشدار زرد ناهم‌نسخه‌ای موتور/برنامه
-//       (engineAppVersionGapView — مقایسهٔ عددی نقطه‌ای با نرمال‌سازی رقم فارسی) بالای کارت سرور
-//       + متن کوتاهش در ردیف بی‌اتصال کارت ابری و توضیح «وضعیت اتصال ابری از سرور نگرفته شد»
-//       به‌جای «—» تا موتور کهنهٔ بدون /api/instance-sync/* خودتوضیح باشد (دکمه‌ها/CTA دست‌نخورده).
+// نمای «پنل نجات و سلامت» (۱.۲۷.۲۱ — بازنویسی کامل به درخواست کارفرما)
+//
+// جریان قبلی شلوغ بود و کارفرما دوباره خواست: «کل health-panel را بازنویسی کن؛ فلو شلوغ و
+// کامل خراب است؛ در قسمت سرور محلی، IP دستگاه روی شبکه و پورت درست پیدا نمی‌شود؛ بخش‌های
+// راهنما/پنل نجات اضافه و تکراری را حذف کن و پنل نجات تمیز با طبقه‌بندی واژگان فارسی ساده
+// اما فنی بنویس؛ موبایلِ همان وای‌فای نشانی چاپ‌شده در بوت (مثل http://192.168.1.50:8787)
+// را در مرورگر باز کند؛ و با کلید کلادفلر بتوان ورکر جدید ساخت و سایت آنلاین داشت.»
+//
+// پنل اکنون شش بخش مرتب دارد (بخش‌شماره‌ها روی عنوان‌ها):
+//   ۱) چراغ‌های وضعیت — پنج سیگنال §۴ نقد با سه رنگ و دکمهٔ اقدام
+//   ۲) سرور محلی روی شبکه — feed پوسته (FSM) + GET /api/system/lan (۱.۲۷.۲۱): نشانی واقعی
+//      این رایانه + نشانی‌های موبایل روی همان وای‌فای/مودم با دکمهٔ کپی + سه قدم بازکردن
+//   ۳) سایت ابری (کلادفلر) — کارت هم‌گامی instance-sync + ویزارد کامل پیکربندی/ساخت ورکر
+//      (mountCloudSetup) — همان ماشین ۱.۲۷.۱۸/۲۰ با واژگان ساده
+//   ۴) هم‌گامی با مرکز — وضعیت نود با مرکز (جبرانی/خارج از خط/خطا/انتظار)
+//   ۵) کارهای اضطراری — راه‌اندازی دوباره / پشتیبان فوری / گزارش خطا (zip)
+//   ۶) هشدارهای فعال — همان دادهٔ پنل با حکم محلی-نودی (م۲۱۰)
+// حذف‌شده‌ها (اضافه/تکراری به خواست کارفرما): گزارش رشد جدول‌ها، جدول شش درگاه CP، کارت
+// تفصیلی «مصرف مرکز»، ثبت drill عملیاتی، راهنمای درون‌برنامه‌ای هفت‌بخشی، کارت «سامانه» و
+// آکاردئون «بقیهٔ بخش‌های پنل». درگاه‌های دادهٔ حذف‌شده سمت سرور زنده‌اند — بازگشت هر بخش
+// با برگرداندن همان تابع ممکن است. بنر نگهبان موتور (EXP-4) و feedهای سرور/ابر سر جایشان.
 import { api } from '../api.js';
 import { el, icon, emptyState, skeletonState, confirmModal, formModal, toast, toastError, lockBtn } from '../ui.js';
 import { fa, formatJalaliDateTime } from '../format.js';
@@ -56,37 +32,36 @@ function ageHuman(sec) {
   return `${fa(Math.round(sec / 86400))} روز پیش`;
 }
 
-/** آستانهٔ ok درگاه به فارسی */
-function thresholdHuman(sec) {
-  if (sec < 3600) return `${fa(Math.round(sec / 60))} دقیقه`;
-  if (sec < 86400) return `${fa(Math.round(sec / 3600))} ساعت`;
-  return `${fa(Math.round(sec / 86400))} روز`;
-}
-
-/** عدد با علامت — مثبت «+۲۰»، منفی «−۵»، صفر «۰»، نبود «—» (جهت عددی ltr در سلول) */
-function signedNum(n) {
+/** درصد به رقم فارسی با ممیز فارسی؛ ورودی غایب/خراب → «—» (چراغ سهمیه) */
+function pctNum(n) {
   if (n == null) return '—';
-  if (n === 0) return fa(0);
-  return `${n > 0 ? '+' : '−'}${fa(Math.abs(n))}`;
+  const v = Number(n);
+  if (!Number.isFinite(v)) return '—';
+  return fa(String(Math.round(v * 10) / 10)).replace('.', '٫');
 }
 
-/** میانگین روزانه با یک رقم اعشار فارسی */
-function avgNum(n) {
-  if (n == null) return '—';
-  return fa(String(n)).replace('.', '٫');
+/** ISO معتبر → مُهر میلی‌ثانیه؛ ورودی خراب/حذف‌شده → null (تا NaN به تاریخ فارسی نشت نکند) */
+function isoMsOf(iso) {
+  if (typeof iso !== 'string' || !iso) return null;
+  const t = Date.parse(iso);
+  return Number.isFinite(t) ? t : null;
 }
 
-/** سلول عددی جدول رشد — جهت ltr تا علامت و رقم جابه‌جا نشوند */
-function numCell(value) {
-  return el('td', { style: { direction: 'ltr', textAlign: 'center', whiteSpace: 'nowrap' } }, value);
+/** تازه‌ترین ISO معتبر میان چند مُهر — «آخرین هم‌گامی» از جفت push/pull */
+function newestIso(...isos) {
+  let best = null;
+  let bestMs = -1;
+  for (const iso of isos) {
+    const ms = isoMsOf(iso);
+    if (ms !== null && ms > bestMs) { bestMs = ms; best = iso; }
+  }
+  return best;
 }
 
-/* ── ف۶ — وضعیت هم‌گامی نود ───────────────────────────────────────────────
-   قرائت GET /api/node-sync/status (فقط‌مدیر): موتور هم‌گامیِ همین نود با مرکز.
-   نگاشت «حالت → برچسب/رنگ» تابع خالص است (syncStateView — بدون DOM) تا بی‌ماک
-   سنگین آزمون شود (src/__tests__/front-sync-status.test.ts). درگاه شاید هنوز مستقر
-   نباشد؛ پس همهٔ فیلدها اختیاری فرض می‌شوند و هر خرابی فقط همین کارت را degraded
-   می‌کند — «وضعیت هم‌گامی نامشخص» بی‌صدا، بقیهٔ پنل سالم می‌ماند (الگوی بخش رشد). */
+/* ── وضعیت هم‌گامی نود — نگاشت‌های خالص بی‌DOM (بی‌ماک سنگین آزمون می‌شوند) ────────
+   قرائت GET /api/node-sync/status (فقط‌مدیر). همهٔ فیلدها اختیاری فرض می‌شوند و هر
+   خرابی فقط همین کارت را degraded می‌کند — «وضعیت هم‌گامی نامشخص» بی‌صدا، بقیهٔ
+   پنل سالم می‌ماند. */
 
 const SYNC_STATE_VIEWS = {
   synced: { badge: 'badge--success', dot: 'dot--success', short: 'هم‌گام شد', label: 'هم‌گام شد' },
@@ -110,13 +85,10 @@ export function syncErrorKindView(kind) {
   return SYNC_ERROR_KIND_VIEWS[kind] ?? 'خطای نامشخص';
 }
 
-/* ── موج ۱ — نگاشت‌های تازهٔ قرارداد v2 (همه تابع خالص، بی‌DOM — الگوی syncStateView) ──
-   قرارداد GET /api/node-sync/status نسخهٔ ۲: version/clock_drift_minutes/clock_warning/last_catchup */
-
 const CATCHUP_SUMMARY_WINDOW_MS = 10 * 60_000; // پیام «هم‌گام شد؛ N رکورد رسید» فقط ۱۰ دقیقه پس از جبران
 
 /**
- * موج ۱ (۱-۳) — هشدار زرد اختلاف ساعت: فقط وقتی clock_warning صریحاً true است پیام می‌دهد؛
+ * هشدار زرد اختلاف ساعت: فقط وقتی clockWarning صریحاً true است پیام می‌دهد؛
  * X = clock_drift_minutes (قدر مطلق). ورودی غایب/ناشناخته = null (بی‌هشدار، بی‌کرش).
  */
 export function clockWarningView(clockWarning, driftMinutes) {
@@ -129,10 +101,8 @@ export function clockWarningView(clockWarning, driftMinutes) {
 }
 
 /**
- * موج ۱ (بقیهٔ ۱-۱) — خط سبز پس از جبران کامل: state=synced و خلاصهٔ catch-up در
- * پنجرهٔ ۱۰دقیقه‌ای باشد → «هم‌گام شد؛ N رکورد رسید»؛ اگر فقط یک جهت nonzero بوده
- * فعل متناسب می‌آید (ارسال شد/دریافت شد). خارج از پنجره/بی‌خلاصه/دستاورد صفر = null
- * (خط سبز عادی «هم‌گام شد» سر جایش می‌ماند).
+ * خط سبز پس از جبران کامل: state=synced و خلاصهٔ catch-up در پنجرهٔ ۱۰دقیقه‌ای باشد →
+ * «هم‌گام شد؛ N رکورد رسید». خارج از پنجره/بی‌خلاصه/دستاورد صفر = null.
  */
 export function catchupSummaryView(state, lastCatchup, nowMs = Date.now()) {
   if (state !== 'synced' || !lastCatchup || typeof lastCatchup !== 'object') return null;
@@ -149,10 +119,7 @@ export function catchupSummaryView(state, lastCatchup, nowMs = Date.now()) {
   return `هم‌گام شد؛ ${fa(n)} رکورد دریافت شد`;
 }
 
-/**
- * موج ۱ (۱-۴) — خط نسخه‌های دیده‌شده از هندشیک: «نسخهٔ نود X · حداقل نسخهٔ مرکز Y»؛
- * هیچ عددی در پاکت نباشد = null.
- */
+/** خط نسخه‌های دیده‌شده از هندشیک: «نسخهٔ نود X · حداقل نسخهٔ مرکز Y»؛ هیچ عددی نباشد = null */
 export function versionNumbersView(version) {
   if (!version || typeof version !== 'object') return null;
   const client = typeof version.client === 'string' && version.client ? version.client : null;
@@ -161,37 +128,21 @@ export function versionNumbersView(version) {
   return `نسخهٔ نود ${client ?? '—'} · حداقل نسخهٔ مرکز ${center ?? '—'}`;
 }
 
-/**
- * موج ۱ (۱-۴) — ردیف قرمز ناسازگاری نسخه: فقط وقتی compatible صریحاً false است؛
- * با ردیف paused_version یکپارچه می‌شود (همان پیام/همان رنگ، بدون دو ردیف دوباره).
- */
+/** ردیف قرمز ناسازگاری نسخه: فقط وقتی compatible صریحاً false است (یکپارچه با paused_version) */
 export function versionIncompatView(version) {
   if (!version || typeof version !== 'object' || version.compatible !== false) return null;
-  return {
-    message: 'نسخه ناسازگار — اول مرکز را ارتقا دهید',
-    detail: versionNumbersView(version)
-  };
+  return { message: 'نسخه ناسازگار — اول مرکز را ارتقا دهید', detail: versionNumbersView(version) };
 }
-
-/* ── EXP-1 — آشتی‌ساز (قرارداد v3) و EXP-2 — مصرف مرکز (برآوردی) ───────────────────
-   هر دو تابع خالص و بی‌DOM (الگوی clockWarningView) تا بی‌ماک سنگین آزمون شوند.
-   آشتی‌ساز فقط-گزارش است؛ مصرف مرکز شاید اصلاً در دسترس نباشد (پنل روی نود اجرا می‌شود
-   و مسیر فقط-مدیر مرکز را ندارد) — خرابی فقط همین کارت را degraded می‌کند. */
 
 const RECONCILE_WINDOW_MS = 10 * 60_000; // پیام آشتی‌ساز فقط ۱۰ دقیقه پس از مقایسه معتبر است
 
-/**
- * EXP-1 — ردیف آشتی‌ساز از فیلد reconciliation وضعیت v3:
- *  • ok=true و differences=0 (در پنجرهٔ ۱۰دقیقه‌ای) → سبز «آشتی‌ساز: همهٔ دامنه‌ها هم‌شمار»؛
- *  • ok=false → زرد «آشتی‌ساز: ناهم‌خوانی در K دامنه — بررسی لازم»؛
- *  • نتیجهٔ کهنه/غایب/خراب → null (ردیف اصلاً رندر نمی‌شود).
- */
+/** ردیف آشتی‌ساز از فیلد reconciliation وضعیت v3؛ نتیجهٔ کهنه/غایب/خراب → null */
 export function reconciliationView(recon, nowMs = Date.now()) {
   if (!recon || typeof recon !== 'object') return null;
   const atMs = isoMsOf(recon.at);
   if (atMs === null) return null;
   const age = nowMs - atMs;
-  if (age > RECONCILE_WINDOW_MS || age < -60_000) return null; // کج‌ساعت جزئی مُهر آینده پذیرفته است
+  if (age > RECONCILE_WINDOW_MS || age < -60_000) return null;
   const diffs = Number(recon.differences);
   if (recon.ok === true && diffs === 0) return { tone: 'ok', message: 'آشتی‌ساز: همهٔ دامنه‌ها هم‌شمار' };
   if (recon.ok === false) {
@@ -204,7 +155,7 @@ export function reconciliationView(recon, nowMs = Date.now()) {
   return null;
 }
 
-/** EXP-1 — خط جزئیات ردیف‌های ناهم‌خوانی: «library — مرکز ۴۰ · این دستگاه ۳۹» (حداکثر ۳) */
+/** خط جزئیات ردیف‌های ناهم‌خوانی: «library — مرکز ۴۰ · این دستگاه ۳۹» (حداکثر ۳) */
 export function reconciliationDetailView(detail) {
   if (!Array.isArray(detail) || detail.length === 0) return null;
   const parts = detail.slice(0, 3).map((d) => {
@@ -218,55 +169,6 @@ export function reconciliationDetailView(detail) {
   return parts.length > 0 ? parts.join(' · ') : null;
 }
 
-/** EXP-2 — سطح مصرف → کلاس رنگ نشان: سبز/زرد/قرمز؛ سطح ناشناخته → خنثی */
-export function quotaLevelView(level) {
-  if (level === 'ok') return 'badge--success';
-  if (level === 'warn') return 'badge--warning';
-  if (level === 'danger') return 'badge--error';
-  return 'badge--neutral';
-}
-
-/** EXP-2 — درصد به رقم فارسی با ممیز فارسی؛ ورودی غایب/خراب → «—» */
-function pctNum(n) {
-  if (n == null) return '—';
-  const v = Number(n);
-  if (!Number.isFinite(v)) return '—';
-  return fa(String(Math.round(v * 10) / 10)).replace('.', '٫');
-}
-
-/** EXP-2 — عدد شمارنده به رقم فارسی؛ ورودی غایب/خراب → «—» */
-function countNum(n) {
-  const v = Number(n);
-  return Number.isFinite(v) && v >= 0 ? fa(Math.round(v)) : '—';
-}
-
-/**
- * EXP-2 — ردیف «ورود ناموفق ۲۴ ساعت»: زرد وقتی ≥ ۵؛ ورودی غایب → خنثی با «—».
- */
-export function failedLoginsView(n) {
-  const v = Number(n);
-  if (!Number.isFinite(v) || v < 0) return { cls: 'badge--neutral', text: '—' };
-  return { cls: v >= 5 ? 'badge--warning' : 'badge--neutral', text: fa(Math.round(v)) };
-}
-
-/** ISO معتبر → مُهر میلی‌ثانیه؛ ورودی خراب/حذف‌شده → null (تا NaN به تاریخ فارسی نشت نکند) */
-function isoMsOf(iso) {
-  if (typeof iso !== 'string' || !iso) return null;
-  const t = Date.parse(iso);
-  return Number.isFinite(t) ? t : null;
-}
-
-/** تازه‌ترین ISO معتبر میان چند مُهر — «آخرین هم‌گامی» از جفت push/pull */
-function newestIso(...isos) {
-  let best = null;
-  let bestMs = -1;
-  for (const iso of isos) {
-    const ms = isoMsOf(iso);
-    if (ms !== null && ms > bestMs) { bestMs = ms; best = iso; }
-  }
-  return best;
-}
-
 /** پوشش پاسخ درگاه وضعیت: پاکت {data:…} سرور باز می‌شود؛ پاسخِ بی‌هیچ فیلد شناخته → null */
 function unwrapNodeSyncStatus(payload) {
   const raw = payload && typeof payload === 'object' && payload.data && typeof payload.data === 'object'
@@ -275,6 +177,16 @@ function unwrapNodeSyncStatus(payload) {
   if (!raw || typeof raw !== 'object') return null;
   const known = ['mode', 'state', 'pending_push', 'last_push_ok_at', 'last_pull_ok_at', 'last_error', 'version']
     .some((k) => k in raw);
+  return known ? raw : null;
+}
+
+/** پوشش پاسخ درگاه سهمیهٔ مرکز: پاکت {data:…} باز می‌شود؛ پاسخ بی‌فیلد شناخته → null */
+function unwrapQuota(payload) {
+  const raw = payload && typeof payload === 'object' && payload.data && typeof payload.data === 'object'
+    ? payload.data
+    : payload;
+  if (!raw || typeof raw !== 'object') return null;
+  const known = ['day', 'requests', 'rows_written', 'percent', 'level', 'failed_logins_24h'].some((k) => k in raw);
   return known ? raw : null;
 }
 
@@ -287,13 +199,9 @@ function syncSection(sync, syncError) {
       ? el('span', { class: 'badge badge--error' }, 'توقف نسخه')
       : el('span', { class: `badge ${view.badge}` }, view.short);
 
-  /* موج ۱ — خط سبز پس از جبران کامل: در پنجرهٔ ۱۰دقیقه‌ای «هم‌گام شد؛ N رکورد رسید» جای برچسب عادی می‌نشیند */
   const summaryLine = catchupSummaryView(sync?.state, sync?.last_catchup);
-
-  /* موج ۱ — هشدار زرد اختلاف ساعت (۱-۳) — فقط-اطلاعاتی؛ رفتار سینک عوض نمی‌کند */
   const clockMessage = clockWarningView(sync?.clock_warning === true, sync?.clock_drift_minutes);
 
-  /* خط‌های جزئیات: آخرین هم‌گامی (وقتی هم‌گام است)، رکوردهای محفوظ در انتظار ارسال، گونهٔ خطا + زمان */
   const sub = [];
   if (sync?.state === 'synced') {
     const lastOk = newestIso(sync?.last_push_ok_at, sync?.last_pull_ok_at);
@@ -313,13 +221,11 @@ function syncSection(sync, syncError) {
   }
   if (sub.length === 0) sub.push('—');
 
-  /* موج ۱ (۱-۴) — ردیف نسخهٔ ناسازگار یکپارچه: paused_version یا compatible=false — هر دو یک ردیف قرمز */
   const version = sync?.version && typeof sync.version === 'object' ? sync.version : null;
   const incompat = versionIncompatView(version);
   const versionLine = versionNumbersView(version);
   const showVersionRow = Boolean(paused || incompat);
 
-  /* EXP-1 — ردیف آشتی‌ساز از فیلد reconciliation وضعیت v3 (کهنه/غایب = بدون ردیف) */
   const reconcile = sync?.reconciliation && typeof sync.reconciliation === 'object' ? sync.reconciliation : null;
   const reconcileView = reconciliationView(reconcile);
   const reconcileDetail = reconcileView?.tone === 'warn' ? reconciliationDetailView(reconcile?.detail) : null;
@@ -327,11 +233,11 @@ function syncSection(sync, syncError) {
   return el('div', { class: 'card card__body--flush', style: { marginBottom: 'var(--sp-4)' } },
     el('div', { class: 'ob-section__head' },
       el('div', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', flexWrap: 'wrap' } },
-        el('h3', { style: { margin: 0 } }, 'وضعیت هم‌گامی'),
+        el('h3', { style: { margin: 0 } }, '۴ — هم‌گامی با مرکز'),
         headBadge
       ),
       el('p', { class: 'hint-text', style: { margin: '4px 0 0' } },
-        'موتور هم‌گامیِ همین نود با مرکز — ثبت‌های «در انتظار ارسال» روی خود نود محفوظ‌اند و با بازگشت خط، ارسال خودکار از سر گرفته می‌شود؛ وضعیت با همان بازخوانی ۶۰ثانیه‌ای پنل تازه می‌شود.')
+        'موتور هم‌گامیِ همین نود با مرکز — ثبت‌های «در انتظار ارسال» روی خود نود محفوظ‌اند و با بازگشت خط، ارسال خودکار از سر گرفته می‌شود؛ وضعیت با بازخوانی ۶۰ثانیه‌ای پنل تازه می‌شود.')
     ),
     el('div', {},
       syncError
@@ -386,259 +292,14 @@ function syncSection(sync, syncError) {
   );
 }
 
-const STATE_META = {
-  ok: { cls: 'badge badge--success', label: 'سالم' },
-  stale: { cls: 'badge badge--warning', label: 'کهنه‌شده' },
-  never: { cls: 'badge badge--neutral', label: 'بی‌موفقیت' }
-};
-
-function infoRow(label, valueEl) {
-  return el('div', { class: 'ob-row' },
-    el('div', { class: 'ob-row__main' },
-      el('div', { class: 'cell-main' }, label),
-      el('div', { class: 'cell-sub' }, valueEl)
-    )
-  );
-}
-
-function channelRow(ch) {
-  const meta = STATE_META[ch.state] ?? STATE_META.never;
-  const side = [];
-  if (ch.success_at) {
-    side.push(`آخرین موفقیت: ${ageHuman(ch.age_s)} (${formatJalaliDateTime(ch.success_at)})`);
-  } else {
-    side.push('هنوز هیچ موفقیتی ثبت نشده');
-  }
-  if (ch.attempt_at) side.push(`آخرین تلاش: ${formatJalaliDateTime(ch.attempt_at)}`);
-  side.push(`آستانهٔ هشدار: ${thresholdHuman(ch.threshold_s)}`);
-  return el('div', { class: 'ob-row' },
-    el('div', { class: 'ob-row__main' },
-      el('div', { class: 'cell-main' }, ch.label),
-      el('div', { class: 'cell-sub' }, side.join(' · '))
-    ),
-    el('div', { class: 'ob-row__side' },
-      el('span', { class: meta.cls }, meta.label),
-      el('span', { class: 'badge badge--neutral' }, ch.direction === 'pull' ? 'CP→نود' : 'نود→CP')
-    )
-  );
-}
-
-/* ── ف۴ — گزارش رشد جدول‌ها ───────────────────────────────────────────────
-   شمارش ردیف‌ها هر شب در کرون دایجست انجام می‌شود (جدول table_growth_snapshots — مایگریشن 0107)؛
-   این بخش فقط خواندن snapshotهاست. جدول‌های «بی‌سیاست» بالای فهرست می‌آیند — کارکرد اصلی گزارش
-   لو دادن جدول‌های بدون خط‌مشی نگه‌داری است (طرح §۵-۳). */
-
-const POLICY_BADGE = {
-  'بی‌سیاست': 'badge--error',
-  'فقط-افزودنی': 'badge--success',
-  'پاکسازی دوره‌ای': 'badge--success',
-  '۱۸۰ روز': 'badge--neutral',
-  '۹۰ روز': 'badge--neutral',
-  'بازنویسی روزانه (خودپایش)': 'badge--neutral'
-};
-
-function growthRow(t) {
-  const countMain = t.latest_count != null ? fa(t.latest_count) : '—';
-  const countSub = [
-    t.latest_date ? `شمارش ${formatJalaliDateTime(t.latest_date)}` : null,
-    t.live_count != null && t.latest_count != null && t.live_count !== t.latest_count ? `زندهٔ همین لحظه: ${fa(t.live_count)}` : null
-  ].filter(Boolean).join(' · ');
-  const badgeCls = POLICY_BADGE[t.policy] ?? 'badge--neutral';
-  return el('tr', {},
-    el('td', { style: { fontWeight: 500 } }, t.table_name),
-    el('td', { style: { direction: 'ltr', textAlign: 'center', whiteSpace: 'nowrap' } },
-      el('div', {}, countMain),
-      countSub ? el('div', { class: 'hint-text', style: { fontSize: '0.72rem', whiteSpace: 'normal' } }, countSub) : null
-    ),
-    numCell(signedNum(t.delta_7d)),
-    numCell(signedNum(t.delta_30d)),
-    numCell(avgNum(t.avg_daily)),
-    el('td', { style: { textAlign: 'center', whiteSpace: 'nowrap' } },
-      el('span', { class: `badge ${badgeCls}` }, t.policy)
-    )
-  );
-}
-
-/* ── ف۵ (P0-3 حداقلی) — هشدارهای فعال ─────────────────────────────────────────
-   همان دادهٔ پنل، با حکم محلی-نودی: جهش خطاهای مرورگر در ۲۴ ساعت. م۲۱۰ (حکم کارفرما:
-   «هشدارها سمت نود نیایند، سمت CP بیایند») — رانش مُهر تلاش/موفقیت درگاه‌های CP دیگر در
-   نود هشدار نمی‌شود؛ مالکیتش کنترل‌پلین است (CP m9 — channel_alerts با ack/resolve).
-   زنگ‌زنِ خودکار هر شب در کرون دایجست همین حکم را می‌گیرد و اگر بات تنظیم باشد پیام
-   فارسی برای مدیر(ها) می‌فرستد؛ مُهر آخرین ارزیابی از settings می‌آید. */
-
-const SEVERITY_META = {
-  error: { cls: 'badge--error', label: 'فوری' },
-  warning: { cls: 'badge--warning', label: 'هشدار' }
-};
-
-function alertsSection(alerts, lastEvaluatedAt) {
-  const count = (alerts ?? []).length;
-  const headBadge = count === 0
-    ? el('span', { class: 'badge badge--success' }, 'هیچ هشدار فعالی نیست')
-    : el('span', { class: 'badge badge--error' }, `${fa(count)} هشدار فعال`);
-  const stamp = lastEvaluatedAt
-    ? `آخرین ارزیابی خودکار: ${formatJalaliDateTime(lastEvaluatedAt)}`
-    : 'هنوز ارزیابی خودکار شبانه‌ای انجام نشده — با نخستین کرون دایجست مُهر می‌خورد';
-  return el('div', { class: 'card card__body--flush', style: { marginBottom: 'var(--sp-4)' } },
-    el('div', { class: 'ob-section__head' },
-      el('div', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', flexWrap: 'wrap' } },
-        el('h3', { style: { margin: 0 } }, 'هشدارهای فعال'),
-        headBadge
-      ),
-      el('p', { class: 'hint-text', style: { margin: '4px 0 0' } },
-        `${stamp} — ارزیابی هر شب در کرون دایجست انجام می‌شود و وقتی هشدار باشد، پیام فارسی برای مدیر روی همان کانال بات می‌آید؛ این بخش همان حکم را زنده نشان می‌دهد. م۲۱۰: تنها قاعدهٔ هشدار این نود جهش خطاهای مرورگر در ۲۴ ساعت است — هشدار رانش مُهر درگاه‌های CP فقط در کنترل‌پلین ساخته می‌شود و اینجا نمی‌آید؛ جدول درگاه‌های CP پایین، همان دادهٔ واقعی را بدون پیام هشدار نشان می‌دهد.`)
-    ),
-    count === 0
-      ? el('div', {}, el('div', { class: 'ob-row' },
-          el('div', { class: 'ob-row__main' },
-            el('div', { class: 'cell-main' }, 'همهٔ درگاه‌ها و شمارنده‌ها زیر آستانه‌اند'),
-            el('div', { class: 'cell-sub' }, 'اگر مشکلی پیش بیاید، همین‌جا و کانال بات خودش را نشان می‌دهد')))
-        )
-      : el('div', {}, (alerts ?? []).map((alert) => {
-          const meta = SEVERITY_META[alert.severity] ?? SEVERITY_META.warning;
-          return el('div', { class: 'ob-row' },
-            el('div', { class: 'ob-row__main' },
-              el('div', { class: 'cell-main' }, alert.message)),
-            el('div', { class: 'ob-row__side' },
-              el('span', { class: `badge ${meta.cls}` }, meta.label),
-              el('span', { class: 'badge badge--neutral' }, alert.code))
-          );
-        }))
-  );
-}
-
-function growthSection(growth, growthError) {
-  const headBadge = growth
-    ? el('span', { class: 'badge badge--neutral' },
-        growth.snapshot_days > 0
-          ? `تاریخچهٔ ${fa(growth.snapshot_days)} روز شمارش`
-          : 'هنوز شمارشی ثبت نشده — با اولین کرون شبانه پُر می‌شود')
-    : null;
-  const stamp = growth?.last_snapshot_at
-    ? `آخرین شمارش شبانه: ${formatJalaliDateTime(growth.last_snapshot_at)}`
-    : 'هنوز هیچ شمارش شبانه‌ای انجام نشده است';
-  return el('div', { class: 'card', style: { marginBottom: 'var(--sp-4)' } },
-    el('div', { class: 'card__head' },
-      el('h3', { style: { margin: 0 } }, 'گزارش رشد جدول‌ها'),
-      headBadge
-    ),
-    el('div', { class: 'card__body--flush' },
-      growthError
-        ? el('div', { class: 'card__body' },
-            el('p', { class: 'hint-text' }, `خواندن گزارش رشد ناموفق بود: ${growthError?.message ?? 'خطای نامشخص'} — بقیهٔ پنل سالم است.`))
-        : [
-            el('p', { class: 'hint-text', style: { padding: '0 var(--sp-4)', margin: 'var(--sp-3) 0 0' } },
-              `${stamp} — شمارش ردیف‌ها هر شب در کرون دایجست انجام می‌شود (هرگز در مسیر درخواست). ستون «سیاست» خط‌مشی نگه‌داری هر جدول است؛ «بی‌سیاست» یعنی هیچ سقف حذف/پاکسازی‌ای ندارد و بدون تصمیم، بی‌کران رشد می‌کند — این جدول‌ها عمداً بالای فهرست می‌آیند.`),
-            el('div', { class: 'table-wrap' },
-              el('table', { class: 'table' },
-                el('thead', {}, el('tr', {},
-                  el('th', { scope: 'col' }, 'نام جدول'),
-                  el('th', { scope: 'col', style: { textAlign: 'center' } }, 'ردیف‌ها'),
-                  el('th', { scope: 'col', style: { textAlign: 'center' } }, 'رشد ۷روز'),
-                  el('th', { scope: 'col', style: { textAlign: 'center' } }, 'رشد ۳۰روز'),
-                  el('th', { scope: 'col', style: { textAlign: 'center' } }, 'میانگین روزانه'),
-                  el('th', { scope: 'col', style: { textAlign: 'center' } }, 'سیاست')
-                )),
-                el('tbody', {}, (growth?.tables ?? []).map(growthRow))
-              )
-            )
-          ]
-    )
-  );
-}
-
-/* ── EXP-2 — کارت «مصرف مرکز (برآوردی)» ──────────────────────────────────────
-   قرائت GET /api/central/quota (فقط-مدیر مرکز) در همان بازخوانی ۶۰ثانیه‌ای. پنل شاید روی
-   نود اجرا شود و مسیر فقط-مدیر مرکز در دسترس نباشد — خرابی فقط همین کارت را degraded
-   می‌کند: خاکستری «دریافت نشد» و بقیهٔ پنل سالم می‌ماند (الگوی بخش رشد).
-   سه ردیف درصد با رنگ سطح (ok سبز / warn زرد / danger قرمز) + ردیف «ورود ناموفق ۲۴ ساعت». */
-
-const QUOTA_ROWS = [
-  { key: 'requests', label: 'درخواست‌ها' },
-  { key: 'rows_written', label: 'نوشتن‌ها' },
-  { key: 'rows_read', label: 'خواندن‌ها' }
-];
-
-/** پوشش پاسخ درگاه سهمیه: پاکت {data:…} باز می‌شود؛ پاسخ بی‌هیچ فیلد شناخته → null */
-function unwrapQuota(payload) {
-  const raw = payload && typeof payload === 'object' && payload.data && typeof payload.data === 'object'
-    ? payload.data
-    : payload;
-  if (!raw || typeof raw !== 'object') return null;
-  const known = ['day', 'requests', 'rows_written', 'percent', 'level', 'failed_logins_24h'].some((k) => k in raw);
-  return known ? raw : null;
-}
-
-function quotaRowFa(label, percent, level, used, limit) {
-  const meta = quotaLevelView(level);
-  const pctText = `${pctNum(percent)}٪`;
-  const sub = used != null && limit != null ? `${countNum(used)} از ${countNum(limit)}` : null;
-  return el('div', { class: 'ob-row' },
-    el('div', { class: 'ob-row__main' },
-      el('div', { class: 'cell-main' }, label),
-      sub ? el('div', { class: 'cell-sub' }, sub) : null
-    ),
-    el('div', { class: 'ob-row__side' },
-      el('span', { class: `badge ${meta}` }, pctText)
-    )
-  );
-}
-
-function quotaSection(quota, quotaError) {
-  const q = quotaError ? null : quota;
-  const headBadge = q
-    ? el('span', { class: 'badge badge--neutral' }, q.day ? `روز ${q.day}` : 'برآوردی')
-    : el('span', { class: 'badge badge--neutral' }, 'دریافت نشد');
-  return el('div', { class: 'card card__body--flush', style: { marginBottom: 'var(--sp-4)' } },
-    el('div', { class: 'ob-section__head' },
-      el('div', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', flexWrap: 'wrap' } },
-        el('h3', { style: { margin: 0 } }, 'مصرف مرکز (برآوردی)'),
-        headBadge
-      ),
-      el('p', { class: 'hint-text', style: { margin: '4px 0 0' } },
-        'سهمیهٔ روزانهٔ مرکز ابری با برآوردِ خواندن — سه شاخص با سطح رنگی؛ ورود ناموفق ۲۴ ساعت همان آمار امنیتی مرکز است. این درگاه فقط-مدیر مرکز است؛ اگر پنل روی نود اجرا شود همین کارت «دریافت نشد» می‌گیرد و بقیهٔ پنل سالم می‌ماند.')
-    ),
-    !q
-      ? el('div', {},
-          el('div', { class: 'ob-row' },
-            el('div', { class: 'ob-row__main' },
-              el('div', { class: 'cell-main' }, 'دریافت نشد'),
-              el('div', { class: 'cell-sub' },
-                quotaError?.message
-                  ? `خواندن درگاه سهمیه ناموفق بود: ${quotaError.message}`
-                  : 'درگاه سهمیهٔ مرکز از این دستگاه در دسترس نیست — بقیهٔ پنل سالم است.'))
-          )
-        )
-      : [
-          ...QUOTA_ROWS.map((row) => {
-            const percent = q.percent && typeof q.percent === 'object' ? q.percent[row.key] : null;
-            const level = q.level && typeof q.level === 'object' ? q.level[row.key] : null;
-            const used = q[row.key];
-            const limit = q.limits && typeof q.limits === 'object' ? q.limits[row.key] : null;
-            return quotaRowFa(row.label, percent, level, used, limit);
-          }),
-          (() => {
-            const fl = failedLoginsView(q.failed_logins_24h);
-            return el('div', { class: 'ob-row' },
-              el('div', { class: 'ob-row__main' },
-                el('div', { class: 'cell-main' }, 'ورود ناموفق ۲۴ ساعت'),
-                el('div', { class: 'cell-sub' }, 'تلاش‌های ورود ردشدهٔ مرکز در یک روز گذشته — پنج یا بیشتر زرد می‌شود')),
-              el('div', { class: 'ob-row__side' },
-                el('span', { class: `badge ${fl.cls}` }, fl.text))
-            );
-          })()
-        ]
-  );
-}
-
-/* ── EXP-4 — بنر نگهبان موتور (فقط-دسکتاپ، گارد کامل) ─────────────────────────
+/* ── بنر نگهبان موتور (فقط-دسکتاپ، گارد کامل) ─────────────────────────────────
    Rust نگهبان موتور رویدادهای engine:restarting {attempt, delay_ms} / engine:restored {port}
    / engine:down {attempts} + M4: engine:degraded {kind, message} / engine:degraded_recovered
    {kind, message} را emit می‌کند (desktop/src-tauri/src/lib.rs). کانال دریافت:
    window.__TAURI__.event.listen — با withGlobalTauri در tauri.conf.json فعال می‌شود.
    همه‌چیز گاردشده است: بیرون پوستهٔ دسکتاپ (مرورگر/آزمون/IPC ردشده) کل تابع no-op می‌ماند
    و SPA هرگز نمی‌شکند. بنر ثابت بالای صفحه: زرد راه‌اندازی دوباره، سبز «دوباره راه افتاد»
-   با پنهان‌شدن خودکار ۱۰ثانیه‌ای، قرمز ماندگار «پاسخ نمی‌دهد»؛ M4: زرد ماندگار Degraded
+   با پنهان‌شدن خودکار ۱۰ثانیه‌ای، قرمز ماندگار «پاسخ نمی‌دهد»؛ زرد ماندگار Degraded
    (فقط ورکر بازی‌ها پایین است — سرویس اصلی سالم و اپ کار می‌کند) و سبز بازگشت آن. */
 
 const ENGINE_BANNER_ID = 'engine-watchdog-banner';
@@ -700,7 +361,7 @@ function showEngineBanner(tone, text, autoHide) {
 }
 
 /**
- * EXP-4 — نصب یک‌بارهٔ گوش‌دادن‌های نگهبان موتور. خروجی فقط برای آزمون/تشخیص:
+ * نصب یک‌بارهٔ گوش‌دادن‌های نگهبان موتور. خروجی فقط برای آزمون/تشخیص:
  * { installed: false, reason } یعنی کانال Tauri در دسترس نیست (مرورگر/آزمون) و هیچ چیز
  * نصب نشده — SPA در مرورگر و آزمون‌ها بی‌کرش ادامه می‌دهد.
  */
@@ -727,9 +388,7 @@ export function installEngineWatchdogBanner() {
           const n = Number.isFinite(Number(attempts)) && Number(attempts) > 0 ? fa(Math.round(Number(attempts))) : null;
           showEngineBanner('danger', `موتور پاسخ نمی‌دهد${n ? ` — پس از ${n} تلاش` : ''} — صفحهٔ بوت را باز کنید`, false); // ماندگار
         });
-        // M4 — ناسالمی مستقل ورکر بازی‌ها با سرویس اصلی سالم: زرد ماندگار تا بازگشت سلامت؛
-        // پیام فارسی از payload رخداد (lib.rs) می‌آید — پیام غایب/خراب → پیام پیش‌فرض بی‌کرش
-        // (متن پیش‌فرض عین واژگان payload سرور می‌ماند — پین front-sync-status.test.ts)
+        // M4 — ناسالمی مستقل ورکر بازی‌ها با سرویس اصلی سالم: زرد ماندگار تا بازگشت سلامت
         await listen('engine:degraded', (ev) => {
           const msg = typeof ev?.payload?.message === 'string' && ev.payload.message
             ? ev.payload.message
@@ -758,10 +417,9 @@ export function resetEngineWatchdogBannerForTests() {
   if (engineBannerHideTimer) { clearTimeout(engineBannerHideTimer); engineBannerHideTimer = null; }
 }
 
-/* ── موج ۴ (۴-۱) — پنج سیگنال §۴ نقد، هرکدام سه رنگ + دکمهٔ اقدام ────────────────
-   منبع: docs/FAILURE-CRITIQUE.fa.md §۴ — «این پنج سیگنال، ۹۰٪ سناریوها را پیش از فاجعه
-   معلوم می‌کنند». همهٔ نگاشت‌ها تابع خالص بی‌DOM (الگوی syncStateView) تا بی‌ماک سنگین
-   آزمون شوند. tone: ok سبز / warn زرد / error قرمز / unknown خاکستری (درگاه ناآشنا). */
+/* ── چراغ‌های وضعیت — پنج سیگنال §۴ نقد، هرکدام سه رنگ + دکمهٔ اقدام ──────────────
+   tone: ok سبز / warn زرد / error قرمز / unknown خاکستری (درگاه ناآشنا).
+   همهٔ نگاشت‌ها تابع خالص بی‌DOM تا بی‌ماک سنگین آزمون شوند. */
 
 const SIGNAL_TONES = {
   ok: { badge: 'badge--success', dot: 'dot--success' },
@@ -776,9 +434,9 @@ export function healthToneView(tone) {
 }
 
 /**
- * ۴-۱ سیگنال ۱ — موتور محلی. ورودی: پاکت GET /api/health/panel (همان `data` reload).
- * db.ok = پایگاه محلی سالم؛ فیلد بازی‌ها افزوده‌ای است و شاید در نسخه‌های قدیمی‌تر غایب باشد —
- * غایب = بی‌اثر؛ حاضر و ok=false = زرد. پاسخ ناآشنا = قرمز «پاسخ نمی‌دهد».
+ * چراغ ۱ — موتور محلی. ورودی: پاکت GET /api/health/panel.
+ * db.ok = پایگاه محلی سالم؛ فیلد بازی‌ها افزوده‌ای است و شاید غایب باشد — حاضر و
+ * ok=false = زرد. پاسخ ناآشنا = قرمز «پاسخ نمی‌دهد».
  */
 export function engineSignalView(data) {
   if (!data || typeof data !== 'object') {
@@ -786,7 +444,6 @@ export function engineSignalView(data) {
   }
   const dbOk = data?.db?.ok === true;
   const version = typeof data?.version === 'string' && data.version ? data.version : null;
-  // فیلد افزودهٔ games {ok, port} — با گارد کامل؛ نسخهٔ قدیمی‌تر بدون آن سبز عادی می‌ماند
   const games = data?.games && typeof data.games === 'object' ? data.games : null;
   const parts = [];
   if (version) parts.push(`نسخهٔ ${version}`);
@@ -799,8 +456,8 @@ export function engineSignalView(data) {
 }
 
 /**
- * ۴-۱ سیگنال ۲ — مرکز. ورودی: پاکت GET /api/node-sync/status (+nowMs برای آزمون).
- * هندشیک نسخه قرمز می‌دهد؛ خطای هم‌گامی قرمز؛ خارج از خط/در انتظار زرد («داده محفوظ است»)؛
+ * چراغ ۲ — مرکز. ورودی: پاکت GET /api/node-sync/status (+nowMs برای آزمون).
+ * هندشیک نسخه قرمز می‌دهد؛ خطای هم‌گامی قرمز؛ خارج از خط/در انتظار زرد؛
  * هم‌گام با نسخهٔ مرکز سبز. وضعیت آینه غایب/ناآشنا = خاکستری.
  */
 export function centerSignalView(sync, nowMs = Date.now()) {
@@ -826,10 +483,7 @@ export function centerSignalView(sync, nowMs = Date.now()) {
   return { tone: 'warn', label: 'قطع — داده محفوظ است', detail: 'با بازگشت خط، هم‌گام‌سازی خودش ادامه می‌یابد' };
 }
 
-/**
- * ۴-۱ سیگنال ۳ — عقب‌ماندگی سینک. صفر و هم‌گام = سبز؛ رکورد در انتظار/خارج از خط = زرد؛
- * توقف نسخه یا خطای هم‌گامی = قرمز. منبع همان /api/node-sync/status است.
- */
+/** چراغ ۳ — عقب‌ماندگی سینک. صفر و هم‌گام = سبز؛ رکورد در انتظار/خارج از خط = زرد؛ توقف نسخه/خطا = قرمز */
 export function syncLagSignalView(sync) {
   if (!sync || typeof sync !== 'object') {
     return { tone: 'unknown', label: 'نامشخص', detail: 'وضعیت هم‌گامی در دسترس نیست' };
@@ -852,10 +506,7 @@ export function syncLagSignalView(sync) {
   return { tone: 'warn', label: 'خارج از خط', detail: 'ثبت‌های محلی صف شده‌اند — هیچ چیز گم نمی‌شود' };
 }
 
-/**
- * ۴-۱ سیگنال ۴ — مصرف سهمیهٔ مرکز. بدترین سطح میان سه شاخص (درخواست‌ها/نوشتن/خواندن):
- * danger قرمز، warn زرد، همه ok سبز؛ درگاه ناآشنا (پنل روی نود) = خاکستری.
- */
+/** چراغ ۴ — مصرف سهمیهٔ مرکز. بدترین سطح میان سه شاخص؛ درگاه ناآشنا = خاکستری */
 export function quotaSignalView(quota) {
   if (!quota || typeof quota !== 'object') {
     return { tone: 'unknown', label: 'دریافت نشد', detail: 'درگاه سهمیهٔ مرکز از این دستگاه در دسترس نیست' };
@@ -870,14 +521,11 @@ export function quotaSignalView(quota) {
   return { tone: 'ok', label: 'زیر سقف', detail: 'مصرف روزانه در محدودهٔ امن است' + pctText };
 }
 
-/** آستانه‌های رنگ کارت پشتیبان — هفتگی سبز، تا یک ماه زرد، بیشتر قرمز (راهنمای ادمین §۲) */
+/** آستانه‌های رنگ چراغ پشتیبان — هفتگی سبز، تا یک ماه زرد، بیشتر قرمز */
 const BACKUP_OK_DAYS = 7;
 const BACKUP_WARN_DAYS = 30;
 
-/**
- * ۴-۱ سیگنال ۵ — پشتیبان. منبع مُهر: کلید موجود cs.lastBackupAt (همان کلید نمای
- * پشتیبان‌گیری می‌نویسد — منبع جدیدی ساخته نمی‌شود). مُهر غایب = قرمز «بی‌پشتیبان».
- */
+/** چراغ ۵ — پشتیبان. منبع مُهر: کلید موجود cs.lastBackupAt. مُهر غایب = قرمز «بی‌پشتیبان». */
 export function backupSignalView(lastBackupIso, nowMs = Date.now()) {
   const ms = isoMsOf(lastBackupIso);
   if (ms === null) {
@@ -893,52 +541,8 @@ export function backupSignalView(lastBackupIso, nowMs = Date.now()) {
   return { tone: 'error', label: 'بیش از یک ماه', detail: `آخرین پشتیبان ${fa(days)} روز پیش — فوری پشتیبان بگیرید` };
 }
 
-/* ── EXP-6 — ثبت drill عملیاتی ماهانه در پنل ─────────────────────────────────────
-   چک‌لیست چاپی در ADMIN-GUIDE است (عامل دیگر)؛ اینجا فقط «ثبت نتیجه در پنل» (پیوند ۳-۲):
-   localStorage['nodesync:ops-drill-v1'] = {at, result} پس از تأیید فارسی؛ تاریخ با رقم
-   فارسی؛ بیش از ۳۱ روز = زرد («وقت drill بعدی است»). */
-
-export const OPS_DRILL_KEY = 'nodesync:ops-drill-v1';
-const DRILL_STALE_DAYS = 31;
-
-/** خواندن نرم رکورد drill — JSON خراب/غایب = null */
-export function readOpsDrillRecord(storage) {
-  try {
-    const ls = storage ?? (typeof localStorage !== 'undefined' ? localStorage : null);
-    const raw = ls ? ls.getItem(OPS_DRILL_KEY) : null;
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object' || isoMsOf(parsed.at) === null) return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * EXP-6 — نمای رکورد drill: بدون رکورد = {tone:'unknown', label:'—'}؛ تا ۳۱ روز سبز با
- * تاریخ فارسی؛ بیشتر = زرد «وقت drill بعدی است».
- */
-export function drillRecordView(record, nowMs = Date.now()) {
-  const ms = isoMsOf(record?.at);
-  if (ms === null) {
-    return { tone: 'unknown', label: '—', detail: 'هنوز هیچ drill عملیاتی ثبت نشده است' };
-  }
-  const days = Math.max(0, Math.floor((nowMs - ms) / 86_400_000));
-  const dateFa = formatJalaliDateTime(record.at);
-  if (days > DRILL_STALE_DAYS) {
-    return { tone: 'warn', label: dateFa, detail: `${fa(days)} روز از آخرین drill گذشته — وقت drill بعدی است` };
-  }
-  return { tone: 'ok', label: dateFa, detail: `آخرین drill ${fa(days)} روز پیش` };
-}
-
-/* ── فاز A — لایه‌های دوگانهٔ نشانگر «سرور محلی» (طرح docs/rust/server-cloud-update-design.md §۱) ──
-   (۱.۲۷.۰۸) سه‌تاییِ لازمِ pill — نگاشت خالص serverStateView/degradedReasonView + feed مشترک
-   وضعیت — به views/server-pill.js منتقل شد تا کل این فایلِ سنگین از گراف بوت خارج بماند
-   (گیت بودجهٔ کارایی: pill باید در بوت باشد، پنل نه). app.js فقط server-pill.js را استاتیک
-   import می‌کند و خود پنل سلامت همان‌طور که قبل‌تر بود با import پویای مسیر روت
-   (#/health-panel) lazy می‌ماند. نام‌ها این‌جا هم صادر می‌شوند تا آزمون‌ها و پین‌های
-   قرارداد بی‌تغییر بمانند؛ کارت «سرور محلی» و کارت «اتصال ابری» با همان feed می‌نشینند. */
+/* (۱.۲۷.۰۸) پاکت‌سنج unwrapEngineStatus و feed مشترک وضعیت سرور به views/server-pill.js
+   رفت‌اند (خروج از گراف بوت) — همین‌جا از همان ماژول صادر و مصرف می‌شوند. */
 
 import {
   degradedReasonView, serverStateView, unwrapEngineStatus,
@@ -1096,6 +700,8 @@ export function engineCapabilitiesVersionView(caps) {
  * رقم فارسی — هم‌الگوی serverPortsView)؛ وگرنه origin (حالت وب — کانال تائوری نیست) خودش آدرس
  * است با isDefault=false؛ در غیر این دو حالت پورت پیش‌فرض با isDefault=true تا رندر، توضیح
  * «آدرس پس از رسیدن وضعیت پوسته دقیق می‌شود» را نشان دهد.
+ * ۱.۲۷.۲۱ — نشانی‌های موبایل (IPهای LAN واقعی) از درگاه /api/system/lan در ردیف‌های جدا
+ * می‌آیند (lanMobileRowsView) — همین تابع برای «این رایانه» دست‌نخورده ماند (پین‌های آزمون).
  */
 export function serverAddressView(status, origin) {
   const port = Number(status?.port);
@@ -1126,6 +732,16 @@ function serverAddressRow(addr) {
       addr.isDefault ? el('div', { class: 'cell-sub' }, 'پورت پیش‌فرض — پس از رسیدن وضعیت پوسته، آدرس دقیق می‌شود') : null
     ),
     el('div', { class: 'ob-row__side' }, copyBtn)
+  );
+}
+
+/** ردیف اطلاعات ساده — main برچسب + sub مقدار (مصرف لایهٔ پیشرفتهٔ کارت ابری) */
+function infoRow(label, valueEl) {
+  return el('div', { class: 'ob-row' },
+    el('div', { class: 'ob-row__main' },
+      el('div', { class: 'cell-main' }, label),
+      el('div', { class: 'cell-sub' }, valueEl)
+    )
   );
 }
 
@@ -1165,6 +781,11 @@ export function makeServerCardPaint(body, ctx = {}) {
       ),
       // ۱.۲۷.۱۲ — ردیف آدرس محلی، بلافاصله بعد از ردیف وضعیت (خواست کارفرما)
       serverAddressRow(serverAddressView(status, null)),
+      // ۱.۲۷.۲۱ — ردیف‌های «نشانی موبایل» (IPهای LAN واقعی از /api/system/lan) + بازی‌ها +
+      // خط سه‌قدم — بی‌پاکت/بی‌کارت LAN اینجا هیچ ردیفی اضافه نمی‌شود (پین‌های آزمون دست‌نخورده)
+      ...(Array.isArray(ctx.gamesRow) ? ctx.gamesRow : (ctx.gamesRow ? [ctx.gamesRow] : [])),
+      ...(Array.isArray(ctx.lanRows) ? ctx.lanRows : []),
+      ...(ctx.stepsRow ? [ctx.stepsRow] : []),
       el('div', { class: 'ob-row' },
         el('div', { class: 'ob-row__main' },
           el('div', { class: 'cell-main' }, 'نسخهٔ اپ · آخرین بوت'),
@@ -1577,39 +1198,6 @@ export function cloudSetupEntryToggleView(open) {
 }
 
 /** فاز D2 — کلید سشن‌محلی آکاردئون «جزئیات پیشرفته» پنل سلامت (الگوی CLOUD_SETUP_SKIP_KEY ویزارد) */
-export const HEALTH_PANEL_ADVANCED_KEY = 'hp.advancedOpen';
-
-/** نوشتن وضعیت باز آکاردئون در سشن — بی‌storage (حالت خصوصی/node) نرم بی‌قفل می‌ماند */
-export function markAdvancedSectionsOpen(open) {
-  try {
-    if (open === true) globalThis.sessionStorage?.setItem?.(HEALTH_PANEL_ADVANCED_KEY, '1');
-    else globalThis.sessionStorage?.removeItem?.(HEALTH_PANEL_ADVANCED_KEY);
-  } catch { /* سشن‌محلی — بی‌storage هم بی‌کرش */ }
-}
-
-/** خواندن وضعیت باز آکاردئون از سشن — پیش‌فرض بسته (خواست کارفرما: پنل کوتاه) */
-export function advancedSectionsOpenInSession() {
-  try { return globalThis.sessionStorage?.getItem?.(HEALTH_PANEL_ADVANCED_KEY) === '1'; } catch { return false; }
-}
-
-/**
- * فاز D2 — مدل خالص چیدمان کوتاه‌شدهٔ پنل: سه بخش بالای صفحه همیشه رندر می‌شوند؛ بخش‌های ثانویه
- * (به همان ترتیب و محتوای قبل + نوار نجات) فقط وقتی آکاردئون باز است در خروجی می‌آیند.
- * نام‌ها عین عنوان‌های h3/برچسب موجودند — تست‌ها و پین‌ها به بعضی گره خورده‌اند.
- */
-export function healthPanelLayoutView(advancedOpen) {
-  const open = advancedOpen === true;
-  return {
-    open,
-    toggleLabel: open ? 'بستن جزئیات پیشرفته' : 'جزئیات پیشرفته',
-    advancedHidden: !open,
-    topSections: ['سلامت یک‌نگاهی — پنج سیگنال', 'سرور محلی', 'اتصال ابری'],
-    advancedSections: open
-      ? ['نوار نجات', 'سامانه', 'وضعیت هم‌گامی', 'مصرف مرکز (برآوردی)', 'لینک کنترل‌پلین — شش درگاه', 'هشدارهای فعال', 'گزارش رشد جدول‌ها', 'آخرین drill ثبت‌شده', 'راهنما — چکیدهٔ راهنمای ادمین']
-      : []
-  };
-}
-
 /** پوشش پاسخ درگاه وضعیت اتصال ابری: پاکت {data:…} باز می‌شود؛ بی‌هیچ فیلد شناخته → null (الگوی unwrapQuota) */
 export function unwrapInstanceSyncStatus(payload) {
   const raw = payload && typeof payload === 'object' && payload.data && typeof payload.data === 'object'
@@ -1787,19 +1375,82 @@ const GUIDE_SECTIONS = [
 
 
 
+
+/* ── ۱.۲۷.۲۱ — سرور محلی روی شبکه: پاکت GET /api/system/lan → ردیف‌های نشانی موبایل ──────
+   خواست کارفرما: کارت «سرور محلی» فقط 127.0.0.1 نشان می‌داد و IP واقعی دستگاه روی شبکه و
+   پورت درست را نمی‌داد. adapter دسکتاپ حالا در بوت IPهای خصوصی LAN (همان lan.mjs چاپ بوت)
+   و پورت‌های واقعی را در بایندینگ LAN_INFO می‌گذارد و درگاه فقط‌مدیر /api/system/lan همان
+   را به پنل می‌دهد — موبایلِ همان وای‌فای/مودم نشانی چاپ‌شده در بوت را زنده از خود پنل
+   می‌گیرد. پاکت غایب/خراب → null (کارت به ردیف 127.0.0.1/origin قبلی برمی‌گردد؛ نمی‌شکند). */
+
+/**
+ * پاکت /api/system/lan → نمای خوانا؛ پاکت غایب/خراب/بی‌پورت → null (کارت «کشف نشد» نرم).
+ * URLهای موبایل اگر در پاکت ساخته‌شده باشند همان‌ها؛ وگرنه از lan_ips + پورت بازساخته می‌شوند
+ * (همان قرارداد بوت: بایند همه‌کارت‌ها → هر IP یک نشانی).
+ */
+export function lanInfoView(payload) {
+  const raw = payload && typeof payload === 'object' && payload.data && typeof payload.data === 'object'
+    ? payload.data
+    : payload;
+  const lan = raw && typeof raw === 'object' && raw.lan && typeof raw.lan === 'object' ? raw.lan : null;
+  if (!lan) return null;
+  const port = Number(lan.port);
+  if (!Number.isFinite(port) || port <= 0) return null;
+  const gamesPort = Number(lan.games_port);
+  const urls = Array.isArray(lan.main_urls) && lan.main_urls.length > 0
+    ? lan.main_urls.filter((u) => typeof u === 'string' && !!u)
+    : (Array.isArray(lan.lan_ips) ? lan.lan_ips.filter((ip) => typeof ip === 'string' && !!ip).map((ip) => `http://${ip}:${port}`) : []);
+  return {
+    port,
+    gamesPort: Number.isFinite(gamesPort) && gamesPort > 0 ? gamesPort : null,
+    localUrl: typeof lan.local_url === 'string' && lan.local_url ? lan.local_url : `http://127.0.0.1:${port}`,
+    mobileUrls: urls,
+    gamesUrls: Array.isArray(lan.games_urls) ? lan.games_urls.filter((u) => typeof u === 'string' && !!u) : [],
+    bootAt: typeof lan.boot_at === 'string' && lan.boot_at ? lan.boot_at : null
+  };
+}
+
+/** ردیف «نشانی موبایل» کارت سرور — برچسب + متن LTR نشانی + دکمهٔ کپی (کپی با رقم لاتین) */
+function lanMobileRow(url) {
+  const copyBtn = el('button', {
+    class: 'btn btn--ghost',
+    type: 'button',
+    onclick: (e) => void lockBtn(e.currentTarget, async () => {
+      const copied = await copyTextToClipboard(url);
+      toast(copied ? 'نشانی کپی شد' : 'کپی در کلیپ‌بورد ممکن نشد — مرورگر اجازه نداد', copied ? 'success' : 'error');
+    })
+  }, 'کپی');
+  return el('div', { class: 'ob-row' },
+    el('div', { class: 'ob-row__main' },
+      el('div', { class: 'cell-main', style: { whiteSpace: 'normal' } },
+        'نشانی موبایل — همان وای‌فای/مودم ',
+        el('span', { style: { direction: 'ltr', unicodeBidi: 'plaintext', whiteSpace: 'nowrap' } }, url))
+    ),
+    el('div', { class: 'ob-row__side' },
+      el('span', { class: 'badge badge--neutral' }, 'موبایل'),
+      copyBtn
+    )
+  );
+}
+
+/** خط «سه قدم بازکردن روی موبایل» — زیر ردیف‌های نشانی کارت سرور (واژگان ساده، فنی) */
+function lanMobileStepsRow() {
+  return el('div', { class: 'ob-row' },
+    el('div', { class: 'ob-row__main' },
+      el('div', { class: 'cell-sub', style: { whiteSpace: 'normal' } },
+        'بازکردن روی موبایل در سه قدم: ۱) وای‌فای موبایل همان وای‌فای/مودم این رایانه باشد. ۲) یکی از نشانی‌های «موبایل» بالا را در مرورگر موبایل باز کنید — همین نشانی در لاگ بوت هم چاپ می‌شود. ۳) با حساب مدیر وارد شوید؛ اگر باز نشد، جداسازی دستگاه‌ها (AP Isolation) در مودم را خاموش کنید.'))
+  );
+}
+
 export async function renderHealthPanel(outlet) {
   const root = el('div', {});
   outlet.replaceChildren(root);
 
-  // EXP-4 — گوش‌دادن‌های نگهبان موتور یک‌بار در هر نشست نصب می‌شوند؛ بیرون دسکتاپ no-op
+  // بنر نگهبان موتور یک‌بار در هر نشست نصب می‌شود؛ بیرون دسکتاپ no-op
   installEngineWatchdogBanner();
 
   let timer = null;
   const stopTimer = () => { if (timer) { clearInterval(timer); timer = null; } };
-
-  /* ── موج ۴ — کنش‌ها و بخش‌های افزوده (۴-۱/۴-۲/۴-۵/EXP-6) ──────────────────────
-     همه در همین نمای جدا از مسیر؛ هیچ تغییر ناوبری، هیچ لمسی به app.js. بازخوانی ۶۰ثانیه‌ای
-     کل نما را از نو می‌سازد — بخش‌های تازه هم با همان ریتم تازه می‌شوند. */
 
   // خط نتیجهٔ هر کارت: متن + نقطهٔ رنگی (بازخورد کنش‌ها بدون rebuild کل نما)
   function setResult(line, text, tone) {
@@ -1828,8 +1479,8 @@ export async function renderHealthPanel(outlet) {
     }
   }
 
-  // ۴-۲ — «راه‌اندازی دوبارهٔ سامانه» — POST /api/system/restart با تأیید فارسی
-  // قرارداد موتور (موج ۴): {ok:true, scheduled:true} یا {already:true} روی دوباره‌زنی.
+  // «راه‌اندازی دوبارهٔ سامانه» — POST /api/system/restart با تأیید فارسی
+  // قرارداد موتور: {ok:true, scheduled:true} یا {already:true} روی دوباره‌زنی.
   async function restartAction(btn, { title, message, resultLine } = {}) {
     await lockBtn(btn, async () => {
       const okGo = await confirmModal({
@@ -1854,8 +1505,7 @@ export async function renderHealthPanel(outlet) {
     });
   }
 
-  // ۴-۲/۴-۱ — «دریافت پشتیبان فوری» — GET /api/backup/download (پیوست باینری backup-*.db)
-  // مُهر cs.lastBackupAt همان کلید نمای پشتیبان‌گیری است — منبع تازه می‌شود.
+  // «دریافت پشتیبان فوری» — GET /api/backup/download؛ مُهر cs.lastBackupAt تازه می‌شود
   async function backupDownloadAction(btn, resultLine) {
     await lockBtn(btn, async () => {
       try {
@@ -1871,7 +1521,7 @@ export async function renderHealthPanel(outlet) {
     });
   }
 
-  // ۴-۲ — «دریافت گزارش خطا (zip)» — GET /api/support/error-package
+  // «دریافت گزارش خطا (zip)» — GET /api/support/error-package
   async function errorPackageAction(btn, resultLine) {
     await lockBtn(btn, async () => {
       try {
@@ -1886,7 +1536,7 @@ export async function renderHealthPanel(outlet) {
     });
   }
 
-  // ۴-۱ — «آزمایش اتصال» مرکز — پینگ واقعی همین حالا: verifyCloudNode (همان مسیر pull
+  // «آزمایش اتصال» مرکز — پینگ واقعی همین حالا: verifyCloudNode (همان مسیر pull
   // یک‌آیتمی با اعتبار نود) روی worker_url ثبت‌شده در «اتصال ابر». اعتبار ناقص = پیام نرم.
   async function centerPingAction(btn, resultLine) {
     await lockBtn(btn, async () => {
@@ -1918,9 +1568,7 @@ export async function renderHealthPanel(outlet) {
     });
   }
 
-  // ۴-۱ — «جبران دوباره» — نقطهٔ ورود جبرانِ موجود runner: coordinator.runCatchUp()
-  // (همان مسیر catch-up بوت rust-f14؛ همیشه مجاز حتی در قرنطینه/گات نسخه). اعتبار نود از
-  // «اتصال ابر» + مخزن امن در لحظهٔ کلیک خوانده می‌شود — راز انبار نمی‌شود (قرارداد panel.ts).
+  // «جبران دوباره» — نقطهٔ ورود جبرانِ موجود runner: coordinator.runCatchUp()
   const CATCHUP_STATUS_FA = {
     ok: 'کامل شد',
     unconfigured: 'اتصال ابری کامل نیست',
@@ -1972,7 +1620,7 @@ export async function renderHealthPanel(outlet) {
     });
   }
 
-  // ۴-۱ — «بازخوانی سهمیه» — GET /api/central/quota همان درگاه کارت تفصیلی
+  // «بازخوانی سهمیه» — GET /api/central/quota همان درگاه چراغ سهمیه
   async function quotaRefetchAction(btn, resultLine) {
     await lockBtn(btn, async () => {
       try {
@@ -1989,7 +1637,7 @@ export async function renderHealthPanel(outlet) {
     });
   }
 
-  // کارت سیگنال — سه رنگ + دکمهٔ اقدام + خط نتیجه (۴-۱)
+  // کارت چراغ — سه رنگ + دکمهٔ اقدام + خط نتیجه
   function signalCardEl({ title, view, actionLabel, onAction }) {
     const tone = healthToneView(view.tone);
     const resultLine = el('div', { class: 'hint-text', style: { marginTop: 'var(--sp-2)', whiteSpace: 'normal' } });
@@ -2013,20 +1661,7 @@ export async function renderHealthPanel(outlet) {
     );
   }
 
-  // ۴-۲ — نوار نجات همیشه‌در‌دسترس: سه دکمه، بالای پنل
-  function rescueBarSection() {
-    return el('div', { class: 'card', style: { marginBottom: 'var(--sp-4)' } },
-      el('div', { class: 'card__body', style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', flexWrap: 'wrap', padding: 'var(--sp-3) var(--sp-4)' } },
-        el('span', { class: 'badge badge--neutral', style: { flexShrink: '0' } }, 'نوار نجات'),
-        el('button', { class: 'btn btn--primary', type: 'button', onclick: (e) => void restartAction(e.currentTarget) }, 'راه‌اندازی دوبارهٔ سامانه'),
-        el('button', { class: 'btn btn--ghost', type: 'button', onclick: (e) => void backupDownloadAction(e.currentTarget, null) }, 'دریافت پشتیبان فوری'),
-        el('button', { class: 'btn btn--ghost', type: 'button', onclick: (e) => void errorPackageAction(e.currentTarget, null) }, 'دریافت گزارش خطا (zip)'),
-        el('span', { class: 'hint-text', style: { marginInlineStart: 'auto', whiteSpace: 'normal' } }, 'برای روزهای سخت — با تأیید فارسی و حالت مشغول')
-      )
-    );
-  }
-
-  // ۴-۱ — بخش «سلامت یک‌نگاهی»: پنج سیگنال §۴ نقد، هرکدام کارت با سه رنگ + اقدام
+  // بخش ۱ — چراغ‌ها: پنج سیگنال، هرکدام کارت با سه رنگ + اقدام
   function oneGlanceSection(data, sync, quota, lastBackupAt) {
     const cards = [
       { title: 'موتور محلی', view: engineSignalView(data), actionLabel: 'راه‌اندازی دوبارهٔ موتور', onAction: (btn, line) => restartAction(btn, {
@@ -2035,15 +1670,15 @@ export async function renderHealthPanel(outlet) {
           resultLine: line
         }) },
       { title: 'مرکز', view: centerSignalView(sync), actionLabel: 'آزمایش اتصال', onAction: centerPingAction },
-      { title: 'سینک', view: syncLagSignalView(sync), actionLabel: 'جبران دوباره', onAction: syncCatchupAction },
-      { title: 'مصرف سهمیه', view: quotaSignalView(quota), actionLabel: 'بازخوانی سهمیه', onAction: quotaRefetchAction },
+      { title: 'هم‌گامی', view: syncLagSignalView(sync), actionLabel: 'جبران دوباره', onAction: syncCatchupAction },
+      { title: 'سهمیهٔ مرکز', view: quotaSignalView(quota), actionLabel: 'بازخوانی سهمیه', onAction: quotaRefetchAction },
       { title: 'پشتیبان', view: backupSignalView(lastBackupAt), actionLabel: 'دریافت پشتیبان', onAction: backupDownloadAction }
     ];
     return el('div', { class: 'card', style: { marginBottom: 'var(--sp-4)' } },
       el('div', { class: 'card__head' },
-        el('h3', { style: { margin: 0 } }, 'سلامت یک‌نگاهی — پنج سیگنال'),
+        el('h3', { style: { margin: 0 } }, '۱ — چراغ‌های وضعیت'),
         el('p', { class: 'hint-text', style: { margin: '4px 0 0' } },
-          'پنج سیگنال §۴ نقد (موتور محلی، مرکز، عقب‌ماندگی سینک، مصرف سهمیه، پشتیبان) با سه رنگ سبز/زرد/قرمز — هر کارت دکمهٔ اقدام خودش را دارد؛ نتیجهٔ هر اقدام زیر همان کارت می‌آید.')
+          'پنج چراغ: موتور محلی، مرکز، هم‌گامی، سهمیهٔ مرکز، پشتیبان — سبز یعنی سالم، زرد یعنی ناتمام ولی بی‌خطر، قرمز یعنی نیاز به اقدام. هر چراغ دکمهٔ اقدام خودش را دارد؛ نتیجهٔ هر اقدام زیر همان کارت می‌آید.')
       ),
       el('div', { class: 'card__body', style: { display: 'flex', gap: 'var(--sp-3)', flexWrap: 'wrap' } },
         cards.map((c) => signalCardEl(c))
@@ -2051,105 +1686,47 @@ export async function renderHealthPanel(outlet) {
     );
   }
 
-  // EXP-6 — ردیف drill عملیاتی: ثبت نتیجه با تأیید فارسی؛ بیش از ۳۱ روز زرد می‌شود
-  function drillSection() {
-    const valueBadge = el('span', { class: 'badge badge--neutral' }, '—');
-    const sub = el('div', { class: 'cell-sub' }, 'هنوز هیچ drill عملیاتی ثبت نشده است');
-    const render = () => {
-      const v = drillRecordView(readOpsDrillRecord(), Date.now());
-      const t = healthToneView(v.tone);
-      valueBadge.className = `badge ${t.badge}`;
-      valueBadge.textContent = v.label;
-      sub.textContent = v.detail;
-    };
-    render();
-    return el('div', { class: 'card card__body--flush', style: { marginBottom: 'var(--sp-4)' } },
-      el('div', { class: 'ob-row' },
-        el('div', { class: 'ob-row__main' },
-          el('div', { class: 'cell-main', style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', flexWrap: 'wrap' } },
-            'آخرین drill ثبت‌شده:',
-            valueBadge
-          ),
-          sub
-        ),
-        el('div', { class: 'ob-row__side' },
-          el('button', {
-            class: 'btn btn--ghost',
-            type: 'button',
-            onclick: (e) => void lockBtn(e.currentTarget, async () => {
-              const okGo = await confirmModal({
-                title: 'ثبت drill امروز',
-                message: 'آخرین drill عملیاتی — بازیابی پشتیبان روی رایانهٔ تمیز + قطع اینترنت واقعی + بستن برنامه از Task Manager — امروز با موفقیت انجام شده است؟ فقط نتیجهٔ واقعی را ثبت کنید.',
-                confirmLabel: 'ثبت می‌کنم'
-              });
-              if (!okGo) return;
-              try {
-                localStorage.setItem(OPS_DRILL_KEY, JSON.stringify({ at: new Date().toISOString(), result: 'done' }));
-                render();
-                toast('نتیجهٔ drill امروز ثبت شد — ماه بعد دوباره', 'success');
-              } catch {
-                toast('ثبت drill ممکن نشد — حافظهٔ مرورگر در دسترس نیست', 'error');
-              }
-            })
-          }, 'ثبت drill امروز')
-        )
-      )
-    );
-  }
-
-  // ۴-۵ — راهنمای درون‌برنامه‌ای: بخش تاشو؛ متن تعبیه‌شدهٔ همین فایل (بدون خواندن فایل بیرونی)
-  function guideSection() {
-    const body = el('div', { style: { display: 'none' } },
-      GUIDE_SECTIONS.map((s) => el('div', { style: { marginBottom: 'var(--sp-3)' } },
-        el('h4', { style: { margin: '0 0 var(--sp-1)' } }, s.title),
-        el('ul', { style: { margin: 0, paddingInlineStart: 'var(--sp-4)' } },
-          s.lines.map((ln) => el('li', { style: { margin: '2px 0', whiteSpace: 'normal' } }, ln))
-        )
-      ))
-    );
-    const toggleBtn = el('button', {
-      class: 'btn btn--ghost',
-      type: 'button',
-      onclick: () => {
-        const open = body.style.display !== 'none';
-        body.style.display = open ? 'none' : 'block';
-        toggleBtn.textContent = open ? 'باز کردن راهنما' : 'بستن راهنما';
-      }
-    }, 'باز کردن راهنما');
-    return el('div', { class: 'card', style: { marginBottom: 'var(--sp-4)' } },
-      el('div', { class: 'card__head', style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--sp-2)' } },
-        el('h3', { style: { margin: 0 } }, 'راهنما — چکیدهٔ راهنمای ادمین'),
-        toggleBtn
-      ),
-      el('div', { class: 'card__body' },
-        el('p', { class: 'hint-text', style: { margin: '0 0 var(--sp-2)', whiteSpace: 'normal' } },
-          'همان راهنمای سادهٔ ادمین، داخل خود برنامه — برای روزی که فایل راهنما دسترس نیست. سامانهٔ دسکتاپ بدون اینترنت هم کامل کار می‌کند؛ فقط تبادل بین شعبه‌ها تا وصل شدن صبر می‌کند.'),
-        body
-      )
-    );
-  }
-
-  /* ── فاز A — کارت «سرور محلی» (لایهٔ دوم نشانگر؛ طرح §۱-۳) ─────────────────────
+  /* ── بخش ۲ — سرور محلی روی شبکه (لایهٔ دوم نشانگر + نشانی‌های واقعی LAN) ───────────
      وضعیت/پورت‌ها/نسخهٔ اپ/آخرین بوت از feed مشترک پوسته (رویداد engine:status + poll
      ۳۰ثانیه‌ای engine_status) — رندر کارت درجا با شنونده تازه می‌شود، بدون rebuild کل نما.
-     سه کنش: راه‌اندازی دوباره (engine_restart با تأیید فارسی — الگوی restartAction)،
-     بازکردن پوشهٔ دیتا (open_data_dir)، کپی اطلاعات عیب‌یابی (کلیپ‌بورد با fallback).
-     بیرون پوستهٔ میز (window.__TAURI__ غایب) → کارت خاکستری «حالت وب — سرور خارجی». */
-  function serverSection() {
+     ۱.۲۷.۲۱ — ردیف‌های «نشانی موبایل» از GET /api/system/lan (lanView) کنار ردیف آدرس
+     محلی می‌نشینند + خط سه‌قدم موبایل؛ کنش‌ها: راه‌اندازی دوباره (engine_restart)،
+     بازکردن پوشهٔ داده (open_data_dir)، کپی اطلاعات عیب‌یابی (کلیپ‌بورد با fallback).
+     بیرون پوستهٔ میز → کارت «حالت وب» با origin + همان ردیف‌های LAN (از درگاه اپ). */
+  function serverSection(lanView) {
+    const lanRows = lanView && lanView.mobileUrls.length > 0
+      ? lanView.mobileUrls.map((u) => lanMobileRow(u))
+      : [];
+    const stepsRow = lanRows.length > 0 ? lanMobileStepsRow() : null;
+    const gamesRow = lanView && lanView.gamesPort
+      ? el('div', { class: 'ob-row' },
+          el('div', { class: 'ob-row__main' },
+            el('div', { class: 'cell-main' }, `بازی‌ها — پورت ${fa(lanView.gamesPort)}`),
+            el('div', { class: 'cell-sub', style: { direction: 'ltr', textAlign: 'left' } }, `http://127.0.0.1:${lanView.gamesPort} (همین رایانه)`)
+          ),
+          el('div', { class: 'ob-row__side' }, el('span', { class: 'badge badge--neutral' }, 'سرویس دوم'))
+        )
+      : null;
+
     const tauri = globalThis.__TAURI__;
     const hasChannel = Boolean(tauri && (typeof tauri.invoke === 'function' || (tauri.event && typeof tauri.event.listen === 'function')));
     if (!hasChannel) {
-      // ۱.۲۷.۱۲ — حالت وب هم آدرس را نشان می‌دهد (خواست کارفرما) — کانال تائوری نیست: origin خودش آدرس است
+      // ۱.۲۷.۱۲ — حالت وب هم آدرس را نشان می‌دهد — کانال تائوری نیست: origin خودش آدرس است
       const webAddr = serverAddressView(null, typeof window !== 'undefined' && window?.location?.origin ? window.location.origin : null);
       return el('div', { class: 'card', style: { marginBottom: 'var(--sp-4)' } },
         el('div', { class: 'card__head' },
-          el('h3', { style: { margin: 0 } }, 'سرور محلی'),
+          el('h3', { style: { margin: 0 } }, '۲ — سرور محلی روی شبکه'),
           el('span', { class: 'badge badge--neutral' }, 'حالت وب')
         ),
-        el('div', { class: 'card__body' },
-          el('p', { class: 'hint-text', style: { whiteSpace: 'normal' } },
-            'حالت وب — سرور خارجی: این نسخه بدون پوستهٔ میز اجرا شده و فرمان‌های موتور محلی (engine_status / engine_restart) در دسترس نیستند؛ سلامت موتور همین‌جا از کارت «موتور محلی» بالای پنل خوانده می‌شود.'),
-          serverAddressRow(webAddr)
+        el('div', { class: 'card__body--flush' },
+          el('div', { class: 'card__body' },
+            el('p', { class: 'hint-text', style: { whiteSpace: 'normal' } },
+              'حالت وب — سرور خارجی: این نسخه بدون پوستهٔ میز اجرا شده و فرمان‌های موتور محلی (engine_status / engine_restart) در دسترس نیستند؛ سلامت موتور همین‌جا از کارت «موتور محلی» بالای پنل خوانده می‌شود.'),
+            serverAddressRow(webAddr)
+          ),
+          gamesRow,
+          ...lanRows,
+          stepsRow
         )
       );
     }
@@ -2159,9 +1736,9 @@ export async function renderHealthPanel(outlet) {
     const card = el('div', { class: 'card card__body--flush', style: { marginBottom: 'var(--sp-4)' } },
       el('div', { class: 'ob-section__head' },
         el('div', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', flexWrap: 'wrap' } },
-          el('h3', { style: { margin: 0 } }, 'سرور محلی'),
+          el('h3', { style: { margin: 0 } }, '۲ — سرور محلی روی شبکه'),
           el('p', { class: 'hint-text', style: { margin: '4px 0 0' } },
-            'وضعیت زندهٔ سرور محلی — همان نقطهٔ رنگی نشانگر سربرگ؛ هر ۳۰ ثانیه و با هر رویداد پوسته تازه می‌شود.')
+            'وضعیت زندهٔ سرور محلی و نشانی واقعی آن روی شبکه — پورت‌ها از همین بوت؛ هر ۳۰ ثانیه و با هر رویداد پوسته تازه می‌شود. موبایلِ همان وای‌فای نشانی «موبایل» را باز می‌کند.')
         )
       ),
       body
@@ -2220,13 +1797,15 @@ export async function renderHealthPanel(outlet) {
 
     let unsubscribed = false;
     let unsubscribe = null;
-    // ۱.۲۷.۱۲ — paint دومایه‌ای شد (status, isInitial): پرِ اولیه با بدنهٔ جدا از DOM هم می‌نشیند
-    // (کارت داخل آرایهٔ el ساخته می‌شود و هنوز به DOM وصل نیست) — گارد «اشتراک کهنه» فقط برای emitهای feed
+    // paint دومایه‌ای (status, isInitial) + ردیف‌های LAN از ctx — ۱.۲۷.۲۱
     const paint = makeServerCardPaint(body, {
       resultLine,
       engineRestartAction,
       openDataDirAction,
       copyDiagAction,
+      lanRows,
+      stepsRow,
+      gamesRow,
       onStaleSubscription: () => {
         // نما رندر دوباره شده (بازخوانی ۶۰ثانیه‌ای کل پنل) — اشتراک کهنه بسته شود
         if (unsubscribe && !unsubscribed) { unsubscribed = true; unsubscribe(); }
@@ -2237,34 +1816,24 @@ export async function renderHealthPanel(outlet) {
     return card;
   }
 
-  /* ── فاز B — کارت «اتصال ابری» (سند §۲-۵) — کنار کارت «سرور محلی» (دو کارت جدا) ─────────
-     فاز D1 — چیدمان دو-لایه (خواست کارفرما): لایهٔ عادی فقط خط وضعیت انسانی + دو دکمهٔ برجستهٔ
-     «دریافت اطلاعات»/«ارسال اطلاعات» (هر دو = POST run-now، همان قرارداد فعلی) + خط «همگام‌سازی
-     خودکار: هر X دقیقه (تغییر)» + دکمهٔ «جزئیات پیشرفته»؛ لایهٔ پیشرفته (بازو/بسته، پیش‌فرض بسته)
-     نسخهٔ ساختار اطلاعات/تعارض/تاریخچهٔ خطاها/آدرس/کلید + «پیکربندی اولیه…» و «حذف اتصال».
-     وضعیت/آخرین هم‌گامی دوطرفه از feed مشترک HTTP (/api/instance-sync/status + poll ۳۰ثانیه‌ای +
-     poll فوری پس از هر کنش) — رندر درجا با شنونده، بدون rebuild کل نما (الگوی paint کارت سرور
-     فاز A). کنش‌ها: run-now (در جریان → غیرفعال)، «تغییر» (formModal: URL با normalizeWorkerUrl
-     موجود + فاصلهٔ خودکار دقیقه + کلید اتصال فقط در دسکتاپ → POST config + invoke
-     cloud_secret_set + poll فوری)، «حذف اتصال» (تأیید دوبله + پیام پشتیبان → DELETE config)،
-     «کلون از ابر…» در فرم (تأیید دوبله + هشدار جایگزینی اطلاعات → POST clone {confirm:true} →
-     نتیجه + مسیر پشتیبان). بیرون پوستهٔ میز فیلد کلید غیرفعال است — بقیهٔ کارت سالم می‌ماند.
-     ⚠ هیچ تغییر قرارداد API و هیچ تغییر نام تابع — فقط متن‌ها، ترتیب نمایش و بازو/بستن. */
+  /* ── بخش ۳ — سایت ابری (کلادفلر): همان کارت instance-sync با عنوان و واژگان تازه ──────
+     با کلید کلادفلر، ویزارد درون‌کارت (mountCloudSetup) پایگاه D1 + ورکر markaz-central +
+     دامنهٔ workers.dev را می‌سازد و همین دستگاه را به آن وصل می‌کند؛ دریافت/ارسال اطلاعات
+     و پیکربندی/کلون/حذف با feed مشترک HTTP (poll ۳۰ثانیه‌ای) — ماشین ۱.۲۷.۱۸/۲۰ دست‌نخورده. */
   function cloudSyncSection(engineGap) {
     const desktopSecret = cloudSecretChannelAvailable();
-    // ۱.۲۷.۱۲ — متن کوتاه هشدار ناهم‌نسخه‌ای برای ردیف بی‌اتصال وقتی status=null (خودتوضیحی موتور کهنه)
     const gapShort = engineGapShortView(engineGap);
     const resultLine = el('div', { class: 'hint-text', style: { marginTop: 'var(--sp-2)', whiteSpace: 'normal' } });
     const body = el('div', { class: 'card__body--flush' });
-    // فاز D2 — ناحیهٔ سوارشدن ویزارد داخل کارت: عمداً بیرون از body تا بازخوانی‌های ۳۰ثانیه‌ای feed
+    // ناحیهٔ سوارشدن ویزارد داخل کارت: عمداً بیرون از body تا بازخوانی‌های ۳۰ثانیه‌ای feed
     // (paint فقط body را عوض می‌کند) ویزاردِ بازِ نیمه‌کاره را نشویند؛ بسته/خالی → گره تهی بی‌اثر
     const setupHost = el('div', {});
     const card = el('div', { class: 'card card__body--flush', style: { marginBottom: 'var(--sp-4)' } },
       el('div', { class: 'ob-section__head' },
         el('div', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', flexWrap: 'wrap' } },
-          el('h3', { style: { margin: 0 } }, 'اتصال ابری'),
+          el('h3', { style: { margin: 0 } }, '۳ — سایت ابری (کلادفلر)'),
           el('p', { class: 'hint-text', style: { margin: '4px 0 0' } },
-            'همین دستگاه با مرکز ابری اطلاعات رد و بدل می‌کند — «دریافت اطلاعات» تازه‌ها را از ابر می‌گیرد و «ارسال اطلاعات» کارهای این دستگاه را می‌فرستد؛ وضعیت هر ۳۰ ثانیه و پس از هر کنش تازه می‌شود.')
+            'با کلید کلادفلر، سرور مرکزی روی حساب خودتان ساخته می‌شود: پایگاه D1 + ورکر markaz-central + دامنهٔ workers.dev — و همین دستگاه با آن اطلاعات رد و بدل می‌کند. «دریافت اطلاعات» تازه‌ها را از ابر می‌گیرد و «ارسال اطلاعات» کارهای این دستگاه را می‌فرستد؛ وضعیت هر ۳۰ ثانیه تازه می‌شود.')
         )
       ),
       body,
@@ -2285,8 +1854,7 @@ export async function renderHealthPanel(outlet) {
       });
     }
 
-    // «کلون از ابر…» — دکمهٔ دوم فرم پیکربندی: تأیید دوبله + هشدار جایگزینی اطلاعات → POST clone
-    // قرارداد: ۴۰۹=نیاز confirm — پس از تأیید دوبله با {confirm:true} می‌رویم؛ پاسخ {ok, tables, backup_path}
+    // «کلون از ابر…» — تأیید دوبله + هشدار جایگزینی اطلاعات → POST clone {confirm:true}
     async function cloneFromCloudAction() {
       const okFirst = await confirmModal({
         title: 'کلون از ابر',
@@ -2331,7 +1899,6 @@ export async function renderHealthPanel(outlet) {
           submitLabel: 'ذخیره',
           secondary: { label: 'کلون از ابر…', onClick: () => cloneFromCloudAction() },
           onSubmit: async (values) => {
-            // URL با نگاشت موجود اعتبارسنجی می‌شود؛ خطا → errBox فرم و ماندن مودال باز
             const { normalizeWorkerUrl } = await import('../../../../src/cloud-setup/verify.ts');
             const nm = normalizeWorkerUrl(values.url ?? '');
             if (!nm.ok) throw new Error(nm.message);
@@ -2348,14 +1915,12 @@ export async function renderHealthPanel(outlet) {
             await pollCloudSyncNow();
           }
         });
-        // حالت وب — فیلد کلید اتصال غیرفعال؛ مقدار هرگز خوانده/فرستاده نمی‌شود (گارد کانال)
         if (!desktopSecret) {
           const secretInput = form.querySelector('input[name="secret"]');
           if (secretInput) { secretInput.disabled = true; secretInput.placeholder = '—'; }
         }
       };
       if (!desktopSecret) { openForm(); return; }
-      // دسکتاپ — ماسک کلید فعلی از پوسته خوانده می‌شود تا hint فرم واقعی باشد
       void (async () => {
         try {
           const cur = await cloudSecretInvoke('cloud_secret_get');
@@ -2400,7 +1965,7 @@ export async function renderHealthPanel(outlet) {
 
     let unsubscribed = false;
     let unsubscribe = null;
-    // فاز D1 — لایهٔ پیشرفته: بازو/بستهٔ نشست‌محلی با پیش‌فرض بسته (مدیر تازه‌کار فقط لایهٔ عادی را می‌بیند)
+    // لایهٔ پیشرفته: بازو/بستهٔ محلی با پیش‌فرض بسته (مدیر تازه‌کار فقط لایهٔ عادی را می‌بیند)
     let advancedOpen = false;
     const advancedBody = el('div', { style: { display: 'none' } });
     const advancedToggleBtn = el('button', {
@@ -2416,13 +1981,8 @@ export async function renderHealthPanel(outlet) {
     };
     paintAdvanced();
 
-    /* فاز D2 — جریان کامل پیکربندی ابری داخل کارت (خواست کارفرما: «کل جریان پیکربندی ابری باید
-       داخل کارت ابریِ پنل سلامت بیاید»): دکمهٔ «شروع پیکربندی ابری» ناحیهٔ داخلی (setupHost) را
-       بازو/بسته می‌کند؛ ویزارد کامل (سه گزینه، فرم‌ها، پیش‌نمایش markaz-، گام رمز یک‌بارمصرف،
-       «ذخیره و اتصال» و پیوند «وب مرکز ابری») با import پویا فقط هنگام باز شدن lazy سوار می‌شود
-       (mountCloudSetup — views/cloud-setup.js — حالت compact). هیچ ناوبری به #/cloud-setup برای
-       شروع نیست — آن مسیر فقط دیپ‌لینک می‌ماند. پس از «ذخیره و اتصال» موفق (done)، ناحیه بسته و
-       کارت با poll فوری feed مشترک به حالت «متصل» می‌رود — توست موفقیت خودِ ویزارد است. */
+    // جریان کامل پیکربندی ابری داخل کارت: «شروع پیکربندی ابری» ناحیهٔ داخلی را بازو/بسته می‌کند؛
+    // ویزارد کامل با import پویا فقط هنگام باز شدن lazy سوار می‌شود (mountCloudSetup — compact).
     let setupOpen = false;
     let setupUnmount = null;
     const setupToggleBtn = el('button', {
@@ -2449,7 +2009,6 @@ export async function renderHealthPanel(outlet) {
       try {
         const mod = await import('./cloud-setup.js');
         if (!setupOpen || !body.isConnected) return; // در فاصلهٔ import بسته/تخریب شده — سوار نشود
-        // تطبیق‌دهندهٔ کوچک deps — همان قرارداد ویزارد: fetch/api یکسان + کانال راز پوستهٔ میز + مودال‌ها
         setupUnmount = mod.mountCloudSetup(setupHost, {
           api,
           invoke: cloudSecretInvoke,
@@ -2472,8 +2031,6 @@ export async function renderHealthPanel(outlet) {
       }
     }
 
-    // ۱.۲۷.۱۲ — paint دومایه‌ای شد (status, isInitial): پرِ اولیه با بدنهٔ جدا از DOM هم می‌نشیند —
-    // اگر feed هرگز emit نکند (موتور کهنهٔ بدون /api/instance-sync/*) کارت تا ابد خالی نمی‌ماند
     const paint = makeCloudCardPaint(body, {
       setupToggleBtn,
       advancedToggleBtn,
@@ -2484,7 +2041,6 @@ export async function renderHealthPanel(outlet) {
       deleteConnectionAction,
       gapShort,
       onStaleSubscription: () => {
-        // نما رندر دوباره شده (بازخوانی ۶۰ثانیه‌ای کل پنل) — اشتراک کهنه بسته شود
         if (unsubscribe && !unsubscribed) { unsubscribed = true; unsubscribe(); }
       }
     });
@@ -2494,47 +2050,99 @@ export async function renderHealthPanel(outlet) {
     return card;
   }
 
+  // بخش ۵ — کارهای اضطراری: سه کنش نجات، همیشه در دسترس
+  function rescueBarSection() {
+    const line = el('div', { class: 'hint-text', style: { marginTop: 'var(--sp-2)', whiteSpace: 'normal' } });
+    return el('div', { class: 'card', style: { marginBottom: 'var(--sp-4)' } },
+      el('div', { class: 'card__head' },
+        el('h3', { style: { margin: 0 } }, '۵ — کارهای اضطراری'),
+        el('p', { class: 'hint-text', style: { margin: '4px 0 0' } },
+          'سه کنش نجات با تأیید فارسی و حالت مشغول: راه‌اندازی دوبارهٔ سامانه (چند ثانیه قطع می‌شود)، پشتیبان فوری (فایل روی حافظهٔ جدا نگه دارید) و بستهٔ گزارش خطا برای پشتیبانی.')
+      ),
+      el('div', { class: 'card__body' },
+        el('div', { style: { display: 'flex', gap: 'var(--sp-3)', flexWrap: 'wrap' } },
+          el('button', { class: 'btn btn--primary', type: 'button', onclick: (e) => void restartAction(e.currentTarget, { resultLine: line }) }, 'راه‌اندازی دوبارهٔ سامانه'),
+          el('button', { class: 'btn btn--ghost', type: 'button', onclick: (e) => void backupDownloadAction(e.currentTarget, line) }, 'دریافت پشتیبان فوری'),
+          el('button', { class: 'btn btn--ghost', type: 'button', onclick: (e) => void errorPackageAction(e.currentTarget, line) }, 'دریافت گزارش خطا (zip)')
+        ),
+        line
+      )
+    );
+  }
+
+  // بخش ۶ — هشدارهای فعال: همان دادهٔ پنل با حکم محلی-نودی (م۲۱۰ — جهش خطاهای مرورگر ۲۴ساعت)
+  function alertsSection(alerts, lastEvaluatedAt) {
+    const count = (alerts ?? []).length;
+    const headBadge = count === 0
+      ? el('span', { class: 'badge badge--success' }, 'هیچ هشدار فعالی نیست')
+      : el('span', { class: 'badge badge--error' }, `${fa(count)} هشدار فعال`);
+    const stamp = lastEvaluatedAt
+      ? `آخرین ارزیابی خودکار: ${formatJalaliDateTime(lastEvaluatedAt)}`
+      : 'هنوز ارزیابی خودکار شبانه‌ای انجام نشده است';
+    return el('div', { class: 'card card__body--flush', style: { marginBottom: 'var(--sp-4)' } },
+      el('div', { class: 'ob-section__head' },
+        el('div', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', flexWrap: 'wrap' } },
+          el('h3', { style: { margin: 0 } }, '۶ — هشدارهای فعال'),
+          headBadge
+        ),
+        el('p', { class: 'hint-text', style: { margin: '4px 0 0' } },
+          `${stamp} — ارزیابی هر شب در کرون دایجست انجام می‌شود؛ وقتی هشدار باشد، پیام فارسی برای مدیر روی کانال بات می‌آید.`)
+      ),
+      count === 0
+        ? el('div', {}, el('div', { class: 'ob-row' },
+            el('div', { class: 'ob-row__main' },
+              el('div', { class: 'cell-main' }, 'همهٔ چراغ‌ها زیر آستانه‌اند'),
+              el('div', { class: 'cell-sub' }, 'اگر مشکلی پیش بیاید، همین‌جا و کانال بات خودش را نشان می‌دهد')))
+          )
+        : el('div', {}, (alerts ?? []).map((alert) => {
+            const meta = alert.severity === 'error'
+              ? { cls: 'badge--error', label: 'فوری' }
+              : { cls: 'badge--warning', label: 'هشدار' };
+            return el('div', { class: 'ob-row' },
+              el('div', { class: 'ob-row__main' },
+                el('div', { class: 'cell-main' }, alert.message)),
+              el('div', { class: 'ob-row__side' },
+                el('span', { class: `badge ${meta.cls}` }, meta.label),
+                el('span', { class: 'badge badge--neutral' }, alert.code))
+            );
+          }))
+    );
+  }
+
   async function reload() {
-    // ف۶ + EXP-2 — پنل سلامت، گزارش رشد، وضعیت هم‌گامی و سهمیهٔ مرکز هم‌زمان گرفته می‌شوند؛
-    // خرابیِ هر بخش فقط کارت خودش را degraded می‌کند
-    const [healthOut, growthOut, syncOut, quotaOut, capsOut] = await Promise.allSettled([
+    // پنل سلامت، وضعیت هم‌گامی، سهمیهٔ مرکز، قابلیت‌های موتور و نشانی LAN هم‌زمان گرفته
+    // می‌شوند؛ خرابیِ هر بخش فقط کارت خودش را degraded می‌کند — پنل هرگز نمی‌شکند
+    const [healthOut, syncOut, quotaOut, capsOut, lanOut] = await Promise.allSettled([
       api.get('/api/health/panel'),
-      api.get('/api/growth/report'),
       api.get('/api/node-sync/status'),
       api.get('/api/central/quota'),
-      // ۱.۲۷.۱۳ — پایانهٔ قابلیت‌های موتور (P0-1 ممیزی §۱): عمومی و بی‌احراز؛ خرابیِ آن
-      // فقط کارت نسخه را به منبع قبلی برمی‌گرداند — بقیهٔ پنل هرگز نمی‌شکند
-      api.get('/api/engine/capabilities')
+      // پایانهٔ قابلیت‌های موتور (P0-1 ممیزی §۱): عمومی و بی‌احراز؛ خرابیِ آن فقط کارت نسخه را
+      // به منبع قبلی برمی‌گرداند — بقیهٔ پنل هرگز نمی‌شکند
+      api.get('/api/engine/capabilities'),
+      // ۱.۲۷.۲۱ — نشانی واقعی سرور روی شبکه (بایندینگ LAN_INFO adapter)؛ غایب → کارت به ردیف قبلی برمی‌گردد
+      api.get('/api/system/lan')
     ]);
     if (healthOut.status === 'rejected') {
       const err = healthOut.reason;
       stopTimer();
       root.replaceChildren(emptyState({
         iconName: 'alert',
-        title: 'بارگذاری پنل سلامت ناموفق بود',
+        title: 'بارگذاری پنل نجات ناموفق بود',
         hint: err?.message ?? 'خطای نامشخص'
       }));
       return;
     }
     const data = healthOut.value.data;
-    const growth = growthOut.status === 'fulfilled' ? growthOut.value.data : null;
-    const growthError = growthOut.status === 'rejected' ? growthOut.reason : null;
-    // ف۶ — وضعیت هم‌گامی: پاکت {data:…} باز می‌شود؛ پاسخ ناآشنا (درگاه هنوز مستقر نبود؟) → null → کارت «نامشخص»
     const sync = syncOut.status === 'fulfilled' ? unwrapNodeSyncStatus(syncOut.value) : null;
     const syncError = syncOut.status === 'rejected' ? syncOut.reason : null;
-    // EXP-2 — سهمیهٔ مرکز: خرابی/پاکت ناآشنا → null → کارت «دریافت نشد»؛ بقیهٔ پنل سالم می‌ماند
     const quota = quotaOut.status === 'fulfilled' ? unwrapQuota(quotaOut.value) : null;
-    const quotaError = quotaOut.status === 'rejected' ? quotaOut.reason : null;
+    const lanView = lanOut.status === 'fulfilled' ? lanInfoView(lanOut.value) : null;
 
-    // موج ۴ (۴-۱) — مُهر پشتیبان از کلید موجود نمای پشتیبان‌گیری (cs.lastBackupAt)
+    // مُهر پشتیبان از کلید موجود نمای پشتیبان‌گیری (cs.lastBackupAt)
     let lastBackupAt = null;
     try { lastBackupAt = localStorage.getItem('cs.lastBackupAt'); } catch { /* نرم */ }
 
-    // ۱.۲۷.۱۳ — هشدار ناهم‌نسخه‌ای موتور/برنامه: نسخهٔ موتور با اولویت از /api/engine/capabilities
-    // (پایانهٔ قابلیت‌های موتور P0-1 — مستقیم‌ترین سیگنال نسخهٔ موتور؛ عمومی و بی‌احراز)؛
-    // اگر آن در دسترس نبود همان اولویت ۱.۲۷.۱۲ (data.version پنل، سپس appVersion پاکت
-    // engine_status). APP_VERSION از «منبع یکتای نسخه» (src/core/version.ts) با import پویا —
-    // الگوی importهای نما به src.
+    // هشدار ناهم‌نسخه‌ای موتور/برنامه: نسخهٔ موتور با اولویت capabilities → data.version → feed
     let appVersion = null;
     try { appVersion = (await import('../../../../src/core/version.ts')).APP_VERSION ?? null; } catch { /* نرم — بی‌هشدار نسخه */ }
     const feedAppVersion = lastServerStatus()?.appVersion;
@@ -2544,24 +2152,14 @@ export async function renderHealthPanel(outlet) {
       || (typeof feedAppVersion === 'string' && feedAppVersion ? feedAppVersion : null);
     const engineGap = engineAppVersionGapView(engineVersionText, appVersion);
 
-    const dbOk = data?.db?.ok;
-    const counts = data?.counts ?? {};
-    const cp = data?.cp_link ?? { configured: false, channels: [] };
-    const okCount = cp.channels.filter((c) => c.state === 'ok').length;
-    const linkBadge = !cp.configured
-      ? el('span', { class: 'badge badge--neutral' }, 'خاموش (کلید نود تنظیم نشده)')
-      : okCount === cp.channels.length
-        ? el('span', { class: 'badge badge--success' }, `هر ${fa(cp.channels.length)} درگاه سالم`)
-        : el('span', { class: 'badge badge--warning' }, `${fa(okCount)} از ${fa(cp.channels.length)} درگاه سالم`);
-
-    // ف۶ — کارت وضعیت هم‌گامی: هر خطای غیرمنتظرهٔ ساخت فقط به «نامشخص» بی‌صدا می‌افتد — پنل هرگز نمی‌شکند
+    // کارت وضعیت هم‌گامی: هر خطای غیرمنتظرهٔ ساخت فقط به «نامشخص» بی‌صدا می‌افتد — پنل هرگز نمی‌شکند
     let syncCard;
     try {
       syncCard = syncSection(sync, syncError);
     } catch {
       syncCard = el('div', { class: 'card', style: { marginBottom: 'var(--sp-4)' } },
         el('div', { class: 'card__head' },
-          el('h3', { style: { margin: 0 } }, 'وضعیت هم‌گامی'),
+          el('h3', { style: { margin: 0 } }, '۴ — هم‌گامی با مرکز'),
           el('span', { class: 'badge badge--neutral' }, 'نامشخص')
         ),
         el('div', { class: 'card__body' },
@@ -2569,100 +2167,17 @@ export async function renderHealthPanel(outlet) {
       );
     }
 
-    // EXP-2 — کارت مصرف مرکز: هر خطای غیرمنتظرهٔ ساخت فقط به «دریافت نشد» بی‌صدا می‌افتد — پنل هرگز نمی‌شکند
-    let quotaCard;
-    try {
-      quotaCard = quotaSection(quota, quotaError);
-    } catch {
-      quotaCard = el('div', { class: 'card', style: { marginBottom: 'var(--sp-4)' } },
-        el('div', { class: 'card__head' },
-          el('h3', { style: { margin: 0 } }, 'مصرف مرکز (برآوردی)'),
-          el('span', { class: 'badge badge--neutral' }, 'دریافت نشد')
-        ),
-        el('div', { class: 'card__body' },
-          el('p', { class: 'hint-text' }, 'سهمیهٔ مرکز دریافت نشد — بقیهٔ پنل سالم است.'))
-      );
-    }
-
-    /* فاز D2 — کوتاه‌سازی پنل (خواست کارفرما: «منوی کارت سلامت خیلی طولانیه — ساده شود»)؛
-       بالای صفحه فقط سه چیز: «سلامت یک‌نگاهی» + کارت «سرور محلی» + کارت «اتصال ابری»؛ بقیهٔ بخش‌ها
-       (به همان ترتیب و محتوای قبل) زیر آکاردئون واحد «جزئیات پیشرفته» با پیش‌فرض بسته جمع می‌شوند —
-       باز/بسته سشن‌محلی (کلید hp.advancedOpen — الگوی cs.cloudSetupSkipped)؛ عنوان‌های h3 عین قبل.
-       نوار نجات هم داخل همین آکاردئون می‌آید تا «فقط سه چیز» در بالای صفحه برقرار بماند (کنش‌هایش
-       با یک باز کردن در دسترس‌اند). هر دو مسیر رندر پوشش داده شد: کارت‌های عادی و کارت‌های
-       fallback (syncCard/quotaCard ناشی از خطای درگاه) همه داخل همین آکاردئون می‌نشینند. */
-    let advancedOpenNow = advancedSectionsOpenInSession();
-    const advancedBody = el('div', { style: { display: 'none' } },
-      rescueBarSection(), // ۴-۲ — نوار نجات سه‌دکمه‌ای (راه‌اندازی دوباره / پشتیبان فوری / zip)
-
-      el('div', { class: 'card', style: { marginBottom: 'var(--sp-4)' } },
-        el('div', { class: 'card__head' },
-          el('h3', { style: { margin: 0 } }, 'سامانه'),
-          el('span', { class: dbOk ? 'badge badge--success' : 'badge badge--error' }, dbOk ? 'D1 متصل' : 'D1 قطع')
-        ),
-        el('div', { class: 'card__body--flush' },
-          infoRow('نسخهٔ سامانه', el('span', {}, `${data?.version ?? '—'}${data?.env ? ` · محیط ${data.env}` : ''}`)),
-          infoRow('مایگریشن‌های اعمال‌شده', data?.migrations?.applied != null ? fa(data.migrations.applied) : '—'),
-          infoRow('تأخیر D1', data?.db?.latency_ms != null ? `${fa(data.db.latency_ms)} میلی‌ثانیه` : '—'),
-          infoRow('خطاهای مرورگر (۲۴ ساعت)', counts.client_errors_24h != null ? fa(counts.client_errors_24h) : '—'),
-          infoRow('تله‌متری RUM (۲۴ ساعت)', counts.rum_events_24h != null ? fa(counts.rum_events_24h) : '—'),
-          infoRow('گزارش باگ باز', counts.bug_reports_open != null ? fa(counts.bug_reports_open) : '—')
-        )
-      ),
-
-      syncCard, // ف۶ — وضعیت هم‌گامی نود (بین «سامانه» و درگاه‌های CP: جبرانی/خارج از خط/خطا با یک نگاه)
-
-      quotaCard, // EXP-2 — مصرف مرکز (برآوردی): سه شاخص رنگی + ورود ناموفق ۲۴ ساعت؛ خرابی = «دریافت نشد»
-
-      el('div', { class: 'card card__body--flush', style: { marginBottom: 'var(--sp-4)' } },
-        el('div', { class: 'ob-section__head' },
-          el('div', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', flexWrap: 'wrap' } },
-            el('h3', { style: { margin: 0 } }, 'لینک کنترل‌پلین — شش درگاه'),
-            linkBadge
-          ),
-          el('p', { class: 'hint-text', style: { margin: '4px 0 0' } },
-            'هر درگاه «آخرین موفقیت» خودش را از زمانِ ثبت‌شدهٔ همگام‌سازی می‌خواند؛ کهنه‌شدن یعنی CP پاسخ نمی‌دهد یا ترافیک زنده برای چرخهٔ فرصت‌طلب نبوده — هیچ مسیر محلی به‌خاطر آن نمی‌شکند.')
-        ),
-        el('div', {}, cp.channels.map(channelRow))
-      ),
-
-      alertsSection(data?.alerts, data?.alerts_last_evaluated_at), // ف۵ (P0-3) — هشدارهای فعال زنده
-
-      growthSection(growth, growthError),
-
-      drillSection(), // EXP-6 — ثبت drill عملیاتی ماهانه (پیوند ۳-۲ و چک‌لیست چاپی ADMIN-GUIDE)
-
-      guideSection() // ۴-۵ — راهنمای درون‌برنامه‌ای (چکیدهٔ ADMIN-GUIDE — بدون خواندن فایل)
-    );
-    const advancedToggleBtn = el('button', {
-      class: 'btn btn--ghost',
-      type: 'button',
-      onclick: () => {
-        advancedOpenNow = !advancedOpenNow;
-        markAdvancedSectionsOpen(advancedOpenNow); // سشن‌محلی — الگوی skip ویزارد ابری
-        paintAdvancedSections();
-      }
-    });
-    const paintAdvancedSections = () => {
-      const layout = healthPanelLayoutView(advancedOpenNow);
-      advancedToggleBtn.textContent = layout.toggleLabel;
-      advancedToggleBtn.setAttribute('aria-expanded', String(layout.open));
-      advancedBody.style.display = layout.advancedHidden ? 'none' : 'block';
-    };
-    paintAdvancedSections();
-
     root.replaceChildren(
       el('div', { class: 'page-head' },
-        el('h2', {}, 'پنل سلامت'),
-        el('p', { class: 'hint-text' }, 'وضعیت زندهٔ سامانه و لینک کنترل‌پلین — از زمانِ واقعی آخرین همگام‌سازی و شمارنده‌های جدول‌ها؛ هر ۶۰ ثانیه خودکار بازخوانی می‌شود.')
+        el('h2', {}, 'پنل نجات و سلامت'),
+        el('p', { class: 'hint-text' },
+          `شش بخش مرتب: چراغ‌ها · سرور محلی · سایت ابری · هم‌گامی · کارهای اضطراری · هشدارها — بازخوانی خودکار هر ۶۰ ثانیه · نسخهٔ ${data?.version ?? '—'}${data?.env ? ` (${data.env})` : ''}`)
       ),
 
-      oneGlanceSection(data, sync, quota, lastBackupAt), // ۴-۱ — پنج سیگنال §۴ نقد با اقدام
+      oneGlanceSection(data, sync, quota, lastBackupAt), // ۱ — چراغ‌های وضعیت
 
-      // فاز B — دو کارت جدا کنار هم (دو قرارداد جدا — سند §۲-۵): «سرور محلی» (فاز A) + «اتصال ابری» (فاز B)؛
-      // روی نمایشگر باریک خودش می‌شکند (auto-fit) — هیچ تغییری در ساخت کارت سرور فاز A نداریم
-      // ۱.۲۷.۱۲ — ردیف هشدار ناهم‌نسخه‌ای (badge زرد موجود — بدون CSS تازه) بالای کارت سرور
-      // محلی داخل همان grid (span همهٔ ستون‌ها)؛ gapShort به کارت ابری می‌رود (ردیف بی‌اتصال)
+      // ۲ سرور محلی + ۳ سایت ابری کنار هم (روی نمایشگر باریک خودش می‌شکند — auto-fit)؛
+      // هشدار زرد ناهم‌نسخه‌ای بالای کارت سرور با span همهٔ ستون‌ها (۱.۲۷.۱۲ — دست‌نخورده)
       el('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 'var(--sp-3)', alignItems: 'start' } },
         engineGap
           ? el('div', { class: 'card card__body--flush', style: { gridColumn: '1 / -1' } },
@@ -2675,22 +2190,16 @@ export async function renderHealthPanel(outlet) {
                 )
               ))
           : null,
-        serverSection(), cloudSyncSection(engineGap)),
+        serverSection(lanView), cloudSyncSection(engineGap)),
 
-      // فاز D2 — آکاردئون واحد «جزئیات پیشرفته»: بقیهٔ بخش‌ها با همان ترتیب/محتوای قبل، پیش‌فرض بسته
-      el('div', { class: 'card card__body--flush', style: { marginBottom: 'var(--sp-4)' } },
-        el('div', { class: 'ob-row' },
-          el('div', { class: 'ob-row__main' },
-            el('div', { class: 'cell-main' }, 'بقیهٔ بخش‌های پنل'),
-            el('div', { class: 'cell-sub' }, 'سامانه، وضعیت هم‌گامی، مصرف مرکز، کنترل‌پلین، هشدارها، گزارش رشد جدول‌ها، بازیابی و راهنما — همه سرِ جایشان هستند؛ با «جزئیات پیشرفته» باز می‌شوند.')
-          ),
-          el('div', { class: 'ob-row__side' }, advancedToggleBtn)
-        ),
-        advancedBody
-      ),
+      syncCard, // ۴ — هم‌گامی با مرکز
+
+      rescueBarSection(), // ۵ — کارهای اضطراری
+
+      alertsSection(data?.alerts, data?.alerts_last_evaluated_at), // ۶ — هشدارهای فعال
 
       el('p', { class: 'hint-text' },
-        `آخرین بازخوانی: ${formatJalaliDateTime(data?.now)} — مرجع طراحی: طرح ارتقای بک‌اند §۳-۹ (CP-2/CP-3) و §۵-۳ (ف۴ بهداشت داده).`)
+        `آخرین بازخوانی: ${formatJalaliDateTime(data?.now)} — این پنل جایگزین «پنل سلامت» پرحجم است؛ دادهٔ بخش‌های حذف‌شده در درگاه‌های سرور زنده مانده است.`)
     );
   }
 

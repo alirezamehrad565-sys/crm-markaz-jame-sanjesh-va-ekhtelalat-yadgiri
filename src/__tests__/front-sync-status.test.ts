@@ -6,7 +6,7 @@
  * نگاشت‌ها تابع خالص‌اند (بدون DOM) — الگو: front-view-identifiers.test.ts و format-front.test.ts.
  */
 // @ts-ignore — فایل .js فرانت، خارج از include تایپ‌اسکریپت است (import تک‌خطی تا @ts-ignore نشتی را بپوشاند)
-import { syncErrorKindView, syncStateView, clockWarningView, catchupSummaryView, versionNumbersView, versionIncompatView, reconciliationView, reconciliationDetailView, quotaLevelView, failedLoginsView, installEngineWatchdogBanner, resetEngineWatchdogBannerForTests, engineSignalView, centerSignalView, syncLagSignalView, quotaSignalView, backupSignalView, drillRecordView, readOpsDrillRecord, OPS_DRILL_KEY, healthToneView } from '../../public/assets/js/views/health-panel.js';
+import { syncErrorKindView, syncStateView, clockWarningView, catchupSummaryView, versionNumbersView, versionIncompatView, reconciliationView, reconciliationDetailView, installEngineWatchdogBanner, resetEngineWatchdogBannerForTests, engineSignalView, centerSignalView, syncLagSignalView, quotaSignalView, backupSignalView, healthToneView, lanInfoView } from '../../public/assets/js/views/health-panel.js';
 
 describe('کارت وضعیت هم‌گامی پنل سلامت — نگاشت حالت به برچسب/رنگ', () => {
   it('پنج حالت شناخته‌شدهٔ قرارداد → برچسب فارسی و کلاس رنگ درست', () => {
@@ -156,27 +156,6 @@ describe('EXP-1 — ردیف آشتی‌ساز از فیلد reconciliation وض
   });
 });
 
-// ───────────────────────── EXP-2 — کارت مصرف مرکز (برآوردی) ─────────────────────────
-
-describe('EXP-2 — نگاشت‌های کارت مصرف مرکز', () => {
-  it('سطح مصرف → کلاس نشان: ok سبز / warn زرد / danger قرمز / ناشناخته خنثی', () => {
-    expect(quotaLevelView('ok')).toBe('badge--success');
-    expect(quotaLevelView('warn')).toBe('badge--warning');
-    expect(quotaLevelView('danger')).toBe('badge--error');
-    expect(quotaLevelView('other')).toBe('badge--neutral');
-    expect(quotaLevelView(undefined)).toBe('badge--neutral');
-  });
-
-  it('ورود ناموفق ۲۴ ساعت: پنج یا بیشتر → زرد؛ کمتر → خنثی؛ ورودی غایب/منفی → خنثی با «—»', () => {
-    expect(failedLoginsView(5)).toEqual({ cls: 'badge--warning', text: '۵' });
-    expect(failedLoginsView(12)).toEqual({ cls: 'badge--warning', text: '۱۲' });
-    expect(failedLoginsView(4)).toEqual({ cls: 'badge--neutral', text: '۴' });
-    expect(failedLoginsView(0)).toEqual({ cls: 'badge--neutral', text: '۰' });
-    expect(failedLoginsView(undefined)).toEqual({ cls: 'badge--neutral', text: '—' });
-    expect(failedLoginsView(-1)).toEqual({ cls: 'badge--neutral', text: '—' });
-  });
-});
-
 // ───────────────────────── EXP-4 — بنر نگهبان موتور (گارد کامل) ─────────────────────────
 
 describe('EXP-4 — بنر نگهبان موتور: بیرون پوستهٔ دسکتاپ no-op بی‌کرش', () => {
@@ -291,29 +270,37 @@ describe('موج ۴ (۴-۱) — سیگنال مصرف سهمیه و پشتیبا
   });
 });
 
-describe('EXP-6 — رکورد drill عملیاتی در پنل', () => {
-  const NOW = Date.parse('2026-11-14T10:00:00Z');
+describe('۱.۲۷.۲۱ — نمای سرور محلی (lanInfoView): پاکت /api/system/lan → ردیف‌های نشانی', () => {
+  const PACKET = {
+    ok: true,
+    lan: {
+      host: '0.0.0.0', port: 8787, games_port: 8788,
+      lan_ips: ['192.168.1.50', '10.0.0.7'],
+      main_urls: ['http://192.168.1.50:8787', 'http://10.0.0.7:8787'],
+      local_url: 'http://127.0.0.1:8787',
+      games_urls: ['http://192.168.1.50:8788'],
+      games_local_url: 'http://127.0.0.1:8788',
+      boot_at: '2026-11-18T10:00:00.000Z'
+    }
+  };
 
-  it('بدون رکورد → خاکستری «—»؛ تا ۳۱ روز سبز با تاریخ فارسی؛ بیش از ۳۱ روز زرد', () => {
-    expect(drillRecordView(null, NOW)).toMatchObject({ tone: 'unknown', label: '—' });
-    expect(drillRecordView({ at: 'broken' }, NOW)).toMatchObject({ tone: 'unknown' });
-    expect(drillRecordView({ at: '2026-11-12T00:00:00Z', result: 'done' }, NOW).tone).toBe('ok');
-    expect(drillRecordView({ at: '2026-11-12T00:00:00Z', result: 'done' }, NOW).label).toContain('۲۱'); // تاریخ شمسی با رقم فارسی
-    const stale = drillRecordView({ at: '2026-08-01T00:00:00Z', result: 'done' }, NOW);
-    expect(stale.tone).toBe('warn');
-    expect(stale.detail).toContain('وقت drill بعدی است');
+  it('پاکت کامل → ردیف‌های نشانی با پورت واقعی؛ بدون URL ساخته‌شده، URL از IP+پورت بازساخته می‌شود', () => {
+    const v = lanInfoView(PACKET);
+    expect(v).toMatchObject({ port: 8787, gamesPort: 8788, localUrl: 'http://127.0.0.1:8787' });
+    expect(v?.mobileUrls).toEqual(['http://192.168.1.50:8787', 'http://10.0.0.7:8787']);
+    expect(v?.bootAt).toBe('2026-11-18T10:00:00.000Z');
+    const rebuilt = lanInfoView({ data: { lan: { port: 8787, games_port: 0, lan_ips: ['192.168.0.12'], local_url: '' } } });
+    expect(rebuilt?.mobileUrls).toEqual(['http://192.168.0.12:8787']); // URL بازسازی از IP
+    expect(rebuilt?.gamesPort).toBeNull(); // پورت بازی‌های نامعتبر → null
+    expect(rebuilt?.localUrl).toBe('http://127.0.0.1:8787'); // پیش‌فرض ایمن
   });
 
-  it('خواندن نرم از انبار: JSON خراب/کلید غایب = null؛ کلید قرارداد nodesync:ops-drill-v1', () => {
-    const mem = new Map<string, string>();
-    const storage = { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => void mem.set(k, v), removeItem: (k: string) => void mem.delete(k) };
-    expect(readOpsDrillRecord(storage)).toBeNull();
-    storage.setItem(OPS_DRILL_KEY, 'not json');
-    expect(readOpsDrillRecord(storage)).toBeNull();
-    storage.setItem(OPS_DRILL_KEY, JSON.stringify({ at: '2026-11-12T00:00:00Z', result: 'done' }));
-    expect(readOpsDrillRecord(storage)).toMatchObject({ result: 'done' });
-    storage.setItem(OPS_DRILL_KEY, JSON.stringify({ result: 'done' })); // بی‌at → نامعتبر
-    expect(readOpsDrillRecord(storage)).toBeNull();
+  it('پاکت غایب/خراب/بی‌پورت → null (کارت «کشف نشد» نرم — پنل نمی‌شکند)', () => {
+    expect(lanInfoView(null)).toBeNull();
+    expect(lanInfoView({})).toBeNull();
+    expect(lanInfoView({ lan: null })).toBeNull();
+    expect(lanInfoView({ lan: { port: 'x' } })).toBeNull();
+    expect(lanInfoView({ lan: { port: 0 } })).toBeNull();
   });
 });
 

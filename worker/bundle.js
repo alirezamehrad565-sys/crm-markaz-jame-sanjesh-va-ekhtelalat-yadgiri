@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.27.20";
+var APP_VERSION = "1.27.21";
 var NODE_MIN_VERSION = "1.26.0";
 
 // node_modules/zod/v4/classic/external.js
@@ -64175,6 +64175,35 @@ function isRestartScheduled() {
   return restartFlag;
 }
 __name(isRestartScheduled, "isRestartScheduled");
+function parseLanInfo(raw2) {
+  if (typeof raw2 !== "string" || !raw2) return null;
+  let p = null;
+  try {
+    p = JSON.parse(raw2);
+  } catch {
+    return null;
+  }
+  if (!p || typeof p !== "object") return null;
+  const o = p;
+  const port = Number(o.port);
+  const gamesPort = Number(o.games_port);
+  if (!Number.isFinite(port) || port <= 0) return null;
+  const ips = Array.isArray(o.lan_ips) ? o.lan_ips.filter((x) => typeof x === "string" && !!x) : [];
+  const urls = Array.isArray(o.main_urls) ? o.main_urls.filter((x) => typeof x === "string" && !!x) : [];
+  const gameUrls = Array.isArray(o.games_urls) ? o.games_urls.filter((x) => typeof x === "string" && !!x) : [];
+  return {
+    host: typeof o.host === "string" && o.host ? o.host : "0.0.0.0",
+    port,
+    games_port: Number.isFinite(gamesPort) && gamesPort > 0 ? gamesPort : 0,
+    lan_ips: ips,
+    main_urls: urls,
+    local_url: typeof o.local_url === "string" && o.local_url ? o.local_url : `http://127.0.0.1:${port}`,
+    games_urls: gameUrls,
+    games_local_url: typeof o.games_local_url === "string" && o.games_local_url ? o.games_local_url : "",
+    boot_at: typeof o.boot_at === "string" && o.boot_at ? o.boot_at : null
+  };
+}
+__name(parseLanInfo, "parseLanInfo");
 function registerSystemPublicRoutes(app, deps) {
   app.get("/api/system/restart-status", async (c) => {
     let scheduled = false;
@@ -64241,6 +64270,10 @@ function registerSystemRoutes(app, deps) {
         "Cache-Control": "no-store"
       }
     });
+  });
+  app.get("/api/system/lan", requireRole("manager"), async (c) => {
+    const lan = parseLanInfo(c.env?.LAN_INFO);
+    return c.json({ ok: true, lan }, 200, { "Cache-Control": "no-store" });
   });
 }
 __name(registerSystemRoutes, "registerSystemRoutes");

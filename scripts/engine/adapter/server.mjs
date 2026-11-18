@@ -13,7 +13,7 @@ import { existsSync, readdirSync, readFileSync, renameSync, statSync, unlinkSync
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { makeD1 } from './d1.mjs';
-import { bootUrlsOf, defaultPublicBaseOf } from './lan.mjs'; // v1.27.20 — بایند LAN + نشانی موبایل‌ها
+import { bootUrlsOf, defaultPublicBaseOf, lanIPv4sOf } from './lan.mjs'; // v1.27.20 — بایند LAN + نشانی موبایل‌ها · ۱.۲۷.۲۱ — LAN_INFO برای پنل
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -278,6 +278,21 @@ export async function startAdapterEngine(opts) {
   // فاز B — راز ابری passthrough از env پروسهٔ موتور (تزریق پوستهٔ Rust) + پل فایل‌های ابری
   // CloudFsIO روی dataDir — باندل ورکر هرگز node:fs import نمی‌کند؛ فقط از همین binding می‌خواند
   const cloudFs = makeCloudFsIO(bindings.dataDir);
+  // ۱.۲۷.۲۱ — LAN_INFO برای پنل نجات: IPهای خصوصی LAN (همان lan.mjs بوت) + پورت‌های واقعی همین
+  //   بوت → درگاه GET /api/system/lan فقط‌مدیر؛ کارت «سرور محلی» پنل دیگر به 127.0.0.1 بسنده
+  //   نمی‌کند و موبایلِ همان وای‌فای نشانی چاپ‌شده در بوت را زنده از خود پنل می‌گیرد.
+  const lanIps = lanIPv4sOf();
+  const lanInfo = {
+    host,
+    port,
+    games_port: gamesPort,
+    lan_ips: lanIps,
+    main_urls: lanIps.map((ip) => `http://${ip}:${port}`),
+    local_url: `http://127.0.0.1:${port}`,
+    games_urls: lanIps.map((ip) => `http://${ip}:${gamesPort}`),
+    games_local_url: `http://127.0.0.1:${gamesPort}`,
+    boot_at: new Date().toISOString(),
+  };
   const mainEnv = {
     DB,
     ENV: 'production',
@@ -292,6 +307,7 @@ export async function startAdapterEngine(opts) {
     // فاز D1 — خوانندهٔ سوم webAssetsReader (فایل‌های public برای Static Assets) از bindings می‌آید
     CLOUD_PROVISION: makeCloudProvision(bindings.centralWorkerPath, bindings.centralSchemaPath, bindings.webAssetsReader),
     ENGINE_CLOUD_SECRET: typeof bindings.engineCloudSecret === 'string' ? bindings.engineCloudSecret : '',
+    LAN_INFO: JSON.stringify(lanInfo),
   };
   const gamesEnv = {
     DB,

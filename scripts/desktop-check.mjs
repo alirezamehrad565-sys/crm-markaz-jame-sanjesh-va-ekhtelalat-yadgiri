@@ -189,7 +189,8 @@ try {
     d1.includes(t) ? ok(`d1.mjs: ${t.replace("'node:sqlite'", 'node:sqlite')} سیم است`) : bad(`d1.mjs: ${t} غایب است`);
   }
   const srv = readFileSync(path.join(ROOT, 'scripts', 'engine', 'adapter', 'server.mjs'), 'utf8');
-  for (const t of ['startAdapterEngine', 'serveStatic', 'createServer', "listen(p, '127.0.0.1'", 'CLINIC_NAME', 'AUTH_SECRET']) {
+  // ۱.۲۷.۲۱ — پین بایند به‌روز شد: از ۱.۲۷.۱۸ بایند از پارامتر host می‌آید (engine.rs پاس می‌دهد 0.0.0.0)
+  for (const t of ['startAdapterEngine', 'serveStatic', 'createServer', 'srv.listen(p, host', 'CLINIC_NAME', 'AUTH_SECRET', 'LAN_INFO']) {
     srv.includes(t) ? ok(`server.mjs: ${t} سیم است`) : bad(`server.mjs: ${t} غایب است`);
   }
   const em = readFileSync(path.join(ROOT, 'scripts', 'engine', 'engine.mjs'), 'utf8');

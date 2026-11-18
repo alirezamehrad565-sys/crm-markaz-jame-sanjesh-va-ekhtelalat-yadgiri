@@ -351,6 +351,8 @@ export interface AppBindings {
   NODE_RATE_LIMIT_PER_MIN?: string;
   /** ENG-4 (۱.۲۶.۴) — نشانی /health ورکر بازی‌ها؛ فقط در موتور محلی بسته می‌شود (config.mjs) — تولید وب غایب */
   GAMES_HEALTH_URL?: string;
+  /** ۱.۲۷.۲۱ — نشانی LAN سرور محلی (رشتهٔ JSON: IPهای دستگاه + پورت‌های واقعی بوت از lan.mjs)؛ adapter دسکتاپ می‌سازد — تولید وب غایب */
+  LAN_INFO?: string;
 }
 
 export interface AppVariables {
