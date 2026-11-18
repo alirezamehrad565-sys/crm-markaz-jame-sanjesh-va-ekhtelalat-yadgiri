@@ -54,9 +54,15 @@ for (const f of files) {
     continue;
   }
   const n = before.split(old).length - 1;
-  if (n > 0) writeFileSync(f, before.split(old).join(target));
-  total += n;
-  console.log(`${f}: ${n} جایگزینی`);
+  // پین‌های regex با نقطهٔ escape‌شده (مثل '1\.27\.19' در front-12561 — درس ۱.۲۵.۸۰:
+  // نقطهٔ بدون escape در regex هر نویسه‌ای را می‌پذیرد) — وگرنه پین escape-شده با بامپ
+  // جامانده می‌ماند و گیت vitest در انتشار بعدی سرخ می‌شود
+  const escOld = old.split('.').join('\\.');
+  const escTarget = target.split('.').join('\\.');
+  const escN = escOld !== old ? before.split(escOld).length - 1 : 0;
+  if (n + escN > 0) writeFileSync(f, before.split(escOld).join(escTarget).split(old).join(target));
+  total += n + escN;
+  console.log(`${f}: ${n + escN} جایگزینی`);
 }
 
 // v1.27.۱۹ — مهرهای دسکتاپ: جایگزینی رشتهٔ «نسخهٔ فعلی» اگر مهر قبلاً جامانده بود هیچ‌چیز

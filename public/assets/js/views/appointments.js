@@ -717,7 +717,7 @@ function apptOnGrid(a, ymd, opts = {}) {
   });
   if (!isSupervisorRole()) { /* ۱.۲۵.۰۱ — ناظر: شنونده‌های درگ کلاً سوار نمی‌شوند */
     card.addEventListener('dragstart', (e) => {
-      e.dataTransfer.setData('text/plain', JSON.stringify({ id: a.id, version: a.version, fromYmd: ymd }));
+      e.dataTransfer.setData('text/plain', JSON.stringify({ id: a.id, version: a.version, fromYmd: ymd, staffId: a.staffId })); /* ۱.۲۷.۱۵ — staffId برای گارد بلوک سنجش */
       e.dataTransfer.effectAllowed = 'move';
       card.classList.add('is-dragging');
     });
@@ -833,7 +833,7 @@ async function handleDrop(e, targetYmd, cellMinute, cell) {
   }
 
   // ۱.۲۷.۱۵ — پیش‌بازخورد بلوک سنجش بر پایهٔ درمانگرِ درگیرِ نوبتِ کشیده‌شده؛ سد نهایی سمت سرور می‌ماند
-  if (!isSupervisorRole() && isBlockedMinute(targetYmd, cellMinute, payload.staffId)) {
+  if (isBlockedMinute(targetYmd, cellMinute, payload.staffId)) {
     toast('این بازه برای «سنجش» رزرو شده است — جابه‌جایی نوبت به این زمان ممکن نیست؛ با مدیر هماهنگ کنید', 'warning');
     return;
   }
@@ -1197,6 +1197,12 @@ function openCreateModal(container, preset = {}) {
       const startAt = tehranYmdMinuteToIso(ymd, startMinute);
       const endAt = tehranYmdMinuteToIso(ymd, startMinute + Number(values.duration));
       state.lastDuration = Number(values.duration);
+      /* ۱.۲۷.۱۵ — سد نمایشی بلوک سنجش: نوبتِ درمانگرِ درگیر در بازهٔ رزرو ثبت نمی‌شود (سد نهایی سرور است) */
+      for (let m = startMinute; m < startMinute + Number(values.duration); m += 15) {
+        if (isBlockedMinute(ymd, m, values.staff_id)) {
+          throw new Error('این بازه برای «سنجش» رزرو شده است — نوبت‌گیریِ درمانگرِ درگیر در این زمان ممکن نیست');
+        }
+      }
       const res = await api.post('/api/appointments', {
         staff_id: values.staff_id,
         start_at: startAt,
@@ -1593,6 +1599,12 @@ function openEditModal(a, currentDuration, preset = {}) {
       const newStartMinute = timeToMinute(values.start);
       const newStartAt = tehranYmdMinuteToIso(newYmd, newStartMinute);
       const newDuration = Number(values.duration);
+      /* ۱.۲۷.۱۵ — سد نمایشی بلوک سنجش در ویرایش: پنجرهٔ تازهٔ نوبتِ درمانگرِ درگیر نباید در بازه بیفتد */
+      for (let m = newStartMinute; m < newStartMinute + newDuration; m += 15) {
+        if (isBlockedMinute(newYmd, m, a.staffId)) {
+          throw new Error('این بازه برای «سنجش» رزرو شده است — نوبت‌گیریِ درمانگرِ درگیر در این زمان ممکن نیست');
+        }
+      }
       const oldStartMinute = timeToMinute(tehranTimeOfIso(a.startAt));
       const oldYmd = isoToYmd(a.startAt);
       const oldDuration = Math.round((Date.parse(a.endAt) - Date.parse(a.startAt)) / 60000);
