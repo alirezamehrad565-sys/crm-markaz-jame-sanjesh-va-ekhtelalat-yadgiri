@@ -143,6 +143,39 @@ export const NewAppointmentSchema = z
     }
   );
 
+/* ۱.۲۷.۱۴ — بلوک نوبت سنجش (خواست کارفرما): بازهٔ رزرو مدیر برای سنجش با درمانگران درگیر؛
+   در این بازه ثبت/جابه‌جایی نوبتِ درمانگر/منشی سد سخت می‌خورد (assertNoAssessmentBlockInRange
+   در appointment-core). دقیقه‌ها «از نیمه‌شب تهران» — هم‌واژگان مرکز ساعات کاری. */
+export const AssessmentBlockCreateSchema = z
+  .object({
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'تاریخ باید شکل YYYY-MM-DD باشد'),
+    start_minute: z.number().int().min(0).max(1439),
+    end_minute: z.number().int().min(1).max(1440),
+    therapist_ids: z.array(UuidSchema).max(30).default([]),
+    note: z.string().max(500).nullish()
+  })
+  .refine((v) => v.end_minute > v.start_minute, {
+    message: 'پایان بازهٔ سنجش باید بعد از شروع آن باشد',
+    path: ['end_minute']
+  });
+
+/* ۱.۲۷.۱۵ — پچ کارت نوبت سنجش (خواست کارفرما: کارت درگ‌پذیر به‌ازای هر درمانگر):
+   جابه‌جایی روز/ساعت، کش‌دادن پایان، جابه‌جایی به ستون درمانگر دیگر و نوشتن جزئیات —
+   با قفل خوش‌بینانهٔ نسخه (هم‌الگوی UpdateAppointmentSchema). */
+export const AssessmentBlockPatchSchema = z
+  .object({
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'تاریخ باید شکل YYYY-MM-DD باشد').optional(),
+    start_minute: z.number().int().min(0).max(1439).optional(),
+    end_minute: z.number().int().min(1).max(1440).optional(),
+    staff_id: UuidSchema.optional(),
+    note: z.string().max(500).nullish(),
+    version: z.number().int().positive()
+  })
+  .refine(
+    (v) => v.start_minute === undefined || v.end_minute === undefined || v.end_minute > v.start_minute,
+    { message: 'پایان بازهٔ سنجش باید بعد از شروع آن باشد', path: ['end_minute'] }
+  );
+
 export const UpdateAppointmentSchema = z.object({
   note: z.string().max(2000).nullish(),
   version: z.number().int().positive()

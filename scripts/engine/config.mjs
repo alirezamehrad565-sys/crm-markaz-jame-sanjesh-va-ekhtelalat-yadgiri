@@ -126,9 +126,13 @@ async function moduleEntry(name, contents) {
  * @param {number} opts.gamesPort        پورت سرویس بازی‌ها (پیش‌فرض ۸۷۸۸)
  * @param {string} opts.dataDir          پوشهٔ داده (فایل SQLite + بلاف‌ها + کانفیگ)
  * @param {string} opts.authSecret       runtime-secret مشترک دو ورکر (seed در settings هم می‌شود)
+ * @param {string} [opts.bind]           نشانی بایند سوکت‌ها (v1.27.۱۸ — پیش‌فرض 127.0.0.1؛ موتور 0.0.0.0 می‌فرستد)
+ * @param {string} [opts.publicBase]     مبنی لینک‌های عمومی PUBLIC_BASE_URL (پیش‌فرض لوکال)
  */
 export async function buildEngineConfig(opts) {
   const { port, gamesPort = 8788, dataDir, authSecret } = opts;
+  const bind = opts.bind ?? '127.0.0.1';
+  const publicBase = opts.publicBase ?? `http://127.0.0.1:${port}`;
   return buildCapnpConfig({
     port,
     gamesPort,
@@ -136,6 +140,8 @@ export async function buildEngineConfig(opts) {
     publicDir: path.join(REPO_ROOT, 'public'),
     authSecret,
     env: 'development',
+    bind,
+    publicBase,
   });
 }
 
@@ -166,7 +172,8 @@ export async function buildInstallerCapnpTemplate({ publicDir }) {
 }
 
 async function buildCapnpConfig(opts) {
-  const { port, gamesPort = 8788, dataDir, publicDir, manifestPublicDir = publicDir, authSecret, env } = opts;
+  const { port, gamesPort = 8788, dataDir, publicDir, manifestPublicDir = publicDir, authSecret, env, bind = '127.0.0.1' } = opts;
+  const publicBase = opts.publicBase ?? `http://127.0.0.1:${port}`;
   const d1DiskPath = path.join(dataDir, 'd1');
   const { encodedAssetManifest, assetsReverseMap } = await buildAssetManifest(manifestPublicDir);
 
@@ -199,7 +206,7 @@ async function buildCapnpConfig(opts) {
     textBinding('ENV', env),
     textBinding('CF_ACCESS_TEAM_DOMAIN', ''),
     textBinding('CLINIC_NAME', 'مرکز جامع'),
-    textBinding('PUBLIC_BASE_URL', `http://127.0.0.1:${port}`),
+    textBinding('PUBLIC_BASE_URL', publicBase),
     textBinding('AUTH_SECRET', authSecret),
     // rust-f9 — گیت زمان‌اجرای میز: مسیرهای /api/internal/sync/* فقط در موتور محلی زنده‌اند؛
     // در تولید وب این binding وجود ندارد → ۴۰۴ کم‌دست (باندل یکسان، رفتار تولید دست‌نخورده)
@@ -211,7 +218,7 @@ async function buildCapnpConfig(opts) {
   const gamesVars = [
     textBinding('ENV', env),
     textBinding('CF_ACCESS_TEAM_DOMAIN', ''),
-    textBinding('PUBLIC_BASE_URL', `http://127.0.0.1:${port}`),
+    textBinding('PUBLIC_BASE_URL', publicBase),
     textBinding('AUTH_SECRET', authSecret),
   ];
 
@@ -235,8 +242,8 @@ async function buildCapnpConfig(opts) {
   const extensions = `(modules = [${await moduleEntry('miniflare:shared', sharedModule)}, ${await moduleEntry('miniflare:zod', zodModule)}])`;
 
   const sockets = [
-    `(name = "main", address = "127.0.0.1:${port}", http = (), service = (name = "assets:router:main"))`,
-    `(name = "games", address = "127.0.0.1:${gamesPort}", http = (), service = (name = "games"))`,
+    `(name = "main", address = "${bind}:${port}", http = (), service = (name = "assets:router:main"))`,
+    `(name = "games", address = "${bind}:${gamesPort}", http = (), service = (name = "games"))`,
   ];
 
   return `using W = import "/workerd/workerd.capnp";\nconst config :W.Config = (\n  services = [\n    ${services.join(',\n    ')}\n  ],\n  sockets = [\n    ${sockets.join(',\n    ')}\n  ],\n  extensions = [${extensions}]\n);\n`;

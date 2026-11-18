@@ -5,6 +5,7 @@ import type { AuditWriter } from '@core/audit';
 import type { Logger } from '@core/logger';
 import type { DbClient } from '@core/db';
 import { inParamChunks, inPlaceholders } from '@core/db/in-chunks'; // ۱.۲۵.۷۲ — دروازهٔ IN-list (بدهی ف۶ ⑧)
+import { assertNoAssessmentBlockInRange } from '@domain/assessment-blocks'; // ۱.۲۷.۱۴ — سد سخت بلوک سنجش (خواست کارفرما)
 import { rowToAppointment, rowToStudent, selectAppointmentById, selectAppointments, selectStudentsOfAppointments, APPOINTMENT_STUDENT_QUERY_CHUNK } from './repository';
 import type { AppointmentRow, AppointmentStudentRow } from './repository';
 import type { Appointment, AppointmentDeps, AppointmentLifecycleObserver, AppointmentService, AppointmentUpdatePatch, CopyWeekInput, CopyWeekResult, ListFilters, MyStudent, NewAppointmentInput } from './types';
@@ -208,6 +209,9 @@ export function createAppointmentService(deps: AppointmentDeps): AppointmentServ
 
       assertAppointmentScope(actor, input.staffId);
       await assertStudentsInScope(tx, actor, input.students.map((s) => s.studentId));
+      // ۱.۲۷.۱۴ — سد سخت بلوک سنجش (خواست کارفرما): در بازهٔ رزرو سنجش، ثبت نوبت برای
+      // درمانگر/منشی ممکن نیست (مدیر/ناظر معاف — خودشان جلسهٔ سنجش را نوبت‌گذاری می‌کنند)
+      await assertNoAssessmentBlockInRange(tx, { startAt: input.startAt, endAt: input.endAt }, actor, input.staffId); /* ۱.۲۷.۱۵ — سد بر پایهٔ درمانگرِ درگیر */
 
       const id = crypto.randomUUID();
       await tx.execute(
@@ -322,6 +326,8 @@ export function createAppointmentService(deps: AppointmentDeps): AppointmentServ
       const newEndAt = addMinutes(newStartAt, durationMin);
 
       await db.transaction(async (tx) => {
+        // ۱.۲۷.۱۴ — سد سخت بلوک سنجش: جابه‌جایی نوبتِ درمانگر/منشی به درون بازهٔ سنجش ممنوع است
+        await assertNoAssessmentBlockInRange(tx, { startAt: newStartAt, endAt: newEndAt }, actor, current.staffId); /* ۱.۲۷.۱۵ */
         await tx.execute(
           `UPDATE appointments SET start_at = ?, end_at = ?, version = version + 1, updated_at = datetime('now') WHERE id = ? AND version = ?`,
           [newStartAt, newEndAt, id, version]
@@ -370,6 +376,8 @@ export function createAppointmentService(deps: AppointmentDeps): AppointmentServ
       }
 
       await db.transaction(async (tx) => {
+        // ۱.۲۷.۱۴ — سد سخت بلوک سنجش: کشیدن پایان نوبت به درون بازهٔ سنجش ممنوع است
+        await assertNoAssessmentBlockInRange(tx, { startAt: current.startAt, endAt: newEndAt }, actor, current.staffId); /* ۱.۲۷.۱۵ */
         await tx.execute(
           `UPDATE appointments SET end_at = ?, version = version + 1, updated_at = datetime('now') WHERE id = ? AND version = ?`,
           [newEndAt, id, version]

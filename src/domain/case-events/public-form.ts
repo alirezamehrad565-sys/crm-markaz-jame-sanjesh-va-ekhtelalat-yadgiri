@@ -31,6 +31,50 @@ function faNum(n: number): string {
   return String(n).replace(/[0-9]/g, (d) => FA_DIGITS[Number(d)]);
 }
 
+/* ۱.۲۵.۸۱ — بخش‌بندی مشترک فرم خانواده: هم مسیر واقعی /fill و هم پیش‌نمایش فرم‌ساز از همین
+   تابع می‌خوانند تا «پیش‌نمایش = عین چیزی که خانواده می‌بیند» به قاعدهٔ یکتا تبدیل شود؛
+   قبلاً همین منطق داخل routes.ts کپی بود و هر اصلاح باید دو جا می‌رفت. */
+export interface FamilySectionItem {
+  key: string;
+  label: string;
+  kind?: 'scale' | 'single' | 'longtext';
+  scaleMax?: number;
+  scoredOptions?: { label: string }[];
+  scaleLabels?: string[];
+  hint?: string | null;
+  teacherLabel?: string | null; // — فرم معلم: متن جایگزین گویه
+  teacherHint?: string | null;
+}
+
+export function familySectionsOf(
+  fields: { key: string; label: string; type: string; subscaleId?: string | null; scaleMax?: number; scoredOptions?: { label: string }[] | null; scaleLabels?: string[] | null; hint?: string | null; teacherLabel?: string | null; teacherHint?: string | null }[],
+  subscales?: { id: string; name: string }[] | null
+): { title: string | null; items: FamilySectionItem[] }[] {
+  const subscaleName = new Map((subscales ?? []).map((s) => [s.id, s.name] as const));
+  const sections: { title: string | null; items: FamilySectionItem[] }[] = [];
+  for (const f of fields) {
+    if (f.type !== 'scale' && f.type !== 'single' && f.type !== 'longtext') continue; // — آیتم نمره‌دار + متن آزاد به گیرنده می‌رسد
+    const title = f.subscaleId ? subscaleName.get(f.subscaleId) ?? null : null;
+    const item: FamilySectionItem = {
+      key: f.key, label: f.label,
+      kind: (f.type === 'longtext' ? 'longtext' : f.type) as 'scale' | 'single' | 'longtext',
+      scaleMax: f.scaleMax,
+      scoredOptions: f.scoredOptions?.map((o) => ({ label: o.label })),
+      scaleLabels: f.scaleLabels ?? undefined,
+      hint: f.hint ?? null,
+      teacherLabel: f.teacherLabel ?? null,
+      teacherHint: f.teacherHint ?? null
+    };
+    const last = sections[sections.length - 1];
+    if (last && last.title === title) {
+      last.items.push(item);
+    } else {
+      sections.push({ title, items: [item] });
+    }
+  }
+  return sections;
+}
+
 const SCALE_LABELS = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹', '۱۰'];
 
 export function renderFillFormPage(model: FillFormModel, token: string): string {

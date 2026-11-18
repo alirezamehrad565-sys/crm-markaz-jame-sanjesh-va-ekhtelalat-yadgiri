@@ -18,6 +18,10 @@ mod cf_deploy;
 mod deploy_plan;
 mod engine;
 mod engine_watchdog;
+// ۱.۲۷.۱۳ — چرخهٔ عمر موتور با Windows Job Object (P0-3 ممیزی §۳) — فقط ویندوز؛
+// جاب cargo-check/test لینوکسی CI این ماژول را نمی‌بیند و بدون آن کامپایل می‌شود.
+#[cfg(windows)]
+mod job_object;
 mod secure_store;
 
 use std::path::Path;
@@ -82,6 +86,9 @@ pub struct EngineStatusSnapshot {
     last_event_at_unix: u64,
     degraded_reason: Option<String>,
     app_version: String,
+    /// ۱.۲۷.۱۳ — خودآزمایی بوت (P0-2): نسخهٔ موتور از پایانهٔ قابلیت‌ها (P0-1) پس از سبزشدن —
+    /// None تا بوت موفق/پروب ناکام؛ صفحهٔ بوت و پنل سلامت ناهم‌خوانی را با همین می‌سازند
+    engine_version: Option<String>,
 }
 
 impl EngineStatusSnapshot {
@@ -96,6 +103,7 @@ impl EngineStatusSnapshot {
             last_event_at_unix: 0,
             degraded_reason: None,
             app_version: env!("CARGO_PKG_VERSION").to_string(),
+            engine_version: None,
         }
     }
 }
@@ -143,6 +151,7 @@ fn engine_status_json(s: &EngineStatusSnapshot) -> serde_json::Value {
         "lastEventAtUnix": s.last_event_at_unix,
         "degradedReason": s.degraded_reason.clone(),
         "appVersion": s.app_version.clone(),
+        "engineVersion": s.engine_version.clone(),
     })
 }
 
@@ -557,17 +566,27 @@ fn desktop_status(app: tauri::AppHandle) -> serde_json::Value {
     let state = app.state::<AppState>();
     let phase = state.phase.lock().map(|g| g.clone()).unwrap_or(EnginePhase::Booting);
     let version = env!("CARGO_PKG_VERSION").to_string();
+    // ۱.۲۷.۱۳ — خودآزمایی بوت (P0-2): نسخهٔ موتور از آینه — None تا بوت موفق؛ صفحهٔ بوت
+    // ناهم‌خوانی را فقط وقتی هر دو معلوم‌اند نشان می‌دهد (پروب نرم — هرگز بوت را نمی‌سد)
+    let engine_version = app
+        .state::<EngineStatusMirror>()
+        .0
+        .lock()
+        .ok()
+        .and_then(|g| g.engine_version.clone());
     match phase {
-        EnginePhase::Booting => serde_json::json!({ "phase": "booting", "version": version }),
+        EnginePhase::Booting => {
+            serde_json::json!({ "phase": "booting", "version": version, "engineVersion": engine_version })
+        }
         EnginePhase::Ready { port, base_url } => {
-            serde_json::json!({ "phase": "ready", "version": version, "port": port, "base_url": base_url })
+            serde_json::json!({ "phase": "ready", "version": version, "engineVersion": engine_version, "port": port, "base_url": base_url })
         }
         // M4 — Degraded همان شکل ready را دارد (اپ اصلی کار می‌کند)؛ فقط phase عوض است
         EnginePhase::Degraded { port, base_url } => {
-            serde_json::json!({ "phase": "degraded", "version": version, "port": port, "base_url": base_url })
+            serde_json::json!({ "phase": "degraded", "version": version, "engineVersion": engine_version, "port": port, "base_url": base_url })
         }
         EnginePhase::Failed { message, log_tail } => {
-            serde_json::json!({ "phase": "failed", "version": version, "message": message, "log_tail": log_tail })
+            serde_json::json!({ "phase": "failed", "version": version, "engineVersion": engine_version, "message": message, "log_tail": log_tail })
         }
     }
 }
@@ -867,6 +886,10 @@ fn spawn_engine_boot(app: tauri::AppHandle) {
                 if let Ok(mut slot) = app.state::<LocalEngineSlot>().0.lock() {
                     *slot = Some(motor);
                 }
+                // ۱.۲۷.۱۳ — خودآزمایی بوت (P0-2): پس از سبزشدن، نسخهٔ موتور از پایانهٔ قابلیت‌ها
+                // (P0-1) خوانده می‌شود و در آینهٔ وضعیت می‌نشیند؛ شکست پروب نرم است (None —
+                // بوت هرگز از این نسخه نمی‌شکند) و پنل سلامت/صفحهٔ بوت از همین خوراک می‌گیرند.
+                let engine_version = engine::engine_capabilities_version(port);
                 if finish_stale(&state) {
                     return;
                 }
@@ -879,6 +902,7 @@ fn spawn_engine_boot(app: tauri::AppHandle) {
                     st.games_port = games_port;
                     st.started_at_unix = unix_now();
                     st.degraded_reason = None;
+                    st.engine_version = engine_version;
                 });
                 // ناوبری صفحهٔ بوت به loopback — خودِ boot page با desktop_status این را می‌فهمد و
                 // location.replace می‌زند؛ اینجا هم برای سازگاری eval همان ناوبری را تزریق می‌کنیم.

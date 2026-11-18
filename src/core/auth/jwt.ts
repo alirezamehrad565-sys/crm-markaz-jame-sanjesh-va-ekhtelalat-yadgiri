@@ -78,7 +78,3 @@ export async function verifyAccessToken(token: string, teamDomain: string): Prom
 
   return payload;
 }
-
-export function resetJwksCache(): void {
-  jwksCache = null;
-}
