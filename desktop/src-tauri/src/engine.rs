@@ -316,10 +316,9 @@ impl EngineChild {
 /// انتساب کودک به Job تازه — شکست غیرمهلک است و فقط ثبت می‌شود (kill عادی کافی می‌ماند)
 #[cfg(windows)]
 fn job_guard_for(child: &Child) -> Option<crate::job_object::JobGuard> {
-    use std::os::windows::process::ChildExt;
-    let handle = child.raw_handle().ok_or_else(|| {
-        std::io::Error::new(std::io::ErrorKind::Other, "هندل پروسهٔ کودک در دسترس نیست")
-    });
+    use std::os::windows::io::AsRawHandle;
+    // Child روی ویندوز AsRawHandle دارد — hProcess خام برای AssignProcessToJobObject
+    let handle = Ok(child.as_raw_handle());
     match crate::job_object::JobGuard::assign(handle) {
         Ok(g) => Some(g),
         Err(e) => {
