@@ -54,3 +54,5 @@ export const NODE_DB_CONTRACT_TABLES: readonly string[] = Object.freeze([
   'working_hours'
 ]);
 
+/** سند مرجع فهرست — گیت ② این مسیر را می‌خواند */
+export const NODE_DB_CONTRACT_DOC = 'docs/backend-upgrade-plan-2026-11-11.md';

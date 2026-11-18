@@ -163,4 +163,4 @@ export function formulateCase(
   return { ...raw, inferenceRanked: inf.ranked, inferenceConvergence: inf.convergence };
 }
 
-export { ageYearsFromBirthDate };
+export { buildCaseFormulation, wechslerFromEvent, ageYearsFromBirthDate };

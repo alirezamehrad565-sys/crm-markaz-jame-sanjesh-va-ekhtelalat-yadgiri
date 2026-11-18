@@ -159,23 +159,6 @@ export const AssessmentBlockCreateSchema = z
     path: ['end_minute']
   });
 
-/* ۱.۲۷.۱۵ — پچ کارت نوبت سنجش (خواست کارفرما: کارت درگ‌پذیر به‌ازای هر درمانگر):
-   جابه‌جایی روز/ساعت، کش‌دادن پایان، جابه‌جایی به ستون درمانگر دیگر و نوشتن جزئیات —
-   با قفل خوش‌بینانهٔ نسخه (هم‌الگوی UpdateAppointmentSchema). */
-export const AssessmentBlockPatchSchema = z
-  .object({
-    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'تاریخ باید شکل YYYY-MM-DD باشد').optional(),
-    start_minute: z.number().int().min(0).max(1439).optional(),
-    end_minute: z.number().int().min(1).max(1440).optional(),
-    staff_id: UuidSchema.optional(),
-    note: z.string().max(500).nullish(),
-    version: z.number().int().positive()
-  })
-  .refine(
-    (v) => v.start_minute === undefined || v.end_minute === undefined || v.end_minute > v.start_minute,
-    { message: 'پایان بازهٔ سنجش باید بعد از شروع آن باشد', path: ['end_minute'] }
-  );
-
 export const UpdateAppointmentSchema = z.object({
   note: z.string().max(2000).nullish(),
   version: z.number().int().positive()

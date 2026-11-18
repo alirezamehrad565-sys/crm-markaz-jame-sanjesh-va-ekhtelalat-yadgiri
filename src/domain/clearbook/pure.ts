@@ -28,6 +28,11 @@ export function escapeLike(raw: string): string {
 
 // ─── تقویم شمسی ───
 
+export function jalaliYearOfYmd(ymd: string): number {
+  const [gy, gm, gd] = ymd.split('-').map(Number);
+  return toJalaliParts(gy, gm, gd).jy;
+}
+
 /** سال تحصیلی (مهر تا شهریور): مهر ۱۴۰۴ تا شهریور ۱۴۰۵ = سال تحصیلی ۱۴۰۴ */
 export function schoolYearOfYmd(ymd: string): number {
   const [gy, gm, gd] = ymd.split('-').map(Number);
@@ -47,6 +52,16 @@ export function shiftYmdByJalaliYears(ymd: string, n: number): string {
     if (back.jy === target.jy && back.jm === target.jm && back.jd === jd) break;
   }
   return jalaliToGregorianYmd(target.jy, target.jm, Math.max(jd, 1));
+}
+
+/** بازهٔ میلادی یک سال شمسی کامل (فروردین ۱ تا اسفند پایان) */
+export function jalaliYearBounds(jy: number): { from: string; to: string } {
+  const from = jalaliToGregorianYmd(jy, 1, 1);
+  // اسفند ۳۰ فقط در سال کابیسه معتبر است؛ بازگشت ناموفق → ۲۹
+  let to = jalaliToGregorianYmd(jy, 12, 30);
+  const back = toJalaliParts(Number(to.slice(0, 4)), Number(to.slice(5, 7)), Number(to.slice(8, 10)));
+  if (back.jy !== jy || back.jm !== 12 || back.jd !== 30) to = jalaliToGregorianYmd(jy, 12, 29);
+  return { from, to };
 }
 
 // ─── قالب استاندارد تقویم اجرایی (برگرفته از سند «تقویم اجرایی و عملیاتی مرکز جامع سنجش») ───

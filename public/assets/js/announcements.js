@@ -26,13 +26,11 @@ export async function initAnnouncementBanners() {
     const pub = await api.getDetached('/public/announcements'); // پوسته‌محور: با ناوبری لغو نشود
     for (const a of pub.data ?? []) items.set(a.id, a);
   } catch {
-    /* نرم — این منبع اختیاری است؛ منبع دیگر جبران می‌کند */
   }
   try {
     const panel = await api.getDetached('/api/announcements'); // پوسته‌محور
     for (const a of panel.data ?? []) items.set(a.id, a);
   } catch {
-    /* نرم — این منبع اختیاری است؛ منبع دیگر جبران می‌کند */
   }
 
   if (items.size === 0) {

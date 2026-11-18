@@ -226,7 +226,7 @@ export declare const SUBTESTS: Array<{ code: SubtestCode; col: string; fa: strin
 export declare const SUBTEST_CODES: SubtestCode[];
 export declare const SUBTEST_FA: Record<string, string>;
 export declare const SUBTEST_FA_OK: Record<string, string>;
-export declare const NORMS: Record<string, { rows: Array<Record<string, unknown>>; bands?: Record<string, string[]>; indices?: Record<string, string[]>; clusters?: Record<string, string[]>; }>;
+export declare const NORMS: Record<string, any>;
 export declare const NORM_MIN_AGE: 6;
 export declare const NORM_MAX_BAND: 14;
 export declare const INDEX_MEMBERS: Record<"VCI" | "PRI" | "WMI" | "PSI" | "FSIQ", string[]>;

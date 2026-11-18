@@ -290,10 +290,6 @@ struct EngineChild {
 }
 
 impl EngineChild {
-    /// پولینگ خروج کودک — واگذاری به Child درونی (نگهبان جزئیات Job را نمی‌بیند)
-    fn try_wait(&mut self) -> std::io::Result<Option<std::process::ExitStatus>> {
-        self.child.try_wait()
-    }
     /// spawn واقعی + انتساب به Job تازه (شکست انتساب غیرمهلک است — kill عادی می‌ماند)
     #[cfg(windows)]
     fn spawn(child: Child) -> Self {
@@ -316,10 +312,7 @@ impl EngineChild {
 /// انتساب کودک به Job تازه — شکست غیرمهلک است و فقط ثبت می‌شود (kill عادی کافی می‌ماند)
 #[cfg(windows)]
 fn job_guard_for(child: &Child) -> Option<crate::job_object::JobGuard> {
-    use std::os::windows::io::AsRawHandle;
-    // Child روی ویندوز AsRawHandle دارد — hProcess خام برای AssignProcessToJobObject
-    let handle = Ok(child.as_raw_handle());
-    match crate::job_object::JobGuard::assign(handle) {
+    match crate::job_object::JobGuard::assign(child.raw_handle()) {
         Ok(g) => Some(g),
         Err(e) => {
             eprintln!("[desktop] انتساب موتور به Job Object ناموفق بود ({e}) — پاک‌سازی یتیم فقط با kill عادی می‌ماند");
@@ -712,7 +705,7 @@ fn handle_unexpected_exit(
     plan: &EngineLaunch,
     port: u16,
     stop: &AtomicBool,
-    child_slot: &Mutex<Option<EngineChild>>,
+    child_slot: &Mutex<Option<Child>>,
     on_event: &EngineEventSink,
     history: &mut Vec<RestartRecord>,
 ) {

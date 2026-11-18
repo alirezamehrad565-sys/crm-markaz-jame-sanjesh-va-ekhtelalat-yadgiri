@@ -6,6 +6,8 @@ import type { RankedHypothesis } from './types';
 
 export const HYPOTHESIS_LOG_EVENT_KEY = 'ce-hypothesis-log-v1';
 
+export const HYPOTHESIS_LOG_TITLE = 'لج فرضیهٔ بالینی (خودکار)';
+
 export interface HypothesisLogEntry {
   targetKey: string;
   targetTitle: string;

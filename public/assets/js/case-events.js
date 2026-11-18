@@ -539,7 +539,7 @@ export function openCaseEventDetail(event, { onChanged } = {}) {
     try {
       const c = JSON.parse(String(payload['engine_output'].value));
       if (c && c.ok) wEng = c;
-    } catch {} /* نرم — JSON خراب → پیش‌فرض */
+    } catch {}
   }
   const keys = Object.keys(payload).filter((k) => k !== 'engine_output' && !k.startsWith('_') && payload[k] && String(payload[k].value ?? '').length > 0); /* ۱.۲۵.۵۹: کلیدهای رزرو (_) نمایشی نیستند */
   if (wEng) {

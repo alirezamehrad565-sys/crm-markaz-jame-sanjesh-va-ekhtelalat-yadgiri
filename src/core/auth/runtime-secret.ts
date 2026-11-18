@@ -44,7 +44,6 @@ export async function getOrCreateRuntimeSecret(store: SecretStore): Promise<stri
         return cachedSecret;
       }
     } catch {
-      /* نرم — راز خراب = بازتولید و بازنویسی؛ همهٔ سشن‌ها عمداً باطل می‌شوند */
     }
   }
 

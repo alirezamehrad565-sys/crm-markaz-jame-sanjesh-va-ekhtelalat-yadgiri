@@ -1327,7 +1327,7 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
         `SELECT fill_token FROM case_events WHERE id = ?`,
         [id]
       );
-      return row?.fill_token === token;
+      return Boolean(row?.fill_token) && row!.fill_token === token;
     },
 
     async mintFillLink(id, publicBaseUrl) {

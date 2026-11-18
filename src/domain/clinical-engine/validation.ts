@@ -117,3 +117,7 @@ export function computeValidationKpis(
     generatedAt: now.toISOString()
   };
 }
+
+export function kpiShareFa(k: KpiShare): string {
+  return k.pct === null ? '—' : `${faDigits(k.pct)}٪ (${faDigits(k.hit)} از ${faDigits(k.base)})`;
+}

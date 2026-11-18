@@ -227,6 +227,14 @@ export function scanItemInStage(
 // آستانه‌ها مشترک و proposed تا پیلوت مرکز. اهرم سختی authored روی بانک است؛
 // «انتخاب بانک هر مرحله» در رجیستری است — محرک/کلید هرگز بازنویسی نمی‌شود.
 
+/** آستانهٔ گذار و ستارهٔ سه نوع تازه — بر دقت (درصد)؛ وضعیت proposed تا پیلوت مرکز */
+export const ACCURACY_STAGE_THRESHOLDS = accuracyThresholdsOf(GAME_KINDS.stroop.stage_rule);
+
+/** نتیجهٔ مرحلهٔ سه نوع تازه از دقت خلاصهٔ جلسه — همان قرارداد StageOutcome */
+export function stageOutcomeAccuracyKind(accuracy: number | null | undefined): StageOutcome {
+  return accuracyOutcomeOf(GAME_KINDS.stroop.stage_rule, accuracy);
+}
+
 /** بانک مجاز هر مرحلهٔ استروپ — گروه‌های authored بانک (a=مرحلهٔ ۱ … d=مرحلهٔ ۴، p=پروب) */
 export const STROOP_STAGE_BANDS: Record<string, string[] | null> = GAME_KINDS.stroop.levers.bank_bands!;
 
@@ -412,6 +420,14 @@ export function stageStimViewOf(
 // ─── مراحل دو بازی حافظهٔ دنباله‌ای (G8/۱.۲۵.۴۹) — صدف‌های جادویی / حباب‌های عدد ───
 // ملاک گذار هر دو = دقت دنبالهٔ کامل (درصد) — آستانهٔ مشترک خودشان (SEQ_MEMORY) تا
 // آیندهٔ این دو نوع به پیلوت خودشان وابسته بماند؛ اهرم سختی authored روی بانک است.
+
+/** آستانهٔ گذار و ستارهٔ دو بازی حافظهٔ دنباله‌ای — بر دقت (درصد)؛ وضعیت proposed تا پیلوت مرکز */
+export const SEQ_MEMORY_STAGE_THRESHOLDS = accuracyThresholdsOf(GAME_KINDS.corsi.stage_rule);
+
+/** نتیجهٔ مرحلهٔ دو بازی حافظهٔ دنباله‌ای از دقت خلاصهٔ جلسه — همان قرارداد StageOutcome */
+export function stageOutcomeSeqMemory(accuracy: number | null | undefined): StageOutcome {
+  return accuracyOutcomeOf(GAME_KINDS.corsi.stage_rule, accuracy);
+}
 
 /** سقف طول دنبالهٔ صدف‌ها در هر مرحلهٔ کرسی — null = همهٔ دنباله‌ها (مرحلهٔ پایانی مرور بزرگ) */
 export const CORSI_STAGE_MAX_SPAN: Record<string, number | null> = GAME_KINDS.corsi.levers.bank_caps!;
