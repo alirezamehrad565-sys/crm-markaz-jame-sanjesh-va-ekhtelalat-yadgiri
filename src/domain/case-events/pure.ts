@@ -10,7 +10,6 @@ import type {
 import { CASE_EVENT_CATEGORIES, CASE_EVENT_FIELD_TYPES, CASE_EVENT_BAND_COLORS } from './types';
 
 export const TYPE_TITLE_MAX = 120;
-export const TYPE_KEY_MAX = 60;
 export const TYPE_ICON_MAX = 16;
 export const FIELD_LABEL_MAX = 240;
 export const FIELD_KEY_MAX = 60;
@@ -61,7 +60,6 @@ export function withTeacherName(
   return { ...payload, [TEACHER_NAME_FIELD_KEY]: { value: teacher.name, label: TEACHER_NAME_LABEL } };
 }
 
-export const NEXT_ACTION_OPTIONS = ['هیچ', 'پیگیری', 'نوبت بعدی', 'تماس با خانواده', 'ارجاع'] as const;
 export const NEXT_ACTION_FOLLOW_UP = 'پیگیری';
 
 export function estimateBase64Bytes(b64: string): number {
