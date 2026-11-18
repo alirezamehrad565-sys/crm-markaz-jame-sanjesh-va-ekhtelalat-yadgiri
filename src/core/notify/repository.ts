@@ -548,7 +548,7 @@ export function resolveChatOwner(chatId: string): { sql: string; params: unknown
   };
 }
 
-// ─── قطع اتصال () — پاک‌سازی همهٔ اتصال‌ها و وضعیت‌های یک گفتگو ───
+// ─── قطع اتصال — پاک‌سازی همهٔ اتصال‌ها و وضعیت‌های یک گفتگو ───
 
 export function unlinkBotLinksByChat(chatId: string): { sql: string; params: unknown[] } {
   return {

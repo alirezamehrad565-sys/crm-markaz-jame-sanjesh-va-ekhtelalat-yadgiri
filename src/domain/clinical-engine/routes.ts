@@ -424,7 +424,7 @@ export function registerClinicalEngineRoutes(app: AppHono, service: ClinicalEngi
         outcome: body.outcome,
         note: body.note,
         items: itemInputsToDomain(body.items),
-        fidelity: body.fidelity // عیناً عبور: کلید غایب = undefined = دست‌نخوردن قبلی (قرارداد )
+        fidelity: body.fidelity // عیناً عبور: کلید غایب = undefined = دست‌نخوردن قبلی (قرارداد)
       },
       actor
     );

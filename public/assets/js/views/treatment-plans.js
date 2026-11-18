@@ -1,5 +1,5 @@
 // «طرح درمان»: جایگزین کامل «مدیریت قالب‌ها» — نویسندهٔ کارت‌محورِ جلسه‌به‌جلسه
-// هدف/معیار هر جلسه + هفت نوع کارت + کتابخانهٔ «کارت‌های آماده» (ریبرند ) + کارت‌های قبلی تیم + کپی طرح
+// هدف/معیار هر جلسه + هفت نوع کارت + کتابخانهٔ «کارت‌های آماده» (ریبرند) + کارت‌های قبلی تیم + کپی طرح
 import { api } from '../api.js';
 import { el, icon, toast, toastError, confirmModal, openModal, emptyState, skeletonState, errorState } from '../ui.js';
 import { fa } from '../format.js';

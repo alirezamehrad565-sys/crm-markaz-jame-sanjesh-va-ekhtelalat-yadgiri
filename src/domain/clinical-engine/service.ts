@@ -423,7 +423,7 @@ export function createClinicalEngineService(deps: ClinicalEngineDeps) {
   }
 
   // لج فرضیه: اسنپ‌شات رتبه‌بندی در رویداد پرونده — فقط وقتی اثرانگشت عوض شده باشد.
-  // ناظر ( فقط-خواندن) هرگز در مسیر GET چیزی نمی‌نویسد؛ دانش‌آموز بی‌فرضیه هم رکورد نمی‌گیرد.
+  // ناظر (فقط-خواندن) هرگز در مسیر GET چیزی نمی‌نویسد؛ دانش‌آموز بی‌فرضیه هم رکورد نمی‌گیرد.
   async function persistHypothesisLogIfChanged(studentId: string, actor: AuthContext, result: InferenceOutput): Promise<void> {
     try {
       if (actor.role === 'supervisor') return;
@@ -1302,7 +1302,7 @@ export function createClinicalEngineService(deps: ClinicalEngineDeps) {
     );
     if (!probe) throw new NotFoundError('پراپ');
 
-    // اصلاح نمرهٔ اشتباه‌گرفته‌شده؛ کلید غایب = دست‌نخوردن مقدار قبلی (درس )
+    // اصلاح نمرهٔ اشتباه‌گرفته‌شده؛ کلید غایب = دست‌نخوردن مقدار قبلی (درس)
     const nextValue = input.value !== undefined ? input.value : probe.value;
     const nextUnit = input.unit !== undefined ? parseText(input.unit, PATH_PROBE_UNIT_MAX) : probe.unit;
     const nextNote = input.note !== undefined ? parseText(input.note, PATH_PROBE_NOTE_MAX) : probe.note;

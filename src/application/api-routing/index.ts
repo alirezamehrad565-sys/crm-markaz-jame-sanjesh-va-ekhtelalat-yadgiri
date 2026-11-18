@@ -535,7 +535,7 @@ export function createApp(deps: AppDeps): AppHono {
 
   const app: AppHono = new Hono<{ Bindings: AppBindings; Variables: AppVariables }>();
 
-  // — هوک تستی: دسترسی به سرویس‌ها برای e2e (مثلاً setFillObserver در آزمون )
+  // — هوک تستی: دسترسی به سرویس‌ها برای e2e (مثلاً setFillObserver در آزمون)
   (app as unknown as { __services?: Services }).__services = services;
 
   app.use('*', async (c, next) => {

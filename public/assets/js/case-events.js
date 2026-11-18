@@ -5,7 +5,7 @@ import { TOOL_GUIDES } from './clinical-content.js';
 import { jalaliDateInput } from './jalali-picker.js';
 import { session } from './state.js';
 import { typeIconNode } from './case-event-icons.js';
-import { wechslerEventAnalysisSection } from './wechsler-profile.js'; // — نیم‌رخ کامل وکسلر در مودال ()
+import { wechslerEventAnalysisSection } from './wechsler-profile.js'; // — نیم‌رخ کامل وکسلر در مودال
 const STATUS_LABELS = { draft: 'پیش‌نویس', completed: 'ثبت‌شده', pending_family: 'در انتظار خانواده', cancelled: 'لغوشده' };
 
 function studentLabel(student) {

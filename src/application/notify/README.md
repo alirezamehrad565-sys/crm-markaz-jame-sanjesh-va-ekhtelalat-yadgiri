@@ -31,7 +31,7 @@
 
 ## جریان اتصال بات (link flow)
 
-1. منشی/مدیر/درمانگر (): `POST /api/notifications/links { student_id }` → کد ۶ نویسه‌ای (بدون O/0/I/1).
+1. منشی/مدیر/درمانگر: `POST /api/notifications/links { student_id }` → کد ۶ نویسه‌ای (بدون O/0/I/1).
 2. ولیّ در بله: `/link CODE` می‌فرستد.
 3. بات (webhook): کد پیدا و `status='pending'` است → `bot_links.status='linked'` + chat_id ذخیره
    + `notification_prefs` آن دانش‌آموز با channel=bale و chat_id ساخته/به‌روز می‌شود.

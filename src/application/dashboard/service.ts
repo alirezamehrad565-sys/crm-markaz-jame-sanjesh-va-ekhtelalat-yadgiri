@@ -68,7 +68,7 @@ export function createDashboardService(deps: DashboardDeps): DashboardService {
   async function activityCounts(fromYmd: string, toYmd: string): Promise<Map<string, TherapistActivityCounts>> {
     const range = tehranRange(fromYmd, toYmd);
     // — شمارنده‌ها با مرز UTC آگاه (range.start/end) مقایسه می‌شوند نه substr تاریخ UTC؛ وگرنه از نیمه‌شب تا ۰۳:۳۰ تهران،
-    // created_at (UTC روز قبل) از پنجرهٔ روز تهران بیرون می‌افتد و تمرین/رویداد/پیگیری صفر می‌شود (رفع باگ ).
+    // created_at (UTC روز قبل) از پنجرهٔ روز تهران بیرون می‌افتد و تمرین/رویداد/پیگیری صفر می‌شود (رفع باگ).
     const [monthAppointments, exRows, evRows, fuRows] = await Promise.all([
       appointments.list({ from: range.start, to: range.end }),
       db.query<{ staffId: string; cnt: number }>(

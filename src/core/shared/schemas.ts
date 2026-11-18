@@ -612,7 +612,7 @@ export const ReplaceStudentTagsSchema = z.object({
   tag_ids: z.array(UuidSchema).max(MAX_TAGS_PER_STUDENT, `حداکثر ${MAX_TAGS_PER_STUDENT} برچسب مجاز است`)
 });
 
-// پیوند درخت هدف با پروفایل دانش‌آموز؛ اعتبار کلید در سرویس (درخت در کد است، همان قرارداد )
+// پیوند درخت هدف با پروفایل دانش‌آموز؛ اعتبار کلید در سرویس (درخت در کد است، همان قرارداد)
 export const ReplaceStudentFocusSchema = z.object({
   focus_keys: z.array(z.string().trim().min(1).max(48)).max(8, 'حداکثر ۸ پیوند هدف مجاز است')
 });

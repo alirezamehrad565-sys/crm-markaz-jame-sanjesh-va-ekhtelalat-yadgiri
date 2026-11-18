@@ -142,7 +142,7 @@ export interface CaseEventRecord {
   fillExpiresAt: string | null;
   sentAt: string | null;
   sentCount: number;
-  filledByChatId: string | null; // — «web:…» یا chatId یعنی فرم توسط خانواده/معلم پر شده ()
+  filledByChatId: string | null; // — «web:…» یا chatId یعنی فرم توسط خانواده/معلم پر شده
   createdAt: string;
   files?: CaseEventFileMeta[];
 }
