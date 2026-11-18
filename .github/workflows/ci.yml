@@ -46,7 +46,9 @@ jobs:
       - name: Build games worker bundle
         run: node scripts/build-worker-games.mjs
 
-      # v1.27.۰۳ — گیت فاز ۲ دوهاته: موتور توسعهٔ workerd و موتور دسکتاپ adapter (نصاب)
+      # v1.27.۰۳ — گیت فاز ۲ دوهاته: موتور توسعهٔ workerd و موتور دسکتاپ adapter (نصاب).
+      # پاریتی: هر دو حالت همین مجموعهٔ بررسی را اجرا می‌کنند (پروب مستقل gamesPort در هر دو —
+      # شمارش برابر، خروجی هر گام با «[smoke] نتیجه (<mode>)» برچسب حالت دارد) → مقایسه‌پذیر.
       - name: Engine smoke — workerd (حالت توسعه)
         run: node scripts/engine/engine-smoke.mjs
 

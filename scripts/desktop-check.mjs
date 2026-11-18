@@ -217,9 +217,9 @@ try {
   smoke.includes('SMOKE_ENGINE') && smoke.includes('--engine')
     ? ok('engine-smoke: گیت دوهاته workerd/adapter سیم است')
     : bad('engine-smoke: حالت adapter سیم نیست');
-  // M4 — پروب مستقل gamesPort در smoke حالت adapter + گوش‌دادن بنر Degraded در پنل سلامت
+  // M4 — پروب مستقل gamesPort در smoke (هر دو حالت workerd/adapter) + گوش‌دادن بنر Degraded در پنل سلامت
   smoke.includes('سلامت مستقل gamesPort')
-    ? ok('engine-smoke: پروب مستقل gamesPort در حالت adapter سیم است (M4)')
+    ? ok('engine-smoke: پروب مستقل gamesPort در هر دو حالت سیم است (M4 — پاریتی ۲۸/۲۸)')
     : bad('engine-smoke: پروب مستقل gamesPort (M4) غایب است');
   const hpSrc = readFileSync(path.join(ROOT, 'public', 'assets', 'js', 'views', 'health-panel.js'), 'utf8');
   hpSrc.includes("listen('engine:degraded'") && hpSrc.includes("listen('engine:degraded_recovered'")
