@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.27.17";
+var APP_VERSION = "1.27.18";
 var NODE_MIN_VERSION = "1.26.0";
 
 // node_modules/zod/v4/classic/external.js
@@ -76217,6 +76217,54 @@ async function verifyCloudToken(deps) {
   return { ok: true, accounts };
 }
 __name(verifyCloudToken, "verifyCloudToken");
+async function discoverCloudDeployment(deps) {
+  const doFetch = deps.fetchImpl ?? ((input2, i) => fetch(input2, i));
+  const verify = await verifyCloudToken({ token: deps.token, fetchImpl: doFetch, log: deps.log });
+  if (!verify.ok) {
+    return {
+      ok: false,
+      step: verify.step === "verify" ? "verify" : "accounts",
+      kind: verify.kind === "no_account" ? "no_account" : verify.kind,
+      message: verify.message,
+      ...verify.errors ? { errors: verify.errors } : {}
+    };
+  }
+  const workers = [];
+  const databases = [];
+  for (const account of verify.accounts) {
+    const headers = authHeaders(deps.token);
+    const domainsOutcome = await callCf(doFetch, `/accounts/${account.id}/workers/domains`, { headers });
+    if (domainsOutcome.kind === "ok" && Array.isArray(domainsOutcome.body.result)) {
+      const byService = /* @__PURE__ */ new Map();
+      for (const row of domainsOutcome.body.result) {
+        const service = typeof row.service === "string" ? row.service : "";
+        const hostname3 = typeof row.hostname === "string" ? row.hostname : "";
+        if (!service || !hostname3) continue;
+        const urls = byService.get(service) ?? [];
+        urls.push(`https://${hostname3}`);
+        byService.set(service, urls);
+      }
+      for (const [name, urls] of byService) workers.push({ name, account_id: account.id, urls: urls.sort() });
+      deps.log?.(`\u062D\u0633\u0627\u0628 \xAB${account.name || account.id}\xBB: ${byService.size} \u0648\u0631\u06A9\u0631 \u0628\u0627 \u062F\u0627\u0645\u0646\u0647\u0654 \u0639\u0645\u0648\u0645\u06CC`);
+    } else {
+      deps.log?.(`\u062F\u0627\u0645\u0646\u0647\u200C\u0647\u0627\u06CC \u062D\u0633\u0627\u0628 \xAB${account.name || account.id}\xBB \u062E\u0648\u0627\u0646\u062F\u0647 \u0646\u0634\u062F \u2014 \u0628\u062E\u0634 \u0648\u0631\u06A9\u0631\u0647\u0627 \u062E\u0627\u0644\u06CC \u0645\u06CC\u200C\u0645\u0627\u0646\u062F`);
+    }
+    const d1Outcome = await callCf(doFetch, `/accounts/${account.id}/d1/database`, { headers });
+    if (d1Outcome.kind === "ok" && Array.isArray(d1Outcome.body.result)) {
+      for (const row of d1Outcome.body.result) {
+        const id = typeof row.uuid === "string" ? row.uuid : typeof row.id === "string" ? row.id : "";
+        const name = typeof row.name === "string" ? row.name : "";
+        if (!id || !name) continue;
+        databases.push({ name, id, account_id: account.id });
+      }
+      deps.log?.(`\u062D\u0633\u0627\u0628 \xAB${account.name || account.id}\xBB: ${databases.length} \u067E\u0627\u06CC\u06AF\u0627\u0647 D1`);
+    } else {
+      deps.log?.(`\u0641\u0647\u0631\u0633\u062A D1 \u062D\u0633\u0627\u0628 \xAB${account.name || account.id}\xBB \u062E\u0648\u0627\u0646\u062F\u0647 \u0646\u0634\u062F \u2014 \u0628\u062E\u0634 \u067E\u0627\u06CC\u06AF\u0627\u0647\u200C\u0647\u0627 \u062E\u0627\u0644\u06CC \u0645\u06CC\u200C\u0645\u0627\u0646\u062F`);
+    }
+  }
+  return { ok: true, accounts: verify.accounts, workers, databases };
+}
+__name(discoverCloudDeployment, "discoverCloudDeployment");
 
 // src/core/logger/logger.ts
 var LEVEL_WEIGHT = { debug: 10, info: 20, warn: 30, error: 40 };
@@ -76957,6 +77005,9 @@ var CloneSchema = external_exports.object({
 var ProvisionVerifySchema = external_exports.object({
   token: external_exports.string().min(1, "\u062A\u0648\u06A9\u0646 \u06A9\u0644\u0627\u062F\u0641\u0644\u0631 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A")
 });
+var DiscoverSchema = external_exports.object({
+  token: external_exports.string().min(1, "\u062A\u0648\u06A9\u0646 \u06A9\u0644\u0627\u062F\u0641\u0644\u0631 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A")
+});
 var ProvisionSchema = external_exports.object({
   token: external_exports.string().min(1, "\u062A\u0648\u06A9\u0646 \u06A9\u0644\u0627\u062F\u0641\u0644\u0631 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A"),
   accountId: external_exports.string().min(1).optional(),
@@ -77065,6 +77116,27 @@ function registerDesktopRoutes(app, deps) {
       );
     }
     return c.json({ data: { accounts: result.accounts } }, 200);
+  });
+  app.post("/api/instance-sync/provision/discover", requireRole("manager"), async (c) => {
+    getAuthContext(c);
+    const parsed = DiscoverSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: "VALIDATION_ERROR", message: "\u0628\u062F\u0646\u0647\u0654 \u06A9\u0634\u0641 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A \u2014 token \u0644\u0627\u0632\u0645 \u0627\u0633\u062A" }, 400);
+    }
+    const result = await discoverCloudDeployment({
+      fetchImpl: fetchImplOf(envOf(c)),
+      token: parsed.data.token
+    });
+    if (!result.ok) {
+      return c.json(
+        { error: "CLOUD_DISCOVER_FAILED", message: result.message, data: { step: result.step, errors: result.errors ?? [] } },
+        400
+      );
+    }
+    return c.json(
+      { data: { accounts: result.accounts, workers: result.workers, databases: result.databases } },
+      200
+    );
   });
   app.post("/api/instance-sync/provision", requireRole("manager"), async (c) => {
     const actor = getAuthContext(c);

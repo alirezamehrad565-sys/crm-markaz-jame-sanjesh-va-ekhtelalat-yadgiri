@@ -280,6 +280,25 @@ export async function saveExistingConnection(deps, input) {
  * گام ۱ زنجیرهٔ A1 — وارسی توکن و فهرست حساب‌ها: POST provision/verify {token} →
  * {ok, accounts:[{id,name}]}؛ پاکت غایب/ناقص → accounts خالی بی‌کرش.
  */
+/**
+ * فاز E (۱.۲۷.۱۸ — خواست کارفرما) — کشف مرکزهای ابری موجود با کلید کلادفلر:
+ * POST provision/discover {token} → {accounts, workers:[{name,urls[]}], databases}.
+ * خروجی تخت: هر دامنهٔ عمومی یک گزینهٔ {name,url}. کلید هرگز ذخیره نمی‌شود — فقط همین فراخوان.
+ * پاکت غایب/ناقص → فهرست‌های خالی بی‌کرش (عین الگوی verifyProvisionToken).
+ */
+export async function discoverCloudCandidates(deps, token) {
+  const res = await deps.api.post('/api/instance-sync/provision/discover', { token });
+  const data = unwrapPacket(res);
+  const workers = Array.isArray(data?.workers)
+    ? data.workers
+        .filter((w) => w && typeof w === 'object' && typeof w.name === 'string' && Array.isArray(w.urls))
+        .flatMap((w) => w.urls
+          .filter((u) => typeof u === 'string' && u.startsWith('https://'))
+          .map((u) => ({ name: w.name, url: u })))
+    : [];
+  return { ok: data?.ok === true, workers, databases: Array.isArray(data?.databases) ? data.databases : [] };
+}
+
 export async function verifyProvisionToken(deps, token) {
   const res = await deps.api.post('/api/instance-sync/provision/verify', { token });
   const data = unwrapPacket(res);
@@ -496,16 +515,28 @@ export function mountCloudSetup(root, deps = {}, opts = {}) {
     const { form } = d.formModal({
       title: 'اتصال به مرکز ابری موجود',
       fields: [
-        { name: 'url', label: 'آدرس مرکز ابری', type: 'text', required: true, ltr: true, placeholder: 'https://markaz-….workers.dev', hint: 'آدرس مرکز ابری کلادفلر — با https شروع می‌شود' },
+        { name: 'url', label: 'آدرس مرکز ابری', type: 'text', required: false, ltr: true, placeholder: 'https://markaz-….workers.dev', hint: 'آدرس مرکز ابری — یا خالی بگذارید تا با کلید کلادفلر خودکار یافته شود' },
         { name: 'interval_minutes', label: 'همگام‌سازی خودکار (دقیقه)', type: 'number', min: 1, value: '10', hint: 'پیش‌فرض ۱۰ دقیقه — یعنی هر ۱۰ دقیقه یک‌بار؛ کف ۱ دقیقه' },
-        { name: 'secret', label: 'رمز اتصال', type: 'password', ltr: true, hint: desktopSecret ? 'رمز اتصال — یک‌بار در حافظهٔ امن ویندوز ذخیره می‌شود' : 'تنظیم رمز اتصال فقط در نسخهٔ دسکتاپ فعال است' }
+        { name: 'secret', label: 'رمز اتصال', type: 'password', ltr: true, hint: desktopSecret ? 'رمز اتصال — یک‌بار در حافظهٔ امن ویندوز ذخیره می‌شود' : 'تنظیم رمز اتصال فقط در نسخهٔ دسکتاپ فعال است' },
+        { name: 'cf_token', label: 'کلید کلادفلر (اختیاری)', type: 'password', ltr: true, hint: 'اگر آدرس را نمی‌دانید فقط کلید را بدهید — مرکزهای ابریِ موجود با مجوز Workers و D1 خودکار یافته می‌شوند؛ کلید ذخیره نمی‌شود' }
       ],
       submitLabel: 'ذخیره و اتصال',
       secondary: { label: 'کلون از ابر…', onClick: () => cloneFromCloudAction() },
       onSubmit: async (values) => {
+        // فاز E (۱.۲۷.۱۸) — آدرس خالی + کلید کلادفلر = کشف خودکار؛ اولویت با markaz-*
+        // (قرارداد provision) وگرنه اولین دامنهٔ عمومی؛ چندگانه → اولی و اطلاع با toast
+        let url = String(values.url ?? '').trim();
+        const cfToken = String(values.cf_token ?? '').trim();
+        if (!url && cfToken) {
+          const disc = await discoverCloudCandidates(d, cfToken);
+          const pick = disc.workers.find((w) => /markaz-/.test(w.url)) ?? disc.workers[0];
+          if (!pick) throw new Error('مرکز ابری با این کلید پیدا نشد — کلید باید مجوز Workers و D1 داشته باشد، یا آدرس را دستی وارد کنید');
+          url = pick.url;
+          d.toast(`آدرس از کلادفلر یافت شد: ${pick.url} (${pick.name})`, 'success');
+        }
         // URL با نگاشت مشترک پیکربندی ابر اعتبارسنجی می‌شود؛ خطا → errBox فرم و ماندن مودال باز
         const { normalizeWorkerUrl } = await import('../../../../src/cloud-setup/verify.ts');
-        const nm = normalizeWorkerUrl(values.url ?? '');
+        const nm = normalizeWorkerUrl(url);
         if (!nm.ok) throw new Error(nm.message);
         let msg;
         try {

@@ -130,5 +130,10 @@ impl Drop for JobGuard {
     }
 }
 
+// هندل Job ویندوزی process-wide است (نه thread-affine) و فقط در Drop مصرف می‌شود؛
+// انتقال مالکیت بین رشته‌ها امن است — هم‌الگو با std::process::Child که خودش Send است.
+// بدون این، EngineChild هنگام عبور به رشتهٔ نگهبان/بوت E0277 می‌گیرد (RawHandle !Send است).
+unsafe impl Send for JobGuard {}
+
 // هیچ آزمون واحد FFI این‌جا نیست: اجرای واقعی Job فقط روی ویندوز معنا دارد و در جاب
 // windows-build CI (کامپایل) + نصب واقعی پوشش داده می‌شود؛ ساختار داده و ثابت‌ها pure هستند.
