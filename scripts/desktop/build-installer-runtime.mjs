@@ -80,7 +80,13 @@ async function downloadNodeSidecar(target) {
   writeFileSync(archive, Buffer.from(await res.arrayBuffer()));
 
   const extractDir = mkdtempSync(path.join(os.tmpdir(), 'node-extract-'));
-  execFileSync('tar', ['-xf', archive, '-C', extractDir]);
+  /* ۱.۲۷.۲۵ — tar گنو روی لینوکس zip را باز نمی‌کند (tar.exe ویندوز همان bsdtar است و zip را باز می‌کند)؛
+     در میزبان posix برای بستهٔ zip از unzip استفاده می‌شود تا mount رانتایم در سندباکس/CI هم سبز شود */
+  if (isWin && process.platform !== 'win32') {
+    execFileSync('unzip', ['-q', '-o', archive, '-d', extractDir]);
+  } else {
+    execFileSync('tar', ['-xf', archive, '-C', extractDir]);
+  }
   const binPath = isWin
     ? path.join(extractDir, `node-v${version}-win-x64`, 'node.exe')
     : path.join(extractDir, `node-v${version}-linux-x64`, 'bin', 'node');

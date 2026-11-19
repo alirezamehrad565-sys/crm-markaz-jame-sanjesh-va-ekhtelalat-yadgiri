@@ -650,6 +650,10 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   background: var(--kpi-tint, var(--primary));
   opacity: 0.75;
 }
+/* POLISH-3 M2 — حفر شاخص: KPI کلیک‌پذیر با هُور و فوکوس کیبورد */
+.kpi--link { cursor: pointer; transition: border-color 0.15s ease; }
+.kpi--link:hover { border-color: var(--primary); }
+.kpi--link:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .kpi__label {
   font-size: var(--fs-xs);
   color: var(--text-2);

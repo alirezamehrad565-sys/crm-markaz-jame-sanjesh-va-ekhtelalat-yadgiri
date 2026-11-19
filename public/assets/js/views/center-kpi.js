@@ -30,9 +30,11 @@ function rateKpi(label, value, sub) {
   return kpi(label, pct(value), sub, tone);
 }
 
-function sectionTitle(iconName, text) {
-  return el('div', { class: 'card__head', style: { marginTop: 'var(--sp-5)' } },
-    el('div', { class: 'card__title' }, icon(iconName, 16), text));
+/* POLISH-3 M2 — هر بخش شاخص یک پیوند حفر به نمای مرجع خودش می‌گیرد (فقط‌خواندنیِ بی‌حفر ممنوع) */
+function sectionTitle(iconName, text, linkTo = null) {
+  return el('div', { class: 'card__head', style: { marginTop: 'var(--sp-5)', alignItems: 'center' } },
+    el('div', { class: 'card__title' }, icon(iconName, 16), text),
+    linkTo ? el('button', { class: 'btn btn--ghost btn--sm', type: 'button', onclick: () => { location.hash = linkTo; } }, 'مشاهدهٔ جزئیات', icon('chevL', 13)) : null);
 }
 
 /* ۱.۲۵.۶۰ — نشان تفکیک نوع فرم نظرسنجی: «ارسالی ۴ · پاسخ ۲» */
@@ -98,7 +100,7 @@ export async function renderCenterKpi(container, opts = {}) {
       ),
 
       // ─── نوبت‌ها و حضور: خالی نبودن نوبت‌ها و جا نیفتادن‌ها ───
-      sectionTitle('calendar', 'نوبت‌ها و حضور'),
+      sectionTitle('calendar', 'نوبت‌ها و حضور', '#/working-day'),
       el('div', { class: 'kpi-grid' },
         kpi('نوبت‌های پنجره', num(a.total), `برنامه‌ریزی‌شده ${num(a.scheduled)} · لغوشده ${num(a.cancelled)}`, 'primary'),
         rateKpi('نرخ لغو', a.cancel_rate, 'لغوشده از کل نوبت‌های پنجره'),
@@ -109,7 +111,7 @@ export async function renderCenterKpi(container, opts = {}) {
       ),
 
       // ─── کیفیت مداخله ───
-      sectionTitle('clipboard', 'کیفیت مداخله'),
+      sectionTitle('clipboard', 'کیفیت مداخله', '#/treatment-plans'),
       el('div', { class: 'kpi-grid' },
         kpi('جلسات انجام‌شدهٔ طرح درمان', num(iv.pathway_sessions_done), `رهاشده ${num(iv.pathway_sessions_skipped)}`, 'primary'),
         rateKpi('نرخ تکمیل جلسات', iv.session_completion_rate, 'انجام‌شده از انجام‌شده + رهاشده'),
@@ -120,7 +122,7 @@ export async function renderCenterKpi(container, opts = {}) {
       ),
 
       // ─── ثبت پرونده و بازخورد خانواده ───
-      sectionTitle('file', 'ثبت پرونده و بازخورد خانواده'),
+      sectionTitle('file', 'ثبت پرونده و بازخورد خانواده', '#/case-event-types'),
       el('div', { class: 'kpi-grid' },
         kpi('رویدادهای پرونده', num(dc.case_events_total), `گزارش جلسهٔ مداخله ${num(dc.session_notes)}`, 'primary'),
         rateKpi('پوشش ثبت پرونده', dc.documentation_coverage, `دانش‌آموز مستند از ${num(dc.students_active)} فعال`),
@@ -131,7 +133,7 @@ export async function renderCenterKpi(container, opts = {}) {
       ),
 
       // ─── رضایت خانواده‌ها (نظرسنجی — ۱.۲۵.۵۹ / تفکیک دو فرم ساخت‌یافته — ۱.۲۵.۶۰) ───
-      sectionTitle('heart', 'رضایت خانواده‌ها (نظرسنجی)'),
+      sectionTitle('heart', 'رضایت خانواده‌ها (نظرسنجی)', '#/family-surveys'),
       el('div', { class: 'kpi-grid' },
         kpi('نظرسنجی‌های ارسالی', num(fs.surveys_sent), `پاسخ‌گرفته ${num(fs.surveys_filled)}`, 'primary'),
         rateKpi('نرخ پاسخ‌دهی نظرسنجی', fs.response_rate, 'پاسخ‌گرفته از ارسالی پنجره'),
