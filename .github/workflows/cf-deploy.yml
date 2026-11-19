@@ -1,8 +1,20 @@
-name: دیپلوی Worker کلادفلر (دستی)
-# انتشار تولیدی از CI — همان مسیر update-remote.mjs (بکاپ → مایگریشن → deploy → دروازهٔ سلامت ×۳ + رولبک خودکار)
-# پورت فاز E-۲ از main به rust (server-cloud-update-design.md §۴؛ POLISH-2) — خط rust با همین ورک‌فلو منتشر می‌شود.
-# اعتبارها از رازهای مخزن: CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID (تاریخچه/لاگ هرگز مقدار را نشان نمی‌دهد)
+name: Deploy (Cloudflare)
+# انتشار خودکار تولیدی با هر پوش مؤثر روی main:
+# پشتیبان D1 → مایگریشن → deploy → دروازهٔ سلامت ×۳ → رولبک خودکار (scripts/update-remote.mjs)
+# اعتبارها از رازهای مخزن: CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'public/**'
+      - 'worker/**'
+      - 'migrations/**'
+      - 'wrangler.toml'
+      - 'scripts/update-remote.mjs'
+      - 'scripts/build-worker-bundle.mjs'
+      - 'package.json'
+      - 'package-lock.json'
   workflow_dispatch:
     inputs:
       skip_backup:
@@ -19,14 +31,12 @@ permissions:
 
 jobs:
   deploy:
-    name: update-remote (بکاپ + مایگریشن + انتشار + دروازهٔ سلامت)
+    name: backup → migrate → deploy → health ×3
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
@@ -40,7 +50,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           ARGS="--yes"
-          if [ "${{ github.event.inputs.skip_backup }}" = "true" ]; then ARGS="--yes --skip-backup"; fi
+          if [ "${{ inputs.skip_backup }}" = "true" ]; then ARGS="--yes --skip-backup"; fi
           node scripts/update-remote.mjs $ARGS
 
       - name: آپلود پشتیبان D1 به آرتیفکت اجرا
