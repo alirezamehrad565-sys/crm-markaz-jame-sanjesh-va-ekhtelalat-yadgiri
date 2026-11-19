@@ -531,7 +531,7 @@ async function renderDailyTab(box, container, myGen) {
     }
   };
 
-  const listCard = el('div', { class: 'card' },
+  const listCard = el('div', { class: 'card', style: { marginTop: 'var(--sp-4)' } },
     el('div', { class: 'card__head' },
       el('div', { class: 'card__title' }, isToday ? 'لیست روز سنجش امروز' : `لیست روز سنجش — ${formatJalaliFull(selected)}`), /* ۱.۲۷.۱۶ */
       listCount

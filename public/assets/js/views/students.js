@@ -61,8 +61,6 @@ export async function renderStudents(container, ctx) {
   }
 
   if (ctx?.query && 'tag_id' in ctx.query) local.tagId = ctx.query.tag_id || '';
-  /* POLISH-3 M2 — حفر «مدارس مبدأ» گزارش دوره: فیلتر مدرسه از لینک عمیق می‌آید */
-  if (ctx?.query && 'school_id' in ctx.query) local.schoolId = ctx.query.school_id || '';
 
   container.replaceChildren(skeletonState('table', 6));
 

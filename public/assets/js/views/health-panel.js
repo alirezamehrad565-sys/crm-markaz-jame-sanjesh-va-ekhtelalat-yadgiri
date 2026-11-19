@@ -753,7 +753,7 @@ function infoRow(label, valueEl) {
  * داخل آرایهٔ el در reload ساخته می‌شود و تا root.replaceChildren بعدی وصل نیست؛ با گارد قدیمی
  * پرِ اولیه بی‌صدا رد می‌شد و کارت تا اولین emit feed خالی می‌ماند (اشکال گزارش‌شدهٔ کارفرما).
  * گارد «بستن اشتراک کهنه» فقط برای emitهای feed است — پیام/رفتارش عین قبل.
- * ctx: { resultLine, engineRestartAction, openDataDirAction, copyDiagAction, checkUpdatesAction, openReleasePageAction, updaterState, onStaleSubscription }
+ * ctx: { resultLine, engineRestartAction, openDataDirAction, copyDiagAction, onStaleSubscription }
  */
 export function makeServerCardPaint(body, ctx = {}) {
   return (status, isInitial) => {
@@ -798,12 +798,9 @@ export function makeServerCardPaint(body, ctx = {}) {
         el('div', { class: 'ob-row__side' },
           el('button', { class: 'btn btn--primary', type: 'button', onclick: (e) => void ctx.engineRestartAction(e.currentTarget) }, 'راه‌اندازی دوباره'),
           el('button', { class: 'btn btn--ghost', type: 'button', onclick: (e) => void ctx.openDataDirAction(e.currentTarget) }, 'بازکردن پوشهٔ داده'),
-          el('button', { class: 'btn btn--ghost', type: 'button', onclick: (e) => void ctx.copyDiagAction(e.currentTarget) }, 'کپی اطلاعات عیب‌یابی'),
-          el('button', { class: 'btn btn--ghost', type: 'button', onclick: (e) => void ctx.checkUpdatesAction(e.currentTarget) }, 'بررسی نسخهٔ تازه')
+          el('button', { class: 'btn btn--ghost', type: 'button', onclick: (e) => void ctx.copyDiagAction(e.currentTarget) }, 'کپی اطلاعات عیب‌یابی')
         )
       ),
-      // فاز D — ردیف نتیجهٔ «بررسی نسخهٔ تازه» — فقط پس از اولین بررسی رندر می‌شود (پین‌های آزمون دست‌نخورده)
-      ...(typeof ctx.updaterState === 'function' && ctx.updaterState() ? [updaterRowView(ctx.updaterState(), ctx)] : []),
       ctx.resultLine ?? null
     );
   };
@@ -812,52 +809,6 @@ export function makeServerCardPaint(body, ctx = {}) {
 /** ۱.۲۷.۱۲ — توضیح cell-sub ردیف وضعیت کارت ابری وقتی status=null (موتور کهنهٔ بدون
    /api/instance-sync/* هم همین‌جا می‌افتد — poll ابر شکست می‌خورد و feed هرگز notify نمی‌شود) */
 const CLOUD_STATUS_PENDING_TEXT = 'وضعیت اتصال ابری از سرور نگرفته شد — اگر موتور محلی قدیمی است، با به‌روزرسانی نصب درست می‌شود.';
-
-/* ── فاز D — OTA: کانال دستی «بررسی نسخهٔ تازه» (server-cloud-update-design.md §۳-۱) ─────────
-   قرارداد فرمان پوستهٔ check_updates → {state:'latest'|'available'|'error', current, version?, notes?}
-   نمای خالص بی‌DOM (الگوی serverStateView). دانلود/نصب هرگز از داخل اپ نیست — فقط مرورگر
-   (هیچ دانلودی تک‌مسیر نیست؛ درس ریسک ۴). بی‌کانال/خراب → بی‌کرش با پیام فارسی. */
-export function updateCheckView(res) {
-  const r = res && typeof res === 'object' ? res : null;
-  if (!r || typeof r.state !== 'string') {
-    return { badge: 'badge--neutral', label: 'بررسی نشد — کانال پوسته در دسترس نیست', sub: '', download: false };
-  }
-  if (r.state === 'available') {
-    return {
-      badge: 'badge--warning',
-      label: `نسخهٔ تازه موجود است: ${typeof r.version === 'string' && r.version ? r.version : '—'}`,
-      sub: typeof r.notes === 'string' && r.notes.trim() ? r.notes.trim().slice(0, 160) : '',
-      download: true
-    };
-  }
-  if (r.state === 'error') {
-    return { badge: 'badge--neutral', label: typeof r.message === 'string' && r.message ? r.message : 'بررسی نشد — آفلاین؟ بعداً دوباره', sub: '', download: false };
-  }
-  if (r.state === 'latest') {
-    return { badge: 'badge--success', label: 'به‌روز است — نسخهٔ نصب‌شده جدیدترین ریلیز است', sub: '', download: false };
-  }
-  return { badge: 'badge--neutral', label: 'وضعیت نامشخص', sub: '', download: false };
-}
-
-/** فاز D — ردیف نتیجهٔ بررسی: بج + یادداشت کوتاه + دکمهٔ «دانلود نصاب از مرورگر» فقط وقتی نسخهٔ تازه هست */
-function updaterRowView(state, ctx) {
-  const v = state && state.badge ? state : updateCheckView(state);
-  return el('div', { class: 'ob-row' },
-    el('div', { class: 'ob-row__main' },
-      el('div', { class: 'cell-main' },
-        el('span', { class: `badge ${v.badge}` }, v.label),
-        v.sub ? el('span', { class: 'hint-text', style: { marginInlineStart: 'var(--sp-2)' } }, v.sub) : null
-      ),
-      v.download ? el('div', { class: 'cell-sub' }, UPDATER_BACKUP_HINT) : null
-    ),
-    el('div', { class: 'ob-row__side' },
-      v.download ? el('button', { class: 'btn btn--primary', type: 'button', onclick: (e) => void ctx.openReleasePageAction(e.currentTarget) }, 'دانلود نصاب از مرورگر') : null
-    )
-  );
-}
-
-/** فاز D-۵ — قاعدهٔ سخت «بدون آسیب به دیتا»: یادداشت پشتیبان پیش از نصب، عین سند §۳-۲ */
-const UPDATER_BACKUP_HINT = 'پیش از نصب نسخهٔ تازه، از کارت «۵ — کارهای اضطراری» یک «پشتیبان فوری» بگیرید.';
 
 /**
  * ۱.۲۷.۱۲ — کارخانهٔ paint کارت «اتصال ابری» (بدنهٔ پویای قبلی همان کارت؛ بیرون‌کشی برای آزمون
@@ -960,7 +911,7 @@ export function makeCloudCardPaint(body, ctx = {}) {
       );
     }
     rows.push(resultLine);
-    body.replaceChildren(...rows.filter(Boolean));
+    body.replaceChildren(...rows);
   };
 }
 
@@ -1845,37 +1796,6 @@ export async function renderHealthPanel(outlet) {
       });
     }
 
-    // فاز D — کانال دستی OTA: «بررسی نسخهٔ تازه» فقط وارسی می‌کند؛ نصب همیشه از مرورگر با نصاب رسمی
-    let updaterState = null; // آخرین نتیجهٔ check_updates — با paint دوباره در کارت رندر می‌شود
-    async function checkUpdatesAction(btn) {
-      await lockBtn(btn, async () => {
-        const out = await engineInvoke('check_updates');
-        if (out.ok) {
-          updaterState = updateCheckView(out.value);
-          paint(lastServerStatus(), false);
-          if (updaterState.download) toast(`نسخهٔ تازه ${out.value?.version ?? ''} موجود است — نصاب از مرورگر`, 'warn');
-          else if (updaterState.badge === 'badge--success') toast('برنامه به‌روز است', 'success');
-        } else if (out.reason === 'no-tauri-channel') {
-          setResult(resultLine, 'بررسی نسخهٔ تازه فقط در برنامهٔ دسکتاپ (پوستهٔ میز) کار می‌کند — در حالت وب از صفحهٔ ریلیز گیت‌هاب استفاده کنید', 'error');
-        } else {
-          setResult(resultLine, `بررسی نسخهٔ تازه ناموفق بود: ${out.reason ?? 'خطای نامشخص'}`, 'error');
-        }
-      });
-    }
-    // «دانلود نصاب از مرورگر» — بازکردن صفحهٔ ریلیز گیت‌هاب (فرمان پوستهٔ open_release_page)
-    async function openReleasePageAction(btn) {
-      await lockBtn(btn, async () => {
-        const out = await engineInvoke('open_release_page');
-        if (out.ok) {
-          setResult(resultLine, 'صفحهٔ ریلیز گیت‌هاب در مرورگر باز شد — نصاب را دانلود و اجرا کنید', 'ok');
-        } else if (out.reason === 'no-tauri-channel') {
-          setResult(resultLine, 'پوستهٔ میز در دسترس نیست — آدرس ریلیز را دستی باز کنید', 'error');
-        } else {
-          setResult(resultLine, `بازکردن مرورگر ناموفق بود: ${out.reason ?? 'خطای نامشخص'}`, 'error');
-        }
-      });
-    }
-
     let unsubscribed = false;
     let unsubscribe = null;
     // paint دومایه‌ای (status, isInitial) + ردیف‌های LAN از ctx — ۱.۲۷.۲۱
@@ -1884,9 +1804,6 @@ export async function renderHealthPanel(outlet) {
       engineRestartAction,
       openDataDirAction,
       copyDiagAction,
-      checkUpdatesAction,
-      openReleasePageAction,
-      updaterState: () => updaterState,
       lanRows,
       stepsRow,
       gamesRow,
@@ -2262,7 +2179,7 @@ export async function renderHealthPanel(outlet) {
 
       // ۲ سرور محلی + ۳ سایت ابری کنار هم (روی نمایشگر باریک خودش می‌شکند — auto-fit)؛
       // هشدار زرد ناهم‌نسخه‌ای بالای کارت سرور با span همهٔ ستون‌ها (۱.۲۷.۱۲ — دست‌نخورده)
-      el('div', { class: 'hp-section-grid' },
+      el('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 'var(--sp-3)', alignItems: 'start' } },
         engineGap
           ? el('div', { class: 'card card__body--flush', style: { gridColumn: '1 / -1' } },
               el('div', { class: 'ob-row' },

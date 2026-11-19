@@ -418,18 +418,6 @@ try {
   pinB(path.join(ROOT, 'public', 'assets', 'js', 'app.js'), ['/#/cloud-setup'], 'app.js (روت/بنر فاز C)');
   pinB(path.join(ROOT, 'desktop', 'src-tauri', 'boot-dist', 'index.html'), ['پیکربندی اتصال ابری'], 'boot-dist (لینک فاز C)');
   pinB(path.join(ROOT, 'src', '__tests__', 'front-cloud-setup.test.ts'), ['cloudSetupView'], 'آزمون front-cloud-setup.test.ts');
-
-  // فاز D — OTA (سند §۳): پین‌های سخت کانال دستی + قاعدهٔ سخت dataDir — هم‌الگوی پین‌های فاز B/C
-  pinB(path.join(T, 'src', 'lib.rs'), ['tauri_plugin_updater', 'check_updates', 'open_release_page'], 'lib.rs (فاز D — OTA)');
-  pinB(path.join(T, 'Cargo.toml'), ['tauri-plugin-updater'], 'Cargo.toml (فاز D — updater)');
-  pinB(path.join(ROOT, 'public', 'assets', 'js', 'views', 'health-panel.js'), ['updateCheckView', 'بررسی نسخهٔ تازه'], 'health-panel (فاز D — کانال دستی)');
-  pinB(path.join(ROOT, 'src', '__tests__', 'front-updater.test.ts'), ['updateCheckView'], 'آزمون front-updater.test.ts');
-  pinB(path.join(ROOT, 'scripts', 'make-latest-json.mjs'), ['latest.json', 'windows-x86_64'], 'make-latest-json.mjs');
-  // قاعدهٔ سخت D-۴ — پیکرهٔ فرمان‌های ارتقا هرگز به dataDir اشاره نمی‌کند
-  // (نصاب per-user NSIS فقط شاخهٔ برنامه را لمس می‌کند؛ dataDir بیرون شاخهٔ نصب است)
-  const updSrc = readFileSync(path.join(T, 'src', 'lib.rs'), 'utf8');
-  const updFn = updSrc.slice(updSrc.indexOf('async fn check_updates'), updSrc.indexOf('pub fn run()'));
-  if (/data_dir|dataDir|DATA_DIR/i.test(updFn)) bad('قاعدهٔ سخت فاز D: کد ارتقا به dataDir اشاره دارد');
 } catch (e) {
   bad(`گیت پین‌های P2 خطا داد: ${e instanceof Error ? e.message : String(e)}`);
 }
@@ -518,7 +506,7 @@ try {
 // ⑮ گیت زبان کاربر — اسکن رشته‌های رندرشوندهٔ UI (روایت بازآرایی / ژاژخان فنی / توکن ممنوعه)
 try {
   const { spawnSync: ss15 } = await import('node:child_process');
-  const r15 = ss15(process.execPath, [path.join(ROOT, 'scripts', 'ui-voice-check.mjs')], { timeout: 60_000, encoding: 'utf8' });
+  const r15 = ss15('node', [path.join(T, 'scripts', 'ui-voice-check.mjs')], { timeout: 60_000, encoding: 'utf8' });
   (r15.stdout || '').split('\n').filter(Boolean).slice(-3).forEach((l) => lines.push('  ' + l));
   r15.status === 0 ? ok('گیت زبان کاربر سبز است (صفر یافته)') : bad(`گیت زبان کاربر قرمز است (exit=${r15.status})`);
 } catch (e) {
@@ -528,7 +516,7 @@ try {
 // ⑯ گیت کنتراست AA — جفت‌های توکن رنگی در هر دو تم (۴٫۵ متن عادی / ۳ مؤلفه و مرز)
 try {
   const { spawnSync: ss16 } = await import('node:child_process');
-  const r16 = ss16('node', [path.join(ROOT, 'scripts', 'contrast-check.mjs')], { timeout: 60_000, encoding: 'utf8' });
+  const r16 = ss16('node', [path.join(T, 'scripts', 'contrast-check.mjs')], { timeout: 60_000, encoding: 'utf8' });
   (r16.stdout || '').split('\n').filter((l) => l.includes('✗') || l.includes('گیت')).slice(0, 8).forEach((l) => lines.push('  ' + l));
   r16.status === 0 ? ok('گیت کنتراست AA سبز است (صفر تخلف)') : bad(`گیت کنتراست AA قرمز است (exit=${r16.status})`);
 } catch (e) {

@@ -881,7 +881,7 @@ export function emptyState({ iconName = 'dots', title = 'چیزی اینجا ن�
    جلوتر می‌گذاشت و زیرنویسش با kpi__hint هیچ قاعدهٔ CSS نداشت، هم‌زمان اصلاح شد. */
 export const KPI_ALERT_RATE = 0.2; /* آستانهٔ بالینی ۲۰٪ نرخ لغو/غیبت — قبلاً در reports (0.2) و dashboard (20) دو واحد و دو عدد بود */
 
-export function kpi(label, value, sub, tone = 'primary', fmt, href) {
+export function kpi(label, value, sub, tone = 'primary', fmt) {
   let valueEl;
   if (value === null || value === undefined) {
     valueEl = el('div', { class: 'kpi__value' }, '—');
@@ -892,15 +892,7 @@ export function kpi(label, value, sub, tone = 'primary', fmt, href) {
   } else {
     valueEl = el('div', { class: 'kpi__value' }, value);
   }
-  /* POLISH-3 M2 — «هر نمودار یا حفر دارد یا می‌رود»: href شاخص را به فهرستِ پشتِ عدد می‌بَرد (کلیک + کیبورد) */
-  return el('div', {
-    class: `kpi kpi--${tone}${href ? ' kpi--link' : ''}`,
-    ...(href ? {
-      role: 'link', tabindex: 0, title: 'مشاهدهٔ جزئیات',
-      onclick: () => { location.hash = href; },
-      onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); location.hash = href; } }
-    } : {})
-  },
+  return el('div', { class: `kpi kpi--${tone}` },
     el('div', { class: 'kpi__label' }, label),
     valueEl,
     sub ? el('div', { class: 'kpi__sub' }, sub) : null

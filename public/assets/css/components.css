@@ -620,14 +620,6 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: var(--sp-4);
 }
-/* داوری تصویری — زیر ۹۸۰px دو ستون با مهار سلول یتیم؛ زیر ۵۶۰ تک‌ستون */
-@media (max-width: 980px) {
-  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
-  .kpi-grid > :last-child:nth-child(odd) { grid-column: 1 / -1; }
-}
-@media (max-width: 560px) {
-  .kpi-grid { grid-template-columns: 1fr; }
-}
 .kpi {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -650,10 +642,6 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   background: var(--kpi-tint, var(--primary));
   opacity: 0.75;
 }
-/* POLISH-3 M2 — حفر شاخص: KPI کلیک‌پذیر با هُور و فوکوس کیبورد */
-.kpi--link { cursor: pointer; transition: border-color 0.15s ease; }
-.kpi--link:hover { border-color: var(--primary); }
-.kpi--link:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .kpi__label {
   font-size: var(--fs-xs);
   color: var(--text-2);
