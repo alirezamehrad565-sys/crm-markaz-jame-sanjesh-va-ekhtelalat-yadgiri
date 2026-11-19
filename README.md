@@ -153,6 +153,7 @@ docs/                 ← مستندات فارسی
 | [`docs/restore-drill.md`](./docs/restore-drill.md) | تمرین ماهانهٔ بازیابی — «بکاپ تست‌نشده = بکاپ نیست» |
 | [`docs/BOT-FLOW.md`](./docs/BOT-FLOW.md) | فلوی نقش‌آگاه بات بله |
 | [`docs/EXERCISE-BANK.md`](./docs/EXERCISE-BANK.md) | طراحی بانک تمرین و حلقهٔ تکلیف |
+| [`docs/INTAKE-DESIGN.md`](./docs/INTAKE-DESIGN.md) | طراحی جریان معرفی، اینباکس لیست انتظار و آرشیو سال تحصیلی |
 | [`docs/games-module-worker.md`](./docs/games-module-worker.md) | ماژول بازی‌ها و ورکر مستقل |
 | [`CHANGELOG.md`](./CHANGELOG.md) | تاریخچهٔ نسخه‌ها |
 
