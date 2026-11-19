@@ -823,6 +823,21 @@
   gap: var(--sp-4);
   margin-bottom: var(--sp-4);
 }
+/* داوری تصویری — زیر ۹۸۰px کارت‌های پنل نجات تک‌ستون؛ ارتفاع کارت‌ها محتوامحور می‌ماند */
+@media (max-width: 980px) {
+  .report-grid { grid-template-columns: 1fr; }
+}
+
+/* گرید کارت‌های پنل نجات — سه‌ستونهٔ خودکار؛ ردیف هم‌ارتفاع (بدون حفره)؛ زیر ۹۸۰ تک‌ستون */
+.hp-section-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-4);
+}
+@media (max-width: 980px) {
+  .hp-section-grid { grid-template-columns: 1fr; }
+}
 
 /* — ۱.۲۵.۱۰ گزارش‌ها: نوار ابزار شکستنی «میان گروه‌ها» — برچسب از/تا هرگز از پیکرش جدا نمی‌شود — */
 .rpt-toolbar { row-gap: var(--sp-2); }
