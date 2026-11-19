@@ -428,7 +428,9 @@ export async function renderCaseEventTypes(container) {
               (isChecklist ? ` — ماکسیمم ${fa(totalMax(t.fields ?? [], subscales))} نمره` : '') +
               (isChecklist && subscales.length ? ` — ${fa(subscales.length)} زیرمقیاس` : '') +
               (isChecklist && t.bands?.length ? ` — ${fa(t.bands.length)} باند تحلیل` : '') +
-              (t.familyFillable ? ' — قابل پر کردن توسط گیرنده' : '')),
+              (t.familyFillable ? ' — قابل پر کردن توسط گیرنده' : '') +
+              (t.toolSource ? ` — منبع: ${t.toolSource}` : '') +
+              (t.toolNorm ? ` — هنجار: ${t.toolNorm}` : '')),
             subscales.length > 0
               ? el('div', { style: { display: 'flex', gap: 'var(--sp-1)', flexWrap: 'wrap', marginTop: 'var(--sp-2)' } },
                   ...subscales.map((s, i) => el('span', {
@@ -557,7 +559,9 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
     fields: isEdit ? JSON.parse(JSON.stringify(type.fields ?? [])) : [],
     bands: isEdit && type.bands ? JSON.parse(JSON.stringify(type.bands)) : null,
     subscales: isEdit && type.subscales ? JSON.parse(JSON.stringify(type.subscales)) : null,
-    tags: new Set(isEdit ? (type.tags ?? []) : [])
+    tags: new Set(isEdit ? (type.tags ?? []) : []),
+    toolSource: type?.toolSource ?? '', /* ۱.۲۷.۲۸ — M5: شناسنامهٔ ابزار — منبع/مرجع */
+    toolNorm: type?.toolNorm ?? '' /* ۱.۲۷.۲۸ — M5: شناسنامهٔ ابزار — هنجار سنی/روایی */
   };
   const tagMap = tagName instanceof Map ? tagName : new Map(Object.entries(tagName ?? {}));
   const availableTags = [...tagMap.entries()].map(([id, name]) => ({ id, name }));
@@ -631,6 +635,13 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
     return el('div', {},
       sectionTitle('۱) مشخصات قالب', null),
       rows,
+      /* ۱.۲۷.۲۸ — M5 POLISH-3: شناسنامهٔ ابزار — منبع و هنجار سنی/روایی؛ اختیاری، در شناسنامهٔ
+         کارت کتابخانه هم نمایش داده می‌شود تا «این ابزار از کجاست» برای هر قالب صریح باشد. */
+      el('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 'var(--sp-3)', marginTop: 'var(--sp-3)' } },
+        fieldWrap('منبع ابزار (اختیاری — از کجا آمده؟)',
+          el('textarea', { class: 'input', rows: 2, placeholder: 'مثلاً اداپتهٔ رسمی فارسی SDQ — یا «ساخت درون‌مرکزی»', oninput: (e) => { st.toolSource = e.target.value; } }, st.toolSource ?? '')),
+        fieldWrap('هنجار سنی و روایی (اختیاری — برای چه سنی، چه اعتباری؟)',
+          el('textarea', { class: 'input', rows: 2, placeholder: 'مثلاً هنجار ۶–۱۱ سال؛ روایی سازه در مطالعهٔ داخلی ۱۴۰۲', oninput: (e) => { st.toolNorm = e.target.value; } }, st.toolNorm ?? ''))),
       fieldWrap('آیکون قالب (وکتوری — در کتابخانه و بات نمایش داده می‌شود)', iconPicker)
     );
   }
@@ -818,7 +829,9 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
       bands: st.category === 'checklist' ? (st.bands ?? null) : null,
       subscales: st.category === 'checklist' ? (st.subscales && st.subscales.length > 0 ? st.subscales : null) : null,
       tags: [...st.tags],
-      audience: st.category === 'checklist' ? st.audience : 'family'
+      audience: st.category === 'checklist' ? st.audience : 'family',
+      toolSource: v(st.toolSource) || null, /* ۱.۲۷.۲۸ — M5: شناسنامهٔ ابزار */
+      toolNorm: v(st.toolNorm) || null
     };
   }
 

@@ -46,6 +46,8 @@ export interface ValidationKpis {
   reassessOnTime: KpiShare;
   // ۴ — فاصلهٔ شروع تا جمع‌بندی شناسایی (میانهٔ روز — دانش‌آموزان دارای گزارش نتایج)
   startToIdentification: { medianDays: number | null; students: number };
+  // M6 POLISH-3 (۱.۲۷.۲۹) — «شاهد پیامد واقعی»: شمارش فرم پیگیری ۳–۶ماهه (کلید ثابت مایگریشن 0082)
+  followups?: { sent: number; filled: number } | null;
   generatedAt: string;
 }
 

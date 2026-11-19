@@ -7,10 +7,14 @@ import type { AuditWriter } from '@core/audit';
 import type { Logger } from '@core/logger';
 import type { CaseEventAnalysis, CaseEventBand, CaseEventSubscale } from '@domain/case-events';
 import type {
+  ClinicalNarrative,
   EvidenceEvent,
   InferenceOutput,
   InterventionPathRecord,
   InterventionPathStatus,
+  NarrativeCommitteeBlock,
+  NarrativePathBlock,
+  NarrativeProbeTrend,
   PathDecision,
   PathProbeRecord,
   PathProbeSeries,
@@ -21,6 +25,8 @@ import type {
   RankedHypothesis
 } from './types';
 import { buildPathwayReport } from './report'; // تجمیع خالص گزارش دوره‌ای
+import { mintFamilySheetToken } from './family-sheet'; // ۱.۲۷.۲۷ — M4 برگهٔ پیشرفت خانواده (توکن امضاشده)
+import type { FamilySheetModel, FamilySheetPath } from './family-sheet';
 import { evaluateProbeSeries, masteryOf } from './progress'; // محاسبات خالص پراپ پیشروی
 import type { ChecklistPlan } from './recommender';
 import { INTERVENTION_PATH_STATUS_LABELS, PATHWAY_ITEM_TYPES, PATHWAY_SESSION_STATUSES } from './types';
@@ -179,6 +185,7 @@ export interface ClinicalEngineDeps {
   audit: AuditWriter;
   logger: Logger;
   now?: () => Date;
+  publicBaseUrl?: string | null; // ۱.۲۷.۲۷ — M4: آدرس عمومی برگهٔ خانواده (تزریقی، هم‌الگوی case-events)
   exerciseIdsExist?: (ids: string[]) => Promise<Set<string>>; // اعتبارسنجی لینک کارت به بانک تمرین (تزریقی)
   /* ۱.۲۵.۰۵ — زمینهٔ OT برای صورت‌بندی مورد: تزریقی (قرارداد «وابستگی ماژولی domain→domain ممنوع»)
      تا سرویس بالینی بدون تزریق هم در تست‌ها بالا بیاید؛ نبودش فقط پوشش داده را کم می‌کند */
@@ -1511,7 +1518,14 @@ export function createClinicalEngineService(deps: ClinicalEngineDeps) {
       withProbes: kpis.interventionResponse.base,
       dueReassess: kpis.reassessOnTime.base
     });
-    return kpis;
+    // M6 POLISH-3 (۱.۲۷.۲۹) — «شاهد پیامد واقعی»: چند فرم پیگیری ۳–۶ماهه ارسال/پر شده؟
+    const fuRow = await db.queryOne<{ sent: number; filled: number }>(
+      `SELECT COUNT(*) AS sent,
+              SUM(CASE WHEN e.status = 'completed' THEN 1 ELSE 0 END) AS filled
+         FROM case_events e JOIN case_event_types t ON t.id = e.event_type_id
+        WHERE t.key = 'ce-followup-3m-v1' AND e.deleted_at IS NULL`
+    );
+    return { ...kpis, followups: { sent: fuRow?.sent ?? 0, filled: fuRow?.filled ?? 0 } };
   }
 
   async function createCaseAudit(input: CaseAuditCreateInput, actor: AuthContext): Promise<CaseAuditRecord> {
@@ -1539,8 +1553,24 @@ export function createClinicalEngineService(deps: ClinicalEngineDeps) {
   }
 
   async function listCaseAudits(actor: AuthContext, studentId: string | null): Promise<CaseAuditRecord[]> {
-    if (actor.role !== 'manager') {
-      throw new ForbiddenError('حسابرسی موردی فقط برای مدیر قابل مشاهده است');
+    // M6 POLISH-3 (۱.۲۷.۲۹) — ۴۰۳ مطلق برداشته شد: درمانگر حسابرسیِ پرونده‌های خودش را
+    // فقط‌خواندنی می‌بیند (صاحب پرونده یا منتسب در نوبت‌ها) — مدیر/منشی همه را می‌بینند.
+    if (actor.role === 'therapist') {
+      const rows = await db.query<CaseAuditRow & { student_first: string; student_last: string }>(
+        `SELECT a.*, s.first_name AS student_first, s.last_name AS student_last
+           FROM case_audits a JOIN students s ON s.id = a.student_id
+          WHERE (s.owner_staff_id = ? OR EXISTS (
+                  SELECT 1 FROM appointments ap
+                    JOIN appointment_students asn ON asn.appointment_id = ap.id
+                   WHERE ap.staff_id = ? AND asn.student_id = s.id
+                 ))
+          ORDER BY a.created_at DESC LIMIT 50`,
+        [actor.staffId, actor.staffId]
+      );
+      return rows.map((r) => caseAuditRowToRecord(r));
+    }
+    if (actor.role !== 'manager' && actor.role !== 'secretary') {
+      throw new ForbiddenError('حسابرسی موردی فقط برای دفتر مرکز و درمانگرِ همان پرونده قابل مشاهده است');
     }
     const rows = studentId
       ? await db.query<CaseAuditRow & { student_first: string; student_last: string }>(
@@ -1572,7 +1602,224 @@ export function createClinicalEngineService(deps: ClinicalEngineDeps) {
     };
   }
 
-  return { getInsights, getCaseFormulation, homeMonitorFocusOf, getChecklistPlan, listPaths, createPath, decidePath, getPath, listTargets, toggleStep, listPathTemplates, upsertPathTemplate, listPathSessions, addPathSession, updatePathSession, deletePathSession, reorderPathSessions, listRecentCards, getPathwayReport, addPathProbe, listPathProbes, updatePathProbe, updatePathGoal, getValidationKpis, createCaseAudit, listCaseAudits }; // پراپ‌های پیشروی · هدف مسیر · اعتبارسنجی · صورت‌بندی مورد (۱.۲۵.۰۵)
+  /* ۱.۲۷.۲۶ — M3 POLISH-3: روایت بالینی پرونده — تجمیع فقط‌خواندنی «فرضیهٔ موتور ← مصوبهٔ کمیته ←
+     مسیر مداخله و جلساتش ← نتیجهٔ پراپ». مسیرها از listPaths با همان دسترسی (assertCanView) می‌آیند؛
+     کمیته و روند پراپ با دو کوئری سبک اضافه می‌شوند (بدون N+1 — IN تکه‌بندی‌شده با قرارداد §ف۶ ⑧). */
+  async function getClinicalNarrative(studentId: string, actor: AuthContext): Promise<ClinicalNarrative> {
+    const student = await loadStudent(studentId);
+    assertCanView(student, actor);
+    const paths = await listPaths(studentId, actor);
+
+    const committeeRows = await db.query<{ id: string; topic: string; decision: string | null; decision_status: string; meeting_title: string; meeting_date: string; meeting_status: string }>(
+      `SELECT ci.id, ci.topic, ci.decision, ci.decision_status,
+              m.title AS meeting_title, m.meeting_date, m.status AS meeting_status
+         FROM committee_items ci
+         JOIN committee_meetings m ON m.id = ci.meeting_id AND m.deleted_at IS NULL
+        WHERE ci.student_id = ? AND ci.deleted_at IS NULL
+        ORDER BY m.meeting_date ASC, ci.created_at ASC`,
+      [studentId]
+    );
+
+    // روند پراپ هر مسیر: سنجهٔ اصلی = سنجهٔ آخرین پراپ؛ سقف ۴۰۰ هم‌قرارداد بج فهرست مسیرها
+    const pathIds = paths.map((p) => p.id);
+    const probeRows: { pathway_id: string; metric: string; unit: string | null; value: number; taken_at: string }[] = [];
+    for (const chunk of inParamChunks(pathIds)) {
+      probeRows.push(...await db.query<{ pathway_id: string; metric: string; unit: string | null; value: number; taken_at: string }>(
+        `SELECT pathway_id, metric, unit, value, taken_at FROM pathway_probes
+          WHERE pathway_id IN (${inPlaceholders(chunk.length)})
+          ORDER BY taken_at DESC
+          LIMIT 400`,
+        chunk
+      ));
+    }
+    const byPathMetric = new Map<string, Map<string, { unit: string | null; points: { value: number; taken_at: string }[] }>>();
+    for (const r of probeRows) {
+      let metrics = byPathMetric.get(r.pathway_id);
+      if (!metrics) { metrics = new Map(); byPathMetric.set(r.pathway_id, metrics); }
+      const s = metrics.get(r.metric) ?? { unit: r.unit, points: [] };
+      s.points.push({ value: r.value, taken_at: r.taken_at }); // DESC ورودی
+      metrics.set(r.metric, s);
+    }
+    const trends = new Map<string, NarrativeProbeTrend>();
+    for (const [pathId, metrics] of byPathMetric) {
+      let primaryMetric: string | null = null;
+      let primaryLastAt = '';
+      for (const [metric, s] of metrics) {
+        const lastAt = s.points[0]?.taken_at ?? '';
+        if (lastAt > primaryLastAt) { primaryLastAt = lastAt; primaryMetric = metric; }
+      }
+      if (!primaryMetric) continue;
+      const s = metrics.get(primaryMetric)!;
+      const asc = [...s.points].reverse(); // صعودی برای first/last
+      const first = asc.length > 0 ? asc[0].value : null;
+      const last = asc.length > 0 ? asc[asc.length - 1].value : null;
+      trends.set(pathId, {
+        count: asc.length,
+        metric: primaryMetric,
+        unit: s.unit,
+        first,
+        last,
+        firstAt: asc.length > 0 ? asc[0].taken_at : null,
+        lastAt: asc.length > 0 ? asc[asc.length - 1].taken_at : null,
+        improved: first !== null && last !== null ? last > first : null
+      });
+    }
+
+    const pathBlocks: NarrativePathBlock[] = paths.map((p) => {
+      const done = p.sessions.filter((s) => s.status === 'done');
+      return {
+        id: p.id,
+        targetKey: p.targetKey,
+        targetTitle: p.targetTitle,
+        status: p.status,
+        createdAt: p.createdAt,
+        engineHypothesis: p.engineHypothesis,
+        decision: p.decision,
+        sessionsPlanned: p.sessions.length,
+        sessionsDone: done.length,
+        sessionsSkipped: p.sessions.filter((s) => s.status === 'skipped').length,
+        lastSessionDoneAt: done.length > 0 ? done[done.length - 1].doneAt ?? null : null,
+        probeTrend: trends.get(p.id) ?? null,
+        probeSummary: p.probeSummary,
+        reassessAt: p.reassessAt
+      };
+    });
+
+    const committee: NarrativeCommitteeBlock[] = committeeRows.map((r) => ({
+      id: r.id,
+      topic: r.topic,
+      decision: r.decision,
+      decisionStatus: r.decision_status,
+      meetingTitle: r.meeting_title,
+      meetingDate: r.meeting_date,
+      meetingStatus: r.meeting_status
+    }));
+
+    const stamps = [
+      ...committee.map((c) => c.meetingDate),
+      ...pathBlocks.map((p) => p.createdAt.slice(0, 10)),
+      ...pathBlocks.map((p) => p.probeTrend?.lastAt?.slice(0, 10) ?? '')
+    ].filter(Boolean).sort();
+    return {
+      student: { id: student.id, firstName: student.first_name, lastName: student.last_name },
+      committee,
+      paths: pathBlocks,
+      storyFrom: stamps[0] ?? null,
+      storyTo: stamps[stamps.length - 1] ?? null
+    };
+  }
+
+  /* ۱.۲۷.۲۷ — M4 POLISH-3: دادهٔ برگهٔ پیشرفت خانواده — فقط‌خواندنی و فقط مسیر/جلسه/پراپ همان بچه
+     (کمیته/حسابرسی/مالی عمداً بیرون است: برگهٔ خانواده سند روایت درمان نیست). actor = null یعنی
+     زمینهٔ توکن خانواده — خودِ توکن امضاشده اجازه است؛ actor کارمند یعنی ساخت پیوند با assertCanView. */
+  async function getFamilyProgressSheet(studentId: string, actor: AuthContext | null): Promise<FamilySheetModel> {
+    const student = await loadStudent(studentId);
+    if (actor) assertCanView(student, actor);
+    const rows = await db.query<PathRow>(
+      `SELECT p.* FROM intervention_paths p WHERE p.student_id = ? AND p.deleted_at IS NULL ORDER BY p.created_at DESC`,
+      [studentId]
+    );
+    const pathIds = rows.map((r) => r.id);
+
+    // شمارش جلسات هر مسیر — یک کوئری گروه‌بندی‌شده برای همهٔ مسیرها (بدون N+1)
+    const sessMap = new Map<string, { planned: number; done: number }>();
+    for (const chunk of inParamChunks(pathIds)) {
+      const srows = await db.query<{ pathway_id: string; planned: number; done: number }>(
+        `SELECT pathway_id, COUNT(*) AS planned, SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) AS done
+           FROM pathway_sessions WHERE pathway_id IN (${inPlaceholders(chunk.length)}) GROUP BY pathway_id`,
+        chunk
+      );
+      for (const s of srows) sessMap.set(s.pathway_id, { planned: s.planned, done: s.done });
+    }
+
+    // پراپ‌ها: جدیدترین ۴۰۰ هم‌قرارداد بج فهرست مسیرها — بعد صعودی می‌شوند
+    const probeRows: { pathway_id: string; metric: string; unit: string | null; value: number; taken_at: string }[] = [];
+    for (const chunk of inParamChunks(pathIds)) {
+      probeRows.push(...await db.query<{ pathway_id: string; metric: string; unit: string | null; value: number; taken_at: string }>(
+        `SELECT pathway_id, metric, unit, value, taken_at FROM pathway_probes
+          WHERE pathway_id IN (${inPlaceholders(chunk.length)})
+          ORDER BY taken_at DESC
+          LIMIT 400`,
+        chunk
+      ));
+    }
+    probeRows.sort((a, b) => (a.taken_at < b.taken_at ? 1 : a.taken_at > b.taken_at ? -1 : 0));
+    probeRows.length = Math.min(probeRows.length, 400);
+
+    // سنجهٔ اصلی هر مسیر = سنجهٔ آخرین پراپ؛ ملاک تسلط از همان محاسبات پراپ پیشروی (masteryOf)
+    const byPath = new Map<string, Map<string, { unit: string | null; points: { value: number; taken_at: string }[] }>>();
+    for (const r of probeRows) {
+      let metrics = byPath.get(r.pathway_id);
+      if (!metrics) { metrics = new Map(); byPath.set(r.pathway_id, metrics); }
+      const s = metrics.get(r.metric) ?? { unit: r.unit, points: [] };
+      s.points.push({ value: r.value, taken_at: r.taken_at });
+      metrics.set(r.metric, s);
+    }
+
+    const paths: FamilySheetPath[] = rows.map((r) => {
+      const metrics = byPath.get(r.id);
+      const sess = sessMap.get(r.id) ?? { planned: 0, done: 0 };
+      let metric: string | null = null;
+      let unit: string | null = null;
+      let points: { value: number; taken_at: string }[] = [];
+      let first: number | null = null;
+      let last: number | null = null;
+      let improved: boolean | null = null;
+      let mastered = false;
+      if (metrics) {
+        let primaryLastAt = '';
+        for (const [m, s] of metrics) {
+          const lastAt = s.points[0]?.taken_at ?? '';
+          if (lastAt > primaryLastAt) { primaryLastAt = lastAt; metric = m; }
+        }
+        if (metric) {
+          const s = metrics.get(metric)!;
+          unit = s.unit;
+          points = [...s.points].reverse(); // صعودی برای روند و ملاک
+          first = points[0]?.value ?? null;
+          last = points[points.length - 1]?.value ?? null;
+          improved = first !== null && last !== null ? last > first : null;
+          mastered = masteryOf(points.map((p) => ({ value: p.value, takenAt: p.taken_at }))).achieved;
+        }
+      }
+      const hypothesis = parseJson<RankedHypothesis | null>(r.engine_hypothesis, null);
+      return {
+        id: r.id,
+        targetTitle: hypothesis?.targetTitle ?? targetOf(r.target_key)?.title ?? r.target_key,
+        status: r.status as InterventionPathStatus,
+        sessionsPlanned: sess.planned,
+        sessionsDone: sess.done,
+        metric,
+        unit,
+        points: points.map((p) => ({ value: p.value, takenAt: p.taken_at })),
+        first,
+        last,
+        improved,
+        mastered,
+        reassessAt: r.reassess_at ?? null
+      };
+    });
+
+    return {
+      studentName: `${student.first_name} ${student.last_name}`.trim(),
+      grade: student.grade ?? null,
+      generatedAt: iso(),
+      paths
+    };
+  }
+
+  /* ۱.۲۷.۲۷ — M4: ساخت پیوند برگهٔ خانواده — کارمند مجاز با assertCanView؛ توکن HS256 با secret نشست؛
+     آدرس عمومی از deps تزریق می‌شود (هم‌الگوی case-events). */
+  async function mintProgressSheetLink(studentId: string, actor: AuthContext, secret: string): Promise<{ token: string; url: string; expiresAt: string }> {
+    const student = await loadStudent(studentId);
+    assertCanView(student, actor);
+    const base = deps.publicBaseUrl?.trim() || null; // خالی/فاصله‌دار = تنظیم‌نشده
+    if (!base) throw new ValidationError('آدرس عمومی سامانه (PUBLIC_BASE_URL) تنظیم نشده است — ساخت پیوند برگهٔ خانواده ممکن نیست.');
+    const { token, expiresAt } = await mintFamilySheetToken(studentId, secret);
+    return { token, url: `${base.replace(/\/+$/, '')}/public/family/progress-sheet/${token}`, expiresAt };
+  }
+
+  return { getInsights, getCaseFormulation, homeMonitorFocusOf, getChecklistPlan, listPaths, createPath, decidePath, getPath, listTargets, toggleStep, listPathTemplates, upsertPathTemplate, listPathSessions, addPathSession, updatePathSession, deletePathSession, reorderPathSessions, listRecentCards, getPathwayReport, addPathProbe, listPathProbes, updatePathProbe, updatePathGoal, getValidationKpis, createCaseAudit, listCaseAudits, getClinicalNarrative, getFamilyProgressSheet, mintProgressSheetLink }; // پراپ‌های پیشروی · هدف مسیر · اعتبارسنجی · صورت‌بندی مورد (۱.۲۵.۰۵) · روایت بالینی (۱.۲۷.۲۶) · برگهٔ خانواده (۱.۲۷.۲۷)
 }
 
 export type ClinicalEngineService = ReturnType<typeof createClinicalEngineService>;

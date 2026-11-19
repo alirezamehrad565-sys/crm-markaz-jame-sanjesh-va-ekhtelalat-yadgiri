@@ -157,7 +157,9 @@ export const CaseEventTypeInputSchema = z.object({
   bands: z.array(CaseEventBandSchema).max(BANDS_MAX).nullish(),
   subscales: z.array(CaseEventSubscaleSchema).max(SUBSCALES_MAX, `حداکثر ${SUBSCALES_MAX} زیرمقیاس`).nullish(),
   tags: z.array(z.string().min(8).max(64)).max(12, 'حداکثر ۱۲ برچسب برای هر قالب').nullish(),
-  audience: z.enum(['family', 'teacher', 'both']).nullish()
+  audience: z.enum(['family', 'teacher', 'both']).nullish(),
+  toolSource: z.string().max(TYPE_DESCRIPTION_MAX).nullish(), // ۱.۲۷.۲۸ — M5: شناسنامهٔ ابزار — منبع/مرجع
+  toolNorm: z.string().max(TYPE_DESCRIPTION_MAX).nullish() // ۱.۲۷.۲۸ — M5: شناسنامهٔ ابزار — هنجار سنی/روایی
 });
 
 export const CaseEventTypeUpdateSchema = CaseEventTypeInputSchema.partial();

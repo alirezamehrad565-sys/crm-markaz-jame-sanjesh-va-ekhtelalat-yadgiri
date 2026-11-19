@@ -4013,8 +4013,8 @@ tr.wl-row--urgent > td:first-child {
   :root, :root[data-theme='dark'] {
     color-scheme: light;
     --bg: #F7F3EA; --surface: #FFFDF8; --surface-2: #F0ECE3; --surface-3: #E8E4DB;
-    --border: #DDD8CD; --border-1: #DDD8CD; --border-strong: #968B76;
-    --text: #202529; --text-1: #202529; --text-2: #687078; --text-3: #61696F;
+    --border: #D0CABB; --border-1: #D0CABB; --border-strong: #968B76; /* M1 POLISH-4: آینهٔ تم روشن (۱.۲۷.۳۱) */
+    --text: #171B20; --text-1: #171B20; --text-2: #575F66; --text-3: #4F565C;
     --primary: #0D72A8; --primary-hover: #0B6798; --primary-soft: #E4F1FA;
     --on-primary: #FFFFFF; --on-primary-soft: #0D5780; --focus: #0D72A8;
     --accent: #D89428; --accent-soft: #F7E9CC; --on-accent: #231703; --on-accent-soft: #8A5C10; --accent-strong: #96660A;

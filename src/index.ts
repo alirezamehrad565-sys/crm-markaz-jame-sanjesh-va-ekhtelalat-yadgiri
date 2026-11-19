@@ -25,12 +25,12 @@ export interface Env {
   AUTH_SECRET?: string;
   EXERCISE_FILES?: unknown;
   PUBLIC_BASE_URL?: string;
-  // — سینک اعلان از کنترل‌پلین (m1.5)؛ هر چهار مقدار خالی = خاموش کامل —
+  // — سینک اعلان از شبکهٔ مراکز (m1.5)؛ هر چهار مقدار خالی = خاموش کامل —
   CP_SYNC_URL?: string;
   CP_NODE_CODE?: string;
   CP_NODE_KEY?: string;
   CP_SYNC_STAFF_ID?: string;
-  /** Service Binding به ورکر کنترل‌پلین (هم‌حساب) — fetch عمومیِ هم‌زون ۱۰۴۲ می‌دهد */
+  /** Service Binding به ورکر شبکهٔ مراکز (هم‌حساب) — fetch عمومیِ هم‌زون ۱۰۴۲ می‌دهد */
   CP?: Fetcher;
   /**
    * ف۴ — سقف نگه‌داری audit_log بر حسب روز (اختیاری؛ پیش‌فرض ۱۸۰؛ صفر = پاکسازی خاموش).
@@ -384,7 +384,7 @@ export default {
 
   async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
     if (event.cron === CP_SYNC_CRON) {
-      ctx.waitUntil(runCpSyncCycle(env)); // سینک اعلان از کنترل‌پلین — خاموش اگر env خالی باشد
+      ctx.waitUntil(runCpSyncCycle(env)); // سینک اعلان از شبکهٔ مراکز — خاموش اگر env خالی باشد
       ctx.waitUntil(runCpReportCycle(env)); // گزارش‌دهی تجمیعی — گیت ۲۴ساعتهٔ مشترک، دوباره‌کاری صفر
       ctx.waitUntil(runCpContentCycleWrap(env)); // کتابخانهٔ شبکه — گیت ۱۵دقیقه‌ای مشترک، دوباره‌کاری صفر
       ctx.waitUntil(runBugReportForwardWrap(env)); // گزارش باگ → پشتیبانی CP — گیت ۵دقیقه‌ای مشترک (بازاعمال ۱.۲۵.۵۱)
