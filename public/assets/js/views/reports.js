@@ -169,17 +169,16 @@ function buildPeriodicBody(r) {
   const ratePct = (rate, markedCount) => markedCount > 0 ? pct(rate) : '—';
   const fa1 = (v) => fa(Math.round((v ?? 0) * 10) / 10);
   /* ۱.۲۵.۱۰ — گرید سه‌ستونهٔ گزارش: ۹ شاخص = ۳×۳ و ۶ شاخص = ۳+۳ — سلول یتیم حذف */
-  /* POLISH-3 M2 — حفر گرید ۹KPI: هر شاخص به فهرست پشتِ عددش می‌رود */
   const kpiGrid = el('div', { class: 'kpi-grid kpi-grid--rpt', style: { marginBottom: 'var(--sp-5)' } },
-    kpi('نوبت‌های بازه', r.appointments.total, `روزانه ${fa(r.appointments.avgPerDay)}`, 'primary', null, '#/appointments'),
+    kpi('نوبت‌های بازه', r.appointments.total, `روزانه ${fa(r.appointments.avgPerDay)}`, 'primary'),
     kpi('مجموع ساعت جلسات', r.appointments.hours, 'جلسات برنامه‌ریزی‌شده', 'accent'),
     kpi('نرخ لغو', r.appointments.total > 0 ? pct(r.appointments.cancellationRate) : '—', `${fa(r.appointments.cancelled)} نوبت لغوشده`, r.appointments.cancellationRate >= KPI_ALERT_RATE ? 'error' : 'neutral'),
-    kpi('نرخ غیبت دانش‌آموز', ratePct(r.attendance.absenceRate, r.attendance.present + (r.attendance.late ?? 0) + r.attendance.absent), `${fa(r.attendance.absent)} غیبت از ${fa(r.attendance.present + (r.attendance.late ?? 0) + r.attendance.absent)} جلسه`, (r.attendance.present + (r.attendance.late ?? 0) + r.attendance.absent) === 0 ? 'neutral' : r.attendance.absenceRate >= KPI_ALERT_RATE ? 'error' : 'success', null, '#/working-day') /* S7-08 */,
-    kpi('میانگین انتظار تا نوبت', r.waitSchedule.avgDays, r.waitSchedule.scheduled > 0 ? `${fa(r.waitSchedule.scheduled)} نوبت‌دهی از لیست انتظار` : 'نوبت‌دهی از لیست انتظار در این بازه ثبت نشده', 'primary', (v) => `${fa1(v)} روز`, '#/waitlist'),
+    kpi('نرخ غیبت دانش‌آموز', ratePct(r.attendance.absenceRate, r.attendance.present + (r.attendance.late ?? 0) + r.attendance.absent), `${fa(r.attendance.absent)} غیبت از ${fa(r.attendance.present + (r.attendance.late ?? 0) + r.attendance.absent)} جلسه`, (r.attendance.present + (r.attendance.late ?? 0) + r.attendance.absent) === 0 ? 'neutral' : r.attendance.absenceRate >= KPI_ALERT_RATE ? 'error' : 'success') /* S7-08 */,
+    kpi('میانگین انتظار تا نوبت', r.waitSchedule.avgDays, r.waitSchedule.scheduled > 0 ? `${fa(r.waitSchedule.scheduled)} نوبت‌دهی از لیست انتظار` : 'نوبت‌دهی از لیست انتظار در این بازه ثبت نشده', 'primary', (v) => `${fa1(v)} روز`),
     kpi('میانگین جلسات هر دانش‌آموز', r.perStudent.avgSessions, r.perStudent.students > 0 ? `${fa(r.perStudent.sessions)} جلسه · ${fa(r.perStudent.students)} دانش‌آموز` : 'جلسه‌ای در این بازه ثبت نشده', 'accent', (v) => fa1(v)),
-    kpi('نمرهٔ تولید محتوای تیم', r.practical.score, `تولید ${fa(r.practical.exercises)} کارت · ${fa(r.practical.templates)} قالب · ${fa(r.practical.forms)} فرم`, 'success', null, '#/exercises'),
-    kpi('دانش‌آموزان جدید', r.newStudents, 'ثبت‌نام در این بازه', 'primary', null, '#/students'),
-    kpi('حضور همکاران', ratePct(r.staffAttendance.attendanceRate, r.staffAttendance.present ?? 0), `${fa(r.staffAttendance.absent + r.staffAttendance.leave + r.staffAttendance.sick)} روز عدم حضور`, 'neutral', null, '#/staff')
+    kpi('نمرهٔ تولید محتوای تیم', r.practical.score, `تولید ${fa(r.practical.exercises)} کارت · ${fa(r.practical.templates)} قالب · ${fa(r.practical.forms)} فرم`, 'success'),
+    kpi('دانش‌آموزان جدید', r.newStudents, 'ثبت‌نام در این بازه', 'primary'),
+    kpi('حضور همکاران', ratePct(r.staffAttendance.attendanceRate, r.staffAttendance.present ?? 0), `${fa(r.staffAttendance.absent + r.staffAttendance.leave + r.staffAttendance.sick)} روز عدم حضور`, 'neutral')
   );
 
   const points = r.byDay.map((p) => ({ date: jalaliTick(p.date), total: p.total, cancelled: p.cancelled }));
@@ -224,11 +223,7 @@ function buildPeriodicBody(r) {
   }), { reserveH: 190 }); /* E3 */
   const donutCard = el('div', { class: 'card' },
     el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, 'وضعیت حضور دانش‌آموزان')),
-    el('div', { class: 'card__body' }, attDonut),
-    /* POLISH-3 M2 — حفر دونات حضور به بورد روز */
-    el('div', { style: { padding: '0 var(--sp-5) var(--sp-4)' } },
-      el('button', { class: 'btn btn--ghost btn--sm', type: 'button', onclick: () => { location.hash = '#/working-day'; } }, 'بورد جلسات روز', icon('chevL', 13))
-    )
+    el('div', { class: 'card__body' }, attDonut)
   );
 
   const staffCard = el('div', { class: 'card' },
@@ -248,10 +243,6 @@ function buildPeriodicBody(r) {
             })),
             valueFormatter: (v) => fa(v)
           }), { reserveH: Math.max(1, r.perStaff.length) * 56 + 16 }) /* E3: ارتفاع تقریبی ردیف‌ها */
-    ),
-    /* POLISH-3 M2 — حفر بار کاری به کارکنان */
-    el('div', { style: { padding: '0 var(--sp-5) var(--sp-4)' } },
-      el('button', { class: 'btn btn--ghost btn--sm', type: 'button', onclick: () => { location.hash = '#/staff'; } }, 'مدیریت کارکنان', icon('chevL', 13))
     )
   );
 
@@ -265,8 +256,7 @@ function buildPeriodicBody(r) {
         ? emptyState({ iconName: 'school', title: 'دانش‌آموزی با مدرسه ثبت‌شده نیست', hint: 'مدرسهٔ هر دانش‌آموز را از «دانش‌آموزان ← ویرایش» انتخاب کنید تا این‌جا شمرده شود.' })
         : dataTable({
             columns: [
-              /* POLISH-3 M2 — حفر: دانش‌آموزان همان مدرسه (لینک عمیق فیلتر مدرسه) */
-              { key: 'name', label: 'مدرسه', render: (s) => el('button', { class: 'btn btn--ghost btn--sm', type: 'button', title: 'دانش‌آموزان این مدرسه', onclick: () => { location.hash = `#/students?school_id=${encodeURIComponent(s.schoolId)}`; } }, s.name) },
+              { key: 'name', label: 'مدرسه' },
               { key: 'students', label: 'دانش‌آموز', render: (s) => fa(s.students), align: 'end' }
             ],
             rows: r.schools
@@ -298,8 +288,7 @@ function buildPeriodicBody(r) {
     ? el('div', { class: 'card' },
         el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, 'برچسب‌های پرتکرار')),
         el('div', { class: 'card__body', style: { display: 'flex', flexWrap: 'wrap', gap: 'var(--sp-2)' } }, /* 8px خام (S7-10) */
-          /* POLISH-3 M2 — حفر برچسب به فیلتر دانش‌آموزان (tag_id از قبل پشتیبانی می‌شد) */
-          r.topTags.map((t) => el('span', { class: 'badge badge--neutral', role: 'link', tabindex: 0, style: { cursor: 'pointer' }, title: `برچسب «${t.name}» (${t.category}) — مشاهدهٔ دانش‌آموزان`, onclick: () => { location.hash = `#/students?tag_id=${encodeURIComponent(t.tagId)}`; }, onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); location.hash = `#/students?tag_id=${encodeURIComponent(t.tagId)}`; } } }, `${t.name} · ${fa(t.count)}`))
+          r.topTags.map((t) => el('span', { class: 'badge badge--neutral', title: t.category }, `${t.name} · ${fa(t.count)}`))
         )
       )
     : null;
@@ -464,10 +453,6 @@ function buildAdvancedBody(adv, pct, days) {
       adv.waitlist.total === 0
         ? emptyState({ iconName: 'clock', title: 'متقاضی‌ای ثبت نشده', hint: 'متقاضی‌های لیست انتظار از ماژول «لیست انتظار» ثبت می‌شوند.' })
         : funnelDonut
-    ),
-    /* POLISH-3 M2 — حفر قیف به لیست انتظار */
-    el('div', { style: { padding: '0 var(--sp-5) var(--sp-4)' } },
-      el('button', { class: 'btn btn--ghost btn--sm', type: 'button', onclick: () => { location.hash = '#/waitlist'; } }, 'لیست انتظار', icon('chevL', 13))
     )
   );
 
