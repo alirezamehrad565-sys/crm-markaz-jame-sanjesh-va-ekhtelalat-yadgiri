@@ -935,18 +935,6 @@ fn spawn_engine_boot(app: tauri::AppHandle) {
     });
 }
 
-// فاز D — OTA (server-cloud-update-design.md §۳): پلاگین updater؛ کلید عمومی از متغیر ساخت CI
-// (راز TAURI_UPDATER_PUBKEY هنگام بیلد تزریق می‌شود) — بی‌کلید، کانال خودکار بی‌اثر می‌ماند و
-// کانال دستی (check_updates + open_release_page) همیشه سالم است. قاعدهٔ سخت D-۴: این کد هیچ
-// مسیری به dataDir ندارد — نصاب per-user NSIS فقط شاخهٔ برنامه را لمس می‌کند (پین desktop-check).
-fn updater_plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
-    // کلید عمومی از پیکربندی tauri.conf.json (plugins.updater.pubkey) خوانده می‌شود —
-    // Builder::pubkey() در این نسخهٔ tauri تایپ پلاگین را به TauriPlugin<_, Config> می‌برد که
-    // .plugin() نمی‌پذیرد (درس E0308 CI). تزریق کلید واقعی در CI هنگام بیلد انجام می‌شود؛
-    // بی‌کلید = کانال خودکار بی‌اثر در runtime (خطا با پیام فارسی گرفته می‌شود)، کانال دستی سالم.
-    tauri_plugin_updater::Builder::new().build()
-}
-
 /// فاز D-۳ — کانال دستی «بررسی نسخهٔ تازه»: فقط وارسی؛ هیچ دانلود/نصبی از داخل اپ نیست
 /// (درس ریسک ۴ — AV ایران). آفلاین/بی‌کلید/خطا → پیام فارسی با state:'error'، هرگز کرش.
 #[tauri::command]
@@ -994,8 +982,12 @@ pub fn run() {
                 let _ = window.set_focus();
             }
         }))
-        // فاز D — OTA (بعد از تکی‌نمونه — ترتیب پلاگین‌ها: single_instance اولین می‌ماند)
-        .plugin(updater_plugin())
+        // فاز D — OTA (بعد از تکی‌نمونه — ترتیب پلاگین‌ها: single_instance اولین می‌ماند).
+        // کلید عمومی از پیکربندی tauri.conf.json (plugins.updater.pubkey) خوانده می‌شود؛ ثبت باید
+        // inline باشد چون Builder پلاگین updater تایپ TauriPlugin<_, Config> می‌سازد (درس E0308 CI).
+        // تزریق کلید واقعی در CI هنگام بیلد انجام می‌شود؛ بی‌کلید = کانال خودکار بی‌اثر در runtime
+        // (خطا با پیام فارسی در check_updates گرفته می‌شود)، کانال دستی سالم.
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(LocalEngineSlot(Mutex::new(None)))
         .manage(AppState::new())
         // فاز A — آینهٔ وضعیت سرور محلی (قرارداد engine_status / engine:status)

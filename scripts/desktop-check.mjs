@@ -420,7 +420,7 @@ try {
   pinB(path.join(ROOT, 'src', '__tests__', 'front-cloud-setup.test.ts'), ['cloudSetupView'], 'آزمون front-cloud-setup.test.ts');
 
   // فاز D — OTA (سند §۳): پین‌های سخت کانال دستی + قاعدهٔ سخت dataDir — هم‌الگوی پین‌های فاز B/C
-  pinB(path.join(T, 'src', 'lib.rs'), ['updater_plugin', 'check_updates', 'open_release_page', 'tauri_plugin_updater'], 'lib.rs (فاز D — OTA)');
+  pinB(path.join(T, 'src', 'lib.rs'), ['tauri_plugin_updater', 'check_updates', 'open_release_page'], 'lib.rs (فاز D — OTA)');
   pinB(path.join(T, 'Cargo.toml'), ['tauri-plugin-updater'], 'Cargo.toml (فاز D — updater)');
   pinB(path.join(ROOT, 'public', 'assets', 'js', 'views', 'health-panel.js'), ['updateCheckView', 'بررسی نسخهٔ تازه'], 'health-panel (فاز D — کانال دستی)');
   pinB(path.join(ROOT, 'src', '__tests__', 'front-updater.test.ts'), ['updateCheckView'], 'آزمون front-updater.test.ts');
