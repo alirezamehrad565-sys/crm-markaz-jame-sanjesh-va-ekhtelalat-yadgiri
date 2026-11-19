@@ -122,7 +122,7 @@ export async function renderProgressReport(container, ctx) {
   try {
     student = (await api.get(`/api/students/${id}`)).data;
   } catch (err) {
-    container.replaceChildren(emptyState({ iconName: 'alert', title: 'دانش‌آموز پیدا نشد', hint: err.message }));
+    container.replaceChildren(emptyState({ iconName: 'alert', title: 'دانش‌آموز پیدا نشد', hint: err?.message ?? 'از پروفایل دانش‌آموز دوباره وارد شوید.' }));
     return;
   }
 
@@ -194,7 +194,7 @@ export async function renderProgressReport(container, ctx) {
     el('div', { class: 'pr-head__brand' }, icon('clipboard', 13), 'سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام'),
     el('h1', { class: 'pr-head__title' }, 'گزارش پیشرفت توانبخشی — مبتنی بر چک‌لیست مهارتی'),
     el('div', { class: 'pr-meta' },
-      metaItem('دانش‌آموز', `${student.firstName ?? ''} ${student.lastName ?? ''}`.trim()),
+      metaItem('دانش‌آموز', `${student.firstName ?? ''} ${student.lastName ?? ''}`.trim() || '—'),
       metaItem('سن', ageLineOf(student.birthDate)),
       metaItem('پایه', student.grade ? gradeLabel(student.grade) : null),
       metaItem('مسیر پرونده', student.pathway ? (student.pathway === 'rehab' ? 'توانبخشی' : 'اختلال یادگیری') : null),
@@ -540,7 +540,7 @@ async function renderPathwayReportView(container, { student, id, pathwayId, from
     }));
     return;
   }
-  const { pathway, period, summary, sessions, familySummary } = report;
+  const { pathway = {}, period = {}, summary = {}, sessions = [], familySummary } = report;
   const parts = [];
 
   // سه گزارش از یک داده: بالینی (موجود) / والدپسند / مدرسه — هر سه با یک دکمه چاپ/PDF
@@ -561,22 +561,24 @@ async function renderPathwayReportView(container, { student, id, pathwayId, from
   function variantCardNode() {
     if (audience === 'family') {
       const v = report.parent;
+      if (!v?.headline) return null;
       return el('div', { class: 'card' },
         el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, icon('heart', 16), v.headline)),
         el('div', { class: 'card__body' },
-          ...v.paragraphs.map((p) => el('p', { style: { margin: 'var(--sp-2) 0', lineHeight: 'var(--lh-relaxed)' } }, p)), /* ۱٫۹ جادویی → توکن (S7-16) */
+          ...(v.paragraphs ?? []).map((p) => el('p', { style: { margin: 'var(--sp-2) 0', lineHeight: 'var(--lh-relaxed)' } }, p)), /* ۱٫۹ جادویی → توکن (S7-16) */
           el('div', { class: 'clx-sub__title', style: { marginTop: 'var(--sp-3)' } }, 'پیشنهادهای خانه:'),
-          el('ul', { class: 'pr-variant-list' }, ...v.tips.map((t) => el('li', {}, t)))));
+          el('ul', { class: 'pr-variant-list' }, ...(v.tips ?? []).map((t) => el('li', {}, t)))));
     }
     if (audience === 'school') {
       const v = report.school;
+      if (!v?.headline) return null;
       return el('div', { class: 'card' },
         el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, icon('book', 16), v.headline)),
         el('div', { class: 'card__body' },
           el('div', { class: 'clx-sub__title' }, 'عملکرد کلاس:'),
-          el('ul', { class: 'pr-variant-list' }, ...v.performance.map((p) => el('li', {}, p))),
+          el('ul', { class: 'pr-variant-list' }, ...(v.performance ?? []).map((p) => el('li', {}, p))),
           el('div', { class: 'clx-sub__title', style: { marginTop: 'var(--sp-3)' } }, 'توصیه‌های اجرایی برای معلم:'),
-          el('ul', { class: 'pr-variant-list' }, ...v.actions.map((a) => el('li', {}, a)))));
+          el('ul', { class: 'pr-variant-list' }, ...(v.actions ?? []).map((a) => el('li', {}, a)))));
     }
     return null;
   }
@@ -591,6 +593,7 @@ async function renderPathwayReportView(container, { student, id, pathwayId, from
   function printVariant() {
     if (audience === 'clinical') { window.print(); return; } // گزارش بالینی با استایل چاپ موجود
     const v = audience === 'family' ? report.parent : report.school;
+    if (!v?.headline) { window.print(); return; } // واریانت سرور نیامده — همان گزارش بالینی چاپ می‌شود
     const w = window.open('', '_blank', 'width=900,height=1000');
     if (!w) { toast('پنجرهٔ چاپ باز نشد — مسدودکنندهٔ پاپ‌آپ را خاموش کنید', 'warning'); return; }
     const esc = escapeHtml; // فرار درست تک‌کاراکترها (regex قبلی فقط جفت‌دوتایی می‌گرفت)
@@ -677,7 +680,7 @@ async function renderPathwayReportView(container, { student, id, pathwayId, from
           : m.masteryAchieved
             ? `بله — ملاک برقرار است (${m.masteryPct != null ? `${fa(m.masteryPct)}٪ ملاک` : ''})`
             : m.masteryPct != null ? `هنوز نه — ${fa(m.masteryPct)}٪ ملاک` : '—',
-        m.metric ? `سنجهٔ «${m.metric}» با ${fa(m.points)} داده` : null),
+        m.metric ? `سنجهٔ «${m.metric}» با ${m.points != null ? fa(m.points) : fa(0)} داده` : null),
       answer('روند؟',
         m.trendKey ? (TREND_FA[m.trendKey] ?? m.trendKey) + (m.slopePerSession != null ? ` — شیب ${fa(m.slopePerSession)} در هر پراپ` : '') : '—',
         m.fourPointKey ? `قاعدهٔ ۴-نقطه: ${FOUR_FA[m.fourPointKey] ?? m.fourPointKey}` : null),
@@ -685,7 +688,7 @@ async function renderPathwayReportView(container, { student, id, pathwayId, from
         m.decisionLabel ? (DEC_FA[m.decision] ?? m.decisionLabel) : '—',
         m.decision === 'dose' ? 'پیش از تغییر روش، تعداد/تناوب جلسه و تمرین خانگی بیشتر شود' : null),
       answer('دوز و وفاداری؟',
-        `دوز: ${fa(m.doseDone)}/${fa(m.dosePlanned)} جلسه${m.doseAdherencePct != null ? ` (${fa(m.doseAdherencePct)}٪)` : ''} · وفاداری: ${m.fidelityPct != null ? `${fa(m.fidelityPct)}٪` : 'ثبت نشده'}`,
+        `دوز: ${fa(m.doseDone ?? 0)}/${fa(m.dosePlanned ?? 0)} جلسه${m.doseAdherencePct != null ? ` (${fa(m.doseAdherencePct)}٪)` : ''} · وفاداری: ${m.fidelityPct != null ? `${fa(m.fidelityPct)}٪` : 'ثبت نشده'}`,
         'دوز بر مبنای جلسات برنامه‌ریزی‌شده — وفاداری از چک‌لیست سه‌گانهٔ جلسات انجام‌شده')
     ));
   }
@@ -694,8 +697,8 @@ async function renderPathwayReportView(container, { student, id, pathwayId, from
   const doneSessions = sessions.filter((s) => s.status === 'done');
   let cardsAcc = 0;
   const trendPoints = doneSessions.map((s) => {
-    cardsAcc += s.cardsDone;
-    return { x: `ج${fa(s.ord)}`, y: cardsAcc, note: `${fa(s.cardsDone)} کارت از ${fa(s.cardsTotal)} در همین جلسه` };
+    cardsAcc += s.cardsDone ?? 0;
+    return { x: `ج${fa(s.ord)}`, y: cardsAcc, note: `${fa(s.cardsDone ?? 0)} کارت از ${fa(s.cardsTotal ?? 0)} در همین جلسه` };
   });
   parts.push(el('div', { class: 'card' },
     el('div', { class: 'card__head' },

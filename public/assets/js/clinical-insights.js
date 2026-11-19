@@ -8,8 +8,8 @@ import { cardListEditor } from './plan-cards.js'; // ویرایشگر کارت �
 import { openCaseEventForm, openCaseEventDetail, openChecklistBatchSendModal } from './case-events.js'; // — : ارسال گروهی فرم‌های پلن + : بازکردن جزئیات فرم از ردیف‌های تب بالینی
 import { pathwayChip, canEditPathway, openPathwayModal } from './session-type.js'; // — مسیر پرونده
 import { otChecklistCard, otProgressPanel, protocolChip, protocolCard, NEEDS_KEY, OT_SESSION_KEY } from './ot-checklist.js'; // — فلو دوفازی شناسایی→مداخله (openNeedsModal در کارت جمع‌بندی) + پنل پیشرفت جلسه‌به‌جلسه
-import { synthesisSection, fetchFormulation } from './case-formulation.js'; // — کارت واحد جمع‌بندی تشخیصی ()
-import { wechslerProfileBlock, wechslerSourceBadge, connectionsSection, WEAKEST_FA } from './wechsler-profile.js'; // — نیم‌رخ وکسلر (+) + «پیوند با سایر اطلاعات» ( → مرحلهٔ ۵)
+import { synthesisSection, fetchFormulation } from './case-formulation.js'; // — کارت واحد جمع‌بندی تشخیصی
+import { wechslerProfileBlock, wechslerSourceBadge, connectionsSection, WEAKEST_FA } from './wechsler-profile.js'; // — نیم‌رخ وکسلر + «پیوند با سایر اطلاعات» → مرحلهٔ ۵
 import {
   ANAMNESIS_KEY,
   ANAMNESIS_LEGACY_KEY,

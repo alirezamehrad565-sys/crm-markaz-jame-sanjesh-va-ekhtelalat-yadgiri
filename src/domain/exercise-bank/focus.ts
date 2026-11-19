@@ -274,7 +274,7 @@ export function expandDisorderSelection(keys: string[], disorderTags: DisorderTr
   return [...byId.keys()].filter((id) => out.has(id));
 }
 
-// ─── ستون ۴ درخت واحد: «پایه تحصیلی» — همان الگوی اختلال‌ها () ───
+// ─── ستون ۴ درخت واحد: «پایه تحصیلی» — همان الگوی اختلال‌ها ───
 // حوزه‌های تحصیلی «در کد» نسخه‌پذیرند؛ اعضا برچسب‌های dynamic با category=grade هستند.
 // قاعدهٔ تطبیق متنی (اولین تطبیق برنده)؛ برچسب ناشناخته به «سایر پایه‌ها»ی پویا می‌رود.
 // به تصمیم کاربر، کلینیک فقط پیش‌دبستانی تا ششم دبستان را پوشش می‌دهد؛
@@ -371,7 +371,7 @@ export function expandGradeSelection(keys: string[], gradeTags: GradeTreeTag[]):
 }
 
 // ─── درخت واحد طبقه‌بندی کارت: چهار ستون، یک شکل ───
-// «برچسب‌ها» و «درخت هدف» دو منبعِ یک درخت واحدند (تصمیم ):
+// «برچسب‌ها» و «درخت هدف» دو منبعِ یک درخت واحدند (تصمیم):
 // ستون‌های علمی (info/exec) برگ‌شان کلید هدف است؛ ستون‌های dynamic (disorder/grade) برگ‌شان شناسهٔ برچسب.
 // ذخیره‌سازی تفکیک‌شده می‌ماند: کلید info/exec → exercise_focus_links · شناسهٔ برچسب → exercise_tags.
 export interface TaxonomyLeaf {

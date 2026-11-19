@@ -125,7 +125,7 @@ describe('GET /api/students/:id/checklist-plan — پیشنهادگر چک‌ل�
     expect(keys).toEqual(expect.arrayContaining([
       'ce-probe-read-v1', 'ce-probe-write-v1', 'ce-probe-calc-v1', 'ce-id-adapt-v1', 'ce-sdq-p-v1', 'ce-sdq-t-v1'
     ]));
-    expect(keys).not.toContain('ce-comp-family-v2'); // — بستهٔ جامع حذف شده ()
+    expect(keys).not.toContain('ce-comp-family-v2'); // — بستهٔ جامع حذف شده
     expect(keys.some((k) => k.startsWith('ce-sld-'))).toBe(false);
     expect(plan.basis).toContain('مرزی/دیرآموزی');
     expect(plan.referralFa).toBeNull();

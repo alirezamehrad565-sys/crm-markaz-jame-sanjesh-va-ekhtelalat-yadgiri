@@ -5,7 +5,7 @@ import { TOOL_GUIDES } from './clinical-content.js';
 import { jalaliDateInput } from './jalali-picker.js';
 import { session } from './state.js';
 import { typeIconNode } from './case-event-icons.js';
-import { wechslerEventAnalysisSection } from './wechsler-profile.js'; // — نیم‌رخ کامل وکسلر در مودال ()
+import { wechslerEventAnalysisSection } from './wechsler-profile.js'; // — نیم‌رخ کامل وکسلر در مودال
 const STATUS_LABELS = { draft: 'پیش‌نویس', completed: 'ثبت‌شده', pending_family: 'در انتظار خانواده', cancelled: 'لغوشده' };
 
 function studentLabel(student) {
@@ -539,7 +539,7 @@ export function openCaseEventDetail(event, { onChanged } = {}) {
     try {
       const c = JSON.parse(String(payload['engine_output'].value));
       if (c && c.ok) wEng = c;
-    } catch {}
+    } catch {} /* نرم — JSON خراب → پیش‌فرض */
   }
   const keys = Object.keys(payload).filter((k) => k !== 'engine_output' && !k.startsWith('_') && payload[k] && String(payload[k].value ?? '').length > 0); /* ۱.۲۵.۵۹: کلیدهای رزرو (_) نمایشی نیستند */
   if (wEng) {

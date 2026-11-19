@@ -13,6 +13,5 @@ export {
 } from './body';
 export {
   NODE_DB_CONTRACT_TABLES,
-  NODE_DB_CONTRACT_CP_SOURCE,
-  NODE_DB_CONTRACT_DOC
+  NODE_DB_CONTRACT_CP_SOURCE
 } from './node-db-contract';

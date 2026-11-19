@@ -46,8 +46,9 @@ export async function renderSpecialNeeds(container) {
   const generatedAtBadge = el('span', { class: 'badge badge--neutral', title: 'زمان محاسبه' });
 
   const pageHead = el('div', { class: 'page-head' },
-    el('div', { class: 'page-head__title' }, 'نیازهای ویژه'),
-    generatedAtBadge
+    el('h2', { class: 'page-head__title' }, 'نیازهای ویژه'),
+    generatedAtBadge,
+    el('p', { class: 'page-head__desc' }, 'گرید نیازهای ویژهٔ دانش‌آموزان به تفکیک مدرسه و پایه — با شمارش نیازمندان توجه و فهرست دلایل.')
   );
 
   const select = (label, value, options, onchange) => {
@@ -154,10 +155,12 @@ function buildDataBody(g) {
 }
 
 function buildKpis(g) {
-  const sev = g.overall.bySeverity ?? {};
+  // گارد ②: پاکت ناقص هرگز «undefined» خام نشان نمی‌دهد — صفر می‌نشیند
+  const ov = g.overall && typeof g.overall === 'object' ? g.overall : {};
+  const sev = ov.bySeverity && typeof ov.bySeverity === 'object' ? ov.bySeverity : {};
   return el('div', { class: 'kpi-grid', style: { marginBottom: 'var(--sp-5)' } },
-    kpi('شناسایی‌شده', fa(g.overall.special), `از ${fa(g.overall.total)} دانش‌آموز فعال`, 'primary'),
-    kpi('نیازمند توجه', fa(g.overall.attention), 'بر اساس قواعد توجه', g.overall.attention > 0 ? 'warning' : 'neutral'),
+    kpi('شناسایی‌شده', fa(ov.special ?? 0), `از ${fa(ov.total ?? 0)} دانش‌آموز فعال`, 'primary'),
+    kpi('نیازمند توجه', fa(ov.attention ?? 0), 'بر اساس قواعد توجه', (ov.attention ?? 0) > 0 ? 'warning' : 'neutral'),
     kpi('خفیف', fa(sev.mild ?? 0), 'شدت نیاز ویژه', 'neutral'),
     kpi('متوسط', fa(sev.moderate ?? 0), 'شدت نیاز ویژه', 'accent'),
     kpi('شدید', fa(sev.severe ?? 0), 'شدت نیاز ویژه', 'error')
@@ -185,7 +188,8 @@ function cellMetricValue(cell, metric) {
 
 function maxCellMetric(grid) {
   let max = 0;
-  for (const row of grid.schools) {
+  const schools = Array.isArray(grid.schools) ? grid.schools : [];
+  for (const row of schools) {
     for (const cell of Object.values(row.cells)) {
       const v = cellMetricValue(cell, state.metric) ?? 0;
       if (v > max) max = v;
@@ -203,14 +207,17 @@ function intensityClass(value, max) {
 }
 
 function buildHeatmap(grid, maxVal) {
+  // گارد ②: فیلدهای غایب پاکت → آرایهٔ خالی بی‌کرش (به‌جای کرش/متن خام)
+  const grades = Array.isArray(grid.grades) ? grid.grades : [];
+  const schools = Array.isArray(grid.schools) ? grid.schools : [];
   const head = el('tr', {},
     el('th', {}, 'مدرسه'),
-    ...grid.grades.map((g) => el('th', {}, gradeLabel(g) || g)),
+    ...grades.map((g) => el('th', {}, gradeLabel(g) || g)),
     el('th', { class: 'sn-cell--total' }, 'جمع')
   );
 
-  const bodyRows = grid.schools.map((row) => {
-    const cells = grid.grades.map((g) => {
+  const bodyRows = schools.map((row) => {
+    const cells = grades.map((g) => {
       const cell = row.cells[g];
       const v = cellMetricValue(cell, state.metric);
       // کنش اصلی نما فقط با ماوس بود؛ حالا کیبورد/صفحه‌خوان هم دارد
@@ -237,11 +244,11 @@ function buildHeatmap(grid, maxVal) {
     );
   });
 
-  if (grid.schools.length === 0) {
+  if (schools.length === 0) {
     return emptyState({
       iconName: 'clip',
       title: 'داده‌ای برای این فیلترها نیست',
-      hint: 'نیاز ویژه از پروفایل هر دانش‌آموز توسط منشی/مدیر ثبت می‌شود.'
+      hint: 'فیلترهای مدرسه/پایه/شدت را بازتر کنید — یا نیاز ویژه را از پروفایل دانش‌آموز ثبت کنید تا اینجا بیاید.'
     });
   }
 
@@ -274,7 +281,7 @@ async function loadStudents(listBox, schoolId, grade, close) {
     const students = (res.data || []).filter((s) => s.specialNeedType);
     const filtered = grade ? students.filter((s) => s.grade === grade) : students;
     if (filtered.length === 0) {
-      listBox.replaceChildren(emptyState({ iconName: 'student', title: 'در این سلول دانش‌آموز ویژه‌ای نیست' }));
+      listBox.replaceChildren(emptyState({ iconName: 'student', title: 'در این سلول دانش‌آموز ویژه‌ای نیست', hint: 'برای ثبت یا ویرایش نیاز ویژه، از پروفایل دانش‌آموز اقدام کنید.' }));
       return;
     }
     listBox.replaceChildren(
@@ -306,23 +313,24 @@ async function loadStudents(listBox, schoolId, grade, close) {
 }
 
 function buildAttentionCard(attention) {
-  const list = attention.length === 0
+  const listSafe = Array.isArray(attention) ? attention : []; // گارد ② — پاکت ناقص بی‌کرش
+  const list = listSafe.length === 0
     ? emptyState({
         iconName: 'check',
         title: 'کسی نیازمند توجه فوری نیست',
         hint: 'قواعد توجه: پیگیری سررسیدگذشته، پیگیری باز بیش از ۳۰ روز، در انتظار ارزیابی، بیش از ۳۰ روز بدون جلسه.'
       })
     : el('div', { class: 'sn-attention-list' },
-        ...attention.map((a) => el('div', { class: 'sn-attention-item' },
+        ...listSafe.map((a) => el('div', { class: 'sn-attention-item' },
           el('div', { style: { flex: 1, minWidth: 0 } },
             el('div', { class: 'cell-main' }, `${a.firstName} ${a.lastName}`),
             el('div', { class: 'cell-sub' },
               `${a.schoolName ?? 'بدون مدرسه'}${a.className ? ` — ${a.className}` : ''}${a.grade ? ` — پایه ${gradeLabel(a.grade)}` : ''}`
             ),
-            el('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '6px' } },
+            el('div', { style: { display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap', marginTop: 'var(--sp-2)' } },
               a.specialNeedType ? el('span', { class: 'badge badge--primary' }, TYPE_LABELS[a.specialNeedType] ?? a.specialNeedType) : null,
               a.specialNeedSeverity ? el('span', { class: `badge badge--${SEVERITY_TONES[a.specialNeedSeverity] ?? 'neutral'}` }, SEVERITY_LABELS[a.specialNeedSeverity] ?? a.specialNeedSeverity) : null,
-              ...a.reasons.map((r) => el('span', { class: 'badge badge--warning' }, REASON_LABELS[r] ?? r))
+              ...(Array.isArray(a.reasons) ? a.reasons.map((r) => el('span', { class: 'badge badge--warning' }, REASON_LABELS[r] ?? r)) : [])
             )
           ),
           el('button', { class: 'btn btn--soft btn--sm', onclick: () => { location.hash = `#/students/${a.id}`; } },
@@ -333,7 +341,7 @@ function buildAttentionCard(attention) {
   return el('div', { class: 'card', style: { marginTop: 'var(--sp-4)' } },
     el('div', { class: 'card__head' },
       el('div', { class: 'card__title' }, 'نیاز به توجه دارد'),
-      el('span', { class: `badge ${attention.length > 0 ? 'badge--warning' : 'badge--success'}` }, fa(attention.length))
+      el('span', { class: `badge ${listSafe.length > 0 ? 'badge--warning' : 'badge--success'}` }, fa(listSafe.length))
     ),
     el('div', { class: 'card__body' }, list)
   );

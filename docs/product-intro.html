@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام</title>
+<style>
+  :root{
+    --bg:#0F1722; --panel:#1A2330; --panel2:#202B3B; --line:#2C3849;
+    --accent:#D4875A; --accent-soft:rgba(212,135,90,.14);
+    --ink:#F2F0EC; --ink2:#B0B8C0; --ink3:#7C8794;
+    --ok:#7FB069; --radius:14px;
+  }
+  *{box-sizing:border-box; margin:0; padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:Tahoma,"Segoe UI",Vazirmatn,sans-serif;
+    line-height:1.9; font-size:clamp(14px,1.6vw,16px);
+  }
+  .wrap{max-width:1060px; margin-inline:auto; padding-inline:clamp(16px,4vw,32px)}
+  section{padding-block:clamp(36px,6vw,72px)}
+  .kicker{
+    display:inline-block; font-size:clamp(11px,1.3vw,13px); letter-spacing:.14em;
+    color:var(--accent); border:1px solid var(--accent); border-radius:999px;
+    padding:.25em 1em; margin-bottom:1.2em
+  }
+  h1{font-size:clamp(1.7rem,5.4vw,3.1rem); line-height:1.5; font-weight:700}
+  h2{font-size:clamp(1.25rem,3.2vw,1.8rem); margin-bottom:.9em}
+  h2::after{content:""; display:block; width:64px; height:3px; background:var(--accent);
+    border-radius:2px; margin-top:.45em}
+  .lead{color:var(--ink2); font-size:clamp(1rem,2vw,1.15rem); max-width:46em}
+  p{color:var(--ink2)}
+  strong{color:var(--ink)}
+
+  header.hero{padding-block:clamp(56px,10vw,110px); border-bottom:1px solid var(--line);
+    background:radial-gradient(1100px 420px at 85% -10%, var(--accent-soft), transparent 60%)}
+  .hero .lead{margin-top:1em}
+  .chips{display:flex; flex-wrap:wrap; gap:.6em; margin-top:1.8em}
+  .chip{
+    background:var(--panel); border:1px solid var(--line); border-radius:999px;
+    padding:.35em 1em; font-size:clamp(12px,1.4vw,13.5px); color:var(--ink2)
+  }
+  .chip b{color:var(--accent); font-weight:700}
+  .cta{display:inline-block; margin-top:2em; background:var(--accent); color:#14100B;
+    font-weight:700; text-decoration:none; border-radius:10px; padding:.7em 1.6em;
+    font-size:clamp(13px,1.6vw,15px)}
+  .cta.ghost{background:transparent; color:var(--ink); border:1px solid var(--line); margin-inline-start:.6em}
+
+  .pillars{display:grid; grid-template-columns:1fr 1fr; gap:clamp(14px,2.5vw,22px); margin-top:1.6em}
+  .pillar{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+    padding:clamp(16px,3vw,26px)}
+  .pillar .num{color:var(--accent); font-size:clamp(1.6rem,4vw,2.2rem); font-weight:700; line-height:1.2}
+  .pillar h3{margin:.3em 0 .5em; font-size:clamp(1.02rem,2.2vw,1.2rem)}
+  .pillar p{font-size:clamp(13.5px,1.6vw,15px)}
+
+  .grid{display:grid; grid-template-columns:repeat(3,1fr); gap:clamp(12px,2vw,18px); margin-top:1.6em}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+    padding:clamp(14px,2.4vw,22px)}
+  .card h3{font-size:clamp(.95rem,1.9vw,1.08rem); color:var(--accent); margin-bottom:.5em}
+  .card p{font-size:clamp(12.5px,1.5vw,14px); line-height:1.8}
+
+  .arch{display:grid; grid-template-columns:repeat(3,1fr); gap:clamp(12px,2vw,18px); margin-top:1.6em}
+  .arch .card{border-inline-start:3px solid var(--accent)}
+  .archnote{margin-top:1.4em; font-size:clamp(12.5px,1.5vw,14px); color:var(--ink3)}
+
+  .trust{display:grid; grid-template-columns:1fr 1fr; gap:clamp(12px,2vw,18px); margin-top:1.6em}
+  .trust .card p{font-size:clamp(13px,1.6vw,14.5px)}
+  .check{color:var(--ok); font-weight:700}
+
+  footer{border-top:1px solid var(--line); padding-block:clamp(28px,5vw,44px);
+    color:var(--ink3); font-size:clamp(12px,1.4vw,13.5px)}
+  footer a{color:var(--accent); text-decoration:none}
+  footer .row{display:flex; flex-wrap:wrap; gap:1em 2.4em; justify-content:space-between}
+
+  @media (max-width:820px){ .grid{grid-template-columns:repeat(2,1fr)} .arch{grid-template-columns:1fr} }
+  @media (max-width:640px){
+    .pillars,.grid,.trust{grid-template-columns:1fr}
+    .cta.ghost{margin-inline-start:0; margin-top:.6em}
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="kicker">سامانهٔ مدیریت مرکز — محلی‌فرست · فارسی · RTL</span>
+    <h1>مرکز جامع سنجش، آموزش،<br>توان‌بخشی و مداخلات بهنگام</h1>
+    <p class="lead">از لیست انتظار تا پروندهٔ بالینی، از تقویم بصری تا حلقهٔ تکلیفِ خانواده و بازی‌های شناختی — یک سامانهٔ کامل برای کلینیک‌های سنجش و توان‌بخشی کودک، که <strong>روی میزِ خودِ مرکز کار می‌کند</strong> و به ابر هم وصل است.</p>
+    <div class="chips">
+      <span class="chip"><b>۲۹۰۲</b> آزمون سبز</span>
+      <span class="chip">tsc strict — <b>صفر</b> خطا</span>
+      <span class="chip"><b>۱۱۹</b> مایگریشن · <b>۱۳۹</b> ایندکس</span>
+      <span class="chip">smoke دوهاتهٔ موتور <b>۲۸/۲۸</b></span>
+      <span class="chip">نصب آفلاین — <b>پک USB</b></span>
+    </div>
+    <a class="cta" href="#domains">قابلیت‌ها</a>
+    <a class="cta ghost" href="#arch">معماری</a>
+  </div>
+</header>
+
+<section id="idea">
+  <div class="wrap">
+    <h2>ایده بر دو ستونه استوار است</h2>
+    <p class="lead">طرح این سامانه از چند سال مدیریت یکی از مراکز سنجش بیرون آمده، نه از یک قالب عمومی CRM.</p>
+    <div class="pillars">
+      <div class="pillar">
+        <div class="num">۱</div>
+        <h3>کار تیمی روی یک پرونده</h3>
+        <p>درمانگران، آزمایندهٔ تخصصی و همکاران روی یک پروندهٔ دانش‌آموز کار می‌کنند؛ فعالیت‌ها، تمرین‌ها و قالب‌های جلسهٔ مداخله مشترک و نسخه‌پذیرند — نه پاره در هر نرم‌افزار جدا.</p>
+      </div>
+      <div class="pillar">
+        <div class="num">۲</div>
+        <h3>تقویم بصری با حداقل کلیک</h3>
+        <p>تقویم هفتگی شنبه‌محور، چنددرمانگره و دراگ‌اند‌دراپ؛ کپی از هفتهٔ قبل، نوبت چنددانش‌آموزی و بورد «روز کاری» که همهٔ همکاران، شیفت‌ها و نوبت‌های روز را در یک نما می‌دهد.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="domains" style="border-top:1px solid var(--line)">
+  <div class="wrap">
+    <h2>شش دامنهٔ کارکرد</h2>
+    <div class="grid">
+      <div class="card"><h3>نوبت‌دهی و روز کاری</h3><p>تقویم بصری، تداخل‌سنج، لیست انتظار با تبدیل اتمیک به پرونده و نوبت، حضور جلسه‌ای و بورد روز کاری.</p></div>
+      <div class="card"><h3>پرونده و سنجش</h3><p>پروفایل زنده با تایم‌لاین، غربالگری و باتری‌های سنجش، نیم‌رخ وکسلر با ثبت نمرهٔ خام، برچسب‌ها و پیوست‌ها.</p></div>
+      <div class="card"><h3>مسیر بالینی و درمان</h3><p>مسیر استاندارد، قالب‌ساز جلسات مداخله، بانک تمرین با حلقهٔ تکلیف و گزارش دورهٔ والدپسند.</p></div>
+      <div class="card"><h3>بازی‌های شناختی</h3><p>بستهٔ نسخه‌دار با سطح شواهد و «دوز»، تجویز درمانگر، اجرای لینک‌محور برای خانواده و سنجه‌های جلسه.</p></div>
+      <div class="card"><h3>خانواده و بات بله</h3><p>ربات نقش‌آگاه برای والد، معلم و همکاران: یادآوری نوبت، تکلیف و بازگشت فایل، فرم رویداد و محتوای آگاه‌بخش.</p></div>
+      <div class="card"><h3>عملیات و پنل نجات</h3><p>سلامت سامانه در یک صفحهٔ فقط‌مدیر، پشتیبان‌گیری سه‌لایه، هم‌گامی با ابر و کارهای اضطراری با واژگان ساده.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="arch" style="border-top:1px solid var(--line)">
+  <div class="wrap">
+    <h2>یک کد، سه بستر</h2>
+    <div class="arch">
+      <div class="card"><h3>میز — پیش‌فرض مرکز</h3><p>پوستهٔ Rust/Tauri با نگهبان بیرونی، موتور محلی روی SQLite، نصب آفلاین از پک USB و کار از موبایل روی وای‌فای مرکز.</p></div>
+      <div class="card"><h3>ابری — Cloudflare</h3><p>همان باندل ورکر روی Workers + D1؛ مایگریشن‌ها و رفتار دقیقاً مشترک با میز.</p></div>
+      <div class="card"><h3>خود‌میزبانی — Docker</h3><p>Node.js + SQLite درون کانتینر با ایمیج آمارهٔ GHCR، برای سرور شخصی بدون Cloudflare.</p></div>
+    </div>
+    <p class="archnote">مرکز کنترل شبکه (CP) توزیع را بدون هیچ پورت ورودی انجام می‌دهد: نود همیشه خودش می‌کشد و فقط آمار تجمیعی بالا می‌رود — قانون طلایی «تجمیع در نود، فقط عدد در مرکز».</p>
+  </div>
+</section>
+
+<section id="trust" style="border-top:1px solid var(--line)">
+  <div class="wrap">
+    <h2>چرا قابل اعتماد است</h2>
+    <div class="trust">
+      <div class="card"><p><span class="check">✓</span> <strong>گیت‌های کیفیت قبل از هر انتشار:</strong> ۲۹۰۲ آزمون Vitest، tsc strict صفر، smoke دوهاتهٔ موتور ۲۸/۲۸، سازگاری D1 روی ۱۱۹ مایگریشن، بودجهٔ کارایی باندل و ۱۶۸ چک پوستهٔ دسکتاپ.</p></div>
+      <div class="card"><p><span class="check">✓</span> <strong>دادهٔ مرکز پیش شماست:</strong> مخزن فقط کد و اسکیما است؛ هیچ دادهٔ واقعی منتشر نمی‌شود و داده‌ها روی میز خودِ مرکز می‌مانند — پشتیبان JSON، ارسال شبانهٔ بله و drill بازیابی ماهانه.</p></div>
+      <div class="card"><p><span class="check">✓</span> <strong>دسترسی نقش‌محور:</strong> مدیر، منشی، درمانگر و ناظر فقط‌خواندنی با احراز JWT و دفتر رویداد append-only.</p></div>
+      <div class="card"><p><span class="check">✓</span> <strong>فارسی، واقعاً:</strong> RTL کامل، تقویم جلالی، تم روشن/تاریک توکنی و موبایل‌فرندلی — نه ترجمهٔ رویهٔ یک محصول انگلیسی.</p></div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap row">
+    <span>ساختهٔ <a href="https://t.me/sdt144">@sdt144</a> — انتشار تحت مجوز MIT</span>
+    <span>مخزن: crm-markaz-jame-sanjesh-va-ekhtelalat-yadgiri</span>
+  </div>
+</footer>
+
+</body>
+</html>

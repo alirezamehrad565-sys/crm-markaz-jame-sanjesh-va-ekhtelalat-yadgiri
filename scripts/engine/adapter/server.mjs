@@ -13,6 +13,7 @@ import { existsSync, readdirSync, readFileSync, renameSync, statSync, unlinkSync
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { makeD1 } from './d1.mjs';
+import { bootUrlsOf, defaultPublicBaseOf, lanIPv4sOf } from './lan.mjs'; // v1.27.20 — بایند LAN + نشانی موبایل‌ها · ۱.۲۷.۲۱ — LAN_INFO برای پنل
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -264,7 +265,8 @@ export function makeWebAssetsReader(publicDir) {
  * ری‌استارت پنل/نگهبان بازی‌ها close و دوباره startAdapterEngine می‌زند.
  */
 export async function startAdapterEngine(opts) {
-  const { port, gamesPort, dbPath, mainBundle, gamesBundle, publicDir, log } = opts;
+  const { port, gamesPort, dbPath, mainBundle, gamesBundle, publicDir, log, bind } = opts;
+  const host = bind ?? '127.0.0.1'; // v1.27.۱۸ — بایند شبکه‌ای (0.0.0.0) از موتور؛ پیش‌فرض لوکال
   const bindings = opts.bindings ?? {};
   const mainMod = await import(pathToFileURL(mainBundle).href);
   const gamesMod = await import(pathToFileURL(gamesBundle).href);
@@ -276,12 +278,27 @@ export async function startAdapterEngine(opts) {
   // فاز B — راز ابری passthrough از env پروسهٔ موتور (تزریق پوستهٔ Rust) + پل فایل‌های ابری
   // CloudFsIO روی dataDir — باندل ورکر هرگز node:fs import نمی‌کند؛ فقط از همین binding می‌خواند
   const cloudFs = makeCloudFsIO(bindings.dataDir);
+  // ۱.۲۷.۲۱ — LAN_INFO برای پنل نجات: IPهای خصوصی LAN (همان lan.mjs بوت) + پورت‌های واقعی همین
+  //   بوت → درگاه GET /api/system/lan فقط‌مدیر؛ کارت «سرور محلی» پنل دیگر به 127.0.0.1 بسنده
+  //   نمی‌کند و موبایلِ همان وای‌فای نشانی چاپ‌شده در بوت را زنده از خود پنل می‌گیرد.
+  const lanIps = lanIPv4sOf();
+  const lanInfo = {
+    host,
+    port,
+    games_port: gamesPort,
+    lan_ips: lanIps,
+    main_urls: lanIps.map((ip) => `http://${ip}:${port}`),
+    local_url: `http://127.0.0.1:${port}`,
+    games_urls: lanIps.map((ip) => `http://${ip}:${gamesPort}`),
+    games_local_url: `http://127.0.0.1:${gamesPort}`,
+    boot_at: new Date().toISOString(),
+  };
   const mainEnv = {
     DB,
     ENV: 'production',
     CF_ACCESS_TEAM_DOMAIN: bindings.cfAccessTeamDomain ?? '',
     CLINIC_NAME: bindings.clinicName ?? 'مرکز جامع',
-    PUBLIC_BASE_URL: bindings.publicBaseUrl ?? `http://127.0.0.1:${port}`,
+    PUBLIC_BASE_URL: bindings.publicBaseUrl ?? defaultPublicBaseOf(host, port),
     AUTH_SECRET: bindings.authSecret,
     CENTER_DESKTOP_ENGINE: '1',
     GAMES_HEALTH_URL: bindings.gamesHealthUrl ?? `http://127.0.0.1:${gamesPort}/health`,
@@ -290,12 +307,13 @@ export async function startAdapterEngine(opts) {
     // فاز D1 — خوانندهٔ سوم webAssetsReader (فایل‌های public برای Static Assets) از bindings می‌آید
     CLOUD_PROVISION: makeCloudProvision(bindings.centralWorkerPath, bindings.centralSchemaPath, bindings.webAssetsReader),
     ENGINE_CLOUD_SECRET: typeof bindings.engineCloudSecret === 'string' ? bindings.engineCloudSecret : '',
+    LAN_INFO: JSON.stringify(lanInfo),
   };
   const gamesEnv = {
     DB,
     ENV: 'production',
     CF_ACCESS_TEAM_DOMAIN: bindings.cfAccessTeamDomain ?? '',
-    PUBLIC_BASE_URL: bindings.publicBaseUrl ?? `http://127.0.0.1:${port}`,
+    PUBLIC_BASE_URL: bindings.publicBaseUrl ?? defaultPublicBaseOf(host, port),
     AUTH_SECRET: bindings.authSecret,
   };
 
@@ -358,7 +376,7 @@ export async function startAdapterEngine(opts) {
 
   const listen = (srv, p, name) => new Promise((resolve, reject) => {
     srv.once('error', reject);
-    srv.listen(p, '127.0.0.1', () => {
+    srv.listen(p, host, () => {
       log?.(`سرویس ${name} روی پورت ${p} راه افتاد`);
       resolve();
     });
@@ -370,6 +388,12 @@ export async function startAdapterEngine(opts) {
   } catch (err) {
     try { mainServer.close(); mainServer.closeAllConnections(); } catch { /* بهترین‌تلاش */ }
     throw err;
+  }
+
+  // v1.27.20 — نشانی‌های بوت: با بایند LAN نشانی موبایل‌ها چاپ می‌شود + خط راهنمای فایروال
+  for (const url of bootUrlsOf(host, port)) log?.(`نشانی سرویس اصلی: ${url}`);
+  if (host === '0.0.0.0' || host === '::') {
+    log?.('اگر از موبایل/دستگاه دیگر باز نشد: در فایروال ویندوز برای Node (یا پورت 8787) اجازهٔ ورودی بدهید');
   }
 
   return {

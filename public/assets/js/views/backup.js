@@ -1,8 +1,8 @@
 import { api } from '../api.js';
-import { fa, formatJalaliDateTime } from '../format.js';
+import { fa, formatJalaliDateTime, sizeLabel } from '../format.js'; /* ۱.۲۵.۰۲ — یکسان‌سازی sizeLabel */
 import { el, icon, toast, toastError, loadingState, errorState, skeletonState, flashNode } from '../ui.js';
 
-// ─── پشتیبان‌گیری و بازیابی () + ارسال به آیدی بله () — فقط مدیر مرکز ───
+// ─── پشتیبان‌گیری و بازیابی + ارسال به آیدی بله — فقط مدیر مرکز ───
 // مکانیک: گرفتن یک فایل JSON از کل داده‌ها + بازیابی جایگزینی‌کل با دو گارد امنیتی
 // (گام ۱: فایل اطمینان از وضعیت فعلی — گام ۲: تایپ عبارت تأیید)
 // : همان فایل پشتیبان با ربات بله به مقصدهای انتخابی (آیدی‌های عددی ذخیره‌شده)
@@ -100,9 +100,9 @@ function drawDelivery(delivery) {
         c.dataset.group = group;
         return el('label', {
           style: {
-            display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer',
-            padding: '6px 10px', border: '1px solid var(--line)', borderRadius: 'var(--radius-xs)', /* fallback و ۸px خام (S10-29) */
-            fontSize: 'var(--fs-sm)', marginTop: '6px'
+            display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', cursor: 'pointer',
+            padding: 'var(--sp-2) var(--sp-3)', border: '1px solid var(--line)', borderRadius: 'var(--radius-xs)', /* fallback و ۸px خام (S10-29) */
+            fontSize: 'var(--fs-sm)', marginTop: 'var(--sp-2)'
           }
         }, c, ` ${d.label || 'بدون نام'} (${d.chat_id})${d.active ? '' : ' — غیرفعال'}`);
       });
@@ -116,7 +116,7 @@ function drawDelivery(delivery) {
     box.appendChild(el('p', { class: 'hint-text' },
       'فایل پشتیبان با ربات مرکز مستقیماً به آیدی بلهٔ انتخابی‌تان فرستاده می‌شود — لازم نیست چیزی دانلود و جابه‌جا کنید. اول آیدی‌های موردنظر را در «مدیریت مقصدها» ذخیره کنید؛ بعد هر بار مقصدهای همان ارسال را تیک بزنید. فایل پشتیبان اطلاعات حساس دارد — آیدی گرو‌ه‌ها را فقط به افراد مطمئن بدهید.'));
     if (!botReady) {
-      box.appendChild(el('div', { style: { color: 'var(--error)', fontWeight: 600, marginTop: '6px' } },
+      box.appendChild(el('div', { style: { color: 'var(--error)', fontWeight: 600, marginTop: 'var(--sp-2)' } },
         icon('alert', 16), ' توکن ربات بله هنوز روی سرور تنظیم نشده است — تا وقتی «BALE_BOT_TOKEN» ست نشود، ارسال انجام نمی‌شود.'));
     }
 
@@ -134,10 +134,10 @@ function drawDelivery(delivery) {
         labelInp.addEventListener('input', () => { d.label = labelInp.value; });
         chatInp.addEventListener('input', () => { d.chat_id = normalizeDigits(chatInp.value).replace(/[\s-]/g, ''); });
         activeInp.addEventListener('change', () => { d.active = activeInp.checked; });
-        rowsBox.appendChild(el('div', { style: { display: 'flex', gap: '8px', alignItems: 'center', marginTop: '6px', flexWrap: 'wrap' } },
+        rowsBox.appendChild(el('div', { style: { display: 'flex', gap: 'var(--sp-2)', alignItems: 'center', marginTop: 'var(--sp-2)', flexWrap: 'wrap' } },
           labelInp,
           chatInp,
-          el('label', { style: { display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap', cursor: 'pointer', fontSize: 'var(--fs-xs)' } }, activeInp, ' فعال'),
+          el('label', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-1)', whiteSpace: 'nowrap', cursor: 'pointer', fontSize: 'var(--fs-xs)' } }, activeInp, ' فعال'),
           el('button', {
             class: 'btn btn--ghost', title: 'حذف این مقصد',
             onclick: () => {
@@ -174,7 +174,7 @@ function drawDelivery(delivery) {
     });
 
     box.appendChild(el('div', { style: { marginTop: 'var(--sp-3)' } },
-      el('h4', { style: { fontSize: 'var(--fs-sm)', margin: '0 0 4px' } }, 'مدیریت مقصدها (آیدی‌های بله)'),
+      el('h4', { style: { fontSize: 'var(--fs-sm)', margin: '0 0 var(--sp-1)' } }, 'مدیریت مقصدها (آیدی‌های بله)'),
       rowsBox,
       addBtn, ' ', saveBtn
     ));
@@ -201,7 +201,7 @@ function drawDelivery(delivery) {
           el('div', { style: { marginTop: 'var(--sp-2)' } },
             smallText(`فایل «${report.filename}» — ${fmtNum(report.size_bytes)} بایت — ${fa(report.sent)} موفق، ${fa(report.failed)} ناموفق`),
             ...report.results.map((r) => smallText(
-              `${r.ok ? icon('check', 14) : icon('alert', 14)} ${r.label} (${r.chat_id}): ${r.ok ? 'ارسال شد' : (r.error || 'خطا')}`
+              `${r.ok ? icon('check', 14) : icon('alert', 14)} ${r.label} (${r.chat_id}): ${r.ok ? 'ارسال شد' : (r.error || 'خطای نامشخص')}`
             ))
           )
         );
@@ -218,11 +218,11 @@ function drawDelivery(delivery) {
     });
 
     box.appendChild(el('div', { style: { marginTop: 'var(--sp-3)' } },
-      el('h4', { style: { fontSize: 'var(--fs-sm)', margin: '0 0 4px' } }, 'ارسال فوری — مقصدهای این ارسال را تیک بزنید'),
+      el('h4', { style: { fontSize: 'var(--fs-sm)', margin: '0 0 var(--sp-1)' } }, 'ارسال فوری — مقصدهای این ارسال را تیک بزنید'),
       state.destinations.filter((d) => d.active).length === 0
         ? smallText('اول مقصدها را ذخیره کنید تا اینجا فهرست شوند.')
         : sendChecksBox,
-      el('label', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginTop: 'var(--sp-2)', cursor: 'pointer' } },
+      el('label', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', marginTop: 'var(--sp-2)', cursor: 'pointer' } },
         sendFilesInp, ' همراه‌کردن فایل‌های پیوستی (حجم بیشتر)'),
       smallText(BALE_SEND_CAP_TEXT),
       sendBtn,
@@ -238,11 +238,11 @@ function drawDelivery(delivery) {
     refs.autoFiles = autoFilesInp;
 
     box.appendChild(el('div', { style: { marginTop: 'var(--sp-3)' } },
-      el('h4', { style: { fontSize: 'var(--fs-sm)', margin: '0 0 4px' } }, 'پشتیبان خودکار شبانه (اختیاری)'),
-      el('label', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginTop: 'var(--sp-2)', cursor: 'pointer' } },
+      el('h4', { style: { fontSize: 'var(--fs-sm)', margin: '0 0 var(--sp-1)' } }, 'پشتیبان خودکار شبانه (اختیاری)'),
+      el('label', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', marginTop: 'var(--sp-2)', cursor: 'pointer' } },
         autoOnInp, ' هر شب حدود ۷:۳۰ صبح به‌وقت تهران، خودکار بفرست'),
       autoChecksBox,
-      el('label', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginTop: 'var(--sp-2)', cursor: 'pointer' } },
+      el('label', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', marginTop: 'var(--sp-2)', cursor: 'pointer' } },
         autoFilesInp, ' همراه‌کردن فایل‌های پیوستی در ارسال خودکار'),
       smallText('اگر روشن باشد ولی مقصدی تیک نخورده باشد، آن شب چیزی فرستاده نمی‌شود. برای اعمال تغییرها «ذخیره» را بزنید.'),
       smallText(BALE_SEND_CAP_TEXT)
@@ -268,7 +268,7 @@ function drawDelivery(delivery) {
 }
 
 function smallText(...children) {
-  return el('div', { style: { fontSize: 'var(--fs-xs)', color: 'var(--text-3)', marginTop: '4px' } }, ...children);
+  return el('div', { style: { fontSize: 'var(--fs-xs)', color: 'var(--text-3)', marginTop: 'var(--sp-1)' } }, ...children);
 }
 
 /* UX-ممیزی: گارد تعلیق — درخواست‌های کند به خطای قابل‌اقدام با «تلاش دوباره» تبدیل می‌شوند */
@@ -301,7 +301,14 @@ export async function renderBackup(container) {
     deliveryErr = err; /* S10-27: شکست بی‌صدا نباشد — مدیر فکر می‌کند تنظیم نشده */
   }
 
-  const wrap = el('div', {});
+  // ستون فرم ۷۲۰px وسط‌چین RTL — هم‌قانون نماهای فرم‌محور (settings)
+  const wrap = el('div', { style: { maxWidth: '720px', marginInline: 'auto' } });
+
+  // سربرگ استاندارد نما — هم‌قانون بقیهٔ نماها (page-head__title/page-head__desc)
+  wrap.appendChild(el('div', { class: 'page-head' },
+    el('h2', { class: 'page-head__title' }, 'پشتیبان‌گیری و بازیابی'),
+    el('p', { class: 'page-head__desc' }, 'یک فایل از همهٔ اطلاعات مرکز بگیرید، به آیدی بله بفرستید یا روز نیاز دوباره برنشانید — هر گام حساس با تأیید فارسی همراه است.')
+  ));
 
   // ─── توضیح دوستانه ───
   wrap.appendChild(section('پشتیبان‌گیری چیست؟', 'info',
@@ -315,7 +322,7 @@ export async function renderBackup(container) {
   // (reload کل صفحه که فقط برای همین چیپ بود حذف شد)
   const lastAt = localStorage.getItem(LAST_BACKUP_KEY);
   const lastChip = el('span', { class: 'chip' },
-    lastAt ? `آخرین دریافت پشتیبان در این مرورگر: ${formatJalaliDateTime(lastAt)}` : 'در این مرورگر هنوز پشتیبانی گرفته نشده');
+    lastAt ? `آخرین دریافت پشتیبان در این مرورگر: ${formatJalaliDateTime(lastAt)}` : 'در این مرورگر هنوز پشتیبانی گرفته نشده — با «دریافت فایل پشتیبان» اولین نسخه را بگیرید');
 
   /* F8: به‌روزرسانی چیپ «آخرین دریافت» یک مسیر مشترک — هم دانلود عادی، هم پشتیبانِ اطمینانِ گام ۱ بازیابی
      (پیش‌تر گام ۱ فقط localStorage می‌نوشت و چیپ ثانیه‌ها بعد «هرگز پشتیبانی گرفته نشده» نشان می‌داد) */
@@ -333,11 +340,12 @@ export async function renderBackup(container) {
     ),
     (status.recent ?? []).length > 0 /* F9: قرارداد سرور بدون گارد نباشد */
       ? el('div', { style: { marginTop: 'var(--sp-3)' } },
-          el('h4', { style: { fontSize: 'var(--fs-sm)', margin: '0 0 6px' } }, 'رویدادهای اخیر پشتیبان‌گیری:'),
+          el('h4', { style: { fontSize: 'var(--fs-sm)', margin: '0 0 var(--sp-2)' } }, 'رویدادهای اخیر پشتیبان‌گیری:'),
           ...status.recent.map((r) => smallText(
             `${BACKUP_ACTION_LABELS[r.action] || r.action} — ${formatJalaliDateTime(isoOfAudit(r.created_at))}`
           )))
-      : null
+      : el('div', { style: { marginTop: 'var(--sp-3)' } },
+          smallText('تا این‌جا رویدادی ثبت نشده است — پس از اولین دریافت یا ارسال پشتیبان، رویدادها همین‌جا می‌آیند.'))
   ));
 
   // ─── دریافت پشتیبان ───
@@ -363,7 +371,7 @@ export async function renderBackup(container) {
   });
   wrap.appendChild(section('دریافت پشتیبان', 'save',
     'یک فایل از همهٔ داده‌ها دانلود می‌شود. اگر فایل‌های پیوستی (تمرین‌ها و مدارک) را هم می‌خواهید، تیک پایین را بزنید — حجم فایل بیشتر می‌شود.',
-    el('label', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginTop: 'var(--sp-3)', cursor: 'pointer' } },
+    el('label', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', marginTop: 'var(--sp-3)', cursor: 'pointer' } },
       filesCheck, ' همراه‌کردن فایل‌های پیوستی (حجم بیشتر)'),
     downloadBtn
   ));
@@ -373,29 +381,47 @@ export async function renderBackup(container) {
   else if (deliveryErr) wrap.appendChild(errorState(deliveryErr, renderBackup)); /* S10-27 */
 
   // ─── بازیابی ───
-  const fileInput = el('input', { type: 'file', accept: '.json,application/json', 'aria-label': 'انتخاب فایل پشتیبان برای بازیابی', style: { marginTop: 'var(--sp-3)' } }); /* S10-30 */
+  /* کنترل فارسی فایل (S10-30): input[type=file] خام رندر نمی‌شود — دکمهٔ انتخاب + input پنهان + سطر وضعیت */
+  const fileInput = el('input', { type: 'file', accept: '.json,application/json', 'aria-label': 'انتخاب فایل پشتیبان برای بازیابی', style: { display: 'none' } });
+  const filePickBtn = el('button', { class: 'btn btn--primary', type: 'button', onclick: () => fileInput.click() },
+    icon('archive', 16), ' انتخاب فایل پشتیبان…');
+  const fileRow = el('p', { class: 'hint-text', style: { marginTop: 'var(--sp-2)' } }, 'فایلی انتخاب نشده است');
+  const fileMsg = el('p', { class: 'field__error', style: { marginTop: 'var(--sp-1)', display: 'none' } });
   const restoreArea = el('div', {});
   wrap.appendChild(section('بازیابی از فایل پشتیبان', 'archive',
     'فایل پشتیبان را انتخاب کنید تا همه‌چیز به همان لحظه برگردد. توجه: بازیابی اطلاعات فعلی را با محتوای فایل عوض می‌کند — چیزهایی که بعد از گرفتن آن پشتیبان ثبت شده‌اند، از بین می‌روند. به همین دلیل سامانه اول از وضعیت فعلی یک «فایل اطمینان» می‌گیرد.',
-    fileInput,
+    filePickBtn,
+    fileRow,
+    fileMsg,
     restoreArea
   ));
 
+  const FILE_NONE_TEXT = 'فایلی انتخاب نشده است';
+  const showFileMsg = (text) => { fileMsg.textContent = text; fileMsg.style.display = 'block'; };
+  const hideFileMsg = () => { fileMsg.style.display = 'none'; fileMsg.textContent = ''; };
+  const resetFileRow = () => { fileInput.value = ''; fileRow.textContent = FILE_NONE_TEXT; };
+
   fileInput.addEventListener('change', async () => {
     restoreArea.replaceChildren();
+    hideFileMsg();
     const file = fileInput.files?.[0];
-    if (!file) return;
+    if (!file) { fileRow.textContent = FILE_NONE_TEXT; return; }
+    fileRow.textContent = `فایل انتخاب‌شده: ${file.name} — ${sizeLabel(file.size)}`;
     if (file.size > MAX_FILE_BYTES) {
-      toastError(new Error('حجم فایل بیشتر از ۶۰ مگابایت است'));
-      fileInput.value = '';
+      const capMsg = `حجم فایل بیشتر از ${sizeLabel(MAX_FILE_BYTES)} است — فایل پشتیبان کوچک‌تری انتخاب کنید`;
+      showFileMsg(capMsg);
+      toastError(new Error(capMsg));
+      resetFileRow();
       return;
     }
     let parsed;
     try {
       parsed = JSON.parse(await file.text());
     } catch {
-      toastError(new Error('این فایل JSON معتبری نیست — فایل پشتیبان سامانه را انتخاب کنید'));
-      fileInput.value = '';
+      const parseMsg = 'این فایل JSON معتبری نیست — فایل پشتیبان سامانه را انتخاب کنید';
+      showFileMsg(parseMsg);
+      toastError(new Error(parseMsg));
+      resetFileRow();
       return;
     }
     // بررسی سمت سامانه — بدون هیچ نوشتنی
@@ -403,8 +429,9 @@ export async function renderBackup(container) {
     try {
       summary = (await api.post('/api/backup/inspect', parsed)).data;
     } catch (err) {
+      showFileMsg('بررسی فایل ناموفق بود — اتصال را بررسی کنید و دوباره تلاش کنید');
       toastError(err);
-      fileInput.value = '';
+      resetFileRow();
       return;
     }
     drawRestoreWizard(parsed, summary);
@@ -482,11 +509,11 @@ export async function renderBackup(container) {
         el('h3', {}, icon('file', 18), ' فایل انتخاب‌شده'),
         safe
           ? null
-          : el('div', { style: { color: 'var(--error)', fontWeight: 600, marginTop: '6px' } },
+          : el('div', { style: { color: 'var(--error)', fontWeight: 600, marginTop: 'var(--sp-2)' } },
               'این فایل با نسخهٔ فعلی سامانه هم‌خوان نیست و بازیابی انجام نمی‌شود: ',
               ...(summary.problems ?? []).flatMap((p, i) => [i > 0 ? '؛ ' : '', p]), /* F9: قرارداد سرور بدون گارد نباشد */
               '. اگر فایل پشتیبان از نسخهٔ خیلی قدیمی سامانه است، با مدیر فنی سامانه تماس بگیرید.'),
-        el('ul', { style: { margin: 'var(--sp-2) 0 0', paddingRight: '18px', fontSize: 'var(--fs-sm)', lineHeight: 'var(--lh-relaxed)' } }, /* */
+        el('ul', { style: { margin: 'var(--sp-2) 0 0', paddingRight: 'var(--sp-4)', fontSize: 'var(--fs-sm)', lineHeight: 'var(--lh-relaxed)' } }, /* */
           el('li', {}, `نسخهٔ سامانهٔ وقت پشتیبان: ${summary.app_version}`),
           el('li', {}, `زمان گرفتن پشتیبان: ${summary.created_at && summary.created_at !== '—' ? formatJalaliDateTime(summary.created_at) : '—'}`),
           el('li', {}, `${fa(summary.tableCount)} جدول، ${fmtNum(summary.totalRows)} ردیف`),

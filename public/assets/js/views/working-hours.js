@@ -330,7 +330,7 @@ export async function renderStaffHoursInto(container, requestedStaff = '') {
 
   if (!local.staffId) {
     container.replaceChildren(
-      emptyState({ iconName: 'clock', title: 'اول یک کارمند اضافه کنید', hint: 'بازهٔ کاری برای هر همکار جداگانه تعریف می‌شود.' })
+      emptyState({ iconName: 'clock', title: 'اول یک کارمند اضافه کنید', hint: 'بازهٔ کاری برای هر همکار جداگانه تعریف می‌شود.', actionLabel: 'رفتن به کارکنان', onAction: () => { location.hash = '#/staff'; } })
     );
     return;
   }
@@ -356,7 +356,7 @@ export async function renderStaffHoursInto(container, requestedStaff = '') {
     class: 'btn btn--primary btn--sm',
     onclick: async () => {
       if (editor.hasOverlap()) {
-        toast('هم‌پوشانی بازه‌ها در یک روز مجاز نیست', 'error');
+        toast('هم‌پوشانی بازه‌ها در یک روز مجاز نیست — بازه‌ها را جدا کنید و دوباره ذخیره کنید', 'error');
         return;
       }
       saveBtn.disabled = true;

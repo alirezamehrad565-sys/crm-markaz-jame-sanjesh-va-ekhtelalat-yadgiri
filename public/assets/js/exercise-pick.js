@@ -1,7 +1,7 @@
 import { api } from './api.js';
 import { el, icon, toast, toastError, openModal, skeletonState, emptyState } from './ui.js';
 import { fa } from './format.js';
-import { hueDot } from './staff-hue.js'; // — چیپ رنگی سازندهٔ تمرین ()
+import { hueDot } from './staff-hue.js'; // — چیپ رنگی سازندهٔ تمرین
 import { buildTaxonomyPicker } from './taxonomy.js'; // درخت واحد طبقه‌بندی (یک کامپوننت برای منو/فرم/پیکر)
 
 const PAGE_SIZE = 50; // با جستجو + فیلتر درخت کافی است — مرور کامل در نمای «کارت‌های آماده»

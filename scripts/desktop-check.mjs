@@ -189,7 +189,8 @@ try {
     d1.includes(t) ? ok(`d1.mjs: ${t.replace("'node:sqlite'", 'node:sqlite')} سیم است`) : bad(`d1.mjs: ${t} غایب است`);
   }
   const srv = readFileSync(path.join(ROOT, 'scripts', 'engine', 'adapter', 'server.mjs'), 'utf8');
-  for (const t of ['startAdapterEngine', 'serveStatic', 'createServer', "listen(p, '127.0.0.1'", 'CLINIC_NAME', 'AUTH_SECRET']) {
+  // ۱.۲۷.۲۱ — پین بایند به‌روز شد: از ۱.۲۷.۱۸ بایند از پارامتر host می‌آید (engine.rs پاس می‌دهد 0.0.0.0)
+  for (const t of ['startAdapterEngine', 'serveStatic', 'createServer', 'srv.listen(p, host', 'CLINIC_NAME', 'AUTH_SECRET', 'LAN_INFO']) {
     srv.includes(t) ? ok(`server.mjs: ${t} سیم است`) : bad(`server.mjs: ${t} غایب است`);
   }
   const em = readFileSync(path.join(ROOT, 'scripts', 'engine', 'engine.mjs'), 'utf8');
@@ -216,9 +217,9 @@ try {
   smoke.includes('SMOKE_ENGINE') && smoke.includes('--engine')
     ? ok('engine-smoke: گیت دوهاته workerd/adapter سیم است')
     : bad('engine-smoke: حالت adapter سیم نیست');
-  // M4 — پروب مستقل gamesPort در smoke حالت adapter + گوش‌دادن بنر Degraded در پنل سلامت
+  // M4 — پروب مستقل gamesPort در smoke (هر دو حالت workerd/adapter) + گوش‌دادن بنر Degraded در پنل سلامت
   smoke.includes('سلامت مستقل gamesPort')
-    ? ok('engine-smoke: پروب مستقل gamesPort در حالت adapter سیم است (M4)')
+    ? ok('engine-smoke: پروب مستقل gamesPort در هر دو حالت سیم است (M4 — پاریتی ۲۸/۲۸)')
     : bad('engine-smoke: پروب مستقل gamesPort (M4) غایب است');
   const hpSrc = readFileSync(path.join(ROOT, 'public', 'assets', 'js', 'views', 'health-panel.js'), 'utf8');
   hpSrc.includes("listen('engine:degraded'") && hpSrc.includes("listen('engine:degraded_recovered'")
@@ -417,6 +418,18 @@ try {
   pinB(path.join(ROOT, 'public', 'assets', 'js', 'app.js'), ['/#/cloud-setup'], 'app.js (روت/بنر فاز C)');
   pinB(path.join(ROOT, 'desktop', 'src-tauri', 'boot-dist', 'index.html'), ['پیکربندی اتصال ابری'], 'boot-dist (لینک فاز C)');
   pinB(path.join(ROOT, 'src', '__tests__', 'front-cloud-setup.test.ts'), ['cloudSetupView'], 'آزمون front-cloud-setup.test.ts');
+
+  // فاز D — OTA (سند §۳): پین‌های سخت کانال دستی + قاعدهٔ سخت dataDir — هم‌الگوی پین‌های فاز B/C
+  pinB(path.join(T, 'src', 'lib.rs'), ['tauri_plugin_updater', 'check_updates', 'open_release_page'], 'lib.rs (فاز D — OTA)');
+  pinB(path.join(T, 'Cargo.toml'), ['tauri-plugin-updater'], 'Cargo.toml (فاز D — updater)');
+  pinB(path.join(ROOT, 'public', 'assets', 'js', 'views', 'health-panel.js'), ['updateCheckView', 'بررسی نسخهٔ تازه'], 'health-panel (فاز D — کانال دستی)');
+  pinB(path.join(ROOT, 'src', '__tests__', 'front-updater.test.ts'), ['updateCheckView'], 'آزمون front-updater.test.ts');
+  pinB(path.join(ROOT, 'scripts', 'make-latest-json.mjs'), ['latest.json', 'windows-x86_64'], 'make-latest-json.mjs');
+  // قاعدهٔ سخت D-۴ — پیکرهٔ فرمان‌های ارتقا هرگز به dataDir اشاره نمی‌کند
+  // (نصاب per-user NSIS فقط شاخهٔ برنامه را لمس می‌کند؛ dataDir بیرون شاخهٔ نصب است)
+  const updSrc = readFileSync(path.join(T, 'src', 'lib.rs'), 'utf8');
+  const updFn = updSrc.slice(updSrc.indexOf('async fn check_updates'), updSrc.indexOf('pub fn run()'));
+  if (/data_dir|dataDir|DATA_DIR/i.test(updFn)) bad('قاعدهٔ سخت فاز D: کد ارتقا به dataDir اشاره دارد');
 } catch (e) {
   bad(`گیت پین‌های P2 خطا داد: ${e instanceof Error ? e.message : String(e)}`);
 }
@@ -500,6 +513,26 @@ try {
     : bad('lib.rs: mod job_object غایب است');
 } catch (e) {
   bad(`گیت Job Object خطا داد: ${e instanceof Error ? e.message : String(e)}`);
+}
+
+// ⑮ گیت زبان کاربر — اسکن رشته‌های رندرشوندهٔ UI (روایت بازآرایی / ژاژخان فنی / توکن ممنوعه)
+try {
+  const { spawnSync: ss15 } = await import('node:child_process');
+  const r15 = ss15(process.execPath, [path.join(ROOT, 'scripts', 'ui-voice-check.mjs')], { timeout: 60_000, encoding: 'utf8' });
+  (r15.stdout || '').split('\n').filter(Boolean).slice(-3).forEach((l) => lines.push('  ' + l));
+  r15.status === 0 ? ok('گیت زبان کاربر سبز است (صفر یافته)') : bad(`گیت زبان کاربر قرمز است (exit=${r15.status})`);
+} catch (e) {
+  bad(`اجرای گیت زبان کاربر خطا داد: ${e instanceof Error ? e.message : String(e)}`);
+}
+
+// ⑯ گیت کنتراست AA — جفت‌های توکن رنگی در هر دو تم (۴٫۵ متن عادی / ۳ مؤلفه و مرز)
+try {
+  const { spawnSync: ss16 } = await import('node:child_process');
+  const r16 = ss16('node', [path.join(ROOT, 'scripts', 'contrast-check.mjs')], { timeout: 60_000, encoding: 'utf8' });
+  (r16.stdout || '').split('\n').filter((l) => l.includes('✗') || l.includes('گیت')).slice(0, 8).forEach((l) => lines.push('  ' + l));
+  r16.status === 0 ? ok('گیت کنتراست AA سبز است (صفر تخلف)') : bad(`گیت کنتراست AA قرمز است (exit=${r16.status})`);
+} catch (e) {
+  bad(`اجرای گیت کنتراست خطا داد: ${e instanceof Error ? e.message : String(e)}`);
 }
 
 lines.push(failed ? '❌ گیت ساختار دسکتاپ قرمز است' : '✅ گیت ساختار دسکتاپ سبز است');

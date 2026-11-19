@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.27.14";
+var APP_VERSION = "1.27.25";
 var NODE_MIN_VERSION = "1.26.0";
 
 // node_modules/zod/v4/classic/external.js
@@ -22310,8 +22310,6 @@ var DEFAULT_CENTER_HOURS = [
   { weekday: 3, startMinute: 9 * 60, endMinute: 17 * 60 },
   { weekday: 4, startMinute: 9 * 60, endMinute: 13 * 60 }
 ];
-var CALENDAR_DAY_START_MINUTE = 6 * 60;
-var CALENDAR_DAY_END_MINUTE = 22 * 60;
 var ANNOUNCEMENT_TITLE_MAX = 120;
 var ANNOUNCEMENT_BODY_MAX = 2e3;
 var KNOWLEDGE_TITLE_MAX = 140;
@@ -22793,6 +22791,17 @@ var AssessmentBlockCreateSchema = external_exports.object({
   message: "\u067E\u0627\u06CC\u0627\u0646 \u0628\u0627\u0632\u0647\u0654 \u0633\u0646\u062C\u0634 \u0628\u0627\u06CC\u062F \u0628\u0639\u062F \u0627\u0632 \u0634\u0631\u0648\u0639 \u0622\u0646 \u0628\u0627\u0634\u062F",
   path: ["end_minute"]
 });
+var AssessmentBlockPatchSchema = external_exports.object({
+  date: external_exports.string().regex(/^\d{4}-\d{2}-\d{2}$/, "\u062A\u0627\u0631\u06CC\u062E \u0628\u0627\u06CC\u062F \u0634\u06A9\u0644 YYYY-MM-DD \u0628\u0627\u0634\u062F").optional(),
+  start_minute: external_exports.number().int().min(0).max(1439).optional(),
+  end_minute: external_exports.number().int().min(1).max(1440).optional(),
+  staff_id: UuidSchema.optional(),
+  note: external_exports.string().max(500).nullish(),
+  version: external_exports.number().int().positive()
+}).refine(
+  (v) => v.start_minute === void 0 || v.end_minute === void 0 || v.end_minute > v.start_minute,
+  { message: "\u067E\u0627\u06CC\u0627\u0646 \u0628\u0627\u0632\u0647\u0654 \u0633\u0646\u062C\u0634 \u0628\u0627\u06CC\u062F \u0628\u0639\u062F \u0627\u0632 \u0634\u0631\u0648\u0639 \u0622\u0646 \u0628\u0627\u0634\u062F", path: ["end_minute"] }
+);
 var UpdateAppointmentSchema = external_exports.object({
   note: external_exports.string().max(2e3).nullish(),
   version: external_exports.number().int().positive()
@@ -26183,11 +26192,10 @@ function tehranYmdsSpanned(startAt, endAt) {
   return [...out];
 }
 __name(tehranYmdsSpanned, "tehranYmdsSpanned");
-async function assertNoAssessmentBlockInRange(db, window, actor) {
-  if (actor.role === "manager" || actor.role === "supervisor") return;
+async function findAssessmentBlockConflict(db, window, targetStaffId) {
   const startMs = Date.parse(window.startAt);
   const endMs = Date.parse(window.endAt);
-  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return;
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return null;
   for (const ymd of tehranYmdsSpanned(window.startAt, window.endAt)) {
     const rows = await db.query(
       "SELECT * FROM assessment_blocks WHERE block_date = ? AND deleted_at IS NULL",
@@ -26197,13 +26205,33 @@ async function assertNoAssessmentBlockInRange(db, window, actor) {
       const blockWin = tehranMinuteWindow(ymd, row.start_minute, row.end_minute);
       const blockStart = Date.parse(blockWin.start);
       const blockEnd = Date.parse(blockWin.end);
-      if (blockStart < endMs && blockEnd > startMs) {
-        throw new ValidationError(
-          `\u0627\u06CC\u0646 \u0628\u0627\u0632\u0647 \u0628\u0631\u0627\u06CC \xAB\u0633\u0646\u062C\u0634\xBB \u0631\u0632\u0631\u0648 \u0634\u062F\u0647 \u0627\u0633\u062A (${minuteToLabel(row.start_minute)} \u062A\u0627 ${minuteToLabel(row.end_minute)}) \u2014 \u062B\u0628\u062A \u06CC\u0627 \u062C\u0627\u0628\u0647\u200C\u062C\u0627\u06CC\u06CC \u0646\u0648\u0628\u062A \u062F\u0631 \u0627\u06CC\u0646 \u0632\u0645\u0627\u0646 \u0645\u0645\u06A9\u0646 \u0646\u06CC\u0633\u062A\u061B \u0628\u0627 \u0645\u062F\u06CC\u0631 \u0647\u0645\u0627\u0647\u0646\u06AF \u06A9\u0646\u06CC\u062F.`
-        );
+      if (blockStart >= endMs || blockEnd <= startMs) continue;
+      const block = rowToBlock(row);
+      if (block.therapistIds.length > 0) {
+        if (targetStaffId && block.therapistIds.includes(targetStaffId)) {
+          return { block, kind: "involved" };
+        }
+        continue;
       }
+      return { block, kind: "time_only" };
     }
   }
+  return null;
+}
+__name(findAssessmentBlockConflict, "findAssessmentBlockConflict");
+async function assertNoAssessmentBlockInRange(db, window, actor, targetStaffId) {
+  const hit = await findAssessmentBlockConflict(db, window, targetStaffId);
+  if (!hit) return;
+  const when = `(${minuteToLabel(hit.block.startMinute)} \u062A\u0627 ${minuteToLabel(hit.block.endMinute)})`;
+  if (hit.kind === "involved") {
+    throw new ValidationError(
+      `\u0627\u06CC\u0646 \u0628\u0627\u0632\u0647 \u0628\u0631\u0627\u06CC \xAB\u0633\u0646\u062C\u0634\xBB \u0631\u0632\u0631\u0648 \u0634\u062F\u0647 \u0627\u0633\u062A ${when} \u2014 \u0646\u0648\u0628\u062A\u200C\u06AF\u06CC\u0631\u06CC\u0650 \u062F\u0631\u0645\u0627\u0646\u06AF\u0631\u0650 \u062F\u0631\u06AF\u06CC\u0631 \u062F\u0631 \u0627\u06CC\u0646 \u0632\u0645\u0627\u0646 \u0645\u0645\u06A9\u0646 \u0646\u06CC\u0633\u062A.`
+    );
+  }
+  if (actor.role === "manager" || actor.role === "supervisor") return;
+  throw new ValidationError(
+    `\u0627\u06CC\u0646 \u0628\u0627\u0632\u0647 \u0628\u0631\u0627\u06CC \xAB\u0633\u0646\u062C\u0634\xBB \u0631\u0632\u0631\u0648 \u0634\u062F\u0647 \u0627\u0633\u062A ${when} \u2014 \u062B\u0628\u062A \u06CC\u0627 \u062C\u0627\u0628\u0647\u200C\u062C\u0627\u06CC\u06CC \u0646\u0648\u0628\u062A \u062F\u0631 \u0627\u06CC\u0646 \u0632\u0645\u0627\u0646 \u0645\u0645\u06A9\u0646 \u0646\u06CC\u0633\u062A\u061B \u0628\u0627 \u0645\u062F\u06CC\u0631 \u0647\u0645\u0627\u0647\u0646\u06AF \u06A9\u0646\u06CC\u062F.`
+  );
 }
 __name(assertNoAssessmentBlockInRange, "assertNoAssessmentBlockInRange");
 function createAssessmentBlockService(deps) {
@@ -26213,50 +26241,112 @@ function createAssessmentBlockService(deps) {
       if (input2.endMinute <= input2.startMinute) {
         throw new ValidationError("\u067E\u0627\u06CC\u0627\u0646 \u0628\u0627\u0632\u0647\u0654 \u0633\u0646\u062C\u0634 \u0628\u0627\u06CC\u062F \u0628\u0639\u062F \u0627\u0632 \u0634\u0631\u0648\u0639 \u0622\u0646 \u0628\u0627\u0634\u062F");
       }
-      if (input2.therapistIds.length > 0) {
+      const therapistIds = [...new Set(input2.therapistIds)];
+      if (therapistIds.length > 0) {
         let knownCount = 0;
-        for (const chunk of inParamChunks(input2.therapistIds)) {
+        for (const chunk of inParamChunks(therapistIds)) {
           const known = await db.query(
             `SELECT id FROM staff WHERE id IN (${inPlaceholders(chunk.length)})`,
             chunk
           );
           knownCount += known.length;
         }
-        if (knownCount !== input2.therapistIds.length) {
+        if (knownCount !== therapistIds.length) {
           throw new ValidationError("\u06CC\u06A9 \u06CC\u0627 \u0686\u0646\u062F \u062F\u0631\u0645\u0627\u0646\u06AF\u0631\u0650 \u062F\u0631\u06AF\u06CC\u0631 \u062F\u0631 \u0641\u0647\u0631\u0633\u062A \u0647\u0645\u06A9\u0627\u0631\u0627\u0646 \u0646\u06CC\u0633\u062A");
         }
       }
-      const id = newId();
       const now = (/* @__PURE__ */ new Date()).toISOString();
-      await db.execute(
-        `INSERT INTO assessment_blocks (id, block_date, start_minute, end_minute, therapist_ids, note, version, created_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
-        [id, input2.date, input2.startMinute, input2.endMinute, JSON.stringify(input2.therapistIds), input2.note ?? null, actor.staffId, now, now]
-      );
-      await audit.log({
-        actorId: actor.staffId,
-        action: "assessment_block.create",
-        resourceType: "assessment_block",
-        resourceId: id,
-        changes: {
-          date: { from: null, to: input2.date },
-          window: { from: null, to: `${minuteToLabel(input2.startMinute)}-${minuteToLabel(input2.endMinute)}` },
-          therapist_ids: { from: null, to: input2.therapistIds }
+      const created = [];
+      const perTherapistRows = therapistIds.length > 0 ? therapistIds.map((t) => [t]) : [[]];
+      await db.transaction(async (tx) => {
+        for (const single of perTherapistRows) {
+          const id = newId();
+          await tx.execute(
+            `INSERT INTO assessment_blocks (id, block_date, start_minute, end_minute, therapist_ids, note, version, created_by, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
+            [id, input2.date, input2.startMinute, input2.endMinute, JSON.stringify(single), input2.note ?? null, actor.staffId, now, now]
+          );
+          await audit.logInTransaction(tx, {
+            actorId: actor.staffId,
+            action: "assessment_block.create",
+            resourceType: "assessment_block",
+            resourceId: id,
+            changes: {
+              date: { from: null, to: input2.date },
+              window: { from: null, to: `${minuteToLabel(input2.startMinute)}-${minuteToLabel(input2.endMinute)}` },
+              therapist_ids: { from: null, to: single }
+            }
+          });
+          created.push({
+            id,
+            date: input2.date,
+            startMinute: input2.startMinute,
+            endMinute: input2.endMinute,
+            therapistIds: single,
+            note: input2.note ?? null,
+            version: 1,
+            createdBy: actor.staffId,
+            createdAt: now,
+            updatedAt: now
+          });
         }
       });
-      logger.child("assessment-blocks").info("block.created", { date: input2.date });
-      return {
-        id,
-        date: input2.date,
-        startMinute: input2.startMinute,
-        endMinute: input2.endMinute,
-        therapistIds: input2.therapistIds,
-        note: input2.note ?? null,
-        version: 1,
-        createdBy: actor.staffId,
-        createdAt: now,
-        updatedAt: now
-      };
+      logger.child("assessment-blocks").info("block.created", { date: input2.date, cards: created.length });
+      return created;
+    },
+    /* ۱.۲۷.۱۵ — پچ کارت سنجش (خواست کارفرما): درگ/دراپ روی تقویم، کش‌دادن پایان، پرتاب به
+       ستون درمانگر دیگر و ذخیرهٔ جزئیات از مودال کلیکِ کارت — قفل خوش‌بینانهٔ نسخه، هم‌الگوی
+       update/move سرویس نوبت. سدِ نوبت‌ها (findAssessmentBlockConflict) از ردیفِ به‌روزشده
+       خودکار پیروی می‌کند؛ تداخل بین خودِ بلوک‌ها مثل قبل آزاد است (پاریتی با create). */
+    async update(id, patch, actor) {
+      const row = await db.queryOne(
+        "SELECT * FROM assessment_blocks WHERE id = ? AND deleted_at IS NULL",
+        [id]
+      );
+      if (!row) throw new NotFoundError("\u0628\u0644\u0648\u06A9 \u0633\u0646\u062C\u0634");
+      if (row.version !== patch.version) {
+        throw new ConflictError("\u0627\u06CC\u0646 \u0628\u0627\u0632\u0647\u0654 \u0633\u0646\u062C\u0634 \u0647\u0645\u06CC\u0646 \u0627\u0644\u0627\u0646 \u062A\u0648\u0633\u0637 \u06A9\u0627\u0631\u0628\u0631 \u062F\u06CC\u06AF\u0631\u06CC \u062A\u063A\u06CC\u06CC\u0631 \u06A9\u0631\u062F.", row.version);
+      }
+      const date5 = patch.date ?? row.block_date;
+      const startMinute = patch.startMinute ?? row.start_minute;
+      const endMinute = patch.endMinute ?? row.end_minute;
+      if (endMinute <= startMinute) {
+        throw new ValidationError("\u067E\u0627\u06CC\u0627\u0646 \u0628\u0627\u0632\u0647\u0654 \u0633\u0646\u062C\u0634 \u0628\u0627\u06CC\u062F \u0628\u0639\u062F \u0627\u0632 \u0634\u0631\u0648\u0639 \u0622\u0646 \u0628\u0627\u0634\u062F");
+      }
+      const prevIds = rowToBlock(row).therapistIds;
+      const therapistIds = patch.staffId !== void 0 ? [patch.staffId] : prevIds;
+      if (patch.staffId !== void 0) {
+        const known = await db.queryOne("SELECT id FROM staff WHERE id = ?", [patch.staffId]);
+        if (!known) throw new ValidationError("\u062F\u0631\u0645\u0627\u0646\u06AF\u0631\u0650 \u0645\u0642\u0635\u062F \u062F\u0631 \u0641\u0647\u0631\u0633\u062A \u0647\u0645\u06A9\u0627\u0631\u0627\u0646 \u0646\u06CC\u0633\u062A");
+      }
+      const note = patch.note === void 0 ? row.note ?? null : (patch.note ?? "").trim().length > 0 ? patch.note.trim() : null;
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      await db.transaction(async (tx) => {
+        await tx.execute(
+          `UPDATE assessment_blocks
+             SET block_date = ?, start_minute = ?, end_minute = ?, therapist_ids = ?, note = ?, version = version + 1, updated_at = ?
+           WHERE id = ?`,
+          [date5, startMinute, endMinute, JSON.stringify(therapistIds), note, now, id]
+        );
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: "assessment_block.update",
+          resourceType: "assessment_block",
+          resourceId: id,
+          changes: {
+            date: { from: row.block_date, to: date5 },
+            window: {
+              from: `${minuteToLabel(row.start_minute)}-${minuteToLabel(row.end_minute)}`,
+              to: `${minuteToLabel(startMinute)}-${minuteToLabel(endMinute)}`
+            },
+            therapist_ids: { from: prevIds, to: therapistIds },
+            note: { from: row.note, to: note }
+          }
+        });
+      });
+      logger.child("assessment-blocks").info("block.updated", { id, movedDay: date5 !== row.block_date });
+      const fresh = await db.queryOne("SELECT * FROM assessment_blocks WHERE id = ?", [id]);
+      return rowToBlock(fresh);
     },
     async list(from, to) {
       const rows = await db.query(
@@ -26298,7 +26388,7 @@ function registerAssessmentBlockRoutes(app, service) {
   app.post("/api/assessment-blocks", requireRole("manager"), async (c) => {
     const actor = getAuthContext(c);
     const body = AssessmentBlockCreateSchema.parse(await c.req.json());
-    const block = await service.create(
+    const blocks = await service.create(
       {
         date: body.date,
         startMinute: body.start_minute,
@@ -26308,7 +26398,24 @@ function registerAssessmentBlockRoutes(app, service) {
       },
       actor
     );
-    return c.json({ data: block }, 201);
+    return c.json({ data: blocks }, 201);
+  });
+  app.patch("/api/assessment-blocks/:id", requireRole("manager"), async (c) => {
+    const actor = getAuthContext(c);
+    const body = AssessmentBlockPatchSchema.parse(await c.req.json());
+    const block = await service.update(
+      c.req.param("id"),
+      {
+        date: body.date,
+        startMinute: body.start_minute,
+        endMinute: body.end_minute,
+        staffId: body.staff_id,
+        note: body.note === void 0 ? void 0 : body.note ?? null,
+        version: body.version
+      },
+      actor
+    );
+    return c.json({ data: block }, 200);
   });
   app.delete("/api/assessment-blocks/:id", requireRole("manager"), async (c) => {
     const actor = getAuthContext(c);
@@ -26470,6 +26577,16 @@ async function copyWeek(ctx) {
         staffId: row.staff_id,
         existingStartAt: overlap.start_at,
         existingEndAt: overlap.end_at,
+        proposedStartAt: newStart,
+        proposedEndAt: newEnd
+      });
+      continue;
+    }
+    const blockHit = await findAssessmentBlockConflict(db, { startAt: newStart, endAt: newEnd }, row.staff_id);
+    if (blockHit && (blockHit.kind === "involved" || actor.role !== "manager" && actor.role !== "supervisor")) {
+      conflicts.push({
+        type: "assessment_block",
+        staffId: row.staff_id,
         proposedStartAt: newStart,
         proposedEndAt: newEnd
       });
@@ -26713,7 +26830,7 @@ function createAppointmentService(deps) {
       }
       assertAppointmentScope(actor, input2.staffId);
       await assertStudentsInScope(tx, actor, input2.students.map((s) => s.studentId));
-      await assertNoAssessmentBlockInRange(tx, { startAt: input2.startAt, endAt: input2.endAt }, actor);
+      await assertNoAssessmentBlockInRange(tx, { startAt: input2.startAt, endAt: input2.endAt }, actor, input2.staffId);
       const id = crypto.randomUUID();
       await tx.execute(
         `INSERT INTO appointments (id, staff_id, start_at, end_at, status, session_type, note, version, created_by)
@@ -26816,7 +26933,7 @@ function createAppointmentService(deps) {
       const durationMin = (Date.parse(current.endAt) - Date.parse(current.startAt)) / 6e4;
       const newEndAt = addMinutes(newStartAt, durationMin);
       await db.transaction(async (tx) => {
-        await assertNoAssessmentBlockInRange(tx, { startAt: newStartAt, endAt: newEndAt }, actor);
+        await assertNoAssessmentBlockInRange(tx, { startAt: newStartAt, endAt: newEndAt }, actor, current.staffId);
         await tx.execute(
           `UPDATE appointments SET start_at = ?, end_at = ?, version = version + 1, updated_at = datetime('now') WHERE id = ? AND version = ?`,
           [newStartAt, newEndAt, id, version2]
@@ -26859,7 +26976,7 @@ function createAppointmentService(deps) {
         throw new ValidationError("\u0632\u0645\u0627\u0646 \u067E\u0627\u06CC\u0627\u0646 \u0628\u0627\u06CC\u062F \u0631\u0648\u06CC \u0634\u0628\u06A9\u0647 \u06F1\u06F5 \u062F\u0642\u06CC\u0642\u0647\u200C\u0627\u06CC \u0628\u0627\u0634\u062F");
       }
       await db.transaction(async (tx) => {
-        await assertNoAssessmentBlockInRange(tx, { startAt: current.startAt, endAt: newEndAt }, actor);
+        await assertNoAssessmentBlockInRange(tx, { startAt: current.startAt, endAt: newEndAt }, actor, current.staffId);
         await tx.execute(
           `UPDATE appointments SET end_at = ?, version = version + 1, updated_at = datetime('now') WHERE id = ? AND version = ?`,
           [newEndAt, id, version2]
@@ -28851,9 +28968,9 @@ function createStudentProfileService(deps) {
         if (count > 0) blocks.push({ key, label: STUDENT_DELETE_LABELS[key] ?? key, count });
       }
       const asm = await db.queryOne(`SELECT COUNT(*) AS cnt FROM assessments WHERE student_id = ?`, [id]);
-      if ((asm?.cnt ?? 0) > 0) hardBlocks.push({ key: "assessment", label: STUDENT_DELETE_LABELS.assessment, count: asm.cnt });
+      if (asm && asm.cnt > 0) hardBlocks.push({ key: "assessment", label: STUDENT_DELETE_LABELS.assessment, count: asm.cnt });
       const don = await db.queryOne(`SELECT COUNT(*) AS cnt FROM finance_donations WHERE student_id = ?`, [id]);
-      if ((don?.cnt ?? 0) > 0) hardBlocks.push({ key: "donation", label: STUDENT_DELETE_LABELS.donation, count: don.cnt });
+      if (don && don.cnt > 0) hardBlocks.push({ key: "donation", label: STUDENT_DELETE_LABELS.donation, count: don.cnt });
       return {
         studentId: id,
         fullName,
@@ -35444,7 +35561,7 @@ var FIELD_LABEL_MAX = 240;
 var FIELD_KEY_MAX = 60;
 var FIELD_OPTION_MAX = 120;
 var FIELD_OPTIONS_MAX = 16;
-var FIELDS_MAX = 45;
+var FIELDS_MAX = 120;
 var SCALE_MAX_LIMIT = 10;
 var EVENT_TEXT_MAX = 200;
 var EVENT_LONGTEXT_MAX = 2e3;
@@ -35565,7 +35682,7 @@ var CaseEventTypeInputSchema = external_exports.object({
   category: external_exports.enum(CASE_EVENT_CATEGORIES),
   icon: external_exports.string().max(TYPE_ICON_MAX).nullish(),
   familyFillable: external_exports.boolean().optional(),
-  fields: external_exports.array(CaseEventFieldSchema).min(1, "\u062D\u062F\u0627\u0642\u0644 \u06CC\u06A9 \u0641\u06CC\u0644\u062F \u0641\u0631\u0645 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A").max(FIELDS_MAX),
+  fields: external_exports.array(CaseEventFieldSchema).min(1, "\u062D\u062F\u0627\u0642\u0644 \u06CC\u06A9 \u0641\u06CC\u0644\u062F \u0641\u0631\u0645 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A").max(FIELDS_MAX, `\u062D\u062F\u0627\u06A9\u062B\u0631 ${faNum2(FIELDS_MAX)} \u0622\u06CC\u062A\u0645 \u062F\u0631 \u0647\u0631 \u0642\u0627\u0644\u0628 \u0645\u062C\u0627\u0632 \u0627\u0633\u062A`),
   bands: external_exports.array(CaseEventBandSchema).max(BANDS_MAX).nullish(),
   subscales: external_exports.array(CaseEventSubscaleSchema).max(SUBSCALES_MAX, `\u062D\u062F\u0627\u06A9\u062B\u0631 ${SUBSCALES_MAX} \u0632\u06CC\u0631\u0645\u0642\u06CC\u0627\u0633`).nullish(),
   tags: external_exports.array(external_exports.string().min(8).max(64)).max(12, "\u062D\u062F\u0627\u06A9\u062B\u0631 \u06F1\u06F2 \u0628\u0631\u0686\u0633\u0628 \u0628\u0631\u0627\u06CC \u0647\u0631 \u0642\u0627\u0644\u0628").nullish(),
@@ -39738,7 +39855,7 @@ function createCaseEventsService(deps) {
         `SELECT fill_token FROM case_events WHERE id = ?`,
         [id]
       );
-      return Boolean(row?.fill_token) && row.fill_token === token;
+      return row?.fill_token === token;
     },
     async mintFillLink(id, publicBaseUrl) {
       const row = await db.queryOne(
@@ -39953,6 +40070,33 @@ function faNum4(n) {
   return String(n).replace(/[0-9]/g, (d) => FA_DIGITS[Number(d)]);
 }
 __name(faNum4, "faNum");
+function familySectionsOf(fields, subscales) {
+  const subscaleName = new Map((subscales ?? []).map((s) => [s.id, s.name]));
+  const sections = [];
+  for (const f of fields) {
+    if (f.type !== "scale" && f.type !== "single" && f.type !== "longtext") continue;
+    const title = f.subscaleId ? subscaleName.get(f.subscaleId) ?? null : null;
+    const item = {
+      key: f.key,
+      label: f.label,
+      kind: f.type === "longtext" ? "longtext" : f.type,
+      scaleMax: f.scaleMax,
+      scoredOptions: f.scoredOptions?.map((o) => ({ label: o.label })),
+      scaleLabels: f.scaleLabels ?? void 0,
+      hint: f.hint ?? null,
+      teacherLabel: f.teacherLabel ?? null,
+      teacherHint: f.teacherHint ?? null
+    };
+    const last = sections[sections.length - 1];
+    if (last && last.title === title) {
+      last.items.push(item);
+    } else {
+      sections.push({ title, items: [item] });
+    }
+  }
+  return sections;
+}
+__name(familySectionsOf, "familySectionsOf");
 var SCALE_LABELS = ["\u06F0", "\u06F1", "\u06F2", "\u06F3", "\u06F4", "\u06F5", "\u06F6", "\u06F7", "\u06F8", "\u06F9", "\u06F1\u06F0"];
 function renderFillFormPage(model, token) {
   const esc3 = /* @__PURE__ */ __name((s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"), "esc");
@@ -40147,6 +40291,286 @@ function renderFillFormPage(model, token) {
 </html>`;
 }
 __name(renderFillFormPage, "renderFillFormPage");
+
+// src/domain/case-events/preview-form.ts
+var FA_DIGITS2 = "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9";
+function faNum5(n) {
+  return String(n).replace(/[0-9]/g, (d) => FA_DIGITS2[Number(d)]);
+}
+__name(faNum5, "faNum");
+function renderPreviewPage(def, token) {
+  const esc3 = /* @__PURE__ */ __name((s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"), "esc");
+  const sections = familySectionsOf(def.fields, def.subscales ?? null);
+  let counter = 0;
+  const total = sections.reduce((sum, s) => sum + s.items.filter((f) => f.kind !== "longtext").length, 0);
+  const rendered = sections.map((sec) => {
+    const items = sec.items.map((f) => {
+      counter += 1;
+      if (f.kind === "longtext") {
+        counter -= 1;
+        return `<div class="item item--free"><div class="q">${esc3(f.label)}</div>${f.hint ? `<div class="hint">${esc3(f.hint)}</div>` : ""}<textarea class="free" name="${esc3(f.key)}" maxlength="1500" rows="3" placeholder="\u0627\u062E\u062A\u06CC\u0627\u0631\u06CC \u2014 \u0627\u06AF\u0631 \u0686\u06CC\u0632\u06CC \u0628\u0631\u0627\u06CC \u06AF\u0641\u062A\u0646 \u062F\u0627\u0631\u06CC\u062F \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F"></textarea></div>`;
+      }
+      const opts = [];
+      if (f.scoredOptions && f.scoredOptions.length > 0) {
+        for (const o of f.scoredOptions) {
+          opts.push(`<label class="opt opt--wide"><input type="radio" name="${esc3(f.key)}" value="${opts.length}" required /><span>${esc3(o.label)}</span></label>`);
+        }
+      } else {
+        const max = Math.min(Math.max(f.scaleMax ?? 3, 1), 10);
+        const labels = f.scaleLabels && f.scaleLabels.length === max + 1 ? f.scaleLabels : null;
+        for (let v = 0; v <= max; v++) {
+          const lbl = labels ? labels[v] : ["\u06F0", "\u06F1", "\u06F2", "\u06F3", "\u06F4", "\u06F5", "\u06F6", "\u06F7", "\u06F8", "\u06F9", "\u06F1\u06F0"][v] ?? faNum5(v);
+          opts.push(`<label class="opt"><input type="radio" name="${esc3(f.key)}" value="${v}" required /><span>${esc3(lbl)}</span></label>`);
+        }
+      }
+      return `<div class="item" data-key="${esc3(f.key)}"><div class="q">${faNum5(counter)}. ${esc3(f.label)}</div>${f.hint ? `<div class="hint">${esc3(f.hint)}</div>` : ""}<div class="opts">${opts.join("")}</div></div>`;
+    }).join("");
+    const head = sec.title ? `<div class="subscale"><span class="subscale__dot"></span>${esc3(sec.title)}</div>` : "";
+    return `${head}<div class="card">${items}</div>`;
+  }).join("");
+  return `<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex, nofollow" />
+<title>\u067E\u06CC\u0634\u200C\u0646\u0645\u0627\u06CC\u0634 \u2014 ${esc3(def.title)}</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #F7F3EA; color: #12384f;
+         font-family: Tahoma, "Segoe UI", sans-serif; line-height: 1.8; }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 24px 16px 64px; }
+  .banner { position: sticky; top: 0; z-index: 9; background: #FFF3CD; border: 1px solid #E8D48B;
+            color: #6B5416; border-radius: 12px; padding: 10px 14px; margin-bottom: 14px;
+            font-size: 13px; font-weight: 700; }
+  .banner span { font-weight: 400; display: block; font-size: 12px; }
+  .head { background: #12384f; color: #fff; border-radius: 16px; padding: 20px 22px; margin-bottom: 18px; }
+  .head h1 { margin: 0 0 6px; font-size: 18px; }
+  .head p { margin: 0; font-size: 13px; opacity: .85; }
+  .head .desc { margin-top: 10px; font-size: 13px; opacity: .95; line-height: 1.9;
+                background: rgba(255,255,255,.08); border-radius: 10px; padding: 10px 12px; }
+  .progress { background: #fff; border: 1px solid #E5DCCB; border-radius: 12px;
+              padding: 8px 12px; margin-bottom: 14px; font-size: 12px; color: #1c5d80; }
+  .progress__bar { height: 5px; background: #EFE8DC; border-radius: 999px; overflow: hidden; margin-top: 6px; }
+  .progress__fill { height: 100%; width: 0%; background: #229ED9; border-radius: 999px; transition: width .2s; }
+  .subscale { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700;
+              color: #1c5d80; margin: 16px 4px 8px; }
+  .subscale__dot { width: 9px; height: 9px; border-radius: 50%; background: #229ED9; display: inline-block; }
+  .card { background: #fff; border-radius: 16px; padding: 18px 20px; margin-bottom: 14px;
+          box-shadow: 0 1px 3px rgba(18,56,79,.08); }
+  .item { padding: 12px 0; border-bottom: 1px solid #EFE8DC; }
+  .item:last-child { border-bottom: 0; }
+  .item.is-missing .q { color: #A12622; }
+  .q { font-weight: 700; font-size: 14px; margin-bottom: 8px; }
+  .hint { font-size: 12px; color: #8A8377; margin: -5px 0 8px; line-height: 1.9; }
+  .opts { display: flex; flex-wrap: wrap; gap: 8px; }
+  .opt { display: inline-flex; align-items: center; gap: 5px; background: #F7F3EA;
+         border: 1px solid #E5DCCB; border-radius: 10px; padding: 6px 10px; font-size: 13px; cursor: pointer; }
+  .opt--wide { width: 100%; align-items: flex-start; }
+  .opt:has(input:checked) { background: #D9EDF7; border-color: #229ED9; }
+  .item--free .q { font-size: 13.5px; }
+  textarea.free { width: 100%; border: 1px solid #E5DCCB; border-radius: 10px; padding: 10px 12px;
+                  font-family: inherit; font-size: 13.5px; line-height: 1.9; resize: vertical; background: #FDFCF9; }
+  textarea.free:focus { outline: 2px solid #229ED9; outline-offset: -1px; }
+  .notice { text-align: center; font-size: 11.5px; color: #8A8377; margin: -4px 0 12px; }
+  .btn { display: block; width: 100%; border: 0; background: #229ED9; color: #fff;
+         border-radius: 12px; padding: 14px; font-size: 16px; font-weight: 700; cursor: pointer;
+         font-family: inherit; margin-top: 6px; }
+  .btn:disabled { opacity: .6; }
+  .btn--ghost { background: #fff; color: #1c5d80; border: 1px solid #E5DCCB; margin-top: 10px; }
+  .msg { display: none; border-radius: 12px; padding: 16px; margin-top: 12px; font-size: 14px; }
+  .msg.err { display: block; background: #FDE8E8; color: #A12622; }
+  .result { display: none; }
+  .result.show { display: block; }
+  .result__card { background: #fff; border-radius: 16px; padding: 20px; margin-bottom: 14px;
+                  box-shadow: 0 1px 3px rgba(18,56,79,.08); }
+  .result__score { font-size: 22px; font-weight: 700; color: #1c5d80; margin-bottom: 8px; }
+  .band { display: inline-block; border-radius: 999px; padding: 5px 14px; font-size: 13.5px; font-weight: 700; }
+  .band.ok { background: #E4F5E9; color: #1D6B39; }
+  .band.warn { background: #FFF7E0; color: #6B5416; }
+  .band.danger { background: #FDE8E8; color: #A12622; }
+  .band.none { background: #EFE8DC; color: #5A5347; }
+  .sub-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid #EFE8DC; font-size: 13.5px; }
+  .sub-row:last-child { border-bottom: 0; }
+  .sub-row .name { font-weight: 700; }
+  .interp { white-space: pre-line; background: #FDFCF9; border: 1px solid #E5DCCB; border-radius: 12px;
+            padding: 12px 14px; font-size: 13.5px; line-height: 2; }
+  .raw { margin-top: 10px; }
+  .raw details summary { cursor: pointer; font-size: 12.5px; color: #1c5d80; }
+  .raw .pair { display: flex; gap: 8px; font-size: 13px; padding: 4px 0; border-bottom: 1px dashed #EFE8DC; }
+  .raw .pair:last-child { border-bottom: 0; }
+  .raw .pair b { color: #5A5347; flex-shrink: 0; }
+  .foot { text-align: center; font-size: 12px; color: #8A8377; margin-top: 18px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="banner">\u26A0 \u0627\u06CC\u0646 \u0641\u0642\u0637 \u067E\u06CC\u0634\u200C\u0646\u0645\u0627\u06CC\u0634 \u0622\u0632\u0645\u0627\u06CC\u0634\u06CC \u0627\u0633\u062A \u2014 \u0647\u06CC\u0686 \u067E\u0627\u0633\u062E\u06CC \u062C\u0627\u06CC\u06CC \u0630\u062E\u06CC\u0631\u0647 \u0646\u0645\u06CC\u200C\u0634\u0648\u062F
+    <span>\u067E\u0631 \u06A9\u0631\u062F\u0646 \u0627\u06CC\u0646 \u0635\u0641\u062D\u0647 \xAB\u067E\u0627\u0633\u062E \u0648\u0627\u0642\u0639\u06CC\xBB \u062A\u0648\u0644\u06CC\u062F \u0646\u0645\u06CC\u200C\u06A9\u0646\u062F \u0648 \u062F\u0631 \u067E\u0631\u0648\u0646\u062F\u0647\u0654 \u0647\u06CC\u0686 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\u06CC \u062B\u0628\u062A \u0646\u0645\u06CC\u200C\u0634\u0648\u062F. \u0628\u0631\u0627\u06CC \u067E\u0627\u0633\u062E \u0648\u0627\u0642\u0639\u06CC\u060C \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u067E\u06CC\u0627\u0645\u200C\u06A9\u0648\u062A\u0627\u0647 \u0631\u0633\u0645\u06CC \u0631\u0627 \u067E\u0631 \u0645\u06CC\u200C\u06A9\u0646\u062F.</span>
+  </div>
+  <div class="head">
+    <h1>${esc3(def.title)}</h1>
+    <p>\u067E\u0631\u0633\u0634\u200C\u0646\u0627\u0645\u0647\u0654 \u0641\u0631\u0632\u0646\u062F \u0634\u0645\u0627 \u2014 \u0646\u0645\u0627\u06CC \u067E\u06CC\u0634\u200C\u0646\u0645\u0627\u06CC\u0634 \u0641\u0631\u0645\u200C\u0633\u0627\u0632</p>
+    ${def.description ? `<div class="desc">${esc3(def.description)}</div>` : ""}
+  </div>
+  <div class="progress" id="prog">
+    <span id="progText">\u067E\u0627\u0633\u062E \u062F\u0627\u062F\u0647\u200C\u0634\u062F\u0647: \u06F0 \u0627\u0632 ${faNum5(total)}</span>
+    <div class="progress__bar"><div class="progress__fill" id="progFill"></div></div>
+  </div>
+  <div class="notice">\u0627\u06CC\u0646 \u0641\u0631\u0645 \u062A\u0634\u062E\u06CC\u0635 \u0646\u06CC\u0633\u062A\u061B \u0641\u0642\u0637 \u0628\u0647 \u062A\u0635\u0645\u06CC\u0645\u200C\u06AF\u06CC\u0631\u06CC \u062F\u0631\u0645\u0627\u0646\u06AF\u0631 \u06A9\u0645\u06A9 \u0645\u06CC\u200C\u06A9\u0646\u062F.</div>
+  <form id="f" novalidate>
+    ${rendered}
+    <button class="btn" type="submit" id="submitBtn">\u062F\u06CC\u062F\u0646 \u0646\u062A\u06CC\u062C\u0647\u0654 \u062A\u062D\u0644\u06CC\u0644 (\u067E\u06CC\u0634\u200C\u0646\u0645\u0627\u06CC\u0634)</button>
+    <div class="msg" id="msg"></div>
+  </form>
+  <div class="result" id="result">
+    <div class="result__card">
+      <div style="font-size:14px;font-weight:700;margin-bottom:10px">\u0646\u062A\u06CC\u062C\u0647\u0654 \u062A\u062D\u0644\u06CC\u0644 \u2014 \u0647\u0645\u0627\u0646 \u06A9\u0647 \u067E\u0633 \u0627\u0632 \u0627\u0631\u0633\u0627\u0644 \u0648\u0627\u0642\u0639\u06CC \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u062F\u0631 \u067E\u0631\u0648\u0646\u062F\u0647 \u062B\u0628\u062A \u0645\u06CC\u200C\u0634\u0648\u062F</div>
+      <div id="resultBody"></div>
+    </div>
+    <button class="btn btn--ghost" type="button" id="againBtn">\u067E\u0631 \u06A9\u0631\u062F\u0646 \u062F\u0648\u0628\u0627\u0631\u0647</button>
+    <button class="btn btn--ghost" type="button" onclick="window.close()">\u0628\u0633\u062A\u0646 \u067E\u06CC\u0634\u200C\u0646\u0645\u0627\u06CC\u0634</button>
+  </div>
+  <div class="foot">\u067E\u06CC\u0634\u200C\u0646\u0645\u0627\u06CC\u0634 \u0641\u0631\u0645\u200C\u0633\u0627\u0632 \xAB\u0641\u0631\u0645\u200C\u0647\u0627 \u0648 \u067E\u0631\u0633\u0634\u200C\u0646\u0627\u0645\u0647\u200C\u0647\u0627\xBB \u2014 \u067E\u0627\u0633\u062E\u200C\u0647\u0627\u06CC \u0627\u06CC\u0646 \u0635\u0641\u062D\u0647 \u0647\u06CC\u0686\u200C\u062C\u0627 \u0630\u062E\u06CC\u0631\u0647 \u0646\u0645\u06CC\u200C\u0634\u0648\u0646\u062F.</div>
+</div>
+<script>
+(function () {
+  var TOKEN = ${JSON.stringify(token)};
+  var DEFINITION = ${JSON.stringify(JSON.stringify(def))};
+  var f = document.getElementById('f');
+  var msg = document.getElementById('msg');
+  var progText = document.getElementById('progText');
+  var progFill = document.getElementById('progFill');
+  var TOTAL = ${total};
+  var FA = '\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9';
+  function fa(n) { return String(n).replace(/[0-9]/g, function (d) { return FA[Number(d)]; }); }
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+  function updateProgress() {
+    var answered = {};
+    f.querySelectorAll('.item input[type=radio]:checked').forEach(function (r) { answered[r.name] = true; });
+    var n = Object.keys(answered).length;
+    progText.textContent = '\u067E\u0627\u0633\u062E \u062F\u0627\u062F\u0647\u200C\u0634\u062F\u0647: ' + fa(n) + ' \u0627\u0632 ' + fa(TOTAL);
+    progFill.style.width = (TOTAL ? Math.round(n * 100 / TOTAL) : 0) + '%';
+  }
+  f.addEventListener('change', updateProgress);
+
+  f.addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var data = new FormData(f);
+    var answers = {};
+    document.querySelectorAll('#f .item input[type=radio]').forEach(function (radio) {
+      if (data.get(radio.name)) answers[radio.name] = Number(data.get(radio.name));
+    });
+    document.querySelectorAll('#f textarea.free').forEach(function (ta) {
+      var v = (ta.value || '').trim();
+      if (v) answers[ta.name] = v;
+    });
+    var missing = 0;
+    document.querySelectorAll('#f .item').forEach(function (item) {
+      if (item.classList.contains('item--free')) return;
+      var has = item.querySelector('input[type=radio]:checked');
+      item.classList.toggle('is-missing', !has);
+      if (!has) missing += 1;
+    });
+    if (missing > 0) {
+      msg.className = 'msg err';
+      msg.textContent = '\u0628\u0647 ' + fa(missing) + ' \u0633\u0624\u0627\u0644 \u067E\u0627\u0633\u062E \u0646\u062F\u0627\u062F\u0647\u200C\u0627\u06CC\u062F \u2014 \u0633\u0624\u0627\u0644\u200C\u0647\u0627\u06CC \u062C\u0627\u0645\u0627\u0646\u062F\u0647 \u0628\u0627 \u0631\u0646\u06AF \u0633\u0631\u062E \u0645\u0634\u062E\u0635 \u0634\u062F\u0647\u200C\u0627\u0646\u062F.';
+      var first = document.querySelector('#f .item.is-missing');
+      if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+    var btn = document.getElementById('submitBtn');
+    btn.disabled = true;
+    fetch('/public/case-events/preview/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: TOKEN, definition: JSON.parse(DEFINITION), answers: answers })
+    }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        if (!res.ok) {
+          msg.className = 'msg err';
+          msg.textContent = (res.j && res.j.error && res.j.error.message) || '\u062A\u062D\u0644\u06CC\u0644 \u0627\u0646\u062C\u0627\u0645 \u0646\u0634\u062F.';
+          btn.disabled = false;
+          return;
+        }
+        showResult(res.j);
+      })
+      .catch(function () { msg.className = 'msg err'; msg.textContent = '\u062E\u0637\u0627\u06CC \u0634\u0628\u06A9\u0647 \u2014 \u062F\u0648\u0628\u0627\u0631\u0647 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F.'; btn.disabled = false; });
+  });
+
+  function bandChip(band, color) {
+    var cls = color === 'ok' || color === 'warn' || color === 'danger' ? color : 'none';
+    return band ? '<span class="band ' + cls + '">' + esc(band) + '</span>' : '';
+  }
+
+  function showResult(j) {
+    var parts = [];
+    var a = j.analysis;
+    if (a) {
+      parts.push('<div class="result__score">\u0646\u0645\u0631\u0647\u0654 \u06A9\u0644: ' + fa(a.score) + ' \u0627\u0632 ' + fa(a.maxScore ?? (a.total * 3)) + '</div>');
+      parts.push('<div style="margin-bottom:12px">' + (bandChip(a.band, null) || '<span class="band none">\u0628\u062F\u0648\u0646 \u0628\u0627\u0646\u062F \u062A\u062D\u0644\u06CC\u0644</span>') + '</div>');
+      if (a.subscaleScores && a.subscaleScores.length > 0) {
+        parts.push('<div style="margin-bottom:6px;font-size:13px;font-weight:700">\u0632\u06CC\u0631\u0645\u0642\u06CC\u0627\u0633\u200C\u0647\u0627</div>');
+        a.subscaleScores.forEach(function (s) {
+          parts.push('<div class="sub-row"><span class="name">' + esc(s.name) + '</span><span>' + fa(s.score) + ' \u0627\u0632 ' + fa(s.max) + '</span>' + bandChip(s.band, s.color) + '</div>');
+        });
+      }
+      if (a.flags && a.flags.length > 0) {
+        parts.push('<div style="margin:10px 0 6px;font-size:13px;font-weight:700;color:#A12622">\u0622\u06CC\u062A\u0645 \u0628\u062D\u0631\u0627\u0646\u06CC (' + fa(a.flags.length) + ' \u0645\u0648\u0631\u062F)</div>');
+        a.flags.forEach(function (fl) {
+          parts.push('<div style="font-size:13px;padding:3px 0">\u2022 ' + esc(fl.label) + '</div>');
+        });
+      }
+      parts.push('<div style="margin-top:12px" class="interp">' + esc(a.interpretation) + '</div>');
+      parts.push('<div style="margin-top:8px;font-size:12.5px;color:#5A5347">\u062C\u0645\u0639\u200C\u0628\u0646\u062F\u06CC \u062B\u0628\u062A\u200C\u0634\u062F\u0647 \u062F\u0631 \u067E\u0631\u0648\u0646\u062F\u0647: ' + esc(j.summary ?? '') + '</div>');
+    } else {
+      parts.push('<div class="band none">\u0627\u06CC\u0646 \u0642\u0627\u0644\u0628 \u062E\u0627\u0646\u0648\u0627\u062F\u0647\u200C\u067E\u0631\u06A9\u0646 \u0646\u06CC\u0633\u062A \u2014 \u0646\u0645\u0631\u0647\u0654 \u062E\u0648\u062F\u06A9\u0627\u0631 \u0641\u0642\u0637 \u0628\u0631\u0627\u06CC \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u0633\u0627\u062E\u062A\u0647 \u0645\u06CC\u200C\u0634\u0648\u062F.</div>');
+    }
+    var pairs = [];
+    var payload = j.payload ?? {};
+    Object.keys(payload).forEach(function (k) {
+      pairs.push('<div class="pair"><b>' + esc(payload[k].label) + ':</b><span>' + esc(payload[k].value) + '</span></div>');
+    });
+    parts.push('<div class="raw"><details><summary>\u062F\u06CC\u062A\u0627\u06CC \u062E\u0627\u0645 \u0641\u0631\u0645 (' + fa(pairs.length) + ' \u0641\u06CC\u0644\u062F)</summary>' + pairs.join('') + '</details></div>');
+    document.getElementById('resultBody').innerHTML = parts.join('');
+    f.style.display = 'none';
+    document.getElementById('prog').style.display = 'none';
+    var r = document.getElementById('result');
+    r.classList.add('show');
+    r.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  document.getElementById('againBtn').addEventListener('click', function () {
+    fetch('/public/case-events/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: TOKEN, definition: JSON.parse(DEFINITION) })
+    }).then(function (r) { return r.text(); })
+      .then(function (html) { document.open(); document.write(html); document.close(); });
+  });
+
+  updateProgress();
+})();
+</script>
+</body>
+</html>`;
+}
+__name(renderPreviewPage, "renderPreviewPage");
+function renderPreviewErrorPage(title, message) {
+  const esc3 = /* @__PURE__ */ __name((s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"), "esc");
+  return `<!doctype html>
+<html lang="fa" dir="rtl"><head><meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex, nofollow" />
+<title>\u067E\u06CC\u0634\u200C\u0646\u0645\u0627\u06CC\u0634 \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0646\u06CC\u0633\u062A</title>
+<style>body{margin:0;background:#F7F3EA;color:#12384f;font-family:Tahoma,sans-serif;display:flex;min-height:100vh;align-items:center;justify-content:center}
+.box{background:#fff;border-radius:16px;padding:28px;max-width:440px;text-align:center;box-shadow:0 1px 3px rgba(18,56,79,.08);margin:16px}</style></head>
+<body><div class="box"><h1 style="font-size:17px">${esc3(title)}</h1><p style="font-size:13.5px;line-height:2">${esc3(message)}</p>
+<p style="font-size:12px;color:#8A8377">\u062F\u0631 \u067E\u0646\u062C\u0631\u0647\u0654 \u0641\u0631\u0645\u200C\u0633\u0627\u0632 \xAB\u0630\u062E\u06CC\u0631\u0647\xBB \u0628\u0632\u0646\u06CC\u062F \u062A\u0627 \u062E\u0637\u0627\u0647\u0627 \u062F\u0642\u06CC\u0642 \u0646\u0634\u0627\u0646 \u062F\u0627\u062F\u0647 \u0634\u0648\u062F\u060C \u0633\u067E\u0633 \u062F\u0648\u0628\u0627\u0631\u0647 \u067E\u06CC\u0634\u200C\u0646\u0645\u0627\u06CC\u0634 \u0628\u06AF\u06CC\u0631\u06CC\u062F.</p></div></body></html>`;
+}
+__name(renderPreviewErrorPage, "renderPreviewErrorPage");
 
 // src/domain/case-events/routes.ts
 function registerCaseEventsRoutes(app, service) {
@@ -40377,28 +40801,7 @@ function registerCaseEventPublicRoutes(app, service, helpers) {
       }
     }
     const subscaleName = new Map((type?.subscales ?? []).map((s) => [s.id, s.name]));
-    const sections = [];
-    for (const f of type?.fields ?? []) {
-      if (f.type !== "scale" && f.type !== "single" && f.type !== "longtext") continue;
-      const title = f.subscaleId ? subscaleName.get(f.subscaleId) ?? null : null;
-      const item = {
-        key: f.key,
-        label: f.label,
-        kind: f.type === "longtext" ? "longtext" : f.type,
-        scaleMax: f.scaleMax,
-        scoredOptions: f.scoredOptions?.map((o) => ({ label: o.label })),
-        scaleLabels: f.scaleLabels,
-        hint: f.hint ?? null,
-        teacherLabel: f.teacherLabel ?? null,
-        teacherHint: f.teacherHint ?? null
-      };
-      const last = sections[sections.length - 1];
-      if (last && last.title === title) {
-        last.items.push(item);
-      } else {
-        sections.push({ title, items: [item] });
-      }
-    }
+    const sections = familySectionsOf(type?.fields ?? [], type?.subscales ?? null);
     sections.sort((a, b) => {
       const keyOf = /* @__PURE__ */ __name((s) => [...subscaleName.entries()].find(([, n]) => n === s.title)?.[0] ?? null, "keyOf");
       const ai = focusKeys.has(keyOf(a) ?? "") ? 0 : 1;
@@ -40442,6 +40845,105 @@ function registerCaseEventPublicRoutes(app, service, helpers) {
       const code = message.includes("\u0645\u0647\u0644\u062A") ? 410 : 409;
       return c.json({ error: { code: "CONFLICT", message } }, code);
     }
+  });
+  const STAFF_ROLES2 = ["manager", "secretary", "therapist"];
+  async function previewStaffOf(env, token) {
+    if (!token) throw new AuthError("\u062A\u0648\u06A9\u0646 \u062F\u0633\u062A\u0631\u0633\u06CC \u0645\u0648\u062C\u0648\u062F \u0646\u06CC\u0633\u062A");
+    const payload = await verifySessionJwt(token, await resolveSessionSecret(env));
+    if (!payload) throw new AuthError("\u062A\u0648\u06A9\u0646 \u062F\u0633\u062A\u0631\u0633\u06CC \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A");
+    const staff = await getStaffById(env.DB, payload.sub);
+    if (!staff || staff.active !== 1) throw new AuthError("\u06A9\u0627\u0631\u0628\u0631 \u06CC\u0627\u0641\u062A \u0646\u0634\u062F \u06CC\u0627 \u063A\u06CC\u0631\u0641\u0639\u0627\u0644 \u0627\u0633\u062A");
+    if (!STAFF_ROLES2.includes(staff.role)) {
+      throw new ForbiddenError("\u0646\u0642\u0634 \u06A9\u0627\u0631\u0628\u0631 \u0645\u062C\u0627\u0632 \u0646\u06CC\u0633\u062A");
+    }
+    return staff;
+  }
+  __name(previewStaffOf, "previewStaffOf");
+  app.post("/public/case-events/preview", async (c) => {
+    let definition = null;
+    let token = "";
+    const ct = c.req.header("content-type") ?? "";
+    if (ct.includes("application/json")) {
+      const body = await c.req.json().catch(() => null);
+      definition = body?.definition ?? null;
+      token = String(body?.token ?? "");
+    } else {
+      const form = await c.req.formData().catch(() => null);
+      token = String(form?.get("token") ?? "");
+      try {
+        definition = JSON.parse(String(form?.get("definition") ?? "null"));
+      } catch {
+        definition = null;
+      }
+    }
+    await previewStaffOf(c.env, token);
+    const parsed = CaseEventTypeInputSchema.safeParse(definition);
+    if (!parsed.success) {
+      const issue2 = parsed.error.issues[0];
+      const where = issue2.path.length > 0 ? ` (\u0641\u06CC\u0644\u062F: ${issue2.path.join(".")})` : "";
+      return c.html(renderPreviewErrorPage("\u062A\u0639\u0631\u06CC\u0641 \u0642\u0627\u0644\u0628 \u0647\u0646\u0648\u0632 \u06A9\u0627\u0645\u0644 \u0646\u06CC\u0633\u062A", `${issue2.message}${where} \u2014 \u067E\u06CC\u0634\u200C\u0646\u0645\u0627\u06CC\u0634 \u0641\u0642\u0637 \u0628\u0631\u0627\u06CC \u062A\u0639\u0631\u06CC\u0641 \u06A9\u0627\u0645\u0644 \u0645\u0639\u0646\u0627 \u062F\u0627\u0631\u062F.`), 400);
+    }
+    return new Response(renderPreviewPage(parsed.data, token), {
+      status: 200,
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-store",
+        "X-Robots-Tag": "noindex, nofollow"
+      }
+    });
+  });
+  app.post("/public/case-events/preview/analyze", async (c) => {
+    const body = await c.req.json().catch(() => null);
+    if (!body) {
+      return c.json({ error: { code: "BAD_REQUEST", message: "\u062F\u0631\u062E\u0648\u0627\u0633\u062A \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A" } }, 400);
+    }
+    await previewStaffOf(c.env, String(body.token ?? ""));
+    const parsed = CaseEventTypeInputSchema.safeParse(body.definition);
+    if (!parsed.success) {
+      const issue2 = parsed.error.issues[0];
+      const where = issue2.path.length > 0 ? ` (${issue2.path.join(".")})` : "";
+      return c.json({ error: { code: "VALIDATION", message: `${issue2.message}${where}` } }, 400);
+    }
+    const def = parsed.data;
+    const values = body.answers ?? {};
+    const displayPayload = /* @__PURE__ */ __name(() => {
+      const payload2 = {};
+      for (const f of def.fields) {
+        const raw2 = values[f.key];
+        if (raw2 === void 0 || raw2 === null || String(raw2).trim() === "") continue;
+        const display = f.type === "single" ? f.scoredOptions?.[Number(raw2)]?.label ?? String(raw2) : String(raw2);
+        payload2[f.key] = { value: display, label: f.label };
+      }
+      return payload2;
+    }, "displayPayload");
+    if (def.category !== "checklist") {
+      return c.json({
+        ok: true,
+        analysis: null,
+        summary: null,
+        payload: displayPayload(),
+        note: "\u0627\u06CC\u0646 \u0642\u0627\u0644\u0628 \u062E\u0627\u0646\u0648\u0627\u062F\u0647\u200C\u067E\u0631\u06A9\u0646 \u0646\u06CC\u0633\u062A \u2014 \u0646\u0645\u0631\u0647\u0654 \u062E\u0648\u062F\u06A9\u0627\u0631 \u0641\u0642\u0637 \u0628\u0631\u0627\u06CC \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u0633\u0627\u062E\u062A\u0647 \u0645\u06CC\u200C\u0634\u0648\u062F."
+      }, 200);
+    }
+    const scoredKeys = new Set(def.fields.filter((f) => f.type === "scale" || f.type === "single").map((f) => f.key));
+    for (const f of def.fields) {
+      if (f.type === "longtext" || f.type === "text") {
+        if (f.required && String(values[f.key] ?? "").trim() === "") {
+          throw new ValidationError(`\u0622\u06CC\u062A\u0645 \xAB${f.label}\xBB \u0628\u06CC\u200C\u067E\u0627\u0633\u062E \u0645\u0627\u0646\u062F\u0647 \u0627\u0633\u062A`);
+        }
+        continue;
+      }
+      if (values[f.key] === void 0 || values[f.key] === null) {
+        throw new ValidationError(`\u0622\u06CC\u062A\u0645 \xAB${f.label}\xBB \u0628\u06CC\u200C\u067E\u0627\u0633\u062E \u0645\u0627\u0646\u062F\u0647 \u0627\u0633\u062A`);
+      }
+    }
+    const numericValues = Object.fromEntries(
+      Object.entries(values).filter(([k]) => scoredKeys.has(k)).map(([k, v]) => [k, Number(v)])
+    );
+    const analysis = analyzeChecklist(def.fields, def.bands ?? null, numericValues, def.subscales ?? null);
+    const payload = displayPayload();
+    const summary = buildSummary(payload, analysis);
+    return c.json({ ok: true, analysis, summary, payload }, 200);
   });
 }
 __name(registerCaseEventPublicRoutes, "registerCaseEventPublicRoutes");
@@ -42207,7 +42709,6 @@ __name(stageOutcomeFor, "stageOutcomeFor");
 var NUMLINE_STAGE_MAX2 = GAME_KINDS.numline.levers.bank_caps;
 var SCAN_STAGE_THRESHOLDS = accuracyThresholdsOf(GAME_KINDS.scan.stage_rule);
 var SCAN_STAGE_MAX_TILES2 = GAME_KINDS.scan.levers.bank_caps;
-var ACCURACY_STAGE_THRESHOLDS = accuracyThresholdsOf(GAME_KINDS.stroop.stage_rule);
 var STROOP_STAGE_BANDS2 = GAME_KINDS.stroop.levers.bank_bands;
 var FLANKER_STAGE_MAX_DECOYS2 = GAME_KINDS.flanker.levers.bank_caps;
 var FLANKER_STAGE_BANDS2 = GAME_KINDS.flanker.levers.bank_bands;
@@ -42281,7 +42782,6 @@ function stageStimViewOf(stim, correctTouch, stageId) {
   return { ...base, ...correctTouch ? v.go : v.nogo };
 }
 __name(stageStimViewOf, "stageStimViewOf");
-var SEQ_MEMORY_STAGE_THRESHOLDS = accuracyThresholdsOf(GAME_KINDS.corsi.stage_rule);
 var CORSI_STAGE_MAX_SPAN2 = GAME_KINDS.corsi.levers.bank_caps;
 var SPAN_STAGE_MAX_DIGITS2 = GAME_KINDS.span.levers.bank_caps;
 var SIMON_STAGE_MAX_SPAN2 = GAME_KINDS.simon.levers.bank_caps;
@@ -44381,11 +44881,11 @@ function createGamesService(deps) {
 __name(createGamesService, "createGamesService");
 
 // src/domain/games/page.ts
-var FA_DIGITS2 = "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9";
-function faNum5(n) {
-  return String(n).replace(/[0-9]/g, (d) => FA_DIGITS2[Number(d)]);
+var FA_DIGITS3 = "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9";
+function faNum6(n) {
+  return String(n).replace(/[0-9]/g, (d) => FA_DIGITS3[Number(d)]);
 }
-__name(faNum5, "faNum");
+__name(faNum6, "faNum");
 function esc2(s) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
@@ -44520,13 +45020,13 @@ function renderGamesPage(model, token) {
     const r = model.playStageResult;
     const STAR_PATH_D = "M60 8 L74 46 L115 46 L81 71 L94 112 L60 87 L26 112 L39 71 L5 46 L46 46 Z";
     const stageCard = r ? `<div class="stage-done">
-      <div class="stage-done__badge">\u0645\u0631\u062D\u0644\u0647\u0654 ${faNum5(r.index)} \u2014 ${esc2(r.title_fa)}</div>
-      <div class="stage-done__stars" role="img" aria-label="${faNum5(r.stars)} \u0633\u062A\u0627\u0631\u0647 \u0627\u0632 ${faNum5(3)}">
+      <div class="stage-done__badge">\u0645\u0631\u062D\u0644\u0647\u0654 ${faNum6(r.index)} \u2014 ${esc2(r.title_fa)}</div>
+      <div class="stage-done__stars" role="img" aria-label="${faNum6(r.stars)} \u0633\u062A\u0627\u0631\u0647 \u0627\u0632 ${faNum6(3)}">
         ${[1, 2, 3].map((i) => `<svg class="star${i <= r.stars ? " star--lit" : ""}" viewBox="0 0 120 124" aria-hidden="true"><path d="${STAR_PATH_D}"/></svg>`).join("")}
       </div>
       <p class="muted">${r.passed ? "\u0627\u06CC\u0646 \u0645\u0631\u062D\u0644\u0647 \u0631\u0627 \u06A9\u0627\u0645\u0644 \u06A9\u0631\u062F\u06CC!" : "\u062A\u0645\u0631\u06CC\u0646 \u062E\u0648\u0628\u06CC \u0628\u0648\u062F\u061B \u062F\u0648\u0628\u0627\u0631\u0647 \u0628\u0647\u0634 \u0645\u06CC\u200C\u0631\u0633\u06CC\u0645."}</p>
       ${r.passed && r.next_title_fa ? `<p class="muted">\u0645\u0631\u062D\u0644\u0647\u0654 \u0628\u0639\u062F\u06CC: ${esc2(r.next_title_fa)} \u2014 \u0641\u0631\u062F\u0627 \u0645\u0646\u062A\u0638\u0631\u062A \u0627\u0633\u062A.</p>` : ""}
-      ${r.stars_total > 0 ? `<p class="muted">\u0645\u062C\u0645\u0648\u0639 \u0633\u062A\u0627\u0631\u0647\u200C\u0647\u0627\u06CC \u062A\u0648: ${faNum5(r.stars_total)}</p>` : ""}
+      ${r.stars_total > 0 ? `<p class="muted">\u0645\u062C\u0645\u0648\u0639 \u0633\u062A\u0627\u0631\u0647\u200C\u0647\u0627\u06CC \u062A\u0648: ${faNum6(r.stars_total)}</p>` : ""}
     </div>` : "";
     return page(model, token, `<div class="card"><h1>\u0627\u0645\u0631\u0648\u0632 \u062A\u0645\u0627\u0645 \u0634\u062F!</h1>${stageCard}
       <p class="muted">\u06AF\u0648\u0634\u06CC \u0631\u0627 \u0628\u0647 \u0645\u0627\u0645\u0627\u0646 \u0628\u062F\u0647.</p>
@@ -44538,10 +45038,10 @@ function renderGamesPage(model, token) {
       <button id="btn-gate-solve" type="button">\u062A\u0623\u06CC\u06CC\u062F</button></div>`);
   }
   if (model.state === "parent_post") {
-    const conf = model.adherenceConfirmed ? faNum5(2) : faNum5(1);
+    const conf = model.adherenceConfirmed ? faNum6(2) : faNum6(1);
     const pp = model.parentPost;
-    const postHtml = pp ? `<p class="muted">\u0627\u06CC\u0646 \u0647\u0641\u062A\u0647 ${faNum5(pp.sessions_week)} \u062C\u0644\u0633\u0647 \u0628\u0627\u0632\u06CC \u0622\u063A\u0627\u0632 \u0634\u062F\u0647 \u0627\u0633\u062A.</p>
-         <p class="muted">\u0627\u0645\u0631\u0648\u0632 ${faNum5(pp.attempts_today)} \u067E\u0627\u0633\u062E \u062B\u0628\u062A \u0634\u062F\u061B \u0647\u0645\u0647\u0654 \u0642\u062F\u0645\u200C\u0647\u0627\u06CC \u06A9\u0648\u062F\u06A9 \u0628\u0627 \u0647\u0645\u06CC\u0646 \u0644\u06CC\u0646\u06A9 \u0627\u062F\u0627\u0645\u0647 \u067E\u06CC\u062F\u0627 \u0645\u06CC\u200C\u06A9\u0646\u062F.</p>
+    const postHtml = pp ? `<p class="muted">\u0627\u06CC\u0646 \u0647\u0641\u062A\u0647 ${faNum6(pp.sessions_week)} \u062C\u0644\u0633\u0647 \u0628\u0627\u0632\u06CC \u0622\u063A\u0627\u0632 \u0634\u062F\u0647 \u0627\u0633\u062A.</p>
+         <p class="muted">\u0627\u0645\u0631\u0648\u0632 ${faNum6(pp.attempts_today)} \u067E\u0627\u0633\u062E \u062B\u0628\u062A \u0634\u062F\u061B \u0647\u0645\u0647\u0654 \u0642\u062F\u0645\u200C\u0647\u0627\u06CC \u06A9\u0648\u062F\u06A9 \u0628\u0627 \u0647\u0645\u06CC\u0646 \u0644\u06CC\u0646\u06A9 \u0627\u062F\u0627\u0645\u0647 \u067E\u06CC\u062F\u0627 \u0645\u06CC\u200C\u06A9\u0646\u062F.</p>
          <p class="muted">${esc2(pp.tomorrow_fa)}</p>` : `<p class="muted">\u062C\u0644\u0633\u0647\u0654 \u0627\u0645\u0631\u0648\u0632 \u062B\u0628\u062A \u0634\u062F\u061B \u0633\u067E\u0627\u0633 \u0627\u0632 \u0647\u0645\u0631\u0627\u0647\u06CC \u0634\u0645\u0627.</p>`;
     return page(model, token, `<div class="card">${head}
       ${postHtml}
@@ -44552,7 +45052,7 @@ function renderGamesPage(model, token) {
     <p class="muted">\u067E\u0627\u06CC\u0628\u0646\u062F\u06CC \u0627\u0645\u0631\u0648\u0632 \u062B\u0628\u062A \u0634\u062F. \u0633\u067E\u0627\u0633 \u0627\u0632 \u0647\u0645\u0631\u0627\u0647\u06CC \u0634\u0645\u0627.</p></div>`);
 }
 __name(renderGamesPage, "renderGamesPage");
-function renderPreviewPage(state, token) {
+function renderPreviewPage2(state, token) {
   if (!state || !token) {
     return page(
       { state: "expired", missionRef: "", missionTitle: "\u067E\u06CC\u0634\u200C\u0646\u0645\u0627\u06CC\u0634 \u0628\u0627\u0632\u06CC", packageTitle: "", expiresAt: "" },
@@ -44589,7 +45089,7 @@ function renderPreviewPage(state, token) {
     body
   );
 }
-__name(renderPreviewPage, "renderPreviewPage");
+__name(renderPreviewPage2, "renderPreviewPage");
 
 // src/domain/games/routes.ts
 var MetricSchema = external_exports.object({
@@ -44876,7 +45376,7 @@ function registerGamesPublicRoutes(app, service) {
   const jsonHeaders = { "Cache-Control": "no-store" };
   app.get("/play/preview/:token", async (c) => {
     const state = await service.previewState(c.req.param("token")).catch(() => null);
-    const html = renderPreviewPage(state, state ? c.req.param("token") : "");
+    const html = renderPreviewPage2(state, state ? c.req.param("token") : "");
     return new Response(html, {
       status: 200,
       headers: {
@@ -50620,7 +51120,7 @@ var FSIQ_BAND_RANGES = [
   { band: "SUPERIOR", min: 120, max: 129, fa: "\u0639\u0627\u0644\u06CC (\u06F1\u06F2\u06F0\u2013\u06F1\u06F2\u06F9)" },
   { band: "GIFTED", min: 130, max: 200, fa: "\u0627\u0633\u062A\u0639\u062F\u0627\u062F (\u06F1\u06F3\u06F0+)" }
 ];
-function fsiqBandOf3(fsiq) {
+function fsiqBandOf2(fsiq) {
   const s = Number(fsiq);
   if (!Number.isFinite(s) || s < 0) return "ID";
   for (const b of FSIQ_BAND_RANGES) {
@@ -50628,7 +51128,7 @@ function fsiqBandOf3(fsiq) {
   }
   return "GIFTED";
 }
-__name(fsiqBandOf3, "fsiqBandOf");
+__name(fsiqBandOf2, "fsiqBandOf");
 function clamp01(v) {
   const n = Number(v);
   if (!Number.isFinite(n)) return 0;
@@ -50659,7 +51159,6 @@ var ASD_B_FULL_CRITERIA = 2;
 var SCARED_SCHOOL_CUTOFF = 3;
 var BIF_IQ_RANGE = { min: 70, max: 85 };
 var FSIQ_BAND_BIF = FSIQ_BAND_RANGES.find((b) => b.band === "BIF");
-var FSIQ_BAND_LOW_BORDER = FSIQ_BAND_RANGES.find((b) => b.band === "LOW_BORDER");
 var ID_PATH_MAX_FSIQ = FSIQ_BAND_BIF.min;
 var SCATTER_UNIFORM_MAX = 23;
 var RULES = [
@@ -51182,16 +51681,16 @@ function completed(events) {
   return events.filter((e) => e.status === "completed");
 }
 __name(completed, "completed");
-function faNum6(n) {
+function faNum7(n) {
   return String(n).replace(/[0-9]/g, (d) => "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9"[Number(d)]);
 }
-__name(faNum6, "faNum");
+__name(faNum7, "faNum");
 function wechslerProfileFactsOf(event) {
   const profile = wechslerEngineOutputOf(event)?.profile ?? null;
   const idxNum = /* @__PURE__ */ __name((x) => typeof x?.scaled === "number" ? x.scaled : null, "idxNum");
   const fsiq = typeof profile?.fsiq === "number" ? profile.fsiq : null;
   const bandRaw = typeof profile?.fsiqBand === "string" ? profile.fsiqBand : null;
-  const band = bandRaw ?? (fsiq !== null ? fsiqBandOf3(fsiq) : null);
+  const band = bandRaw ?? (fsiq !== null ? fsiqBandOf2(fsiq) : null);
   const scatter = typeof profile?.indexScatter === "number" ? profile.indexScatter : null;
   const step5Weak = (profile?.step5?.weaknesses ?? []).filter((k) => typeof k === "string");
   return {
@@ -51509,7 +52008,7 @@ function runInference(events, options = {}) {
       if (!idPathActive && wFacts.fsiq !== null && wFacts.fsiq >= FSIQ_BAND_BIF.min && wFacts.fsiq <= FSIQ_BAND_BIF.max && (adapt === "normal" || adapt === "unknown")) {
         cands.push({
           weight: 1,
-          fa: `\u0647\u0648\u0634\u200C\u0628\u0647\u0631 \u06A9\u0644 ${faNum6(wFacts.fsiq)} \u062F\u0631 \u0628\u0627\u0632\u0647\u0654 \u0645\u0631\u0632\u06CC/\u062F\u06CC\u0631\u0622\u0645\u0648\u0632\u06CC (\u06F7\u06F0\u2013\u06F8\u06F4) \u0627\u0633\u062A \u0648 \u0627\u0646\u0637\u0628\u0627\u0642 \u0631\u0648\u0632\u0645\u0631\u0647 \u0639\u0627\u062F\u06CC \u06CC\u0627 \u062B\u0628\u062A\u200C\u0646\u0634\u062F\u0647 \u0627\u0633\u062A \u2014 \u0634\u0627\u0647\u062F \u062F\u06CC\u0631\u0622\u0645\u0648\u0632\u06CC (BIF).`
+          fa: `\u0647\u0648\u0634\u200C\u0628\u0647\u0631 \u06A9\u0644 ${faNum7(wFacts.fsiq)} \u062F\u0631 \u0628\u0627\u0632\u0647\u0654 \u0645\u0631\u0632\u06CC/\u062F\u06CC\u0631\u0622\u0645\u0648\u0632\u06CC (\u06F7\u06F0\u2013\u06F8\u06F4) \u0627\u0633\u062A \u0648 \u0627\u0646\u0637\u0628\u0627\u0642 \u0631\u0648\u0632\u0645\u0631\u0647 \u0639\u0627\u062F\u06CC \u06CC\u0627 \u062B\u0628\u062A\u200C\u0646\u0634\u062F\u0647 \u0627\u0633\u062A \u2014 \u0634\u0627\u0647\u062F \u062F\u06CC\u0631\u0622\u0645\u0648\u0632\u06CC (BIF).`
         });
       }
       if (!idPathActive) {
@@ -51659,10 +52158,10 @@ function runInference(events, options = {}) {
 __name(runInference, "runInference");
 
 // src/domain/clinical-engine/narrative.ts
-function faNum7(s) {
+function faNum8(s) {
   return String(s).replace(/[0-9]/g, (d) => "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9"[Number(d)]);
 }
-__name(faNum7, "faNum");
+__name(faNum8, "faNum");
 var CERTAINTY_WORDS = ["\u0642\u0637\u0639\u0627\u064B", "\u0628\u0644\u0627\u0634\u06A9", "\u062D\u062A\u0645\u0627\u064B \u062A\u0634\u062E\u06CC\u0635", "\u0635\u062F \u062F\u0631 \u0635\u062F", "\u06F1\u06F0\u06F0\u066A"];
 function assertPlainTone(text) {
   for (const w of CERTAINTY_WORDS) {
@@ -51684,7 +52183,7 @@ function sawOf(h) {
   const counts = h.criteriaSummary;
   if (counts.met > 0 || counts.partial > 0) {
     parts.push(
-      shortLine(`\u062F\u0631 \u062C\u062F\u0648\u0644 \u0645\u0644\u0627\u06A9\u200C\u0647\u0627: ${faNum7(counts.met)} \u0645\u0644\u0627\u06A9 \u0628\u0631\u0622\u0648\u0631\u062F\u0647\u060C ${faNum7(counts.partial)} \u0646\u0627\u0642\u0635 \u0627\u0632 \u0645\u062C\u0645\u0648\u0639 \u0645\u0644\u0627\u06A9\u200C\u0647\u0627\u06CC DSM.`)
+      shortLine(`\u062F\u0631 \u062C\u062F\u0648\u0644 \u0645\u0644\u0627\u06A9\u200C\u0647\u0627: ${faNum8(counts.met)} \u0645\u0644\u0627\u06A9 \u0628\u0631\u0622\u0648\u0631\u062F\u0647\u060C ${faNum8(counts.partial)} \u0646\u0627\u0642\u0635 \u0627\u0632 \u0645\u062C\u0645\u0648\u0639 \u0645\u0644\u0627\u06A9\u200C\u0647\u0627\u06CC DSM.`)
     );
   }
   if (parts.length === 0) parts.push("\u0634\u0648\u0627\u0647\u062F \u06A9\u0645\u06CC \u062B\u0628\u062A \u0634\u062F\u0647 \u0627\u0633\u062A \u2014 \u0628\u0631\u0627\u06CC \u0642\u0648\u06CC\u200C\u0634\u062F\u0646 \u0641\u0631\u0636\u06CC\u0647 \u062F\u0627\u062F\u0647\u0654 \u0628\u06CC\u0634\u062A\u0631\u06CC \u0644\u0627\u0632\u0645 \u0627\u0633\u062A.");
@@ -54512,10 +55011,10 @@ function numOf(value) {
   return Number.isFinite(n) ? n : null;
 }
 __name(numOf, "numOf");
-function faNum8(n) {
+function faNum9(n) {
   return String(n).replace(/[0-9]/g, (d) => "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9"[Number(d)]);
 }
-__name(faNum8, "faNum");
+__name(faNum9, "faNum");
 function subtestsOf(engine) {
   const map2 = /* @__PURE__ */ new Map();
   const snap = engine?.["snapshot"];
@@ -54561,7 +55060,7 @@ function extractWechslerFacts(event) {
     return v !== null && v <= RECOMMENDER_THRESHOLDS.SUBTEST_WEAK;
   }), "patternActive");
   const fsiq = profile?.fsiq ?? snap?.fsiq ?? manual("fsiq");
-  const fsiqBand = profile?.fsiqBand ?? (fsiq !== null ? fsiqBandOf3(fsiq) : null);
+  const fsiqBand = profile?.fsiqBand ?? (fsiq !== null ? fsiqBandOf2(fsiq) : null);
   const scatter = profile?.indexScatter ?? snap?.indexScatter ?? null;
   const step5Weak = (profile?.step5?.weaknesses ?? []).map((w) => typeof w === "string" ? w : w?.key ?? "").filter((k) => ["VCI", "PRI", "WMI", "PSI"].includes(k));
   const cd = sub("CD");
@@ -54674,7 +55173,7 @@ function recommendChecklistPlan(ctx) {
   const existing = existingToolsOf(ctx.events);
   const builder = new PlanBuilder();
   const fsiq = facts.fsiq;
-  const band = facts.fsiqBand ?? (fsiq !== null ? fsiqBandOf3(fsiq) : null);
+  const band = facts.fsiqBand ?? (fsiq !== null ? fsiqBandOf2(fsiq) : null);
   const maxAbility = [facts.vci, facts.pri].filter((v) => v !== null);
   const abilityMax = maxAbility.length ? Math.max(...maxAbility) : null;
   const gapOf = /* @__PURE__ */ __name((v) => abilityMax !== null && v !== null ? abilityMax - v : null, "gapOf");
@@ -54684,14 +55183,14 @@ function recommendChecklistPlan(ctx) {
     return {
       planType: "\u062C\u0627\u0645\u0639",
       items: [],
-      basis: `\u0647\u0648\u0634\u200C\u0628\u0647\u0631 \u06A9\u0644 ${faNum8(fsiq ?? 0)} \u062F\u0631 \u0628\u0627\u0632\u0647\u0654 \u0646\u0627\u062A\u0648\u0627\u0646\u06CC \u0647\u0648\u0634\u06CC \u0627\u0633\u062A \u0648 \u0627\u0646\u0637\u0628\u0627\u0642 \u0631\u0648\u0632\u0645\u0631\u0647 \xAB\u067E\u0627\u06CC\u06CC\u0646\xBB \u06AF\u0632\u0627\u0631\u0634 \u0634\u062F\u0647 \u2014 \u0637\u0628\u0642 \u0645\u0644\u0627\u06A9 \u062A\u0641\u06A9\u06CC\u06A9 \u0627\u0646\u0637\u0628\u0627\u0642\u06CC\u060C \u0645\u0633\u06CC\u0631 \u0627\u0631\u062C\u0627\u0639 \u0646\u0627\u062A\u0648\u0627\u0646\u06CC \u0647\u0648\u0634\u06CC (ID) \u0641\u0639\u0627\u0644 \u0645\u06CC\u200C\u0634\u0648\u062F \u0648 \u0633\u0627\u0645\u0627\u0646\u0647 \u067E\u0644\u0646 \u0627\u0628\u0632\u0627\u0631\u06CC \u067E\u06CC\u0634\u0646\u0647\u0627\u062F \u0646\u0645\u06CC\u200C\u06A9\u0646\u062F\u061B \u062A\u0635\u0645\u06CC\u0645 \u0648 \u0627\u0631\u062C\u0627\u0639 \u0628\u0627 \u0645\u062A\u062E\u0635\u0635 \u0627\u0633\u062A.`,
+      basis: `\u0647\u0648\u0634\u200C\u0628\u0647\u0631 \u06A9\u0644 ${faNum9(fsiq ?? 0)} \u062F\u0631 \u0628\u0627\u0632\u0647\u0654 \u0646\u0627\u062A\u0648\u0627\u0646\u06CC \u0647\u0648\u0634\u06CC \u0627\u0633\u062A \u0648 \u0627\u0646\u0637\u0628\u0627\u0642 \u0631\u0648\u0632\u0645\u0631\u0647 \xAB\u067E\u0627\u06CC\u06CC\u0646\xBB \u06AF\u0632\u0627\u0631\u0634 \u0634\u062F\u0647 \u2014 \u0637\u0628\u0642 \u0645\u0644\u0627\u06A9 \u062A\u0641\u06A9\u06CC\u06A9 \u0627\u0646\u0637\u0628\u0627\u0642\u06CC\u060C \u0645\u0633\u06CC\u0631 \u0627\u0631\u062C\u0627\u0639 \u0646\u0627\u062A\u0648\u0627\u0646\u06CC \u0647\u0648\u0634\u06CC (ID) \u0641\u0639\u0627\u0644 \u0645\u06CC\u200C\u0634\u0648\u062F \u0648 \u0633\u0627\u0645\u0627\u0646\u0647 \u067E\u0644\u0646 \u0627\u0628\u0632\u0627\u0631\u06CC \u067E\u06CC\u0634\u0646\u0647\u0627\u062F \u0646\u0645\u06CC\u200C\u06A9\u0646\u062F\u061B \u062A\u0635\u0645\u06CC\u0645 \u0648 \u0627\u0631\u062C\u0627\u0639 \u0628\u0627 \u0645\u062A\u062E\u0635\u0635 \u0627\u0633\u062A.`,
       referralFa: "\u062E\u0637 \u0642\u0631\u0645\u0632 \u2014 \u0645\u0633\u06CC\u0631 \u0646\u0627\u062A\u0648\u0627\u0646\u06CC \u0647\u0648\u0634\u06CC (FSIQ \u2264 \u06F7\u06F0 \u0647\u0645\u0631\u0627\u0647 \u0627\u0646\u0637\u0628\u0627\u0642 \u067E\u0627\u06CC\u06CC\u0646): \u067E\u0644\u0646 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0631\u0641\u062A\u0627\u0631\u06CC \u067E\u06CC\u0634\u0646\u0647\u0627\u062F \u0646\u0645\u06CC\u200C\u0634\u0648\u062F\u061B \u067E\u0631\u0648\u0646\u062F\u0647 \u0628\u0631\u0627\u06CC \u0627\u0631\u062C\u0627\u0639 \u062A\u062E\u0635\u0635\u06CC (\u0631\u0648\u0627\u0646\u200C\u067E\u0632\u0634\u06A9/\u0645\u062F\u06CC\u0631 \u067E\u0631\u0648\u0646\u062F\u0647) \u0639\u0644\u0627\u0645\u062A \u062E\u0648\u0631\u062F."
     };
   }
   const bifCondition = band === "BIF" || band === "ID" && (adapt.level === "normal" || adapt.level === "border");
   if (bifCondition) {
     const bandFa = band === "BIF" ? "\u0628\u0627\u0632\u0647\u0654 \u0645\u0631\u0632\u06CC/\u062F\u06CC\u0631\u0622\u0645\u0648\u0632\u06CC (\u06F7\u06F0\u2013\u06F8\u06F4)" : "\u067E\u0627\u06CC\u06CC\u0646\u200C\u062A\u0631 \u0627\u0632 \u0645\u0631\u0632 \u06F7\u06F0 \u0628\u0627 \u0627\u0646\u0637\u0628\u0627\u0642 \u062D\u0641\u0638\u200C\u0634\u062F\u0647";
-    const probeReason = `\u067E\u0644\u0646 \u062F\u06CC\u0631\u0622\u0645\u0648\u0632 (FSIQ ${faNum8(fsiq ?? 0)} \u2014 ${bandFa}): \u0633\u0646\u062C\u0634 \u0639\u0645\u0644\u06A9\u0631\u062F \u0648\u0627\u0642\u0639\u06CC \u062F\u0631 \u0633\u0647 \u062D\u0648\u0632\u0647\u0654 \u067E\u0627\u06CC\u0647 \u0628\u0631\u0627\u06CC \u0647\u062F\u0641\u200C\u06AF\u0630\u0627\u0631\u06CC \u0622\u0645\u0648\u0632\u0634\u06CC \u0648\u0627\u0642\u0639\u200C\u0628\u06CC\u0646\u0627\u0646\u0647 (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F5).`;
+    const probeReason = `\u067E\u0644\u0646 \u062F\u06CC\u0631\u0622\u0645\u0648\u0632 (FSIQ ${faNum9(fsiq ?? 0)} \u2014 ${bandFa}): \u0633\u0646\u062C\u0634 \u0639\u0645\u0644\u06A9\u0631\u062F \u0648\u0627\u0642\u0639\u06CC \u062F\u0631 \u0633\u0647 \u062D\u0648\u0632\u0647\u0654 \u067E\u0627\u06CC\u0647 \u0628\u0631\u0627\u06CC \u0647\u062F\u0641\u200C\u06AF\u0630\u0627\u0631\u06CC \u0622\u0645\u0648\u0632\u0634\u06CC \u0648\u0627\u0642\u0639\u200C\u0628\u06CC\u0646\u0627\u0646\u0647 (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F5).`;
     for (const key of [PLAN_TOOL_KEYS.probeRead, PLAN_TOOL_KEYS.probeWrite, PLAN_TOOL_KEYS.probeCalc]) {
       builder.add(key, "core", probeReason, "r5");
     }
@@ -54742,7 +55241,7 @@ function recommendChecklistPlan(ctx) {
       builder.add(
         PLAN_TOOL_KEYS.idAdapt,
         "core",
-        `\u0647\u0648\u0634\u200C\u0628\u0647\u0631 \u06A9\u0644 ${faNum8(fsiq ?? 0)} \u067E\u0627\u06CC\u06CC\u0646\u200C\u062A\u0631 \u0627\u0632 \u0645\u0631\u0632 \u06F7\u06F0 \u0627\u0633\u062A \u0648\u0644\u06CC \u0627\u0646\u0637\u0628\u0627\u0642 \u0631\u0648\u0632\u0645\u0631\u0647 \u062B\u0628\u062A \u0646\u0634\u062F\u0647 \u2014 \u0633\u0646\u062C\u0647\u0654 \u0627\u0646\u0637\u0628\u0627\u0642 \u0631\u0648\u0632\u0645\u0631\u0647 (\u0641\u0631\u0645 \u062E\u0627\u0646\u0648\u0627\u062F\u0647) \u0628\u0631\u0627\u06CC \u062A\u0641\u06A9\u06CC\u06A9 \u0645\u0633\u06CC\u0631 \u0646\u0627\u062A\u0648\u0627\u0646\u06CC \u0647\u0648\u0634\u06CC \u0627\u0632 \u062F\u06CC\u0631\u0622\u0645\u0648\u0632\u06CC \u0644\u0627\u0632\u0645 \u0627\u0633\u062A (\xA7\u06F3.\u06F1).`,
+        `\u0647\u0648\u0634\u200C\u0628\u0647\u0631 \u06A9\u0644 ${faNum9(fsiq ?? 0)} \u067E\u0627\u06CC\u06CC\u0646\u200C\u062A\u0631 \u0627\u0632 \u0645\u0631\u0632 \u06F7\u06F0 \u0627\u0633\u062A \u0648\u0644\u06CC \u0627\u0646\u0637\u0628\u0627\u0642 \u0631\u0648\u0632\u0645\u0631\u0647 \u062B\u0628\u062A \u0646\u0634\u062F\u0647 \u2014 \u0633\u0646\u062C\u0647\u0654 \u0627\u0646\u0637\u0628\u0627\u0642 \u0631\u0648\u0632\u0645\u0631\u0647 (\u0641\u0631\u0645 \u062E\u0627\u0646\u0648\u0627\u062F\u0647) \u0628\u0631\u0627\u06CC \u062A\u0641\u06A9\u06CC\u06A9 \u0645\u0633\u06CC\u0631 \u0646\u0627\u062A\u0648\u0627\u0646\u06CC \u0647\u0648\u0634\u06CC \u0627\u0632 \u062F\u06CC\u0631\u0622\u0645\u0648\u0632\u06CC \u0644\u0627\u0632\u0645 \u0627\u0633\u062A (\xA7\u06F3.\u06F1).`,
         "r6"
       );
       builder.notes.push("\u062A\u0627 \u062A\u06A9\u0645\u06CC\u0644 \u0633\u0646\u062C\u0647\u0654 \u0627\u0646\u0637\u0628\u0627\u0642\u060C \u0645\u0633\u06CC\u0631 ID \u0645\u0647\u0631 \u0646\u0645\u06CC\u200C\u0634\u0648\u062F \u2014 \u0645\u0644\u0627\u06A9 \u062A\u0641\u06A9\u06CC\u06A9 \u0627\u0646\u0637\u0628\u0627\u0642\u06CC \u062F\u0648 \u0645\u0633\u06CC\u0631 \u0631\u0627 \u062C\u062F\u0627\u06CC \u0647\u0645 \u0646\u06AF\u0647 \u0645\u06CC\u200C\u062F\u0627\u0631\u062F.");
@@ -54822,12 +55321,12 @@ function applyProfileRules(args) {
     builder.domains.add("attention");
   }
   if (facts.vci !== null && facts.vci <= T.LOW_INDEX && facts.vocabLow) {
-    builder.add(PLAN_TOOL_KEYS.speech, "core", `\u0634\u0627\u062E\u0635 \u06A9\u0644\u0627\u0645\u06CC ${faNum8(facts.vci)} \u0628\u0627 \u0648\u0627\u0698\u06AF\u0627\u0646/\u062A\u0634\u0627\u0628\u0647\u0627\u062A \u0636\u0639\u06CC\u0641 \u2014 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0632\u0628\u0627\u0646 \u0648 \u06AF\u0641\u062A\u0627\u0631 (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F3).`, "r3");
+    builder.add(PLAN_TOOL_KEYS.speech, "core", `\u0634\u0627\u062E\u0635 \u06A9\u0644\u0627\u0645\u06CC ${faNum9(facts.vci)} \u0628\u0627 \u0648\u0627\u0698\u06AF\u0627\u0646/\u062A\u0634\u0627\u0628\u0647\u0627\u062A \u0636\u0639\u06CC\u0641 \u2014 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0632\u0628\u0627\u0646 \u0648 \u06AF\u0641\u062A\u0627\u0631 (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F3).`, "r3");
     builder.add(PLAN_TOOL_KEYS.probeRead, "recommended", "\u067E\u0631\u0648\u0628 \u0631\u0648\u0627\u0646\u06CC\u200C\u062E\u0648\u0627\u0646\u062F\u0646 \u062F\u0631 \u0633\u0646 \u0645\u062F\u0631\u0633\u0647 \u2014 \u062A\u0641\u06A9\u06CC\u06A9 \u0632\u0628\u0627\u0646 \u0627\u0632 \u062E\u0648\u0627\u0646\u062F\u0646 (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F3).", "r3");
     builder.domains.add("language");
   }
   if (facts.wmi !== null && facts.wmi <= T.LOW_INDEX && (facts.digitsSpanLow || facts.letterNumberLow)) {
-    builder.add(PLAN_TOOL_KEYS.speech, "core", `\u062D\u0627\u0641\u0638\u0647\u0654 \u06A9\u0627\u0631\u06CC ${faNum8(facts.wmi)} \u0628\u0627 \u0641\u0631\u0627\u062E\u0646\u0627\u06CC \u0627\u0631\u0642\u0627\u0645/\u062A\u0648\u0627\u0644\u06CC \u062D\u0631\u0641-\u0639\u062F\u062F \u0636\u0639\u06CC\u0641 \u2014 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0632\u0628\u0627\u0646 + \u0628\u0631\u0631\u0633\u06CC \u067E\u0631\u062F\u0627\u0632\u0634 \u0634\u0646\u06CC\u062F\u0627\u0631\u06CC (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F4).`, "r4");
+    builder.add(PLAN_TOOL_KEYS.speech, "core", `\u062D\u0627\u0641\u0638\u0647\u0654 \u06A9\u0627\u0631\u06CC ${faNum9(facts.wmi)} \u0628\u0627 \u0641\u0631\u0627\u062E\u0646\u0627\u06CC \u0627\u0631\u0642\u0627\u0645/\u062A\u0648\u0627\u0644\u06CC \u062D\u0631\u0641-\u0639\u062F\u062F \u0636\u0639\u06CC\u0641 \u2014 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0632\u0628\u0627\u0646 + \u0628\u0631\u0631\u0633\u06CC \u067E\u0631\u062F\u0627\u0632\u0634 \u0634\u0646\u06CC\u062F\u0627\u0631\u06CC (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F4).`, "r4");
     builder.notes.push("\u0627\u0644\u06AF\u0648\u06CC \u067E\u0631\u062F\u0627\u0632\u0634 \u0634\u0646\u06CC\u062F\u0627\u0631\u06CC \u2014 \u0627\u0631\u062C\u0627\u0639 \u0634\u0646\u0648\u0627\u06CC\u06CC\u200C\u0634\u0646\u0627\u0633\u06CC (APD) \u062F\u0631 \u0646\u0648\u0628\u062A\u200C\u06AF\u06CC\u0631\u06CC \u062F\u0631 \u0646\u0638\u0631 \u06AF\u0631\u0641\u062A\u0647 \u0634\u0648\u062F.");
     builder.domains.add("language");
   }
@@ -54863,7 +55362,7 @@ function applyProfileRules(args) {
   const execWeak = facts.wmi !== null && facts.wmi <= T.EXEC_WEAK || facts.psi !== null && facts.psi <= T.EXEC_WEAK;
   if (strongIdx.length > 0 && execWeak && facts.indexScatter !== null && facts.indexScatter >= T.SCATTER_TWO_E) {
     const weakDomain = anam.sldDomains.write ? [PLAN_TOOL_KEYS.sldWri, "\u0646\u0648\u0634\u062A\u0646"] : anam.sldDomains.calc ? [PLAN_TOOL_KEYS.sldCalc, "\u062D\u0633\u0627\u0628"] : [PLAN_TOOL_KEYS.sldRead, "\u062E\u0648\u0627\u0646\u062F\u0646"];
-    builder.add(weakDomain[0], "core", `\u0634\u0627\u062E\u0635 \u0642\u0648\u06CC ${faNum8(Math.max(...strongIdx))} \u0628\u0627 \u0636\u0639\u0641 \u0627\u062C\u0631\u0627\u06CC\u06CC \u0648 \u067E\u0631\u0627\u06A9\u0646\u062F\u06AF\u06CC ${faNum8(facts.indexScatter)} \u2014 \u0628\u0633\u062A\u0647\u0654 SLD \u062D\u0648\u0632\u0647\u0654 \u0636\u0639\u0641 (${weakDomain[1]}) + \u062A\u06AF \u0627\u0633\u062A\u0639\u062F\u0627\u062F (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F1\u06F1).`, "r11");
+    builder.add(weakDomain[0], "core", `\u0634\u0627\u062E\u0635 \u0642\u0648\u06CC ${faNum9(Math.max(...strongIdx))} \u0628\u0627 \u0636\u0639\u0641 \u0627\u062C\u0631\u0627\u06CC\u06CC \u0648 \u067E\u0631\u0627\u06A9\u0646\u062F\u06AF\u06CC ${faNum9(facts.indexScatter)} \u2014 \u0628\u0633\u062A\u0647\u0654 SLD \u062D\u0648\u0632\u0647\u0654 \u0636\u0639\u0641 (${weakDomain[1]}) + \u062A\u06AF \u0627\u0633\u062A\u0639\u062F\u0627\u062F (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F1\u06F1).`, "r11");
     builder.domains.add("academic");
   }
   if (facts.fsiq !== null && facts.fsiq >= 90 && facts.step5Weak.length > 0) {
@@ -54890,7 +55389,7 @@ function applyProfileRules(args) {
     builder.notes.push("\u0646\u06CC\u0645\u200C\u0631\u062E \u0647\u0645\u200C\u0646\u0648\u0627\u0632 \u062F\u0631 \u0628\u0627\u0632\u0647\u0654 \u0645\u062A\u0648\u0633\u0637 \u2014 \u0628\u0627\u062A\u0631\u06CC \u067E\u0627\u06CC\u0647\u0654 \u0633\u0628\u06A9 \u0648 \u067E\u0627\u06CC\u0627\u0646 \u0632\u0648\u062F\u0647\u0646\u06AF\u0627\u0645 \u0645\u0633\u06CC\u0631 \u0634\u0646\u0627\u0633\u0627\u06CC\u06CC (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F1\u06F3).");
   }
   if ((facts.indexScatter ?? 0) >= T.SCATTER_SEVERE && !facts.acid && !facts.cad && builder.items.size === 0) {
-    builder.notes.push(`\u067E\u0631\u0627\u06A9\u0646\u062F\u06AF\u06CC \u0628\u06CC\u0646\u200C\u0634\u0627\u062E\u0635\u06CC ${faNum8(facts.indexScatter ?? 0)} (\u2265\u06F2\u06F3) \u0628\u062F\u0648\u0646 \u0627\u0644\u06AF\u0648\u06CC \u0645\u0639\u0646\u0627\u062F\u0627\u0631 \u2014 \u0627\u0628\u062A\u062F\u0627 \u0627\u0639\u062A\u0628\u0627\u0631 \u0627\u062C\u0631\u0627\u06CC \u0622\u0632\u0645\u0648\u0646 \u0628\u0627\u0632\u0628\u06CC\u0646\u06CC \u0634\u0648\u062F\u061B \u062A\u0641\u0633\u06CC\u0631 \u0628\u0647 \u0633\u0637\u062D \u0634\u0627\u062E\u0635\u200C\u0647\u0627 \u0645\u0646\u062A\u0642\u0644 \u0645\u06CC\u200C\u0634\u0648\u062F (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F1\u06F4).`);
+    builder.notes.push(`\u067E\u0631\u0627\u06A9\u0646\u062F\u06AF\u06CC \u0628\u06CC\u0646\u200C\u0634\u0627\u062E\u0635\u06CC ${faNum9(facts.indexScatter ?? 0)} (\u2265\u06F2\u06F3) \u0628\u062F\u0648\u0646 \u0627\u0644\u06AF\u0648\u06CC \u0645\u0639\u0646\u0627\u062F\u0627\u0631 \u2014 \u0627\u0628\u062A\u062F\u0627 \u0627\u0639\u062A\u0628\u0627\u0631 \u0627\u062C\u0631\u0627\u06CC \u0622\u0632\u0645\u0648\u0646 \u0628\u0627\u0632\u0628\u06CC\u0646\u06CC \u0634\u0648\u062F\u061B \u062A\u0641\u0633\u06CC\u0631 \u0628\u0647 \u0633\u0637\u062D \u0634\u0627\u062E\u0635\u200C\u0647\u0627 \u0645\u0646\u062A\u0642\u0644 \u0645\u06CC\u200C\u0634\u0648\u062F (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F1\u06F4).`);
   }
   void band;
 }
@@ -54912,8 +55411,8 @@ var ADAPT_FA = {
 function buildBasis(args) {
   const { facts, anam, adapt, domains, notes, planType } = args;
   const parts = [];
-  parts.push(facts.available && facts.fsiq !== null ? `\u0646\u06CC\u0645\u200C\u0631\u062E \u0648\u06A9\u0633\u0644\u0631: FSIQ ${faNum8(facts.fsiq)}${args.band ? ` \u2014 ${bandLabelFa(args.band)}` : ""}` : "\u0646\u06CC\u0645\u200C\u0631\u062E \u0648\u06A9\u0633\u0644\u0631: \u062B\u0628\u062A\u200C\u0646\u0634\u062F\u0647");
-  parts.push(anam.signals.size > 0 ? `\u0634\u0631\u062D\u200C\u062D\u0627\u0644 \u0633\u0627\u062E\u062A\u200C\u06CC\u0627\u0641\u062A\u0647: ${faNum8(anam.signals.size)} \u0646\u0634\u0627\u0646\u0647\u0654 \u062B\u0628\u062A\u200C\u0634\u062F\u0647` : anam.text.length > 0 ? "\u0634\u0631\u062D\u200C\u062D\u0627\u0644: \u0646\u0633\u062E\u0647\u0654 \u0642\u062F\u06CC\u0645\u06CC (\u0628\u062F\u0648\u0646 \u0633\u06CC\u06AF\u0646\u0627\u0644 \u0633\u0627\u062E\u062A\u200C\u06CC\u0627\u0641\u062A\u0647)" : "\u0634\u0631\u062D\u200C\u062D\u0627\u0644 \u0646\u0633\u062E\u0647\u0654 \u06F3: \u062B\u0628\u062A\u200C\u0646\u0634\u062F\u0647");
+  parts.push(facts.available && facts.fsiq !== null ? `\u0646\u06CC\u0645\u200C\u0631\u062E \u0648\u06A9\u0633\u0644\u0631: FSIQ ${faNum9(facts.fsiq)}${args.band ? ` \u2014 ${bandLabelFa(args.band)}` : ""}` : "\u0646\u06CC\u0645\u200C\u0631\u062E \u0648\u06A9\u0633\u0644\u0631: \u062B\u0628\u062A\u200C\u0646\u0634\u062F\u0647");
+  parts.push(anam.signals.size > 0 ? `\u0634\u0631\u062D\u200C\u062D\u0627\u0644 \u0633\u0627\u062E\u062A\u200C\u06CC\u0627\u0641\u062A\u0647: ${faNum9(anam.signals.size)} \u0646\u0634\u0627\u0646\u0647\u0654 \u062B\u0628\u062A\u200C\u0634\u062F\u0647` : anam.text.length > 0 ? "\u0634\u0631\u062D\u200C\u062D\u0627\u0644: \u0646\u0633\u062E\u0647\u0654 \u0642\u062F\u06CC\u0645\u06CC (\u0628\u062F\u0648\u0646 \u0633\u06CC\u06AF\u0646\u0627\u0644 \u0633\u0627\u062E\u062A\u200C\u06CC\u0627\u0641\u062A\u0647)" : "\u0634\u0631\u062D\u200C\u062D\u0627\u0644 \u0646\u0633\u062E\u0647\u0654 \u06F3: \u062B\u0628\u062A\u200C\u0646\u0634\u062F\u0647");
   parts.push(`\u0627\u0646\u0637\u0628\u0627\u0642 \u0631\u0648\u0632\u0645\u0631\u0647: ${ADAPT_FA[adapt.level]}`);
   const domainFa = [...domains].map((d) => DOMAIN_FA[d] ?? d);
   parts.push(domainFa.length ? `\u062D\u0648\u0632\u0647\u200C\u0647\u0627\u06CC \u062F\u0631\u06AF\u06CC\u0631: ${domainFa.join("\u060C ")}` : "\u062D\u0648\u0632\u0647\u0654 \u062F\u0631\u06AF\u06CC\u0631 \u0645\u0634\u062E\u0635 \u0646\u0634\u062F\u0647");
@@ -56514,7 +57013,7 @@ function registerClinicalEngineRoutes(app, service) {
         note: body.note,
         items: itemInputsToDomain(body.items),
         fidelity: body.fidelity
-        // عیناً عبور: کلید غایب = undefined = دست‌نخوردن قبلی (قرارداد )
+        // عیناً عبور: کلید غایب = undefined = دست‌نخوردن قبلی (قرارداد)
       },
       actor
     );
@@ -56627,11 +57126,11 @@ function parseJsonSafe(raw2) {
   }
 }
 __name(parseJsonSafe, "parseJsonSafe");
-function faNum9(value) {
+function faNum10(value) {
   const fa2 = "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9";
   return String(value).replace(/\d/g, (d) => fa2[Number(d)]);
 }
-__name(faNum9, "faNum");
+__name(faNum10, "faNum");
 function numOf2(value) {
   if (value === null || value === void 0 || value === "") return null;
   const n = Number(String(value).replace(/[۰-۹]/g, (d) => String("\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9".indexOf(d))));
@@ -56680,15 +57179,15 @@ function computeSuspicion(behavioralEvents, decisionEvent, isFreshIso) {
       const iaDanger = iaNum !== null ? iaNum >= cut.ia.danger : subscaleColorOf(event, "ia") === "danger";
       const iaWarn = !iaDanger && iaNum !== null ? iaNum >= cut.ia.warn : !iaDanger && subscaleColorOf(event, "ia") === "warn";
       if (iaDanger) {
-        hits.push({ construct: "adhd", level: "high", source: sourceOf(toolKey), text: `\u0628\u06CC\u200C\u062A\u0648\u062C\u0647\u06CC \u062F\u0631 SNAP-IV ${src} \u067E\u0631\u062E\u0637\u0631 \u0627\u0633\u062A${iaNum !== null ? ` (\u0646\u0645\u0631\u0647\u0654 ${faNum9(iaNum)} \u0627\u0632 ${faNum9(27)})` : ""}` });
+        hits.push({ construct: "adhd", level: "high", source: sourceOf(toolKey), text: `\u0628\u06CC\u200C\u062A\u0648\u062C\u0647\u06CC \u062F\u0631 SNAP-IV ${src} \u067E\u0631\u062E\u0637\u0631 \u0627\u0633\u062A${iaNum !== null ? ` (\u0646\u0645\u0631\u0647\u0654 ${faNum10(iaNum)} \u0627\u0632 ${faNum10(27)})` : ""}` });
       } else if (iaWarn) {
-        hits.push({ construct: "adhd", level: "watch", source: sourceOf(toolKey), text: `\u0628\u06CC\u200C\u062A\u0648\u062C\u0647\u06CC \u062F\u0631 SNAP-IV ${src} \u06A9\u0645\u06CC \u0628\u0627\u0644\u0627\u062A\u0631 \u0627\u0632 \u0645\u0639\u0645\u0648\u0644 \u0627\u0633\u062A${iaNum !== null ? ` (\u0646\u0645\u0631\u0647\u0654 ${faNum9(iaNum)})` : ""}` });
+        hits.push({ construct: "adhd", level: "watch", source: sourceOf(toolKey), text: `\u0628\u06CC\u200C\u062A\u0648\u062C\u0647\u06CC \u062F\u0631 SNAP-IV ${src} \u06A9\u0645\u06CC \u0628\u0627\u0644\u0627\u062A\u0631 \u0627\u0632 \u0645\u0639\u0645\u0648\u0644 \u0627\u0633\u062A${iaNum !== null ? ` (\u0646\u0645\u0631\u0647\u0654 ${faNum10(iaNum)})` : ""}` });
       }
       const hi = subscaleScoreOf2(event, "hi");
       const hiNum = hi ? hi.score : numOf2(event.payload?.["hi_total"]?.value);
       const hiDanger = hiNum !== null ? hiNum >= cut.hi.danger : subscaleColorOf(event, "hi") === "danger";
       if (hiDanger) {
-        hits.push({ construct: "adhd", level: "high", source: sourceOf(toolKey), text: `\u0628\u06CC\u200C\u0642\u0631\u0627\u0631\u06CC/\u062A\u06A9\u0627\u0646\u0634 \u062F\u0631 SNAP-IV ${src} \u067E\u0631\u062E\u0637\u0631 \u0627\u0633\u062A${hiNum !== null ? ` (\u0646\u0645\u0631\u0647\u0654 ${faNum9(hiNum)})` : ""}` });
+        hits.push({ construct: "adhd", level: "high", source: sourceOf(toolKey), text: `\u0628\u06CC\u200C\u0642\u0631\u0627\u0631\u06CC/\u062A\u06A9\u0627\u0646\u0634 \u062F\u0631 SNAP-IV ${src} \u067E\u0631\u062E\u0637\u0631 \u0627\u0633\u062A${hiNum !== null ? ` (\u0646\u0645\u0631\u0647\u0654 ${faNum10(hiNum)})` : ""}` });
       }
       continue;
     }
@@ -56706,11 +57205,11 @@ function computeSuspicion(behavioralEvents, decisionEvent, isFreshIso) {
       const total = event.analysis?.score ?? numOf2(event.payload?.["total"]?.value);
       if (total !== null) {
         if (total >= SCARED_STRONG2) {
-          hits.push({ construct: "anxiety", level: "high", source: "parent", text: `\u0646\u0645\u0631\u0647\u0654 \u06A9\u0644 \u0627\u0636\u0637\u0631\u0627\u0628 (SCARED \u0648\u0627\u0644\u062F) \u062F\u0631 \u0628\u0627\u0646\u062F \u0627\u062E\u062A\u0635\u0627\u0635\u06CC \u0627\u0633\u062A (${faNum9(total)})` });
+          hits.push({ construct: "anxiety", level: "high", source: "parent", text: `\u0646\u0645\u0631\u0647\u0654 \u06A9\u0644 \u0627\u0636\u0637\u0631\u0627\u0628 (SCARED \u0648\u0627\u0644\u062F) \u062F\u0631 \u0628\u0627\u0646\u062F \u0627\u062E\u062A\u0635\u0627\u0635\u06CC \u0627\u0633\u062A (${faNum10(total)})` });
         } else if (total >= SCARED_DANGER2) {
-          hits.push({ construct: "anxiety", level: "high", source: "parent", text: `\u0646\u0645\u0631\u0647\u0654 \u06A9\u0644 \u0627\u0636\u0637\u0631\u0627\u0628 (SCARED \u0648\u0627\u0644\u062F) \u067E\u0631\u062E\u0637\u0631 \u0627\u0633\u062A (${faNum9(total)} \u0627\u0632 ${faNum9(82)})` });
+          hits.push({ construct: "anxiety", level: "high", source: "parent", text: `\u0646\u0645\u0631\u0647\u0654 \u06A9\u0644 \u0627\u0636\u0637\u0631\u0627\u0628 (SCARED \u0648\u0627\u0644\u062F) \u067E\u0631\u062E\u0637\u0631 \u0627\u0633\u062A (${faNum10(total)} \u0627\u0632 ${faNum10(82)})` });
         } else if (total >= SCARED_WARN_MIN2) {
-          hits.push({ construct: "anxiety", level: "watch", source: "parent", text: `\u0646\u0645\u0631\u0647\u0654 \u06A9\u0644 \u0627\u0636\u0637\u0631\u0627\u0628 (SCARED \u0648\u0627\u0644\u062F) \u06A9\u0645\u06CC \u0628\u0627\u0644\u0627\u062A\u0631 \u0627\u0632 \u0645\u0639\u0645\u0648\u0644 \u0627\u0633\u062A (${faNum9(total)})` });
+          hits.push({ construct: "anxiety", level: "watch", source: "parent", text: `\u0646\u0645\u0631\u0647\u0654 \u06A9\u0644 \u0627\u0636\u0637\u0631\u0627\u0628 (SCARED \u0648\u0627\u0644\u062F) \u06A9\u0645\u06CC \u0628\u0627\u0644\u0627\u062A\u0631 \u0627\u0632 \u0645\u0639\u0645\u0648\u0644 \u0627\u0633\u062A (${faNum10(total)})` });
         }
       }
       continue;
@@ -63676,6 +64175,35 @@ function isRestartScheduled() {
   return restartFlag;
 }
 __name(isRestartScheduled, "isRestartScheduled");
+function parseLanInfo(raw2) {
+  if (typeof raw2 !== "string" || !raw2) return null;
+  let p = null;
+  try {
+    p = JSON.parse(raw2);
+  } catch {
+    return null;
+  }
+  if (!p || typeof p !== "object") return null;
+  const o = p;
+  const port = Number(o.port);
+  const gamesPort = Number(o.games_port);
+  if (!Number.isFinite(port) || port <= 0) return null;
+  const ips = Array.isArray(o.lan_ips) ? o.lan_ips.filter((x) => typeof x === "string" && !!x) : [];
+  const urls = Array.isArray(o.main_urls) ? o.main_urls.filter((x) => typeof x === "string" && !!x) : [];
+  const gameUrls = Array.isArray(o.games_urls) ? o.games_urls.filter((x) => typeof x === "string" && !!x) : [];
+  return {
+    host: typeof o.host === "string" && o.host ? o.host : "0.0.0.0",
+    port,
+    games_port: Number.isFinite(gamesPort) && gamesPort > 0 ? gamesPort : 0,
+    lan_ips: ips,
+    main_urls: urls,
+    local_url: typeof o.local_url === "string" && o.local_url ? o.local_url : `http://127.0.0.1:${port}`,
+    games_urls: gameUrls,
+    games_local_url: typeof o.games_local_url === "string" && o.games_local_url ? o.games_local_url : "",
+    boot_at: typeof o.boot_at === "string" && o.boot_at ? o.boot_at : null
+  };
+}
+__name(parseLanInfo, "parseLanInfo");
 function registerSystemPublicRoutes(app, deps) {
   app.get("/api/system/restart-status", async (c) => {
     let scheduled = false;
@@ -63742,6 +64270,10 @@ function registerSystemRoutes(app, deps) {
         "Cache-Control": "no-store"
       }
     });
+  });
+  app.get("/api/system/lan", requireRole("manager"), async (c) => {
+    const lan = parseLanInfo(c.env?.LAN_INFO);
+    return c.json({ ok: true, lan }, 200, { "Cache-Control": "no-store" });
   });
 }
 __name(registerSystemRoutes, "registerSystemRoutes");
@@ -76103,6 +76635,54 @@ async function verifyCloudToken(deps) {
   return { ok: true, accounts };
 }
 __name(verifyCloudToken, "verifyCloudToken");
+async function discoverCloudDeployment(deps) {
+  const doFetch = deps.fetchImpl ?? ((input2, i) => fetch(input2, i));
+  const verify = await verifyCloudToken({ token: deps.token, fetchImpl: doFetch, log: deps.log });
+  if (!verify.ok) {
+    return {
+      ok: false,
+      step: verify.step === "verify" ? "verify" : "accounts",
+      kind: verify.kind === "no_account" ? "no_account" : verify.kind,
+      message: verify.message,
+      ...verify.errors ? { errors: verify.errors } : {}
+    };
+  }
+  const workers = [];
+  const databases = [];
+  for (const account of verify.accounts) {
+    const headers = authHeaders(deps.token);
+    const domainsOutcome = await callCf(doFetch, `/accounts/${account.id}/workers/domains`, { headers });
+    if (domainsOutcome.kind === "ok" && Array.isArray(domainsOutcome.body.result)) {
+      const byService = /* @__PURE__ */ new Map();
+      for (const row of domainsOutcome.body.result) {
+        const service = typeof row.service === "string" ? row.service : "";
+        const hostname3 = typeof row.hostname === "string" ? row.hostname : "";
+        if (!service || !hostname3) continue;
+        const urls = byService.get(service) ?? [];
+        urls.push(`https://${hostname3}`);
+        byService.set(service, urls);
+      }
+      for (const [name, urls] of byService) workers.push({ name, account_id: account.id, urls: urls.sort() });
+      deps.log?.(`\u062D\u0633\u0627\u0628 \xAB${account.name || account.id}\xBB: ${byService.size} \u0648\u0631\u06A9\u0631 \u0628\u0627 \u062F\u0627\u0645\u0646\u0647\u0654 \u0639\u0645\u0648\u0645\u06CC`);
+    } else {
+      deps.log?.(`\u062F\u0627\u0645\u0646\u0647\u200C\u0647\u0627\u06CC \u062D\u0633\u0627\u0628 \xAB${account.name || account.id}\xBB \u062E\u0648\u0627\u0646\u062F\u0647 \u0646\u0634\u062F \u2014 \u0628\u062E\u0634 \u0648\u0631\u06A9\u0631\u0647\u0627 \u062E\u0627\u0644\u06CC \u0645\u06CC\u200C\u0645\u0627\u0646\u062F`);
+    }
+    const d1Outcome = await callCf(doFetch, `/accounts/${account.id}/d1/database`, { headers });
+    if (d1Outcome.kind === "ok" && Array.isArray(d1Outcome.body.result)) {
+      for (const row of d1Outcome.body.result) {
+        const id = typeof row.uuid === "string" ? row.uuid : typeof row.id === "string" ? row.id : "";
+        const name = typeof row.name === "string" ? row.name : "";
+        if (!id || !name) continue;
+        databases.push({ name, id, account_id: account.id });
+      }
+      deps.log?.(`\u062D\u0633\u0627\u0628 \xAB${account.name || account.id}\xBB: ${databases.length} \u067E\u0627\u06CC\u06AF\u0627\u0647 D1`);
+    } else {
+      deps.log?.(`\u0641\u0647\u0631\u0633\u062A D1 \u062D\u0633\u0627\u0628 \xAB${account.name || account.id}\xBB \u062E\u0648\u0627\u0646\u062F\u0647 \u0646\u0634\u062F \u2014 \u0628\u062E\u0634 \u067E\u0627\u06CC\u06AF\u0627\u0647\u200C\u0647\u0627 \u062E\u0627\u0644\u06CC \u0645\u06CC\u200C\u0645\u0627\u0646\u062F`);
+    }
+  }
+  return { ok: true, accounts: verify.accounts, workers, databases };
+}
+__name(discoverCloudDeployment, "discoverCloudDeployment");
 
 // src/core/logger/logger.ts
 var LEVEL_WEIGHT = { debug: 10, info: 20, warn: 30, error: 40 };
@@ -76843,6 +77423,9 @@ var CloneSchema = external_exports.object({
 var ProvisionVerifySchema = external_exports.object({
   token: external_exports.string().min(1, "\u062A\u0648\u06A9\u0646 \u06A9\u0644\u0627\u062F\u0641\u0644\u0631 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A")
 });
+var DiscoverSchema = external_exports.object({
+  token: external_exports.string().min(1, "\u062A\u0648\u06A9\u0646 \u06A9\u0644\u0627\u062F\u0641\u0644\u0631 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A")
+});
 var ProvisionSchema = external_exports.object({
   token: external_exports.string().min(1, "\u062A\u0648\u06A9\u0646 \u06A9\u0644\u0627\u062F\u0641\u0644\u0631 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A"),
   accountId: external_exports.string().min(1).optional(),
@@ -76951,6 +77534,27 @@ function registerDesktopRoutes(app, deps) {
       );
     }
     return c.json({ data: { accounts: result.accounts } }, 200);
+  });
+  app.post("/api/instance-sync/provision/discover", requireRole("manager"), async (c) => {
+    getAuthContext(c);
+    const parsed = DiscoverSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: "VALIDATION_ERROR", message: "\u0628\u062F\u0646\u0647\u0654 \u06A9\u0634\u0641 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A \u2014 token \u0644\u0627\u0632\u0645 \u0627\u0633\u062A" }, 400);
+    }
+    const result = await discoverCloudDeployment({
+      fetchImpl: fetchImplOf(envOf(c)),
+      token: parsed.data.token
+    });
+    if (!result.ok) {
+      return c.json(
+        { error: "CLOUD_DISCOVER_FAILED", message: result.message, data: { step: result.step, errors: result.errors ?? [] } },
+        400
+      );
+    }
+    return c.json(
+      { data: { accounts: result.accounts, workers: result.workers, databases: result.databases } },
+      200
+    );
   });
   app.post("/api/instance-sync/provision", requireRole("manager"), async (c) => {
     const actor = getAuthContext(c);

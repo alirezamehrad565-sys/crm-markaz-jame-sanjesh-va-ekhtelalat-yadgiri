@@ -10,13 +10,15 @@ import type {
 import { CASE_EVENT_CATEGORIES, CASE_EVENT_FIELD_TYPES, CASE_EVENT_BAND_COLORS } from './types';
 
 export const TYPE_TITLE_MAX = 120;
-export const TYPE_KEY_MAX = 60;
 export const TYPE_ICON_MAX = 16;
 export const FIELD_LABEL_MAX = 240;
 export const FIELD_KEY_MAX = 60;
 export const FIELD_OPTION_MAX = 120;
 export const FIELD_OPTIONS_MAX = 16;
-export const FIELDS_MAX = 45;
+/* ۱.۲۵.۸۱ — سقف ۴۵ → ۱۲۰: گزارش همکار مرکز — پرسش‌نامهٔ ۱۰۰ ایتمی طراحی می‌کرد و فرم‌ساز
+   رد می‌کرد. ۱۲۰ = حاشیهٔ رشد کافی برای پرسش‌نامه‌های استاندارد (SDQ ۲۵، CBCL ۱۱۳،Connor ۱۰۰)
+   و هنوز زیر هر محدودیت اندازهٔ سطر/درخواست D1. صرفاً سقف — منطق نمره و رندر تغییری نکرده است. */
+export const FIELDS_MAX = 120;
 export const SCALE_MAX_LIMIT = 10;
 export const EVENT_TEXT_MAX = 200;
 export const EVENT_LONGTEXT_MAX = 2000;
@@ -61,7 +63,6 @@ export function withTeacherName(
   return { ...payload, [TEACHER_NAME_FIELD_KEY]: { value: teacher.name, label: TEACHER_NAME_LABEL } };
 }
 
-export const NEXT_ACTION_OPTIONS = ['هیچ', 'پیگیری', 'نوبت بعدی', 'تماس با خانواده', 'ارجاع'] as const;
 export const NEXT_ACTION_FOLLOW_UP = 'پیگیری';
 
 export function estimateBase64Bytes(b64: string): number {
@@ -152,7 +153,7 @@ export const CaseEventTypeInputSchema = z.object({
   category: z.enum(CASE_EVENT_CATEGORIES as unknown as [string, ...string[]]),
   icon: z.string().max(TYPE_ICON_MAX).nullish(),
   familyFillable: z.boolean().optional(),
-  fields: z.array(CaseEventFieldSchema).min(1, 'حداقل یک فیلد فرم لازم است').max(FIELDS_MAX),
+  fields: z.array(CaseEventFieldSchema).min(1, 'حداقل یک فیلد فرم لازم است').max(FIELDS_MAX, `حداکثر ${faNum(FIELDS_MAX)} آیتم در هر قالب مجاز است`),
   bands: z.array(CaseEventBandSchema).max(BANDS_MAX).nullish(),
   subscales: z.array(CaseEventSubscaleSchema).max(SUBSCALES_MAX, `حداکثر ${SUBSCALES_MAX} زیرمقیاس`).nullish(),
   tags: z.array(z.string().min(8).max(64)).max(12, 'حداکثر ۱۲ برچسب برای هر قالب').nullish(),

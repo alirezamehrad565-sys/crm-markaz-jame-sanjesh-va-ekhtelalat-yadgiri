@@ -1,6 +1,6 @@
 {
   "name": "center-system",
-  "version": "1.27.14",
+  "version": "1.27.25",
   "private": true,
   "type": "module",
   "author": {
@@ -9,7 +9,7 @@
   },
   "description": "سامانهٔ مدیریت مرکز جامع سنجش و اختلالات یادگیری (CRM، نوبت‌دهی، پروندهٔ بالینی) — Cloudflare Workers + D1 + Hono",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "node scripts/dev-lan.mjs",
     "predev": "node scripts/build-client.mjs",
     "build:client": "node scripts/build-client.mjs",
     "deploy": "wrangler deploy",
@@ -27,6 +27,8 @@
     "build:games-worker": "node scripts/build-worker-games.mjs",
     "smoke:games": "node scripts/games-bundle-smoke.mjs",
     "desktop:check": "node scripts/desktop-check.mjs",
+    "ui-voice-check": "node scripts/ui-voice-check.mjs",
+    "contrast-check": "node scripts/contrast-check.mjs",
     "desktop:icons": "python3 scripts/make-desktop-icons.py",
     "engine:start": "node scripts/engine/engine.mjs",
     "engine:smoke": "node scripts/engine/engine-smoke.mjs",
@@ -48,6 +50,7 @@
   "dependencies": {
     "@hono/node-server": "^2.1.5",
     "hono": "^4.6.14",
+    "mime": "^4.1.2",
     "qrcode-generator": "^2.0.4",
     "zod": "^4.6.7"
   },

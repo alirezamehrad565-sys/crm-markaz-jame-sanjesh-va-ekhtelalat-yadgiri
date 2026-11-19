@@ -62,7 +62,9 @@ export async function renderOutbox(outlet) {
     outlet.replaceChildren(emptyState({
       iconName: 'alert',
       title: 'بارگذاری صندوق اعلان‌ها ناموفق بود',
-      hint: err?.message ?? 'خطای نامشخص'
+      hint: err?.message ?? 'ارتباط با سرور برقرار نشد — اعلان‌ها از بین نرفته‌اند؛ دوباره تلاش کنید.',
+      actionLabel: 'تلاش مجدد',
+      onAction: () => { void renderOutbox(outlet); }
     }));
     return;
   }
@@ -89,7 +91,7 @@ export async function renderOutbox(outlet) {
           countBadge,
           extraHead ?? null
         ),
-        hint ? el('p', { class: 'hint-text', style: { margin: '4px 0 0' } }, hint) : null
+        hint ? el('p', { class: 'hint-text', style: { margin: 'var(--sp-1) 0 0' } }, hint) : null
       ),
       bodyEl
     );
@@ -110,6 +112,16 @@ export async function renderOutbox(outlet) {
       el('button', { class: 'btn btn--soft btn--sm', onclick: (e) => lockBtn(e.currentTarget, () => release(n)) }, icon('refresh', 15), 'تلاش دوباره'));
   }
 
+  /* حالت خالی هر بخش — پیام کنش‌دار هم‌قانون ⑥: چه شد + چه کنم (متنی — کنشِ بخش خالی نداریم) */
+  function emptySectionText(key) {
+    if (key === 'drafts') return 'اعلانی در انتظار نیست — اعلان‌های ثبت نوبت تا «ساعت ارسال» اینجا می‌مانند.';
+    if (key === 'ready') return 'اعلانی آمادهٔ ارسال نیست — اعلان‌های بی‌درنگ پس از ثبت، در چرخهٔ بعدی همین‌جا رد می‌شوند.';
+    return 'اعلانی متوقف نشده — همهٔ ارسال‌ها در جریان‌اند.';
+  }
+  function emptySectionNode(key) {
+    return el('div', { class: 'sanj-widget__empty', style: { padding: 'var(--sp-4)' } }, icon('check', 15), el('span', {}, emptySectionText(key)));
+  }
+
   function renderSections() {
     for (const key of ['drafts', 'ready', 'failed']) {
       const arr = data[key] ?? [];
@@ -117,7 +129,7 @@ export async function renderOutbox(outlet) {
       bodyEl.replaceChildren(
         ...(arr.length
           ? arr.map((n) => sectionBodyRow(key, n))
-          : [el('div', { class: 'sanj-widget__empty', style: { padding: 'var(--sp-4)' } }, icon('check', 15), el('span', {}, 'موردی در این بخش نیست'))])
+          : [emptySectionNode(key)])
       );
     }
     updateBadges(); /* بج‌ها/هدر/دکمهٔ تلاش‌دوباره فقط از یک‌جا — منطق تکراری حذف شد */
@@ -138,7 +150,7 @@ export async function renderOutbox(outlet) {
     for (const key of ['drafts', 'ready', 'failed']) {
       const { bodyEl } = sections[key];
       if ((data[key] ?? []).length === 0 && !bodyEl.querySelector('[data-notif-id]')) {
-        bodyEl.replaceChildren(el('div', { class: 'sanj-widget__empty', style: { padding: 'var(--sp-4)' } }, icon('check', 15), el('span', {}, 'موردی در این بخش نیست')));
+        bodyEl.replaceChildren(emptySectionNode(key));
       }
     }
   }
@@ -182,10 +194,10 @@ export async function renderOutbox(outlet) {
   outlet.replaceChildren(
     el('div', { class: 'page-head' },
       el('h2', { class: 'page-head__title' }, 'صندوق اعلان‌ها') /* S9-04 */,
-      headBadge
+      headBadge,
+      el('p', { class: 'page-head__desc' },
+        'اعلان‌های ثبت نوبت تا «ساعت ارسال» (پیش‌فرض ۱۸:۰۰) پیش‌نویس می‌مانند؛ بقیه فوری می‌روند.')
     ),
-    el('p', { class: 'hint-text', style: { marginTop: '0' } },
-      'اعلان‌های ثبت نوبت تا «ساعت ارسال» (پیش‌فرض ۱۸:۰۰) پیش‌نویس می‌مانند؛ بقیه فوری می‌روند.'),
     makeSection('drafts', 'پیش‌نویس‌ها (در انتظار ساعت ارسال)', 'ارسال پیش از موعد با «ارسال فوری».'),
     makeSection('ready', 'آمادهٔ ارسال', 'در چرخهٔ بعدی (چند دقیقه) خودکار می‌رود.'),
     makeSection('failed', 'ناموفق‌ها', 'پس از ۵ تلاش متوقف شده‌اند — علت در خطای ردیف.', retryAllBtn)

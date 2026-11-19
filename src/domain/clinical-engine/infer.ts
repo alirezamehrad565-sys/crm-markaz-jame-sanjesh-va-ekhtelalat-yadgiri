@@ -33,10 +33,6 @@ function probeDefOf(toolKey: string): ProbeDef | undefined {
 export const ANAMNESIS_V2_KEY = 'ce-anamnesis-v2';
 export const ANAMNESIS_V3_KEY = 'ce-anamnesis-v3';
 
-export function latestAnamnesisKeyOf(latest: Map<string, EvidenceEvent>): string {
-  return latest.has(ANAMNESIS_V3_KEY) ? ANAMNESIS_V3_KEY : ANAMNESIS_V2_KEY;
-}
-
 const ANAMNESIS_V3_LEVEL4: Record<string, number> = {
   'بدون نگرانی': 0,
   'کم': 0.33,

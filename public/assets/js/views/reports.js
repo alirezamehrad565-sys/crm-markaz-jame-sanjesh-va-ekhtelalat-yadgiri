@@ -1,5 +1,5 @@
 import { api, qs } from '../api.js';
-import { csvRow, downloadCsv } from '../csv-rtl.js'; // ۱.۲۷.۱۴ — خروجی CSV راست‌چین جدولی (خواست کارفرما)
+import { csvRow, csvTable, downloadCsv } from '../csv-rtl.js'; // ۱.۲۷.۱۴/۷۷ — خروجی CSV راست‌چین جدولی + هم‌عرضی ستون‌ها (خواست کارفرما)
 import { fa, addDaysYmd, formatJalaliNumeric, iranianWeekdayOfYmd, tehranTodayYmd, toJalali, WEEKDAY_NAMES } from '../format.js';
 import { el, icon, skeletonState, errorState, dataTable, emptyState, toast, kpi, KPI_ALERT_RATE, statusBadge, markScrollable } from '../ui.js'; /* ۱.۲۵.۰۵ — kpi/آستانه تک‌منبع · ۱.۲۵.۵۶ — statusBadge برای نقش همکار · B7 — markScrollable */
 import { jalaliDateInput } from '../jalali-picker.js';
@@ -169,16 +169,17 @@ function buildPeriodicBody(r) {
   const ratePct = (rate, markedCount) => markedCount > 0 ? pct(rate) : '—';
   const fa1 = (v) => fa(Math.round((v ?? 0) * 10) / 10);
   /* ۱.۲۵.۱۰ — گرید سه‌ستونهٔ گزارش: ۹ شاخص = ۳×۳ و ۶ شاخص = ۳+۳ — سلول یتیم حذف */
+  /* POLISH-3 M2 — حفر گرید ۹KPI: هر شاخص به فهرست پشتِ عددش می‌رود */
   const kpiGrid = el('div', { class: 'kpi-grid kpi-grid--rpt', style: { marginBottom: 'var(--sp-5)' } },
-    kpi('نوبت‌های بازه', r.appointments.total, `روزانه ${fa(r.appointments.avgPerDay)}`, 'primary'),
+    kpi('نوبت‌های بازه', r.appointments.total, `روزانه ${fa(r.appointments.avgPerDay)}`, 'primary', null, '#/appointments'),
     kpi('مجموع ساعت جلسات', r.appointments.hours, 'جلسات برنامه‌ریزی‌شده', 'accent'),
     kpi('نرخ لغو', r.appointments.total > 0 ? pct(r.appointments.cancellationRate) : '—', `${fa(r.appointments.cancelled)} نوبت لغوشده`, r.appointments.cancellationRate >= KPI_ALERT_RATE ? 'error' : 'neutral'),
-    kpi('نرخ غیبت دانش‌آموز', ratePct(r.attendance.absenceRate, r.attendance.present + (r.attendance.late ?? 0) + r.attendance.absent), `${fa(r.attendance.absent)} غیبت از ${fa(r.attendance.present + (r.attendance.late ?? 0) + r.attendance.absent)} جلسه`, (r.attendance.present + (r.attendance.late ?? 0) + r.attendance.absent) === 0 ? 'neutral' : r.attendance.absenceRate >= KPI_ALERT_RATE ? 'error' : 'success') /* S7-08 */,
-    kpi('میانگین انتظار تا نوبت', r.waitSchedule.avgDays, r.waitSchedule.scheduled > 0 ? `${fa(r.waitSchedule.scheduled)} نوبت‌دهی از لیست انتظار` : 'نوبت‌دهی از لیست انتظار در این بازه ثبت نشده', 'primary', (v) => `${fa1(v)} روز`),
+    kpi('نرخ غیبت دانش‌آموز', ratePct(r.attendance.absenceRate, r.attendance.present + (r.attendance.late ?? 0) + r.attendance.absent), `${fa(r.attendance.absent)} غیبت از ${fa(r.attendance.present + (r.attendance.late ?? 0) + r.attendance.absent)} جلسه`, (r.attendance.present + (r.attendance.late ?? 0) + r.attendance.absent) === 0 ? 'neutral' : r.attendance.absenceRate >= KPI_ALERT_RATE ? 'error' : 'success', null, '#/working-day') /* S7-08 */,
+    kpi('میانگین انتظار تا نوبت', r.waitSchedule.avgDays, r.waitSchedule.scheduled > 0 ? `${fa(r.waitSchedule.scheduled)} نوبت‌دهی از لیست انتظار` : 'نوبت‌دهی از لیست انتظار در این بازه ثبت نشده', 'primary', (v) => `${fa1(v)} روز`, '#/waitlist'),
     kpi('میانگین جلسات هر دانش‌آموز', r.perStudent.avgSessions, r.perStudent.students > 0 ? `${fa(r.perStudent.sessions)} جلسه · ${fa(r.perStudent.students)} دانش‌آموز` : 'جلسه‌ای در این بازه ثبت نشده', 'accent', (v) => fa1(v)),
-    kpi('نمرهٔ تولید محتوای تیم', r.practical.score, `تولید ${fa(r.practical.exercises)} کارت · ${fa(r.practical.templates)} قالب · ${fa(r.practical.forms)} فرم`, 'success'),
-    kpi('دانش‌آموزان جدید', r.newStudents, 'ثبت‌نام در این بازه', 'primary'),
-    kpi('حضور همکاران', ratePct(r.staffAttendance.attendanceRate, r.staffAttendance.present ?? 0), `${fa(r.staffAttendance.absent + r.staffAttendance.leave + r.staffAttendance.sick)} روز عدم حضور`, 'neutral')
+    kpi('نمرهٔ تولید محتوای تیم', r.practical.score, `تولید ${fa(r.practical.exercises)} کارت · ${fa(r.practical.templates)} قالب · ${fa(r.practical.forms)} فرم`, 'success', null, '#/exercises'),
+    kpi('دانش‌آموزان جدید', r.newStudents, 'ثبت‌نام در این بازه', 'primary', null, '#/students'),
+    kpi('حضور همکاران', ratePct(r.staffAttendance.attendanceRate, r.staffAttendance.present ?? 0), `${fa(r.staffAttendance.absent + r.staffAttendance.leave + r.staffAttendance.sick)} روز عدم حضور`, 'neutral', null, '#/staff')
   );
 
   const points = r.byDay.map((p) => ({ date: jalaliTick(p.date), total: p.total, cancelled: p.cancelled }));
@@ -223,7 +224,11 @@ function buildPeriodicBody(r) {
   }), { reserveH: 190 }); /* E3 */
   const donutCard = el('div', { class: 'card' },
     el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, 'وضعیت حضور دانش‌آموزان')),
-    el('div', { class: 'card__body' }, attDonut)
+    el('div', { class: 'card__body' }, attDonut),
+    /* POLISH-3 M2 — حفر دونات حضور به بورد روز */
+    el('div', { style: { padding: '0 var(--sp-5) var(--sp-4)' } },
+      el('button', { class: 'btn btn--ghost btn--sm', type: 'button', onclick: () => { location.hash = '#/working-day'; } }, 'بورد جلسات روز', icon('chevL', 13))
+    )
   );
 
   const staffCard = el('div', { class: 'card' },
@@ -233,7 +238,7 @@ function buildPeriodicBody(r) {
     ),
     el('div', { class: 'card__body' },
       r.perStaff.length === 0
-        ? emptyState({ iconName: 'users', title: 'نوبتی در این بازه ثبت نشده' })
+        ? emptyState({ iconName: 'users', title: 'نوبتی در این بازه ثبت نشده', hint: 'بازهٔ گزارش را عوض کنید، یا بعد از ثبت نوبت‌های تازه همین‌جا را ببینید.' })
         : deferredChart(() => hbars({
             items: r.perStaff.map((s) => ({
               label: s.staffName,
@@ -243,6 +248,10 @@ function buildPeriodicBody(r) {
             })),
             valueFormatter: (v) => fa(v)
           }), { reserveH: Math.max(1, r.perStaff.length) * 56 + 16 }) /* E3: ارتفاع تقریبی ردیف‌ها */
+    ),
+    /* POLISH-3 M2 — حفر بار کاری به کارکنان */
+    el('div', { style: { padding: '0 var(--sp-5) var(--sp-4)' } },
+      el('button', { class: 'btn btn--ghost btn--sm', type: 'button', onclick: () => { location.hash = '#/staff'; } }, 'مدیریت کارکنان', icon('chevL', 13))
     )
   );
 
@@ -253,10 +262,11 @@ function buildPeriodicBody(r) {
     ),
     el('div', { class: 'card__body' },
       r.schools.length === 0
-        ? emptyState({ iconName: 'school', title: 'دانش‌آموزی با مدرسه ثبت‌شده نیست' })
+        ? emptyState({ iconName: 'school', title: 'دانش‌آموزی با مدرسه ثبت‌شده نیست', hint: 'مدرسهٔ هر دانش‌آموز را از «دانش‌آموزان ← ویرایش» انتخاب کنید تا این‌جا شمرده شود.' })
         : dataTable({
             columns: [
-              { key: 'name', label: 'مدرسه' },
+              /* POLISH-3 M2 — حفر: دانش‌آموزان همان مدرسه (لینک عمیق فیلتر مدرسه) */
+              { key: 'name', label: 'مدرسه', render: (s) => el('button', { class: 'btn btn--ghost btn--sm', type: 'button', title: 'دانش‌آموزان این مدرسه', onclick: () => { location.hash = `#/students?school_id=${encodeURIComponent(s.schoolId)}`; } }, s.name) },
               { key: 'students', label: 'دانش‌آموز', render: (s) => fa(s.students), align: 'end' }
             ],
             rows: r.schools
@@ -268,7 +278,7 @@ function buildPeriodicBody(r) {
     el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, 'پرتکرارترین دانش‌آموزان')),
     el('div', { class: 'card__body' },
       r.topStudents.length === 0
-        ? emptyState({ iconName: 'student', title: 'داده‌ای نیست' })
+        ? emptyState({ iconName: 'student', title: 'جلسه‌ای در این بازه ثبت نشده', hint: 'بازهٔ گزارش را عوض کنید، یا بعد از برگزاری جلسه‌ها همین‌جا را ببینید.' })
         : dataTable({
             columns: [
               { key: 'studentName', label: 'دانش‌آموز' },
@@ -288,7 +298,8 @@ function buildPeriodicBody(r) {
     ? el('div', { class: 'card' },
         el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, 'برچسب‌های پرتکرار')),
         el('div', { class: 'card__body', style: { display: 'flex', flexWrap: 'wrap', gap: 'var(--sp-2)' } }, /* 8px خام (S7-10) */
-          r.topTags.map((t) => el('span', { class: 'badge badge--neutral', title: t.category }, `${t.name} · ${fa(t.count)}`))
+          /* POLISH-3 M2 — حفر برچسب به فیلتر دانش‌آموزان (tag_id از قبل پشتیبانی می‌شد) */
+          r.topTags.map((t) => el('span', { class: 'badge badge--neutral', role: 'link', tabindex: 0, style: { cursor: 'pointer' }, title: `برچسب «${t.name}» (${t.category}) — مشاهدهٔ دانش‌آموزان`, onclick: () => { location.hash = `#/students?tag_id=${encodeURIComponent(t.tagId)}`; }, onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); location.hash = `#/students?tag_id=${encodeURIComponent(t.tagId)}`; } } }, `${t.name} · ${fa(t.count)}`))
         )
       )
     : null;
@@ -451,8 +462,12 @@ function buildAdvancedBody(adv, pct, days) {
     el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, 'قیف لیست انتظار — کل تاریخ')),
     el('div', { class: 'card__body' },
       adv.waitlist.total === 0
-        ? emptyState({ iconName: 'clock', title: 'متقاضی‌ای ثبت نشده' })
+        ? emptyState({ iconName: 'clock', title: 'متقاضی‌ای ثبت نشده', hint: 'متقاضی‌های لیست انتظار از ماژول «لیست انتظار» ثبت می‌شوند.' })
         : funnelDonut
+    ),
+    /* POLISH-3 M2 — حفر قیف به لیست انتظار */
+    el('div', { style: { padding: '0 var(--sp-5) var(--sp-4)' } },
+      el('button', { class: 'btn btn--ghost btn--sm', type: 'button', onclick: () => { location.hash = '#/waitlist'; } }, 'لیست انتظار', icon('chevL', 13))
     )
   );
 
@@ -465,7 +480,7 @@ function buildAdvancedBody(adv, pct, days) {
       { label: 'نرخ حضور', render: (w) => w.attendanceRate === null ? '—' : pct(w.attendanceRate) }
     ],
     rows: [...adv.weeks].reverse(),
-    empty: emptyState({ iconName: 'calendar', title: 'هفته‌ای در این بازه نیست' })
+    empty: emptyState({ iconName: 'calendar', title: 'هفته‌ای در این بازه نیست', hint: 'بازهٔ گزارش را عوض کنید تا هفته‌های دیگر بیاید.' })
   });
   const weeksCard = el('div', { class: 'card' },
     el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, 'جزئیات هفته‌ها')),
@@ -480,23 +495,28 @@ function buildAdvancedBody(adv, pct, days) {
 }
 
 function exportCsv(adv) {
-  /* ۱.۲۷.۱۴ — خواست کارفرما: خروجی راست‌چین جدولی (csv-rtl: BOM + RLM روی سلول متنی؛
-     سلول عددی عدد می‌ماند) — سه سکشن # هم‌ساخت قبل حفظ شده، همه به‌صورت ردیف جدول. */
+  /* ۱.۲۷.۱۴/۷۷ — خواست کارفرما: خروجی راست‌چین جدولی (csv-rtl: BOM + RLM روی سلول متنی؛
+     سلول عددی عدد می‌ماند) و هم‌عرضی ستون‌ها — عرض هر ستون = طول بزرگ‌ترین دادهٔ همان ستون.
+     سه سکشن # هم‌ساخت قبل؛ هر سکشن جدولِ هم‌عرضِ خودش را دارد تا ستون‌های سکشن‌ها با هم قاطی نشوند. */
   const lines = [];
   lines.push(csvRow(['# روند هفتگی']));
-  lines.push(csvRow(['هفته (شنبه)', 'جلسات', 'برگزارشده', 'لغوشده', 'نرخ حضور']));
-  for (const w of adv.weeks) {
-    lines.push(csvRow([w.weekStart, w.sessions, w.completed, w.cancelled, w.attendanceRate ?? '']));
-  }
+  lines.push(...csvTable([
+    ['هفته (شنبه)', 'جلسات', 'برگزارشده', 'لغوشده', 'نرخ حضور'],
+    ...adv.weeks.map((w) => [w.weekStart, w.sessions, w.completed, w.cancelled, w.attendanceRate ?? ''])
+  ]));
   lines.push('');
   lines.push(csvRow(['# قیف لیست انتظار']));
-  lines.push(csvRow(['کل', 'در صف', 'نوبت‌داده‌شده', 'پذیرش‌شده', 'ردشده', 'عدم حضور', 'لغوشده', 'میانگین انتظار (روز)', 'نرخ تبدیل']));
-  lines.push(csvRow([adv.waitlist.total, adv.waitlist.open, adv.waitlist.scheduled, adv.waitlist.admitted, adv.waitlist.rejected, adv.waitlist.noShow, adv.waitlist.cancelled, adv.waitlist.avgWaitDays ?? '', adv.waitlist.conversionRate ?? '']));
+  lines.push(...csvTable([
+    ['کل', 'در صف', 'نوبت‌داده‌شده', 'پذیرش‌شده', 'ردشده', 'عدم حضور', 'لغوشده', 'میانگین انتظار (روز)', 'نرخ تبدیل'],
+    [adv.waitlist.total, adv.waitlist.open, adv.waitlist.scheduled, adv.waitlist.admitted, adv.waitlist.rejected, adv.waitlist.noShow, adv.waitlist.cancelled, adv.waitlist.avgWaitDays ?? '', adv.waitlist.conversionRate ?? '']
+  ]));
   lines.push('');
   lines.push(csvRow(['# پوشش‌ها']));
-  lines.push(csvRow(['پوشش گزارش پرونده', adv.assessments.withAny, adv.assessments.activeStudents, adv.assessments.coverageRate ?? '']));
-  lines.push(csvRow(['پوشش گزارش جلسه', adv.sessionNotes.withNote, adv.sessionNotes.sessions, adv.sessionNotes.coverageRate ?? '']));
-  lines.push(csvRow(['مصوبات کمیسیون', adv.committee.approved, adv.committee.itemsTotal, adv.committee.approvalRate ?? '']));
+  lines.push(...csvTable([
+    ['پوشش گزارش پرونده', adv.assessments.withAny, adv.assessments.activeStudents, adv.assessments.coverageRate ?? ''],
+    ['پوشش گزارش جلسه', adv.sessionNotes.withNote, adv.sessionNotes.sessions, adv.sessionNotes.coverageRate ?? ''],
+    ['مصوبات کمیسیون', adv.committee.approved, adv.committee.itemsTotal, adv.committee.approvalRate ?? '']
+  ]));
 
   downloadCsv(`advanced-report-${adv.from}_${adv.to}`, lines);
   toast('فایل CSV دانلود شد', 'success');
@@ -646,7 +666,7 @@ function buildAttendanceView(zone) {
 
 function buildAttendanceBody(model) {
   if (model.people.length === 0) {
-    return emptyState({ iconName: 'users', title: 'همکار فعالی ثبت نشده است' });
+    return emptyState({ iconName: 'users', title: 'همکار فعالی ثبت نشده است', hint: 'همکاران را از ماژول «کارکنان» اضافه کنید تا دفتر حضور ساخته شود.' });
   }
   const summaryTable = dataTable({
     columns: [
@@ -705,26 +725,29 @@ function buildAttendanceBody(model) {
 }
 
 function exportAttendanceCsv(model) {
-  /* ۱.۲۷.۱۴ — خواست کارفرما: خروجی راست‌چین جدولی (csv-rtl: BOM + RLM روی سلول متنی؛
-     سلول عددی/نشانهٔ خالی دست‌نخورده) — ساختار دفتر روزبه‌روز + راهنما هم‌ساخت قبل. */
+  /* ۱.۲۷.۱۴/۷۷ — خواست کارفرما: خروجی راست‌چین جدولی + هم‌عرضی ستون‌ها (csv-rtl: عرض هر
+     ستون = طول بزرگ‌ترین دادهٔ همان ستون؛ سلول عددی/نشانهٔ خالی دست‌نخورده) — ساختار
+     دفتر روزبه‌روز + راهنما هم‌ساخت قبل. */
   const lines = [];
   lines.push(csvRow([`# دفتر حضور و غیاب همکاران — از ${formatJalaliNumeric(model.from)} تا ${formatJalaliNumeric(model.to)}`]));
-  lines.push(csvRow(['همکار', 'نقش', 'روزهای کاری', ...model.days.map((d) => jalaliTick(d)), 'حاضر', 'تأخیر', 'غایب', 'مرخصی', 'بیماری', 'ثبت‌نشده']));
-  for (const p of model.people) {
-    /* ۱.۲۵.۵۷ — ستون روزها: فقط روزهای کاریِ خودِ همکار مقدار دارد؛ روزِ غیرِکاری خالی می‌ماند */
-    const dayMark = new Map(p.days.map((d, i) => [d, p.marks[i]]));
-    lines.push(csvRow([
-      p.name,
-      STAFF_ROLE_FA[p.role] ?? p.role,
-      p.days.length,
-      ...model.days.map((d) => {
-        if (!dayMark.has(d)) return ''; // غیرِکاری — خالی
-        const st = dayMark.get(d);
-        return st ? (STAFF_ATT_SYM[st] ?? st) : '—';
-      }),
-      p.counts.present, p.counts.late, p.counts.absent, p.counts.leave, p.counts.sick, p.counts.unmarked
-    ]));
-  }
+  lines.push(...csvTable([
+    ['همکار', 'نقش', 'روزهای کاری', ...model.days.map((d) => jalaliTick(d)), 'حاضر', 'تأخیر', 'غایب', 'مرخصی', 'بیماری', 'ثبت‌نشده'],
+    ...model.people.map((p) => {
+      /* ۱.۲۵.۵۷ — ستون روزها: فقط روزهای کاریِ خودِ همکار مقدار دارد؛ روزِ غیرِکاری خالی می‌ماند */
+      const dayMark = new Map(p.days.map((d, i) => [d, p.marks[i]]));
+      return [
+        p.name,
+        STAFF_ROLE_FA[p.role] ?? p.role,
+        p.days.length,
+        ...model.days.map((d) => {
+          if (!dayMark.has(d)) return ''; // غیرِکاری — خالی
+          const st = dayMark.get(d);
+          return st ? (STAFF_ATT_SYM[st] ?? st) : '—';
+        }),
+        p.counts.present, p.counts.late, p.counts.absent, p.counts.leave, p.counts.sick, p.counts.unmarked
+      ];
+    })
+  ]));
   lines.push('');
   lines.push(csvRow(['# راهنما: ✓ حاضر · ت تأخیر · غ غایب · م مرخصی · ب بیماری · — ثبت‌نشده · سلول خالی = روزِ غیرِکاریِ آن همکار']));
 

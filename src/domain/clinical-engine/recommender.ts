@@ -18,9 +18,6 @@ export const RECOMMENDER_THRESHOLDS = {
   NORMAL_INDEX_MAX: 110
 } as const;
 
-export const BIF_PLAN_RANGE = { min: 70, max: 84 } as const;
-export const LOW_BORDER_RANGE = { min: 85, max: 89 } as const;
-
 export const PLAN_TOOL_KEYS = {
   snapP: 'ce-snap-iv-p-v1',
   snapT: 'ce-snap-iv-t-v1',

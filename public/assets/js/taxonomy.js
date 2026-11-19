@@ -1,6 +1,6 @@
-// درخت واحد طبقه‌بندی کارت: چهار ستون، یک کامپوننت (تصمیم /)
+// درخت واحد طبقه‌بندی کارت: چهار ستون، یک کامپوننت (تصمیم)
 // «برچسب‌ها» و «درخت هدف» دو منبعِ یک درخت واحدند — این کامپوننت تنها زبان رابط طبقه‌بندی است
-// و در فرم کارت ()، منوی کتابخانه و پیکر تمرین () به‌کار می‌رود.
+// و در فرم کارت، منوی کتابخانه و پیکر تمرین به‌کار می‌رود.
 // منبع درخت = meta.taxonomyTree (سرور): ستون‌های info/exec برگ‌شان «کلید هدف» است و
 // ستون‌های disorder/grade برگ‌شان «شناسهٔ برچسب» — ذخیره‌سازی تفکیک‌شده دست‌نخورده می‌ماند:
 // کلید هدف → focus[] (سقف maxFocus) · شناسهٔ برچسب → tag_ids[].
@@ -38,7 +38,7 @@ export const SPECIAL_NEED_SEVERITY_TONES = { mild: 'neutral', moderate: 'warning
  * @param {Array} p.tree درخت واحد از meta.taxonomyTree
  * @param {Set<string>} p.focusSel کلیدهای هدف (info/exec)
  * @param {Set<string>} p.tagSel شناسهٔ برچسب‌ها (disorder/grade)
- * @param {number} [p.maxFocus=8] سقف پیوند هدف per کارت (قرارداد ) — در فیلتر Infinity
+ * @param {number} [p.maxFocus=8] سقف پیوند هدف per کارت (قرارداد) — در فیلتر Infinity
  * @param {Function} [p.onChange] بعد از هر تغییر انتخاب (فقط تعامل کاربر) صدا می‌شود
  * @param {Function} [p.countOf] (key) => number|null — شمارندهٔ کارت برای تب/حوزه/چیپ
  * @param {string} [p.summaryHint] متن راهنما وقتی چیزی انتخاب نشده

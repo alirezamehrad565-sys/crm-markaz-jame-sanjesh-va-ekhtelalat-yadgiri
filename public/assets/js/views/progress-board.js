@@ -194,7 +194,7 @@ function openExplainModal(row, period) {
     .catch((err) => box.replaceChildren(
       el('div', { class: 'pb-explain__error' },
         el('b', {}, 'دریافت جزئیات ناموفق بود'),
-        el('span', { class: 'cell-sub' }, err?.message ?? ''))));
+        el('span', { class: 'cell-sub' }, err?.message || 'اتصال را بررسی کنید و مودال را دوباره باز کنید.'))));
 }
 
 export function renderProgressBoardCard(container) {
@@ -228,7 +228,11 @@ export function renderProgressBoardCard(container) {
   function render(data) {
     const meId = session.user?.staffId;
     if (!data.rows.length) {
-      body.replaceChildren(emptyState({ iconName: 'users', title: 'همکاری ثبت نشده است' }));
+      body.replaceChildren(emptyState({
+        iconName: 'users',
+        title: 'همکاری ثبت نشده است',
+        hint: 'امتیازها از فعالیت واقعی همکاران ساخته می‌شود — با ثبت نوبت، پرونده، گزارش یا محتوا، تابلو همین‌جا پر می‌شود.'
+      }));
       return;
     }
     const board = el('div', { class: 'card card__body--flush pb-board' },

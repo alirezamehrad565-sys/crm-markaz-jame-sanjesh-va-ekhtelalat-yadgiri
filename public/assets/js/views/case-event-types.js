@@ -1,4 +1,4 @@
-import { api } from '../api.js';
+import { api, getToken } from '../api.js';
 import { fa, formatJalaliDateTime } from '../format.js';
 import { el, icon, openModal, formModal, confirmModal, toast, toastError, emptyState, errorState, skeletonState, scienceNote, rowMenu, collapseRemove, flashNode, lockBtn } from '../ui.js'; /* ۱.۲۲.۰ — collapseRemove/flashNode/lockBtn برای جریان پیوسته */
 import { TOOL_GUIDES } from '../clinical-content.js';
@@ -102,7 +102,7 @@ export async function renderCaseEventTypes(container) {
     library: tabBtn('library', `کتابخانهٔ فرم‌ها (${fa(types.filter((t) => t.active).length)})`),
     pending: tabBtn('pending', `در انتظار پاسخ (${fa(pending.length)})`)
   }; /* ۱.۲۵.۶۰ — تب «نظرسنجی خانواده‌ها» حذف شد؛ ماژول مستقل #/family-surveys (فقط مدیر) */
-  const tabs = el('div', { style: { display: 'flex', gap: '8px', margin: '0 0 var(--sp-4)', flexWrap: 'wrap' } },
+  const tabs = el('div', { style: { display: 'flex', gap: 'var(--sp-2)', margin: '0 0 var(--sp-4)', flexWrap: 'wrap' } },
     tabBtns.library, tabBtns.pending
   );
   function tabBtn(key, label) {
@@ -208,7 +208,7 @@ export async function renderCaseEventTypes(container) {
       type: 'button',
       'aria-pressed': String(active), /* S3-21 */
       ...(key ? { dataset: { chip: key } } : {}), /* ۱.۲۲.۰ — کلید چیپ برای فعال‌سازی درجا */
-      style: { cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px' },
+      style: { cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-1)' },
       onclick: onClick
     }, label);
 
@@ -224,12 +224,12 @@ export async function renderCaseEventTypes(container) {
       searchTimer = setTimeout(() => { state.q2 = searchInput.value.trim(); paintTypeZone(); }, 250); /* ۱.۲۲.۰ — فقط ناحیهٔ فهرست؛ گرهٔ input و مکان‌نما سرِ جایش می‌ماند */
     });
 
-    return el('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', margin: '0 0 var(--sp-4)', alignItems: 'center' } },
+    return el('div', { style: { display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap', margin: '0 0 var(--sp-4)', alignItems: 'center' } },
       el('span', { class: 'cell-sub' }, 'دسته:'),
       chip('همه', state.cat === 'all', () => setTypeFilter('cat', 'all'), 'cat:all'),
       ...Object.entries(CATEGORY_LABELS).map(([k, v]) =>
-        chip(el('span', { style: { display: 'inline-flex', alignItems: 'center', gap: '5px' } }, icon(CATEGORY_ICONS[k], 13), v), state.cat === k, () => setTypeFilter('cat', k), `cat:${k}`)),
-      el('span', { style: { width: '12px' } }),
+        chip(el('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-1)' } }, icon(CATEGORY_ICONS[k], 13), v), state.cat === k, () => setTypeFilter('cat', k), `cat:${k}`)),
+      el('span', { style: { width: 'var(--sp-3)' } }),
       el('span', { class: 'cell-sub' }, 'مخاطب:'),
       chip('همه', state.aud === 'all', () => setTypeFilter('aud', 'all'), 'aud:all'),
       ...Object.entries(AUDIENCE_LABELS).map(([k, v]) => chip(v, state.aud === k, () => setTypeFilter('aud', k), `aud:${k}`)),
@@ -340,17 +340,17 @@ export async function renderCaseEventTypes(container) {
       : 'هنوز از پنل ارسال نشده — خانواده فقط از داخل بات می‌تواند آن را ببیند';
     return el('div', { class: 'card', dataset: { id: String(p.id) } }, /* ۱.۲۲.۰ — data-id برای پچ/حذف درجای کارت */
       el('div', { class: 'card__body' },
-        el('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' } },
+        el('div', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', flexWrap: 'wrap' } },
           el('span', { class: 'typegrid__icon typegrid__icon--lg', style: { display: 'inline-flex' } }, typeIconNode(null, p.typeIcon, 20)),
           el('b', {}, p.studentName || 'دانش‌آموز'),
           el('span', { class: 'badge badge--primary' }, p.typeTitle),
           el('span', { class: 'badge badge--neutral' }, AUDIENCE_LABELS[p.typeAudience] ?? 'خانواده'),
           p.expired ? el('span', { class: 'badge badge--error' }, 'مهلت تمام شده') : el('span', { class: 'badge badge--warning' }, 'در انتظار پاسخ')
         ),
-        el('div', { class: 'cell-sub', style: { margin: '8px 0' } },
+        el('div', { class: 'cell-sub', style: { margin: 'var(--sp-2) 0' } },
           `ثبت: ${formatJalaliDateTime(p.occurredAt)} — ${sentLine}`),
         /* UX-ممیزی فاز ۳: چهار دکمهٔ هم‌اندازه در هر کارت → یک CTA اصلی + منوی «⋯» با تفکیک مخرب‌ها */
-        el('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' } },
+        el('div', { style: { display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap', alignItems: 'center' } },
           el('button', {
             class: 'btn btn--primary btn--sm',
             onclick: async (e) => lockBtn(e.currentTarget, async () => { /* ۱.۲۲.۰ — قفل دکمه + همگام‌سازی بی‌صدای صف */
@@ -406,7 +406,7 @@ export async function renderCaseEventTypes(container) {
     const subscales = t.subscales ?? [];
     return el('div', { class: 'card', dataset: { id: String(t.id) } }, /* ۱.۲۲.۰ — data-id برای پچ/حذف درجای کارت */
       el('div', { class: 'card__body' },
-        el('div', { style: { display: 'flex', alignItems: 'flex-start', gap: '10px' } },
+        el('div', { style: { display: 'flex', alignItems: 'flex-start', gap: 'var(--sp-3)' } },
           el('div', {
             class: 'typegrid__icon typegrid__icon--lg',
             style: {
@@ -417,35 +417,35 @@ export async function renderCaseEventTypes(container) {
             }
           }, typeIconNode(t.category, t.icon, 22)),
           el('div', { style: { flex: '1', minWidth: '0' } },
-            el('div', { style: { display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' } },
+            el('div', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', flexWrap: 'wrap' } },
               el('b', {}, t.title),
               el('span', { class: 'badge badge--neutral' }, CATEGORY_LABELS[t.category] ?? t.category),
               el('span', { class: `badge ${fillTargetOf(t).badgeClass}` }, fillTargetOf(t).badge),
               !t.active ? el('span', { class: 'badge badge--neutral' }, 'غیرفعال') : null
             ),
-            el('div', { class: 'cell-sub', style: { marginTop: '4px' } },
+            el('div', { class: 'cell-sub', style: { marginTop: 'var(--sp-1)' } },
               `${fa((t.fields ?? []).length)} فیلد` +
               (isChecklist ? ` — ماکسیمم ${fa(totalMax(t.fields ?? [], subscales))} نمره` : '') +
               (isChecklist && subscales.length ? ` — ${fa(subscales.length)} زیرمقیاس` : '') +
               (isChecklist && t.bands?.length ? ` — ${fa(t.bands.length)} باند تحلیل` : '') +
               (t.familyFillable ? ' — قابل پر کردن توسط گیرنده' : '')),
             subscales.length > 0
-              ? el('div', { style: { display: 'flex', gap: '5px', flexWrap: 'wrap', marginTop: '6px' } },
+              ? el('div', { style: { display: 'flex', gap: 'var(--sp-1)', flexWrap: 'wrap', marginTop: 'var(--sp-2)' } },
                   ...subscales.map((s, i) => el('span', {
                     class: 'chip',
-                    style: { fontSize: 'var(--fs-2xs)', display: 'inline-flex', alignItems: 'center', gap: '4px' } /* S3-12 */
+                    style: { fontSize: 'var(--fs-2xs)', display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-1)' } /* S3-12 */
                   },
                   el('span', { style: { width: '8px', height: '8px', borderRadius: '50%', background: SUBSCALE_DOT_COLORS[i % SUBSCALE_DOT_COLORS.length], display: 'inline-block' } }),
                   s.name + (s.excludeFromTotal ? ' (خارج از کل)' : ''))))
               : null,
             tagChips.length > 0
-              ? el('div', { style: { display: 'flex', gap: '5px', flexWrap: 'wrap', marginTop: '6px' } },
+              ? el('div', { style: { display: 'flex', gap: 'var(--sp-1)', flexWrap: 'wrap', marginTop: 'var(--sp-2)' } },
                   ...tagChips.map((x) => el('span', { class: 'chip', style: { fontSize: 'var(--fs-2xs)' } }, `#${x.name}`))) /* S3-12 */
               : null
           )
         ),
         /* UX-ممیزی فاز ۳: یک CTA + منوی «⋯» — مخرب‌ها («غیرفعال‌سازی/حذف») از دکمه‌های سطح کارت جدا شدند */
-        el('div', { style: { display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap', alignItems: 'center' } },
+        el('div', { style: { display: 'flex', gap: 'var(--sp-2)', marginTop: 'var(--sp-3)', flexWrap: 'wrap', alignItems: 'center' } },
           isChecklist && t.familyFillable && t.active
             ? el('button', {
                 class: 'btn btn--primary btn--sm',
@@ -493,9 +493,9 @@ export async function renderCaseEventTypes(container) {
   }
 
   function openStudentPicker(type) {
-    const results = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px', margin: '10px 0', maxHeight: '320px', overflowY: 'auto' } });
+    const results = el('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-2)', margin: 'var(--sp-3) 0', maxHeight: '320px', overflowY: 'auto' } });
     /* B5 — مودال بدون راهنما باز می‌شد: فقط یک input خالی؛ کاربر نمی‌دانست باید تایپ کند */
-    const hint = el('p', { class: 'cell-sub', style: { margin: '10px 0' } }, 'بخشی از نام یا کد ملی دانش‌آموز را بنویسید تا فهرست بگیرید.');
+    const hint = el('p', { class: 'cell-sub', style: { margin: 'var(--sp-3) 0' } }, 'بخشی از نام یا کد ملی دانش‌آموز را بنویسید تا فهرست بگیرید.');
     results.replaceChildren(hint);
     const input = el('input', {
       class: 'input',
@@ -526,7 +526,7 @@ export async function renderCaseEventTypes(container) {
           }, `${name}${s.class_name ? ` — ${s.class_name}` : ''}`);
         }));
       } catch (err) {
-        results.replaceChildren(el('p', { class: 'cell-sub' }, 'جستجو ناموفق بود'));
+        results.replaceChildren(el('p', { class: 'cell-sub' }, 'جستجو ناموفق بود — دوباره تلاش کنید'));
       }
     }
     input.addEventListener('input', () => {
@@ -567,6 +567,11 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
     wide: true,
     body: el('div', {}),
     actions: [
+      (closeModal) => el('button', { /* ۱.۲۵.۸۱ — خواست کارفرما: پیش‌نمایش از نگاه خانواده */
+        class: 'btn btn--soft',
+        type: 'button',
+        onclick: () => openFamilyPreview()
+      }, icon('eye', 16), 'پیش‌نمایش از نگاه خانواده'),
       (closeModal) => el('button', {
         class: 'btn btn--primary',
         onclick: (e) => lockBtn(e.currentTarget, () => save(closeModal)) /* ۱.۲۲.۲ (F12) — قفل مشغولی: دوبارکلیک قالب تکراری نمی‌سازد */
@@ -606,7 +611,7 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
       )
     );
 
-    const rows = el('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px' } },
+    const rows = el('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 'var(--sp-3)' } },
       fieldWrap('عنوان قالب', titleInput),
       fieldWrap('دستهٔ رویداد', catSelect)
     );
@@ -632,14 +637,14 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
 
   function subscalesSection() {
     const subs = st.subscales ?? [];
-    const list = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px', margin: '8px 0' } });
+    const list = el('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-2)', margin: 'var(--sp-2) 0' } });
     if (subs.length === 0) {
       list.appendChild(el('p', { class: 'cell-sub' },
         'زیرمقیاسی تعریف نشده است — نمرهٔ کل از جمع همهٔ آیتم‌ها حساب می‌شود. برای چک‌لیست‌های چندبعدی (مثل SDQ) زیرمقیاس بسازید تا نمرهٔ هر بُعد جدا و با باند مستقل تفسیر شود.'));
     }
     subs.forEach((s, i) => {
       const dot = el('span', { style: { width: '10px', height: '10px', borderRadius: '50%', background: SUBSCALE_DOT_COLORS[i % SUBSCALE_DOT_COLORS.length], display: 'inline-block', flexShrink: '0' } });
-      list.appendChild(el('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', background: 'var(--surface-2)', borderRadius: 'var(--radius-sm)', padding: '8px 10px' } },
+      list.appendChild(el('div', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', flexWrap: 'wrap', background: 'var(--surface-2)', borderRadius: 'var(--radius-sm)', padding: 'var(--sp-2) var(--sp-3)' } },
         dot,
         el('b', { style: { fontSize: 'var(--fs-xs)' } }, s.name),
         s.excludeFromTotal ? el('span', { class: 'badge badge--neutral' }, 'خارج از نمرهٔ کل (نقطهٔ قوت)') : null,
@@ -676,7 +681,7 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
   }
 
   function fieldsSection() {
-    const list = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px', margin: '8px 0' } });
+    const list = el('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-2)', margin: 'var(--sp-2) 0' } });
     if (st.fields.length === 0) {
       list.appendChild(el('p', { class: 'cell-sub' }, 'هنوز آیتمی اضافه نشده — با «آیتم جدید» شروع کنید.'));
     }
@@ -684,7 +689,7 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
     st.fields.forEach((f, i) => {
       const subIdx = (st.subscales ?? []).findIndex((s) => s.id === f.subscaleId);
       const dotColor = f.subscaleId ? SUBSCALE_DOT_COLORS[subIdx % SUBSCALE_DOT_COLORS.length] : null;
-      list.appendChild(el('div', { style: { display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', background: 'var(--surface-2)', borderRadius: 'var(--radius-sm)', padding: '8px 10px' } },
+      list.appendChild(el('div', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', flexWrap: 'wrap', background: 'var(--surface-2)', borderRadius: 'var(--radius-sm)', padding: 'var(--sp-2) var(--sp-3)' } },
         el('b', { style: { fontSize: 'var(--fs-xs)' } }, `${fa(i + 1)}. ${f.label}`),
         el('span', { class: 'badge badge--neutral' }, FIELD_TYPE_LABELS[f.type] ?? f.type),
         f.required ? el('span', { class: 'badge badge--warning' }, 'الزامی') : null,
@@ -694,7 +699,7 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
         f.type === 'scale' ? el('span', { class: 'cell-sub' }, `تا ${fa(f.scaleMax ?? 3)}`) : null,
         f.type === 'select' && f.options?.length ? el('span', { class: 'cell-sub' }, `(${fa(f.options.length)} گزینه)`) : null,
         f.subscaleId && subName.has(f.subscaleId)
-          ? el('span', { class: 'chip', style: { fontSize: 'var(--fs-2xs)', display: 'inline-flex', alignItems: 'center', gap: '4px' } }, /* S3-12 */
+          ? el('span', { class: 'chip', style: { fontSize: 'var(--fs-2xs)', display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-1)' } }, /* S3-12 */
               el('span', { style: { width: '8px', height: '8px', borderRadius: '50%', background: dotColor, display: 'inline-block' } }),
               subName.get(f.subscaleId))
           : null,
@@ -706,14 +711,14 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
       ));
     });
     const stats = st.fields.length > 0 && (st.category === 'checklist')
-      ? el('div', { class: 'cell-sub', style: { margin: '6px 2px' } },
+      ? el('div', { class: 'cell-sub', style: { margin: 'var(--sp-2) var(--sp-1)' } },
           `جمع: ${fa(st.fields.length)} آیتم — ماکسیمم نمرهٔ کل: ${fa(totalMax(st.fields, st.subscales))}`)
       : null;
     return el('div', {},
       sectionTitle('۳) آیتم‌های فرم', `${fa(st.fields.length)} آیتم`),
       list,
       stats,
-      el('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } },
+      el('div', { style: { display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap' } },
         el('button', { class: 'btn btn--soft btn--sm', onclick: () => openFieldEditor(null, (nf) => { st.fields.push(nf); rerender(); }) }, icon('plus', 14), 'آیتم جدید'),
         st.fields.length > 0
           ? el('button', {
@@ -733,14 +738,14 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
   function bandsSection() {
     const maxTotal = totalMax(st.fields, st.subscales);
     const chips = st.bands?.length
-      ? el('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', margin: '8px 0' } },
+      ? el('div', { style: { display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap', margin: 'var(--sp-2) 0' } },
           ...st.bands.map((b) => el('span', {
             class: `badge badge--${BAND_TONES[b.color] ?? 'neutral'}`,
             title: b.advice ?? ''
           }, `تا ${b.max === 9999 ? '∞' : fa(b.max)}: ${b.label}`)))
-      : el('p', { class: 'cell-sub', style: { margin: '8px 0' } },
+      : el('p', { class: 'cell-sub', style: { margin: 'var(--sp-2) 0' } },
           'بدون باند — نتیجه فقط به‌صورت جمع نمره گزارش می‌شود. با باندها، سامانه به‌طور خودکار تفسیر و توصیهٔ بالینی تولید می‌کند.');
-    const rows = el('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } },
+    const rows = el('div', { style: { display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap' } },
       el('button', { class: 'btn btn--soft btn--sm', onclick: () => openBandsEditor(st.bands, maxTotal, (nb) => { st.bands = nb; rerender(); }) },
         st.bands?.length ? 'ویرایش باندها' : 'تعریف باندهای تحلیل'),
       st.bands?.length
@@ -755,8 +760,8 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
 
   function tagsSection() {
     const chips = availableTags.length === 0
-      ? el('p', { class: 'cell-sub', style: { margin: '4px 0' } }, 'برچسبی تعریف نشده است.')
-      : el('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', margin: '6px 0' } },
+      ? el('p', { class: 'cell-sub', style: { margin: 'var(--sp-1) 0' } }, 'برچسبی تعریف نشده است.')
+      : el('div', { style: { display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap', margin: 'var(--sp-2) 0' } },
           ...availableTags.map((t) => el('button', {
             class: `chip ${st.tags.has(t.id) ? 'is-active' : ''}`,
             type: 'button',
@@ -770,7 +775,7 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
           }, `#${t.name}`)));
     return el('div', {},
       sectionTitle('۵) برچسب‌های مرتبط (اختیاری)', null),
-      el('p', { class: 'cell-sub', style: { margin: '2px 0' } }, 'قالب برای دانش‌آموزانی که همین برچسب‌ها را دارند پیشنهاد خودکار می‌شود.'),
+      el('p', { class: 'cell-sub', style: { margin: 'var(--sp-1) 0' } }, 'قالب برای دانش‌آموزانی که همین برچسب‌ها را دارند پیشنهاد خودکار می‌شود.'),
       chips
     );
   }
@@ -789,16 +794,50 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
   rerender();
 
   function sectionTitle(text, hint) {
-    return el('div', { style: { display: 'flex', alignItems: 'baseline', gap: '8px', marginTop: '4px' } },
+    return el('div', { style: { display: 'flex', alignItems: 'baseline', gap: 'var(--sp-2)', marginTop: 'var(--sp-1)' } },
       el('b', { style: { fontSize: 'var(--fs-sm)' } }, text),
       hint ? el('span', { class: 'cell-sub' }, hint) : null
     );
   }
   function fieldWrap(label, inputEl, hint) {
-    return el('label', { style: { display: 'flex', flexDirection: 'column', gap: '5px', fontSize: 'var(--fs-2xs)', color: 'var(--muted)' } }, /* */
+    return el('label', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-1)', fontSize: 'var(--fs-2xs)', color: 'var(--muted)' } }, /* */
       label, inputEl,
       hint ? el('span', { class: 'cell-sub', style: { fontSize: 'var(--fs-2xs)' } }, hint) : null /* S3-12 */
     );
+  }
+
+  /* ۱.۲۵.۸۱ — تعریف قالب از حالت همین‌لحظهٔ ادیتور (حتی ذخیره‌نشده) — save و پیش‌نمایش
+     هر دو از همین یک سازنده می‌خوانند تا «پیش‌نمایش = عین چیزی که ذخیره می‌شود». */
+  function definitionPayload() {
+    return {
+      title: v(st.title),
+      category: st.category,
+      icon: v(st.icon) || null,
+      familyFillable: st.category === 'checklist' ? Boolean(st.familyFillable) : false,
+      fields: st.fields,
+      bands: st.category === 'checklist' ? (st.bands ?? null) : null,
+      subscales: st.category === 'checklist' ? (st.subscales && st.subscales.length > 0 ? st.subscales : null) : null,
+      tags: [...st.tags],
+      audience: st.category === 'checklist' ? st.audience : 'family'
+    };
+  }
+
+  /* ۱.۲۵.۸۱ — «پیش‌نمایش از نگاه خانواده» (خواست کارفرما): تعریفِ در حال طراحی با فرم POST
+     در تب تازه باز می‌شود؛ صفحهٔ بازشده عین فرم خانواده است و پر کردنش هیچ جایی ذخیره
+     نمی‌شود (تحلیل خالص سمت سرور). فرم مخفی = تنها راه گذاشتن تعریف بزرگ در بدنهٔ POST
+     با تب تازه؛ توکن نشست در بدنه می‌آید چون مسیر /public سرِتیتِ هدر Authorization است. */
+  function openFamilyPreview() {
+    if (v(st.title).length < 2 || st.fields.length === 0) {
+      toast('برای پیش‌نمایش، عنوان قالب و حداقل یک آیتم لازم است', 'error');
+      return;
+    }
+    const hidden = (name, value) => el('input', { type: 'hidden', name, value });
+    const form = el('form', { method: 'POST', action: '/public/case-events/preview', target: '_blank', style: { display: 'none' } },
+      hidden('definition', JSON.stringify(definitionPayload())),
+      hidden('token', getToken() ?? ''));
+    document.body.appendChild(form);
+    form.submit();
+    setTimeout(() => form.remove(), 2000);
   }
 
   async function save(closeModal) {
@@ -816,17 +855,7 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
         return;
       }
     }
-    const payload = {
-      title: v(st.title),
-      category: st.category,
-      icon: v(st.icon) || null,
-      familyFillable: st.category === 'checklist' ? Boolean(st.familyFillable) : false,
-      fields: st.fields,
-      bands: st.category === 'checklist' ? (st.bands ?? null) : null,
-      subscales: st.category === 'checklist' ? (st.subscales && st.subscales.length > 0 ? st.subscales : null) : null,
-      tags: [...st.tags],
-      audience: st.category === 'checklist' ? st.audience : 'family'
-    };
+    const payload = definitionPayload();
     try {
       if (isEdit) {
         const res = await api.patch(`/api/case-events/types/${type.id}`, payload); /* ۱.۲۲.۰ — بدنهٔ پاسخ سرور برای پچ درجای همان کارت */
@@ -887,7 +916,7 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
     slot = _ov[_ov.length - 1]?.querySelector('.modal__body') ?? null;
 
     function rerender() {
-      const list = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px' } });
+      const list = el('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-2)' } });
       rows.forEach((b, i) => {
         const maxInput = el('input', { class: 'input', type: 'number', min: '1', value: b.max, style: { width: '90px' } });
         maxInput.addEventListener('input', () => { b.max = Number(maxInput.value); });
@@ -895,10 +924,10 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
         labelInput.addEventListener('input', () => { b.label = labelInput.value; });
         const colorSelect = el('select', { class: 'input', style: { width: '160px' }, onchange: (e) => { b.color = e.target.value; } },
           ...Object.entries(BAND_COLOR_LABELS).map(([value, label]) => el('option', { value, selected: b.color === value }, label)));
-        const adviceInput = el('input', { class: 'input', type: 'text', value: b.advice ?? '', placeholder: 'توصیهٔ خودکار این باند (نمایش در تفسیر نتیجه)', style: { width: '100%', marginTop: '6px' } });
+        const adviceInput = el('input', { class: 'input', type: 'text', value: b.advice ?? '', placeholder: 'توصیهٔ خودکار این باند (نمایش در تفسیر نتیجه)', style: { width: '100%', marginTop: 'var(--sp-2)' } });
         adviceInput.addEventListener('input', () => { b.advice = adviceInput.value; });
-        list.appendChild(el('div', { style: { background: 'var(--surface-2)', borderRadius: 'var(--radius-sm)', padding: '10px' } },
-          el('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' } },
+        list.appendChild(el('div', { style: { background: 'var(--surface-2)', borderRadius: 'var(--radius-sm)', padding: 'var(--sp-3)' } },
+          el('div', { style: { display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap', alignItems: 'center' } },
             el('span', { class: 'cell-sub' }, i === 0 ? 'نمره تا' : 'تا'),
             maxInput,
             labelInput,
@@ -909,11 +938,11 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
         ));
       });
       slot.replaceChildren(
-        el('p', { class: 'cell-sub', style: { margin: '0 0 8px' } },
+        el('p', { class: 'cell-sub', style: { margin: '0 0 var(--sp-2)' } },
           `باندها صعودی‌اند؛ سقف آخرین باند باید برابر ماکسیمم (${fa(expectedMax)}) باشد. رنگ هر باند و توصیهٔ آن در تفسیر خودکار نتیجه می‌آید.`),
         list,
         rows.length < 5
-          ? el('button', { class: 'btn btn--soft btn--sm', style: { marginTop: '8px' }, onclick: () => { rows.push({ max: expectedMax, label: 'باند جدید', color: 'warn', advice: '' }); rerender(); } }, icon('plus', 14), 'باند جدید') /* S3-19 */
+          ? el('button', { class: 'btn btn--soft btn--sm', style: { marginTop: 'var(--sp-2)' }, onclick: () => { rows.push({ max: expectedMax, label: 'باند جدید', color: 'warn', advice: '' }); rerender(); } }, icon('plus', 14), 'باند جدید') /* S3-19 */
           : null
       );
     }
@@ -978,7 +1007,7 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
 
       const requiredCheck = el('input', { type: 'checkbox', checked: Boolean(f.required), onchange: (e) => { f.required = e.target.checked; } });
 
-      const head = el('div', { style: { display: 'grid', gridTemplateColumns: '2fr 1fr auto', gap: '10px', alignItems: 'end' } },
+      const head = el('div', { style: { display: 'grid', gridTemplateColumns: '2fr 1fr auto', gap: 'var(--sp-3)', alignItems: 'end' } },
         fieldWrap('متن آیتم', labelInput),
         fieldWrap('نوع آیتم', typeSelect),
         fieldWrap('الزامی', requiredCheck)
@@ -989,20 +1018,20 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
         const maxInput = el('input', { class: 'input', type: 'number', min: '1', max: String(SCALE_MAX_LIMIT), value: f.scaleMax ?? 3, style: { width: '110px' } });
         maxInput.addEventListener('input', () => { f.scaleMax = Number(maxInput.value); });
         const reverseCheck = el('input', { type: 'checkbox', checked: Boolean(f.reverse), onchange: (e) => { f.reverse = e.target.checked; rerender(); } });
-        parts.push(el('div', { style: { display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '10px', alignItems: 'end' } },
+        parts.push(el('div', { style: { display: 'grid', gridTemplateColumns: 'auto 1fr', gap: 'var(--sp-3)', alignItems: 'end' } },
           fieldWrap('سقف نمره (۰ تا سقف)', maxInput, 'پاسخ عددی از ۰ تا سقف — برچسب هرگز/گاهی/اغلب/همیشه برای سقف ۳'),
           fieldWrap('آیتم معکوس (جملهٔ مثبت — نمره برعکس محاسبه می‌شود)', reverseCheck)
         ));
       }
 
       if (f.type === 'single') {
-        const optsList = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px', margin: '6px 0' } });
+        const optsList = el('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-2)', margin: 'var(--sp-2) 0' } });
         (f.scoredOptions ?? []).forEach((o, i) => {
           const labelIn = el('input', { class: 'input', type: 'text', value: o.label, placeholder: `برچسب گزینهٔ ${fa(i + 1)}`, style: { flex: '1', minWidth: '160px' } });
           labelIn.addEventListener('input', () => { o.label = labelIn.value; });
           const scoreIn = el('input', { class: 'input', type: 'number', min: '0', max: String(SCALE_MAX_LIMIT), value: o.score, style: { width: '90px' } });
           scoreIn.addEventListener('input', () => { o.score = Number(scoreIn.value); });
-          optsList.appendChild(el('div', { style: { display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', background: 'var(--surface-2)', borderRadius: 'var(--radius-sm)', padding: '8px 10px' } },
+          optsList.appendChild(el('div', { style: { display: 'flex', gap: 'var(--sp-2)', alignItems: 'center', flexWrap: 'wrap', background: 'var(--surface-2)', borderRadius: 'var(--radius-sm)', padding: 'var(--sp-2) var(--sp-3)' } },
             el('span', { class: 'cell-sub', style: { minWidth: '18px' } }, `${fa(i + 1)}.`),
             labelIn,
             fieldWrap('نمره', scoreIn),
@@ -1010,7 +1039,7 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
           ));
         });
         parts.push(el('div', {},
-          el('div', { style: { fontWeight: '600', fontSize: 'var(--fs-xs)', margin: '8px 0 2px' } },
+          el('div', { style: { fontWeight: '600', fontSize: 'var(--fs-xs)', margin: 'var(--sp-2) 0 var(--sp-1)' } },
             `گزینه‌های نمره‌دار — نمرهٔ هر گزینه فقط برای جمع‌بندی بالینی است و به گیرنده نمایش داده نمی‌شود`),
           optsList,
           (f.scoredOptions?.length ?? 0) < FIELD_OPTIONS_MAX
@@ -1035,7 +1064,7 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
           critMinInput.addEventListener('input', () => { f.criticalMin = Number(critMinInput.value); });
           critRow.push(fieldWrap('آستانهٔ پرچم (نمرهٔ مؤثر ≥ این آستانه)', critMinInput));
         }
-        parts.push(el('div', { style: { display: 'grid', gridTemplateColumns: f.critical ? '1fr auto' : '1fr', gap: '10px', alignItems: 'end' } }, ...critRow));
+        parts.push(el('div', { style: { display: 'grid', gridTemplateColumns: f.critical ? '1fr auto' : '1fr', gap: 'var(--sp-3)', alignItems: 'end' } }, ...critRow));
       }
 
       if (st.category === 'checklist' && (st.subscales ?? []).length > 0) {
@@ -1045,7 +1074,7 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
         parts.push(fieldWrap('زیرمقیاس (نمرهٔ این آیتم در نمرهٔ همان زیرمقیاس جمع می‌شود)', subSelect));
       }
 
-      slot.replaceChildren(el('div', { style: { display: 'flex', flexDirection: 'column', gap: '10px' } }, ...parts));
+      slot.replaceChildren(el('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' } }, ...parts));
     }
     rerender();
 

@@ -337,10 +337,10 @@ export async function renderArchive(container) {
   container.replaceChildren(
     el('div', { class: 'page-head' },
       el('div', { class: 'page-head__title' }, 'آرشیو'),
-      el('span', { class: 'badge badge--neutral' }, metaBar)
+      el('span', { class: 'badge badge--neutral' }, metaBar),
+      el('p', { class: 'page-head__desc' },
+        'پروندهٔ دانش‌آموزان نیاز ویژهٔ شهر — پرونده‌های خارج‌شده از چرخهٔ مرکز این‌جا نگه داشته می‌شوند؛ هر زمان خواستید، همان‌جا به چرخه برگردانید.') /* H3 */
     ),
-    el('div', { class: 'muted', style: { fontSize: 'var(--fs-xs)', margin: '0 2px var(--sp-3)' } }, /* 13px خام (S5-06) */
-      'پروندهٔ دانش‌آموزان نیاز ویژهٔ شهر — پرونده‌های خارج‌شده از چرخهٔ مرکز این‌جا نگه داشته می‌شوند؛ هر زمان خواستید، همان‌جا به چرخه برگردانید.'), /* H3 */
     toolbar,
     el('div', { class: 'card card__body--flush card--table cv-block' }, table, pagerZone) /* E2 */
   );

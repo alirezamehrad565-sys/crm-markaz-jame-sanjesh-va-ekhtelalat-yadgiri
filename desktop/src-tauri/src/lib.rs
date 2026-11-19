@@ -935,6 +935,43 @@ fn spawn_engine_boot(app: tauri::AppHandle) {
     });
 }
 
+/// فاز D-۳ — کانال دستی «بررسی نسخهٔ تازه»: فقط وارسی؛ هیچ دانلود/نصبی از داخل اپ نیست
+/// (درس ریسک ۴ — AV ایران). آفلاین/بی‌کلید/خطا → پیام فارسی با state:'error'، هرگز کرش.
+#[tauri::command]
+async fn check_updates(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    use tauri_plugin_updater::UpdaterExt;
+    let current = app.package_info().version.to_string();
+    let updater = match app.updater() {
+        Ok(u) => u,
+        Err(e) => return Ok(serde_json::json!({ "state": "error", "message": format!("به‌روزرسان آماده نیست — {e}") })),
+    };
+    let found = match updater.check().await {
+        Ok(f) => f,
+        Err(e) => return Ok(serde_json::json!({ "state": "error", "message": format!("بررسی نشد — {e}") })),
+    };
+    Ok(match found {
+        None => serde_json::json!({ "state": "latest", "current": current }),
+        Some(u) => serde_json::json!({
+            "state": "available",
+            "current": current,
+            "version": u.version,
+            "notes": u.body.clone().unwrap_or_default()
+        }),
+    })
+}
+
+/// فاز D-۳ — بازکردن صفحهٔ ریلیز در مرورگر پیش‌فرض (دانلود دستی نصاب — همیشه موجود)
+#[tauri::command]
+fn open_release_page() -> Result<(), String> {
+    const RELEASE_URL: &str = "https://github.com/alirezamehrad565-sys/crm-markaz-jame-sanjesh-va-ekhtelalat-yadgiri/releases/latest";
+    let spawned = if cfg!(target_os = "windows") {
+        std::process::Command::new("cmd").args(["/C", "start", "", RELEASE_URL]).spawn()
+    } else {
+        std::process::Command::new("xdg-open").arg(RELEASE_URL).spawn()
+    };
+    spawned.map(|_| ()).map_err(|e| format!("بازکردن مرورگر ناموفق بود — {e}"))
+}
+
 pub fn run() {
     tauri::Builder::default()
         // F — تکی‌نمونه (بستن ریسک #۱۰) — باید اولین plugin زنجیره باشد (پلاگین‌ها به ترتیب
@@ -945,6 +982,12 @@ pub fn run() {
                 let _ = window.set_focus();
             }
         }))
+        // فاز D — OTA (بعد از تکی‌نمونه — ترتیب پلاگین‌ها: single_instance اولین می‌ماند).
+        // کلید عمومی از پیکربندی tauri.conf.json (plugins.updater.pubkey) خوانده می‌شود؛ ثبت باید
+        // inline باشد چون Builder پلاگین updater تایپ TauriPlugin<_, Config> می‌سازد (درس E0308 CI).
+        // تزریق کلید واقعی در CI هنگام بیلد انجام می‌شود؛ بی‌کلید = کانال خودکار بی‌اثر در runtime
+        // (خطا با پیام فارسی در check_updates گرفته می‌شود)، کانال دستی سالم.
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(LocalEngineSlot(Mutex::new(None)))
         .manage(AppState::new())
         // فاز A — آینهٔ وضعیت سرور محلی (قرارداد engine_status / engine:status)
@@ -965,7 +1008,10 @@ pub fn run() {
             // فاز B — راز اتصال ابری (keyring؛ فقط ماسک به فرانت می‌آید)
             cloud_secret_set,
             cloud_secret_get,
-            cloud_secret_delete
+            cloud_secret_delete,
+            // فاز D — OTA کانال دستی (فقط وارسی + بازکردن مرورگر)
+            check_updates,
+            open_release_page
         ])
         .run(tauri::generate_context!())
         .expect("خطای راه‌اندازی پوستهٔ دسکتاپ");
