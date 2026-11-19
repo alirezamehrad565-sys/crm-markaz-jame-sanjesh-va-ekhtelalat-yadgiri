@@ -911,7 +911,7 @@ export function makeCloudCardPaint(body, ctx = {}) {
       );
     }
     rows.push(resultLine);
-    body.replaceChildren(...rows);
+    body.replaceChildren(...rows.filter(Boolean));
   };
 }
 
@@ -2179,7 +2179,7 @@ export async function renderHealthPanel(outlet) {
 
       // ۲ سرور محلی + ۳ سایت ابری کنار هم (روی نمایشگر باریک خودش می‌شکند — auto-fit)؛
       // هشدار زرد ناهم‌نسخه‌ای بالای کارت سرور با span همهٔ ستون‌ها (۱.۲۷.۱۲ — دست‌نخورده)
-      el('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 'var(--sp-3)', alignItems: 'start' } },
+      el('div', { class: 'hp-section-grid' },
         engineGap
           ? el('div', { class: 'card card__body--flush', style: { gridColumn: '1 / -1' } },
               el('div', { class: 'ob-row' },
