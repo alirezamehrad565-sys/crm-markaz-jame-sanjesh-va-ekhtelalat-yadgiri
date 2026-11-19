@@ -104,6 +104,8 @@ export interface CaseEventTypeRecord {
   subscales: CaseEventSubscale[] | null;
   tags: string[];
   audience: CaseEventAudience;
+  toolSource: string | null; // ۱.۲۷.۲۸ — M5: شناسنامهٔ ابزار — منبع/مرجع قالب
+  toolNorm: string | null; // ۱.۲۷.۲۸ — M5: شناسنامهٔ ابزار — هنجار سنی/روایی
   active: boolean;
   isSystem: boolean;
   createdAt: string;
@@ -158,6 +160,8 @@ export interface CaseEventTypeInput {
   subscales?: CaseEventSubscale[] | null;
   tags?: string[] | null;
   audience?: CaseEventAudience | null;
+  toolSource?: string | null; // ۱.۲۷.۲۸ — M5: شناسنامهٔ ابزار
+  toolNorm?: string | null;
 }
 
 export interface CaseEventInput {

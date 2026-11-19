@@ -39,7 +39,7 @@ export interface HealthPanelData {
     configured: boolean;
     channels: HealthChannelStatus[];
   };
-  /** ف۵ (P0-3) — هشدارهای فعالِ همین لحظه — م۲۱۰: فقط قاعدهٔ محلی-نودی (جهش خطاهای مرورگر)؛ هشدار درگاه‌های CP مالکیت کنترل‌پلین است (CP m9 → channel_alerts) و در نود مشتق نمی‌شود */
+  /** ف۵ (P0-3) — هشدارهای فعالِ همین لحظه — م۲۱۰: فقط قاعدهٔ محلی-نودی (جهش خطاهای مرورگر)؛ هشدار درگاه‌های CP مالکیت شبکهٔ مراکز است (CP m9 → channel_alerts) و در نود مشتق نمی‌شود */
   alerts: HealthAlert[];
   /** ف۵ (P0-3) — مُهر آخرین ارزیابی خودکار کرون شبانه (settings: alerts.last_evaluated_at) */
   alerts_last_evaluated_at: string | null;
@@ -53,7 +53,7 @@ export interface HealthPanelData {
 
 /**
  * کد پایدار هشدار نود — م۲۱۰: فقط `client_errors_spike` (قاعدهٔ محلی-نودی).
- * کد `cp_seal_drift` از نود حذف شد؛ رانش مُهر درگاه‌های CP فقط در کنترل‌پلین هشدار می‌شود
+ * کد `cp_seal_drift` از نود حذف شد؛ رانش مُهر درگاه‌های CP فقط در شبکهٔ مراکز هشدار می‌شود
  * (CP m9/۱.۱۳.۰ — جدول channel_alerts با kind='seal_drift' + ack/resolve + رساندن اختیاری).
  */
 export interface HealthAlert {

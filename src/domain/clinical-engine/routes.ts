@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import type { AppHono } from '@core/shared';
 import { TehranYmdSchema } from '@core/shared'; // تاریخ بازهٔ گزارش با قالب YYYY-MM-DD
-import { getAuthContext, requireRole } from '@core/auth';
+import { getAuthContext, requireRole, resolveSessionSecret } from '@core/auth';
+import { verifyFamilySheetToken, renderFamilySheetPage, sheetErrorPage } from './family-sheet'; // ۱.۲۷.۲۷ — M4 برگهٔ پیشرفت خانواده
 import type { ClinicalEngineService } from './service';
 import {
   DECISION_NOTE_MAX,
@@ -220,6 +221,39 @@ export function registerClinicalEngineRoutes(app: AppHono, service: ClinicalEngi
     return c.json({ data }, 200);
   });
 
+  /* ۱.۲۷.۲۶ — M3 POLISH-3: روایت بالینی پرونده — تجمیع فقط‌خواندنی «فرضیهٔ موتور ← کمیته ← مسیر ← پراپ»؛
+     نقش‌ها عیناً هم‌تراز case-formulation است (ناظر مانند تفسیر بالینی مشمول نمی‌شود). */
+  app.get('/api/students/:id/clinical-narrative', requireRole('manager', 'secretary', 'therapist'), async (c) => {
+    const actor = getAuthContext(c);
+    const data = await service.getClinicalNarrative(c.req.param('id'), actor);
+    return c.json({ data }, 200);
+  });
+
+  /* ۱.۲۷.۲۷ — M4 POLISH-3: پیوند برگهٔ پیشرفت خانواده — کارمند مجاز می‌سازد؛ صفحهٔ بدون auth با
+     توکن امضاشدهٔ HS256 (scope: family-sheet، انقضای ۱۸۰ روز) — فقط مسیر/جلسه/پراپ همان بچه. */
+  app.post('/api/students/:id/progress-sheet-link', requireRole('manager', 'secretary', 'therapist'), async (c) => {
+    const actor = getAuthContext(c);
+    const secret = await resolveSessionSecret(c.env);
+    const data = await service.mintProgressSheetLink(c.req.param('id'), actor, secret);
+    return c.json({ data }, 201);
+  });
+
+  app.get('/public/family/progress-sheet/:token', async (c) => {
+    const secret = await resolveSessionSecret(c.env);
+    const sid = await verifyFamilySheetToken(c.req.param('token'), secret);
+    if (!sid) return c.html(sheetErrorPage('این برگه معتبر نیست یا منقضی شده است — از مرکز بخواهید پیوند تازه بسازد.'), 403);
+    let model;
+    try {
+      model = await service.getFamilyProgressSheet(sid, null);
+    } catch {
+      return c.html(sheetErrorPage('پروندهٔ این برگه پیدا نشد.'), 404);
+    }
+    return new Response(renderFamilySheetPage(model), {
+      status: 200,
+      headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' }
+    });
+  });
+
   app.get('/api/clinical-targets', requireRole('manager', 'secretary', 'therapist'), async (c) => {
     const data = await service.listTargets();
     return c.json({ data }, 200);
@@ -257,14 +291,15 @@ export function registerClinicalEngineRoutes(app: AppHono, service: ClinicalEngi
     return c.json({ data }, 200);
   });
 
-  app.get('/api/case-audits', requireRole('manager'), async (c) => {
+  app.get('/api/case-audits', requireRole('manager', 'secretary', 'therapist'), async (c) => {
     const actor = getAuthContext(c);
     const studentId = c.req.query('student_id')?.trim() || null;
     const data = await service.listCaseAudits(actor, studentId);
     return c.json({ data }, 200);
   });
 
-  app.post('/api/case-audits', requireRole('manager'), async (c) => {
+  /* M6 POLISH-3 (۱.۲۷.۲۹) — POST هم‌راستا با دکمهٔ UI (canAudit = manager/secretary): منشی هم ثبت می‌کند */
+  app.post('/api/case-audits', requireRole('manager', 'secretary'), async (c) => {
     const actor = getAuthContext(c);
     const body = CaseAuditCreateSchema.parse(await c.req.json<unknown>());
     const data = await service.createCaseAudit(

@@ -171,7 +171,7 @@ export function createNetworkContentService(deps: {
     if (!rec) throw new NotFoundError('محتوای شبکه');
     if (rec.origin !== 'local') {
       // ردیف‌های CP فقط از مسیر سینک می‌آیند — هیچ ویرایش محلی مجاز نیست
-      throw new ConflictError('این آیتم از کنترل‌پلین آمده و در مرکز قابل تغییر نیست');
+      throw new ConflictError('این آیتم از شبکهٔ مراکز آمده و در مرکز قابل تغییر نیست');
     }
     return rec;
   }

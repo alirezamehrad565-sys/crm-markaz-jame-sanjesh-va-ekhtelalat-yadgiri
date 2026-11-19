@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.27.24";
+var APP_VERSION = "1.27.31";
 var NODE_MIN_VERSION = "1.26.0";
 
 // node_modules/zod/v4/classic/external.js
@@ -35686,7 +35686,11 @@ var CaseEventTypeInputSchema = external_exports.object({
   bands: external_exports.array(CaseEventBandSchema).max(BANDS_MAX).nullish(),
   subscales: external_exports.array(CaseEventSubscaleSchema).max(SUBSCALES_MAX, `\u062D\u062F\u0627\u06A9\u062B\u0631 ${SUBSCALES_MAX} \u0632\u06CC\u0631\u0645\u0642\u06CC\u0627\u0633`).nullish(),
   tags: external_exports.array(external_exports.string().min(8).max(64)).max(12, "\u062D\u062F\u0627\u06A9\u062B\u0631 \u06F1\u06F2 \u0628\u0631\u0686\u0633\u0628 \u0628\u0631\u0627\u06CC \u0647\u0631 \u0642\u0627\u0644\u0628").nullish(),
-  audience: external_exports.enum(["family", "teacher", "both"]).nullish()
+  audience: external_exports.enum(["family", "teacher", "both"]).nullish(),
+  toolSource: external_exports.string().max(TYPE_DESCRIPTION_MAX).nullish(),
+  // ۱.۲۷.۲۸ — M5: شناسنامهٔ ابزار — منبع/مرجع
+  toolNorm: external_exports.string().max(TYPE_DESCRIPTION_MAX).nullish()
+  // ۱.۲۷.۲۸ — M5: شناسنامهٔ ابزار — هنجار سنی/روایی
 });
 var CaseEventTypeUpdateSchema = CaseEventTypeInputSchema.partial();
 var SurveyCreateSchema = external_exports.object({
@@ -38834,6 +38838,8 @@ function typeRowToRecord(r) {
     subscales: r.subscales ? parseJson(r.subscales, null) : null,
     tags: r.tags ? parseJson(r.tags, []) : [],
     audience: r.audience ?? "family",
+    toolSource: r.tool_source ?? null,
+    toolNorm: r.tool_norm ?? null,
     active: r.active === 1,
     isSystem: r.is_system === 1,
     createdAt: r.created_at,
@@ -39069,8 +39075,8 @@ function createCaseEventsService(deps) {
       const id = crypto.randomUUID();
       const key = newTypeKey();
       await db.execute(
-        `INSERT INTO case_event_types (id, key, title, description, category, icon, family_fillable, fields, bands, subscales, tags, audience, active, created_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
+        `INSERT INTO case_event_types (id, key, title, description, category, icon, family_fillable, fields, bands, subscales, tags, audience, tool_source, tool_norm, active, created_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
         [
           id,
           key,
@@ -39084,6 +39090,8 @@ function createCaseEventsService(deps) {
           input2.subscales && input2.subscales.length > 0 ? JSON.stringify(input2.subscales) : null,
           input2.tags && input2.tags.length > 0 ? JSON.stringify(input2.tags) : null,
           input2.audience ?? "family",
+          input2.toolSource?.trim() || null,
+          input2.toolNorm?.trim() || null,
           actor.staffId,
           now().toISOString(),
           now().toISOString()
@@ -39118,12 +39126,14 @@ function createCaseEventsService(deps) {
         bands: input2.bands !== void 0 ? input2.bands ?? null : current.bands,
         subscales: input2.subscales !== void 0 ? input2.subscales ?? null : current.subscales,
         tags: input2.tags !== void 0 ? input2.tags ?? [] : current.tags,
-        audience: input2.audience !== void 0 ? input2.audience ?? "family" : current.audience
+        audience: input2.audience !== void 0 ? input2.audience ?? "family" : current.audience,
+        toolSource: input2.toolSource !== void 0 ? input2.toolSource?.trim() || null : current.toolSource,
+        toolNorm: input2.toolNorm !== void 0 ? input2.toolNorm?.trim() || null : current.toolNorm
       };
       validateTypeDefinition({ category: next.category, fields: next.fields, bands: next.bands, familyFillable: next.familyFillable, subscales: next.subscales });
       await db.execute(
         `UPDATE case_event_types
-            SET title = ?, description = ?, category = ?, icon = ?, family_fillable = ?, fields = ?, bands = ?, subscales = ?, tags = ?, audience = ?, updated_at = ?
+            SET title = ?, description = ?, category = ?, icon = ?, family_fillable = ?, fields = ?, bands = ?, subscales = ?, tags = ?, audience = ?, tool_source = ?, tool_norm = ?, updated_at = ?
           WHERE id = ?`,
         [
           next.title,
@@ -39136,6 +39146,8 @@ function createCaseEventsService(deps) {
           next.subscales && next.subscales.length > 0 ? JSON.stringify(next.subscales) : null,
           next.tags.length > 0 ? JSON.stringify(next.tags) : null,
           next.audience,
+          next.toolSource,
+          next.toolNorm,
           now().toISOString(),
           id
         ]
@@ -40099,7 +40111,7 @@ function familySectionsOf(fields, subscales) {
 __name(familySectionsOf, "familySectionsOf");
 var SCALE_LABELS = ["\u06F0", "\u06F1", "\u06F2", "\u06F3", "\u06F4", "\u06F5", "\u06F6", "\u06F7", "\u06F8", "\u06F9", "\u06F1\u06F0"];
 function renderFillFormPage(model, token) {
-  const esc3 = /* @__PURE__ */ __name((s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"), "esc");
+  const esc4 = /* @__PURE__ */ __name((s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"), "esc");
   let counter = 0;
   const total = model.sections.reduce((sum, s) => sum + s.items.filter((f) => f.kind !== "longtext").length, 0);
   const isTeacherForm = model.audience === "teacher" || !!model.teacherLabel;
@@ -40112,13 +40124,13 @@ function renderFillFormPage(model, token) {
       const qHint = isTeacherForm && f.teacherHint ? f.teacherHint : f.hint;
       if (f.kind === "longtext") {
         counter -= 1;
-        return `<div class="item item--free"><div class="q">${esc3(qLabel)}</div>${qHint ? `<div class="hint">${esc3(qHint)}</div>` : ""}<textarea class="free" name="${esc3(f.key)}" maxlength="1500" rows="3" placeholder="\u0627\u062E\u062A\u06CC\u0627\u0631\u06CC \u2014 \u0627\u06AF\u0631 \u0686\u06CC\u0632\u06CC \u0628\u0631\u0627\u06CC \u06AF\u0641\u062A\u0646 \u062F\u0627\u0631\u06CC\u062F \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F"></textarea></div>`;
+        return `<div class="item item--free"><div class="q">${esc4(qLabel)}</div>${qHint ? `<div class="hint">${esc4(qHint)}</div>` : ""}<textarea class="free" name="${esc4(f.key)}" maxlength="1500" rows="3" placeholder="\u0627\u062E\u062A\u06CC\u0627\u0631\u06CC \u2014 \u0627\u06AF\u0631 \u0686\u06CC\u0632\u06CC \u0628\u0631\u0627\u06CC \u06AF\u0641\u062A\u0646 \u062F\u0627\u0631\u06CC\u062F \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F"></textarea></div>`;
       }
       let opts = [];
       if (f.scoredOptions && f.scoredOptions.length > 0) {
         opts = f.scoredOptions.map(
-          (o, idx) => `<label class="opt opt--wide"><input type="radio" name="${esc3(f.key)}" value="${idx}" required />
-           <span>${esc3(o.label)}</span></label>`
+          (o, idx) => `<label class="opt opt--wide"><input type="radio" name="${esc4(f.key)}" value="${idx}" required />
+           <span>${esc4(o.label)}</span></label>`
         );
       } else {
         const max = Math.min(Math.max(f.scaleMax ?? 3, 1), 10);
@@ -40126,14 +40138,14 @@ function renderFillFormPage(model, token) {
         for (let v = 0; v <= max; v++) {
           const lbl = labels ? labels[v] : SCALE_LABELS[v] ?? faNum4(v);
           opts.push(
-            `<label class="opt"><input type="radio" name="${esc3(f.key)}" value="${v}" required />
-             <span>${esc3(lbl)}</span></label>`
+            `<label class="opt"><input type="radio" name="${esc4(f.key)}" value="${v}" required />
+             <span>${esc4(lbl)}</span></label>`
           );
         }
       }
-      return `<div class="item" data-key="${esc3(f.key)}"><div class="q">${faNum4(counter)}. ${esc3(qLabel)}</div>${qHint ? `<div class="hint">${esc3(qHint)}</div>` : ""}<div class="opts">${opts.join("")}</div></div>`;
+      return `<div class="item" data-key="${esc4(f.key)}"><div class="q">${faNum4(counter)}. ${esc4(qLabel)}</div>${qHint ? `<div class="hint">${esc4(qHint)}</div>` : ""}<div class="opts">${opts.join("")}</div></div>`;
     }).join("");
-    const head = sec.title ? `<div class="subscale"><span class="subscale__dot"></span>${esc3(sec.title)}</div>` : "";
+    const head = sec.title ? `<div class="subscale"><span class="subscale__dot"></span>${esc4(sec.title)}</div>` : "";
     return `${head}<div class="card">${items}</div>`;
   }).join("");
   return `<!doctype html>
@@ -40142,7 +40154,7 @@ function renderFillFormPage(model, token) {
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="robots" content="noindex, nofollow" />
-<title>${esc3(model.typeTitle)}</title>
+<title>${esc4(model.typeTitle)}</title>
 <style>
   :root { color-scheme: light; }
   * { box-sizing: border-box; }
@@ -40197,17 +40209,17 @@ function renderFillFormPage(model, token) {
 <body>
 <div class="wrap">
   <div class="head">
-    <h1>${esc3(model.typeTitle)}</h1>
-    ${headSub ? `<p>${esc3(headSub)}</p>` : ""}
-    ${model.teacherLabel ? `<div class="who">${esc3(model.teacherLabel)}</div>` : ""}
-    ${model.description ? `<div class="desc">${esc3(model.description)}</div>` : ""}
+    <h1>${esc4(model.typeTitle)}</h1>
+    ${headSub ? `<p>${esc4(headSub)}</p>` : ""}
+    ${model.teacherLabel ? `<div class="who">${esc4(model.teacherLabel)}</div>` : ""}
+    ${model.description ? `<div class="desc">${esc4(model.description)}</div>` : ""}
   </div>
   <div class="progress" id="prog">
     <span id="progText">\u067E\u0627\u0633\u062E \u062F\u0627\u062F\u0647\u200C\u0634\u062F\u0647: \u06F0 \u0627\u0632 ${faNum4(total)}</span>
     <div class="progress__bar"><div class="progress__fill" id="progFill"></div></div>
   </div>
   <div class="notice">\u0627\u06CC\u0646 \u0641\u0631\u0645 \u062A\u0634\u062E\u06CC\u0635 \u0646\u06CC\u0633\u062A\u061B \u0641\u0642\u0637 \u0628\u0647 \u062A\u0635\u0645\u06CC\u0645\u200C\u06AF\u06CC\u0631\u06CC \u062F\u0631\u0645\u0627\u0646\u06AF\u0631 \u06A9\u0645\u06A9 \u0645\u06CC\u200C\u06A9\u0646\u062F.</div>
-  ${model.focusNote ? `<div class="focus">\u{1F3AF} \u06A9\u0627\u0646\u0648\u0646\u200C\u0647\u0627\u06CC \u0627\u06CC\u0646 \u062F\u0648\u0631\u0647 \u0627\u0632 \u0622\u062E\u0631\u06CC\u0646 \u062C\u0645\u0639\u200C\u0628\u0646\u062F\u06CC \u067E\u0631\u0648\u0646\u062F\u0647: <b>${esc3(model.focusNote)}</b> \u2014 \u0647\u0645\u06CC\u0646 \u0628\u062E\u0634\u200C\u0647\u0627 \u062F\u0631 \u0627\u0628\u062A\u062F\u0627\u06CC \u0641\u0631\u0645 \u0622\u0645\u062F\u0647\u200C\u0627\u0646\u062F.</div>` : ""}
+  ${model.focusNote ? `<div class="focus">\u{1F3AF} \u06A9\u0627\u0646\u0648\u0646\u200C\u0647\u0627\u06CC \u0627\u06CC\u0646 \u062F\u0648\u0631\u0647 \u0627\u0632 \u0622\u062E\u0631\u06CC\u0646 \u062C\u0645\u0639\u200C\u0628\u0646\u062F\u06CC \u067E\u0631\u0648\u0646\u062F\u0647: <b>${esc4(model.focusNote)}</b> \u2014 \u0647\u0645\u06CC\u0646 \u0628\u062E\u0634\u200C\u0647\u0627 \u062F\u0631 \u0627\u0628\u062A\u062F\u0627\u06CC \u0641\u0631\u0645 \u0622\u0645\u062F\u0647\u200C\u0627\u0646\u062F.</div>` : ""}
   <form id="f" novalidate>
     ${sections}
     <button class="btn" type="submit">\u0627\u0631\u0633\u0627\u0644 \u067E\u0627\u0633\u062E\u200C\u0647\u0627</button>
@@ -40299,7 +40311,7 @@ function faNum5(n) {
 }
 __name(faNum5, "faNum");
 function renderPreviewPage(def, token) {
-  const esc3 = /* @__PURE__ */ __name((s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"), "esc");
+  const esc4 = /* @__PURE__ */ __name((s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"), "esc");
   const sections = familySectionsOf(def.fields, def.subscales ?? null);
   let counter = 0;
   const total = sections.reduce((sum, s) => sum + s.items.filter((f) => f.kind !== "longtext").length, 0);
@@ -40308,24 +40320,24 @@ function renderPreviewPage(def, token) {
       counter += 1;
       if (f.kind === "longtext") {
         counter -= 1;
-        return `<div class="item item--free"><div class="q">${esc3(f.label)}</div>${f.hint ? `<div class="hint">${esc3(f.hint)}</div>` : ""}<textarea class="free" name="${esc3(f.key)}" maxlength="1500" rows="3" placeholder="\u0627\u062E\u062A\u06CC\u0627\u0631\u06CC \u2014 \u0627\u06AF\u0631 \u0686\u06CC\u0632\u06CC \u0628\u0631\u0627\u06CC \u06AF\u0641\u062A\u0646 \u062F\u0627\u0631\u06CC\u062F \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F"></textarea></div>`;
+        return `<div class="item item--free"><div class="q">${esc4(f.label)}</div>${f.hint ? `<div class="hint">${esc4(f.hint)}</div>` : ""}<textarea class="free" name="${esc4(f.key)}" maxlength="1500" rows="3" placeholder="\u0627\u062E\u062A\u06CC\u0627\u0631\u06CC \u2014 \u0627\u06AF\u0631 \u0686\u06CC\u0632\u06CC \u0628\u0631\u0627\u06CC \u06AF\u0641\u062A\u0646 \u062F\u0627\u0631\u06CC\u062F \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F"></textarea></div>`;
       }
       const opts = [];
       if (f.scoredOptions && f.scoredOptions.length > 0) {
         for (const o of f.scoredOptions) {
-          opts.push(`<label class="opt opt--wide"><input type="radio" name="${esc3(f.key)}" value="${opts.length}" required /><span>${esc3(o.label)}</span></label>`);
+          opts.push(`<label class="opt opt--wide"><input type="radio" name="${esc4(f.key)}" value="${opts.length}" required /><span>${esc4(o.label)}</span></label>`);
         }
       } else {
         const max = Math.min(Math.max(f.scaleMax ?? 3, 1), 10);
         const labels = f.scaleLabels && f.scaleLabels.length === max + 1 ? f.scaleLabels : null;
         for (let v = 0; v <= max; v++) {
           const lbl = labels ? labels[v] : ["\u06F0", "\u06F1", "\u06F2", "\u06F3", "\u06F4", "\u06F5", "\u06F6", "\u06F7", "\u06F8", "\u06F9", "\u06F1\u06F0"][v] ?? faNum5(v);
-          opts.push(`<label class="opt"><input type="radio" name="${esc3(f.key)}" value="${v}" required /><span>${esc3(lbl)}</span></label>`);
+          opts.push(`<label class="opt"><input type="radio" name="${esc4(f.key)}" value="${v}" required /><span>${esc4(lbl)}</span></label>`);
         }
       }
-      return `<div class="item" data-key="${esc3(f.key)}"><div class="q">${faNum5(counter)}. ${esc3(f.label)}</div>${f.hint ? `<div class="hint">${esc3(f.hint)}</div>` : ""}<div class="opts">${opts.join("")}</div></div>`;
+      return `<div class="item" data-key="${esc4(f.key)}"><div class="q">${faNum5(counter)}. ${esc4(f.label)}</div>${f.hint ? `<div class="hint">${esc4(f.hint)}</div>` : ""}<div class="opts">${opts.join("")}</div></div>`;
     }).join("");
-    const head = sec.title ? `<div class="subscale"><span class="subscale__dot"></span>${esc3(sec.title)}</div>` : "";
+    const head = sec.title ? `<div class="subscale"><span class="subscale__dot"></span>${esc4(sec.title)}</div>` : "";
     return `${head}<div class="card">${items}</div>`;
   }).join("");
   return `<!doctype html>
@@ -40334,7 +40346,7 @@ function renderPreviewPage(def, token) {
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="robots" content="noindex, nofollow" />
-<title>\u067E\u06CC\u0634\u200C\u0646\u0645\u0627\u06CC\u0634 \u2014 ${esc3(def.title)}</title>
+<title>\u067E\u06CC\u0634\u200C\u0646\u0645\u0627\u06CC\u0634 \u2014 ${esc4(def.title)}</title>
 <style>
   :root { color-scheme: light; }
   * { box-sizing: border-box; }
@@ -40410,9 +40422,9 @@ function renderPreviewPage(def, token) {
     <span>\u067E\u0631 \u06A9\u0631\u062F\u0646 \u0627\u06CC\u0646 \u0635\u0641\u062D\u0647 \xAB\u067E\u0627\u0633\u062E \u0648\u0627\u0642\u0639\u06CC\xBB \u062A\u0648\u0644\u06CC\u062F \u0646\u0645\u06CC\u200C\u06A9\u0646\u062F \u0648 \u062F\u0631 \u067E\u0631\u0648\u0646\u062F\u0647\u0654 \u0647\u06CC\u0686 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\u06CC \u062B\u0628\u062A \u0646\u0645\u06CC\u200C\u0634\u0648\u062F. \u0628\u0631\u0627\u06CC \u067E\u0627\u0633\u062E \u0648\u0627\u0642\u0639\u06CC\u060C \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u067E\u06CC\u0627\u0645\u200C\u06A9\u0648\u062A\u0627\u0647 \u0631\u0633\u0645\u06CC \u0631\u0627 \u067E\u0631 \u0645\u06CC\u200C\u06A9\u0646\u062F.</span>
   </div>
   <div class="head">
-    <h1>${esc3(def.title)}</h1>
+    <h1>${esc4(def.title)}</h1>
     <p>\u067E\u0631\u0633\u0634\u200C\u0646\u0627\u0645\u0647\u0654 \u0641\u0631\u0632\u0646\u062F \u0634\u0645\u0627 \u2014 \u0646\u0645\u0627\u06CC \u067E\u06CC\u0634\u200C\u0646\u0645\u0627\u06CC\u0634 \u0641\u0631\u0645\u200C\u0633\u0627\u0632</p>
-    ${def.description ? `<div class="desc">${esc3(def.description)}</div>` : ""}
+    ${def.description ? `<div class="desc">${esc4(def.description)}</div>` : ""}
   </div>
   <div class="progress" id="prog">
     <span id="progText">\u067E\u0627\u0633\u062E \u062F\u0627\u062F\u0647\u200C\u0634\u062F\u0647: \u06F0 \u0627\u0632 ${faNum5(total)}</span>
@@ -40559,7 +40571,7 @@ function renderPreviewPage(def, token) {
 }
 __name(renderPreviewPage, "renderPreviewPage");
 function renderPreviewErrorPage(title, message) {
-  const esc3 = /* @__PURE__ */ __name((s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"), "esc");
+  const esc4 = /* @__PURE__ */ __name((s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"), "esc");
   return `<!doctype html>
 <html lang="fa" dir="rtl"><head><meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -40567,7 +40579,7 @@ function renderPreviewErrorPage(title, message) {
 <title>\u067E\u06CC\u0634\u200C\u0646\u0645\u0627\u06CC\u0634 \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0646\u06CC\u0633\u062A</title>
 <style>body{margin:0;background:#F7F3EA;color:#12384f;font-family:Tahoma,sans-serif;display:flex;min-height:100vh;align-items:center;justify-content:center}
 .box{background:#fff;border-radius:16px;padding:28px;max-width:440px;text-align:center;box-shadow:0 1px 3px rgba(18,56,79,.08);margin:16px}</style></head>
-<body><div class="box"><h1 style="font-size:17px">${esc3(title)}</h1><p style="font-size:13.5px;line-height:2">${esc3(message)}</p>
+<body><div class="box"><h1 style="font-size:17px">${esc4(title)}</h1><p style="font-size:13.5px;line-height:2">${esc4(message)}</p>
 <p style="font-size:12px;color:#8A8377">\u062F\u0631 \u067E\u0646\u062C\u0631\u0647\u0654 \u0641\u0631\u0645\u200C\u0633\u0627\u0632 \xAB\u0630\u062E\u06CC\u0631\u0647\xBB \u0628\u0632\u0646\u06CC\u062F \u062A\u0627 \u062E\u0637\u0627\u0647\u0627 \u062F\u0642\u06CC\u0642 \u0646\u0634\u0627\u0646 \u062F\u0627\u062F\u0647 \u0634\u0648\u062F\u060C \u0633\u067E\u0633 \u062F\u0648\u0628\u0627\u0631\u0647 \u067E\u06CC\u0634\u200C\u0646\u0645\u0627\u06CC\u0634 \u0628\u06AF\u06CC\u0631\u06CC\u062F.</p></div></body></html>`;
 }
 __name(renderPreviewErrorPage, "renderPreviewErrorPage");
@@ -40948,7 +40960,7 @@ function registerCaseEventPublicRoutes(app, service, helpers) {
 }
 __name(registerCaseEventPublicRoutes, "registerCaseEventPublicRoutes");
 function fillErrorPage(message) {
-  const esc3 = /* @__PURE__ */ __name((s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"), "esc");
+  const esc4 = /* @__PURE__ */ __name((s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"), "esc");
   return `<!doctype html>
 <html lang="fa" dir="rtl"><head><meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -40956,7 +40968,7 @@ function fillErrorPage(message) {
 <title>\u0641\u0631\u0645 \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0646\u06CC\u0633\u062A</title>
 <style>body{margin:0;background:#F7F3EA;color:#12384f;font-family:Tahoma,sans-serif;display:flex;min-height:100vh;align-items:center;justify-content:center}
 .box{background:#fff;border-radius:16px;padding:28px;max-width:420px;text-align:center;box-shadow:0 1px 3px rgba(18,56,79,.08)}</style></head>
-<body><div class="box"><h1 style="font-size:18px">\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0646\u06CC\u0633\u062A</h1><p style="font-size:14px;line-height:1.9">${esc3(message)}</p></div></body></html>`;
+<body><div class="box"><h1 style="font-size:18px">\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0646\u06CC\u0633\u062A</h1><p style="font-size:14px;line-height:1.9">${esc4(message)}</p></div></body></html>`;
 }
 __name(fillErrorPage, "fillErrorPage");
 
@@ -43150,7 +43162,7 @@ function buildComparison(sessions) {
 }
 __name(buildComparison, "buildComparison");
 function reportToCsv(report) {
-  const esc3 = /* @__PURE__ */ __name((v) => {
+  const esc4 = /* @__PURE__ */ __name((v) => {
     const s = String(v ?? "");
     return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   }, "esc");
@@ -43201,7 +43213,7 @@ function reportToCsv(report) {
       num4(sum?.nback?.match_pct),
       num4(sum?.nback?.false_alarm_pct),
       num4(sum?.nback?.miss_pct)
-    ].map(esc3).join(","));
+    ].map(esc4).join(","));
   }
   return "\uFEFF" + lines.join("\r\n") + "\r\n";
 }
@@ -45171,20 +45183,20 @@ var PreviewFeedbackSchema = external_exports.object({
   rt_ms: external_exports.number().min(0).max(12e4).nullable().optional()
 });
 function renderReportHtml(report, childId) {
-  const esc3 = /* @__PURE__ */ __name((s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"), "esc");
+  const esc4 = /* @__PURE__ */ __name((s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"), "esc");
   const sessionRows = report.sessions.map((s) => {
     const sum = s.computed?.summary ?? {};
     const attemptCount = s.raw.attempt_count;
     const st = sum.stage;
-    const stageCell = st && typeof st.stars === "number" ? esc3(st.title_fa ?? "") + (st.passed ? " \xB7 " + "\u2605".repeat(st.stars) : " \xB7 \u0646\u0627\u062A\u0645\u0627\u0645") : "\u2014";
-    return `<tr><td>${esc3(s.session_id.slice(0, 8))}</td><td>${esc3(s.purpose)}</td><td>${esc3(s.computed?.validity)}</td><td>${esc3(s.computed?.quality_verdict)}</td><td>${esc3(sum.totals?.total ?? "\u2014")}</td><td>${esc3(sum.pct?.correct_go ?? "\u2014")}</td><td>${esc3(sum.pct?.correct_nogo ?? "\u2014")}</td><td>${esc3(sum.pct?.commission ?? "\u2014")}</td><td>${esc3(sum.pct?.omission ?? "\u2014")}</td><td>${stageCell}</td><td>${esc3(attemptCount)}</td></tr>`;
+    const stageCell = st && typeof st.stars === "number" ? esc4(st.title_fa ?? "") + (st.passed ? " \xB7 " + "\u2605".repeat(st.stars) : " \xB7 \u0646\u0627\u062A\u0645\u0627\u0645") : "\u2014";
+    return `<tr><td>${esc4(s.session_id.slice(0, 8))}</td><td>${esc4(s.purpose)}</td><td>${esc4(s.computed?.validity)}</td><td>${esc4(s.computed?.quality_verdict)}</td><td>${esc4(sum.totals?.total ?? "\u2014")}</td><td>${esc4(sum.pct?.correct_go ?? "\u2014")}</td><td>${esc4(sum.pct?.correct_nogo ?? "\u2014")}</td><td>${esc4(sum.pct?.commission ?? "\u2014")}</td><td>${esc4(sum.pct?.omission ?? "\u2014")}</td><td>${stageCell}</td><td>${esc4(attemptCount)}</td></tr>`;
   }).join("");
   const compareRows = report.comparison.by_metric.map(
-    (m) => `<tr><td>${esc3(m.metric_id)}</td><td>${esc3(m.unit)}</td><td>${m.points.map((p) => esc3(p.value)).join(" \u2192 ") || "\u2014"}</td></tr>`
+    (m) => `<tr><td>${esc4(m.metric_id)}</td><td>${esc4(m.unit)}</td><td>${m.points.map((p) => esc4(p.value)).join(" \u2192 ") || "\u2014"}</td></tr>`
   ).join("");
   return `<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" /><meta name="robots" content="noindex, nofollow" />
-<title>\u06AF\u0632\u0627\u0631\u0634 \u0628\u0627\u0632\u06CC \u2014 \u06A9\u0648\u062F\u06A9 ${esc3(childId.slice(0, 8))}</title>
+<title>\u06AF\u0632\u0627\u0631\u0634 \u0628\u0627\u0632\u06CC \u2014 \u06A9\u0648\u062F\u06A9 ${esc4(childId.slice(0, 8))}</title>
 <style>
   body { font-family: Tahoma, sans-serif; background: #F5F0E5; color: #153E50; margin: 0; padding: 24px; }
   h1 { font-size: 20px; } h2 { font-size: 16px; margin-top: 28px; }
@@ -45193,8 +45205,8 @@ function renderReportHtml(report, childId) {
   th { background: #153E50; color: #fff; }
   .muted { color: #6E7B76; font-size: 12px; }
 </style></head><body>
-<h1>\u06AF\u0632\u0627\u0631\u0634 \u062C\u0644\u0633\u0647\u200C\u0647\u0627\u06CC \u0628\u0627\u0632\u06CC \u2014 \u06A9\u0648\u062F\u06A9 ${esc3(childId.slice(0, 8))}</h1>
-<p class="muted">${esc3(report.session_count)} \u062C\u0644\u0633\u0647 \xB7 \u062A\u0648\u0644\u06CC\u062F ${esc3(report.generated_at)} \xB7 \u0627\u06CC\u0646 \u06AF\u0632\u0627\u0631\u0634 \u0647\u06CC\u0686 \u062A\u0641\u0633\u06CC\u0631 \u0628\u0627\u0644\u06CC\u0646\u06CC \u062A\u0648\u0644\u06CC\u062F \u0646\u0645\u06CC\u200C\u06A9\u0646\u062F \u2014 \u062A\u0641\u0633\u06CC\u0631 \u0628\u0627 \u062F\u0631\u0645\u0627\u0646\u06AF\u0631 \u0627\u0633\u062A.</p>
+<h1>\u06AF\u0632\u0627\u0631\u0634 \u062C\u0644\u0633\u0647\u200C\u0647\u0627\u06CC \u0628\u0627\u0632\u06CC \u2014 \u06A9\u0648\u062F\u06A9 ${esc4(childId.slice(0, 8))}</h1>
+<p class="muted">${esc4(report.session_count)} \u062C\u0644\u0633\u0647 \xB7 \u062A\u0648\u0644\u06CC\u062F ${esc4(report.generated_at)} \xB7 \u0627\u06CC\u0646 \u06AF\u0632\u0627\u0631\u0634 \u0647\u06CC\u0686 \u062A\u0641\u0633\u06CC\u0631 \u0628\u0627\u0644\u06CC\u0646\u06CC \u062A\u0648\u0644\u06CC\u062F \u0646\u0645\u06CC\u200C\u06A9\u0646\u062F \u2014 \u062A\u0641\u0633\u06CC\u0631 \u0628\u0627 \u062F\u0631\u0645\u0627\u0646\u06AF\u0631 \u0627\u0633\u062A.</p>
 <h2>\u062E\u0644\u0627\u0635\u0647\u0654 \u0645\u062D\u0627\u0633\u0628\u0647\u200C\u0634\u062F\u0647\u0654 \u062C\u0644\u0633\u0647\u200C\u0647\u0627</h2>
 <table><thead><tr><th>\u062C\u0644\u0633\u0647</th><th>\u062D\u0627\u0644\u062A</th><th>\u0627\u0639\u062A\u0628\u0627\u0631</th><th>\u06A9\u06CC\u0641\u06CC\u062A</th><th>\u0622\u0632\u0645\u0648\u0646</th><th>\u06AF\u0648 \u062F\u0631\u0633\u062A\u066A</th><th>\u0646\u0648\u06AF\u0648 \u062F\u0631\u0633\u062A\u066A</th><th>\u06A9\u0645\u06CC\u0633\u06CC\u0648\u0646\u066A</th><th>\u0627\u064F\u0645\u06CC\u0634\u0646\u066A</th><th>\u0645\u0631\u062D\u0644\u0647</th><th>\u067E\u0627\u0633\u062E \u062E\u0627\u0645</th></tr></thead>
 <tbody>${sessionRows || '<tr><td colspan="11">\u062C\u0644\u0633\u0647\u200C\u0627\u06CC \u062B\u0628\u062A \u0646\u0634\u062F\u0647</td></tr>'}</tbody></table>
@@ -45202,7 +45214,7 @@ function renderReportHtml(report, childId) {
 <table><thead><tr><th>\u0633\u0646\u062C\u0647</th><th>\u0648\u0627\u062D\u062F</th><th>\u0633\u0631\u06CC \u0632\u0645\u0627\u0646\u06CC</th></tr></thead>
 <tbody>${compareRows || '<tr><td colspan="3">\u0633\u0646\u062C\u0647\u200C\u0627\u06CC \u062B\u0628\u062A \u0646\u0634\u062F\u0647</td></tr>'}</tbody></table>
 <h2>\u0644\u0627\u06CC\u0647\u0654 \u062E\u0627\u0645</h2>
-<p class="muted">${esc3(report.sessions.reduce((a, s) => a + s.raw.attempts.length, 0))} \u067E\u0627\u0633\u062E \u062E\u0627\u0645 \u0628\u0627 \u0634\u0648\u0627\u0647\u062F \u0646\u0645\u0627\u06CC\u0634 (\u0645\u064F\u0647\u0631 \u0632\u0645\u0627\u0646/\u0627\u0641\u062A \u0641\u0631\u06CC\u0645/\u0644\u0645\u0633\u200C\u0647\u0627) \u062F\u0631 \u062E\u0631\u0648\u062C\u06CC JSON \u0647\u0645\u06CC\u0646 \u0645\u0633\u06CC\u0631 \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0627\u0633\u062A \u2014 \u062A\u0641\u06A9\u06CC\u06A9 \u062E\u0627\u0645/\u0645\u062D\u0627\u0633\u0628\u0647\u200C\u0634\u062F\u0647 \u062D\u0641\u0638 \u0634\u062F\u0647.</p>
+<p class="muted">${esc4(report.sessions.reduce((a, s) => a + s.raw.attempts.length, 0))} \u067E\u0627\u0633\u062E \u062E\u0627\u0645 \u0628\u0627 \u0634\u0648\u0627\u0647\u062F \u0646\u0645\u0627\u06CC\u0634 (\u0645\u064F\u0647\u0631 \u0632\u0645\u0627\u0646/\u0627\u0641\u062A \u0641\u0631\u06CC\u0645/\u0644\u0645\u0633\u200C\u0647\u0627) \u062F\u0631 \u062E\u0631\u0648\u062C\u06CC JSON \u0647\u0645\u06CC\u0646 \u0645\u0633\u06CC\u0631 \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0627\u0633\u062A \u2014 \u062A\u0641\u06A9\u06CC\u06A9 \u062E\u0627\u0645/\u0645\u062D\u0627\u0633\u0628\u0647\u200C\u0634\u062F\u0647 \u062D\u0641\u0638 \u0634\u062F\u0647.</p>
 </body></html>`;
 }
 __name(renderReportHtml, "renderReportHtml");
@@ -52465,6 +52477,172 @@ function schoolVariantOf(path, summary, monitoring, sessions) {
 }
 __name(schoolVariantOf, "schoolVariantOf");
 
+// src/domain/clinical-engine/family-sheet.ts
+var FAMILY_SHEET_TTL_SECONDS = 15552e3;
+var SHEET_SCOPE = "family-sheet";
+function base64UrlEncode3(bytes) {
+  let bin = "";
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+__name(base64UrlEncode3, "base64UrlEncode");
+function base64UrlDecode4(text) {
+  const b64 = text.replace(/-/g, "+").replace(/_/g, "/");
+  const bin = atob(b64 + "=".repeat((4 - b64.length % 4) % 4));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+__name(base64UrlDecode4, "base64UrlDecode");
+async function hmacKey2(secret) {
+  return crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]);
+}
+__name(hmacKey2, "hmacKey");
+async function mintFamilySheetToken(studentId, secret) {
+  const nowSec = Math.floor(Date.now() / 1e3);
+  const payload = { scope: SHEET_SCOPE, sid: studentId, iat: nowSec, exp: nowSec + FAMILY_SHEET_TTL_SECONDS };
+  const header = { alg: "HS256", typ: "JWT" };
+  const data = `${base64UrlEncode3(new TextEncoder().encode(JSON.stringify(header)))}.${base64UrlEncode3(new TextEncoder().encode(JSON.stringify(payload)))}`;
+  const key = await hmacKey2(secret);
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(data));
+  return { token: `${data}.${base64UrlEncode3(new Uint8Array(sig))}`, expiresAt: new Date(payload.exp * 1e3).toISOString() };
+}
+__name(mintFamilySheetToken, "mintFamilySheetToken");
+async function verifyFamilySheetToken(token, secret) {
+  const parts = token.split(".");
+  if (parts.length !== 3) return null;
+  const [headerB64, payloadB64, signatureB64] = parts;
+  try {
+    const header = JSON.parse(new TextDecoder().decode(base64UrlDecode4(headerB64)));
+    if (header.alg !== "HS256") return null;
+    const key = await hmacKey2(secret);
+    const valid = await crypto.subtle.verify("HMAC", key, base64UrlDecode4(signatureB64), new TextEncoder().encode(`${headerB64}.${payloadB64}`));
+    if (!valid) return null;
+    const payload = JSON.parse(new TextDecoder().decode(base64UrlDecode4(payloadB64)));
+    if (payload.scope !== SHEET_SCOPE) return null;
+    if (!payload.sid || typeof payload.sid !== "string") return null;
+    if (payload.exp * 1e3 < Date.now()) return null;
+    return payload.sid;
+  } catch {
+    return null;
+  }
+}
+__name(verifyFamilySheetToken, "verifyFamilySheetToken");
+var FA_DIGITS4 = "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9";
+function faNum9(s) {
+  return String(s).replace(/\d/g, (d) => FA_DIGITS4[Number(d)]);
+}
+__name(faNum9, "faNum");
+function esc3(s) {
+  return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+__name(esc3, "esc");
+function fmtNum(v) {
+  if (v == null) return "\u2014";
+  return faNum9(Math.round(v * 10) / 10);
+}
+__name(fmtNum, "fmtNum");
+function jalaliDay(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!m) return "";
+  const { jy, jm, jd } = toJalaliParts(Number(m[1]), Number(m[2]), Number(m[3]));
+  return faNum9(`${jy}/${String(jm).padStart(2, "0")}/${String(jd).padStart(2, "0")}`);
+}
+__name(jalaliDay, "jalaliDay");
+function probeSvg(points) {
+  if (points.length < 2) return "";
+  const w = 640, h = 170, padL = 46, padR = 14, padT = 14, padB = 26;
+  const vals = points.map((p) => p.value);
+  const min = Math.min(...vals), max = Math.max(...vals);
+  const span = max - min || Math.max(Math.abs(max), 1) * 0.1;
+  const lo = min - span * 0.15, hi = max + span * 0.15;
+  const x = /* @__PURE__ */ __name((i) => padL + i * (w - padL - padR) / (points.length - 1), "x");
+  const y = /* @__PURE__ */ __name((v) => padT + (1 - (v - lo) / (hi - lo)) * (h - padT - padB), "y");
+  const pts = points.map((p, i) => `${x(i).toFixed(1)},${y(p.value).toFixed(1)}`).join(" ");
+  const dots = points.map((p, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(p.value).toFixed(1)}" r="3" fill="#2b6cb0"/>`).join("");
+  return `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="\u0631\u0648\u0646\u062F \u0633\u0646\u062C\u0647\u0654 \u067E\u0631\u0627\u067E" style="width:100%;height:auto;max-width:${w}px;display:block">
+    <line x1="${padL}" y1="${h - padB}" x2="${w - padR}" y2="${h - padB}" stroke="#d8dee9"/>
+    ${dots}
+    <polyline points="${pts}" fill="none" stroke="#2b6cb0" stroke-width="2"/>
+    <text x="${padL - 6}" y="${(y(max) + 4).toFixed(1)}" font-size="11" fill="#64748b" text-anchor="end">${esc3(fmtNum(max))}</text>
+    <text x="${padL - 6}" y="${y(min).toFixed(1)}" font-size="11" fill="#64748b" text-anchor="end">${esc3(fmtNum(min))}</text>
+    <text x="${padL}" y="${h - 8}" font-size="11" fill="#64748b">${esc3(jalaliDay(points[0].takenAt))}</text>
+    <text x="${w - padR}" y="${h - 8}" font-size="11" fill="#64748b" text-anchor="end">${esc3(jalaliDay(points[points.length - 1].takenAt))}</text>
+  </svg>`;
+}
+__name(probeSvg, "probeSvg");
+var STATUS_BADGE_CLS = {
+  suggested: "b-info",
+  reviewed: "b-warn",
+  active: "b-ok",
+  closed: "b-neutral"
+};
+function pathSection(p) {
+  const dir = p.improved === true ? "\u0631\u0648\u0646\u062F \u0628\u0647\u0628\u0648\u062F" : p.improved === false ? "\u0628\u062F\u0648\u0646 \u0628\u0647\u0628\u0648\u062F \u062F\u0631 \u0627\u06CC\u0646 \u0628\u0627\u0632\u0647" : "\u2014";
+  const trend = p.metric ? `<p class="muted">\u0633\u0646\u062C\u0647\u0654 \xAB${esc3(p.metric)}\xBB \u2014 \u0622\u062E\u0631\u06CC\u0646: ${esc3(fmtNum(p.last))}${p.unit ? " " + esc3(p.unit) : ""} \xB7 ${dir}${p.first != null ? ` (\u0627\u0648\u0644\u06CC\u0646 \u0633\u0646\u062C\u0634: ${esc3(fmtNum(p.first))})` : ""}</p>` : '<p class="muted">\u0647\u0646\u0648\u0632 \u0633\u0646\u062C\u0647\u200C\u0627\u06CC \u0628\u0631\u0627\u06CC \u0627\u06CC\u0646 \u0645\u0633\u06CC\u0631 \u062B\u0628\u062A \u0646\u0634\u062F\u0647 \u0627\u0633\u062A.</p>';
+  const mastery = p.mastered ? '<span class="badge b-ok">\u0645\u0644\u0627\u06A9 \u062A\u0633\u0644\u0637</span>' : "";
+  const reassess = p.reassessAt ? `<p class="muted small">\u0645\u0648\u0639\u062F \u0628\u0627\u0632\u0646\u06AF\u0631\u06CC: ${esc3(jalaliDay(p.reassessAt))}</p>` : "";
+  return `<section class="card">
+    <h2>${esc3(p.targetTitle)}</h2>
+    <p class="row"><span class="badge ${STATUS_BADGE_CLS[p.status] ?? "b-neutral"}">${esc3(INTERVENTION_PATH_STATUS_LABELS[p.status] ?? p.status)}</span> ${mastery}<span class="muted">\u062C\u0644\u0633\u0627\u062A: ${esc3(faNum9(p.sessionsDone))} \u0627\u0632 ${esc3(faNum9(p.sessionsPlanned))} \u0628\u0631\u06AF\u0632\u0627\u0631\u0634\u062F\u0647</span></p>
+    ${trend}
+    ${probeSvg(p.points)}
+    ${reassess}
+  </section>`;
+}
+__name(pathSection, "pathSection");
+function renderFamilySheetPage(model) {
+  const body = model.paths.length > 0 ? model.paths.map(pathSection).join("") : '<section class="card"><p class="muted">\u0647\u0646\u0648\u0632 \u0645\u0633\u06CC\u0631 \u0645\u062F\u0627\u062E\u0644\u0647\u200C\u0627\u06CC \u0628\u0631\u0627\u06CC \u0627\u06CC\u0646 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u062B\u0628\u062A \u0646\u0634\u062F\u0647 \u0627\u0633\u062A \u2014 \u0627\u06CC\u0646 \u0628\u0631\u06AF\u0647 \u0628\u0639\u062F \u0627\u0632 \u0633\u0627\u062E\u062A\u0646 \u0627\u0648\u0644\u06CC\u0646 \u0645\u0633\u06CC\u0631 \u062F\u0631 \u0633\u0627\u0645\u0627\u0646\u0647 \u067E\u0631 \u0645\u06CC\u200C\u0634\u0648\u062F.</p></section>';
+  const grade = model.grade ? ` \xB7 \u067E\u0627\u06CC\u0647\u0654 ${esc3(model.grade)}` : "";
+  return `<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>\u0628\u0631\u06AF\u0647\u0654 \u067E\u06CC\u0634\u0631\u0641\u062A \u2014 ${esc3(model.studentName)}</title>
+<style>
+  :root { color-scheme: light; }
+  body { font-family: Vazirmatn, Tahoma, "Segoe UI", sans-serif; background: #f5f7fa; color: #1f2937; margin: 0; }
+  .wrap { max-width: 720px; margin: 0 auto; padding: clamp(12px, 3vw, 24px); }
+  .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: clamp(14px, 3vw, 20px); margin-bottom: 12px; }
+  h1 { font-size: clamp(1.25rem, 4vw, 1.6rem); margin: 0 0 6px; }
+  h2 { font-size: clamp(1.05rem, 3.5vw, 1.2rem); margin: 0 0 8px; }
+  .muted { color: #64748b; font-size: .92rem; margin: 6px 0; }
+  .small { font-size: .8rem; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: .78rem; border: 1px solid transparent; }
+  .b-ok { background: #e6f4ea; color: #1e7b34; border-color: #bfe3c9; }
+  .b-warn { background: #fdf3e3; color: #9a6700; border-color: #f3dfb6; }
+  .b-info { background: #e8f1fd; color: #2b6cb0; border-color: #c5dbfa; }
+  .b-neutral { background: #f1f5f9; color: #475569; border-color: #e2e8f0; }
+  footer { text-align: center; padding: 10px 0 20px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="card">
+    <h1>\u0628\u0631\u06AF\u0647\u0654 \u067E\u06CC\u0634\u0631\u0641\u062A</h1>
+    <p style="margin:0">${esc3(model.studentName)}${grade}</p>
+    <p class="muted small">\u0633\u0627\u062E\u062A: ${esc3(jalaliDay(model.generatedAt))} \xB7 \u0627\u06CC\u0646 \u0628\u0631\u06AF\u0647 \u0641\u0642\u0637\u200C\u062E\u0648\u0627\u0646\u062F\u0646\u06CC \u0627\u0633\u062A \u0648 \u0631\u0648\u0646\u062F \u0645\u0633\u06CC\u0631\u0647\u0627\u06CC \u0645\u062F\u0627\u062E\u0644\u0647 \u0648 \u0646\u062A\u06CC\u062C\u0647\u0654 \u0633\u0646\u062C\u0634\u200C\u0647\u0627 \u0631\u0627 \u0628\u0631\u0627\u06CC \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u0646\u0634\u0627\u0646 \u0645\u06CC\u200C\u062F\u0647\u062F\u061B \u062C\u0632\u0626\u06CC\u0627\u062A \u0639\u0644\u0645\u06CC \u0648 \u0645\u0635\u0648\u0628\u0647\u200C\u0647\u0627 \u062F\u0631 \u062C\u0644\u0633\u0627\u062A \u0645\u0631\u06A9\u0632 \u0628\u0631\u0631\u0633\u06CC \u0645\u06CC\u200C\u0634\u0648\u0646\u062F.</p>
+  </header>
+  ${body}
+  <footer class="muted small">\u0627\u06CC\u0646 \u0628\u0631\u06AF\u0647 \u0628\u0627 \u067E\u06CC\u0648\u0646\u062F \u0627\u0645\u0636\u0627\u0634\u062F\u0647\u0654 \u0645\u062D\u062F\u0648\u062F \u0628\u0627\u0632 \u0645\u06CC\u200C\u0634\u0648\u062F \u2014 \u067E\u06CC\u0648\u0646\u062F \u0631\u0627 \u0641\u0642\u0637 \u0628\u0627 \u062E\u0627\u0646\u0648\u0627\u062F\u0647\u0654 \u0647\u0645\u06CC\u0646 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u062F\u0631 \u0645\u06CC\u0627\u0646 \u0628\u06AF\u0630\u0627\u0631\u06CC\u062F.</footer>
+</div>
+</body>
+</html>`;
+}
+__name(renderFamilySheetPage, "renderFamilySheetPage");
+function sheetErrorPage(title) {
+  return `<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>\u0628\u0631\u06AF\u0647\u0654 \u067E\u06CC\u0634\u0631\u0641\u062A</title>
+<style>body{font-family:Vazirmatn,Tahoma,sans-serif;background:#f5f7fa;color:#1f2937;margin:0}.wrap{max-width:560px;margin:0 auto;padding:24px}.card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;text-align:center}</style>
+</head>
+<body><div class="wrap"><div class="card"><h1>\u0628\u0631\u06AF\u0647\u0654 \u067E\u06CC\u0634\u0631\u0641\u062A</h1><p>${esc3(title)}</p></div></div></body>
+</html>`;
+}
+__name(sheetErrorPage, "sheetErrorPage");
+
 // src/domain/clinical-engine/progress.ts
 var PATH_PROBE_DEFAULT_THRESHOLD = 80;
 var PATH_PROBE_MASTERY_STREAK = 2;
@@ -55011,10 +55189,10 @@ function numOf(value) {
   return Number.isFinite(n) ? n : null;
 }
 __name(numOf, "numOf");
-function faNum9(n) {
+function faNum10(n) {
   return String(n).replace(/[0-9]/g, (d) => "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9"[Number(d)]);
 }
-__name(faNum9, "faNum");
+__name(faNum10, "faNum");
 function subtestsOf(engine) {
   const map2 = /* @__PURE__ */ new Map();
   const snap = engine?.["snapshot"];
@@ -55183,14 +55361,14 @@ function recommendChecklistPlan(ctx) {
     return {
       planType: "\u062C\u0627\u0645\u0639",
       items: [],
-      basis: `\u0647\u0648\u0634\u200C\u0628\u0647\u0631 \u06A9\u0644 ${faNum9(fsiq ?? 0)} \u062F\u0631 \u0628\u0627\u0632\u0647\u0654 \u0646\u0627\u062A\u0648\u0627\u0646\u06CC \u0647\u0648\u0634\u06CC \u0627\u0633\u062A \u0648 \u0627\u0646\u0637\u0628\u0627\u0642 \u0631\u0648\u0632\u0645\u0631\u0647 \xAB\u067E\u0627\u06CC\u06CC\u0646\xBB \u06AF\u0632\u0627\u0631\u0634 \u0634\u062F\u0647 \u2014 \u0637\u0628\u0642 \u0645\u0644\u0627\u06A9 \u062A\u0641\u06A9\u06CC\u06A9 \u0627\u0646\u0637\u0628\u0627\u0642\u06CC\u060C \u0645\u0633\u06CC\u0631 \u0627\u0631\u062C\u0627\u0639 \u0646\u0627\u062A\u0648\u0627\u0646\u06CC \u0647\u0648\u0634\u06CC (ID) \u0641\u0639\u0627\u0644 \u0645\u06CC\u200C\u0634\u0648\u062F \u0648 \u0633\u0627\u0645\u0627\u0646\u0647 \u067E\u0644\u0646 \u0627\u0628\u0632\u0627\u0631\u06CC \u067E\u06CC\u0634\u0646\u0647\u0627\u062F \u0646\u0645\u06CC\u200C\u06A9\u0646\u062F\u061B \u062A\u0635\u0645\u06CC\u0645 \u0648 \u0627\u0631\u062C\u0627\u0639 \u0628\u0627 \u0645\u062A\u062E\u0635\u0635 \u0627\u0633\u062A.`,
+      basis: `\u0647\u0648\u0634\u200C\u0628\u0647\u0631 \u06A9\u0644 ${faNum10(fsiq ?? 0)} \u062F\u0631 \u0628\u0627\u0632\u0647\u0654 \u0646\u0627\u062A\u0648\u0627\u0646\u06CC \u0647\u0648\u0634\u06CC \u0627\u0633\u062A \u0648 \u0627\u0646\u0637\u0628\u0627\u0642 \u0631\u0648\u0632\u0645\u0631\u0647 \xAB\u067E\u0627\u06CC\u06CC\u0646\xBB \u06AF\u0632\u0627\u0631\u0634 \u0634\u062F\u0647 \u2014 \u0637\u0628\u0642 \u0645\u0644\u0627\u06A9 \u062A\u0641\u06A9\u06CC\u06A9 \u0627\u0646\u0637\u0628\u0627\u0642\u06CC\u060C \u0645\u0633\u06CC\u0631 \u0627\u0631\u062C\u0627\u0639 \u0646\u0627\u062A\u0648\u0627\u0646\u06CC \u0647\u0648\u0634\u06CC (ID) \u0641\u0639\u0627\u0644 \u0645\u06CC\u200C\u0634\u0648\u062F \u0648 \u0633\u0627\u0645\u0627\u0646\u0647 \u067E\u0644\u0646 \u0627\u0628\u0632\u0627\u0631\u06CC \u067E\u06CC\u0634\u0646\u0647\u0627\u062F \u0646\u0645\u06CC\u200C\u06A9\u0646\u062F\u061B \u062A\u0635\u0645\u06CC\u0645 \u0648 \u0627\u0631\u062C\u0627\u0639 \u0628\u0627 \u0645\u062A\u062E\u0635\u0635 \u0627\u0633\u062A.`,
       referralFa: "\u062E\u0637 \u0642\u0631\u0645\u0632 \u2014 \u0645\u0633\u06CC\u0631 \u0646\u0627\u062A\u0648\u0627\u0646\u06CC \u0647\u0648\u0634\u06CC (FSIQ \u2264 \u06F7\u06F0 \u0647\u0645\u0631\u0627\u0647 \u0627\u0646\u0637\u0628\u0627\u0642 \u067E\u0627\u06CC\u06CC\u0646): \u067E\u0644\u0646 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0631\u0641\u062A\u0627\u0631\u06CC \u067E\u06CC\u0634\u0646\u0647\u0627\u062F \u0646\u0645\u06CC\u200C\u0634\u0648\u062F\u061B \u067E\u0631\u0648\u0646\u062F\u0647 \u0628\u0631\u0627\u06CC \u0627\u0631\u062C\u0627\u0639 \u062A\u062E\u0635\u0635\u06CC (\u0631\u0648\u0627\u0646\u200C\u067E\u0632\u0634\u06A9/\u0645\u062F\u06CC\u0631 \u067E\u0631\u0648\u0646\u062F\u0647) \u0639\u0644\u0627\u0645\u062A \u062E\u0648\u0631\u062F."
     };
   }
   const bifCondition = band === "BIF" || band === "ID" && (adapt.level === "normal" || adapt.level === "border");
   if (bifCondition) {
     const bandFa = band === "BIF" ? "\u0628\u0627\u0632\u0647\u0654 \u0645\u0631\u0632\u06CC/\u062F\u06CC\u0631\u0622\u0645\u0648\u0632\u06CC (\u06F7\u06F0\u2013\u06F8\u06F4)" : "\u067E\u0627\u06CC\u06CC\u0646\u200C\u062A\u0631 \u0627\u0632 \u0645\u0631\u0632 \u06F7\u06F0 \u0628\u0627 \u0627\u0646\u0637\u0628\u0627\u0642 \u062D\u0641\u0638\u200C\u0634\u062F\u0647";
-    const probeReason = `\u067E\u0644\u0646 \u062F\u06CC\u0631\u0622\u0645\u0648\u0632 (FSIQ ${faNum9(fsiq ?? 0)} \u2014 ${bandFa}): \u0633\u0646\u062C\u0634 \u0639\u0645\u0644\u06A9\u0631\u062F \u0648\u0627\u0642\u0639\u06CC \u062F\u0631 \u0633\u0647 \u062D\u0648\u0632\u0647\u0654 \u067E\u0627\u06CC\u0647 \u0628\u0631\u0627\u06CC \u0647\u062F\u0641\u200C\u06AF\u0630\u0627\u0631\u06CC \u0622\u0645\u0648\u0632\u0634\u06CC \u0648\u0627\u0642\u0639\u200C\u0628\u06CC\u0646\u0627\u0646\u0647 (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F5).`;
+    const probeReason = `\u067E\u0644\u0646 \u062F\u06CC\u0631\u0622\u0645\u0648\u0632 (FSIQ ${faNum10(fsiq ?? 0)} \u2014 ${bandFa}): \u0633\u0646\u062C\u0634 \u0639\u0645\u0644\u06A9\u0631\u062F \u0648\u0627\u0642\u0639\u06CC \u062F\u0631 \u0633\u0647 \u062D\u0648\u0632\u0647\u0654 \u067E\u0627\u06CC\u0647 \u0628\u0631\u0627\u06CC \u0647\u062F\u0641\u200C\u06AF\u0630\u0627\u0631\u06CC \u0622\u0645\u0648\u0632\u0634\u06CC \u0648\u0627\u0642\u0639\u200C\u0628\u06CC\u0646\u0627\u0646\u0647 (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F5).`;
     for (const key of [PLAN_TOOL_KEYS.probeRead, PLAN_TOOL_KEYS.probeWrite, PLAN_TOOL_KEYS.probeCalc]) {
       builder.add(key, "core", probeReason, "r5");
     }
@@ -55241,7 +55419,7 @@ function recommendChecklistPlan(ctx) {
       builder.add(
         PLAN_TOOL_KEYS.idAdapt,
         "core",
-        `\u0647\u0648\u0634\u200C\u0628\u0647\u0631 \u06A9\u0644 ${faNum9(fsiq ?? 0)} \u067E\u0627\u06CC\u06CC\u0646\u200C\u062A\u0631 \u0627\u0632 \u0645\u0631\u0632 \u06F7\u06F0 \u0627\u0633\u062A \u0648\u0644\u06CC \u0627\u0646\u0637\u0628\u0627\u0642 \u0631\u0648\u0632\u0645\u0631\u0647 \u062B\u0628\u062A \u0646\u0634\u062F\u0647 \u2014 \u0633\u0646\u062C\u0647\u0654 \u0627\u0646\u0637\u0628\u0627\u0642 \u0631\u0648\u0632\u0645\u0631\u0647 (\u0641\u0631\u0645 \u062E\u0627\u0646\u0648\u0627\u062F\u0647) \u0628\u0631\u0627\u06CC \u062A\u0641\u06A9\u06CC\u06A9 \u0645\u0633\u06CC\u0631 \u0646\u0627\u062A\u0648\u0627\u0646\u06CC \u0647\u0648\u0634\u06CC \u0627\u0632 \u062F\u06CC\u0631\u0622\u0645\u0648\u0632\u06CC \u0644\u0627\u0632\u0645 \u0627\u0633\u062A (\xA7\u06F3.\u06F1).`,
+        `\u0647\u0648\u0634\u200C\u0628\u0647\u0631 \u06A9\u0644 ${faNum10(fsiq ?? 0)} \u067E\u0627\u06CC\u06CC\u0646\u200C\u062A\u0631 \u0627\u0632 \u0645\u0631\u0632 \u06F7\u06F0 \u0627\u0633\u062A \u0648\u0644\u06CC \u0627\u0646\u0637\u0628\u0627\u0642 \u0631\u0648\u0632\u0645\u0631\u0647 \u062B\u0628\u062A \u0646\u0634\u062F\u0647 \u2014 \u0633\u0646\u062C\u0647\u0654 \u0627\u0646\u0637\u0628\u0627\u0642 \u0631\u0648\u0632\u0645\u0631\u0647 (\u0641\u0631\u0645 \u062E\u0627\u0646\u0648\u0627\u062F\u0647) \u0628\u0631\u0627\u06CC \u062A\u0641\u06A9\u06CC\u06A9 \u0645\u0633\u06CC\u0631 \u0646\u0627\u062A\u0648\u0627\u0646\u06CC \u0647\u0648\u0634\u06CC \u0627\u0632 \u062F\u06CC\u0631\u0622\u0645\u0648\u0632\u06CC \u0644\u0627\u0632\u0645 \u0627\u0633\u062A (\xA7\u06F3.\u06F1).`,
         "r6"
       );
       builder.notes.push("\u062A\u0627 \u062A\u06A9\u0645\u06CC\u0644 \u0633\u0646\u062C\u0647\u0654 \u0627\u0646\u0637\u0628\u0627\u0642\u060C \u0645\u0633\u06CC\u0631 ID \u0645\u0647\u0631 \u0646\u0645\u06CC\u200C\u0634\u0648\u062F \u2014 \u0645\u0644\u0627\u06A9 \u062A\u0641\u06A9\u06CC\u06A9 \u0627\u0646\u0637\u0628\u0627\u0642\u06CC \u062F\u0648 \u0645\u0633\u06CC\u0631 \u0631\u0627 \u062C\u062F\u0627\u06CC \u0647\u0645 \u0646\u06AF\u0647 \u0645\u06CC\u200C\u062F\u0627\u0631\u062F.");
@@ -55321,12 +55499,12 @@ function applyProfileRules(args) {
     builder.domains.add("attention");
   }
   if (facts.vci !== null && facts.vci <= T.LOW_INDEX && facts.vocabLow) {
-    builder.add(PLAN_TOOL_KEYS.speech, "core", `\u0634\u0627\u062E\u0635 \u06A9\u0644\u0627\u0645\u06CC ${faNum9(facts.vci)} \u0628\u0627 \u0648\u0627\u0698\u06AF\u0627\u0646/\u062A\u0634\u0627\u0628\u0647\u0627\u062A \u0636\u0639\u06CC\u0641 \u2014 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0632\u0628\u0627\u0646 \u0648 \u06AF\u0641\u062A\u0627\u0631 (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F3).`, "r3");
+    builder.add(PLAN_TOOL_KEYS.speech, "core", `\u0634\u0627\u062E\u0635 \u06A9\u0644\u0627\u0645\u06CC ${faNum10(facts.vci)} \u0628\u0627 \u0648\u0627\u0698\u06AF\u0627\u0646/\u062A\u0634\u0627\u0628\u0647\u0627\u062A \u0636\u0639\u06CC\u0641 \u2014 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0632\u0628\u0627\u0646 \u0648 \u06AF\u0641\u062A\u0627\u0631 (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F3).`, "r3");
     builder.add(PLAN_TOOL_KEYS.probeRead, "recommended", "\u067E\u0631\u0648\u0628 \u0631\u0648\u0627\u0646\u06CC\u200C\u062E\u0648\u0627\u0646\u062F\u0646 \u062F\u0631 \u0633\u0646 \u0645\u062F\u0631\u0633\u0647 \u2014 \u062A\u0641\u06A9\u06CC\u06A9 \u0632\u0628\u0627\u0646 \u0627\u0632 \u062E\u0648\u0627\u0646\u062F\u0646 (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F3).", "r3");
     builder.domains.add("language");
   }
   if (facts.wmi !== null && facts.wmi <= T.LOW_INDEX && (facts.digitsSpanLow || facts.letterNumberLow)) {
-    builder.add(PLAN_TOOL_KEYS.speech, "core", `\u062D\u0627\u0641\u0638\u0647\u0654 \u06A9\u0627\u0631\u06CC ${faNum9(facts.wmi)} \u0628\u0627 \u0641\u0631\u0627\u062E\u0646\u0627\u06CC \u0627\u0631\u0642\u0627\u0645/\u062A\u0648\u0627\u0644\u06CC \u062D\u0631\u0641-\u0639\u062F\u062F \u0636\u0639\u06CC\u0641 \u2014 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0632\u0628\u0627\u0646 + \u0628\u0631\u0631\u0633\u06CC \u067E\u0631\u062F\u0627\u0632\u0634 \u0634\u0646\u06CC\u062F\u0627\u0631\u06CC (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F4).`, "r4");
+    builder.add(PLAN_TOOL_KEYS.speech, "core", `\u062D\u0627\u0641\u0638\u0647\u0654 \u06A9\u0627\u0631\u06CC ${faNum10(facts.wmi)} \u0628\u0627 \u0641\u0631\u0627\u062E\u0646\u0627\u06CC \u0627\u0631\u0642\u0627\u0645/\u062A\u0648\u0627\u0644\u06CC \u062D\u0631\u0641-\u0639\u062F\u062F \u0636\u0639\u06CC\u0641 \u2014 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0632\u0628\u0627\u0646 + \u0628\u0631\u0631\u0633\u06CC \u067E\u0631\u062F\u0627\u0632\u0634 \u0634\u0646\u06CC\u062F\u0627\u0631\u06CC (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F4).`, "r4");
     builder.notes.push("\u0627\u0644\u06AF\u0648\u06CC \u067E\u0631\u062F\u0627\u0632\u0634 \u0634\u0646\u06CC\u062F\u0627\u0631\u06CC \u2014 \u0627\u0631\u062C\u0627\u0639 \u0634\u0646\u0648\u0627\u06CC\u06CC\u200C\u0634\u0646\u0627\u0633\u06CC (APD) \u062F\u0631 \u0646\u0648\u0628\u062A\u200C\u06AF\u06CC\u0631\u06CC \u062F\u0631 \u0646\u0638\u0631 \u06AF\u0631\u0641\u062A\u0647 \u0634\u0648\u062F.");
     builder.domains.add("language");
   }
@@ -55362,7 +55540,7 @@ function applyProfileRules(args) {
   const execWeak = facts.wmi !== null && facts.wmi <= T.EXEC_WEAK || facts.psi !== null && facts.psi <= T.EXEC_WEAK;
   if (strongIdx.length > 0 && execWeak && facts.indexScatter !== null && facts.indexScatter >= T.SCATTER_TWO_E) {
     const weakDomain = anam.sldDomains.write ? [PLAN_TOOL_KEYS.sldWri, "\u0646\u0648\u0634\u062A\u0646"] : anam.sldDomains.calc ? [PLAN_TOOL_KEYS.sldCalc, "\u062D\u0633\u0627\u0628"] : [PLAN_TOOL_KEYS.sldRead, "\u062E\u0648\u0627\u0646\u062F\u0646"];
-    builder.add(weakDomain[0], "core", `\u0634\u0627\u062E\u0635 \u0642\u0648\u06CC ${faNum9(Math.max(...strongIdx))} \u0628\u0627 \u0636\u0639\u0641 \u0627\u062C\u0631\u0627\u06CC\u06CC \u0648 \u067E\u0631\u0627\u06A9\u0646\u062F\u06AF\u06CC ${faNum9(facts.indexScatter)} \u2014 \u0628\u0633\u062A\u0647\u0654 SLD \u062D\u0648\u0632\u0647\u0654 \u0636\u0639\u0641 (${weakDomain[1]}) + \u062A\u06AF \u0627\u0633\u062A\u0639\u062F\u0627\u062F (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F1\u06F1).`, "r11");
+    builder.add(weakDomain[0], "core", `\u0634\u0627\u062E\u0635 \u0642\u0648\u06CC ${faNum10(Math.max(...strongIdx))} \u0628\u0627 \u0636\u0639\u0641 \u0627\u062C\u0631\u0627\u06CC\u06CC \u0648 \u067E\u0631\u0627\u06A9\u0646\u062F\u06AF\u06CC ${faNum10(facts.indexScatter)} \u2014 \u0628\u0633\u062A\u0647\u0654 SLD \u062D\u0648\u0632\u0647\u0654 \u0636\u0639\u0641 (${weakDomain[1]}) + \u062A\u06AF \u0627\u0633\u062A\u0639\u062F\u0627\u062F (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F1\u06F1).`, "r11");
     builder.domains.add("academic");
   }
   if (facts.fsiq !== null && facts.fsiq >= 90 && facts.step5Weak.length > 0) {
@@ -55389,7 +55567,7 @@ function applyProfileRules(args) {
     builder.notes.push("\u0646\u06CC\u0645\u200C\u0631\u062E \u0647\u0645\u200C\u0646\u0648\u0627\u0632 \u062F\u0631 \u0628\u0627\u0632\u0647\u0654 \u0645\u062A\u0648\u0633\u0637 \u2014 \u0628\u0627\u062A\u0631\u06CC \u067E\u0627\u06CC\u0647\u0654 \u0633\u0628\u06A9 \u0648 \u067E\u0627\u06CC\u0627\u0646 \u0632\u0648\u062F\u0647\u0646\u06AF\u0627\u0645 \u0645\u0633\u06CC\u0631 \u0634\u0646\u0627\u0633\u0627\u06CC\u06CC (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F1\u06F3).");
   }
   if ((facts.indexScatter ?? 0) >= T.SCATTER_SEVERE && !facts.acid && !facts.cad && builder.items.size === 0) {
-    builder.notes.push(`\u067E\u0631\u0627\u06A9\u0646\u062F\u06AF\u06CC \u0628\u06CC\u0646\u200C\u0634\u0627\u062E\u0635\u06CC ${faNum9(facts.indexScatter ?? 0)} (\u2265\u06F2\u06F3) \u0628\u062F\u0648\u0646 \u0627\u0644\u06AF\u0648\u06CC \u0645\u0639\u0646\u0627\u062F\u0627\u0631 \u2014 \u0627\u0628\u062A\u062F\u0627 \u0627\u0639\u062A\u0628\u0627\u0631 \u0627\u062C\u0631\u0627\u06CC \u0622\u0632\u0645\u0648\u0646 \u0628\u0627\u0632\u0628\u06CC\u0646\u06CC \u0634\u0648\u062F\u061B \u062A\u0641\u0633\u06CC\u0631 \u0628\u0647 \u0633\u0637\u062D \u0634\u0627\u062E\u0635\u200C\u0647\u0627 \u0645\u0646\u062A\u0642\u0644 \u0645\u06CC\u200C\u0634\u0648\u062F (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F1\u06F4).`);
+    builder.notes.push(`\u067E\u0631\u0627\u06A9\u0646\u062F\u06AF\u06CC \u0628\u06CC\u0646\u200C\u0634\u0627\u062E\u0635\u06CC ${faNum10(facts.indexScatter ?? 0)} (\u2265\u06F2\u06F3) \u0628\u062F\u0648\u0646 \u0627\u0644\u06AF\u0648\u06CC \u0645\u0639\u0646\u0627\u062F\u0627\u0631 \u2014 \u0627\u0628\u062A\u062F\u0627 \u0627\u0639\u062A\u0628\u0627\u0631 \u0627\u062C\u0631\u0627\u06CC \u0622\u0632\u0645\u0648\u0646 \u0628\u0627\u0632\u0628\u06CC\u0646\u06CC \u0634\u0648\u062F\u061B \u062A\u0641\u0633\u06CC\u0631 \u0628\u0647 \u0633\u0637\u062D \u0634\u0627\u062E\u0635\u200C\u0647\u0627 \u0645\u0646\u062A\u0642\u0644 \u0645\u06CC\u200C\u0634\u0648\u062F (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F1\u06F4).`);
   }
   void band;
 }
@@ -55411,8 +55589,8 @@ var ADAPT_FA = {
 function buildBasis(args) {
   const { facts, anam, adapt, domains, notes, planType } = args;
   const parts = [];
-  parts.push(facts.available && facts.fsiq !== null ? `\u0646\u06CC\u0645\u200C\u0631\u062E \u0648\u06A9\u0633\u0644\u0631: FSIQ ${faNum9(facts.fsiq)}${args.band ? ` \u2014 ${bandLabelFa(args.band)}` : ""}` : "\u0646\u06CC\u0645\u200C\u0631\u062E \u0648\u06A9\u0633\u0644\u0631: \u062B\u0628\u062A\u200C\u0646\u0634\u062F\u0647");
-  parts.push(anam.signals.size > 0 ? `\u0634\u0631\u062D\u200C\u062D\u0627\u0644 \u0633\u0627\u062E\u062A\u200C\u06CC\u0627\u0641\u062A\u0647: ${faNum9(anam.signals.size)} \u0646\u0634\u0627\u0646\u0647\u0654 \u062B\u0628\u062A\u200C\u0634\u062F\u0647` : anam.text.length > 0 ? "\u0634\u0631\u062D\u200C\u062D\u0627\u0644: \u0646\u0633\u062E\u0647\u0654 \u0642\u062F\u06CC\u0645\u06CC (\u0628\u062F\u0648\u0646 \u0633\u06CC\u06AF\u0646\u0627\u0644 \u0633\u0627\u062E\u062A\u200C\u06CC\u0627\u0641\u062A\u0647)" : "\u0634\u0631\u062D\u200C\u062D\u0627\u0644 \u0646\u0633\u062E\u0647\u0654 \u06F3: \u062B\u0628\u062A\u200C\u0646\u0634\u062F\u0647");
+  parts.push(facts.available && facts.fsiq !== null ? `\u0646\u06CC\u0645\u200C\u0631\u062E \u0648\u06A9\u0633\u0644\u0631: FSIQ ${faNum10(facts.fsiq)}${args.band ? ` \u2014 ${bandLabelFa(args.band)}` : ""}` : "\u0646\u06CC\u0645\u200C\u0631\u062E \u0648\u06A9\u0633\u0644\u0631: \u062B\u0628\u062A\u200C\u0646\u0634\u062F\u0647");
+  parts.push(anam.signals.size > 0 ? `\u0634\u0631\u062D\u200C\u062D\u0627\u0644 \u0633\u0627\u062E\u062A\u200C\u06CC\u0627\u0641\u062A\u0647: ${faNum10(anam.signals.size)} \u0646\u0634\u0627\u0646\u0647\u0654 \u062B\u0628\u062A\u200C\u0634\u062F\u0647` : anam.text.length > 0 ? "\u0634\u0631\u062D\u200C\u062D\u0627\u0644: \u0646\u0633\u062E\u0647\u0654 \u0642\u062F\u06CC\u0645\u06CC (\u0628\u062F\u0648\u0646 \u0633\u06CC\u06AF\u0646\u0627\u0644 \u0633\u0627\u062E\u062A\u200C\u06CC\u0627\u0641\u062A\u0647)" : "\u0634\u0631\u062D\u200C\u062D\u0627\u0644 \u0646\u0633\u062E\u0647\u0654 \u06F3: \u062B\u0628\u062A\u200C\u0646\u0634\u062F\u0647");
   parts.push(`\u0627\u0646\u0637\u0628\u0627\u0642 \u0631\u0648\u0632\u0645\u0631\u0647: ${ADAPT_FA[adapt.level]}`);
   const domainFa = [...domains].map((d) => DOMAIN_FA[d] ?? d);
   parts.push(domainFa.length ? `\u062D\u0648\u0632\u0647\u200C\u0647\u0627\u06CC \u062F\u0631\u06AF\u06CC\u0631: ${domainFa.join("\u060C ")}` : "\u062D\u0648\u0632\u0647\u0654 \u062F\u0631\u06AF\u06CC\u0631 \u0645\u0634\u062E\u0635 \u0646\u0634\u062F\u0647");
@@ -56612,7 +56790,13 @@ function createClinicalEngineService(deps) {
       withProbes: kpis.interventionResponse.base,
       dueReassess: kpis.reassessOnTime.base
     });
-    return kpis;
+    const fuRow = await db.queryOne(
+      `SELECT COUNT(*) AS sent,
+              SUM(CASE WHEN e.status = 'completed' THEN 1 ELSE 0 END) AS filled
+         FROM case_events e JOIN case_event_types t ON t.id = e.event_type_id
+        WHERE t.key = 'ce-followup-3m-v1' AND e.deleted_at IS NULL`
+    );
+    return { ...kpis, followups: { sent: fuRow?.sent ?? 0, filled: fuRow?.filled ?? 0 } };
   }
   __name(getValidationKpis, "getValidationKpis");
   async function createCaseAudit(input2, actor) {
@@ -56640,8 +56824,22 @@ function createClinicalEngineService(deps) {
   }
   __name(createCaseAudit, "createCaseAudit");
   async function listCaseAudits(actor, studentId) {
-    if (actor.role !== "manager") {
-      throw new ForbiddenError("\u062D\u0633\u0627\u0628\u0631\u0633\u06CC \u0645\u0648\u0631\u062F\u06CC \u0641\u0642\u0637 \u0628\u0631\u0627\u06CC \u0645\u062F\u06CC\u0631 \u0642\u0627\u0628\u0644 \u0645\u0634\u0627\u0647\u062F\u0647 \u0627\u0633\u062A");
+    if (actor.role === "therapist") {
+      const rows2 = await db.query(
+        `SELECT a.*, s.first_name AS student_first, s.last_name AS student_last
+           FROM case_audits a JOIN students s ON s.id = a.student_id
+          WHERE (s.owner_staff_id = ? OR EXISTS (
+                  SELECT 1 FROM appointments ap
+                    JOIN appointment_students asn ON asn.appointment_id = ap.id
+                   WHERE ap.staff_id = ? AND asn.student_id = s.id
+                 ))
+          ORDER BY a.created_at DESC LIMIT 50`,
+        [actor.staffId, actor.staffId]
+      );
+      return rows2.map((r) => caseAuditRowToRecord(r));
+    }
+    if (actor.role !== "manager" && actor.role !== "secretary") {
+      throw new ForbiddenError("\u062D\u0633\u0627\u0628\u0631\u0633\u06CC \u0645\u0648\u0631\u062F\u06CC \u0641\u0642\u0637 \u0628\u0631\u0627\u06CC \u062F\u0641\u062A\u0631 \u0645\u0631\u06A9\u0632 \u0648 \u062F\u0631\u0645\u0627\u0646\u06AF\u0631\u0650 \u0647\u0645\u0627\u0646 \u067E\u0631\u0648\u0646\u062F\u0647 \u0642\u0627\u0628\u0644 \u0645\u0634\u0627\u0647\u062F\u0647 \u0627\u0633\u062A");
     }
     const rows = studentId ? await db.query(
       `SELECT a.*, s.first_name AS student_first, s.last_name AS student_last
@@ -56671,7 +56869,214 @@ function createClinicalEngineService(deps) {
     };
   }
   __name(caseAuditRowToRecord, "caseAuditRowToRecord");
-  return { getInsights, getCaseFormulation, homeMonitorFocusOf, getChecklistPlan, listPaths, createPath, decidePath, getPath: getPath2, listTargets, toggleStep, listPathTemplates, upsertPathTemplate, listPathSessions, addPathSession, updatePathSession, deletePathSession, reorderPathSessions, listRecentCards, getPathwayReport, addPathProbe, listPathProbes, updatePathProbe, updatePathGoal, getValidationKpis, createCaseAudit, listCaseAudits };
+  async function getClinicalNarrative(studentId, actor) {
+    const student = await loadStudent(studentId);
+    assertCanView(student, actor);
+    const paths = await listPaths(studentId, actor);
+    const committeeRows = await db.query(
+      `SELECT ci.id, ci.topic, ci.decision, ci.decision_status,
+              m.title AS meeting_title, m.meeting_date, m.status AS meeting_status
+         FROM committee_items ci
+         JOIN committee_meetings m ON m.id = ci.meeting_id AND m.deleted_at IS NULL
+        WHERE ci.student_id = ? AND ci.deleted_at IS NULL
+        ORDER BY m.meeting_date ASC, ci.created_at ASC`,
+      [studentId]
+    );
+    const pathIds = paths.map((p) => p.id);
+    const probeRows = [];
+    for (const chunk of inParamChunks(pathIds)) {
+      probeRows.push(...await db.query(
+        `SELECT pathway_id, metric, unit, value, taken_at FROM pathway_probes
+          WHERE pathway_id IN (${inPlaceholders(chunk.length)})
+          ORDER BY taken_at DESC
+          LIMIT 400`,
+        chunk
+      ));
+    }
+    const byPathMetric = /* @__PURE__ */ new Map();
+    for (const r of probeRows) {
+      let metrics = byPathMetric.get(r.pathway_id);
+      if (!metrics) {
+        metrics = /* @__PURE__ */ new Map();
+        byPathMetric.set(r.pathway_id, metrics);
+      }
+      const s = metrics.get(r.metric) ?? { unit: r.unit, points: [] };
+      s.points.push({ value: r.value, taken_at: r.taken_at });
+      metrics.set(r.metric, s);
+    }
+    const trends = /* @__PURE__ */ new Map();
+    for (const [pathId, metrics] of byPathMetric) {
+      let primaryMetric = null;
+      let primaryLastAt = "";
+      for (const [metric, s2] of metrics) {
+        const lastAt = s2.points[0]?.taken_at ?? "";
+        if (lastAt > primaryLastAt) {
+          primaryLastAt = lastAt;
+          primaryMetric = metric;
+        }
+      }
+      if (!primaryMetric) continue;
+      const s = metrics.get(primaryMetric);
+      const asc = [...s.points].reverse();
+      const first = asc.length > 0 ? asc[0].value : null;
+      const last = asc.length > 0 ? asc[asc.length - 1].value : null;
+      trends.set(pathId, {
+        count: asc.length,
+        metric: primaryMetric,
+        unit: s.unit,
+        first,
+        last,
+        firstAt: asc.length > 0 ? asc[0].taken_at : null,
+        lastAt: asc.length > 0 ? asc[asc.length - 1].taken_at : null,
+        improved: first !== null && last !== null ? last > first : null
+      });
+    }
+    const pathBlocks = paths.map((p) => {
+      const done = p.sessions.filter((s) => s.status === "done");
+      return {
+        id: p.id,
+        targetKey: p.targetKey,
+        targetTitle: p.targetTitle,
+        status: p.status,
+        createdAt: p.createdAt,
+        engineHypothesis: p.engineHypothesis,
+        decision: p.decision,
+        sessionsPlanned: p.sessions.length,
+        sessionsDone: done.length,
+        sessionsSkipped: p.sessions.filter((s) => s.status === "skipped").length,
+        lastSessionDoneAt: done.length > 0 ? done[done.length - 1].doneAt ?? null : null,
+        probeTrend: trends.get(p.id) ?? null,
+        probeSummary: p.probeSummary,
+        reassessAt: p.reassessAt
+      };
+    });
+    const committee = committeeRows.map((r) => ({
+      id: r.id,
+      topic: r.topic,
+      decision: r.decision,
+      decisionStatus: r.decision_status,
+      meetingTitle: r.meeting_title,
+      meetingDate: r.meeting_date,
+      meetingStatus: r.meeting_status
+    }));
+    const stamps = [
+      ...committee.map((c) => c.meetingDate),
+      ...pathBlocks.map((p) => p.createdAt.slice(0, 10)),
+      ...pathBlocks.map((p) => p.probeTrend?.lastAt?.slice(0, 10) ?? "")
+    ].filter(Boolean).sort();
+    return {
+      student: { id: student.id, firstName: student.first_name, lastName: student.last_name },
+      committee,
+      paths: pathBlocks,
+      storyFrom: stamps[0] ?? null,
+      storyTo: stamps[stamps.length - 1] ?? null
+    };
+  }
+  __name(getClinicalNarrative, "getClinicalNarrative");
+  async function getFamilyProgressSheet(studentId, actor) {
+    const student = await loadStudent(studentId);
+    if (actor) assertCanView(student, actor);
+    const rows = await db.query(
+      `SELECT p.* FROM intervention_paths p WHERE p.student_id = ? AND p.deleted_at IS NULL ORDER BY p.created_at DESC`,
+      [studentId]
+    );
+    const pathIds = rows.map((r) => r.id);
+    const sessMap = /* @__PURE__ */ new Map();
+    for (const chunk of inParamChunks(pathIds)) {
+      const srows = await db.query(
+        `SELECT pathway_id, COUNT(*) AS planned, SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) AS done
+           FROM pathway_sessions WHERE pathway_id IN (${inPlaceholders(chunk.length)}) GROUP BY pathway_id`,
+        chunk
+      );
+      for (const s of srows) sessMap.set(s.pathway_id, { planned: s.planned, done: s.done });
+    }
+    const probeRows = [];
+    for (const chunk of inParamChunks(pathIds)) {
+      probeRows.push(...await db.query(
+        `SELECT pathway_id, metric, unit, value, taken_at FROM pathway_probes
+          WHERE pathway_id IN (${inPlaceholders(chunk.length)})
+          ORDER BY taken_at DESC
+          LIMIT 400`,
+        chunk
+      ));
+    }
+    probeRows.sort((a, b) => a.taken_at < b.taken_at ? 1 : a.taken_at > b.taken_at ? -1 : 0);
+    probeRows.length = Math.min(probeRows.length, 400);
+    const byPath = /* @__PURE__ */ new Map();
+    for (const r of probeRows) {
+      let metrics = byPath.get(r.pathway_id);
+      if (!metrics) {
+        metrics = /* @__PURE__ */ new Map();
+        byPath.set(r.pathway_id, metrics);
+      }
+      const s = metrics.get(r.metric) ?? { unit: r.unit, points: [] };
+      s.points.push({ value: r.value, taken_at: r.taken_at });
+      metrics.set(r.metric, s);
+    }
+    const paths = rows.map((r) => {
+      const metrics = byPath.get(r.id);
+      const sess = sessMap.get(r.id) ?? { planned: 0, done: 0 };
+      let metric = null;
+      let unit = null;
+      let points = [];
+      let first = null;
+      let last = null;
+      let improved = null;
+      let mastered = false;
+      if (metrics) {
+        let primaryLastAt = "";
+        for (const [m, s] of metrics) {
+          const lastAt = s.points[0]?.taken_at ?? "";
+          if (lastAt > primaryLastAt) {
+            primaryLastAt = lastAt;
+            metric = m;
+          }
+        }
+        if (metric) {
+          const s = metrics.get(metric);
+          unit = s.unit;
+          points = [...s.points].reverse();
+          first = points[0]?.value ?? null;
+          last = points[points.length - 1]?.value ?? null;
+          improved = first !== null && last !== null ? last > first : null;
+          mastered = masteryOf(points.map((p) => ({ value: p.value, takenAt: p.taken_at }))).achieved;
+        }
+      }
+      const hypothesis = parseJson4(r.engine_hypothesis, null);
+      return {
+        id: r.id,
+        targetTitle: hypothesis?.targetTitle ?? targetOf(r.target_key)?.title ?? r.target_key,
+        status: r.status,
+        sessionsPlanned: sess.planned,
+        sessionsDone: sess.done,
+        metric,
+        unit,
+        points: points.map((p) => ({ value: p.value, takenAt: p.taken_at })),
+        first,
+        last,
+        improved,
+        mastered,
+        reassessAt: r.reassess_at ?? null
+      };
+    });
+    return {
+      studentName: `${student.first_name} ${student.last_name}`.trim(),
+      grade: student.grade ?? null,
+      generatedAt: iso(),
+      paths
+    };
+  }
+  __name(getFamilyProgressSheet, "getFamilyProgressSheet");
+  async function mintProgressSheetLink(studentId, actor, secret) {
+    const student = await loadStudent(studentId);
+    assertCanView(student, actor);
+    const base = deps.publicBaseUrl?.trim() || null;
+    if (!base) throw new ValidationError("\u0622\u062F\u0631\u0633 \u0639\u0645\u0648\u0645\u06CC \u0633\u0627\u0645\u0627\u0646\u0647 (PUBLIC_BASE_URL) \u062A\u0646\u0638\u06CC\u0645 \u0646\u0634\u062F\u0647 \u0627\u0633\u062A \u2014 \u0633\u0627\u062E\u062A \u067E\u06CC\u0648\u0646\u062F \u0628\u0631\u06AF\u0647\u0654 \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u0645\u0645\u06A9\u0646 \u0646\u06CC\u0633\u062A.");
+    const { token, expiresAt } = await mintFamilySheetToken(studentId, secret);
+    return { token, url: `${base.replace(/\/+$/, "")}/public/family/progress-sheet/${token}`, expiresAt };
+  }
+  __name(mintProgressSheetLink, "mintProgressSheetLink");
+  return { getInsights, getCaseFormulation, homeMonitorFocusOf, getChecklistPlan, listPaths, createPath, decidePath, getPath: getPath2, listTargets, toggleStep, listPathTemplates, upsertPathTemplate, listPathSessions, addPathSession, updatePathSession, deletePathSession, reorderPathSessions, listRecentCards, getPathwayReport, addPathProbe, listPathProbes, updatePathProbe, updatePathGoal, getValidationKpis, createCaseAudit, listCaseAudits, getClinicalNarrative, getFamilyProgressSheet, mintProgressSheetLink };
 }
 __name(createClinicalEngineService, "createClinicalEngineService");
 
@@ -56837,6 +57242,32 @@ function registerClinicalEngineRoutes(app, service) {
     const data = await service.getCaseFormulation(c.req.param("id"), actor);
     return c.json({ data }, 200);
   });
+  app.get("/api/students/:id/clinical-narrative", requireRole("manager", "secretary", "therapist"), async (c) => {
+    const actor = getAuthContext(c);
+    const data = await service.getClinicalNarrative(c.req.param("id"), actor);
+    return c.json({ data }, 200);
+  });
+  app.post("/api/students/:id/progress-sheet-link", requireRole("manager", "secretary", "therapist"), async (c) => {
+    const actor = getAuthContext(c);
+    const secret = await resolveSessionSecret(c.env);
+    const data = await service.mintProgressSheetLink(c.req.param("id"), actor, secret);
+    return c.json({ data }, 201);
+  });
+  app.get("/public/family/progress-sheet/:token", async (c) => {
+    const secret = await resolveSessionSecret(c.env);
+    const sid = await verifyFamilySheetToken(c.req.param("token"), secret);
+    if (!sid) return c.html(sheetErrorPage("\u0627\u06CC\u0646 \u0628\u0631\u06AF\u0647 \u0645\u0639\u062A\u0628\u0631 \u0646\u06CC\u0633\u062A \u06CC\u0627 \u0645\u0646\u0642\u0636\u06CC \u0634\u062F\u0647 \u0627\u0633\u062A \u2014 \u0627\u0632 \u0645\u0631\u06A9\u0632 \u0628\u062E\u0648\u0627\u0647\u06CC\u062F \u067E\u06CC\u0648\u0646\u062F \u062A\u0627\u0632\u0647 \u0628\u0633\u0627\u0632\u062F."), 403);
+    let model;
+    try {
+      model = await service.getFamilyProgressSheet(sid, null);
+    } catch {
+      return c.html(sheetErrorPage("\u067E\u0631\u0648\u0646\u062F\u0647\u0654 \u0627\u06CC\u0646 \u0628\u0631\u06AF\u0647 \u067E\u06CC\u062F\u0627 \u0646\u0634\u062F."), 404);
+    }
+    return new Response(renderFamilySheetPage(model), {
+      status: 200,
+      headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow" }
+    });
+  });
   app.get("/api/clinical-targets", requireRole("manager", "secretary", "therapist"), async (c) => {
     const data = await service.listTargets();
     return c.json({ data }, 200);
@@ -56867,13 +57298,13 @@ function registerClinicalEngineRoutes(app, service) {
     const data = await service.getValidationKpis(actor);
     return c.json({ data }, 200);
   });
-  app.get("/api/case-audits", requireRole("manager"), async (c) => {
+  app.get("/api/case-audits", requireRole("manager", "secretary", "therapist"), async (c) => {
     const actor = getAuthContext(c);
     const studentId = c.req.query("student_id")?.trim() || null;
     const data = await service.listCaseAudits(actor, studentId);
     return c.json({ data }, 200);
   });
-  app.post("/api/case-audits", requireRole("manager"), async (c) => {
+  app.post("/api/case-audits", requireRole("manager", "secretary"), async (c) => {
     const actor = getAuthContext(c);
     const body = CaseAuditCreateSchema.parse(await c.req.json());
     const data = await service.createCaseAudit(
@@ -57126,11 +57557,11 @@ function parseJsonSafe(raw2) {
   }
 }
 __name(parseJsonSafe, "parseJsonSafe");
-function faNum10(value) {
+function faNum11(value) {
   const fa2 = "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9";
   return String(value).replace(/\d/g, (d) => fa2[Number(d)]);
 }
-__name(faNum10, "faNum");
+__name(faNum11, "faNum");
 function numOf2(value) {
   if (value === null || value === void 0 || value === "") return null;
   const n = Number(String(value).replace(/[۰-۹]/g, (d) => String("\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9".indexOf(d))));
@@ -57179,15 +57610,15 @@ function computeSuspicion(behavioralEvents, decisionEvent, isFreshIso) {
       const iaDanger = iaNum !== null ? iaNum >= cut.ia.danger : subscaleColorOf(event, "ia") === "danger";
       const iaWarn = !iaDanger && iaNum !== null ? iaNum >= cut.ia.warn : !iaDanger && subscaleColorOf(event, "ia") === "warn";
       if (iaDanger) {
-        hits.push({ construct: "adhd", level: "high", source: sourceOf(toolKey), text: `\u0628\u06CC\u200C\u062A\u0648\u062C\u0647\u06CC \u062F\u0631 SNAP-IV ${src} \u067E\u0631\u062E\u0637\u0631 \u0627\u0633\u062A${iaNum !== null ? ` (\u0646\u0645\u0631\u0647\u0654 ${faNum10(iaNum)} \u0627\u0632 ${faNum10(27)})` : ""}` });
+        hits.push({ construct: "adhd", level: "high", source: sourceOf(toolKey), text: `\u0628\u06CC\u200C\u062A\u0648\u062C\u0647\u06CC \u062F\u0631 SNAP-IV ${src} \u067E\u0631\u062E\u0637\u0631 \u0627\u0633\u062A${iaNum !== null ? ` (\u0646\u0645\u0631\u0647\u0654 ${faNum11(iaNum)} \u0627\u0632 ${faNum11(27)})` : ""}` });
       } else if (iaWarn) {
-        hits.push({ construct: "adhd", level: "watch", source: sourceOf(toolKey), text: `\u0628\u06CC\u200C\u062A\u0648\u062C\u0647\u06CC \u062F\u0631 SNAP-IV ${src} \u06A9\u0645\u06CC \u0628\u0627\u0644\u0627\u062A\u0631 \u0627\u0632 \u0645\u0639\u0645\u0648\u0644 \u0627\u0633\u062A${iaNum !== null ? ` (\u0646\u0645\u0631\u0647\u0654 ${faNum10(iaNum)})` : ""}` });
+        hits.push({ construct: "adhd", level: "watch", source: sourceOf(toolKey), text: `\u0628\u06CC\u200C\u062A\u0648\u062C\u0647\u06CC \u062F\u0631 SNAP-IV ${src} \u06A9\u0645\u06CC \u0628\u0627\u0644\u0627\u062A\u0631 \u0627\u0632 \u0645\u0639\u0645\u0648\u0644 \u0627\u0633\u062A${iaNum !== null ? ` (\u0646\u0645\u0631\u0647\u0654 ${faNum11(iaNum)})` : ""}` });
       }
       const hi = subscaleScoreOf2(event, "hi");
       const hiNum = hi ? hi.score : numOf2(event.payload?.["hi_total"]?.value);
       const hiDanger = hiNum !== null ? hiNum >= cut.hi.danger : subscaleColorOf(event, "hi") === "danger";
       if (hiDanger) {
-        hits.push({ construct: "adhd", level: "high", source: sourceOf(toolKey), text: `\u0628\u06CC\u200C\u0642\u0631\u0627\u0631\u06CC/\u062A\u06A9\u0627\u0646\u0634 \u062F\u0631 SNAP-IV ${src} \u067E\u0631\u062E\u0637\u0631 \u0627\u0633\u062A${hiNum !== null ? ` (\u0646\u0645\u0631\u0647\u0654 ${faNum10(hiNum)})` : ""}` });
+        hits.push({ construct: "adhd", level: "high", source: sourceOf(toolKey), text: `\u0628\u06CC\u200C\u0642\u0631\u0627\u0631\u06CC/\u062A\u06A9\u0627\u0646\u0634 \u062F\u0631 SNAP-IV ${src} \u067E\u0631\u062E\u0637\u0631 \u0627\u0633\u062A${hiNum !== null ? ` (\u0646\u0645\u0631\u0647\u0654 ${faNum11(hiNum)})` : ""}` });
       }
       continue;
     }
@@ -57205,11 +57636,11 @@ function computeSuspicion(behavioralEvents, decisionEvent, isFreshIso) {
       const total = event.analysis?.score ?? numOf2(event.payload?.["total"]?.value);
       if (total !== null) {
         if (total >= SCARED_STRONG2) {
-          hits.push({ construct: "anxiety", level: "high", source: "parent", text: `\u0646\u0645\u0631\u0647\u0654 \u06A9\u0644 \u0627\u0636\u0637\u0631\u0627\u0628 (SCARED \u0648\u0627\u0644\u062F) \u062F\u0631 \u0628\u0627\u0646\u062F \u0627\u062E\u062A\u0635\u0627\u0635\u06CC \u0627\u0633\u062A (${faNum10(total)})` });
+          hits.push({ construct: "anxiety", level: "high", source: "parent", text: `\u0646\u0645\u0631\u0647\u0654 \u06A9\u0644 \u0627\u0636\u0637\u0631\u0627\u0628 (SCARED \u0648\u0627\u0644\u062F) \u062F\u0631 \u0628\u0627\u0646\u062F \u0627\u062E\u062A\u0635\u0627\u0635\u06CC \u0627\u0633\u062A (${faNum11(total)})` });
         } else if (total >= SCARED_DANGER2) {
-          hits.push({ construct: "anxiety", level: "high", source: "parent", text: `\u0646\u0645\u0631\u0647\u0654 \u06A9\u0644 \u0627\u0636\u0637\u0631\u0627\u0628 (SCARED \u0648\u0627\u0644\u062F) \u067E\u0631\u062E\u0637\u0631 \u0627\u0633\u062A (${faNum10(total)} \u0627\u0632 ${faNum10(82)})` });
+          hits.push({ construct: "anxiety", level: "high", source: "parent", text: `\u0646\u0645\u0631\u0647\u0654 \u06A9\u0644 \u0627\u0636\u0637\u0631\u0627\u0628 (SCARED \u0648\u0627\u0644\u062F) \u067E\u0631\u062E\u0637\u0631 \u0627\u0633\u062A (${faNum11(total)} \u0627\u0632 ${faNum11(82)})` });
         } else if (total >= SCARED_WARN_MIN2) {
-          hits.push({ construct: "anxiety", level: "watch", source: "parent", text: `\u0646\u0645\u0631\u0647\u0654 \u06A9\u0644 \u0627\u0636\u0637\u0631\u0627\u0628 (SCARED \u0648\u0627\u0644\u062F) \u06A9\u0645\u06CC \u0628\u0627\u0644\u0627\u062A\u0631 \u0627\u0632 \u0645\u0639\u0645\u0648\u0644 \u0627\u0633\u062A (${faNum10(total)})` });
+          hits.push({ construct: "anxiety", level: "watch", source: "parent", text: `\u0646\u0645\u0631\u0647\u0654 \u06A9\u0644 \u0627\u0636\u0637\u0631\u0627\u0628 (SCARED \u0648\u0627\u0644\u062F) \u06A9\u0645\u06CC \u0628\u0627\u0644\u0627\u062A\u0631 \u0627\u0632 \u0645\u0639\u0645\u0648\u0644 \u0627\u0633\u062A (${faNum11(total)})` });
         }
       }
       continue;
@@ -61743,7 +62174,7 @@ function createNetworkContentService(deps) {
     const rec = await getById(id);
     if (!rec) throw new NotFoundError("\u0645\u062D\u062A\u0648\u0627\u06CC \u0634\u0628\u06A9\u0647");
     if (rec.origin !== "local") {
-      throw new ConflictError("\u0627\u06CC\u0646 \u0622\u06CC\u062A\u0645 \u0627\u0632 \u06A9\u0646\u062A\u0631\u0644\u200C\u067E\u0644\u06CC\u0646 \u0622\u0645\u062F\u0647 \u0648 \u062F\u0631 \u0645\u0631\u06A9\u0632 \u0642\u0627\u0628\u0644 \u062A\u063A\u06CC\u06CC\u0631 \u0646\u06CC\u0633\u062A");
+      throw new ConflictError("\u0627\u06CC\u0646 \u0622\u06CC\u062A\u0645 \u0627\u0632 \u0634\u0628\u06A9\u0647\u0654 \u0645\u0631\u0627\u06A9\u0632 \u0622\u0645\u062F\u0647 \u0648 \u062F\u0631 \u0645\u0631\u06A9\u0632 \u0642\u0627\u0628\u0644 \u062A\u063A\u06CC\u06CC\u0631 \u0646\u06CC\u0633\u062A");
     }
     return rec;
   }
@@ -67561,7 +67992,7 @@ function b64uDecode(part) {
   return bytes;
 }
 __name(b64uDecode, "b64uDecode");
-async function hmacKey2(secret) {
+async function hmacKey3(secret) {
   return crypto.subtle.importKey(
     "raw",
     new TextEncoder().encode(secret),
@@ -67570,7 +68001,7 @@ async function hmacKey2(secret) {
     ["verify"]
   );
 }
-__name(hmacKey2, "hmacKey");
+__name(hmacKey3, "hmacKey");
 async function verifySessionJwt2(token, secret) {
   const parts = token.split(".");
   if (parts.length !== 3) return null;
@@ -67581,7 +68012,7 @@ async function verifySessionJwt2(token, secret) {
   } catch {
     return null;
   }
-  const key = await hmacKey2(secret);
+  const key = await hmacKey3(secret);
   const valid = await crypto.subtle.verify("HMAC", key, b64uDecode(sig), new TextEncoder().encode(`${h}.${p}`));
   if (!valid) return null;
   if (!payload.exp || payload.exp * 1e3 < Date.now()) return null;
@@ -77812,6 +78243,8 @@ function createServices(deps) {
     db,
     audit,
     logger,
+    publicBaseUrl: deps.publicBaseUrl ?? null,
+    // ۱.۲۷.۲۷ — M4: پیوند برگهٔ پیشرفت خانواده
     exerciseIdsExist: /* @__PURE__ */ __name((ids) => exerciseBank.idsExist(ids), "exerciseIdsExist"),
     formulationOt: {
       gatesOf: /* @__PURE__ */ __name((studentId, actor) => otEngine.getGates(studentId, actor), "gatesOf"),
@@ -78112,6 +78545,9 @@ function createApp(deps) {
           part(services.clinicalEngine.getValidationKpis(actor)),
           part(services.clinicalEngine.listCaseAudits(actor, null))
         ]).then(([k, a]) => k ? { kpis: k, audits: a ?? [] } : null)
+      ) : actor.role === "therapist" ? (
+        /* M6 POLISH-3 (۱.۲۷.۲۹) — نمای فقط‌خواندنی درمانگر: حسابرسی پرونده‌های خودش (KPIهای دفتر نمی‌آید) */
+        part(services.clinicalEngine.listCaseAudits(actor, null).then((a) => ({ kpis: null, audits: a ?? [] })))
       ) : Promise.resolve(null)
     ]);
     return c.json({ data: { today, summary, goal, scoring, me, knowledge, announcements, waitlist, dayAppts, followups, validation } }, 200);

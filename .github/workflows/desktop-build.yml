@@ -66,6 +66,19 @@ jobs:
       # v1.27.۱۹ — گیت هم‌مِهری نسخه‌ها پیش از بیلد نصاب ویندوز (عین جاب لینوکس)
       - name: گیت هم‌مِهری نسخه‌ها (check-versions)
         run: node scripts/check-versions.mjs
+      - name: تزریق کلید عمومی updater در tauri.conf.json (فاز D — فقط با ورودی release=true)
+        if: github.event_name == 'workflow_dispatch' && inputs.release == 'true'
+        shell: bash
+        env:
+          TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
+        run: |
+          if [ -n "$TAURI_UPDATER_PUBKEY" ]; then
+            node -e "const fs=require('fs');const f='desktop/src-tauri/tauri.conf.json';const j=JSON.parse(fs.readFileSync(f,'utf8'));j.plugins.updater.pubkey=process.env.TAURI_UPDATER_PUBKEY;fs.writeFileSync(f,JSON.stringify(j,null,2)+'\n')"
+            echo "کلید عمومی updater تزریق شد — کانال خودکار فعال است"
+          else
+            echo "⚠ راز TAURI_UPDATER_PUBKEY تنظیم نشده — کانال خودکار بی‌کلید می‌ماند؛ کانال دستی سالم است"
+          fi
+
       - name: نصب وابستگی‌ها و ساخت کلاینت (پر کردن frontendDist)
         run: |
           npm ci
