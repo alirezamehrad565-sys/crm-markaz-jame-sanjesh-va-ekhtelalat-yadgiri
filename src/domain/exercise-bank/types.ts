@@ -343,7 +343,7 @@ export interface ExerciseBankService {
   softDeletePackage(id: string, actor: AuthContext): Promise<void>;
 
   suggestForStudent(studentId: string): Promise<StudentExerciseSuggestions>;
-  // درخت هدف در پروفایل دانش‌آموز («فاز جدا» نقشهٔ )
+  // درخت هدف در پروفایل دانش‌آموز («فاز جدا» نقشهٔ)
   focusForStudent(studentId: string): Promise<string[]>;
   replaceFocusForStudent(studentId: string, keys: string[], actor: AuthContext): Promise<string[]>;
   createBatch(input: CreateBatchInput, actor: AuthContext): Promise<BatchRecord>;

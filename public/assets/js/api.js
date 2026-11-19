@@ -91,6 +91,7 @@ async function doRequest(method, path, body, signal) {
   try {
     payload = await res.json();
   } catch {
+    /* نرم — بدنهٔ خالی/غیر-JSON → payload null می‌ماند */
   }
 
   if (!res.ok) {
@@ -180,6 +181,7 @@ async function requestForm(method, path, formData) {
   try {
     payload = await res.json();
   } catch {
+    /* نرم — بدنهٔ خالی/غیر-JSON → payload null می‌ماند */
   }
   if (!res.ok) {
     const err = new Error(payload?.message || ERROR_TEXT[payload?.error] || `خطا (${res.status})`);
@@ -253,6 +255,7 @@ async function requestRaw(method, path, arrayBuffer) {
   try {
     payload = await res.json();
   } catch {
+    /* نرم — بدنهٔ خالی/غیر-JSON → payload null می‌ماند */
   }
   if (!res.ok) {
     const err = new Error(payload?.message || ERROR_TEXT[payload?.error] || `خطا (${res.status})`);

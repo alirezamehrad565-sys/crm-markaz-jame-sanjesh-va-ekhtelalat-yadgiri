@@ -3,7 +3,7 @@
 // نیمهٔ علمی درخت (پردازش اطلاعات + کارکردهای اجرایی) متصل می‌شود؛ برچسب‌های اختلال/پایه
 // همان سازوکار قدیمی student_tags هستند و اینجا تکرار نمی‌شوند.
 // ذخیره‌سازی: PUT /api/students/:id/focus → student_focus_links (مهاجرت ۰۰۸۵) — سقف ۸ پیوند.
-// پیشنهاد کارت () با همین پیوندها دو-بعدی می‌شود: برچسب مشترک + هدف مشترک.
+// پیشنهاد کارت با همین پیوندها دو-بعدی می‌شود: برچسب مشترک + هدف مشترک.
 import { api } from './api.js';
 import { el, icon, openModalAsync, toast, toastError } from './ui.js';
 import { buildTaxonomyPicker } from './taxonomy.js';

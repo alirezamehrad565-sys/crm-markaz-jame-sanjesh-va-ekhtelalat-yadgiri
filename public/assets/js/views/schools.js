@@ -44,7 +44,7 @@ export async function renderSchools(container) {
   try {
     rows = (await api.get(`/api/schools${showInactive ? '' : '?active=true'}`)).data;
   } catch (err) {
-    container.replaceChildren(emptyState({ iconName: 'alert', title: 'خطا در بارگذاری', hint: err.message }));
+    container.replaceChildren(emptyState({ iconName: 'alert', title: 'خطا در بارگذاری', hint: err?.message ?? 'خطای نامشخص' }));
     return;
   }
 
@@ -70,7 +70,7 @@ export async function renderSchools(container) {
 
   const toolbar = el('div', { class: 'toolbar' },
     searchInput,
-    el('label', { style: { display: 'flex', alignItems: 'center', gap: '8px', fontSize: 'var(--fs-sm)', color: 'var(--text-2)', cursor: 'pointer' } },
+    el('label', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', fontSize: 'var(--fs-sm)', color: 'var(--text-2)', cursor: 'pointer' } },
       showInactiveCb,
       'نمایش غیرفعال‌ها'
     ),
@@ -237,7 +237,7 @@ export async function renderSchools(container) {
     } catch (err) {
       if (myGen !== gen || !tbody.isConnected) return;
       tbody.replaceChildren(el('tr', {}, el('td', { colspan: colCount, style: { padding: 'var(--sp-2)' } },
-        emptyState({ iconName: 'alert', title: 'خطا در بارگذاری', hint: String(err?.message ?? err) }))));
+        emptyState({ iconName: 'alert', title: 'خطا در بارگذاری', hint: err?.message ?? 'خطای نامشخص' }))));
     }
   }
 
@@ -357,7 +357,7 @@ async function openSchoolOverview(school) {
           ...ov.attention.map((a) => el('div', { class: 'sn-attention-item' },
             el('div', { style: { flex: 1, minWidth: 0 } },
               el('div', { class: 'cell-main' }, `${a.firstName} ${a.lastName}`),
-              el('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '4px' } },
+              el('div', { style: { display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap', marginTop: 'var(--sp-1)' } },
                 ...(a.reasons ?? []).map((r) => el('span', { class: 'badge badge--warning' }, REASON_LABELS[r] ?? 'نیازمند بررسی'))
               )
             ),
@@ -446,7 +446,7 @@ function openClassManager(school) {
       drawList();
     } catch (err) {
       if (myGen !== refreshGen || !listBox.isConnected) return;
-      listBox.replaceChildren(emptyState({ iconName: 'alert', title: 'خطا در بارگذاری', hint: err.message }));
+      listBox.replaceChildren(emptyState({ iconName: 'alert', title: 'خطا در بارگذاری', hint: err?.message ?? 'خطای نامشخص' }));
     }
   }
 
@@ -618,7 +618,7 @@ function openClassManager(school) {
         ? linkedList.slice(0, 1).map((l) =>
             el('div', { class: 'token-box' },
               el('span', { style: { fontSize: 'var(--fs-sm)', color: 'var(--text-2)' } }, 'اتصال فعال — برای انتقال به گفتگوی جدید، همین لینک را دوباره برای معلم بفرستید:'),
-              el('b', { dir: 'ltr', style: { fontSize: 'var(--fs-xl)', letterSpacing: '3px', display: 'block', marginTop: '8px', textAlign: 'center' } }, l.code),
+              el('b', { dir: 'ltr', style: { fontSize: 'var(--fs-xl)', letterSpacing: '3px', display: 'block', marginTop: 'var(--sp-2)', textAlign: 'center' } }, l.code),
               botLinkBox(buildBotLink(botUsername, l.code), l.code)
             )
           )
@@ -633,9 +633,9 @@ function openClassManager(school) {
         ? activePending.slice(0, 2).map((l) =>
             el('div', { class: 'token-box' },
               el('span', { style: { fontSize: 'var(--fs-sm)', color: 'var(--text-2)' } }, 'کد فعال (در انتظار اتصال):'),
-              el('b', { dir: 'ltr', style: { fontSize: 'var(--fs-xl)', letterSpacing: '3px', display: 'block', marginTop: '8px', textAlign: 'center' } }, l.code),
+              el('b', { dir: 'ltr', style: { fontSize: 'var(--fs-xl)', letterSpacing: '3px', display: 'block', marginTop: 'var(--sp-2)', textAlign: 'center' } }, l.code),
               botLinkBox(buildBotLink(botUsername, l.code), l.code),
-              el('div', { style: { display: 'flex', justifyContent: 'center', marginTop: '10px' } },
+              el('div', { style: { display: 'flex', justifyContent: 'center', marginTop: 'var(--sp-3)' } },
                 canDeactivate() || session.user?.role === 'secretary'
                   ? el('button', {
                       class: 'btn btn--danger btn--sm',
@@ -650,14 +650,14 @@ function openClassManager(school) {
 
       const othersBlock = others.length > 0
         ? el('div', {},
-            el('div', { class: 'field__label', style: { marginBottom: '6px' } }, 'کدهای قبلی'),
-            el('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '6px' } },
+            el('div', { class: 'field__label', style: { marginBottom: 'var(--sp-2)' } }, 'کدهای قبلی'),
+            el('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 'var(--sp-2)' } },
               others.slice(0, 6).map((l) => el('div', { class: 'chip' }, el('b', { dir: 'ltr' }, l.code), statusBadge(l.status)))
             )
           )
         : null;
 
-      const generateRow = el('div', { style: { display: 'flex', gap: '8px', justifyContent: 'flex-start' } },
+      const generateRow = el('div', { style: { display: 'flex', gap: 'var(--sp-2)', justifyContent: 'flex-start' } },
         el('button', { class: 'btn btn--primary btn--sm', onclick: () => generate() }, icon('plus', 15), 'تولید کد جدید')
       );
 

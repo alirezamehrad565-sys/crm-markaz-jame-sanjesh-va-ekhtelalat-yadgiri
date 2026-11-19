@@ -45,6 +45,11 @@ use crate::engine_watchdog::{next_action, now_ms, RestartRecord, WatchdogAction,
 /// پورت پیش‌فرض موتور محلی — همان devUrl پوسته (tauri.conf.json)
 const DEFAULT_PORT: u16 = 8787;
 
+/// بایند پیش‌فرض موتور — v1.27.20: شبکهٔ محلی (خواست کارفرما: موبایل‌های هم‌شبکه استفاده کنند).
+/// پرچم `--bind` به adapter پاس می‌شود؛ محدودسازی لوکال = تغییر همین ثابت به 127.0.0.1.
+/// adapter روی 0.0.0.0 در بوت، نشانی هر کارت LAN را لاگ می‌کند و PUBLIC_BASE_URL از کارت LAN اول می‌آید.
+const DEFAULT_BIND: &str = "0.0.0.0";
+
 /// پورت پیش‌فرض سرویس بازی‌ها — به موتور «درخواست» می‌شود؛ اگر اشغال بود موتور پورت دیگری
 /// می‌گیرد و نهایی را در engine-config.json می‌نویسد (Rust همان را می‌خواند).
 const DEFAULT_GAMES_PORT: u16 = 8788;
@@ -290,6 +295,10 @@ struct EngineChild {
 }
 
 impl EngineChild {
+    /// پولینگ خروج کودک — واگذاری به Child درونی (نگهبان جزئیات Job را نمی‌بیند)
+    fn try_wait(&mut self) -> std::io::Result<Option<std::process::ExitStatus>> {
+        self.child.try_wait()
+    }
     /// spawn واقعی + انتساب به Job تازه (شکست انتساب غیرمهلک است — kill عادی می‌ماند)
     #[cfg(windows)]
     fn spawn(child: Child) -> Self {
@@ -312,7 +321,10 @@ impl EngineChild {
 /// انتساب کودک به Job تازه — شکست غیرمهلک است و فقط ثبت می‌شود (kill عادی کافی می‌ماند)
 #[cfg(windows)]
 fn job_guard_for(child: &Child) -> Option<crate::job_object::JobGuard> {
-    match crate::job_object::JobGuard::assign(child.raw_handle()) {
+    use std::os::windows::io::AsRawHandle;
+    // Child روی ویندوز AsRawHandle دارد — hProcess خام برای AssignProcessToJobObject
+    let handle = Ok(child.as_raw_handle());
+    match crate::job_object::JobGuard::assign(handle) {
         Ok(g) => Some(g),
         Err(e) => {
             eprintln!("[desktop] انتساب موتور به Job Object ناموفق بود ({e}) — پاک‌سازی یتیم فقط با kill عادی می‌ماند");
@@ -355,6 +367,8 @@ fn spawn_engine(plan: &EngineLaunch) -> Result<EngineChild, String> {
         .arg(&plan.data_dir)
         .arg("--port")
         .arg(DEFAULT_PORT.to_string())
+        .arg("--bind")
+        .arg(DEFAULT_BIND)
         .arg("--games-port")
         .arg(DEFAULT_GAMES_PORT.to_string())
         .arg("--main-bundle")
@@ -705,7 +719,7 @@ fn handle_unexpected_exit(
     plan: &EngineLaunch,
     port: u16,
     stop: &AtomicBool,
-    child_slot: &Mutex<Option<Child>>,
+    child_slot: &Mutex<Option<EngineChild>>,
     on_event: &EngineEventSink,
     history: &mut Vec<RestartRecord>,
 ) {

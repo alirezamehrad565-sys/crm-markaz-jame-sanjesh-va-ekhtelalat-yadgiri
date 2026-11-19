@@ -191,7 +191,7 @@ describe('پراپ‌های پیشروی مسیر', () => {
   });
 
   it('اصلاح پراپ: نمرهٔ تصحیح‌شده در سری می‌نشیند؛ پراپ/مسیر ناموجود ۴۰۴؛ کلید غایب دست‌نخورده', async () => {
-    // ۸۲ → ۸۵ فقط با کلید value — بقیهٔ فیلدها باید دست‌نخورده بمانند (درس )
+    // ۸۲ → ۸۵ فقط با کلید value — بقیهٔ فیلدها باید دست‌نخورده بمانند (درس)
     const fixed = await ali.patch(`/api/clinical-paths/${pathId}/probes/${probeIds[2]}`, { value: 85 });
     expect(fixed.status).toBe(200);
     const body = dataOf<ProbeBody>(fixed);

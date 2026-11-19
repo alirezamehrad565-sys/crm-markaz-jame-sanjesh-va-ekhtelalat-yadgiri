@@ -1,0 +1,53 @@
+name: دیپلوی Worker کلادفلر (دستی)
+# انتشار تولیدی از CI — همان مسیر update-remote.mjs (بکاپ → مایگریشن → deploy → دروازهٔ سلامت ×۳ + رولبک خودکار)
+# پورت فاز E-۲ از main به rust (server-cloud-update-design.md §۴؛ POLISH-2) — خط rust با همین ورک‌فلو منتشر می‌شود.
+# اعتبارها از رازهای مخزن: CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID (تاریخچه/لاگ هرگز مقدار را نشان نمی‌دهد)
+on:
+  workflow_dispatch:
+    inputs:
+      skip_backup:
+        description: "رد کردن پشتیبان‌گیری D1 (پیش‌فرض: بکاپ گرفته شود)"
+        required: false
+        default: "false"
+
+concurrency:
+  group: cf-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: update-remote (بکاپ + مایگریشن + انتشار + دروازهٔ سلامت)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: انتشار تولیدی (update-remote)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          ARGS="--yes"
+          if [ "${{ github.event.inputs.skip_backup }}" = "true" ]; then ARGS="--yes --skip-backup"; fi
+          node scripts/update-remote.mjs $ARGS
+
+      - name: آپلود پشتیبان D1 به آرتیفکت اجرا
+        if: hashFiles('backups/*.sql') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: d1-backup
+          path: backups/
+          retention-days: 30
+          if-no-files-found: ignore

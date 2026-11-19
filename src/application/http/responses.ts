@@ -5,23 +5,6 @@ export function ok<T>(data: T, meta?: Record<string, unknown>): { data: T; meta?
   return meta ? { data, meta } : { data };
 }
 
-export function paginate<T>(
-  items: T[],
-  page: number,
-  pageSize: number,
-  total: number
-): PaginatedResult<T> {
-  const safePage = Math.max(1, Math.floor(page) || 1);
-  const safeSize = Math.min(Math.max(1, Math.floor(pageSize) || DEFAULT_PAGE_SIZE), MAX_PAGE_SIZE);
-  const meta: PaginationMeta = {
-    page: safePage,
-    pageSize: safeSize,
-    total,
-    totalPages: Math.max(1, Math.ceil(total / safeSize))
-  };
-  return { data: items, meta };
-}
-
 export function pageParams(query: Record<string, string | undefined>): { page: number; pageSize: number } {
   return {
     page: Number.parseInt(query.page ?? '1', 10) || 1,

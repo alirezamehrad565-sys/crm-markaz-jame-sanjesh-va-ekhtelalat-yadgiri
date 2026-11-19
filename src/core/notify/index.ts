@@ -42,7 +42,6 @@ export type {
   BaleDocument
 } from './bale/webhook';
 export {
-  rowToNotification,
   rowToPrefs,
   rowToBotLink,
   rowToStaffBotLink,

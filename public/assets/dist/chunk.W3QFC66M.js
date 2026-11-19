@@ -1,2 +1,0 @@
-function u(t){if(t==null)return"";if(typeof t=="number")return Number.isFinite(t)?String(t):"";let e=String(t);return e===""?"":/^-?\d+(?:[.,]\d+)?$/.test(e)?e:"‏"+e}function s(t){return/[",\n]/.test(t)?`"${t.replace(/"/g,'""')}"`:t}function i(t){return t.map(e=>s(u(e))).join(",")}function d(t,e){let o="\uFEFF"+e.join(`\r
-`),c=new Blob([o],{type:"text/csv;charset=utf-8"}),r=URL.createObjectURL(c),n=document.createElement("a");n.href=r,n.download=t.endsWith(".csv")?t:`${t}.csv`,n.click(),URL.revokeObjectURL(r)}export{i as a,d as b};

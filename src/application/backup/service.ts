@@ -12,7 +12,7 @@ import {
 import { sendBaleDocument } from '@domain/exercise-bank/routes';
 import type { SendResult } from '@core/notify/types';
 
-// ─── مکانیک پشتیبان‌گیری و بازیابی () + ارسال به آیدی بله () ───
+// ─── مکانیک پشتیبان‌گیری و بازیابی + ارسال به آیدی بله ───
 // قالب فایل: gh-backup v1 (JSON با پاکت) — همهٔ جداول دیتابیس به‌جز جدول‌های سیستمی
 // بازیابی = جایگزینی کامل هر جدول در یک تراکنش (delete + insert در یک batch اتمیک)
 // ترتیب جداول: توپولوژیک بر اساس کلیدهای خارجی واقعی (PRAGMA foreign_key_list)

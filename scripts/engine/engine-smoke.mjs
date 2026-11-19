@@ -2,8 +2,9 @@
 //
 //   node scripts/engine/engine-smoke.mjs
 //
-// ۱۹ بررسی: دایرکتوری موقت/مایگریشن/seed/بوت/سلامت/پوسته/دارایی/۴۰۱/ورود غلط/ورود سه نقش/
-// me/kpis/بسته‌های بازی/۴۰۴ کم‌دست §۵/سرویس بازی‌ها/توکن مشترک دو ورکر/خاموشی تمیز/پاک‌سازی.
+// ۲۸ بررسی: دایرکتوری موقت/مایگریشن/seed/بوت/سلامت/پروب مستقل gamesPort/پوسته/دارایی/۴۰۱/
+// ورود غلط/ورود سه نقش/me/kpis/بسته‌های بازی/۴۰۴ کم‌دست §۵/سرویس بازی‌ها/توکن مشترک دو ورکر/
+// خاموشی تمیز/پاک‌سازی.
 // هیچ پورت پیش‌فرض ثابتی اشغال نمی‌کند — دو پورت آزاد تصادفی می‌گیرد.
 import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync, statSync, readFileSync } from 'node:fs';
@@ -72,7 +73,8 @@ const base = `http://127.0.0.1:${enginePort}`;
 const gamesBase = `http://127.0.0.1:${gamesPort}`;
 
 // v1.27.۰۳ — دو حالت گیت: workerd (پیش‌فرض توسعه) و adapter (موتور درون‌پروسه‌ای دسکتاپ —
-// همان چیزی که نصاب اجرا می‌کند). هر دو باید ۲۷/۲۷ سبز شوند.
+// همان چیزی که نصاب اجرا می‌کند). هر دو باید ۲۸/۲۸ سبز شوند — مجموعهٔ بررسی دو حالت یکسان است
+// (پروب مستقل gamesPort در هر دو حالت اجرا می‌شود؛ gamesPort در workerd هم پورت دوم است).
 const adapterMode = process.env.SMOKE_ENGINE === 'adapter';
 console.log(`[smoke] حالت موتور: ${adapterMode ? 'adapter (درون‌پروسه‌ای — بدون workerd)' : 'workerd (توسعه)'}`);
 console.log(`[smoke] پورت‌ها: اپ=${enginePort} بازی‌ها=${gamesPort} | دادهٔ موقت: ${dataDir}`);
@@ -109,9 +111,11 @@ for (let i = 0; i < 120 && !booted; i++) {
 check('مایگریشن‌ها + seed در بوت موتور اعمال شد', booted && engineLog.includes('مایگریشن') && engineLog.includes('seed نمایشی'), engineLog.slice(-300));
 check('بوت موتور روی D1 موقت — /health پاسخ داد', booted);
 
-// M4 — پروب مستقل Games Worker در حالت adapter: سلامت gamesPort جدا از اپ اصلی با fetch
-// (همان چیزی که پوستهٔ Rust با پروب مستقل engine.rs می‌سنجد) — بعد از سبزشدن /health اصلی
-if (booted && adapterMode) {
+// M4 — پروب مستقل Games Worker در هر دو حالت (پاریتی smoke: ۲۸/۲۸ در workerd و adapter):
+// سلامت gamesPort جدا از اپ اصلی با fetch — در adapter همان چیزی است که پوستهٔ Rust با پروب
+// مستقل engine.rs می‌سنجد و در workerd همان چیزی است که ناظر games-watchdog در engine.mjs
+// هر دَور می‌سنجد (gamesPort در هر دو حالت پورت دوم است) — بعد از سبزشدن /health اصلی
+if (booted) {
   let gamesProbed = false;
   for (let i = 0; i < 60 && !gamesProbed; i++) {
     try {

@@ -963,9 +963,9 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
       /* سدهای سخت — حتی «حذف با سابقه»ی مدیر هم از آن‌ها عبور نمی‌کند:
          رکورد رسمی ارزیابی و رکورد مالی باید بمانند؛ راه درست «انتقال به آرشیو» است */
       const asm = await db.queryOne<{ cnt: number }>(`SELECT COUNT(*) AS cnt FROM assessments WHERE student_id = ?`, [id]);
-      if ((asm?.cnt ?? 0) > 0) hardBlocks.push({ key: 'assessment', label: STUDENT_DELETE_LABELS.assessment, count: asm!.cnt });
+      if (asm && asm.cnt > 0) hardBlocks.push({ key: 'assessment', label: STUDENT_DELETE_LABELS.assessment, count: asm.cnt });
       const don = await db.queryOne<{ cnt: number }>(`SELECT COUNT(*) AS cnt FROM finance_donations WHERE student_id = ?`, [id]);
-      if ((don?.cnt ?? 0) > 0) hardBlocks.push({ key: 'donation', label: STUDENT_DELETE_LABELS.donation, count: don!.cnt });
+      if (don && don.cnt > 0) hardBlocks.push({ key: 'donation', label: STUDENT_DELETE_LABELS.donation, count: don.cnt });
       return {
         studentId: id,
         fullName,

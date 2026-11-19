@@ -42,3 +42,35 @@ export function downloadCsv(filename, lines) {
   a.click();
   URL.revokeObjectURL(url);
 }
+
+/* ۱.۲۷.۱۵ — خواست کارفرما: «format as table» — هر ستون به عرضِ بزرگ‌ترین دادهٔ همان ستون.
+   عرض نمایشی = نویسهٔ مرئی؛ نویسه‌های صفرعرض (RLM/ZWJ/BOM…) شمرده نمی‌شوند تا ستون‌های
+   متن و عدد در نمایش monospace یک‌درمیان تراز بنشینند. خانه‌ها با فاصلهٔ عادی پر می‌شوند
+   (اکسل فضای دور عدد را نادیده می‌گیرد و عدد می‌ماند)؛ ردیف کم‌ستون با خانهٔ خالیِ
+   هم‌عرض کامل می‌شود تا همهٔ ردیف‌ها یک عرض داشته باشند. */
+const ZERO_WIDTH = /[\u200B\u200C\u200D\u200E\u200F\u2060\uFEFF]/;
+
+function displayWidth(s) {
+  let w = 0;
+  for (const ch of s) if (!ZERO_WIDTH.test(ch)) w++;
+  return w;
+}
+
+/** جدول هم‌عرض از آرایهٔ ردیف‌ها (اولی = سرستون) — خروجی خط‌های CSV آمادهٔ downloadCsv */
+export function csvTable(rows) {
+  const widths = [];
+  for (const row of rows) {
+    for (let i = 0; i < row.length; i++) {
+      const w = displayWidth(csvCell(row[i]));
+      if (w > (widths[i] ?? 0)) widths[i] = w;
+    }
+  }
+  return rows.map((row) => {
+    const cells = [];
+    for (let i = 0; i < widths.length; i++) {
+      const s = csvCell(row[i]);
+      cells.push(csvQuote(s + ' '.repeat(Math.max(widths[i] - displayWidth(s), 0))));
+    }
+    return cells.join(',');
+  });
+}

@@ -46,7 +46,9 @@ jobs:
       - name: Build games worker bundle
         run: node scripts/build-worker-games.mjs
 
-      # v1.27.۰۳ — گیت فاز ۲ دوهاته: موتور توسعهٔ workerd و موتور دسکتاپ adapter (نصاب)
+      # v1.27.۰۳ — گیت فاز ۲ دوهاته: موتور توسعهٔ workerd و موتور دسکتاپ adapter (نصاب).
+      # پاریتی: هر دو حالت همین مجموعهٔ بررسی را اجرا می‌کنند (پروب مستقل gamesPort در هر دو —
+      # شمارش برابر، خروجی هر گام با «[smoke] نتیجه (<mode>)» برچسب حالت دارد) → مقایسه‌پذیر.
       - name: Engine smoke — workerd (حالت توسعه)
         run: node scripts/engine/engine-smoke.mjs
 
@@ -59,6 +61,12 @@ jobs:
       # ف۲ — گیت همگامی MIGRATIONS.md: هر فایل مایگریشن باید سطر سند داشته باشد
       - name: MIGRATIONS.md sync gate
         run: node scripts/check-migrations-doc.mjs
+
+      # v1.27.۱۹ — گیت هم‌مِهری نسخه‌ها (منبع یگانه version.ts ↔ package.json/tauri.conf.json/
+      # Cargo.toml/sw.js/پین‌های index.html) — منشأ: گزارش کارفرمای ۱.۲۷.۱۸ (CARGO_PKG_VERSION
+      # جامانده → گیت «نصب ارتقا ناقص» پوسته). بامپ فقط با scripts/bump-version.mjs.
+      - name: Version stamps gate (هم‌مِهری نسخه‌ها)
+        run: node scripts/check-versions.mjs
 
       # v1.26.0 — گیت سازگاری D1: پورت جداکنندهٔ cf_deploy.rs + اجرای کامل schema.sql روی SQLite
       # و برابری sqlite_master با مسیر فایل‌به‌فایل — «همان SQL به موتور محلی و markaz-central می‌رود»

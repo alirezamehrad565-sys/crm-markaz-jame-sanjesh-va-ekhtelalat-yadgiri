@@ -1,6 +1,6 @@
 // مسیرهای RUM: نوشتن عمومی بی‌نام (POST /public/rum) + جمع‌بندی فقط‌مدیر (GET /api/rum/summary)
 // مسیر عمومی طبق الگوی /public/announcements و /public/case-events بیرون از authMiddleware است؛
-// گیت ناظر () هم فقط /api/* را می‌پوشاند — پس تله‌متریِ مرورگر ناظر هم از دست نمی‌رود.
+// گیت ناظر هم فقط /api/* را می‌پوشاند — پس تله‌متریِ مرورگر ناظر هم از دست نمی‌رود.
 import { z } from 'zod';
 import type { AppHono } from '@core/shared';
 import { requireRole } from '@core/auth';
