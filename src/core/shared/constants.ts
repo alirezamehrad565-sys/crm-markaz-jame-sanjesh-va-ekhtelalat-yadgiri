@@ -191,7 +191,7 @@ export const BATCH_MIN_LEAD_HOURS = 12;
 
 export const DIGEST_CRON = '0 4 * * *' as const;
 
-/** سینک اعلان از کنترل‌پلین (قرارداد m1.5) — هر ۱۵ دقیقه؛ با env خالی خاموش است */
+/** سینک اعلان از شبکهٔ مراکز (قرارداد m1.5) — هر ۱۵ دقیقه؛ با env خالی خاموش است */
 export const CP_SYNC_CRON = '*/15 * * * *' as const;
 
 export const LINK_CODE_LENGTH = 6;

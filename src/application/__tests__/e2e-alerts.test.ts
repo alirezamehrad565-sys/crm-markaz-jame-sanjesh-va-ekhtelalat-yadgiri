@@ -1,6 +1,6 @@
 // آزمون‌های هشدار خودکار (ف۵ طرح ارتقا — P0-3 حداقلی):
 // رانش مُهر تلاش/موفقیت → دیگر هیچ هشداری سمت نود نمی‌سازد (م۲۱۰ — مالکیت هشدار CP-channel به
-// کنترل‌پلین منتقل شد: CP m9 node-health → channel_alerts) · مُهر ارزیابی باز هم نوشته می‌شود ·
+// شبکهٔ مراکز منتقل شد: CP m9 node-health → channel_alerts) · مُهر ارزیابی باز هم نوشته می‌شود ·
 // سالم → بی‌هشدار · جهش خطاهای مرورگر (قاعدهٔ محلی-نودی) → هشدار · kill-switch → هیچ
 // ساعت «فریز» با مُهرهای دست‌کاری‌شدهٔ settings برقرار می‌شود (هم‌الگوی e2e-health-panel) نه با تایمر ساختگی.
 import { describe, it, expect } from 'vitest';
@@ -71,7 +71,7 @@ describe('هشدار خودکار — رانش مُهر تلاش/موفقیت (�
 
     expect(outcome.disabled).toBe(false);
     // حکم م۲۱۰: هشدار CP-channel در نود ساخته نمی‌شود — نه پنل، نه لاگ error، نه اعلان مدیر.
-    // مالکیت هشدار کنترل‌پلین است (CP m9 node-health → channel_alerts kind='seal_drift').
+    // مالکیت هشدار شبکهٔ مراکز است (CP m9 node-health → channel_alerts kind='seal_drift').
     expect(outcome.alerts).toHaveLength(0);
     expect(log.errors).toHaveLength(0);
     expect(outcome.enqueued).toBe(0);

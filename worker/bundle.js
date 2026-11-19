@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.27.27";
+var APP_VERSION = "1.27.28";
 var NODE_MIN_VERSION = "1.26.0";
 
 // node_modules/zod/v4/classic/external.js
@@ -35686,7 +35686,11 @@ var CaseEventTypeInputSchema = external_exports.object({
   bands: external_exports.array(CaseEventBandSchema).max(BANDS_MAX).nullish(),
   subscales: external_exports.array(CaseEventSubscaleSchema).max(SUBSCALES_MAX, `\u062D\u062F\u0627\u06A9\u062B\u0631 ${SUBSCALES_MAX} \u0632\u06CC\u0631\u0645\u0642\u06CC\u0627\u0633`).nullish(),
   tags: external_exports.array(external_exports.string().min(8).max(64)).max(12, "\u062D\u062F\u0627\u06A9\u062B\u0631 \u06F1\u06F2 \u0628\u0631\u0686\u0633\u0628 \u0628\u0631\u0627\u06CC \u0647\u0631 \u0642\u0627\u0644\u0628").nullish(),
-  audience: external_exports.enum(["family", "teacher", "both"]).nullish()
+  audience: external_exports.enum(["family", "teacher", "both"]).nullish(),
+  toolSource: external_exports.string().max(TYPE_DESCRIPTION_MAX).nullish(),
+  // ۱.۲۷.۲۸ — M5: شناسنامهٔ ابزار — منبع/مرجع
+  toolNorm: external_exports.string().max(TYPE_DESCRIPTION_MAX).nullish()
+  // ۱.۲۷.۲۸ — M5: شناسنامهٔ ابزار — هنجار سنی/روایی
 });
 var CaseEventTypeUpdateSchema = CaseEventTypeInputSchema.partial();
 var SurveyCreateSchema = external_exports.object({
@@ -38834,6 +38838,8 @@ function typeRowToRecord(r) {
     subscales: r.subscales ? parseJson(r.subscales, null) : null,
     tags: r.tags ? parseJson(r.tags, []) : [],
     audience: r.audience ?? "family",
+    toolSource: r.tool_source ?? null,
+    toolNorm: r.tool_norm ?? null,
     active: r.active === 1,
     isSystem: r.is_system === 1,
     createdAt: r.created_at,
@@ -39069,8 +39075,8 @@ function createCaseEventsService(deps) {
       const id = crypto.randomUUID();
       const key = newTypeKey();
       await db.execute(
-        `INSERT INTO case_event_types (id, key, title, description, category, icon, family_fillable, fields, bands, subscales, tags, audience, active, created_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
+        `INSERT INTO case_event_types (id, key, title, description, category, icon, family_fillable, fields, bands, subscales, tags, audience, tool_source, tool_norm, active, created_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
         [
           id,
           key,
@@ -39084,6 +39090,8 @@ function createCaseEventsService(deps) {
           input2.subscales && input2.subscales.length > 0 ? JSON.stringify(input2.subscales) : null,
           input2.tags && input2.tags.length > 0 ? JSON.stringify(input2.tags) : null,
           input2.audience ?? "family",
+          input2.toolSource?.trim() || null,
+          input2.toolNorm?.trim() || null,
           actor.staffId,
           now().toISOString(),
           now().toISOString()
@@ -39118,12 +39126,14 @@ function createCaseEventsService(deps) {
         bands: input2.bands !== void 0 ? input2.bands ?? null : current.bands,
         subscales: input2.subscales !== void 0 ? input2.subscales ?? null : current.subscales,
         tags: input2.tags !== void 0 ? input2.tags ?? [] : current.tags,
-        audience: input2.audience !== void 0 ? input2.audience ?? "family" : current.audience
+        audience: input2.audience !== void 0 ? input2.audience ?? "family" : current.audience,
+        toolSource: input2.toolSource !== void 0 ? input2.toolSource?.trim() || null : current.toolSource,
+        toolNorm: input2.toolNorm !== void 0 ? input2.toolNorm?.trim() || null : current.toolNorm
       };
       validateTypeDefinition({ category: next.category, fields: next.fields, bands: next.bands, familyFillable: next.familyFillable, subscales: next.subscales });
       await db.execute(
         `UPDATE case_event_types
-            SET title = ?, description = ?, category = ?, icon = ?, family_fillable = ?, fields = ?, bands = ?, subscales = ?, tags = ?, audience = ?, updated_at = ?
+            SET title = ?, description = ?, category = ?, icon = ?, family_fillable = ?, fields = ?, bands = ?, subscales = ?, tags = ?, audience = ?, tool_source = ?, tool_norm = ?, updated_at = ?
           WHERE id = ?`,
         [
           next.title,
@@ -39136,6 +39146,8 @@ function createCaseEventsService(deps) {
           next.subscales && next.subscales.length > 0 ? JSON.stringify(next.subscales) : null,
           next.tags.length > 0 ? JSON.stringify(next.tags) : null,
           next.audience,
+          next.toolSource,
+          next.toolNorm,
           now().toISOString(),
           id
         ]
@@ -62142,7 +62154,7 @@ function createNetworkContentService(deps) {
     const rec = await getById(id);
     if (!rec) throw new NotFoundError("\u0645\u062D\u062A\u0648\u0627\u06CC \u0634\u0628\u06A9\u0647");
     if (rec.origin !== "local") {
-      throw new ConflictError("\u0627\u06CC\u0646 \u0622\u06CC\u062A\u0645 \u0627\u0632 \u06A9\u0646\u062A\u0631\u0644\u200C\u067E\u0644\u06CC\u0646 \u0622\u0645\u062F\u0647 \u0648 \u062F\u0631 \u0645\u0631\u06A9\u0632 \u0642\u0627\u0628\u0644 \u062A\u063A\u06CC\u06CC\u0631 \u0646\u06CC\u0633\u062A");
+      throw new ConflictError("\u0627\u06CC\u0646 \u0622\u06CC\u062A\u0645 \u0627\u0632 \u0634\u0628\u06A9\u0647\u0654 \u0645\u0631\u0627\u06A9\u0632 \u0622\u0645\u062F\u0647 \u0648 \u062F\u0631 \u0645\u0631\u06A9\u0632 \u0642\u0627\u0628\u0644 \u062A\u063A\u06CC\u06CC\u0631 \u0646\u06CC\u0633\u062A");
     }
     return rec;
   }

@@ -6,7 +6,7 @@
 // اما فنی بنویس؛ موبایلِ همان وای‌فای نشانی چاپ‌شده در بوت (مثل http://192.168.1.50:8787)
 // را در مرورگر باز کند؛ و با کلید کلادفلر بتوان ورکر جدید ساخت و سایت آنلاین داشت.»
 //
-// پنل اکنون شش بخش مرتب دارد (بخش‌شماره‌ها روی عنوان‌ها):
+// پنل اکنون هفت بخش مرتب دارد (بخش‌شماره‌ها روی عنوان‌ها):
 //   ۱) چراغ‌های وضعیت — پنج سیگنال §۴ نقد با سه رنگ و دکمهٔ اقدام
 //   ۲) سرور محلی روی شبکه — feed پوسته (FSM) + GET /api/system/lan (۱.۲۷.۲۱): نشانی واقعی
 //      این رایانه + نشانی‌های موبایل روی همان وای‌فای/مودم با دکمهٔ کپی + سه قدم بازکردن
@@ -83,6 +83,46 @@ const SYNC_ERROR_KIND_VIEWS = { network: 'مشکل شبکه', quota: 'سقف م�
 /** گونهٔ آخرین خطای هم‌گامی → فارسی؛ گونهٔ ناشناخته/حذف‌شده → «خطای نامشخص» */
 export function syncErrorKindView(kind) {
   return SYNC_ERROR_KIND_VIEWS[kind] ?? 'خطای نامشخص';
+}
+
+/* ===== M5 POLISH-3 (۱.۲۷.۲۸) — نمای واحد «پیوندهای بیرون» =====
+ * چهار سطر وضعیت با یک واژگان: مرکز ابری (node-sync)، شبکهٔ مراکز (CP)، بازی ابری، بات بله.
+ * جمعِ دادهٔ کارت ابر + node-sync/status + health/panel (cp_link/games) + bot-username —
+ * همهٔ ورودی‌ها اختیاری فرض می‌شوند تا شکست هر منبع فقط سطر خودش را «نامشخص» کند، نه کل پنل را. */
+export function externalLinksView({ sync, cpLink, games, botUsername } = {}) {
+  const st = syncStateView(sync?.state);
+  const cloud = { short: st.short, badge: st.badge, note: st.label };
+  const cp = cpLink?.configured
+    ? { short: 'متصل', badge: 'badge--success', note: `اتصال به شبکهٔ مراکز تنظیم شده — ${fa((cpLink.channels ?? []).length)} درگاه` }
+    : { short: 'مستقل', badge: 'badge--neutral', note: 'این مرکز مستقل است — اتصال به شبکهٔ مراکز تنظیم نشده' };
+  const game = games?.ok
+    ? { short: 'پاسخ می‌دهد', badge: 'badge--success', note: games.port ? `ورکر بازی‌ها سلامت است — پورت ${fa(games.port)}` : 'ورکر بازی‌ها سلامت است' }
+    : { short: 'خاموش', badge: 'badge--neutral', note: 'بازی ابری تنظیم نشده یا پاسخ نمی‌دهد' };
+  const bot = botUsername
+    ? { short: 'متصل', badge: 'badge--success', note: `بات بله با نام @${botUsername} فعال است` }
+    : { short: 'نامشخص', badge: 'badge--neutral', note: 'نام کاربری بات بله دریافت نشد — کلید بات تنظیم نشده است' };
+  const rows = [
+    { title: 'مرکز ابری', ...cloud },
+    { title: 'شبکهٔ مراکز', ...cp },
+    { title: 'بازی ابری', ...game },
+    { title: 'بات بله', ...bot }
+  ];
+  return el('div', { class: 'card', style: { marginBottom: 'var(--sp-4)' } },
+    el('div', { class: 'card__head' },
+      el('h3', { style: { margin: 0 } }, '۵ — پیوندهای بیرون'),
+      el('span', { class: 'badge badge--neutral' }, 'جمع وضعیت')),
+    el('div', { class: 'card__body--flush' },
+      el('div', { class: 'card__body' },
+        el('p', { class: 'hint-text', style: { whiteSpace: 'normal' } },
+          'یک نگاه به همهٔ پیوندهای بیرونی سامانه — ابر، شبکهٔ مراکز، بازی و بات بله، همه با یک واژگان.')),
+      ...rows.map((r) => el('div', { class: 'ob-row' },
+        el('div', { class: 'ob-row__main' },
+          el('div', { class: 'cell-main' }, r.title),
+          el('div', { class: 'cell-sub' }, r.note)),
+        el('div', { class: 'ob-row__side' },
+          el('span', { class: `badge ${r.badge}` }, r.short))))
+    )
+  );
 }
 
 const CATCHUP_SUMMARY_WINDOW_MS = 10 * 60_000; // پیام «هم‌گام شد؛ N رکورد رسید» فقط ۱۰ دقیقه پس از جبران
@@ -2139,7 +2179,7 @@ export async function renderHealthPanel(outlet) {
     const line = el('div', { class: 'hint-text', style: { marginTop: 'var(--sp-2)', whiteSpace: 'normal' } });
     return el('div', { class: 'card', style: { marginBottom: 'var(--sp-4)' } },
       el('div', { class: 'card__head' },
-        el('h3', { style: { margin: 0 } }, '۵ — کارهای اضطراری'),
+        el('h3', { style: { margin: 0 } }, '۶ — کارهای اضطراری'),
         el('p', { class: 'hint-text', style: { margin: 'var(--sp-1) 0 0' } },
           'سه کنش نجات با تأیید فارسی و حالت مشغول: راه‌اندازی دوبارهٔ سامانه (چند ثانیه قطع می‌شود)، پشتیبان فوری (فایل روی حافظهٔ جدا نگه دارید) و بستهٔ گزارش خطا برای پشتیبانی.')
       ),
@@ -2166,7 +2206,7 @@ export async function renderHealthPanel(outlet) {
     return el('div', { class: 'card card__body--flush', style: { marginBottom: 'var(--sp-4)' } },
       el('div', { class: 'ob-section__head' },
         el('div', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', flexWrap: 'wrap' } },
-          el('h3', { style: { margin: 0 } }, '۶ — هشدارهای فعال'),
+          el('h3', { style: { margin: 0 } }, '۷ — هشدارهای فعال'),
           headBadge
         ),
         el('p', { class: 'hint-text', style: { margin: 'var(--sp-1) 0 0' } },
@@ -2237,6 +2277,12 @@ export async function renderHealthPanel(outlet) {
     const engineGap = engineAppVersionGapView(engineVersionText, appVersion);
 
     // کارت وضعیت هم‌گامی: هر خطای غیرمنتظرهٔ ساخت فقط به «نامشخص» بی‌صدا می‌افتد — پنل هرگز نمی‌شکند
+    // ۱.۲۷.۲۸ — M5: نام بات بله برای کارت «پیوندهای بیرون» — شکستش فقط آن سطر را «نامشخص» می‌کند
+    let botUsername = null;
+    try {
+      botUsername = (await api.get('/api/notifications/bot-username'))?.data?.username ?? null;
+    } catch { botUsername = null; }
+
     let syncCard;
     try {
       syncCard = syncSection(sync, syncError);
@@ -2255,7 +2301,7 @@ export async function renderHealthPanel(outlet) {
       el('div', { class: 'page-head' },
         el('h2', { class: 'page-head__title' }, 'پنل نجات و سلامت'),
         el('p', { class: 'page-head__desc' },
-          `شش بخش مرتب: چراغ‌ها · سرور محلی · سایت ابری · هم‌گامی · کارهای اضطراری · هشدارها — بازخوانی خودکار هر ۶۰ ثانیه · نسخهٔ ${data?.version ?? '—'}${data?.env ? ` (${data.env})` : ''}`)
+          `هفت بخش مرتب: چراغ‌ها · سرور محلی · سایت ابری · هم‌گامی · پیوندهای بیرون · کارهای اضطراری · هشدارها — بازخوانی خودکار هر ۶۰ ثانیه · نسخهٔ ${data?.version ?? '—'}${data?.env ? ` (${data.env})` : ''}`)
       ),
 
       oneGlanceSection(data, sync, quota, lastBackupAt), // ۱ — چراغ‌های وضعیت
@@ -2278,9 +2324,11 @@ export async function renderHealthPanel(outlet) {
 
       syncCard, // ۴ — هم‌گامی با مرکز
 
-      rescueBarSection(), // ۵ — کارهای اضطراری
+      externalLinksView({ sync, cpLink: data?.cp_link, games: data?.games, botUsername }), // ۵ — پیوندهای بیرون (۱.۲۷.۲۸)
 
-      alertsSection(data?.alerts, data?.alerts_last_evaluated_at), // ۶ — هشدارهای فعال
+      rescueBarSection(), // ۶ — کارهای اضطراری
+
+      alertsSection(data?.alerts, data?.alerts_last_evaluated_at), // ۷ — هشدارهای فعال
 
       el('p', { class: 'hint-text' },
         `آخرین بازخوانی: ${formatJalaliDateTime(data?.now)}`)
