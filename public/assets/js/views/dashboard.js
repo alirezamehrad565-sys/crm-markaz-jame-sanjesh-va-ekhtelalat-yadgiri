@@ -315,7 +315,9 @@ function weekTrendCard(summaryData, todayData) {
       'div',
       { class: 'card__head' },
       el('div', { class: 'card__title' }, 'روند ۷ روز اخیر'),
-      el('span', { class: 'badge badge--neutral' }, `${formatJalaliNumeric(addDaysYmd(todayData.date ?? tehranTodayYmd(), -6))} تا ${formatJalaliNumeric(todayData.date ?? tehranTodayYmd())}`)
+      el('span', { class: 'badge badge--neutral' }, `${formatJalaliNumeric(addDaysYmd(todayData.date ?? tehranTodayYmd(), -6))} تا ${formatJalaliNumeric(todayData.date ?? tehranTodayYmd())}`),
+      /* M7 POLISH-3 (۱.۲۷.۳۰) — برچسب داستان: برای کی؟ در چه لحظه‌ای؟ به کدام تصمیم؟ */
+      el('p', { class: 'hint-text', style: { flexBasis: '100%', margin: '0' } }, 'برای دفتر مرکز، صبح مرور هفته: کدام روزها پر و کدام خالی بوده‌اند تا تصمیم ساعت‌بندی و ظرفیت جلسات روی داده گرفته شود.'),
     ),
     el(
       'div',
@@ -425,7 +427,9 @@ function followupsDueCard(rows, todayYmd) {
       'div',
       { class: 'card__head' },
       el('div', { class: 'card__title' }, icon('bell', 16), 'پیگیری‌های سررسیده'),
-      el('span', { class: 'badge badge--error' }, `${fa(dueAll.length)} مورد`)
+      el('span', { class: 'badge badge--error' }, `${fa(dueAll.length)} مورد`),
+      /* M7 POLISH-3 (۱.۲۷.۳۰) — برچسب داستان: برای کی؟ در چه لحظه‌ای؟ به کدام تصمیم؟ */
+      el('p', { class: 'hint-text', style: { flexBasis: '100%', margin: '0' } }, 'برای درمانگر و دفتر، در شروع روز: چه کسی منتظر تماس مانده تا تصمیم پیگیریِ امروز پیش از سرد شدن خانواده گرفته شود.'),
     ),
     el(
       'div',
@@ -484,7 +488,9 @@ function waitlistAgingCard(waitlist) {
       'div',
       { class: 'card__head' },
       el('div', { class: 'card__title' }, icon('hourglass', 16), 'چه مدت در انتظارند؟'),
-      el('span', { class: 'badge badge--neutral' }, `${fa(total)} متقاضی`)
+      el('span', { class: 'badge badge--neutral' }, `${fa(total)} متقاضی`),
+      /* M7 POLISH-3 (۱.۲۷.۳۰) — برچسب داستان: برای کی؟ در چه لحظه‌ای؟ به کدام تصمیم؟ */
+      el('p', { class: 'hint-text', style: { flexBasis: '100%', margin: '0' } }, 'برای دفتر، هنگام فراخوانی لیست انتظار: چه کسی بیشترین انتظار را داشته تا تصمیم نوبت‌دهی عادلانه گرفته شود.'),
     ),
     el('div', { class: 'card__body' }, row('۰ تا ۷ روز', buckets.ok, 'ok'), row('۸ تا ۱۴ روز', buckets.warn, 'warn'), row('۱۵ روز و بیشتر', buckets.late, 'late')),
     /* POLISH-3 M2 — حفر: مدیریت لیست انتظار */
@@ -504,7 +510,9 @@ function announcementsCard(announcements) {
   return el(
     'div',
     { class: 'card an-card' },
-    el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, icon('bell', 16), 'اطلاع‌رسانی مرکز')),
+    el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, icon('bell', 16), 'اطلاع‌رسانی مرکز'),
+      /* M7 POLISH-3 (۱.۲۷.۳۰) — برچسب داستان: برای کی؟ در چه لحظه‌ای؟ به کدام تصمیم؟ */
+      el('p', { class: 'hint-text', style: { flexBasis: '100%', margin: '0' } }, 'برای همهٔ کاربران، در لحظهٔ ورود: چه خبر تعطیلی یا تغییر برنامه اعلام شده تا تصمیم فردی دربارهٔ حضورشان درست باشد.')),
     el(
       'div',
       { class: 'card__body' },
@@ -543,7 +551,9 @@ function knowledgeCard(knowledge) {
   return el(
     'div',
     { class: 'card kn-card', style: { marginBottom: 'var(--sp-4)' } },
-    el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, icon('file', 16), 'دانش‌افزایی'), knItems.length ? el('span', { class: 'badge badge--neutral' }, `${fa(knowledge.length)} مقاله`) : null),
+    el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, icon('file', 16), 'دانش‌افزایی'), knItems.length ? el('span', { class: 'badge badge--neutral' }, `${fa(knowledge.length)} مقاله`) : null,
+      /* M7 POLISH-3 (۱.۲۷.۳۰) — برچسب داستان: برای کی؟ در چه لحظه‌ای؟ به کدام تصمیم؟ */
+      el('p', { class: 'hint-text', style: { flexBasis: '100%', margin: '0' } }, 'برای درمانگر، در وقفهٔ بین جلسات: چه مطلب تازه‌ای منتشر شده تا تصمیم به‌روزرسانی دانش بالینی گرفته شود.')),
     el(
       'div',
       { class: 'card__body' },
@@ -642,7 +652,9 @@ function drawScreeningGoalCard(goal) {
       'div',
       { class: 'card__head' },
       el('div', { class: 'card__title' }, icon('board', 16), 'سنجش روزانه — گزارش کوتاه'),
-      el('span', { class: 'badge badge--primary' }, `سال ${fa(goal.jalaliYear)}`)
+      el('span', { class: 'badge badge--primary' }, `سال ${fa(goal.jalaliYear)}`),
+      /* M7 POLISH-3 (۱.۲۷.۳۰) — برچسب داستان: برای کی؟ در چه لحظه‌ای؟ به کدام تصمیم؟ */
+      el('p', { class: 'hint-text', style: { flexBasis: '100%', margin: '0' } }, 'برای دفتر، در پایان روز غربال: چند غربال ثبت و چند مانده تا تصمیم ارجاع یا فراخوان بعدی گرفته شود.'),
     ),
     el(
       'div',
