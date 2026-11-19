@@ -233,7 +233,7 @@ function buildPeriodicBody(r) {
     ),
     el('div', { class: 'card__body' },
       r.perStaff.length === 0
-        ? emptyState({ iconName: 'users', title: 'نوبتی در این بازه ثبت نشده' })
+        ? emptyState({ iconName: 'users', title: 'نوبتی در این بازه ثبت نشده', hint: 'بازهٔ گزارش را عوض کنید، یا بعد از ثبت نوبت‌های تازه همین‌جا را ببینید.' })
         : deferredChart(() => hbars({
             items: r.perStaff.map((s) => ({
               label: s.staffName,
@@ -253,7 +253,7 @@ function buildPeriodicBody(r) {
     ),
     el('div', { class: 'card__body' },
       r.schools.length === 0
-        ? emptyState({ iconName: 'school', title: 'دانش‌آموزی با مدرسه ثبت‌شده نیست' })
+        ? emptyState({ iconName: 'school', title: 'دانش‌آموزی با مدرسه ثبت‌شده نیست', hint: 'مدرسهٔ هر دانش‌آموز را از «دانش‌آموزان ← ویرایش» انتخاب کنید تا این‌جا شمرده شود.' })
         : dataTable({
             columns: [
               { key: 'name', label: 'مدرسه' },
@@ -268,7 +268,7 @@ function buildPeriodicBody(r) {
     el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, 'پرتکرارترین دانش‌آموزان')),
     el('div', { class: 'card__body' },
       r.topStudents.length === 0
-        ? emptyState({ iconName: 'student', title: 'داده‌ای نیست' })
+        ? emptyState({ iconName: 'student', title: 'جلسه‌ای در این بازه ثبت نشده', hint: 'بازهٔ گزارش را عوض کنید، یا بعد از برگزاری جلسه‌ها همین‌جا را ببینید.' })
         : dataTable({
             columns: [
               { key: 'studentName', label: 'دانش‌آموز' },
@@ -451,7 +451,7 @@ function buildAdvancedBody(adv, pct, days) {
     el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, 'قیف لیست انتظار — کل تاریخ')),
     el('div', { class: 'card__body' },
       adv.waitlist.total === 0
-        ? emptyState({ iconName: 'clock', title: 'متقاضی‌ای ثبت نشده' })
+        ? emptyState({ iconName: 'clock', title: 'متقاضی‌ای ثبت نشده', hint: 'متقاضی‌های لیست انتظار از ماژول «لیست انتظار» ثبت می‌شوند.' })
         : funnelDonut
     )
   );
@@ -465,7 +465,7 @@ function buildAdvancedBody(adv, pct, days) {
       { label: 'نرخ حضور', render: (w) => w.attendanceRate === null ? '—' : pct(w.attendanceRate) }
     ],
     rows: [...adv.weeks].reverse(),
-    empty: emptyState({ iconName: 'calendar', title: 'هفته‌ای در این بازه نیست' })
+    empty: emptyState({ iconName: 'calendar', title: 'هفته‌ای در این بازه نیست', hint: 'بازهٔ گزارش را عوض کنید تا هفته‌های دیگر بیاید.' })
   });
   const weeksCard = el('div', { class: 'card' },
     el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, 'جزئیات هفته‌ها')),
@@ -651,7 +651,7 @@ function buildAttendanceView(zone) {
 
 function buildAttendanceBody(model) {
   if (model.people.length === 0) {
-    return emptyState({ iconName: 'users', title: 'همکار فعالی ثبت نشده است' });
+    return emptyState({ iconName: 'users', title: 'همکار فعالی ثبت نشده است', hint: 'همکاران را از ماژول «کارکنان» اضافه کنید تا دفتر حضور ساخته شود.' });
   }
   const summaryTable = dataTable({
     columns: [

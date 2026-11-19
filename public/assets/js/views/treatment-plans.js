@@ -79,7 +79,7 @@ function openEditor(tpl, targets, { onSaved }) {
       criterion: critTa.value.trim() || null,
       items: cards.collect()
     });
-    if (sessionBlocks.children.length >= 100) { toast('حداکثر ۱۰۰ جلسه برای هر طرح'); return; }
+    if (sessionBlocks.children.length >= 100) { toast('حداکثر ۱۰۰ جلسه در هر طرح جا می‌شود — برای ادامه، یکی از جلسه‌های پایین را حذف کنید'); return; }
 
     // درگ‌ودراپ جلسه‌ها — ترتیب همان ترتیب DOM و همان ترتیب ذخیره
     block.addEventListener('dragstart', (e) => {
@@ -160,7 +160,7 @@ function openEditor(tpl, targets, { onSaved }) {
             throw err;
           }
         }
-        if (!saved) throw lastErr ?? new Error('ثبت طرح ناموفق بود');
+          if (!saved) throw lastErr ?? new Error('ثبت طرح ناموفق بود — اتصال را بررسی و دوباره تلاش کنید');
       } else {
         await api.patch(`/api/pathway-templates/${editing.key}`, payload);
       }
@@ -217,7 +217,7 @@ export async function renderTreatmentPlans(container) {
       icon('plus', 16), 'طرح جدید')
   );
 
-  const zone = el('div', { class: 'data-zone', style: { display: 'flex', flexDirection: 'column', gap: '10px' } });
+  const zone = el('div', { class: 'data-zone', style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' } });
   container.replaceChildren(head, zone);
 
   async function load() {

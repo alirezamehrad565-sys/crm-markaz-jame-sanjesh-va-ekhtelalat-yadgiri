@@ -830,9 +830,10 @@ function openEntryModal({ entry = null, plan = null } = {}) {
 
   const editor = tagsEditor(entry?.tags ?? (plan?.tag ? [plan.tag] : []));
 
-  // انتخاب عکس‌ها
+  // انتخاب عکس‌ها — کنترل فارسی فایل: دکمهٔ «انتخاب عکس‌ها …» با input پنهان؛ نام/حجم در فهرست زیر
   const photoList = el('div', { class: 'cb-uploadlist' });
-  const photoInput = el('input', { class: 'input', type: 'file', accept: 'image/jpeg,image/png,image/webp', multiple: true, 'aria-label': 'انتخاب عکس‌ها' }); /* S8-08 */
+  const photoInput = el('input', { type: 'file', accept: 'image/jpeg,image/png,image/webp', multiple: true, 'aria-label': 'انتخاب عکس‌ها', style: { display: 'none' } }); /* S8-08 */
+  const photoPick = el('button', { type: 'button', class: 'btn btn--soft btn--sm', onclick: () => photoInput.click() }, icon('upload', 15), 'انتخاب عکس‌ها …');
   photoInput.addEventListener('change', () => {
     for (const f of Array.from(photoInput.files ?? [])) {
       if (!isImageFile(f)) continue;
@@ -859,7 +860,8 @@ function openEntryModal({ entry = null, plan = null } = {}) {
   });
 
   const docList = el('div', { class: 'cb-uploadlist' });
-  const docInput = el('input', { class: 'input', type: 'file', accept: '.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv', multiple: true, 'aria-label': 'انتخاب مستندات' }); /* S8-08 */
+  const docInput = el('input', { type: 'file', accept: '.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv', multiple: true, 'aria-label': 'انتخاب مستندات', style: { display: 'none' } }); /* S8-08 */
+  const docPick = el('button', { type: 'button', class: 'btn btn--soft btn--sm', onclick: () => docInput.click() }, icon('file', 15), 'انتخاب مستندات …');
   docInput.addEventListener('change', () => {
     for (const f of Array.from(docInput.files ?? [])) {
       if (isImageFile(f)) continue;
@@ -887,8 +889,8 @@ function openEntryModal({ entry = null, plan = null } = {}) {
     ),
     el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'برچسب‌ها (برای فیلتر خط زمانی)'), editor.root),
     el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'توضیح'), bodyInput),
-    el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'عکس‌ها (فشرده‌سازی خودکار)'), photoInput, photoList),
-    el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'مستندات (PDF/Word/Excel)'), docInput, docList),
+    el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'عکس‌ها (فشرده‌سازی خودکار)'), photoPick, photoInput, photoList),
+    el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'مستندات (PDF/Word/Excel)'), docPick, docInput, docList),
     progress
   );
 

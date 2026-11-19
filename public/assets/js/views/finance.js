@@ -12,7 +12,7 @@ import {
   errorState,
   tabs
 } from '../ui.js';
-import { fa, enDigits, formatJalaliNumeric, tehranTodayYmd } from '../format.js';
+import { fa, enDigits, formatJalaliNumeric, sizeLabel, tehranTodayYmd } from '../format.js';
 import { jalaliDateInput } from '../jalali-picker.js';
 import { session } from '../state.js';
 
@@ -214,7 +214,7 @@ function invoicesPanel() {
           el('td', { colspan: 6 },
             state.invoices.length === 0
               ? 'هنوز فاکتوری ثبت نشده است — با دکمهٔ «ثبت فاکتور» شروع کنید'
-              : 'نتیجه‌ای برای این جستجو نیست'))
+              : 'نتیجه‌ای برای این جستجو نیست — عبارت را عوض کنید یا کادر جستجو را خالی کنید'))
       );
       return;
     }
@@ -332,11 +332,26 @@ function openInvoiceModal(existing = null) {
   const datalist = el('datalist', { id: 'fin-cat-list' }, CATEGORIES.map((c) => el('option', { value: c })));
   const category = el('input', { class: 'input', type: 'text', list: 'fin-cat-list', value: existing?.category ?? '', 'aria-label': 'دستهٔ هزینه', placeholder: 'اجاره، ملزومات، …' });
   const description = el('input', { class: 'input', type: 'text', value: existing?.description ?? '', 'aria-label': 'توضیح فاکتور' });
-  const fileInput = el('input', { class: 'input', type: 'file', accept: 'image/*,.pdf', 'aria-label': 'پیوست اسکن فاکتور' });
-  const fileField = field(
-    'پیوست اسکن (اختیاری)',
-    fileInput,
-    isEdit && existing?.attachment ? `پیوست فعلی: ${existing.attachment.filename} — انتخاب فایل جدید، قبلی را جایگزین می‌کند` : 'عکس یا PDF اسکن فاکتور'
+  /* کنترل فارسی فایل: دکمهٔ «انتخاب فایل …» با input پنهان + نام/حجم با sizeLabel (الگوی مشترک نماها) */
+  const fileInput = el('input', { type: 'file', accept: 'image/*,.pdf', 'aria-label': 'پیوست اسکن فاکتور', style: { display: 'none' } });
+  const fileLabel = el('span', { class: 'field__hint', style: { margin: 0 } }, 'فایلی انتخاب نشده است');
+  const fileClear = el('button', {
+    class: 'btn btn--ghost btn--sm', type: 'button', title: 'بی‌اثر کردن فایل انتخاب‌شده', 'aria-label': 'بی‌اثر کردن فایل انتخاب‌شده',
+    style: { display: 'none' },
+    onclick: () => { fileInput.value = ''; paintFileLabel(); }
+  }, icon('x', 13));
+  function paintFileLabel() {
+    const f = fileInput.files && fileInput.files[0];
+    fileLabel.textContent = f ? `${f.name} — ${sizeLabel(f.size)}` : 'فایلی انتخاب نشده است';
+    fileClear.style.display = f ? '' : 'none';
+  }
+  fileInput.addEventListener('change', paintFileLabel);
+  const filePick = el('button', { class: 'btn btn--soft btn--sm', type: 'button', onclick: () => fileInput.click() }, icon('file', 15), 'انتخاب فایل …');
+  const fileField = el('div', { class: 'field' },
+    el('label', { class: 'field__label' }, 'پیوست اسکن (اختیاری)'),
+    el('div', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', flexWrap: 'wrap' } }, filePick, fileClear, fileInput, fileLabel),
+    el('span', { class: 'field__hint' },
+      isEdit && existing?.attachment ? `پیوست فعلی: ${existing.attachment.filename} — انتخاب فایل جدید، قبلی را جایگزین می‌کند` : 'عکس یا PDF اسکن فاکتور')
   );
 
   const modal = openModal({
@@ -445,7 +460,7 @@ function studentPicker(initialId, initialName) {
           .filter((g) => g.type === 'student')
           .flatMap((g) => g.items ?? []);
         if (students.length === 0) {
-          dd.replaceChildren(el('div', { class: 'fin-sp__empty' }, 'دانش‌آموزی پیدا نشد'));
+          dd.replaceChildren(el('div', { class: 'fin-sp__empty' }, 'دانش‌آموزی پیدا نشد — بخشی از نام را کامل‌تر بنویسید'));
           syncOpen(true);
           return;
         }
@@ -533,7 +548,7 @@ function donationsPanel() {
           el('td', { colspan: 6 },
             state.donations.length === 0
               ? 'کمکی ثبت نشده است — با دکمهٔ «ثبت کمک» شروع کنید'
-              : 'نتیجه‌ای برای این جستجو نیست'))
+              : 'نتیجه‌ای برای این جستجو نیست — عبارت را عوض کنید یا کادر جستجو را خالی کنید'))
       );
       return;
     }
@@ -677,7 +692,7 @@ function budgetsPanel() {
 
   return el('div', {},
     el('div', { class: 'fin-panel-head' },
-      el('span', { class: 'fin-bar__text' }, 'مرکز دولتی است و یک بودجهٔ مصوب دارد — جمع بودجه‌های غیرحذف‌شده مبنای تراز است.'),
+      el('span', { class: 'fin-bar__text' }, 'مرکز دولتی است و یک بودجهٔ مصوب دارد — جمع بودجه‌های فعال مبنای تراز است.'),
       el('span', { class: 'spacer' }),
       el('button', { class: 'btn btn--primary btn--sm', onclick: () => openBudgetModal() }, icon('plus', 15), 'ثبت بودجه')
     ),

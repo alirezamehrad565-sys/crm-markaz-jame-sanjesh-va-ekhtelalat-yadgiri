@@ -768,7 +768,7 @@ function openCaseAuditModal() {
   saveBtn.addEventListener('click', async () => {
     const studentId = studentIn.value.trim();
     if (studentId.length < 8) { toast('شناسهٔ پرونده را وارد کنید (از تب دانش‌آموزان کپی شود)', 'warning'); studentIn.focus(); return; }
-    if (aIn.value.trim().length < 2 || bIn.value.trim().length < 2) { toast('نام هر دو ارزیاب لازم است', 'warning'); return; }
+    if (aIn.value.trim().length < 2 || bIn.value.trim().length < 2) { toast('نام هر دو ارزیاب را وارد کنید', 'warning'); return; }
     saveBtn.disabled = true;
     try {
       await api.post('/api/case-audits', {
@@ -787,11 +787,11 @@ function openCaseAuditModal() {
   });
   openModal({
     title: 'حسابرسی موردی — مرور دو-ارزیاب',
-    body: el('div', { style: { display: 'flex', flexDirection: 'column', gap: '10px' } },
+    body: el('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' } },
       el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'پرونده (شناسهٔ دانش‌آموز)'), studentIn),
       el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'ارزیاب اول'), aIn),
       el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'ارزیاب دوم'), bIn),
-      el('label', { class: 'fidelity-row', style: { gap: '8px' } }, agreedCb, ' دو ارزیاب به یک جمع‌بندی رسیدند'),
+      el('label', { class: 'fidelity-row', style: { gap: 'var(--sp-2)' } }, agreedCb, ' دو ارزیاب به یک جمع‌بندی رسیدند'),
       el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'یادداشت'), noteTa)),
     actions: [
       (c) => el('button', { class: 'btn btn--ghost', type: 'button', onclick: c }, 'انصراف'),

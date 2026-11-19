@@ -111,10 +111,15 @@ async function previewFile(docId, file, btn) {
   });
 }
 
-/** انتخاب فایل‌ها — فهرست قابل حذف زیر input */
+/** انتخاب فایل‌ها — الگوی فارسی کنترل فایل: دکمهٔ «انتخاب فایل …» + input پنهان + نام/حجم با sizeLabel */
 function filePicker({ accept = '', hint = '' } = {}) {
   const picked = []; // آرایهٔ File خام
-  const input = el('input', { class: 'input', type: 'file', multiple: true, accept, 'aria-label': 'انتخاب فایل‌ها' });
+  const input = el('input', { type: 'file', multiple: true, accept, 'aria-label': 'انتخاب فایل‌ها', style: { display: 'none' } });
+  const pickBtn = el('button', {
+    class: 'btn btn--soft btn--sm',
+    type: 'button',
+    onclick: () => input.click()
+  }, icon('upload', 14), 'انتخاب فایل …');
   const list = el('div', { class: 'docs-uploadlist' });
 
   function draw() {
@@ -145,7 +150,9 @@ function filePicker({ accept = '', hint = '' } = {}) {
 
   return {
     root: el('div', { class: 'field' },
-      el('label', { class: 'field__label' }, 'فایل‌ها (چندتایی مجاز است)'),
+      el('div', { class: 'field__labelrow' },
+        el('span', { class: 'field__label' }, 'فایل‌ها (چندتایی مجاز است)'),
+        pickBtn),
       input,
       hint ? el('div', { class: 'field__hint' }, hint) : null,
       list),
@@ -338,7 +345,7 @@ function openAddFilesModal(doc, { onDone }) {
 async function deleteDocWithConfirm(doc, onDone) {
   const ok = await confirmModal({
     title: 'حذف سند',
-    message: `سند «${doc.title}» حذف شود؟ سند از فهرست نمون‌برگ‌ها حذف می‌شود (حذف نرم).`,
+    message: `سند «${doc.title ?? 'بدون عنوان'}» حذف شود؟ سند از فهرست نمون‌برگ‌ها حذف می‌شود و دیگر در فهرست دیده نمی‌شود.`,
     confirmLabel: 'حذف',
     danger: true
   });
@@ -513,7 +520,7 @@ export async function renderDocsList(container, ctx) {
       }
     },
     el('div', { class: 'docs-card__head' },
-      el('h3', { class: 'docs-card__title' }, doc.title),
+      el('h3', { class: 'docs-card__title' }, doc.title ?? 'بدون عنوان'),
       catBadge(doc.category),
       el('span', { class: 'docs-card__spacer' }),
       deleteBtn

@@ -100,14 +100,14 @@ function tagBadge(label, onRemove) {
   const isPre = KIND_BY_LABEL.has(label);
   return el(
     'span',
-    { class: `badge ${tagBadgeClass(label)}`, style: { display: 'inline-flex', alignItems: 'center', gap: '4px' } },
+    { class: `badge ${tagBadgeClass(label)}`, style: { display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-1)' } },
     isPre ? null : el('span', { style: { opacity: 0.6, fontWeight: 700 } }, '#'),
     label,
     onRemove
       ? el('button', {
           type: 'button',
           'aria-label': `حذف برچسب ${label}`,
-          style: { border: 'none', background: 'transparent', padding: '0 2px', cursor: 'pointer', color: 'inherit', display: 'inline-flex' },
+          style: { border: 'none', background: 'transparent', padding: '0 var(--sp-1)', cursor: 'pointer', color: 'inherit', display: 'inline-flex' },
           onclick: onRemove
         }, icon('x', 12))
       : null
@@ -275,7 +275,7 @@ async function renderDailyTab(box, container, myGen) {
 
   const recentCustom = tagSummary.filter((t) => !KIND_BY_LABEL.has(t.label)).slice(0, 8);
   const recentChips = recentCustom.length === 0 ? null : el('div', {},
-    el('div', { class: 'sanj-hint', style: { marginBottom: '6px' } }, '# برچسب‌های اخیر (کارمند، مهدکودک و…)'),
+    el('div', { class: 'sanj-hint', style: { marginBottom: 'var(--sp-2)' } }, '# برچسب‌های اخیر (کارمند، مهدکودک و…)'),
     el('div', { class: 'sanj-chips' },
       ...recentCustom.map((t) =>
         el('button', {
@@ -546,7 +546,7 @@ async function renderDailyTab(box, container, myGen) {
       preview,
       extraFields, /* ۱.۲۵.۵۰ — زیر ثبت سریع */
       el('div', {},
-        el('div', { class: 'sanj-hint', style: { marginBottom: '6px' } }, 'برچسب وضعیت (لمس کنید تا روشن شود)'),
+        el('div', { class: 'sanj-hint', style: { marginBottom: 'var(--sp-2)' } }, 'برچسب وضعیت (لمس کنید تا روشن شود)'),
         preChips
       ),
       recentChips,
@@ -561,7 +561,7 @@ async function renderDailyTab(box, container, myGen) {
   /* ۱.۲۷.۱۶ — ناوبری روز ثبت: «روز قبل» (کلیک دوباره = روزِ قبل‌تر) + «روز بعد» تا امروز؛
      در روزهای گذشته راهنمای ویرایش سوابق زیر نوار می‌آید (اشتباه/جاافتاده همین‌جا اصلاح می‌شود) */
   const rerenderDay = () => { void renderDailyTab(box, container, ++tabGen); };
-  const dayNav = el('div', { class: 'toolbar', style: { justifyContent: 'center', gap: '10px', marginBottom: 'var(--sp-3)' } },
+  const dayNav = el('div', { class: 'toolbar', style: { justifyContent: 'center', gap: 'var(--sp-3)', marginBottom: 'var(--sp-3)' } },
     el('button', { class: 'btn btn--ghost btn--sm', 'aria-label': 'رفتن به روز قبل', onclick: () => { state.dailyDay = addDaysYmd(selected, -1); rerenderDay(); } },
       icon('chevR', 15), 'روز قبل'),
     el('span', { class: 'cell-main', style: { fontWeight: 700 } },
@@ -674,7 +674,7 @@ async function renderManagerTab(box, container, myGen) {
       syncTagUI();
       void refreshResults();
     }
-  }, el('span', { style: { display: 'inline-flex', alignItems: 'center', gap: '5px' } }, icon('alert', 13), 'نیازمند پیگیری (همهٔ ارجاع‌ها)')),
+  }, el('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-1)' } }, icon('alert', 13), 'نیازمند پیگیری (همهٔ ارجاع‌ها)')),
   ...PREDEFINED.map((t) =>
     el('button', {
       type: 'button',
@@ -711,7 +711,7 @@ async function renderManagerTab(box, container, myGen) {
     class: 'chip',
     style: { display: state.tagFilter.length > 0 ? '' : 'none' },
     onclick: () => { state.tagFilter = []; syncTagUI(); void refreshResults(); }
-  }, el('span', { style: { display: 'inline-flex', alignItems: 'center', gap: '5px' } }, icon('x', 12), 'پاک‌کردن فیلتر برچسب‌ها'));
+  }, el('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-1)' } }, icon('x', 12), 'پاک‌کردن فیلتر برچسب‌ها'));
 
   const syncTagUI = () => {
     for (const b of [...filterChips, clearChip]) {
@@ -737,7 +737,7 @@ async function renderManagerTab(box, container, myGen) {
       customDates,
       searchInput,
       el('div', {},
-        el('div', { class: 'sanj-hint', style: { marginBottom: '6px' } }, 'فیلتر برچسب (پیش‌فرض: بدون فیلتر)'),
+        el('div', { class: 'sanj-hint', style: { marginBottom: 'var(--sp-2)' } }, 'فیلتر برچسب (پیش‌فرض: بدون فیلتر)'),
         tagFilterChips
       )
     )
@@ -776,7 +776,7 @@ async function renderManagerTab(box, container, myGen) {
       sanjKpi('ارجاع تخصصی', fa(stats.referrals), stats.total ? `نرخ ارجاع ٪${fa(stats.referralRate)}` : '—', stats.referrals > 0 ? 'error' : 'neutral'),
       sanjKpi('موارد خاص', fa(stats.noCoop + stats.noReg), `عدم همکاری ${fa(stats.noCoop)} • بی‌ثبت‌نام ${fa(stats.noReg)}`, 'accent')
       ),
-      el('p', { class: 'sanj-hint', style: { margin: '8px 4px 0', lineHeight: 'var(--lh-relaxed)' } },
+      el('p', { class: 'sanj-hint', style: { margin: 'var(--sp-2) var(--sp-1) 0', lineHeight: 'var(--lh-relaxed)' } },
         'تعریف «عادی»: بدون برچسب ارجاع تخصصی (بینایی، شنوایی، هوش، جسمی‌حرکتی) و بدون موارد خاص (عدم همکاری، نداشتن ثبت‌نام) — برچسب کارمند سنجش‌گر و مهدکودک مبدأ «عادی» را تغییر نمی‌دهد.'
       )
     );
@@ -788,11 +788,11 @@ async function renderManagerTab(box, container, myGen) {
         el('div', { class: 'card__title' }, 'تفکیک برچسب‌ها'),
         el('span', { class: 'cell-sub' }, 'کارمند سنجش‌گر، مهدکودک مبدأ و وضعیت‌ها')
       ),
-      el('div', { class: 'card__body', style: { display: 'grid', gap: '8px' } },
+      el('div', { class: 'card__body', style: { display: 'grid', gap: 'var(--sp-2)' } },
         ...stats.perTag.slice(0, 12).map((t) => {
           const max = Math.max(...stats.perTag.map((x) => x.count));
           const color = t.kind === 'referral' ? 'var(--error)' : t.kind === 'status' ? 'var(--accent)' : 'var(--primary)';
-          return el('div', { style: { display: 'flex', alignItems: 'center', gap: '10px' } },
+          return el('div', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-3)' } },
             el('span', { class: 'cell-main', style: { width: '150px', flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } },
               t.kind === 'custom' ? '# ' : '', t.label
             ),
@@ -843,7 +843,7 @@ async function renderManagerTab(box, container, myGen) {
     const listCard = el('div', { class: 'card', style: { marginTop: 'var(--sp-4)' } },
       el('div', { class: 'card__head' },
         el('div', { class: 'card__title' }, 'سنجش‌های بازه'),
-        el('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } },
+        el('div', { style: { display: 'flex', gap: 'var(--sp-2)', alignItems: 'center' } },
           el('span', { class: 'badge badge--neutral' }, `${fa(entries.length)} ردیف`),
           el('button', {
             class: 'btn btn--soft btn--sm',
@@ -854,7 +854,7 @@ async function renderManagerTab(box, container, myGen) {
       ),
       el('div', { class: 'card__body card__body--flush', style: { overflowX: 'auto' } },
         entries.length === 0
-          ? el('div', { style: { padding: 'var(--sp-4)' } }, emptyState({ iconName: 'clip', title: 'برای این فیلترها موردی نیست' }))
+          ? el('div', { style: { padding: 'var(--sp-4)' } }, emptyState({ iconName: 'clip', title: 'برای این فیلترها موردی نیست', hint: 'بازهٔ زمانی یا فیلتر برچسب را عوض کنید — ثبت تازه هم از تب «ثبت روزانه» انجام می‌شود.' }))
           : buildEntriesTable(entries)
       )
     );
@@ -931,7 +931,7 @@ function buildEntriesTable(entries) {
         render: (e) =>
           el(
             'div',
-            { style: { display: 'flex', flexWrap: 'wrap', gap: '4px' } },
+            { style: { display: 'flex', flexWrap: 'wrap', gap: 'var(--sp-1)' } },
             hasPreTag(e.tags)
               ? e.tags.map((t) => tagBadge(t))
               : [normalBadge(), ...e.tags.filter((t) => !KIND_BY_LABEL.has(t)).map((t) => tagBadge(t))]
@@ -949,7 +949,7 @@ function buildEntriesTable(entries) {
       }
     ],
     rows: entries,
-    empty: { iconName: 'clip', title: 'برای این فیلترها موردی نیست' }
+    empty: { iconName: 'clip', title: 'برای این فیلترها موردی نیست', hint: 'بازهٔ زمانی یا فیلتر برچسب را عوض کنید — ثبت تازه هم از تب «ثبت روزانه» انجام می‌شود.' }
   });
 }
 
@@ -1011,9 +1011,12 @@ export async function renderScreening(container, ctx = {}) {
     state.tab = 'daily';
   }
   const head = el('div', { class: 'page-head' },
-    el('div', { class: 'page-head__title' }, 'سنجش روزانه'),
-    el('span', { class: 'badge badge--neutral', title: 'غربال نوآموزان بدو ورود به دبستان' },
-      'بینایی • شنوایی • هوش • جسمی‌حرکتی — ', WEEKDAY_NAMES[iranianWeekdayOfYmd(tehranTodayYmd())]
+    el('div', {},
+      el('div', { class: 'page-head__title' }, 'سنجش روزانه'),
+      el('div', { class: 'page-head__desc' },
+        'غربال نوآموزان بدو ورود به دبستان — بینایی • شنوایی • هوش • جسمی‌حرکتی. امروز: ',
+        WEEKDAY_NAMES[iranianWeekdayOfYmd(tehranTodayYmd())]
+      )
     )
   );
 
@@ -1054,7 +1057,7 @@ export async function renderScreeningDayWidget(box, ymd) {
   try {
     entries = (await api.get(`/api/screening${qs({ from: ymd, to: ymd })}`)).data.entries;
   } catch {
-    body.replaceChildren(el('div', { class: 'cell-sub' }, 'بارگذاری فهرست سنجش ناموفق بود'));
+    body.replaceChildren(el('div', { class: 'cell-sub' }, 'بارگذاری فهرست سنجش ناموفق بود — اتصال را بررسی کنید و ویجت را دوباره باز کنید.'));
     return;
   }
 

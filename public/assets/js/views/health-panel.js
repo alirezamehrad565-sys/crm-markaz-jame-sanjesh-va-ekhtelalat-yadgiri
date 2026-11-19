@@ -236,18 +236,18 @@ function syncSection(sync, syncError) {
         el('h3', { style: { margin: 0 } }, '۴ — هم‌گامی با مرکز'),
         headBadge
       ),
-      el('p', { class: 'hint-text', style: { margin: '4px 0 0' } },
+      el('p', { class: 'hint-text', style: { margin: 'var(--sp-1) 0 0' } },
         'موتور هم‌گامیِ همین نود با مرکز — ثبت‌های «در انتظار ارسال» روی خود نود محفوظ‌اند و با بازگشت خط، ارسال خودکار از سر گرفته می‌شود؛ وضعیت با بازخوانی ۶۰ثانیه‌ای پنل تازه می‌شود.')
     ),
     el('div', {},
       syncError
         ? el('div', { class: 'card__body' },
             el('p', { class: 'hint-text' },
-              `وضعیت هم‌گامی نامشخص — خواندن درگاه وضعیت ناموفق بود: ${syncError?.message ?? 'خطای نامشخص'}؛ بقیهٔ پنل سالم است.`))
+              `وضعیت هم‌گامی نامشخص — خواندن اطلاعات وضعیت ناموفق بود: ${syncError?.message ?? 'خطای نامشخص'}؛ بقیهٔ پنل سالم است.`))
         : !sync
           ? el('div', { class: 'card__body' },
               el('p', { class: 'hint-text' },
-                'وضعیت هم‌گامی نامشخص — پاسخ درگاه وضعیت خوانا نبود؛ اگر سامانه تازه ارتقا یافته، شاید این درگاه هنوز در آن نسخه مستقر نشده باشد.'))
+                'وضعیت هم‌گامی نامشخص — اطلاعات وضعیت خوانا نبود؛ چند لحظه بعد خودکار دوباره بررسی می‌شود.'))
           : [
               el('div', { class: 'ob-row' },
                 el('div', { class: 'ob-row__main' },
@@ -308,9 +308,10 @@ let engineWatchdogInstalled = false;
 let engineBannerHideTimer = null;
 
 const ENGINE_BANNER_TONES = {
-  warn: { background: '#fef9c3', color: '#854d0e', border: '#fde047' },
-  ok: { background: '#dcfce7', color: '#166534', border: '#86efac' },
-  danger: { background: '#fee2e2', color: '#991b1b', border: '#fca5a5' }
+  // رنگ‌ها از توکن پالت (هر دو تم نسخهٔ خودشان را می‌گیرند) — رنگ خام inline ممنوع
+  warn: { background: 'var(--warning-soft)', color: 'var(--on-warning-soft)', border: 'var(--warning)' },
+  ok: { background: 'var(--success-soft)', color: 'var(--on-success-soft)', border: 'var(--success)' },
+  danger: { background: 'var(--error-soft)', color: 'var(--on-error-soft)', border: 'var(--error)' }
 };
 
 /** گرهٔ بنر — تک‌نمونه روی body؛ در محیط بی‌DOM هرگز ساخته نمی‌شود */
@@ -324,15 +325,15 @@ function engineBannerNode() {
     'aria-live': 'polite',
     style: {
       position: 'fixed',
-      top: '12px',
+      top: 'var(--sp-3)',
       left: '50%',
       transform: 'translateX(-50%)',
       zIndex: '9999',
-      padding: '8px 18px',
+      padding: 'var(--sp-2) var(--sp-4)',
       borderRadius: '10px',
       fontSize: '0.85rem',
       fontWeight: '600',
-      boxShadow: '0 4px 14px rgba(0,0,0,0.18)',
+      boxShadow: 'var(--shadow-2)',
       display: 'none',
       maxWidth: 'min(92vw, 560px)',
       textAlign: 'center'
@@ -440,7 +441,7 @@ export function healthToneView(tone) {
  */
 export function engineSignalView(data) {
   if (!data || typeof data !== 'object') {
-    return { tone: 'error', label: 'پاسخ نمی‌دهد', detail: 'درگاه سلامت موتور خوانا نبود' };
+    return { tone: 'error', label: 'پاسخ نمی‌دهد', detail: 'سلامت سامانه پاسخ نداد — چند لحظه بعد دوباره بررسی کنید' };
   }
   const dbOk = data?.db?.ok === true;
   const version = typeof data?.version === 'string' && data.version ? data.version : null;
@@ -509,7 +510,7 @@ export function syncLagSignalView(sync) {
 /** چراغ ۴ — مصرف سهمیهٔ مرکز. بدترین سطح میان سه شاخص؛ درگاه ناآشنا = خاکستری */
 export function quotaSignalView(quota) {
   if (!quota || typeof quota !== 'object') {
-    return { tone: 'unknown', label: 'دریافت نشد', detail: 'درگاه سهمیهٔ مرکز از این دستگاه در دسترس نیست' };
+    return { tone: 'unknown', label: 'دریافت نشد', detail: 'اطلاعات سهمیهٔ مرکز فعلاً در دسترس نیست — با اتصال شبکه دوباره بررسی کنید' };
   }
   const levels = ['requests', 'rows_written', 'rows_read']
     .map((k) => (quota.level && typeof quota.level === 'object' ? quota.level[k] : null))
@@ -1626,7 +1627,7 @@ export async function renderHealthPanel(outlet) {
       try {
         const fresh = unwrapQuota(await api.get('/api/central/quota'));
         if (!fresh) {
-          setResult(resultLine, 'پاکت سهمیه خوانا نبود — بعداً دوباره بزنید', 'warn');
+          setResult(resultLine, 'اطلاعات سهمیه دریافت نشد — چند لحظه بعد دوباره تلاش کنید', 'warn');
           return;
         }
         const pct = fresh.percent && typeof fresh.percent === 'object' ? fresh.percent.requests : null;
@@ -1677,7 +1678,7 @@ export async function renderHealthPanel(outlet) {
     return el('div', { class: 'card', style: { marginBottom: 'var(--sp-4)' } },
       el('div', { class: 'card__head' },
         el('h3', { style: { margin: 0 } }, '۱ — چراغ‌های وضعیت'),
-        el('p', { class: 'hint-text', style: { margin: '4px 0 0' } },
+        el('p', { class: 'hint-text', style: { margin: 'var(--sp-1) 0 0' } },
           'پنج چراغ: موتور محلی، مرکز، هم‌گامی، سهمیهٔ مرکز، پشتیبان — سبز یعنی سالم، زرد یعنی ناتمام ولی بی‌خطر، قرمز یعنی نیاز به اقدام. هر چراغ دکمهٔ اقدام خودش را دارد؛ نتیجهٔ هر اقدام زیر همان کارت می‌آید.')
       ),
       el('div', { class: 'card__body', style: { display: 'flex', gap: 'var(--sp-3)', flexWrap: 'wrap' } },
@@ -1737,7 +1738,7 @@ export async function renderHealthPanel(outlet) {
       el('div', { class: 'ob-section__head' },
         el('div', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', flexWrap: 'wrap' } },
           el('h3', { style: { margin: 0 } }, '۲ — سرور محلی روی شبکه'),
-          el('p', { class: 'hint-text', style: { margin: '4px 0 0' } },
+          el('p', { class: 'hint-text', style: { margin: 'var(--sp-1) 0 0' } },
             'وضعیت زندهٔ سرور محلی و نشانی واقعی آن روی شبکه — پورت‌ها از همین بوت؛ هر ۳۰ ثانیه و با هر رویداد پوسته تازه می‌شود. موبایلِ همان وای‌فای نشانی «موبایل» را باز می‌کند.')
         )
       ),
@@ -1832,7 +1833,7 @@ export async function renderHealthPanel(outlet) {
       el('div', { class: 'ob-section__head' },
         el('div', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', flexWrap: 'wrap' } },
           el('h3', { style: { margin: 0 } }, '۳ — سایت ابری (کلادفلر)'),
-          el('p', { class: 'hint-text', style: { margin: '4px 0 0' } },
+          el('p', { class: 'hint-text', style: { margin: 'var(--sp-1) 0 0' } },
             'با کلید کلادفلر، سرور مرکزی روی حساب خودتان ساخته می‌شود: پایگاه D1 + ورکر markaz-central + دامنهٔ workers.dev — و همین دستگاه با آن اطلاعات رد و بدل می‌کند. «دریافت اطلاعات» تازه‌ها را از ابر می‌گیرد و «ارسال اطلاعات» کارهای این دستگاه را می‌فرستد؛ وضعیت هر ۳۰ ثانیه تازه می‌شود.')
         )
       ),
@@ -2056,7 +2057,7 @@ export async function renderHealthPanel(outlet) {
     return el('div', { class: 'card', style: { marginBottom: 'var(--sp-4)' } },
       el('div', { class: 'card__head' },
         el('h3', { style: { margin: 0 } }, '۵ — کارهای اضطراری'),
-        el('p', { class: 'hint-text', style: { margin: '4px 0 0' } },
+        el('p', { class: 'hint-text', style: { margin: 'var(--sp-1) 0 0' } },
           'سه کنش نجات با تأیید فارسی و حالت مشغول: راه‌اندازی دوبارهٔ سامانه (چند ثانیه قطع می‌شود)، پشتیبان فوری (فایل روی حافظهٔ جدا نگه دارید) و بستهٔ گزارش خطا برای پشتیبانی.')
       ),
       el('div', { class: 'card__body' },
@@ -2085,8 +2086,8 @@ export async function renderHealthPanel(outlet) {
           el('h3', { style: { margin: 0 } }, '۶ — هشدارهای فعال'),
           headBadge
         ),
-        el('p', { class: 'hint-text', style: { margin: '4px 0 0' } },
-          `${stamp} — ارزیابی هر شب در کرون دایجست انجام می‌شود؛ وقتی هشدار باشد، پیام فارسی برای مدیر روی کانال بات می‌آید.`)
+        el('p', { class: 'hint-text', style: { margin: 'var(--sp-1) 0 0' } },
+          `${stamp} — ارزیابی هر شب خودکار انجام می‌شود؛ وقتی هشدار باشد، پیام فارسی برای مدیر روی کانال بات می‌آید.`)
       ),
       count === 0
         ? el('div', {}, el('div', { class: 'ob-row' },
@@ -2169,8 +2170,8 @@ export async function renderHealthPanel(outlet) {
 
     root.replaceChildren(
       el('div', { class: 'page-head' },
-        el('h2', {}, 'پنل نجات و سلامت'),
-        el('p', { class: 'hint-text' },
+        el('h2', { class: 'page-head__title' }, 'پنل نجات و سلامت'),
+        el('p', { class: 'page-head__desc' },
           `شش بخش مرتب: چراغ‌ها · سرور محلی · سایت ابری · هم‌گامی · کارهای اضطراری · هشدارها — بازخوانی خودکار هر ۶۰ ثانیه · نسخهٔ ${data?.version ?? '—'}${data?.env ? ` (${data.env})` : ''}`)
       ),
 
@@ -2199,7 +2200,7 @@ export async function renderHealthPanel(outlet) {
       alertsSection(data?.alerts, data?.alerts_last_evaluated_at), // ۶ — هشدارهای فعال
 
       el('p', { class: 'hint-text' },
-        `آخرین بازخوانی: ${formatJalaliDateTime(data?.now)} — این پنل جایگزین «پنل سلامت» پرحجم است؛ دادهٔ بخش‌های حذف‌شده در درگاه‌های سرور زنده مانده است.`)
+        `آخرین بازخوانی: ${formatJalaliDateTime(data?.now)}`)
     );
   }
 

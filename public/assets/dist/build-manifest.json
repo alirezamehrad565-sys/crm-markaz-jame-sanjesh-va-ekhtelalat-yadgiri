@@ -1,6 +1,6 @@
 {
   "_comment": "مانیفست باندل کلاینت؛ گات بودجه (perf-budget.mjs) از این می‌خواند. فایل ساخته‌شده است — دستی ویرایش نشود.",
-  "boot": "boot.VZKCC2F4.js",
+  "boot": "boot.3MSIWYNG.js",
   "bootImports": [
     "chunk.KPX3C6MD.js",
     "chunk.TQV6FOIY.js",
@@ -11,21 +11,21 @@
   ],
   "outputs": [
     {
-      "name": "appointments.C6VUXSAH.js",
-      "raw": 42785,
-      "gz": 13679,
+      "name": "appointments.XMCQ7PAF.js",
+      "raw": 43651,
+      "gz": 13860,
       "role": "lazy"
     },
     {
-      "name": "archive.PK3EO5US.js",
-      "raw": 11367,
-      "gz": 4368,
+      "name": "archive.RCFKAUNF.js",
+      "raw": 11316,
+      "gz": 4330,
       "role": "lazy"
     },
     {
-      "name": "backup.C4VD4EPM.js",
-      "raw": 17672,
-      "gz": 6078,
+      "name": "backup.J6PHTVFQ.js",
+      "raw": 19365,
+      "gz": 6490,
       "role": "lazy"
     },
     {
@@ -35,9 +35,9 @@
       "role": "lazy"
     },
     {
-      "name": "boot.VZKCC2F4.js",
-      "raw": 78479,
-      "gz": 25652,
+      "name": "boot.3MSIWYNG.js",
+      "raw": 78501,
+      "gz": 25649,
       "role": "boot"
     },
     {
@@ -47,15 +47,15 @@
       "role": "lazy"
     },
     {
-      "name": "case-event-types.YISI7WHF.js",
-      "raw": 39268,
-      "gz": 11860,
+      "name": "case-event-types.SQC435MH.js",
+      "raw": 39801,
+      "gz": 11837,
       "role": "lazy"
     },
     {
-      "name": "center-kpi.AQCXKHX5.js",
-      "raw": 7044,
-      "gz": 2778,
+      "name": "center-kpi.QHZ5YNTC.js",
+      "raw": 7039,
+      "gz": 2767,
       "role": "lazy"
     },
     {
@@ -239,15 +239,9 @@
       "role": "lazy"
     },
     {
-      "name": "clearbook.RM6AQFOW.js",
-      "raw": 37528,
-      "gz": 11958,
-      "role": "lazy"
-    },
-    {
-      "name": "cloud-setup.2GTC7S2U.js",
-      "raw": 26786,
-      "gz": 8109,
+      "name": "clearbook.ZOGDFKFQ.js",
+      "raw": 37826,
+      "gz": 12021,
       "role": "lazy"
     },
     {
@@ -257,33 +251,39 @@
       "role": "lazy"
     },
     {
+      "name": "cloud-setup.LL4OQ6ZN.js",
+      "raw": 26834,
+      "gz": 8120,
+      "role": "lazy"
+    },
+    {
       "name": "coordinator.LTEMZHOK.js",
       "raw": 284,
       "gz": 207,
       "role": "lazy"
     },
     {
-      "name": "docs.CFSYFW57.js",
-      "raw": 15831,
-      "gz": 5499,
+      "name": "docs.3C636ZS2.js",
+      "raw": 16084,
+      "gz": 5564,
       "role": "lazy"
     },
     {
-      "name": "exercises.GZHORM3Z.js",
-      "raw": 41361,
-      "gz": 12385,
+      "name": "exercises.UXT3Y5DV.js",
+      "raw": 41569,
+      "gz": 12428,
       "role": "lazy"
     },
     {
-      "name": "family-surveys.AAYJDZAL.js",
-      "raw": 28041,
-      "gz": 8727,
+      "name": "family-surveys.VV7PL62K.js",
+      "raw": 28517,
+      "gz": 8775,
       "role": "lazy"
     },
     {
-      "name": "finance.VCWIO6OP.js",
-      "raw": 24278,
-      "gz": 6853,
+      "name": "finance.YAQ42RXB.js",
+      "raw": 25362,
+      "gz": 7183,
       "role": "lazy"
     },
     {
@@ -293,21 +293,21 @@
       "role": "lazy"
     },
     {
-      "name": "games.ASG6DKFL.js",
-      "raw": 12943,
-      "gz": 4722,
+      "name": "games.BQWK5YOX.js",
+      "raw": 13513,
+      "gz": 4829,
       "role": "lazy"
     },
     {
-      "name": "health-panel.YZ3Z4W26.js",
-      "raw": 58265,
-      "gz": 16888,
+      "name": "health-panel.7NLFNNPF.js",
+      "raw": 58317,
+      "gz": 16754,
       "role": "lazy"
     },
     {
-      "name": "outbox.SNBYEO2M.js",
-      "raw": 5263,
-      "gz": 2227,
+      "name": "outbox.X6UTLTMN.js",
+      "raw": 5728,
+      "gz": 2402,
       "role": "lazy"
     },
     {
@@ -317,15 +317,15 @@
       "role": "lazy"
     },
     {
-      "name": "progress-report.U22MUL33.js",
-      "raw": 32371,
-      "gz": 10710,
+      "name": "progress-report.OFXJH4FY.js",
+      "raw": 32607,
+      "gz": 10777,
       "role": "lazy"
     },
     {
-      "name": "reports.WMSSV2ZP.js",
-      "raw": 22075,
-      "gz": 6573,
+      "name": "reports.I5BI4UD2.js",
+      "raw": 22871,
+      "gz": 6794,
       "role": "lazy"
     },
     {
@@ -335,33 +335,33 @@
       "role": "lazy"
     },
     {
-      "name": "schools.MMNEGXNF.js",
-      "raw": 20119,
-      "gz": 6537,
+      "name": "schools.7JV7HRB3.js",
+      "raw": 20256,
+      "gz": 6527,
       "role": "lazy"
     },
     {
-      "name": "screening.6CKDWY4Z.js",
-      "raw": 26182,
-      "gz": 8785,
+      "name": "screening.SBOZTUOL.js",
+      "raw": 26714,
+      "gz": 8884,
       "role": "lazy"
     },
     {
-      "name": "settings.6NYOTYWB.js",
-      "raw": 59243,
-      "gz": 17156,
+      "name": "settings.QA2VFYKK.js",
+      "raw": 59559,
+      "gz": 17228,
       "role": "lazy"
     },
     {
-      "name": "special-needs.D2XLHB2M.js",
-      "raw": 9262,
-      "gz": 3673,
+      "name": "special-needs.WTGTLO5M.js",
+      "raw": 9881,
+      "gz": 3868,
       "role": "lazy"
     },
     {
-      "name": "staff.NA5ZNEJ7.js",
-      "raw": 17133,
-      "gz": 5986,
+      "name": "staff.LABVIY4I.js",
+      "raw": 17383,
+      "gz": 6072,
       "role": "lazy"
     },
     {
@@ -371,21 +371,21 @@
       "role": "lazy"
     },
     {
-      "name": "student-profile.6KQ52GDE.js",
-      "raw": 166831,
-      "gz": 48146,
+      "name": "student-profile.TA22MRP5.js",
+      "raw": 167006,
+      "gz": 48168,
       "role": "lazy"
     },
     {
-      "name": "students.X2FV5SLM.js",
-      "raw": 16698,
-      "gz": 5861,
+      "name": "students.V76F6FJB.js",
+      "raw": 16647,
+      "gz": 5827,
       "role": "lazy"
     },
     {
-      "name": "treatment-plans.UHTAQODS.js",
-      "raw": 10865,
-      "gz": 4140,
+      "name": "treatment-plans.NXIVZ6PN.js",
+      "raw": 11040,
+      "gz": 4201,
       "role": "lazy"
     },
     {
@@ -413,15 +413,15 @@
       "role": "lazy"
     },
     {
-      "name": "working-day.3MV3GI43.js",
+      "name": "working-day.NXCXRKUW.js",
       "raw": 30981,
-      "gz": 9859,
+      "gz": 9860,
       "role": "lazy"
     }
   ],
   "totals": {
     "files": 68,
-    "raw": 1268053,
-    "gz": 413836
+    "raw": 1277750,
+    "gz": 415842
   }
 }

@@ -67,7 +67,7 @@ function deltaLine(cur, prev, key, { suffix = '' } = {}) {
 
 function sectionCard(title, desc, body, { extra = null } = {}) {
   return el('div', { class: 'card', style: { padding: 'var(--sp-4)', marginBottom: 'var(--sp-4)' } },
-    el('div', { style: { display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap', margin: '0 0 var(--sp-3)' } },
+    el('div', { style: { display: 'flex', alignItems: 'baseline', gap: 'var(--sp-2)', flexWrap: 'wrap', margin: '0 0 var(--sp-3)' } },
       el('b', { style: { fontSize: 'var(--fs-md)' } }, title),
       desc ? el('span', { class: 'cell-sub' }, desc) : null,
       extra ? el('span', { style: { marginInlineStart: 'auto' } }, extra) : null
@@ -141,7 +141,7 @@ async function renderBoard(zone) {
     const has = ins.trend.some((b) => b[key] !== null);
     const points = ins.trend.map((b) => ({ x: formatJalaliShort(b.from_ymd), y: b[key] ?? 0 }));
     return el('div', { style: { minWidth: '0' } },
-      el('div', { style: { fontSize: 'var(--fs-sm)', fontWeight: 600, margin: '0 0 4px' } }, title),
+      el('div', { style: { fontSize: 'var(--fs-sm)', fontWeight: 600, margin: '0 0 var(--sp-1)' } }, title),
       has
         ? lineChart({ points, yMax: 100, height: 170, valueFormatter: (v) => `${fa(Math.round(v))}٪`, threshold: { value: SAT_OK, label: `هدف ${pct(SAT_OK)}` } })
         : el('p', { class: 'chart__empty' }, 'در این بازه پاسخی ثبت نشده')
@@ -210,7 +210,7 @@ async function renderBoard(zone) {
     { extra: el('span', { class: 'cell-sub' }, 'نظرسنجیِ بدون درمانگر انتخابی به نام ثبت‌کننده می‌نشیند') }
   );
 
-  const windowChips = el('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center', margin: '0 0 var(--sp-4)' } },
+  const windowChips = el('div', { style: { display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap', alignItems: 'center', margin: '0 0 var(--sp-4)' } },
     el('span', { class: 'cell-sub' }, 'بازه:'),
     dayChip(7, '۷ روز'),
     dayChip(30, '۳۰ روز'),
@@ -220,7 +220,7 @@ async function renderBoard(zone) {
   );
 
   const alertBand = alerts.length
-    ? el('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px', margin: '0 0 var(--sp-4)' } },
+    ? el('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-2)', margin: '0 0 var(--sp-4)' } },
         ...alerts.map((a) => el('div', { class: `alert alert--${a.tone}` }, icon('alert', 16), el('div', { class: 'alert__body' }, a.text))))
     : null;
 
@@ -258,11 +258,11 @@ async function renderVoice(zone) {
 
   function paintControls() {
     controls.replaceChildren(
-      el('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center', margin: '0 0 var(--sp-4)' } },
+      el('div', { style: { display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap', alignItems: 'center', margin: '0 0 var(--sp-4)' } },
         el('span', { class: 'cell-sub' }, 'تم:'),
         chip('همه', vstate.theme === 'all', () => { vstate.theme = 'all'; paint(); }),
         ...ins.themes.map((t) => chip(`${t.label} (${fa(t.count)})`, vstate.theme === t.id, () => { vstate.theme = t.id; paint(); })),
-        el('span', { style: { width: '12px' } }),
+        el('span', { style: { width: 'var(--sp-3)' } }),
         chip(vstate.negativeOnly ? '✓ فقط نیازمند پیگیری' : 'فقط نیازمند پیگیری', vstate.negativeOnly,
           () => { vstate.negativeOnly = !vstate.negativeOnly; paintControls(); paint(); })
       )
@@ -291,20 +291,21 @@ async function renderVoice(zone) {
         ? sectionCard('فراوانی تم‌ها', 'متن‌ها با کلیدواژه به تم تقسیم شده‌اند — جهت برنامهٔ بهبود',
             hbars({ items: ins.themes.map((t) => ({ label: t.label, value: t.count, tone: t.negative_count > 0 ? 'warning' : 'accent', hint: t.negative_count > 0 ? `${fa(t.negative_count)} متن نیازمند پیگیری` : null })) }))
         : null,
-      el('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px' } },
+      el('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-2)' } },
         ...rows.map((n) => noteCard(n)))
     );
   }
 
   function noteCard(n) {
     const kind = KIND_META[n.kind] ?? KIND_META.general;
-    return el('div', { class: 'card', dataset: { id: n.id }, style: { padding: 'var(--sp-3)', display: 'flex', flexDirection: 'column', gap: '6px' } },
-      el('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' } },
+    return el('div', { class: 'card', dataset: { id: n.id }, style: { padding: 'var(--sp-3)', display: 'flex', flexDirection: 'column', gap: 'var(--sp-2)' } },
+      el('div', { style: { display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap', alignItems: 'center' } },
         n.negative ? el('span', { class: 'badge badge--error' }, icon('alert', 12), ' نیازمند پیگیری') : null,
         ...n.themes.map((t) => el('span', { class: 'badge badge--neutral' }, THEME_LABEL[t] ?? t)),
         el('span', { class: `badge ${kind.badge}` }, kind.label),
         el('span', { class: 'cell-sub', style: { marginInlineStart: 'auto' } },
-          n.student_name || '', n.staff_name ? ` · درمانگر: ${n.staff_name}` : '', ` · ${formatJalaliDateTime(n.created_at)}`)
+          [n.student_name, n.staff_name ? `درمانگر: ${n.staff_name}` : '', formatJalaliDateTime(n.created_at)]
+            .filter(Boolean).join(' · '))
       ),
       el('div', { style: { background: 'var(--surface-2)', borderRadius: 'var(--radius-sm)', padding: 'var(--sp-3)', whiteSpace: 'pre-wrap' } }, `«${n.note}»`)
     );
@@ -330,18 +331,18 @@ async function renderSurveys(zone, { openCreate = false } = {}) {
   const summaryZone = el('div', {});
   const searchInput = el('input', { class: 'input', type: 'search', placeholder: 'جستجوی نام دانش‌آموز…', style: { maxWidth: '260px' } });
 
-  const chips = el('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', margin: '0 0 var(--sp-4)', alignItems: 'center' } },
+  const chips = el('div', { style: { display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap', margin: '0 0 var(--sp-4)', alignItems: 'center' } },
     el('span', { class: 'cell-sub' }, 'فرم:'),
     kindChip('all', 'همه'),
     kindChip('discharge', 'پایان دوره'),
     kindChip('progress', 'حین درمان'),
-    el('span', { style: { width: '12px' } }),
+    el('span', { style: { width: 'var(--sp-3)' } }),
     el('span', { class: 'cell-sub' }, 'وضعیت:'),
     statusChip('all', 'همه'),
     statusChip('pending', 'در انتظار پاسخ'),
     statusChip('completed', 'پاسخ داده شد'),
     statusChip('cancelled', 'لغو/مهلت‌گذشته'),
-    el('span', { style: { width: '12px' } }),
+    el('span', { style: { width: 'var(--sp-3)' } }),
     searchInput
   );
 
@@ -374,7 +375,7 @@ async function renderSurveys(zone, { openCreate = false } = {}) {
     const progressN = all.filter((s) => s.kind === 'progress').length;
 
     summaryZone.replaceChildren(
-      el('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap', margin: '0 0 var(--sp-4)', alignItems: 'center' } },
+      el('div', { style: { display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap', margin: '0 0 var(--sp-4)', alignItems: 'center' } },
         el('span', { class: 'badge badge--accent' }, `ارسال‌شده: ${fa(all.length)}`),
         el('span', { class: 'badge badge--warning' }, `در انتظار: ${fa(pendingN)}`),
         el('span', { class: 'badge badge--success' }, `پاسخ‌گرفته: ${fa(filled.length)}`),
@@ -441,36 +442,35 @@ async function renderSurveys(zone, { openCreate = false } = {}) {
     const kind = KIND_META[s.kind] ?? KIND_META.general;
     const expired = s.status === 'pending_family' && s.fillExpiresAt && new Date(s.fillExpiresAt).getTime() < Date.now();
     const scoreBadges = s.status === 'completed'
-      ? el('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', margin: '6px 0 0' } },
+      ? el('div', { style: { display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap', margin: 'var(--sp-2) 0 0' } },
           s.centerScore !== null && s.centerScore !== undefined ? el('span', { class: 'badge badge--neutral' }, `مرکز: ${fa(s.centerScore)}٪`) : null,
           s.therapistScore !== null && s.therapistScore !== undefined ? el('span', { class: 'badge badge--neutral' }, `درمانگر: ${fa(s.therapistScore)}٪`) : null,
           s.progressScore !== null && s.progressScore !== undefined ? el('span', { class: 'badge badge--neutral' }, `پیشرفت: ${fa(s.progressScore)}٪`) : null,
           s.nps !== null && s.nps !== undefined ? el('span', { class: 'badge badge--neutral' }, `توصیه: ${fa(s.nps)}/۱۰`) : null)
       : null;
     const note = s.note
-      ? el('div', { class: 'cell-sub', style: { marginTop: '6px', whiteSpace: 'pre-wrap' } }, `«${s.note}»`)
+      ? el('div', { class: 'cell-sub', style: { marginTop: 'var(--sp-2)', whiteSpace: 'pre-wrap' } }, `«${s.note}»`)
       : null;
-    return el('div', { class: 'card', dataset: { id: s.id }, style: { padding: 'var(--sp-3)', display: 'flex', flexDirection: 'column', gap: '6px' } },
-      el('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' } },
-        el('b', { style: { flex: '1', minWidth: '0' } }, s.studentName || 'دانش‌آموز'),
+    return el('div', { class: 'card', dataset: { id: s.id }, style: { padding: 'var(--sp-3)', display: 'flex', flexDirection: 'column', gap: 'var(--sp-2)' } },
+      el('div', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', flexWrap: 'wrap' } },
+        el('b', { style: { flex: '1', minWidth: '0' } }, s.studentName || 'بدون نام'),
         el('span', { class: `badge ${kind.badge}` }, kind.label),
         el('span', { class: `badge ${expired ? 'badge--error' : st.cls}` }, expired ? 'مهلت تمام شده' : st.label)
       ),
       el('div', { class: 'cell-sub' },
-        s.typeTitle || '',
-        s.therapistName ? ` · درمانگر مورد ارزیابی: ${s.therapistName}` : '',
-        ` · ساخت: ${formatJalaliDateTime(s.createdAt)}`
+        [s.typeTitle, s.therapistName ? `درمانگر مورد ارزیابی: ${s.therapistName}` : '', `ساخت: ${formatJalaliDateTime(s.createdAt)}`]
+          .filter(Boolean).join(' · ')
       ),
       scoreBadges,
       note,
-      el('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: 'auto' } },
+      el('div', { style: { display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap', marginTop: 'auto' } },
         s.status === 'completed'
           ? el('button', { class: 'btn btn--sm btn--soft', onclick: () => openDetailsModal(s) }, icon('info', 14), 'جزئیات پاسخ')
           : null,
         s.status === 'pending_family' && s.link
           ? el('button', { class: 'btn btn--sm btn--soft', onclick: async () => {
               try { await navigator.clipboard.writeText(s.link); toast('لینک فرم کپی شد — برای خانواده بفرستید'); }
-              catch { toastError(new Error('کپی لینک ممکن نشد — مرورگر اجازه نداد')); }
+              catch { toastError(new Error('کپی لینک ممکن نشد — مرورگر اجازه نداد؛ نشانی را از پیام قبلی دستی کپی کنید')); }
             } }, icon('copy', 14), 'کپی لینک')
           : null,
         s.status === 'pending_family'
@@ -490,7 +490,7 @@ async function renderSurveys(zone, { openCreate = false } = {}) {
           : null,
         s.status === 'pending_family'
           ? el('button', { class: 'btn btn--sm btn--soft', onclick: async () => {
-              const ok = await confirmModal({ title: 'لغو نظرسنجی', message: `نظرسنجی «${s.studentName}» لغو شود؟ خانواده دیگر نمی‌تواند پاسخ دهد.`, confirmLabel: 'لغو نظرسنجی', danger: true });
+              const ok = await confirmModal({ title: 'لغو نظرسنجی', message: `نظرسنجی «${s.studentName || 'بدون نام'}» لغو شود؟ خانواده دیگر نمی‌تواند پاسخ دهد.`, confirmLabel: 'لغو نظرسنجی', danger: true });
               if (!ok) return;
               try {
                 await api.post(`/api/case-events/${s.id}/cancel`, {});
@@ -511,13 +511,14 @@ async function renderSurveys(zone, { openCreate = false } = {}) {
       ['احتمال توصیه (۰-۱۰)', s.nps === null || s.nps === undefined ? null : fa(s.nps)]
     ].filter(([, v]) => v !== null);
     openModal({
-      title: `پاسخ نظرسنجی — ${s.studentName}`,
+      title: `پاسخ نظرسنجی — ${s.studentName || 'بدون نام'}`,
       body: el('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-2)' } },
         rows.length
-          ? el('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } },
+          ? el('div', { style: { display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap' } },
               ...rows.map(([k, v]) => el('span', { class: 'badge badge--neutral' }, `${k}: ${v}`)))
           : el('div', { class: 'cell-sub' }, 'امتیاز زیرمقیاسی ثبت نشده است.'),
-        el('div', { class: 'cell-sub' }, `فرم: ${s.typeTitle || KIND_META[s.kind]?.label || ''} · پاسخ: ${formatJalaliDateTime(s.sentAt ?? s.createdAt)}`),
+        el('div', { class: 'cell-sub' },
+          [`فرم: ${s.typeTitle || KIND_META[s.kind]?.label || 'نامشخص'}`, `پاسخ: ${formatJalaliDateTime(s.sentAt ?? s.createdAt)}`].join(' · ')),
         s.note
           ? el('div', { style: { background: 'var(--surface-2)', borderRadius: 'var(--radius-sm)', padding: 'var(--sp-3)', whiteSpace: 'pre-wrap' } }, `«${s.note}»`)
           : el('div', { class: 'cell-sub' }, 'متن پیشنهادی ثبت نشده — پاسخ بی‌نام در شاخص‌های مرکز تجمیع شده است.')
@@ -565,7 +566,7 @@ async function renderSurveys(zone, { openCreate = false } = {}) {
       return;
     }
     if (students.length === 0) {
-      toast('دانش‌آموز فعالی برای نظرسنجی نیست');
+      toast('دانش‌آموز فعالی برای نظرسنجی نیست — اول از «دانش‌آموزان» دانش‌آموز فعال ثبت کنید');
       paintList();
       return;
     }
@@ -573,8 +574,8 @@ async function renderSurveys(zone, { openCreate = false } = {}) {
     let kind = 'discharge';
     const checked = new Map(students.map((s) => [s.id, false]));
     const searchStudent = el('input', { class: 'input', type: 'search', placeholder: 'جستجوی نام دانش‌آموز…', style: { margin: '0 0 var(--sp-2)' } });
-    const listWrap = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '280px', overflowY: 'auto', padding: '4px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)' } });
-    const footNote = el('div', { class: 'cell-sub', style: { marginTop: '6px' } });
+    const listWrap = el('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-1)', maxHeight: '280px', overflowY: 'auto', padding: 'var(--sp-1)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)' } });
+    const footNote = el('div', { class: 'cell-sub', style: { marginTop: 'var(--sp-2)' } });
     const therapists = staffList.filter((x) => !x.role || x.role === 'therapist');
     const therapistSel = el('select', { class: 'input' },
       el('option', { value: '' }, '— درمانگر مورد ارزیابی (اختیاری) —'),
@@ -596,14 +597,14 @@ async function renderSurveys(zone, { openCreate = false } = {}) {
           btn.classList.add('is-selected');
         }
       },
-        el('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } },
+        el('div', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)' } },
           icon(key === 'discharge' ? 'medal' : 'activity', 15),
           el('b', { style: { fontSize: 'var(--fs-sm)' } }, title)),
-        el('div', { class: 'cell-sub', style: { marginTop: '4px' } }, `${hint} — حدود ${minutes} دقیقه`)
+        el('div', { class: 'cell-sub', style: { marginTop: 'var(--sp-1)' } }, `${hint} — حدود ${minutes} دقیقه`)
       );
       return btn;
     };
-    const kindRow = el('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } },
+    const kindRow = el('div', { style: { display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap' } },
       kindCard('discharge', 'پایان دوره', 'ترخیص و اتمام جلسه‌ها — تجربهٔ کل دوره + پیشرفت', '۴'),
       kindCard('progress', 'حین درمان', 'میانهٔ دوره — کوتاه‌تر برای نرخ پاسخ بالاتر', '۲')
     );
@@ -616,7 +617,7 @@ async function renderSurveys(zone, { openCreate = false } = {}) {
     const rowOf = (s) => {
       const cb = el('input', { type: 'checkbox', checked: checked.get(s.id), style: { width: '17px', height: '17px', accentColor: 'var(--brand)', flex: 'none' } });
       cb.addEventListener('change', () => { checked.set(s.id, cb.checked); syncFooter(); });
-      return el('label', { dataset: { sid: s.id }, style: { display: 'flex', alignItems: 'center', gap: '9px', padding: '7px 10px', background: 'var(--surface-2)', borderRadius: 'var(--radius-sm)', cursor: 'pointer' } },
+      return el('label', { dataset: { sid: s.id }, style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', padding: 'var(--sp-2) var(--sp-3)', background: 'var(--surface-2)', borderRadius: 'var(--radius-sm)', cursor: 'pointer' } },
         cb,
         el('span', { style: { flex: '1', minWidth: '0', fontSize: '13px' } }, studentNameOf(s))
       );

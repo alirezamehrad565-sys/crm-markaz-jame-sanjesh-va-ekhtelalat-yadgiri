@@ -762,7 +762,7 @@ export function renderExercises(container) {
       ),
       ex.description ? el('p', { class: 'exb-card__desc', title: ex.description }, ex.description) : null,
       safeExternalHref(ex.externalUrl)
-        ? el('div', { style: { marginBottom: '6px' } },
+        ? el('div', { style: { marginBottom: 'var(--sp-2)' } },
             el('a', { class: 'exb-file-chip exb-link-chip', href: safeExternalHref(ex.externalUrl), target: '_blank', rel: 'noopener', title: safeExternalHref(ex.externalUrl) },
               icon('gamepad', 13),
               el('span', { class: 'exb-file-chip__name' }, 'باز کردن بازی/تمرین آنلاین')))
@@ -900,7 +900,7 @@ export function renderExercises(container) {
       const res = await fetch(url, {
         headers: { Authorization: `Bearer ${localStorage.getItem('cs.token') ?? ''}` }
       });
-      if (!res.ok) throw new Error('دریافت فایل ناموفق بود');
+      if (!res.ok) throw new Error('دریافت فایل ناموفق بود — دوباره تلاش کنید');
       const blob = await res.blob();
       const objUrl = URL.createObjectURL(blob);
       const a = el('a', { href: objUrl, download: file?.filename ?? ex.file?.filename ?? 'exercise' });
@@ -1000,7 +1000,7 @@ export function renderExercises(container) {
         }
       } catch (err) {
         if (my !== seq) return;
-        stage.replaceChildren(el('span', { class: 'exb-preview__status' }, 'دریافت پیش‌نمایش ناموفق بود'));
+        stage.replaceChildren(el('span', { class: 'exb-preview__status' }, 'دریافت پیش‌نمایش ناموفق بود — اتصال را بررسی و دوباره تلاش کنید'));
         status.textContent = '';
         toastError(err);
       }
@@ -1036,7 +1036,7 @@ export function renderExercises(container) {
         () => el('button', {
           class: 'btn btn--ghost',
           title: 'باز کردن فایل فعلی در تب جدید',
-          onclick: () => { if (currentUrl) window.open(currentUrl, '_blank', 'noopener'); else toast('فایل هنوز بارگذاری نشده است', 'warning'); }
+          onclick: () => { if (currentUrl) window.open(currentUrl, '_blank', 'noopener'); else toast('فایل هنوز دریافت نشده — چند لحظه بعد دوباره «تب جدید» را بزنید', 'warning'); }
         }, icon('link', 15), 'تب جدید'),
         (close) => el('button', { class: 'btn btn--primary', onclick: close }, 'بستن')
       ],
@@ -1144,14 +1144,14 @@ export function renderExercises(container) {
       { class: 'exb-form' },
       formSection(1, 'هویت کارت', 'عنوان و نوع کارت — هر کارت در طرح درمان به یک کارت جلسه تبدیل می‌شود', [
         el('div', { class: 'field span-2' }, el('label', { class: 'field__label' }, 'عنوان کارت', el('span', { class: 'req' }, ' *')), title,
-          el('div', { class: 'cell-sub', style: { marginTop: '4px' } }, 'اگر خالی بماند، از نام اولین فایل پر می‌شود')),
+          el('div', { class: 'cell-sub', style: { marginTop: 'var(--sp-1)' } }, 'اگر خالی بماند، از نام اولین فایل پر می‌شود')),
         el('div', { class: 'field span-2' }, el('label', { class: 'field__label' }, 'نوع کارت (در طرح درمان)'), fmtChips),
         el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'سازندهٔ کارت — امتیاز به نام او'), ownerSel,
-          el('div', { class: 'cell-sub', style: { marginTop: '4px' } }, 'روی دستگاه مشترک، نام واقعی سازنده را انتخاب کنید')),
+          el('div', { class: 'cell-sub', style: { marginTop: 'var(--sp-1)' } }, 'روی دستگاه مشترک، نام واقعی سازنده را انتخاب کنید')),
         el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'هم‌ساز کارت (سازندهٔ دوم)'), coSel,
-          el('div', { class: 'cell-sub', style: { marginTop: '4px' } }, 'اختیاری — با انتخاب همکار، امتیاز تولید محتوا بین دو نفر نصف می‌شود')),
+          el('div', { class: 'cell-sub', style: { marginTop: 'var(--sp-1)' } }, 'اختیاری — با انتخاب همکار، امتیاز تولید محتوا بین دو نفر نصف می‌شود')),
         el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'دید'), visSel,
-          el('div', { class: 'cell-sub', style: { marginTop: '4px' } }, 'خصوصی: در کتابخانه و انتخابگر فقط شما و مدیر می‌بینید؛ بات/خانواده هرگز'))
+          el('div', { class: 'cell-sub', style: { marginTop: 'var(--sp-1)' } }, 'خصوصی: در کتابخانه و انتخابگر فقط شما و مدیر می‌بینید؛ بات/خانواده هرگز'))
       ]),
       formSection(2, 'طبقه‌بندی کارت — درخت واحد', 'هم‌زمان در چهار ستون: پردازش اطلاعات، کارکردهای اجرایی، اختلال‌ها و پایه تحصیلی — انتخاب خانواده یعنی همهٔ برچسب‌های عضو؛ کارتِ طبقه‌بندی‌شده در طرح درمان و پیکر هدفمند پیدا می‌شود', [
         el('div', { class: 'field span-2' }, taxonomyPicker.el),
@@ -1160,7 +1160,7 @@ export function renderExercises(container) {
       formSection(3, 'محتوای کارت', 'فایل کاربرگ/بازی، لینک آنلاین و راهنمای اجرا برای خانواده', [
         el('div', { class: 'field span-2' }, el('label', { class: 'field__label' }, 'فایل‌های کارت (اختیاری — تصویر/PDF/سند، حداکثر ۱۰ فایل)'), dropzoneWrap),
         el('div', { class: 'field span-2' }, el('label', { class: 'field__label' }, 'لینک بازی/تمرین آنلاین (اختیاری)'), link,
-          el('div', { class: 'cell-sub', style: { marginTop: '4px' } }, 'روی کارت‌های بازی — در پیام بلهٔ خانواده و پروفایل با دکمهٔ بازی باز می‌شود')),
+          el('div', { class: 'cell-sub', style: { marginTop: 'var(--sp-1)' } }, 'روی کارت‌های بازی — در پیام بلهٔ خانواده و پروفایل با دکمهٔ بازی باز می‌شود')),
         el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'توضیح برای خانواده (اختیاری)'), desc)
       ])
     );
@@ -1364,13 +1364,13 @@ export function renderExercises(container) {
         el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'انتشار'), pub),
         canOwn ? el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'دید'), visSel) : null,
         el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'هم‌ساز کارت (سازندهٔ دوم)'), coSel,
-          el('div', { class: 'cell-sub', style: { marginTop: '4px' } },
+          el('div', { class: 'cell-sub', style: { marginTop: 'var(--sp-1)' } },
             'اختیاری — با انتخاب همکار، امتیاز تولید محتوا بین سازندهٔ اصلی و او نصف می‌شود')),
         el('div', { class: 'field span-2' },
           el('label', { class: 'field__label' }, 'سازندهٔ کارت'),
           el('div', { class: 'exb-ownerfield__row' }, creatorChip, reassignToggle),
           reassignPanel,
-          el('div', { class: 'cell-sub', style: { marginTop: '4px' } },
+          el('div', { class: 'cell-sub', style: { marginTop: 'var(--sp-1)' } },
             `امتیاز تولید محتوا به نام ${currentOwnerName} ثبت می‌شود — ویرایش عادی مالکیت را تغییر نمی‌دهد`))
       ]),
       formSection(2, 'طبقه‌بندی کارت — درخت واحد', 'هم‌زمان در چهار ستون: پردازش اطلاعات، کارکردهای اجرایی، اختلال‌ها و پایه تحصیلی — انتخاب خانواده یعنی همهٔ برچسب‌های عضو', [
@@ -1379,7 +1379,7 @@ export function renderExercises(container) {
       ]),
       formSection(3, 'محتوای کارت', 'لینک بازی آنلاین و راهنمای اجرا برای خانواده', [
         el('div', { class: 'field span-2' }, el('label', { class: 'field__label' }, 'لینک بازی/تمرین آنلاین (اختیاری)'), link,
-          el('div', { class: 'cell-sub', style: { marginTop: '4px' } }, 'لینک بازی روی سرویس بیرونی — در پیام بلهٔ خانواده و پروفایل با دکمهٔ بازی باز می‌شود — برای خالی‌کردن، خالی بگذارید')),
+          el('div', { class: 'cell-sub', style: { marginTop: 'var(--sp-1)' } }, 'لینک بازی روی سرویس بیرونی — در پیام بلهٔ خانواده و پروفایل با دکمهٔ بازی باز می‌شود — برای خالی‌کردن، خالی بگذارید')),
         el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'توضیح برای خانواده'), desc)
       ])
     );
@@ -1582,17 +1582,17 @@ export function renderExercises(container) {
     toolbar.replaceChildren(
       el(
         'div',
-        { class: 'page-head__title' },
-        'کارت‌های آماده',
-        newBtn ? el('div', { style: { marginRight: 'auto' } }, newBtn) : null
+        {},
+        el('div', { class: 'page-head__title' }, 'کارت‌های آماده'),
+        el(
+          'div',
+          { class: 'page-head__desc' },
+          // ریبرند: کتابخانهٔ کارت‌های آمادهٔ طرح درمان؛ حلقهٔ تکلیف همان مسیر قبلی
+          /* H4/B4 — نشت پیاده‌سازی «(ذخیره: D1/R2)» حذف شد؛ جملهٔ مرکب ساده شد */
+          'کتابخانهٔ کارت‌های آمادهٔ طرح درمان — هر کارت را در «طرح درمان» به جلسه اضافه کنید؛ ارسال به خانواده و برگشت نتیجه از همان پروفایل دانش‌آموز دنبال می‌شود.'
+        )
       ),
-      el(
-        'div',
-        { class: 'page-head__desc' },
-        // ریبرند: کتابخانهٔ کارت‌های آمادهٔ طرح درمان؛ حلقهٔ تکلیف همان مسیر قبلی
-        /* H4/B4 — نشت پیاده‌سازی «(ذخیره: D1/R2)» حذف شد؛ جملهٔ مرکب ساده شد */
-        'کتابخانهٔ کارت‌های آمادهٔ طرح درمان — هر کارت را در «طرح درمان» به جلسه اضافه کنید؛ ارسال به خانواده و برگشت نتیجه از همان پروفایل دانش‌آموز دنبال می‌شود.'
-      )
+      newBtn ?? null
     );
   }
 

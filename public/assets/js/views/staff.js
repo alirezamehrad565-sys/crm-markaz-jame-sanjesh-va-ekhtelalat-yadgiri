@@ -1,6 +1,6 @@
 import { api } from '../api.js';
 import { fa, formatJalaliNumeric, tehranYmdOfIso } from '../format.js';
-import { el, icon, formModal, confirmModal, toast, toastError, statusBadge, loadingState, emptyState, phoneCell, collapseRemove, flashNode, lockBtn } from '../ui.js';
+import { el, icon, formModal, confirmModal, toast, toastError, statusBadge, loadingState, emptyState, errorState, phoneCell, collapseRemove, flashNode, lockBtn } from '../ui.js';
 import { renderProgressBoardCard } from './progress-board.js'; // — تابلوی پیشرفت (مدیر)
 import { invalidateStudentFormMeta } from '../student-form.js'; // — کش فرم دانش‌آموز بعد از هر تغییر کارکنان تازه شود
 import { openBotLinkModal } from '../bot-link.js'; // — لینک احراز خودکار بات
@@ -15,7 +15,7 @@ export async function renderStaff(container) {
     const staffRes = await api.get(`/api/staff${filter ? `?active=${filter}` : ''}`);
     rows = staffRes.data;
   } catch (err) {
-    container.replaceChildren(emptyState({ iconName: 'alert', title: 'خطا در بارگذاری', hint: err.message }));
+    container.replaceChildren(errorState(err, () => renderStaff(container)));
     return;
   }
 
@@ -148,7 +148,7 @@ export async function renderStaff(container) {
     } catch (err) {
       if (myGen !== gen || !tbody.isConnected) return;
       tbody.replaceChildren(el('tr', {}, el('td', { colspan: colCount, style: { padding: 'var(--sp-2)' } },
-        emptyState({ iconName: 'alert', title: 'خطا در بارگذاری', hint: String(err?.message ?? err) }))));
+        emptyState({ iconName: 'alert', title: 'خطا در بارگذاری', hint: err?.message ?? 'خطای نامشخص' }))));
     }
   }
 

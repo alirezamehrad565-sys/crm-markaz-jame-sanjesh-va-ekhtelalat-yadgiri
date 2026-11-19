@@ -299,7 +299,7 @@ export async function renderAppointments(container, ctx = {}) {
   }
 
   const staffSelect = isTherapist
-    ? el('span', { class: 'badge badge--neutral', style: { padding: '6px 10px' } }, `برنامهٔ من — ${staffName(session.user.staffId)}`)
+    ? el('span', { class: 'badge badge--neutral', style: { padding: 'var(--sp-2) var(--sp-3)' } }, `برنامهٔ من — ${staffName(session.user.staffId)}`)
     : state.therapistList.length > 5
       ? buildStaffDropdown()
       : (staffChipsRoot = el(
@@ -363,6 +363,10 @@ export async function renderAppointments(container, ctx = {}) {
 
   container.replaceChildren(
     ...[
+      el('div', { class: 'page-head' },
+        el('div', { class: 'page-head__title' }, 'تقویم نوبت‌ها'),
+        el('p', { class: 'page-head__desc' }, 'کلیک روی کارت جزئیات نوبت را باز می‌کند — ساختن و جابه‌جایی نوبت هم از خود تقویم انجام می‌شود.')
+      ),
       bar,
       legendEl,
       !isDay ? el('div', { class: 'swipe-hint is-week' }, icon('chevL', 14), 'برای دیدن روزهای دیگر بکشید — جابه‌جایی نوبت روی لمس از «ویرایش زمان» داخل جزئیات') : null,
@@ -459,7 +463,7 @@ export async function renderAppointments(container, ctx = {}) {
       const items = isOther ? leftovers : dayItems.filter((a) => a.staffId === s.id);
       gridInner.appendChild(
         el('div', { class: 'grid-head grid-head--staff' },
-          el('span', { style: { display: 'inline-flex', alignItems: 'center', gap: '6px' } }, isOther ? null : hueDot(s.id, 9), s.fullName),
+          el('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-2)' } }, isOther ? null : hueDot(s.id, 9), s.fullName),
           el('span', { class: 'grid-head__date' }, countEl(`${state.dayYmd}|${s.id}`, `${fa(items.length)} نوبت`))
         )
       );
@@ -1113,7 +1117,7 @@ function openAssessmentBlockDetailModal(blockId) {
         ? el('div', { class: 'field' },
             el('label', { class: 'field__label' }, 'جزئیات — نوشتن/ویرایش'),
             noteTa,
-            el('div', { style: { display: 'flex', justifyContent: 'flex-end', marginTop: '6px' } }, saveNoteBtn)
+            el('div', { style: { display: 'flex', justifyContent: 'flex-end', marginTop: 'var(--sp-2)' } }, saveNoteBtn)
           )
         : null
     ].filter(Boolean),
@@ -1159,7 +1163,9 @@ function openCreateModal(container, preset = {}) {
     const filtered = allStudents.filter((s) => !q || `${s.firstName} ${s.lastName}`.includes(q));
     listBox.replaceChildren(
       ...(filtered.length === 0
-        ? [el('div', { style: { padding: '10px', color: 'var(--text-3)', fontSize: 'var(--fs-sm)' } }, isTher ? 'دانش‌آموزی در فهرست شما نیست — نوبت اول را منشی ثبت می‌کند' : 'دانش‌آموزی یافت نشد')]
+        ? [el('div', { style: { padding: 'var(--sp-3)', color: 'var(--text-3)', fontSize: 'var(--fs-sm)' } }, isTher
+            ? (q ? 'دانش‌آموزی با این نام در فهرست شما پیدا نشد — عبارت جستجو را کوتاه‌تر کنید' : 'دانش‌آموزی در فهرست شما نیست — نوبت اول را منشی ثبت می‌کند')
+            : (q ? 'دانش‌آموزی با این نام پیدا نشد — عبارت جستجو را کوتاه‌تر کنید' : 'هنوز دانش‌آموزی ثبت نشده — از «دانش‌آموزان» پرونده بسازید'))]
         : filtered.map((s) =>
             el('label', { class: `pick-list__item${picked.has(s.id) ? ' is-picked' : ''}` },
               el('input', { type: 'checkbox', checked: picked.has(s.id), onchange: (e) => { e.target.checked ? picked.add(s.id) : picked.delete(s.id); drawList(); } }),
@@ -1225,7 +1231,7 @@ function openCreateModal(container, preset = {}) {
 
     const durationSelect = durationField();
     if (durationSelect) {
-      chipBox = el('div', { class: 'chip-row', style: { marginTop: '-10px', marginBottom: 'var(--sp-3)' } });
+      chipBox = el('div', { class: 'chip-row', style: { marginTop: 'calc(-1 * var(--sp-3))', marginBottom: 'var(--sp-3)' } });
       const drawChips = () => {
         for (const chip of chipBox.querySelectorAll('.chip')) {
           chip.classList.toggle('is-active', Number(chip.dataset.d) === Number(durationSelect.value));
@@ -1260,7 +1266,7 @@ function openCreateModal(container, preset = {}) {
       el('label', { class: 'field__label' }, 'دانش‌آموزان (اختیاری)'),
       searchInput, listBox
     );
-    searchInput.style.marginBottom = '8px';
+    searchInput.style.marginBottom = 'var(--sp-2)';
     searchInput.addEventListener('input', drawList);
     form.appendChild(block);
   }, 50);
@@ -1284,7 +1290,7 @@ async function openDetailModal(appointmentId) {
     } catch { /* بی‌صدا — گرید در ناوبری بعدی تازه می‌شود */ }
   }
 
-  const studentsBox = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px' } });
+  const studentsBox = el('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-2)' } });
 
   function sessionReportBlock(a, s) {
     const writable = canWriteSession(a) && a.status !== 'cancelled';
@@ -1299,7 +1305,7 @@ async function openDetailModal(appointmentId) {
       });
       ta.value = s.sessionNote ?? '';
 
-      const sel = el('select', { class: 'select', style: { width: 'auto', padding: '4px 8px', fontSize: 'var(--fs-xs)' } },
+      const sel = el('select', { class: 'select', style: { width: 'auto', padding: 'var(--sp-1) var(--sp-2)', fontSize: 'var(--fs-xs)' } },
         ...Object.entries(NEXT_ACTION_LABELS).map(([v, label]) => el('option', { value: v }, label))
       );
       sel.value = s.nextAction ?? 'none';
@@ -1381,13 +1387,13 @@ async function openDetailModal(appointmentId) {
   const eventsBlock = (sid) => {
     const evs = eventsOf(sid);
     if (evs.length === 0) return null;
-    return el('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap' } },
+    return el('div', { style: { display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap' } },
       evs.map((e) =>
         el('button', {
           class: 'chip is-active',
           title: 'نمایش جزئیات رویداد ثبت‌شده',
           onclick: () => openCaseEventDetail(e, { onChanged: () => openDetailModal(a.id) })
-        }, el('span', { style: { display: 'inline-flex', alignItems: 'center', gap: '5px' } }, icon('clipboard', 13), `${e.typeTitle}${e.status === 'draft' ? ' (پیش‌نویس)' : ''}`))
+        }, el('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-1)' } }, icon('clipboard', 13), `${e.typeTitle}${e.status === 'draft' ? ' (پیش‌نویس)' : ''}`))
       )
     );
   };
@@ -1397,8 +1403,8 @@ async function openDetailModal(appointmentId) {
       ...(a.students ?? []).map((s) =>
         el(
           'div',
-          { class: 'pick-list__item', style: { border: '1px solid var(--border)', borderRadius: 'var(--radius)', display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'stretch' } },
-          el('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' } },
+          { class: 'pick-list__item', style: { border: '1px solid var(--border)', borderRadius: 'var(--radius)', display: 'flex', flexDirection: 'column', gap: 'var(--sp-2)', alignItems: 'stretch' } },
+          el('div', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', flexWrap: 'wrap' } },
             el('a', {
               href: `#/students/${s.studentId}`,
               class: 'cell-main',
@@ -1409,7 +1415,7 @@ async function openDetailModal(appointmentId) {
             el('span', { style: { marginInlineStart: 'auto' } },
               canManage(a) ? el('select', {
                 class: 'select',
-                style: { width: 'auto', padding: '4px 8px', fontSize: 'var(--fs-sm)' },
+                style: { width: 'auto', padding: 'var(--sp-1) var(--sp-2)', fontSize: 'var(--fs-sm)' },
                 'aria-label': `وضعیت حضور ${state.studentNames.get(s.studentId) ?? ''}`, /* S2-08 */
                 onchange: async (e) => {
                   const prev = s.attendance ?? 'pending'; /* F6: آخرین مقدار ذخیره‌شده برای برگرداندن انتخاب در خطا */
@@ -1460,7 +1466,7 @@ async function openDetailModal(appointmentId) {
 
   const isTherapistHere = session.user?.role === 'therapist';
   const addPool = isTherapistHere ? state.myStudents : state.studentsAll;
-  const addSearch = el('input', { class: 'input', placeholder: isTherapistHere ? 'جستجو در دانش‌آموزان من…' : 'جستجوی نام دانش‌آموز…', style: { marginBottom: '6px' } });
+  const addSearch = el('input', { class: 'input', placeholder: isTherapistHere ? 'جستجو در دانش‌آموزان من…' : 'جستجوی نام دانش‌آموز…', style: { marginBottom: 'var(--sp-2)' } });
   const addList = el('div', { class: 'pick-list', style: { maxHeight: '160px' } });
   const drawAddList = () => {
     const existing = new Set((a.students ?? []).map((s) => s.studentId));
@@ -1468,7 +1474,7 @@ async function openDetailModal(appointmentId) {
     const filtered = addPool.filter((s) => !existing.has(s.id) && (!q || `${s.firstName} ${s.lastName}`.includes(q)));
     addList.replaceChildren(
       ...(filtered.length === 0
-        ? [el('div', { style: { padding: '8px', color: 'var(--text-3)', fontSize: 'var(--fs-sm)' } }, q ? 'دانش‌آموزی یافت نشد' : (isTherapistHere ? 'دانش‌آموز دیگری در فهرست شما نیست' : 'همه دانش‌آموزان فعال در این نوبت هستند'))]
+        ? [el('div', { style: { padding: 'var(--sp-2)', color: 'var(--text-3)', fontSize: 'var(--fs-sm)' } }, q ? 'دانش‌آموزی با این نام پیدا نشد — عبارت جستجو را کوتاه‌تر کنید' : (isTherapistHere ? 'دانش‌آموز دیگری در فهرست شما نیست' : 'همهٔ دانش‌آموزان فعال در این نوبت هستند'))]
         : filtered.map((s) =>
             el('button', {
               type: 'button',
