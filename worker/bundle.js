@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.27.21";
+var APP_VERSION = "1.27.24";
 var NODE_MIN_VERSION = "1.26.0";
 
 // node_modules/zod/v4/classic/external.js
@@ -57013,7 +57013,7 @@ function registerClinicalEngineRoutes(app, service) {
         note: body.note,
         items: itemInputsToDomain(body.items),
         fidelity: body.fidelity
-        // عیناً عبور: کلید غایب = undefined = دست‌نخوردن قبلی (قرارداد )
+        // عیناً عبور: کلید غایب = undefined = دست‌نخوردن قبلی (قرارداد)
       },
       actor
     );
