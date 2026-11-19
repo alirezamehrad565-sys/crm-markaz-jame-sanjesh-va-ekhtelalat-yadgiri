@@ -1,3 +1,11 @@
+# v1.27.27 — POLISH-3 M4: برگهٔ پیشرفت خانواده (بدون لاگین، توکن امضاشده)
+
+- M4-توکن — ماژول family-sheet.ts: توکن HS256 با scope جدای family-sheet (انقضای ۱۸۰ روز، secret نشست) — توکن نشست کارمند هرگز برگه را باز نمی‌کند؛ توکن بد = null بدون استثنا.
+- M4-صفحه — GET /public/family/progress-sheet/:token: HTML مستقل RTL سمت سرور با SVG سبک روند پراپ (بدون وب‌فونت و بدون JS؛ no-store + noindex) — فقط مسیر/جلسه/پراپ همان بچه؛ کمیته و حسابرسی عمداً بیرون است.
+- M4-سرویس — getFamilyProgressSheet (actor = null یعنی زمینهٔ توکن خانواده) + mintProgressSheetLink (assertCanView + تزریق deps.publicBaseUrl هم‌الگوی case-events).
+- M4-پروفایل — بخش تازهٔ «برگهٔ پیشرفت خانواده» در کارت خانواده: ساخت پیوند + کپی + ارسال با بات بله (کد اتصال موجود).
+- گیت تازهٔ front-family-sheet-m4.test.ts (۶ تست) — desktop-check کامل سبز.
+
 # v1.27.26 — POLISH-3 M3: روایت بالینی پرونده (از فرضیه تا نتیجه)
 
 - M3-سرویس — endpoint فقط‌خواندنی GET /api/students/:id/clinical-narrative (نقش‌های هم‌تراز case-formulation؛ assertCanView): تجمیع مسیرهای مداخله با اسنپ‌شات فرضیهٔ موتور و تصمیم، مصوبه‌های کمیته، شمارش جلسات، و روند پراپ (سنجهٔ اصلی + اولین/آخرین + بهبود) — بدون N+1 (IN تکه‌بندی‌شده) و بدون جدول تازه.

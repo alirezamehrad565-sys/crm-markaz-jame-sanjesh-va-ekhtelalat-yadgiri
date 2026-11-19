@@ -25,6 +25,8 @@ import type {
   RankedHypothesis
 } from './types';
 import { buildPathwayReport } from './report'; // تجمیع خالص گزارش دوره‌ای
+import { mintFamilySheetToken } from './family-sheet'; // ۱.۲۷.۲۷ — M4 برگهٔ پیشرفت خانواده (توکن امضاشده)
+import type { FamilySheetModel, FamilySheetPath } from './family-sheet';
 import { evaluateProbeSeries, masteryOf } from './progress'; // محاسبات خالص پراپ پیشروی
 import type { ChecklistPlan } from './recommender';
 import { INTERVENTION_PATH_STATUS_LABELS, PATHWAY_ITEM_TYPES, PATHWAY_SESSION_STATUSES } from './types';
@@ -183,6 +185,7 @@ export interface ClinicalEngineDeps {
   audit: AuditWriter;
   logger: Logger;
   now?: () => Date;
+  publicBaseUrl?: string | null; // ۱.۲۷.۲۷ — M4: آدرس عمومی برگهٔ خانواده (تزریقی، هم‌الگوی case-events)
   exerciseIdsExist?: (ids: string[]) => Promise<Set<string>>; // اعتبارسنجی لینک کارت به بانک تمرین (تزریقی)
   /* ۱.۲۵.۰۵ — زمینهٔ OT برای صورت‌بندی مورد: تزریقی (قرارداد «وابستگی ماژولی domain→domain ممنوع»)
      تا سرویس بالینی بدون تزریق هم در تست‌ها بالا بیاید؛ نبودش فقط پوشش داده را کم می‌کند */
@@ -1683,7 +1686,117 @@ export function createClinicalEngineService(deps: ClinicalEngineDeps) {
     };
   }
 
-  return { getInsights, getCaseFormulation, homeMonitorFocusOf, getChecklistPlan, listPaths, createPath, decidePath, getPath, listTargets, toggleStep, listPathTemplates, upsertPathTemplate, listPathSessions, addPathSession, updatePathSession, deletePathSession, reorderPathSessions, listRecentCards, getPathwayReport, addPathProbe, listPathProbes, updatePathProbe, updatePathGoal, getValidationKpis, createCaseAudit, listCaseAudits, getClinicalNarrative }; // پراپ‌های پیشروی · هدف مسیر · اعتبارسنجی · صورت‌بندی مورد (۱.۲۵.۰۵) · روایت بالینی (۱.۲۷.۲۶)
+  /* ۱.۲۷.۲۷ — M4 POLISH-3: دادهٔ برگهٔ پیشرفت خانواده — فقط‌خواندنی و فقط مسیر/جلسه/پراپ همان بچه
+     (کمیته/حسابرسی/مالی عمداً بیرون است: برگهٔ خانواده سند روایت درمان نیست). actor = null یعنی
+     زمینهٔ توکن خانواده — خودِ توکن امضاشده اجازه است؛ actor کارمند یعنی ساخت پیوند با assertCanView. */
+  async function getFamilyProgressSheet(studentId: string, actor: AuthContext | null): Promise<FamilySheetModel> {
+    const student = await loadStudent(studentId);
+    if (actor) assertCanView(student, actor);
+    const rows = await db.query<PathRow>(
+      `SELECT p.* FROM intervention_paths p WHERE p.student_id = ? AND p.deleted_at IS NULL ORDER BY p.created_at DESC`,
+      [studentId]
+    );
+    const pathIds = rows.map((r) => r.id);
+
+    // شمارش جلسات هر مسیر — یک کوئری گروه‌بندی‌شده برای همهٔ مسیرها (بدون N+1)
+    const sessMap = new Map<string, { planned: number; done: number }>();
+    for (const chunk of inParamChunks(pathIds)) {
+      const srows = await db.query<{ pathway_id: string; planned: number; done: number }>(
+        `SELECT pathway_id, COUNT(*) AS planned, SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) AS done
+           FROM pathway_sessions WHERE pathway_id IN (${inPlaceholders(chunk.length)}) GROUP BY pathway_id`,
+        chunk
+      );
+      for (const s of srows) sessMap.set(s.pathway_id, { planned: s.planned, done: s.done });
+    }
+
+    // پراپ‌ها: جدیدترین ۴۰۰ هم‌قرارداد بج فهرست مسیرها — بعد صعودی می‌شوند
+    const probeRows: { pathway_id: string; metric: string; unit: string | null; value: number; taken_at: string }[] = [];
+    for (const chunk of inParamChunks(pathIds)) {
+      probeRows.push(...await db.query<{ pathway_id: string; metric: string; unit: string | null; value: number; taken_at: string }>(
+        `SELECT pathway_id, metric, unit, value, taken_at FROM pathway_probes
+          WHERE pathway_id IN (${inPlaceholders(chunk.length)})
+          ORDER BY taken_at DESC
+          LIMIT 400`,
+        chunk
+      ));
+    }
+    probeRows.sort((a, b) => (a.taken_at < b.taken_at ? 1 : a.taken_at > b.taken_at ? -1 : 0));
+    probeRows.length = Math.min(probeRows.length, 400);
+
+    // سنجهٔ اصلی هر مسیر = سنجهٔ آخرین پراپ؛ ملاک تسلط از همان محاسبات پراپ پیشروی (masteryOf)
+    const byPath = new Map<string, Map<string, { unit: string | null; points: { value: number; taken_at: string }[] }>>();
+    for (const r of probeRows) {
+      let metrics = byPath.get(r.pathway_id);
+      if (!metrics) { metrics = new Map(); byPath.set(r.pathway_id, metrics); }
+      const s = metrics.get(r.metric) ?? { unit: r.unit, points: [] };
+      s.points.push({ value: r.value, taken_at: r.taken_at });
+      metrics.set(r.metric, s);
+    }
+
+    const paths: FamilySheetPath[] = rows.map((r) => {
+      const metrics = byPath.get(r.id);
+      const sess = sessMap.get(r.id) ?? { planned: 0, done: 0 };
+      let metric: string | null = null;
+      let unit: string | null = null;
+      let points: { value: number; taken_at: string }[] = [];
+      let first: number | null = null;
+      let last: number | null = null;
+      let improved: boolean | null = null;
+      let mastered = false;
+      if (metrics) {
+        let primaryLastAt = '';
+        for (const [m, s] of metrics) {
+          const lastAt = s.points[0]?.taken_at ?? '';
+          if (lastAt > primaryLastAt) { primaryLastAt = lastAt; metric = m; }
+        }
+        if (metric) {
+          const s = metrics.get(metric)!;
+          unit = s.unit;
+          points = [...s.points].reverse(); // صعودی برای روند و ملاک
+          first = points[0]?.value ?? null;
+          last = points[points.length - 1]?.value ?? null;
+          improved = first !== null && last !== null ? last > first : null;
+          mastered = masteryOf(points.map((p) => ({ value: p.value, takenAt: p.taken_at }))).achieved;
+        }
+      }
+      const hypothesis = parseJson<RankedHypothesis | null>(r.engine_hypothesis, null);
+      return {
+        id: r.id,
+        targetTitle: hypothesis?.targetTitle ?? targetOf(r.target_key)?.title ?? r.target_key,
+        status: r.status as InterventionPathStatus,
+        sessionsPlanned: sess.planned,
+        sessionsDone: sess.done,
+        metric,
+        unit,
+        points: points.map((p) => ({ value: p.value, takenAt: p.taken_at })),
+        first,
+        last,
+        improved,
+        mastered,
+        reassessAt: r.reassess_at ?? null
+      };
+    });
+
+    return {
+      studentName: `${student.first_name} ${student.last_name}`.trim(),
+      grade: student.grade ?? null,
+      generatedAt: iso(),
+      paths
+    };
+  }
+
+  /* ۱.۲۷.۲۷ — M4: ساخت پیوند برگهٔ خانواده — کارمند مجاز با assertCanView؛ توکن HS256 با secret نشست؛
+     آدرس عمومی از deps تزریق می‌شود (هم‌الگوی case-events). */
+  async function mintProgressSheetLink(studentId: string, actor: AuthContext, secret: string): Promise<{ token: string; url: string; expiresAt: string }> {
+    const student = await loadStudent(studentId);
+    assertCanView(student, actor);
+    const base = deps.publicBaseUrl?.trim() || null; // خالی/فاصله‌دار = تنظیم‌نشده
+    if (!base) throw new ValidationError('آدرس عمومی سامانه (PUBLIC_BASE_URL) تنظیم نشده است — ساخت پیوند برگهٔ خانواده ممکن نیست.');
+    const { token, expiresAt } = await mintFamilySheetToken(studentId, secret);
+    return { token, url: `${base.replace(/\/+$/, '')}/public/family/progress-sheet/${token}`, expiresAt };
+  }
+
+  return { getInsights, getCaseFormulation, homeMonitorFocusOf, getChecklistPlan, listPaths, createPath, decidePath, getPath, listTargets, toggleStep, listPathTemplates, upsertPathTemplate, listPathSessions, addPathSession, updatePathSession, deletePathSession, reorderPathSessions, listRecentCards, getPathwayReport, addPathProbe, listPathProbes, updatePathProbe, updatePathGoal, getValidationKpis, createCaseAudit, listCaseAudits, getClinicalNarrative, getFamilyProgressSheet, mintProgressSheetLink }; // پراپ‌های پیشروی · هدف مسیر · اعتبارسنجی · صورت‌بندی مورد (۱.۲۵.۰۵) · روایت بالینی (۱.۲۷.۲۶) · برگهٔ خانواده (۱.۲۷.۲۷)
 }
 
 export type ClinicalEngineService = ReturnType<typeof createClinicalEngineService>;

@@ -1355,9 +1355,48 @@ async function buildFamilyInviteCard(student, { canManage }) {
       el('p', { class: 'cell-sub', style: { margin: 0 } },
         'لینک احراز خودکار بات بله — ولیّ با کلیک روی لینک به بات متصل می‌شود و اعلان نوبت‌ها و گزارش‌ها را می‌گیرد. لینک چندبارمصرف است و منقضی نمی‌شود.'),
       el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'لینک‌های اتصال خانواده'), listBox),
+      /* ۱.۲۷.۲۷ — M4 POLISH-3: برگهٔ پیشرفت خانواده — صفحهٔ فقط‌خواندنی توکن‌محور (بدون لاگین، ۱۸۰ روز) */
+      el('div', { class: 'field' },
+        el('label', { class: 'field__label' }, 'برگهٔ پیشرفت خانواده'),
+        el('div', { style: { display: 'flex', gap: 'var(--sp-2)', alignItems: 'center', flexWrap: 'wrap' } },
+          el('span', { class: 'cell-sub', style: { flex: '1', minWidth: '200px', margin: 0 } }, 'صفحهٔ «از فرضیه تا نتیجه»: مسیرهای مداخله، جلسات و روند پراپ — با پیوند امضاشده بدون لاگین باز می‌شود و فقط همین دانش‌آموز را نشان می‌دهد.'),
+          canManage ? el('button', { class: 'btn btn--soft btn--sm', onclick: () => openProgressSheetModal(student, { familyCode: pickActiveLinkCode(links), botUsername }) }, icon('file', 14), 'ساخت پیوند برگه') : null)),
       smsSection.root
     )
   );
+}
+
+/* ۱.۲۷.۲۷ — M4 POLISH-3: برگهٔ پیشرفت خانواده — پیوند توکن‌محور (کپی) + ارسال با بات بله */
+async function openProgressSheetModal(student, { familyCode = null, botUsername = null } = {}) {
+  let res;
+  try {
+    res = await api.post(`/api/students/${student.id}/progress-sheet-link`);
+  } catch (err) {
+    toastError(err);
+    return;
+  }
+  const url = res.data?.url ?? '';
+  const expires = res.data?.expiresAt ? formatJalaliNumeric(res.data.expiresAt.slice(0, 10)) : null;
+  const input = el('input', { class: 'input', dir: 'ltr', readonly: '', value: url, onclick: () => input.select() });
+  const copyBtn = el('button', {
+    class: 'btn btn--soft btn--sm', type: 'button',
+    onclick: async () => {
+      try { await navigator.clipboard.writeText(url); } catch { input.select(); document.execCommand('copy'); }
+      toast('پیوند برگه کپی شد', 'success');
+    }
+  }, icon('copy', 14), 'کپی');
+  const botRow = familyCode && botUsername
+    ? el('div', { style: { display: 'flex', gap: 'var(--sp-2)', alignItems: 'center', flexWrap: 'wrap' } },
+        el('span', { class: 'cell-sub', style: { margin: 0 } }, 'ارسال با بات بله — گفتگوی متصل خانواده:'),
+        el('a', { class: 'btn btn--soft btn--sm', href: buildBotLink(botUsername, familyCode), target: '_blank', rel: 'noopener' }, icon('bot', 14), 'باز کردن بله'))
+    : null;
+  openModal({
+    title: 'برگهٔ پیشرفت خانواده',
+    body: el('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' } },
+      el('p', { class: 'cell-sub', style: { margin: 0 } }, `این پیوند برگهٔ پیشرفت ${student.firstName} را بدون لاگین باز می‌کند${expires ? ` — تا ${expires} معتبر است` : ''}؛ فقط برای خانوادهٔ همین دانش‌آموز بفرستید.`),
+      el('div', { style: { display: 'flex', gap: 'var(--sp-2)' } }, input, copyBtn),
+      botRow)
+  });
 }
 
 async function buildTeacherInviteCard(student, { canManage }) {

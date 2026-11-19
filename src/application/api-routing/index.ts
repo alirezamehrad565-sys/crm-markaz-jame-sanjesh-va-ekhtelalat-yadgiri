@@ -460,6 +460,7 @@ export function createServices(deps: AppDeps): Services {
   const otEngine = createOtEngineService({ db, audit, logger });
   const clinicalEngine = createClinicalEngineService({
     db, audit, logger,
+    publicBaseUrl: deps.publicBaseUrl ?? null, // ۱.۲۷.۲۷ — M4: پیوند برگهٔ پیشرفت خانواده
     exerciseIdsExist: (ids) => exerciseBank.idsExist(ids),
     formulationOt: {
       gatesOf: (studentId, actor) => otEngine.getGates(studentId, actor),

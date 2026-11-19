@@ -25,7 +25,7 @@ describe('POLISH-3 M3 — روایت بالینی', () => {
   test('سرویس: getClinicalNarrative در رجیستری متدها و پشت assertCanView', () => {
     const service = read('src/domain/clinical-engine/service.ts');
     expect(service).toContain('async function getClinicalNarrative(studentId: string, actor: AuthContext)');
-    expect(service).toContain('listCaseAudits, getClinicalNarrative }');
+    expect(service).toContain('getClinicalNarrative, getFamilyProgressSheet, mintProgressSheetLink }');
     // دسترسی: اول loadStudent + assertCanView، بعد listPaths با همان دسترسی
     expect(service).toMatch(/async function getClinicalNarrative[\s\S]*?assertCanView\(student, actor\);[\s\S]*?await listPaths\(studentId, actor\);/);
     // کمیته و پراپ: بدون N+1 — IN تکه‌بندی‌شده
