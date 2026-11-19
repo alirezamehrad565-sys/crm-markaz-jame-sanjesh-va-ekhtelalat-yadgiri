@@ -503,6 +503,26 @@ try {
   bad(`گیت Job Object خطا داد: ${e instanceof Error ? e.message : String(e)}`);
 }
 
+// ⑮ گیت زبان کاربر — اسکن رشته‌های رندرشوندهٔ UI (روایت بازآرایی / ژاژخان فنی / توکن ممنوعه)
+try {
+  const { spawnSync: ss15 } = await import('node:child_process');
+  const r15 = ss15('node', [path.join(T, 'scripts', 'ui-voice-check.mjs')], { timeout: 60_000, encoding: 'utf8' });
+  (r15.stdout || '').split('\n').filter(Boolean).slice(-3).forEach((l) => lines.push('  ' + l));
+  r15.status === 0 ? ok('گیت زبان کاربر سبز است (صفر یافته)') : bad(`گیت زبان کاربر قرمز است (exit=${r15.status})`);
+} catch (e) {
+  bad(`اجرای گیت زبان کاربر خطا داد: ${e instanceof Error ? e.message : String(e)}`);
+}
+
+// ⑯ گیت کنتراست AA — جفت‌های توکن رنگی در هر دو تم (۴٫۵ متن عادی / ۳ مؤلفه و مرز)
+try {
+  const { spawnSync: ss16 } = await import('node:child_process');
+  const r16 = ss16('node', [path.join(T, 'scripts', 'contrast-check.mjs')], { timeout: 60_000, encoding: 'utf8' });
+  (r16.stdout || '').split('\n').filter((l) => l.includes('✗') || l.includes('گیت')).slice(0, 8).forEach((l) => lines.push('  ' + l));
+  r16.status === 0 ? ok('گیت کنتراست AA سبز است (صفر تخلف)') : bad(`گیت کنتراست AA قرمز است (exit=${r16.status})`);
+} catch (e) {
+  bad(`اجرای گیت کنتراست خطا داد: ${e instanceof Error ? e.message : String(e)}`);
+}
+
 lines.push(failed ? '❌ گیت ساختار دسکتاپ قرمز است' : '✅ گیت ساختار دسکتاپ سبز است');
 writeFileSync('/tmp/desktop-check-report.txt', lines.join('\n') + '\n');
 console.log(lines.join('\n'));

@@ -1,6 +1,6 @@
 {
   "name": "center-system",
-  "version": "1.27.21",
+  "version": "1.27.22",
   "private": true,
   "type": "module",
   "author": {
@@ -27,6 +27,8 @@
     "build:games-worker": "node scripts/build-worker-games.mjs",
     "smoke:games": "node scripts/games-bundle-smoke.mjs",
     "desktop:check": "node scripts/desktop-check.mjs",
+    "ui-voice-check": "node scripts/ui-voice-check.mjs",
+    "contrast-check": "node scripts/contrast-check.mjs",
     "desktop:icons": "python3 scripts/make-desktop-icons.py",
     "engine:start": "node scripts/engine/engine.mjs",
     "engine:smoke": "node scripts/engine/engine-smoke.mjs",

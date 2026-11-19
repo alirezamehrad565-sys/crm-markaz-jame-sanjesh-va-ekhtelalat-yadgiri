@@ -136,13 +136,13 @@ html {
   --surface: #22262E;       /* کارت */
   --surface-2: #2A2F38;     /* سطح ۲ */
   --surface-3: #333943;     /* سطح ۳ */
-  --border: #3C434E;
-  --border-1: #3C434E;      /* مترادف --border */
+  --border: #737D8B;        /* ۳٫۶۴ روی کارت — AA مؤلفه (بود #3C434E با ۱٫۵۲) */
+  --border-1: #737D8B;      /* مترادف --border */
 
   --text: #EEF1F4;
   --text-1: #EEF1F4;        /* مترادف --text */
   --text-2: #ADB4BE;
-  --text-3: #8E98A4; /* 4.45/3.95 زیر AA بود؛ 5.46/4.80 */
+  --text-3: #99A3B0; /* ۵٫۲۶ روی سطح۲ — بالای AA ۴٫۵ (بود #8E98A4 با ۴٫۵۹ لبه‌ای) */
 
   --primary: #45B7F0; /* روشن‌تر برای کنتراست روی تیره (۶٫۶۳ روی bg) */
   --primary-hover: #6CC6F5;
@@ -176,7 +176,7 @@ html {
   --brand: #45B7F0;         /* مترادف --primary */
   --focus: #6CC6F5; /* ۹٫۴۳ روی surface */
   --backdrop: rgba(0, 0, 0, 0.62); /* */
-  --border-strong: #626C7A; /* ۳٫۰۰ */
+  --border-strong: #8892A0; /* ۴٫۸۱ روی کارت — AA (بود #626C7A با ۲٫۸۵) */
   --tag-custom: #B590E8; /* */
   --info-strong: #6FC2EF; /* */
   /* تعریف اول --info تیره حذف شد (دوبارتعریف؛ #4FB3E8 بلوک پایین برنده بود) */
