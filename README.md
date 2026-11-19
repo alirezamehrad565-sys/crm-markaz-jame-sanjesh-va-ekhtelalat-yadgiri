@@ -13,7 +13,7 @@
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](tsconfig.json)
 [![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers%20%2B%20D1-F38020?logo=cloudflare&logoColor=white)](wrangler.toml)
-[![Tests](https://img.shields.io/badge/tests-2902%20passed-brightgreen)](package.json)
+[![Tests](https://img.shields.io/badge/tests-vitest%20suite-brightgreen)](package.json)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Self-host: Docker](https://img.shields.io/badge/self--host-Docker-2496ED?logo=docker&logoColor=white)](docs/SELF-HOST.fa.md)
 [![GHCR](https://img.shields.io/badge/image-ghcr.io-2088FF?logo=github&logoColor=white)](https://github.com/sdt144?tab=packages)
@@ -26,6 +26,16 @@
 | **ابری** | دسترسی از بیرون مرکز | Cloudflare Workers + D1 — همان باندل ورکر، همان رفتار |
 | **Docker / سرور شخصی** | خود‌میزبانی | Node.js + SQLite درون کانتینر — با همان کد |
 
+## نصب دسکتاپ و کار روی وای‌فای مرکز — به زبان ساده
+
+1. **نصب:** فایل نصاب ویندوز (Setup.exe) را از صفحهٔ [Releases](../../releases) روی یک رایانهٔ مرکز نصب کنید. اینترنت لازم نیست.
+2. **اجرای سرور محلی:** با باز کردن برنامه، یک سرور کوچک روی همان رایانه بالا می‌آید و همهٔ داده‌ها در SQLite روی خودِ مرکز می‌ماند.
+3. **اتصال از موبایل و لپ‌تاپ:** برنامه نشانی شبکه را نشان می‌دهد (مثل `http://192.168.1.20:8080`). هر گوشی یا لپ‌تاپی که به همان وای‌فای وصل است، همان نشانی را در مرورگر باز می‌کند و نسخهٔ کامل برنامه را می‌بیند.
+4. **چند کاربر هم‌زمان:** درمانگر با گوشی، منشی با لپ‌تاپ و مدیر با رایانهٔ میز، همه روی یک پایگاه دادهٔ مشترک کار می‌کنند؛ تقویم و پرونده‌ها برای همه لحظه‌ای به‌روز است.
+5. **پشتیبان و به‌روزرسانی:** پشتیبان JSON درون‌اپ و drill بازیابی از دست‌نرفته است؛ نسخهٔ تازه را برنامه خودش چک می‌کند و از همان پنل نصب می‌شود.
+
+اگر اینترنت مرکز قطع شود هیچ‌چیز از کار نمی‌افتد — ابر فقط برای هم‌گامی اختیاری بین چند مرکز و دسترسی از بیرون است.
+
 ## اجرای بدون Cloudflare (Docker / سرور شخصی)
 
 ```bash
@@ -36,8 +46,8 @@ docker compose up -d --build      # → http://localhost:3000
 یا بدون کلون و build، با ایمیج آمارهٔ GHCR (توسط GitHub Action خودکار منتشر می‌شود):
 
 ```bash
-docker pull ghcr.io/sdt144/crm-markaz-jame-sanjesh-va-ekhtelalat-yadgiri:latest
-CENTER_IMAGE=ghcr.io/sdt144/crm-markaz-jame-sanjesh-va-ekhtelalat-yadgiri:latest docker compose up -d
+docker pull ghcr.io/alirezamehrad565-sys/crm-markaz-jame-sanjesh-va-ekhtelalat-yadgiri:latest
+CENTER_IMAGE=ghcr.io/alirezamehrad565-sys/crm-markaz-jame-sanjesh-va-ekhtelalat-yadgiri:latest docker compose up -d
 ```
 
 راهنمای کامل راه‌اندازی، انتقال داده از Cloudflare، بات بله و پشتیبان‌گیری:
@@ -71,10 +81,10 @@ CENTER_IMAGE=ghcr.io/sdt144/crm-markaz-jame-sanjesh-va-ekhtelalat-yadgiri:latest
 - **پک USB نصب آفلاین:** چیدمان تکرارپذیر با `npm run usb:pack`.
 - **مرکز کنترل شبکه (CP):** توزیع بدون پورت ورودی — نود همیشه خودش می‌کشد؛ شش کانال (اعلان‌ها، گزارش KPI تجمیعی، محتوا، باگ‌وپاسخ، سلامت نود، خواندن قراردادی D1) با قانون طلایی «تجمیع در نود، فقط عدد در مرکز». مخزن جدا: `cp-repo`.
 
-## وضعیت انتشار (نسخهٔ ۱.۲۷.۲۱)
+## وضعیت انتشار (نسخهٔ ۱.۲۷.۳۲)
 
-- **تست:** ۲۹۰۲ آزمون سبز (Vitest) · **tsc strict:** صفر خطا
-- **گیت‌ها:** smoke دوهاتهٔ موتور ۲۸/۲۸ · سازگاری D1 روی ۱۱۹ مایگریشن · بودجهٔ کارایی باندل · desktop-check (۱۶۸ چک)
+- **تست:** ۲۹۴۴ آزمون سبز (Vitest) · **tsc strict:** صفر خطا
+- **گیت‌ها:** smoke دوهاتهٔ موتور ۲۸/۲۸ · سازگاری D1 روی ۱۲۰ مایگریشن · بودجهٔ کارایی باندل · desktop-check (۱۶۸ چک)
 - استقرار ابری: Cloudflare Workers واحد + D1 + cronهای زمان‌بندی (یادآوری‌ها، خلاصهٔ روز)
 - فرانت: RTL کامل، تقویم جلالی، تم روشن/تاریک توکنی، skeleton لودینگ، موبایل‌فرندلی
 

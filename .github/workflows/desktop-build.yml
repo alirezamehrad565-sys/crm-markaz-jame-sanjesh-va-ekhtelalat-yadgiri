@@ -1,16 +1,17 @@
-# گردش‌کار CI دسکتاپ (خط rust) — کامپایل و بسته‌بندی Tauri
-# بدون هیچ عملیات Cloudflare — فقط کامپایل Rust، بیلد NSIS و مونتاژ پک USB
+# گردش‌کار دسکتاپ — کامپایل Rust، نصاب NSIS ویندوز و انتشار ریلیز
+# گیت کامپایل سبک با هر پوش روی main؛ ساخت کامل + ریلیز draft با هر تگ v*
 name: desktop-build
 
 on:
+  push:
+    branches: [main]
+    tags: ['v*']
   workflow_dispatch:
     inputs:
       release:
-        description: "ساخت ریلیز draft + latest.json + امضای updater (فاز D — از پل sync-main-to-rust صدا زده می‌شود)"
+        description: "ساخت ریلیز draft + latest.json + امضای updater"
         required: false
         default: "false"
-  push:
-    branches: [rust]
 
 permissions:
   contents: read
@@ -49,7 +50,9 @@ jobs:
         run: cargo test --all-targets
 
   windows-build:
-    name: بیلد ویندوز — نصاب NSIS + پک USB
+    name: بیلد ویندوز — نصاب NSIS + پک USB + ریلیز
+    # فقط با تگ نسخه (انتشار خودکار) یا درخواست دستی
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release == 'true')
     runs-on: windows-latest
     permissions:
       contents: write
@@ -66,8 +69,8 @@ jobs:
       # v1.27.۱۹ — گیت هم‌مِهری نسخه‌ها پیش از بیلد نصاب ویندوز (عین جاب لینوکس)
       - name: گیت هم‌مِهری نسخه‌ها (check-versions)
         run: node scripts/check-versions.mjs
-      - name: تزریق کلید عمومی updater در tauri.conf.json (فاز D — فقط با ورودی release=true)
-        if: github.event_name == 'workflow_dispatch' && inputs.release == 'true'
+      - name: تزریق کلید عمومی updater در tauri.conf.json
+        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release == 'true')
         shell: bash
         env:
           TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
@@ -109,8 +112,8 @@ jobs:
             desktop/src-tauri/target/release/bundle/nsis/*.exe
           if-no-files-found: error
 
-      - name: ریلیز draft + latest.json + امضای updater (فاز D — فقط با ورودی release=true؛ publish فقط دستی کارفرما)
-        if: github.event_name == 'workflow_dispatch' && inputs.release == 'true'
+      - name: ریلیز draft + latest.json + امضای updater
+        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release == 'true')
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
