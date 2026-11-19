@@ -1518,7 +1518,14 @@ export function createClinicalEngineService(deps: ClinicalEngineDeps) {
       withProbes: kpis.interventionResponse.base,
       dueReassess: kpis.reassessOnTime.base
     });
-    return kpis;
+    // M6 POLISH-3 (۱.۲۷.۲۹) — «شاهد پیامد واقعی»: چند فرم پیگیری ۳–۶ماهه ارسال/پر شده؟
+    const fuRow = await db.queryOne<{ sent: number; filled: number }>(
+      `SELECT COUNT(*) AS sent,
+              SUM(CASE WHEN e.status = 'completed' THEN 1 ELSE 0 END) AS filled
+         FROM case_events e JOIN case_event_types t ON t.id = e.event_type_id
+        WHERE t.key = 'ce-followup-3m-v1' AND e.deleted_at IS NULL`
+    );
+    return { ...kpis, followups: { sent: fuRow?.sent ?? 0, filled: fuRow?.filled ?? 0 } };
   }
 
   async function createCaseAudit(input: CaseAuditCreateInput, actor: AuthContext): Promise<CaseAuditRecord> {
@@ -1546,8 +1553,24 @@ export function createClinicalEngineService(deps: ClinicalEngineDeps) {
   }
 
   async function listCaseAudits(actor: AuthContext, studentId: string | null): Promise<CaseAuditRecord[]> {
-    if (actor.role !== 'manager') {
-      throw new ForbiddenError('حسابرسی موردی فقط برای مدیر قابل مشاهده است');
+    // M6 POLISH-3 (۱.۲۷.۲۹) — ۴۰۳ مطلق برداشته شد: درمانگر حسابرسیِ پرونده‌های خودش را
+    // فقط‌خواندنی می‌بیند (صاحب پرونده یا منتسب در نوبت‌ها) — مدیر/منشی همه را می‌بینند.
+    if (actor.role === 'therapist') {
+      const rows = await db.query<CaseAuditRow & { student_first: string; student_last: string }>(
+        `SELECT a.*, s.first_name AS student_first, s.last_name AS student_last
+           FROM case_audits a JOIN students s ON s.id = a.student_id
+          WHERE (s.owner_staff_id = ? OR EXISTS (
+                  SELECT 1 FROM appointments ap
+                    JOIN appointment_students asn ON asn.appointment_id = ap.id
+                   WHERE ap.staff_id = ? AND asn.student_id = s.id
+                 ))
+          ORDER BY a.created_at DESC LIMIT 50`,
+        [actor.staffId, actor.staffId]
+      );
+      return rows.map((r) => caseAuditRowToRecord(r));
+    }
+    if (actor.role !== 'manager' && actor.role !== 'secretary') {
+      throw new ForbiddenError('حسابرسی موردی فقط برای دفتر مرکز و درمانگرِ همان پرونده قابل مشاهده است');
     }
     const rows = studentId
       ? await db.query<CaseAuditRow & { student_first: string; student_last: string }>(

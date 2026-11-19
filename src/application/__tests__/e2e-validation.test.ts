@@ -119,9 +119,9 @@ describe('اعتبارسنجی بیرونی (KPI از دادهٔ موجود + ح
     expect(rows.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('KPI برای درمانگر ۴۰۳ است (شاخص کلینیک — فقط مدیر)', async () => {
+  it('KPI برای درمانگر ۴۰۳ است؛ حسابرسی پرونده‌های خودش را فقط‌خواندنی می‌بیند (M6 — ۱.۲۷.۲۹)', async () => {
     expect((await ali.get('/api/validation-kpis')).status).toBe(403);
-    expect((await ali.get('/api/case-audits')).status).toBe(403);
+    expect((await ali.get('/api/case-audits')).status).toBe(200); /* M6 — ۴۰۳ مطلق برداشته شد: فیلتر صاحب/منتسب */
   });
 
   it('فرم پیگیری سه‌تا-شش‌ماهه در کتابخانهٔ فرم‌ها نشسته و خانواده‌پذیر است', async () => {

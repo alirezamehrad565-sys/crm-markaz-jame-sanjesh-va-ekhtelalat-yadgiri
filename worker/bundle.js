@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.27.28";
+var APP_VERSION = "1.27.29";
 var NODE_MIN_VERSION = "1.26.0";
 
 // node_modules/zod/v4/classic/external.js
@@ -56790,7 +56790,13 @@ function createClinicalEngineService(deps) {
       withProbes: kpis.interventionResponse.base,
       dueReassess: kpis.reassessOnTime.base
     });
-    return kpis;
+    const fuRow = await db.queryOne(
+      `SELECT COUNT(*) AS sent,
+              SUM(CASE WHEN e.status = 'completed' THEN 1 ELSE 0 END) AS filled
+         FROM case_events e JOIN case_event_types t ON t.id = e.event_type_id
+        WHERE t.key = 'ce-followup-3m-v1' AND e.deleted_at IS NULL`
+    );
+    return { ...kpis, followups: { sent: fuRow?.sent ?? 0, filled: fuRow?.filled ?? 0 } };
   }
   __name(getValidationKpis, "getValidationKpis");
   async function createCaseAudit(input2, actor) {
@@ -56818,8 +56824,22 @@ function createClinicalEngineService(deps) {
   }
   __name(createCaseAudit, "createCaseAudit");
   async function listCaseAudits(actor, studentId) {
-    if (actor.role !== "manager") {
-      throw new ForbiddenError("\u062D\u0633\u0627\u0628\u0631\u0633\u06CC \u0645\u0648\u0631\u062F\u06CC \u0641\u0642\u0637 \u0628\u0631\u0627\u06CC \u0645\u062F\u06CC\u0631 \u0642\u0627\u0628\u0644 \u0645\u0634\u0627\u0647\u062F\u0647 \u0627\u0633\u062A");
+    if (actor.role === "therapist") {
+      const rows2 = await db.query(
+        `SELECT a.*, s.first_name AS student_first, s.last_name AS student_last
+           FROM case_audits a JOIN students s ON s.id = a.student_id
+          WHERE (s.owner_staff_id = ? OR EXISTS (
+                  SELECT 1 FROM appointments ap
+                    JOIN appointment_students asn ON asn.appointment_id = ap.id
+                   WHERE ap.staff_id = ? AND asn.student_id = s.id
+                 ))
+          ORDER BY a.created_at DESC LIMIT 50`,
+        [actor.staffId, actor.staffId]
+      );
+      return rows2.map((r) => caseAuditRowToRecord(r));
+    }
+    if (actor.role !== "manager" && actor.role !== "secretary") {
+      throw new ForbiddenError("\u062D\u0633\u0627\u0628\u0631\u0633\u06CC \u0645\u0648\u0631\u062F\u06CC \u0641\u0642\u0637 \u0628\u0631\u0627\u06CC \u062F\u0641\u062A\u0631 \u0645\u0631\u06A9\u0632 \u0648 \u062F\u0631\u0645\u0627\u0646\u06AF\u0631\u0650 \u0647\u0645\u0627\u0646 \u067E\u0631\u0648\u0646\u062F\u0647 \u0642\u0627\u0628\u0644 \u0645\u0634\u0627\u0647\u062F\u0647 \u0627\u0633\u062A");
     }
     const rows = studentId ? await db.query(
       `SELECT a.*, s.first_name AS student_first, s.last_name AS student_last
@@ -57278,13 +57298,13 @@ function registerClinicalEngineRoutes(app, service) {
     const data = await service.getValidationKpis(actor);
     return c.json({ data }, 200);
   });
-  app.get("/api/case-audits", requireRole("manager"), async (c) => {
+  app.get("/api/case-audits", requireRole("manager", "secretary", "therapist"), async (c) => {
     const actor = getAuthContext(c);
     const studentId = c.req.query("student_id")?.trim() || null;
     const data = await service.listCaseAudits(actor, studentId);
     return c.json({ data }, 200);
   });
-  app.post("/api/case-audits", requireRole("manager"), async (c) => {
+  app.post("/api/case-audits", requireRole("manager", "secretary"), async (c) => {
     const actor = getAuthContext(c);
     const body = CaseAuditCreateSchema.parse(await c.req.json());
     const data = await service.createCaseAudit(
@@ -78525,6 +78545,9 @@ function createApp(deps) {
           part(services.clinicalEngine.getValidationKpis(actor)),
           part(services.clinicalEngine.listCaseAudits(actor, null))
         ]).then(([k, a]) => k ? { kpis: k, audits: a ?? [] } : null)
+      ) : actor.role === "therapist" ? (
+        /* M6 POLISH-3 (۱.۲۷.۲۹) — نمای فقط‌خواندنی درمانگر: حسابرسی پرونده‌های خودش (KPIهای دفتر نمی‌آید) */
+        part(services.clinicalEngine.listCaseAudits(actor, null).then((a) => ({ kpis: null, audits: a ?? [] })))
       ) : Promise.resolve(null)
     ]);
     return c.json({ data: { today, summary, goal, scoring, me, knowledge, announcements, waitlist, dayAppts, followups, validation } }, 200);

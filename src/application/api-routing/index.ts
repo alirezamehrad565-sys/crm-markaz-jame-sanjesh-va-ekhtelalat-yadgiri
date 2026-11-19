@@ -918,7 +918,10 @@ export function createApp(deps: AppDeps): AppHono {
                 part(services.clinicalEngine.listCaseAudits(actor, null))
               ]).then(([k, a]) => (k ? { kpis: k, audits: a ?? [] } : null))
             )
-          : Promise.resolve(null)
+          : actor.role === 'therapist'
+            ? /* M6 POLISH-3 (۱.۲۷.۲۹) — نمای فقط‌خواندنی درمانگر: حسابرسی پرونده‌های خودش (KPIهای دفتر نمی‌آید) */
+              part(services.clinicalEngine.listCaseAudits(actor, null).then((a) => ({ kpis: null, audits: a ?? [] })))
+            : Promise.resolve(null)
       ]);
 
     return c.json({ data: { today, summary, goal, scoring, me, knowledge, announcements, waitlist, dayAppts, followups, validation } }, 200);

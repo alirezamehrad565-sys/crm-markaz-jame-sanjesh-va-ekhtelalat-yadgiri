@@ -291,14 +291,15 @@ export function registerClinicalEngineRoutes(app: AppHono, service: ClinicalEngi
     return c.json({ data }, 200);
   });
 
-  app.get('/api/case-audits', requireRole('manager'), async (c) => {
+  app.get('/api/case-audits', requireRole('manager', 'secretary', 'therapist'), async (c) => {
     const actor = getAuthContext(c);
     const studentId = c.req.query('student_id')?.trim() || null;
     const data = await service.listCaseAudits(actor, studentId);
     return c.json({ data }, 200);
   });
 
-  app.post('/api/case-audits', requireRole('manager'), async (c) => {
+  /* M6 POLISH-3 (۱.۲۷.۲۹) — POST هم‌راستا با دکمهٔ UI (canAudit = manager/secretary): منشی هم ثبت می‌کند */
+  app.post('/api/case-audits', requireRole('manager', 'secretary'), async (c) => {
     const actor = getAuthContext(c);
     const body = CaseAuditCreateSchema.parse(await c.req.json<unknown>());
     const data = await service.createCaseAudit(
