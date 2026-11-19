@@ -940,10 +940,11 @@ fn spawn_engine_boot(app: tauri::AppHandle) {
 // کانال دستی (check_updates + open_release_page) همیشه سالم است. قاعدهٔ سخت D-۴: این کد هیچ
 // مسیری به dataDir ندارد — نصاب per-user NSIS فقط شاخهٔ برنامه را لمس می‌کند (پین desktop-check).
 fn updater_plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
-    // همیشه با pubkey صدا زده می‌شود (typestate سازنده اجازهٔ شاخه‌کردن نمی‌دهد — درس E0308 CI)؛
-    // کلید خالی از راز CI = کانال خودکار در runtime بی‌اثر (خطا با پیام فارسی گرفته می‌شود)، کانال دستی سالم.
-    let key = option_env!("TAURI_UPDATER_PUBKEY").unwrap_or("");
-    tauri_plugin_updater::Builder::new().pubkey(key).build()
+    // کلید عمومی از پیکربندی tauri.conf.json (plugins.updater.pubkey) خوانده می‌شود —
+    // Builder::pubkey() در این نسخهٔ tauri تایپ پلاگین را به TauriPlugin<_, Config> می‌برد که
+    // .plugin() نمی‌پذیرد (درس E0308 CI). تزریق کلید واقعی در CI هنگام بیلد انجام می‌شود؛
+    // بی‌کلید = کانال خودکار بی‌اثر در runtime (خطا با پیام فارسی گرفته می‌شود)، کانال دستی سالم.
+    tauri_plugin_updater::Builder::new().build()
 }
 
 /// فاز D-۳ — کانال دستی «بررسی نسخهٔ تازه»: فقط وارسی؛ هیچ دانلود/نصبی از داخل اپ نیست
