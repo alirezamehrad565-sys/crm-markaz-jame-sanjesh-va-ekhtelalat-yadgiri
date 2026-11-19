@@ -393,6 +393,21 @@ function managerOnly(render) {
   return roleOnly(['manager'], render, 'این بخش فقط برای مدیر مرکز فعال است.'); /* S11-19 */
 }
 
+/* M2 POLISH-4 (۱.۲۷.۳۱) — قطع پلتفرمی: پنل سلامت و ویزارد پیکربندی ابری ابزار پوستهٔ میز هستند
+   (window.__TAURI__ — همان گارد server-pill)؛ روی نسخهٔ وب/کلادفلر این مسیرها با یادداشت نرم
+   جایگزین می‌شوند و بنر/هدایت اولین‌اجرای ابری هرگز نمی‌آید — سورس و chunk دست‌نخورده می‌ماند. */
+function isDesktopShell() {
+  return Boolean(globalThis.__TAURI__);
+}
+function desktopOnly(render) {
+  return (container, ctx) => {
+    if (isDesktopShell()) return render(container, ctx);
+    container.replaceChildren(
+      emptyState({ iconName: 'settings', title: 'این بخش در نسخهٔ میز مرکز است', hint: 'پنل سلامت و ویزارد پیکربندی ابری روی نسخهٔ وب/کلادفلر از رابط قطع شده‌اند؛ برای این بخش، نسخهٔ میز (دسکتاپ) مرکز را باز کنید.' })
+    );
+  };
+}
+
 /* ── فاز C — ورودی‌های سبک «پیکربندی اولیه اتصال ابری» (سند §۲-۵) ─────────────────
    دو فلگ سشن‌محلی/نصب‌محلی و دو ورودی بنر/هدایت اولین اجرا — هر دو post-login و بی‌await
    سنگین: بوت و نخستین رندر هرگز منتظر fetch وضعیت نمی‌مانند؛ خطای درگاه = بی‌بنر/بی‌هدایت
@@ -414,6 +429,7 @@ function withCloudSetupBanner(dashboardRender) {
     await dashboardRender(container, ctx);
     try {
       if (session.user?.role !== 'manager') return;
+      if (!isDesktopShell()) return; /* M2 POLISH-4 (۱.۲۷.۳۱) — بنر ابری فقط پوستهٔ میز */
       try {
         if (sessionStorage.getItem(CLOUD_SETUP_BANNER_KEY) === '1' || sessionStorage.getItem(CLOUD_SETUP_SKIP_KEY) === '1') return;
       } catch { /* حالت خصوصی — بنر می‌آید */ }
@@ -451,6 +467,7 @@ function withCloudSetupBanner(dashboardRender) {
 function armFirstRunCloudSetup() {
   try {
     if (session.user?.role !== 'manager') return;
+    if (!isDesktopShell()) return; /* M2 POLISH-4 (۱.۲۷.۳۱) — هدایت اولین‌اجرای ابری فقط پوستهٔ میز */
     if (localStorage.getItem(CLOUD_SETUP_SEEN_KEY) === '1') return;
     if (!cloudSetupRouteActive()) return; // دیپ‌لینک کاربر را نمی‌رباییم
     api.getDetached('/api/instance-sync/status')
@@ -568,13 +585,13 @@ register('#/backup', { title: 'پشتیبان‌گیری و بازیابی', ren
    بازگشت = دو خط register از کامیت ۱.۲۵.۷۰ برگردانده شود؛ هش مستقیم اکنون ۴۰۴ می‌دهد) */
 /* فاز A — روت «پنل سلامت» دوباره وصل شد (فقط روت؛ آیتم سایدبار به حکم ۱.۲۵.۷۱ همچنان قطع است):
    pill سربرگ «سرور محلی» کلیک → همین مسیر — الگوی register از هم‌نمایان کامیت ۱.۲۵.۷۰. */
-register('#/health-panel', { title: 'پنل سلامت', render: managerOnly(lazyView(() => import('./views/health-panel.js'), 'renderHealthPanel', '#/health-panel')) });
+register('#/health-panel', { title: 'پنل سلامت', render: managerOnly(desktopOnly(lazyView(() => import('./views/health-panel.js'), 'renderHealthPanel', '#/health-panel'))) }); /* M2 POLISH-4: روی وب یادداشت نرم */
 /* فاز C — ویزارد «پیکربندی اولیه اتصال ابری» (سند server-cloud-update-design §۲-۵/§۶ فاز C):
    جریان پیکربندی نخست پس از نصب تازه — فقط مدیر؛ کل ویزارد (مدل خالص + جریان‌های B1/A1 +
    گام secret یک‌بارمصرف) در views/cloud-setup.js است و chunk فقط با ورود به مسیر می‌آید
    (import داینامیک literal در thunk — گیت بودجهٔ کارایی: boot_js_gz/eager_modules دست نمی‌خورد).
    آدرس کامل مسیر در نصب میز: http://127.0.0.1:8787/#/cloud-setup — از لینک پانویس boot-dist هم. */
-register('#/cloud-setup', { title: 'پیکربندی اتصال ابری', render: managerOnly(lazyView(() => import('./views/cloud-setup.js'), 'renderCloudSetup', '#/cloud-setup')) });
+register('#/cloud-setup', { title: 'پیکربندی اتصال ابری', render: managerOnly(desktopOnly(lazyView(() => import('./views/cloud-setup.js'), 'renderCloudSetup', '#/cloud-setup'))) }); /* M2 POLISH-4: روی وب یادداشت نرم */
 register('#/working-hours', { title: 'تنظیمات', render: lazyView(() => import('./views/settings.js'), 'renderSettings', '#/working-hours') }); // — مسیر قدیمی → تنظیمات
 register('#/schools', { title: 'مدارس', render: roleOnly(['manager', 'secretary'], lazyView(() => import('./views/schools.js'), 'renderSchools', '#/schools')) }); // — منشی مجاز
 register('#/students', { title: 'دانش‌آموزان', render: lazyView(() => import('./views/students.js'), 'renderStudents', '#/students') });
