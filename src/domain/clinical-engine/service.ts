@@ -7,10 +7,14 @@ import type { AuditWriter } from '@core/audit';
 import type { Logger } from '@core/logger';
 import type { CaseEventAnalysis, CaseEventBand, CaseEventSubscale } from '@domain/case-events';
 import type {
+  ClinicalNarrative,
   EvidenceEvent,
   InferenceOutput,
   InterventionPathRecord,
   InterventionPathStatus,
+  NarrativeCommitteeBlock,
+  NarrativePathBlock,
+  NarrativeProbeTrend,
   PathDecision,
   PathProbeRecord,
   PathProbeSeries,
@@ -1572,7 +1576,114 @@ export function createClinicalEngineService(deps: ClinicalEngineDeps) {
     };
   }
 
-  return { getInsights, getCaseFormulation, homeMonitorFocusOf, getChecklistPlan, listPaths, createPath, decidePath, getPath, listTargets, toggleStep, listPathTemplates, upsertPathTemplate, listPathSessions, addPathSession, updatePathSession, deletePathSession, reorderPathSessions, listRecentCards, getPathwayReport, addPathProbe, listPathProbes, updatePathProbe, updatePathGoal, getValidationKpis, createCaseAudit, listCaseAudits }; // پراپ‌های پیشروی · هدف مسیر · اعتبارسنجی · صورت‌بندی مورد (۱.۲۵.۰۵)
+  /* ۱.۲۷.۲۶ — M3 POLISH-3: روایت بالینی پرونده — تجمیع فقط‌خواندنی «فرضیهٔ موتور ← مصوبهٔ کمیته ←
+     مسیر مداخله و جلساتش ← نتیجهٔ پراپ». مسیرها از listPaths با همان دسترسی (assertCanView) می‌آیند؛
+     کمیته و روند پراپ با دو کوئری سبک اضافه می‌شوند (بدون N+1 — IN تکه‌بندی‌شده با قرارداد §ف۶ ⑧). */
+  async function getClinicalNarrative(studentId: string, actor: AuthContext): Promise<ClinicalNarrative> {
+    const student = await loadStudent(studentId);
+    assertCanView(student, actor);
+    const paths = await listPaths(studentId, actor);
+
+    const committeeRows = await db.query<{ id: string; topic: string; decision: string | null; decision_status: string; meeting_title: string; meeting_date: string; meeting_status: string }>(
+      `SELECT ci.id, ci.topic, ci.decision, ci.decision_status,
+              m.title AS meeting_title, m.meeting_date, m.status AS meeting_status
+         FROM committee_items ci
+         JOIN committee_meetings m ON m.id = ci.meeting_id AND m.deleted_at IS NULL
+        WHERE ci.student_id = ? AND ci.deleted_at IS NULL
+        ORDER BY m.meeting_date ASC, ci.created_at ASC`,
+      [studentId]
+    );
+
+    // روند پراپ هر مسیر: سنجهٔ اصلی = سنجهٔ آخرین پراپ؛ سقف ۴۰۰ هم‌قرارداد بج فهرست مسیرها
+    const pathIds = paths.map((p) => p.id);
+    const probeRows: { pathway_id: string; metric: string; unit: string | null; value: number; taken_at: string }[] = [];
+    for (const chunk of inParamChunks(pathIds)) {
+      probeRows.push(...await db.query<{ pathway_id: string; metric: string; unit: string | null; value: number; taken_at: string }>(
+        `SELECT pathway_id, metric, unit, value, taken_at FROM pathway_probes
+          WHERE pathway_id IN (${inPlaceholders(chunk.length)})
+          ORDER BY taken_at DESC
+          LIMIT 400`,
+        chunk
+      ));
+    }
+    const byPathMetric = new Map<string, Map<string, { unit: string | null; points: { value: number; taken_at: string }[] }>>();
+    for (const r of probeRows) {
+      let metrics = byPathMetric.get(r.pathway_id);
+      if (!metrics) { metrics = new Map(); byPathMetric.set(r.pathway_id, metrics); }
+      const s = metrics.get(r.metric) ?? { unit: r.unit, points: [] };
+      s.points.push({ value: r.value, taken_at: r.taken_at }); // DESC ورودی
+      metrics.set(r.metric, s);
+    }
+    const trends = new Map<string, NarrativeProbeTrend>();
+    for (const [pathId, metrics] of byPathMetric) {
+      let primaryMetric: string | null = null;
+      let primaryLastAt = '';
+      for (const [metric, s] of metrics) {
+        const lastAt = s.points[0]?.taken_at ?? '';
+        if (lastAt > primaryLastAt) { primaryLastAt = lastAt; primaryMetric = metric; }
+      }
+      if (!primaryMetric) continue;
+      const s = metrics.get(primaryMetric)!;
+      const asc = [...s.points].reverse(); // صعودی برای first/last
+      const first = asc.length > 0 ? asc[0].value : null;
+      const last = asc.length > 0 ? asc[asc.length - 1].value : null;
+      trends.set(pathId, {
+        count: asc.length,
+        metric: primaryMetric,
+        unit: s.unit,
+        first,
+        last,
+        firstAt: asc.length > 0 ? asc[0].taken_at : null,
+        lastAt: asc.length > 0 ? asc[asc.length - 1].taken_at : null,
+        improved: first !== null && last !== null ? last > first : null
+      });
+    }
+
+    const pathBlocks: NarrativePathBlock[] = paths.map((p) => {
+      const done = p.sessions.filter((s) => s.status === 'done');
+      return {
+        id: p.id,
+        targetKey: p.targetKey,
+        targetTitle: p.targetTitle,
+        status: p.status,
+        createdAt: p.createdAt,
+        engineHypothesis: p.engineHypothesis,
+        decision: p.decision,
+        sessionsPlanned: p.sessions.length,
+        sessionsDone: done.length,
+        sessionsSkipped: p.sessions.filter((s) => s.status === 'skipped').length,
+        lastSessionDoneAt: done.length > 0 ? done[done.length - 1].doneAt ?? null : null,
+        probeTrend: trends.get(p.id) ?? null,
+        probeSummary: p.probeSummary,
+        reassessAt: p.reassessAt
+      };
+    });
+
+    const committee: NarrativeCommitteeBlock[] = committeeRows.map((r) => ({
+      id: r.id,
+      topic: r.topic,
+      decision: r.decision,
+      decisionStatus: r.decision_status,
+      meetingTitle: r.meeting_title,
+      meetingDate: r.meeting_date,
+      meetingStatus: r.meeting_status
+    }));
+
+    const stamps = [
+      ...committee.map((c) => c.meetingDate),
+      ...pathBlocks.map((p) => p.createdAt.slice(0, 10)),
+      ...pathBlocks.map((p) => p.probeTrend?.lastAt?.slice(0, 10) ?? '')
+    ].filter(Boolean).sort();
+    return {
+      student: { id: student.id, firstName: student.first_name, lastName: student.last_name },
+      committee,
+      paths: pathBlocks,
+      storyFrom: stamps[0] ?? null,
+      storyTo: stamps[stamps.length - 1] ?? null
+    };
+  }
+
+  return { getInsights, getCaseFormulation, homeMonitorFocusOf, getChecklistPlan, listPaths, createPath, decidePath, getPath, listTargets, toggleStep, listPathTemplates, upsertPathTemplate, listPathSessions, addPathSession, updatePathSession, deletePathSession, reorderPathSessions, listRecentCards, getPathwayReport, addPathProbe, listPathProbes, updatePathProbe, updatePathGoal, getValidationKpis, createCaseAudit, listCaseAudits, getClinicalNarrative }; // پراپ‌های پیشروی · هدف مسیر · اعتبارسنجی · صورت‌بندی مورد (۱.۲۵.۰۵) · روایت بالینی (۱.۲۷.۲۶)
 }
 
 export type ClinicalEngineService = ReturnType<typeof createClinicalEngineService>;

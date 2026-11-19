@@ -228,7 +228,8 @@ export async function renderStudentProfile(container, ctx) {
       sessions: renderSessionsTab,
       comms: renderCommsTab,
       exercises: renderExercisesTabContent,
-      games: renderGamesTabContent // ۱.۲۵.۲۴ — میز تجویز بازی در خود پرونده
+      games: renderGamesTabContent, // ۱.۲۵.۲۴ — میز تجویز بازی در خود پرونده
+      narrative: renderNarrativeTabContent // ۱.۲۷.۲۶ — M3 POLISH-3: روایت بالینی
     }[key];
     (renderer ?? renderInfoTab)(content);
   }
@@ -266,6 +267,7 @@ export async function renderStudentProfile(container, ctx) {
     return [
       { key: 'info', label: 'اطلاعات پایه', icon: 'user', onSelect: selectTab },
       ...(canSeeClinical ? [{ key: 'clinical', label: 'تفسیر بالینی', icon: 'brain', onSelect: selectTab }] : []),
+      ...(canSeeClinical ? [{ key: 'narrative', label: 'روایت بالینی', icon: 'book', onSelect: selectTab }] : []), // ۱.۲۷.۲۶ — M3 POLISH-3: خط زمان «از فرضیه تا نتیجه»
       { key: 'timeline', label: 'تاریخچه', icon: 'clock', onSelect: selectTab },
       { key: 'sessions', label: auxDone ? `جلسات (${fa(appointments.length)})` : 'جلسات', icon: 'calendar', onSelect: selectTab },
       { key: 'exercises', label: 'تمرین‌ها', icon: 'file', onSelect: selectTab },
@@ -294,7 +296,7 @@ export async function renderStudentProfile(container, ctx) {
   const requestedTab = ctx.query?.tab;
   const timelineDeepFilter = ctx.query?.filter ?? (requestedTab === 'followups' ? 'followups' : null);
   const knownTabs = ['info', 'timeline', 'sessions', 'comms', 'exercises'];
-  if (canSeeClinical) knownTabs.splice(1, 0, 'clinical');
+  if (canSeeClinical) knownTabs.splice(1, 0, 'clinical', 'narrative');
   selectTab(requestedTab === 'followups' ? 'timeline' : (knownTabs.includes(requestedTab) ? requestedTab : 'info'));
 
   /* رسیدن دادهٔ پس‌زمینه: کارت وضعیت و نوار تب‌ها درجا تازه می‌شوند و تب در انتظار (یا تب فعال)
@@ -387,6 +389,14 @@ export async function renderStudentProfile(container, ctx) {
       .catch((err) => {
         box.replaceChildren(errorState(err, () => renderGamesTabContent(box)));
       });
+  }
+
+  /* ۱.۲۷.۲۶ — M3 POLISH-3: تب روایت بالینی — chunk فقط با ورود به تب fetch می‌شود (الگوی games-console) */
+  function renderNarrativeTabContent(box) {
+    box.replaceChildren(skeletonState('list', 3));
+    import('../student-narrative.js')
+      .then((m) => m.renderNarrativeTab(box, { student }))
+      .catch((err) => box.replaceChildren(errorState(err, () => renderNarrativeTabContent(box))));
   }
 
   function renderClinicalTabContent(box) {

@@ -220,6 +220,14 @@ export function registerClinicalEngineRoutes(app: AppHono, service: ClinicalEngi
     return c.json({ data }, 200);
   });
 
+  /* ۱.۲۷.۲۶ — M3 POLISH-3: روایت بالینی پرونده — تجمیع فقط‌خواندنی «فرضیهٔ موتور ← کمیته ← مسیر ← پراپ»؛
+     نقش‌ها عیناً هم‌تراز case-formulation است (ناظر مانند تفسیر بالینی مشمول نمی‌شود). */
+  app.get('/api/students/:id/clinical-narrative', requireRole('manager', 'secretary', 'therapist'), async (c) => {
+    const actor = getAuthContext(c);
+    const data = await service.getClinicalNarrative(c.req.param('id'), actor);
+    return c.json({ data }, 200);
+  });
+
   app.get('/api/clinical-targets', requireRole('manager', 'secretary', 'therapist'), async (c) => {
     const data = await service.listTargets();
     return c.json({ data }, 200);

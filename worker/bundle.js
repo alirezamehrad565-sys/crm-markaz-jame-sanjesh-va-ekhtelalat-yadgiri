@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.27.25";
+var APP_VERSION = "1.27.26";
 var NODE_MIN_VERSION = "1.26.0";
 
 // node_modules/zod/v4/classic/external.js
@@ -56671,7 +56671,111 @@ function createClinicalEngineService(deps) {
     };
   }
   __name(caseAuditRowToRecord, "caseAuditRowToRecord");
-  return { getInsights, getCaseFormulation, homeMonitorFocusOf, getChecklistPlan, listPaths, createPath, decidePath, getPath: getPath2, listTargets, toggleStep, listPathTemplates, upsertPathTemplate, listPathSessions, addPathSession, updatePathSession, deletePathSession, reorderPathSessions, listRecentCards, getPathwayReport, addPathProbe, listPathProbes, updatePathProbe, updatePathGoal, getValidationKpis, createCaseAudit, listCaseAudits };
+  async function getClinicalNarrative(studentId, actor) {
+    const student = await loadStudent(studentId);
+    assertCanView(student, actor);
+    const paths = await listPaths(studentId, actor);
+    const committeeRows = await db.query(
+      `SELECT ci.id, ci.topic, ci.decision, ci.decision_status,
+              m.title AS meeting_title, m.meeting_date, m.status AS meeting_status
+         FROM committee_items ci
+         JOIN committee_meetings m ON m.id = ci.meeting_id AND m.deleted_at IS NULL
+        WHERE ci.student_id = ? AND ci.deleted_at IS NULL
+        ORDER BY m.meeting_date ASC, ci.created_at ASC`,
+      [studentId]
+    );
+    const pathIds = paths.map((p) => p.id);
+    const probeRows = [];
+    for (const chunk of inParamChunks(pathIds)) {
+      probeRows.push(...await db.query(
+        `SELECT pathway_id, metric, unit, value, taken_at FROM pathway_probes
+          WHERE pathway_id IN (${inPlaceholders(chunk.length)})
+          ORDER BY taken_at DESC
+          LIMIT 400`,
+        chunk
+      ));
+    }
+    const byPathMetric = /* @__PURE__ */ new Map();
+    for (const r of probeRows) {
+      let metrics = byPathMetric.get(r.pathway_id);
+      if (!metrics) {
+        metrics = /* @__PURE__ */ new Map();
+        byPathMetric.set(r.pathway_id, metrics);
+      }
+      const s = metrics.get(r.metric) ?? { unit: r.unit, points: [] };
+      s.points.push({ value: r.value, taken_at: r.taken_at });
+      metrics.set(r.metric, s);
+    }
+    const trends = /* @__PURE__ */ new Map();
+    for (const [pathId, metrics] of byPathMetric) {
+      let primaryMetric = null;
+      let primaryLastAt = "";
+      for (const [metric, s2] of metrics) {
+        const lastAt = s2.points[0]?.taken_at ?? "";
+        if (lastAt > primaryLastAt) {
+          primaryLastAt = lastAt;
+          primaryMetric = metric;
+        }
+      }
+      if (!primaryMetric) continue;
+      const s = metrics.get(primaryMetric);
+      const asc = [...s.points].reverse();
+      const first = asc.length > 0 ? asc[0].value : null;
+      const last = asc.length > 0 ? asc[asc.length - 1].value : null;
+      trends.set(pathId, {
+        count: asc.length,
+        metric: primaryMetric,
+        unit: s.unit,
+        first,
+        last,
+        firstAt: asc.length > 0 ? asc[0].taken_at : null,
+        lastAt: asc.length > 0 ? asc[asc.length - 1].taken_at : null,
+        improved: first !== null && last !== null ? last > first : null
+      });
+    }
+    const pathBlocks = paths.map((p) => {
+      const done = p.sessions.filter((s) => s.status === "done");
+      return {
+        id: p.id,
+        targetKey: p.targetKey,
+        targetTitle: p.targetTitle,
+        status: p.status,
+        createdAt: p.createdAt,
+        engineHypothesis: p.engineHypothesis,
+        decision: p.decision,
+        sessionsPlanned: p.sessions.length,
+        sessionsDone: done.length,
+        sessionsSkipped: p.sessions.filter((s) => s.status === "skipped").length,
+        lastSessionDoneAt: done.length > 0 ? done[done.length - 1].doneAt ?? null : null,
+        probeTrend: trends.get(p.id) ?? null,
+        probeSummary: p.probeSummary,
+        reassessAt: p.reassessAt
+      };
+    });
+    const committee = committeeRows.map((r) => ({
+      id: r.id,
+      topic: r.topic,
+      decision: r.decision,
+      decisionStatus: r.decision_status,
+      meetingTitle: r.meeting_title,
+      meetingDate: r.meeting_date,
+      meetingStatus: r.meeting_status
+    }));
+    const stamps = [
+      ...committee.map((c) => c.meetingDate),
+      ...pathBlocks.map((p) => p.createdAt.slice(0, 10)),
+      ...pathBlocks.map((p) => p.probeTrend?.lastAt?.slice(0, 10) ?? "")
+    ].filter(Boolean).sort();
+    return {
+      student: { id: student.id, firstName: student.first_name, lastName: student.last_name },
+      committee,
+      paths: pathBlocks,
+      storyFrom: stamps[0] ?? null,
+      storyTo: stamps[stamps.length - 1] ?? null
+    };
+  }
+  __name(getClinicalNarrative, "getClinicalNarrative");
+  return { getInsights, getCaseFormulation, homeMonitorFocusOf, getChecklistPlan, listPaths, createPath, decidePath, getPath: getPath2, listTargets, toggleStep, listPathTemplates, upsertPathTemplate, listPathSessions, addPathSession, updatePathSession, deletePathSession, reorderPathSessions, listRecentCards, getPathwayReport, addPathProbe, listPathProbes, updatePathProbe, updatePathGoal, getValidationKpis, createCaseAudit, listCaseAudits, getClinicalNarrative };
 }
 __name(createClinicalEngineService, "createClinicalEngineService");
 
@@ -56835,6 +56939,11 @@ function registerClinicalEngineRoutes(app, service) {
   app.get("/api/students/:id/case-formulation", requireRole("manager", "secretary", "therapist"), async (c) => {
     const actor = getAuthContext(c);
     const data = await service.getCaseFormulation(c.req.param("id"), actor);
+    return c.json({ data }, 200);
+  });
+  app.get("/api/students/:id/clinical-narrative", requireRole("manager", "secretary", "therapist"), async (c) => {
+    const actor = getAuthContext(c);
+    const data = await service.getClinicalNarrative(c.req.param("id"), actor);
     return c.json({ data }, 200);
   });
   app.get("/api/clinical-targets", requireRole("manager", "secretary", "therapist"), async (c) => {

@@ -753,7 +753,8 @@ function validationCard(kpis, audits) {
         kpi(kpis.startToIdentification.medianDays == null ? '—' : `${fa(Math.round(kpis.startToIdentification.medianDays))} روز`, 'شروع تا جمع‌بندی شناسایی', `میانهٔ فاصلهٔ ساخت پرونده تا اولین گزارش نتایج (${fa(kpis.startToIdentification.students)} پرونده)`)),
       audits.length
         ? el('div', { class: 'clx-chips', style: { marginTop: 'var(--sp-3)' } },
-            ...audits.slice(0, 5).map((a) => el('span', { class: `badge ${a.agreed ? 'badge--success' : 'badge--warning'}`, title: a.note ?? '' },
+            /* ۱.۲۷.۲۶ — M3 POLISH-3: حفر چیپ حسابرسی به روایت بالینی همان پرونده (تب «روایت بالینی» پروفایل) */
+            ...audits.slice(0, 5).map((a) => el('span', { class: `badge ${a.agreed ? 'badge--success' : 'badge--warning'}`, title: a.note ? `${a.note} — مشاهدهٔ روایت بالینی پرونده` : 'مشاهدهٔ روایت بالینی پرونده', role: 'link', tabindex: 0, style: { cursor: 'pointer' }, onclick: () => { location.hash = `#/students/${a.studentId}?tab=narrative`; }, onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); location.hash = `#/students/${a.studentId}?tab=narrative`; } } },
               `${a.studentName} — ${a.reviewerA} / ${a.reviewerB} ${a.agreed ? '· توافق' : '· اختلاف'}`)))
         : el('div', { class: 'cell-sub', style: { marginTop: 'var(--sp-3)' } },
             'حسابرسی موردی: مرور یک پرونده توسط دو ارزیاب و ثبت سادهٔ توافق — نتیجه‌ها همین‌جا آرشیو می‌شوند.'))
