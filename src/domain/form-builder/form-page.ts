@@ -23,18 +23,21 @@ h1{font-size:20px;margin:0 0 6px}h2{font-size:19px;margin:0 0 10px}
 p.lead{color:var(--muted);margin:0 0 18px;font-size:14.5px}
 .badge-free{display:inline-block;background:#e7f7ee;color:var(--ok);border-radius:999px;
 padding:4px 14px;font-size:13.5px;font-weight:700;margin-bottom:14px}
+/* ۱.۲۷.۳۶ — دکمه‌های هم‌اندازه: basis صفر یعنی «ادامه» و «بازگشت» همیشه هم‌پهنا؛ min-height هم‌قد */
 .btn{display:inline-flex;align-items:center;justify-content:center;border:none;cursor:pointer;
-border-radius:12px;padding:12px 22px;font-family:inherit;font-size:15.5px;font-weight:700;width:100%}
+border-radius:12px;padding:12px 22px;font-family:inherit;font-size:15.5px;font-weight:700;width:100%;
+min-height:52px}
 .btn--primary{background:var(--brand);color:#fff}
 .btn--primary:disabled{opacity:.45;cursor:not-allowed}
 .btn--ghost{background:transparent;color:var(--brand);border:1.5px solid var(--brand)}
-.btn--sm{width:auto;padding:9px 16px;font-size:14px}
-.btnrow{display:flex;gap:10px;margin-top:20px}.btnrow .btn{flex:1}
+.btn--sm{width:auto;min-height:44px;padding:9px 16px;font-size:14px}
+.btnrow{display:flex;gap:10px;margin-top:20px}.btnrow .btn{flex:1 1 0}
 .choice{display:block;background:var(--card);border:2px solid var(--line);border-radius:var(--r);
-padding:14px 18px;margin-bottom:12px;cursor:pointer;transition:border-color .15s,background .15s;
-font-family:inherit;font-size:15px;text-align:start;width:100%}
+padding:14px 18px;margin-bottom:12px;cursor:pointer;transition:border-color .15s,background .15s,box-shadow .15s;
+font-family:inherit;font-size:15px;text-align:start;width:100%;position:relative}
 .choice:hover{border-color:var(--brand)}
-.choice.sel{border-color:var(--brand);background:var(--brand-soft)}
+.choice.sel{border-color:var(--brand);background:var(--brand-soft);box-shadow:0 2px 10px rgba(37,99,235,.12)}
+.choice.sel::after{content:'✓';position:absolute;top:10px;left:14px;color:var(--brand);font-weight:800;font-size:15px}
 label.f{display:block;font-weight:700;margin:0 0 6px}
 input.i,select.i,textarea.i{width:100%;border:1.5px solid var(--line);border-radius:12px;padding:11px 14px;
 font-family:inherit;font-size:15.5px;background:#fff;color:var(--ink)}
@@ -190,8 +193,8 @@ function bindBlock(i,b){
 function checkBlock(i,b){
   var v=state.answers[i];
   var empty=v===undefined||v===null||v===''||(Array.isArray(v)&&!v.length);
-  if(b.required&&empty){err('be',true,'این پرسش اجباری است — پاسخ دهید تا ادامه دهید');return false;}
-  if(b.kind==='phone'&&!empty&&!validPhone(String(v))){err('be',true,'شماره باید ۱۱ رقم و با ۰۹ شروع شود');return false;}
+  if(b.required&&empty){err('be',true,'برای ادامه به این پرسش پاسخ بدهید');return false;}
+  if(b.kind==='phone'&&!empty&&!validPhone(String(v))){err('be',true,'شماره موبایل ۱۱ رقم است و با ۰۹ شروع می‌شود');return false;}
   err('be',false);return true;
 }
 function renderContact(){
@@ -199,9 +202,9 @@ function renderContact(){
   app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
     '<h2>اسم و راه تماس شما</h2><p class="lead">برای اینکه بتوانیم پیگیری یا پاسخ بدهیم.</p>'+
     '<div class="field"><label class="f">نام و نام خانوادگی</label><input class="i" id="rn" value="'+esc(state.name)+'">'+
-    '<div class="err-msg" id="rnErr">نام حداقل ۲ نویسه است</div></div>'+
+    '<div class="err-msg" id="rnErr">نام را کامل بنویسید — دست‌کم دو حرف</div></div>'+
     '<div class="field"><label class="f">شماره موبایل (اختیاری)</label><input class="i" id="rp" dir="ltr" inputmode="tel" placeholder="09xxxxxxxxx" value="'+esc(state.phone)+'">'+
-    '<div class="err-msg" id="rpErr">شماره باید ۱۱ رقم و با ۰۹ شروع شود</div></div>'+
+    '<div class="err-msg" id="rpErr">شماره موبایل ۱۱ رقم است و با ۰۹ شروع می‌شود</div></div>'+
     btnRow('ادامه به مرور نهایی', state.step-1)+
     '</div>';
   document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=Number(this.getAttribute('data-to'))||0;render();});

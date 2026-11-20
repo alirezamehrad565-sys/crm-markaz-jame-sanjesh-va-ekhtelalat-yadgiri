@@ -10,7 +10,6 @@ import type { ExerciseBankBot } from './exercise-bank-bot';
 import type { ExerciseSubmissionBot } from './exercise-submission-bot';
 import type { CaseEventsBot } from './case-events-bot';
 import type { AwarenessBot } from './awareness-bot';
-import type { ReferralBot } from './referral-bot'; // ۱.۲۷.۳۵ — فلو معرفی دانش‌آموز
 import type { NotifyAppDeps } from './service';
 
 // هویت لاگ عملیات خودِ بات — بات نباید با هویت آدم‌ها audit بنویسد
@@ -43,7 +42,6 @@ export interface NotifyCtx {
   subBot: ExerciseSubmissionBot | null;
   clfBot: CaseEventsBot;
   awBot: AwarenessBot;
-  rfBot: ReferralBot; // ۱.۲۷.۳۵ — معرفی دانش‌آموز برای عموم و نقش پایه
   readPfState(chatId: string): Promise<{ pfl?: Array<{ e: string; f: string; t: string }> }>;
   writePfState(chatId: string, state: { pfl?: Array<{ e: string; f: string; t: string }> }): Promise<void>;
   studentNamesMap(studentIds: string[]): Promise<Map<string, string>>;

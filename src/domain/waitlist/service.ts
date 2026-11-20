@@ -120,6 +120,7 @@ interface ReferralRow {
   concern_text: string | null;
   prior_eval: number | null;
   prior_eval_note: string | null;
+  family_context: string | null;
   channel: string;
   chat_id: string | null;
   token: string | null;
@@ -142,6 +143,20 @@ function referralRowToDomain(row: ReferralRow): WaitlistReferral {
   } catch {
     /* برچسب خراب = خالی — هرگز ثبت معرفی را نمی‌شکند */
   }
+  /* ۱.۲۷.۳۶ — فرم تکمیلی خانواده (JSON) — خراب/خالی = null؛ هرگز ثبت را نمی‌شکند */
+  let familyContext: WaitlistReferral['familyContext'] = null;
+  if (row.family_context) {
+    try {
+      const fc = JSON.parse(row.family_context) as { culture?: string | null; finance?: string | null; cooperation?: string | null };
+      familyContext = {
+        culture: typeof fc.culture === 'string' ? fc.culture : null,
+        finance: typeof fc.finance === 'string' ? fc.finance : null,
+        cooperation: typeof fc.cooperation === 'string' ? fc.cooperation : null
+      };
+    } catch {
+      familyContext = null;
+    }
+  }
   return {
     id: row.id,
     refRole: row.ref_role as WaitlistReferral['refRole'],
@@ -158,6 +173,7 @@ function referralRowToDomain(row: ReferralRow): WaitlistReferral {
     concernText: row.concern_text,
     priorEval: row.prior_eval === null ? null : row.prior_eval === 1,
     priorEvalNote: row.prior_eval_note,
+    familyContext,
     channel: row.channel,
     chatId: row.chat_id,
     submissionGroup: row.submission_group,
@@ -793,9 +809,9 @@ export function createWaitlistService(deps: WaitlistDeps): WaitlistService {
           await tx.execute(
             `INSERT INTO waitlist_referrals
                (id, ref_role, referrer_name, referrer_phone, first_name, birth_date, guardian_phone, school_text, grade_text,
-                class_text, concern_category, concern_tags, concern_text, prior_eval, prior_eval_note,
+                class_text, concern_category, concern_tags, concern_text, prior_eval, prior_eval_note, family_context,
                 channel, chat_id, token, submission_group, status, academic_year, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'new', ?, ?, ?)`,
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'new', ?, ?, ?)`,
             [
               id,
               input.role,
@@ -812,6 +828,14 @@ export function createWaitlistService(deps: WaitlistDeps): WaitlistService {
               child.concern_text ?? null,
               child.prior_eval === true ? 1 : child.prior_eval === false ? 0 : null,
               child.prior_eval_note ?? null,
+              /* ۱.۲۷.۳۶ — فرم تکمیلی خانواده (JSON) — هیچ‌کدام خالی؟ ستون NULL */
+              (child.family_culture || child.family_finance || child.family_cooperation)
+                ? JSON.stringify({
+                    culture: child.family_culture ?? null,
+                    finance: child.family_finance ?? null,
+                    cooperation: child.family_cooperation ?? null
+                  })
+                : null,
               channel,
               meta.chatId ?? null,
               input.token ?? null,

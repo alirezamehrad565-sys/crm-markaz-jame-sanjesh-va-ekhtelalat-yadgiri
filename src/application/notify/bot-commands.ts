@@ -29,9 +29,10 @@ export function buildBotKeyboard(owner: { kind: string; role: string | null } | 
   const unlinkRow = ['قطع اتصال'];
   if (!owner) {
     return [
+      ['معرفی دانش‌آموز'], // ۱.۲۷.۳۶ — دکمهٔ اول بات؛ ارجاع فقط از لینک فرم وب
       ['معرفی مرکز', 'خدمات مرکز'],
       ['راه‌های ارتباطی', 'احراز هویت'],
-      ['معرفی دانش‌آموز', 'فایل‌های آموزشی'] // ۱.۲۷.۳۵ — عموم مردم بدون احراز
+      ['فایل‌های آموزشی']
     ];
   }
   if (owner.kind === 'staff') {
@@ -50,17 +51,18 @@ export function buildBotKeyboard(owner: { kind: string; role: string | null } | 
   }
   if (owner.kind === 'class') {
     return [
+      ['معرفی دانش‌آموز'], // ۱.۲۷.۳۶ — دکمهٔ اول؛ معلمِ کلاس معرفی‌کنندهٔ اصلی است
       ['نوبت‌های کلاس من', 'فعالیت کلاس'],
       ['کارت‌های آماده', 'آگاهی‌های اختلالات'],
-      ['معرفی دانش‌آموز'], // ۱.۲۷.۳۵ — معلمِ کلاس معرفی‌کنندهٔ اصلی است
       aboutRow,
       unlinkRow
     ];
   }
   return [
+    ['معرفی دانش‌آموز'], // ۱.۲۷.۳۶ — دکمهٔ اول برای نقش پایه (خانواده)
     ['نوبت‌های دانش‌آموز من', 'تمرین‌های انجام‌نشده'],
     ['چک‌لیست‌های من', 'حضور فرزند'],
-    ['معرفی دانش‌آموز', 'فایل‌های آموزشی'], // ۱.۲۷.۳۵ — نقش پایه (خانواده)
+    ['فایل‌های آموزشی'],
     aboutRow,
     unlinkRow
   ];
@@ -77,37 +79,21 @@ function extractMessageText(update: unknown): string | null {
 
 
 export function createBotCommandsSection(ctx: NotifyCtx): Pick<NotifyAppService, 'handleBotUpdate' | 'processLinkCode' | 'handleScheduleCommand' | 'identifyAndReply' | 'handleMyNextCommand' | 'handleBotCancel' | 'resolveOwner' | 'handleFollowupsCommand' | 'handleFollowupDone' | 'handleAttendanceSummary' | 'handleUnlinkCommand' | 'handleClassActivityCommand' | 'handleHelpCommand' | 'handleContactCommand' | 'handleServicesCommand' | 'handleAuthGuideCommand' | 'handlePendingHomeworkCommand' | 'handlePublicFilesCommand' | 'handleParentFileGet'> {
-  const { deps, db, audit, log, now, appointments, students, followups, exbBot, subBot, clfBot, awBot, rfBot, readPfState, writePfState, studentNamesMap, staffNamesMap } = ctx;
+  const { deps, db, audit, log, now, appointments, students, followups, exbBot, subBot, clfBot, awBot, readPfState, writePfState, studentNamesMap, staffNamesMap } = ctx;
+
+  // ۱.۲۷.۳۶ — ارجاع فقط از لینک (خواست کارفرما: پر کردن فرم با دکمه‌های بات سنگین است)؛
+  // دکمهٔ اول بات = معرفی دانش‌آموز → پیام کوتاه با لینک فرم عمومی وب.
+  const refWebLink = (deps.publicBaseUrl ?? '').replace(/\/+$/, '') + '/public/referral';
+  const REFERRAL_LINK_MESSAGE =
+    '🧩 معرفی دانش‌آموز به مرکز\n\n' +
+    'اگر درباره یادگیری، گفتار، توجه یا رفتار یک کودک نگرانی دارید، با فرم کوتاهِ زیر چند دقیقه‌ای ثبتش کنید — ' +
+    'کارشناسان ما بررسی می‌کنند و با شما تماس می‌گیرند. همهٔ خدمات مرکز رایگان است.\n\n' +
+    '🌐 فرم معرفی دانش‌آموز:\n' + refWebLink;
 
   return {
     async handleBotUpdate(update: unknown): Promise<{ handled: boolean; reply: string | null; buttons?: InlineButton[][] | null; keyboard?: string[][] | null }> {
       const cmd = parseBotUpdate(update);
       const rawText = extractMessageText(update);
-      // ۱.۲۷.۳۵ — فلو معرفی فعال؟ متن آزاد (که پارس null می‌دهد) هم یک گام جلو می‌رود —
-      // گارد پیش از early-return، با استخراج مستقیم chatId؛ رفتار بات بیرون فلو دست‌نخورده می‌ماند.
-      const refChat = (() => {
-        if (typeof update !== 'object' || update === null) return null;
-        const u = update as { message?: { chat?: { id?: unknown } }; callback_query?: { message?: { chat?: { id?: unknown } } } };
-        const id = u.callback_query?.message?.chat?.id ?? u.message?.chat?.id;
-        return id === undefined || id === null ? null : String(id);
-      })();
-      if (refChat) {
-        const refActive = await rfBot.readActive(refChat);
-        if (refActive) {
-          const textual = cmd === null || cmd.kind === 'identify' || cmd.kind === 'unknown';
-          if (cmd && cmd.kind === 'flow_cancel') {
-            const out = await rfBot.abort(refChat); // /cancel — لغو صریح فلو معرفی
-            return { handled: true, reply: out.text, keyboard: buildBotKeyboard(await this.resolveOwner(refChat)) };
-          }
-          if (textual) {
-            const out = await rfBot.answer(refChat, (rawText ?? '').trim());
-            return { handled: true, reply: out.text, buttons: out.buttons };
-          }
-          if (cmd.kind !== 'ref_role' && cmd.kind !== 'ref_count' && cmd.kind !== 'ref_cat' && cmd.kind !== 'ref_do' && cmd.kind !== 'ref_no' && cmd.kind !== 'media_received' && cmd.kind !== 'sub_pick') {
-            await rfBot.abort(refChat); // منو/دستور دیگر → فلو بسته و خود دستور ادامه می‌یابد
-          }
-        }
-      }
       if (!cmd) {
         return { handled: false, reply: null };
       }
@@ -117,11 +103,6 @@ export function createBotCommandsSection(ctx: NotifyCtx): Pick<NotifyAppService,
         if (clfActive) {
           const out = await clfBot.abortFill(cmd.chatId);
           return { handled: true, reply: out.text, buttons: out.buttons };
-        }
-        // ۱.۲۷.۳۵ — لغو فلو معرفی دانش‌آموز
-        if (await rfBot.readActive(cmd.chatId)) {
-          const out = await rfBot.abort(cmd.chatId);
-          return { handled: true, reply: out.text, keyboard: buildBotKeyboard(await this.resolveOwner(cmd.chatId)) };
         }
         return { handled: false, reply: null };
       }
@@ -287,30 +268,10 @@ export function createBotCommandsSection(ctx: NotifyCtx): Pick<NotifyAppService,
           return { handled: true, reply: out.text, buttons: out.buttons };
         }
 
-        // ۱.۲۷.۳۵ — فلو «معرفی دانش‌آموز»: عموم مردم و نقش پایه (خانواده/معلم)، بدون احراز
+        // ۱.۲۷.۳۶ — معرفی دانش‌آموز: دکمهٔ اول بات برای عموم و نقش پایه؛ فقط لینک فرم وب
+        // (خواست کارفرما — پر کردن فرم با دکمه‌های بات سنگین است و حذف شد)
         case 'referral_root': {
-          const out = await rfBot.root(cmd.chatId);
-          return { handled: true, reply: out.text, buttons: out.buttons };
-        }
-        case 'ref_role': {
-          const out = await rfBot.start(cmd.chatId, cmd.role);
-          return { handled: true, reply: out.text, buttons: out.buttons };
-        }
-        case 'ref_count': {
-          const out = await rfBot.setCount(cmd.chatId, cmd.n);
-          return { handled: true, reply: out.text, buttons: out.buttons };
-        }
-        case 'ref_cat': {
-          const out = await rfBot.setCategory(cmd.chatId, cmd.idx, cmd.value);
-          return { handled: true, reply: out.text, buttons: out.buttons };
-        }
-        case 'ref_do': {
-          const out = await rfBot.confirm(cmd.chatId);
-          return { handled: true, reply: out.text, buttons: out.buttons, keyboard: out.buttons ? undefined : buildBotKeyboard(await this.resolveOwner(cmd.chatId)) };
-        }
-        case 'ref_no': {
-          const out = await rfBot.abort(cmd.chatId);
-          return { handled: true, reply: out.text, keyboard: buildBotKeyboard(await this.resolveOwner(cmd.chatId)) };
+          return { handled: true, reply: REFERRAL_LINK_MESSAGE, keyboard: buildBotKeyboard(await this.resolveOwner(cmd.chatId)) };
         }
 
         case 'exb_root':

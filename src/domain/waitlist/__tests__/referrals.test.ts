@@ -32,7 +32,10 @@ describe('فرم عمومی معرفی به مرکز + اینباکس لیست �
           first_name: 'آوا کریمی',
           birth_date_text: '۱۳۹۸/۵/۱۲',
           concern_category: 'learning_disorder',
-          concern_text: 'مشکوک به دیسلکسی'
+          concern_text: 'مشکوک به دیسلکسی',
+          family_culture: 'mid',
+          family_finance: 'low',
+          family_cooperation: 'high'
         }
       ]
     });
@@ -45,6 +48,9 @@ describe('فرم عمومی معرفی به مرکز + اینباکس لیست �
     expect(rows[0].channel).toBe('web');
     expect(rows[0].academicYear).toBe(currentSchoolYear());
     expect(rows[0].birthDate).toBe('2019-08-03'); // ۱۳۹۸/۰۵/۱۲
+    /* ۱.۲۷.۳۶ — فرم تکمیلی خانواده در ستون JSON ثبت شده است */
+    const famRow = A.sql.prepare(`SELECT family_context FROM waitlist_referrals WHERE id = ?`).get(familyId) as { family_context: string | null };
+    expect(JSON.parse(famRow.family_context ?? '{}')).toEqual({ culture: 'mid', finance: 'low', cooperation: 'high' });
   });
 
   it('فرم خانواده با بیش از یک کودک → ۴۰۰', async () => {
@@ -187,6 +193,14 @@ describe('فرم عمومی معرفی به مرکز + اینباکس لیست �
     expect(html).toContain('Vazirmatn-font-face.css');
     expect(html).toContain('@keyframes fadein');
     expect(res.headers.get('content-security-policy')).toContain('font-src https://cdn.jsdelivr.net');
+    /* ۱.۲۷.۳۶ — گام فرم تکمیلی خانواده هست؛ گزینهٔ اتیسم دیگر پیشنهاد نمی‌شود */
+    expect(html).toContain('وضع فرهنگی خانواده');
+    expect(html).toContain('سطح مالی خانواده');
+    expect(html).toContain('میزان همکاری خانواده');
+    expect(html).toContain('نمی‌دانم');
+    expect(html).not.toContain('data-c="autism"'); // کارت دغدغهٔ اتیسم حذف شده
+    expect(html).not.toContain('data-cat="autism"'); // دستهٔ معلم هم
+    expect(html).toContain("flex:1 1 0"); // دکمه‌های هم‌اندازه
   });
 
   it('GET /api/waitlist/referrals هرگز به‌عنوان id پارس نمی‌شود', async () => {
