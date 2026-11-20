@@ -2,7 +2,7 @@
  *
  * صفحهٔ خودکفا (HTML+CSS+JS همه inline — الگوی referral-page): خوش‌آمد → یک‌بلوک-در-هر-صفحه
  * (صفحه‌های آگاهی هم در جریان می‌نشینند) → مشخصات پاسخ‌دهنده → مرور نهایی با ویرایش هر سطر → ثبت.
- * رعایت prefers-reduced-motion؛ تم با توکن‌های هم‌ارز referral؛ بدون وب‌فونت و بدون باندل.
+ * رعایت prefers-reduced-motion؛ تم با توکن‌های هم‌ارز referral؛ بدون باندل و بدون فونت بیرونی (۱.۲۷.۴۲: وزیرمتن خودی).
  * هیچ تشخیص یا محاسبه‌ای سمت کلاینت انجام نمی‌شود — فقط گردآوری؛ اعتبارسنجی کامل سمت سرور.
  */
 import type { FormDefinition } from './types';
@@ -11,11 +11,16 @@ const PAGE_STYLES = `
 :root{--bg:#f6f7fb;--card:#ffffff;--ink:#1f2430;--muted:#6b7280;--brand:#2563eb;--brand-soft:#eef2ff;
 --ok:#16a34a;--err:#dc2626;--line:#e5e7eb;--r:14px}
 *{box-sizing:border-box}html,body{margin:0;padding:0}
+/* ۱.۲۷.۴۲ — فونت وزیر متن باندل‌شدهٔ خودی (بدون وب‌فونت بیرونی) — واقعاً لود می‌شود */
+@font-face{font-family:Vazirmatn;src:url('/assets/fonts/Vazirmatn-Variable.woff2') format('woff2');
+font-weight:100 900;font-style:normal;font-display:swap}
 body{background:var(--bg);color:var(--ink);font-family:Vazirmatn,Tahoma,'Segoe UI',sans-serif;
 font-size:16px;line-height:1.9;direction:rtl}
 .bar{position:fixed;top:0;right:0;left:0;height:5px;background:var(--line);z-index:5}
 .bar__fill{height:100%;width:0;background:var(--brand);transition:width .3s ease}
-.app{max-width:560px;margin:0 auto;padding:32px 16px 64px;min-height:100vh}
+/* ۱.۲۷.۴۲ — عمودی‌چین‌شدن مرحله (خواست کارفرما: فرم دقیقاً وسط صفحه)؛ safe center = بدون برش در محتوای بلند؛ پدینگ متقارن تا مرکز بصری دقیق باشد */
+.app{max-width:560px;margin:0 auto;padding:24px 16px;min-height:100dvh;
+display:flex;flex-direction:column;justify-content:safe center}
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:24px;
 box-shadow:0 1px 3px rgba(15,23,42,.06)}
 .step-no{color:var(--muted);font-size:13px;margin-bottom:8px}
@@ -309,9 +314,7 @@ export function renderFormPage(opts: { form: FormDefinition }): string {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${opts.form.title.replace(/[<>&"]/g, '')}</title>
 <meta name="robots" content="noindex, nofollow">
-<!-- وزیرمتن از CDN — تایپوگرافی فارسی یکدست (CSP فقط jsdelivr را اجازه می‌دهد) -->
-<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css">
+<!-- ۱.۲۷.۴۲ — وزیرمتن فقط خودی: @font-face در CSS همین صفحه از /assets/fonts می‌خواند -->
 <style>${PAGE_STYLES}</style>
 </head>
 <body>
@@ -328,9 +331,7 @@ export function renderFormNotFoundPage(): string {
 <html lang="fa" dir="rtl">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>فرم یافت نشد</title><meta name="robots" content="noindex, nofollow">
-<!-- وزیرمتن از CDN — تایپوگرافی فارسی یکدست (CSP فقط jsdelivr را اجازه می‌دهد) -->
-<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css">
+<!-- ۱.۲۷.۴۲ — وزیرمتن فقط خودی: @font-face در CSS همین صفحه از /assets/fonts می‌خواند -->
 <style>${PAGE_STYLES}</style></head>
 <body><div class="app"><div class="card done"><div class="big">🔍</div>
 <h1>این فرم پیدا نشد یا هنوز منتشر نشده</h1>

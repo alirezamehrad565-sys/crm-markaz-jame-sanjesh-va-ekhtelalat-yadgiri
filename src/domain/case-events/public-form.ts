@@ -134,14 +134,20 @@ export function renderFillFormPage(model: FillFormModel, token: string): string 
 <style>
   :root { color-scheme: light; }
   * { box-sizing: border-box; }
-  /* ۱.۲۷.۴۰ — هم‌زبان با فرم معرفی: پس‌زمینهٔ گرادینتی + هالهٔ رنگی ثابت */
+  /* ۱.۲۷.۴۲ — فونت وزیر متن باندل‌شدهٔ خودی (بدون URL بیرونی) — پیش‌تر فقط «اعلام» می‌شد و
+     در عمل Tahoma رندر می‌شد؛ حالا با فایل متغیر خودی واقعاً لود می‌شود */
+  @font-face { font-family: Vazirmatn; src: url('/assets/fonts/Vazirmatn-Variable.woff2') format('woff2');
+               font-weight: 100 900; font-style: normal; font-display: swap; }
+  /* ۱.۲۷.۴۲ — عمودی‌چین‌شدن مرحله در صفحهٔ بلند (خواست کارفرما: «فرم دقیقاً وسط صفحه») —
+     safe center در محتوای بلندتر از صفحه به start برمی‌گردد؛ بدون برشِ بالا */
   body { margin: 0; color: #12384f;
-         font-family: Tahoma, "Segoe UI", sans-serif; line-height: 1.8;
+         font-family: Vazirmatn, Tahoma, "Segoe UI", sans-serif; line-height: 1.8;
          background: radial-gradient(600px 320px at 88% -6%, rgba(34,158,217,.14), transparent 66%),
                      radial-gradient(520px 300px at 8% 104%, rgba(37,99,235,.10), transparent 66%),
                      linear-gradient(168deg,#eef6fb 0%,#f7f3ea 52%,#fdf2f8 100%);
          background-attachment: fixed; }
-  .wrap { max-width: 640px; margin: 0 auto; padding: 24px 16px 64px; }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 24px 16px;
+          min-height: 100dvh; display: flex; flex-direction: column; justify-content: safe center; }
   .head { color: #fff; border-radius: 16px; padding: 20px 22px; margin-bottom: 18px;
           background: linear-gradient(135deg,#12384f 0%,#1c5d80 55%,#229ED9 130%);
           box-shadow: 0 10px 26px -12px rgba(18,56,79,.5); }
@@ -166,17 +172,17 @@ export function renderFillFormPage(model: FillFormModel, token: string): string 
   .item { padding: 12px 0; border-bottom: 1px solid #EFE8DC; }
   .item:last-child { border-bottom: 0; }
   .item.is-missing .q { color: #A12622; }
-  .q { font-weight: 700; font-size: 14px; margin-bottom: 8px; }
-  .hint { font-size: 12px; color: #8A8377; margin: -5px 0 8px; line-height: 1.9; }
+  .q { font-weight: 700; font-size: 15px; margin-bottom: 8px; }
+  .hint { font-size: 12.5px; color: #8A8377; margin: -5px 0 8px; line-height: 1.9; }
   .opts { display: flex; flex-wrap: wrap; gap: 8px; }
   .opt { display: inline-flex; align-items: center; gap: 5px; background: #F7F3EA;
          border: 1px solid #E5DCCB; border-radius: 10px; padding: 6px 10px; font-size: 13px; cursor: pointer; }
   .opt--wide { width: 100%; align-items: flex-start; }
   /* ۱.۲۷.۴۰ — گزینهٔ انتخاب‌شده با گرادینت ملایم */
   .opt:has(input:checked) { background: linear-gradient(135deg,#D9EDF7,#E7E4FA); border-color: #229ED9; }
-  .item--free .q { font-size: 13.5px; }
+  .item--free .q { font-size: 14px; }
   textarea.free { width: 100%; border: 1px solid #E5DCCB; border-radius: 10px; padding: 10px 12px;
-                  font-family: inherit; font-size: 13.5px; line-height: 1.9; resize: vertical; background: #FDFCF9; }
+                  font-family: inherit; font-size: 14px; line-height: 1.9; resize: vertical; background: #FDFCF9; }
   textarea.free:focus { outline: 2px solid #229ED9; outline-offset: -1px; }
   .focus { background: #FFF7E0; border: 1px solid #E8D48B; color: #6B5416; border-radius: 12px;
            padding: 11px 14px; margin-bottom: 14px; font-size: 13px; line-height: 1.9; }
@@ -191,7 +197,7 @@ export function renderFillFormPage(model: FillFormModel, token: string): string 
   .msg.ok { display: block; background: #E4F5E9; color: #1D6B39; }
   .msg.err { display: block; background: #FDE8E8; color: #A12622; }
   .foot { text-align: center; font-size: 12px; color: #8A8377; margin-top: 18px; }
-  .notice { text-align: center; font-size: 11.5px; color: #8A8377; margin: -4px 0 12px; }
+  .notice { text-align: center; font-size: 12px; color: #8A8377; margin: -4px 0 12px; }
 </style>
 </head>
 <body>

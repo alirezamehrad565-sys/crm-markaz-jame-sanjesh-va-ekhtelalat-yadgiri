@@ -68,7 +68,7 @@ describe('بات نقش‌آگاه: راهنمای نقش‌محور ()', () => 
   it('/help بدون اتصال → راهنمای مهمان (مسیر ورود)', async () => {
     const res = await bot(A, tx('/help', CHAT_NONE));
     expect(res.handled).toBe(true);
-    expect(res.reply).toContain('پس از اتصال');
+    expect(res.reply).toContain('بعد از اتصال');
     expect(res.reply).toContain('/link CODE');
   });
 
@@ -92,7 +92,7 @@ describe('بات نقش‌آگاه: راهنمای نقش‌محور ()', () => 
 
   it('دستور ناشناخته هم راهنمای نقش‌محور می‌گیرد', async () => {
     const none = await bot(A, tx('/xyz', CHAT_NONE));
-    expect(none.reply).toContain('پس از اتصال');
+    expect(none.reply).toContain('بعد از اتصال');
 
     const mgr = await bot(A, tx('/xyz', CHAT_MGR));
     expect(mgr.reply).toContain('مدیر/منشی');

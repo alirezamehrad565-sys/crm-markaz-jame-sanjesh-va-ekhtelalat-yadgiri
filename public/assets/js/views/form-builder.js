@@ -53,6 +53,8 @@ const FB_CSS = `
 .fb-blk__acts{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
 @media (hover:hover){.fb-blk__acts .btn{opacity:.55}.fb-blk:hover .fb-blk__acts .btn,.fb-blk:focus-within .fb-blk__acts .btn{opacity:1}}
 .fb-zone-empty{border:1.5px dashed var(--border-strong);border-radius:var(--radius-md);padding:var(--sp-6) var(--sp-4);text-align:center;color:var(--text-3);font-size:var(--fs-sm);display:grid;gap:8px;justify-items:center}
+.fb-addrow{width:100%;border:1.5px dashed var(--border-strong);background:transparent;border-radius:var(--radius-md);padding:12px;color:var(--primary);font-family:inherit;font-size:var(--fs-sm);font-weight:600;cursor:pointer;display:flex;gap:8px;align-items:center;justify-content:center;transition:border-color var(--fast),background var(--fast);margin-top:var(--sp-1)}
+.fb-addrow:hover{border-color:var(--primary);background:var(--primary-soft)}
 .fb-chip{display:inline-flex;align-items:center;gap:5px;padding:2px 9px;border-radius:var(--radius-full);font-size:var(--fs-2xs);font-weight:600;line-height:var(--lh-ui)}
 ${KINDS.map((k) => `.fb-chip--h${k.hue}{background:var(--hue-${k.hue}-soft);color:var(--hue-${k.hue}-on)}\n.fb-ico--h${k.hue}{background:var(--hue-${k.hue}-soft);color:var(--hue-${k.hue}-strong)}`).join('\n')}
 .fb-prev__body{max-height:calc(100vh - 290px);min-height:200px;overflow:auto;padding:var(--sp-4)}
@@ -342,10 +344,20 @@ function openEditor(container, existing, backToList) {
   if (existing?.description) descIn.value = existing.description;
 
   const blocksZone = el('div', {});
+  const blocksBadge = el('span', { class: 'badge badge--neutral' }, `${fa(blocks.length)} از ۶۰ بلوک`);
   const liveTitle = el('span', {}, existing ? existing.title : 'فرم تازه');
   const liveDesc = el('div', {});
-  titleIn.addEventListener('input', () => { liveTitle.textContent = titleIn.value.trim() || 'فرم تازه'; });
-  descIn.addEventListener('input', () => { liveDesc.textContent = descIn.value.trim() ? descIn.value : ''; });
+  /* ۱.۲۷.۴۲ — وصلهٔ پیش‌نمایش زنده: body یک‌بار ساخته نمی‌شد؛ با هر تغییر دوباره رندر می‌شود */
+  const prevBody = el('div', {});
+  function paintPreview() {
+    prevBody.replaceChildren(renderPreviewBody({
+      title: titleIn.value,
+      description: descIn.value,
+      blocks
+    }));
+  }
+  titleIn.addEventListener('input', () => { liveTitle.textContent = titleIn.value.trim() || 'فرم تازه'; paintPreview(); });
+  descIn.addEventListener('input', () => { liveDesc.textContent = descIn.value.trim() ? descIn.value : ''; paintPreview(); });
 
   function paintBlocks() {
     if (blocks.length === 0) {
@@ -417,25 +429,54 @@ function openEditor(container, existing, backToList) {
           ))
       );
     });
-    blocksZone.replaceChildren(...rows);
+    blocksZone.replaceChildren(...rows,
+      el('button', { class: 'fb-addrow', onclick: () => openPaletteModal() }, icon('plus', 15), 'بلوک تازه'));
+    blocksBadge.textContent = `${fa(blocks.length)} از ۶۰ بلوک`;
+    paintPreview();
   }
 
   const palette = el('div', { class: 'fb-pal' },
     ...KINDS.map((k) =>
       el('button', {
         class: 'fb-kind',
-        onclick: () => {
-          if (blocks.length >= 60) { toastError(new Error('حداکثر ۶۰ بلوک در هر فرم')); return; }
-          const fresh = k.kind === 'note'
-            ? { kind: 'note', label: 'صفحهٔ آگاهی', required: false, note: 'متن توضیحی این صفحه…' }
-            : { kind: k.kind, label: k.label, required: false };
-          openBlockEditor(fresh, (next) => { blocks.push(next); paintBlocks(); });
-        }
+        onclick: () => addBlockOf(k.kind)
       },
         kindIco(k.kind),
         el('span', { class: 'fb-kind__txt' }, el('b', {}, k.label), el('span', {}, k.hint)))
     )
   );
+
+  /* ۱.۲۷.۴۲ — افزودن بلوک از پالت یا ردیف پایانی فهرست (سبک Tally): یک مسیر واحد */
+  function addBlockOf(kind) {
+    if (blocks.length >= 60) { toastError(new Error('حداکثر ۶۰ بلوک در هر فرم')); return; }
+    const fresh = kind === 'note'
+      ? { kind: 'note', label: 'صفحهٔ آگاهی', required: false, note: 'متن توضیحی این صفحه…' }
+      : { kind, label: KIND_LABEL[kind] ?? kind, required: false };
+    openBlockEditor(fresh, (next) => { blocks.push(next); paintBlocks(); });
+  }
+
+  /* پالت داخل مودال — ردیف «بلوک تازه» انتهای فهرست همان پالت را باز می‌کند */
+  function openPaletteModal() {
+    openModal({
+      title: 'افزودن بلوک',
+      wide: true,
+      body: el('div', { class: 'fb-pal' },
+        ...KINDS.map((k) =>
+          el('button', {
+            class: 'fb-kind',
+            onclick: (e) => {
+              const overlay = e.currentTarget.closest('.modal-overlay');
+              addBlockOf(k.kind);
+              const x = overlay?.querySelector('[data-close],.modal__close');
+              if (x) x.click();
+            }
+          },
+            kindIco(k.kind),
+            el('span', { class: 'fb-kind__txt' }, el('b', {}, k.label), el('span', {}, k.hint)))
+        )),
+      actions: [(close) => el('button', { class: 'btn btn--ghost btn--sm', onclick: close }, 'بستن')]
+    });
+  }
 
   const editor = el('div', {},
     el('div', { class: 'fb-wrap' },
@@ -464,7 +505,7 @@ function openEditor(container, existing, backToList) {
         el('div', { class: 'card', style: { marginTop: 'var(--sp-4)' } },
           el('div', { class: 'card__head' },
             el('div', { class: 'card__title' }, 'بلوک‌ها — هر بلوک یک صفحه'),
-            el('span', { class: 'badge badge--neutral' }, `${fa(blocks.length)} از ۶۰ بلوک`)
+            blocksBadge
           ),
           el('div', { class: 'card__body' }, blocksZone)
         )
@@ -475,12 +516,9 @@ function openEditor(container, existing, backToList) {
             el('div', { class: 'card__title' }, icon('eye', 16), ' پیش‌نمایش زنده'),
             el('span', { class: 'badge badge--neutral' }, 'نمای پاسخ‌دهنده')
           ),
-          renderPreviewBody({
-            get title() { return titleIn.value; },
-            get description() { return descIn.value; },
-            get blocks() { return blocks; }
-          })
-        ))
+          prevBody
+        )
+      )
     ),
     el('div', { class: 'fb-savebar' },
       el('button', { class: 'btn btn--ghost', onclick: () => backToList(false) }, 'بازگشت به فهرست'),

@@ -56,14 +56,19 @@ export function renderPreviewPage(def: CaseEventTypeInput, token: string): strin
 <style>
   :root { color-scheme: light; }
   * { box-sizing: border-box; }
+  /* ۱.۲۷.۴۲ — عین فرم خانواده: فونت وزیر متن باندل‌شدهٔ خودی واقعاً لود می‌شود */
+  @font-face { font-family: Vazirmatn; src: url('/assets/fonts/Vazirmatn-Variable.woff2') format('woff2');
+               font-weight: 100 900; font-style: normal; font-display: swap; }
   body { margin: 0; color: #12384f;
-         font-family: Tahoma, "Segoe UI", sans-serif; line-height: 1.8;
+         font-family: Vazirmatn, Tahoma, "Segoe UI", sans-serif; line-height: 1.8;
          /* ۱.۲۷.۴۰ — عین فرم خانواده: پس‌زمینهٔ گرادینتی + هالهٔ رنگی ثابت */
          background: radial-gradient(600px 320px at 88% -6%, rgba(34,158,217,.14), transparent 66%),
                      radial-gradient(520px 300px at 8% 104%, rgba(37,99,235,.10), transparent 66%),
                      linear-gradient(168deg,#eef6fb 0%,#f7f3ea 52%,#fdf2f8 100%);
          background-attachment: fixed; }
-  .wrap { max-width: 640px; margin: 0 auto; padding: 24px 16px 64px; }
+  /* ۱.۲۷.۴۲ — عین فرم خانواده: عمودی‌چین‌شدن مرحله با safe center؛ پدینگ متقارن */
+  .wrap { max-width: 640px; margin: 0 auto; padding: 24px 16px;
+          min-height: 100dvh; display: flex; flex-direction: column; justify-content: safe center; }
   .banner { position: sticky; top: 0; z-index: 9; background: #FFF3CD; border: 1px solid #E8D48B;
             color: #6B5416; border-radius: 12px; padding: 10px 14px; margin-bottom: 14px;
             font-size: 13px; font-weight: 700; }
@@ -87,18 +92,18 @@ export function renderPreviewPage(def: CaseEventTypeInput, token: string): strin
   .item { padding: 12px 0; border-bottom: 1px solid #EFE8DC; }
   .item:last-child { border-bottom: 0; }
   .item.is-missing .q { color: #A12622; }
-  .q { font-weight: 700; font-size: 14px; margin-bottom: 8px; }
-  .hint { font-size: 12px; color: #8A8377; margin: -5px 0 8px; line-height: 1.9; }
+  .q { font-weight: 700; font-size: 15px; margin-bottom: 8px; }
+  .hint { font-size: 12.5px; color: #8A8377; margin: -5px 0 8px; line-height: 1.9; }
   .opts { display: flex; flex-wrap: wrap; gap: 8px; }
   .opt { display: inline-flex; align-items: center; gap: 5px; background: #F7F3EA;
          border: 1px solid #E5DCCB; border-radius: 10px; padding: 6px 10px; font-size: 13px; cursor: pointer; }
   .opt--wide { width: 100%; align-items: flex-start; }
   .opt:has(input:checked) { background: linear-gradient(135deg,#D9EDF7,#E7E4FA); border-color: #229ED9; }
-  .item--free .q { font-size: 13.5px; }
+  .item--free .q { font-size: 14px; }
   textarea.free { width: 100%; border: 1px solid #E5DCCB; border-radius: 10px; padding: 10px 12px;
-                  font-family: inherit; font-size: 13.5px; line-height: 1.9; resize: vertical; background: #FDFCF9; }
+                  font-family: inherit; font-size: 14px; line-height: 1.9; resize: vertical; background: #FDFCF9; }
   textarea.free:focus { outline: 2px solid #229ED9; outline-offset: -1px; }
-  .notice { text-align: center; font-size: 11.5px; color: #8A8377; margin: -4px 0 12px; }
+  .notice { text-align: center; font-size: 12px; color: #8A8377; margin: -4px 0 12px; }
   .btn { display: block; width: 100%; border: 0; color: #fff;
          background: linear-gradient(135deg,#1c5d80 0%,#229ED9 100%);
          border-radius: 12px; padding: 14px; font-size: 16px; font-weight: 700; cursor: pointer;

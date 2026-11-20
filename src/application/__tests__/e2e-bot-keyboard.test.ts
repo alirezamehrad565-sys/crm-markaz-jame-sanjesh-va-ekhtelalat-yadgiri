@@ -45,7 +45,7 @@ describe('دکمه‌های ثابت ناوبری + دربارهٔ مرکز + ا
   it('مهمان: /start خوش‌آمد + کیبورد مهمان (معرفی/خدمات/ارتباطی/احراز هویت) می‌گیرد', async () => {
     const res = await bot(A, tx('/start', CHAT_NONE));
     expect(res.handled).toBe(true);
-    expect(res.reply).toContain('خوش آمدید');
+    expect(res.reply).toContain('خوش اومدید');
     expect(res.keyboard).toEqual([['معرفی دانش‌آموز'], ['معرفی مرکز', 'خدمات مرکز'], ['راه‌های ارتباطی', 'احراز هویت'], ['فایل‌های آموزشی'], ['تمرین‌ها و کارت‌ها']]); // ۱.۲۷.۳۸
   });
 
