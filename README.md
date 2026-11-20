@@ -154,6 +154,7 @@ docs/                 ← مستندات فارسی
 | [`docs/BOT-FLOW.md`](./docs/BOT-FLOW.md) | فلوی نقش‌آگاه بات بله |
 | [`docs/EXERCISE-BANK.md`](./docs/EXERCISE-BANK.md) | طراحی بانک تمرین و حلقهٔ تکلیف |
 | [`docs/INTAKE-DESIGN.md`](./docs/INTAKE-DESIGN.md) | طراحی جریان معرفی، اینباکس لیست انتظار و آرشیو سال تحصیلی |
+| [`docs/REFERRAL-DESIGN.md`](./docs/REFERRAL-DESIGN.md) | ریورک فرم‌ساز، جریان تعاملی معرفی، نمایش لیست انتظار و بخش اتیسم |
 | [`docs/games-module-worker.md`](./docs/games-module-worker.md) | ماژول بازی‌ها و ورکر مستقل |
 | [`CHANGELOG.md`](./CHANGELOG.md) | تاریخچهٔ نسخه‌ها |
 
