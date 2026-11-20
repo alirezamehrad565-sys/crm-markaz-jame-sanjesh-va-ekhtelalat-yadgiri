@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.27.33";
+var APP_VERSION = "1.27.34";
 var NODE_MIN_VERSION = "1.26.0";
 
 // node_modules/zod/v4/classic/external.js
@@ -22433,6 +22433,8 @@ var REFERRAL_REJECT_REASON_MAX = 300;
 var REFERRAL_LIST_LIMIT = 500;
 var REFERRAL_RATE_PER_HOUR = 20;
 var REFERRAL_RATE_PER_CHAT = 5;
+var FORM_RESPONSE_LIMIT = 500;
+var FORM_RATE_PER_HOUR = 30;
 var TODO_STATUSES = ["pending", "done"];
 var TODO_PRIORITIES = ["normal", "urgent"];
 var TODO_BOXES = ["inbox", "outbox"];
@@ -23522,6 +23524,47 @@ var PublicReferralSubmissionSchema = external_exports.object({
 });
 var ReferralRejectSchema = external_exports.object({
   reason: external_exports.string().trim().min(2, "\u062F\u0644\u06CC\u0644 \u0631\u062F \u0644\u0627\u0632\u0645 \u0627\u0633\u062A \u2014 \u0628\u0631\u0627\u06CC \u0645\u0639\u0631\u0641 \u0642\u0627\u0628\u0644 \u0627\u0631\u0633\u0627\u0644 \u0627\u0633\u062A").max(REFERRAL_REJECT_REASON_MAX, `\u062F\u0644\u06CC\u0644 \u0631\u062F \u062D\u062F\u0627\u06A9\u062B\u0631 ${REFERRAL_REJECT_REASON_MAX} \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A`)
+});
+var FormBlockSchema = external_exports.object({
+  kind: external_exports.enum(["text", "longtext", "number", "phone", "select", "multi", "yes_no", "note"], {
+    message: "\u0646\u0648\u0639 \u0628\u0644\u0648\u06A9 \u0645\u0639\u062A\u0628\u0631 \u0646\u06CC\u0633\u062A"
+  }),
+  label: external_exports.string().trim().min(2, "\u0628\u0631\u0686\u0633\u0628 \u0628\u0644\u0648\u06A9 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").max(200, "\u0628\u0631\u0686\u0633\u0628 \u0628\u0644\u0648\u06A9 \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F2\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A"),
+  required: external_exports.boolean().optional().default(false),
+  options: external_exports.array(
+    external_exports.object({
+      value: external_exports.string().trim().min(1, "\u0645\u0642\u062F\u0627\u0631 \u06AF\u0632\u06CC\u0646\u0647 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A").max(40),
+      label: external_exports.string().trim().min(1, "\u0628\u0631\u0686\u0633\u0628 \u06AF\u0632\u06CC\u0646\u0647 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A").max(100)
+    })
+  ).max(12, "\u062D\u062F\u0627\u06A9\u062B\u0631 \u06F1\u06F2 \u06AF\u0632\u06CC\u0646\u0647").optional(),
+  note: external_exports.string().trim().max(2e3, "\u0645\u062A\u0646 \u0635\u0641\u062D\u0647\u0654 \u0622\u06AF\u0627\u0647\u06CC \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F2\u06F0\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").optional()
+}).refine((b) => b.kind === "select" || b.kind === "multi" ? (b.options?.length ?? 0) >= 2 : true, {
+  message: "\u0628\u0631\u0627\u06CC \u0628\u0644\u0648\u06A9 \u0627\u0646\u062A\u062E\u0627\u0628\u060C \u062D\u062F\u0627\u0642\u0644 \u062F\u0648 \u06AF\u0632\u06CC\u0646\u0647 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A"
+}).refine((b) => b.kind === "note" ? Boolean(b.note && b.note.trim().length >= 4) : true, {
+  message: "\u0628\u0631\u0627\u06CC \u0635\u0641\u062D\u0647\u0654 \u0622\u06AF\u0627\u0647\u06CC\u060C \u0645\u062A\u0646 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A"
+});
+var FormUpsertSchema = external_exports.object({
+  title: external_exports.string().trim().min(2, "\u0639\u0646\u0648\u0627\u0646 \u0641\u0631\u0645 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").max(120, "\u0639\u0646\u0648\u0627\u0646 \u0641\u0631\u0645 \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F1\u06F2\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A"),
+  slug: external_exports.string().trim().regex(/^[a-z0-9][a-z0-9-]{2,59}$/, "\u0627\u0633\u0644\u0627\u06AF \u0641\u0642\u0637 \u062D\u0631\u0648\u0641 \u0644\u0627\u062A\u06CC\u0646 \u06A9\u0648\u0686\u06A9\u060C \u0631\u0642\u0645 \u0648 \u062E\u0637\u200C\u062A\u06CC\u0631\u0647 (\u06F3 \u062A\u0627 \u06F6\u06F0 \u0646\u0648\u06CC\u0633\u0647)"),
+  description: external_exports.string().trim().max(500, "\u062A\u0648\u0636\u06CC\u062D \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F5\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").optional(),
+  blocks: external_exports.array(FormBlockSchema).max(60, "\u062D\u062F\u0627\u06A9\u062B\u0631 \u06F6\u06F0 \u0628\u0644\u0648\u06A9 \u062F\u0631 \u0647\u0631 \u0641\u0631\u0645").default([]),
+  published: external_exports.boolean().optional().default(false)
+});
+var FormResponseSubmitSchema = external_exports.object({
+  answers: external_exports.array(
+    external_exports.object({
+      index: external_exports.number().int().min(0, "\u0627\u0646\u062F\u06CC\u0633 \u0628\u0644\u0648\u06A9 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A").max(59),
+      value: external_exports.union([
+        external_exports.string().max(2e3, "\u067E\u0627\u0633\u062E \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F2\u06F0\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A"),
+        external_exports.array(external_exports.string().max(100)).max(12, "\u062D\u062F\u0627\u06A9\u062B\u0631 \u06F1\u06F2 \u0627\u0646\u062A\u062E\u0627\u0628"),
+        external_exports.number().finite("\u067E\u0627\u0633\u062E \u0639\u062F\u062F\u06CC \u0628\u0627\u06CC\u062F \u0639\u062F\u062F \u0628\u0627\u0634\u062F"),
+        external_exports.boolean()
+      ])
+    })
+  ).max(60),
+  respondent_name: external_exports.string().trim().min(2, "\u0646\u0627\u0645 \u067E\u0627\u0633\u062E\u200C\u062F\u0647\u0646\u062F\u0647 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").max(80),
+  respondent_phone: GuardianPhoneSchema.nullish(),
+  token: external_exports.string().trim().max(200).optional()
 });
 
 // src/core/shared/features.ts
@@ -32513,6 +32556,754 @@ function registerWaitlistRoutes(app, service) {
   });
 }
 __name(registerWaitlistRoutes, "registerWaitlistRoutes");
+
+// src/domain/form-builder/pure.ts
+function normalizeLatinDigits(raw2) {
+  return String(raw2 ?? "").replace(/[۰-۹]/g, (d) => String("\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9".indexOf(d))).replace(/[٠-٩]/g, (d) => String("\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669".indexOf(d)));
+}
+__name(normalizeLatinDigits, "normalizeLatinDigits");
+function normalizePhone(raw2) {
+  let s = normalizeLatinDigits(raw2).replace(/[\s\-().]/g, "");
+  if (s.startsWith("+98")) s = "0" + s.slice(3);
+  else if (s.startsWith("98") && s.length === 12) s = "0" + s.slice(2);
+  return s;
+}
+__name(normalizePhone, "normalizePhone");
+function validateAnswers(blocks, answers) {
+  const byIndex = /* @__PURE__ */ new Map();
+  for (const a of answers) {
+    if (!Number.isInteger(a.index) || a.index < 0 || a.index >= blocks.length) {
+      return { ok: false, error: "\u067E\u0627\u0633\u062E \u0628\u0647 \u0628\u0644\u0648\u06A9\u06CC \u0646\u0627\u0645\u0648\u062C\u0648\u062F \u0627\u0633\u062A", normalized: [] };
+    }
+    byIndex.set(a.index, a.value);
+  }
+  const normalized = [];
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i];
+    if (block.kind === "note") continue;
+    const raw2 = byIndex.get(i);
+    const present = raw2 !== void 0 && raw2 !== null && !(typeof raw2 === "string" && raw2.trim().length === 0) && !(Array.isArray(raw2) && raw2.length === 0);
+    if (block.required && !present) {
+      return { ok: false, error: `\u067E\u0627\u0633\u062E \u0628\u0647 \xAB${block.label}\xBB \u0627\u0644\u0632\u0627\u0645\u06CC \u0627\u0633\u062A`, normalized: [] };
+    }
+    if (!present) continue;
+    if (block.kind === "select") {
+      const v2 = String(raw2);
+      if (!block.options?.some((o) => o.value === v2)) {
+        return { ok: false, error: `\u067E\u0627\u0633\u062E \xAB${block.label}\xBB \u06CC\u06A9\u06CC \u0627\u0632 \u06AF\u0632\u06CC\u0646\u0647\u200C\u0647\u0627\u06CC \u062A\u0639\u0631\u06CC\u0641\u200C\u0634\u062F\u0647 \u0646\u06CC\u0633\u062A`, normalized: [] };
+      }
+      normalized.push({ index: i, value: v2 });
+      continue;
+    }
+    if (block.kind === "multi") {
+      const arr = Array.isArray(raw2) ? raw2.map(String) : [String(raw2)];
+      if (arr.some((v2) => !block.options?.some((o) => o.value === v2))) {
+        return { ok: false, error: `\u067E\u0627\u0633\u062E \xAB${block.label}\xBB \u06AF\u0632\u06CC\u0646\u0647\u0654 \u0646\u0627\u0634\u0646\u0627\u062E\u062A\u0647 \u062F\u0627\u0631\u062F`, normalized: [] };
+      }
+      if (new Set(arr).size !== arr.length) {
+        return { ok: false, error: `\u067E\u0627\u0633\u062E \xAB${block.label}\xBB \u062A\u06A9\u0631\u0627\u0631\u06CC \u062F\u0627\u0631\u062F`, normalized: [] };
+      }
+      normalized.push({ index: i, value: arr });
+      continue;
+    }
+    if (block.kind === "yes_no") {
+      const v2 = String(raw2);
+      if (v2 !== "yes" && v2 !== "no") {
+        return { ok: false, error: `\u067E\u0627\u0633\u062E \xAB${block.label}\xBB \u0628\u0627\u06CC\u062F \u0628\u0644\u0647 \u06CC\u0627 \u062E\u06CC\u0631 \u0628\u0627\u0634\u062F`, normalized: [] };
+      }
+      normalized.push({ index: i, value: v2 });
+      continue;
+    }
+    if (block.kind === "number") {
+      const n = typeof raw2 === "number" ? raw2 : Number(normalizeLatinDigits(String(raw2)));
+      if (!Number.isFinite(n)) {
+        return { ok: false, error: `\u067E\u0627\u0633\u062E \xAB${block.label}\xBB \u0628\u0627\u06CC\u062F \u0639\u062F\u062F \u0628\u0627\u0634\u062F`, normalized: [] };
+      }
+      normalized.push({ index: i, value: n });
+      continue;
+    }
+    if (block.kind === "phone") {
+      const v2 = normalizePhone(String(raw2));
+      if (!/^09\d{9}$/.test(v2)) {
+        return { ok: false, error: `\u0634\u0645\u0627\u0631\u0647\u0654 \xAB${block.label}\xBB \u0645\u0639\u062A\u0628\u0631 \u0646\u06CC\u0633\u062A \u2014 \u0628\u0627\u06CC\u062F \u06F1\u06F1 \u0631\u0642\u0645 \u0648 \u0628\u0627 \u06F0\u06F9 \u0634\u0631\u0648\u0639 \u0634\u0648\u062F`, normalized: [] };
+      }
+      normalized.push({ index: i, value: v2 });
+      continue;
+    }
+    const v = String(raw2);
+    if (v.length > 2e3) {
+      return { ok: false, error: `\u067E\u0627\u0633\u062E \xAB${block.label}\xBB \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F2\u06F0\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A`, normalized: [] };
+    }
+    normalized.push({ index: i, value: v });
+  }
+  return { ok: true, normalized };
+}
+__name(validateAnswers, "validateAnswers");
+function hasDuplicateOptionValues(block) {
+  if (!block.options) return false;
+  const values = block.options.map((o) => o.value);
+  return new Set(values).size !== values.length;
+}
+__name(hasDuplicateOptionValues, "hasDuplicateOptionValues");
+
+// src/domain/form-builder/service.ts
+function parseBlocks(raw2) {
+  try {
+    const parsed = JSON.parse(raw2);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+__name(parseBlocks, "parseBlocks");
+function parseAnswers(raw2) {
+  try {
+    const parsed = JSON.parse(raw2);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+__name(parseAnswers, "parseAnswers");
+function formRowToDomain(r) {
+  return {
+    id: r.id,
+    slug: r.slug,
+    title: r.title,
+    description: r.description,
+    blocks: parseBlocks(r.blocks),
+    published: r.published === 1,
+    academicYear: r.academic_year,
+    createdBy: r.created_by,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at
+  };
+}
+__name(formRowToDomain, "formRowToDomain");
+function responseRowToDomain(r) {
+  return {
+    id: r.id,
+    formId: r.form_id,
+    answers: parseAnswers(r.answers),
+    respondentName: r.respondent_name,
+    respondentPhone: r.respondent_phone,
+    channel: r.channel,
+    status: r.status,
+    academicYear: r.academic_year,
+    createdAt: r.created_at
+  };
+}
+__name(responseRowToDomain, "responseRowToDomain");
+var FORM_SELECT = `SELECT * FROM forms WHERE deleted_at IS NULL`;
+var RESPONSE_BY_ID = `SELECT * FROM form_responses WHERE id = ? AND deleted_at IS NULL`;
+function createFormBuilderService(deps) {
+  const { db, audit, logger } = deps;
+  const log = logger.child("form-builder");
+  async function loadForm(id) {
+    const row = await db.queryOne(`${FORM_SELECT} AND id = ?`, [id]);
+    if (!row) throw new NotFoundError("\u0641\u0631\u0645");
+    return row;
+  }
+  __name(loadForm, "loadForm");
+  async function assertSlugFree(slug, exceptId) {
+    const dup = await db.queryOne(
+      `${FORM_SELECT} AND slug = ? AND (? IS NULL OR id != ?) LIMIT 1`,
+      [slug, exceptId ?? null, exceptId ?? null]
+    );
+    if (dup) throw new ConflictError("\u0627\u06CC\u0646 \u0627\u0633\u0644\u0627\u06AF \u0642\u0628\u0644\u0627\u064B \u06AF\u0631\u0641\u062A\u0647 \u0634\u062F\u0647 \u2014 \u0644\u06CC\u0646\u06A9 \u0639\u0645\u0648\u0645\u06CC \u0628\u0627\u06CC\u062F \u06CC\u06A9\u062A\u0627 \u0628\u0645\u0627\u0646\u062F");
+  }
+  __name(assertSlugFree, "assertSlugFree");
+  function assertBlocksSane(blocks) {
+    const parsed = blocks;
+    for (const b of parsed) {
+      if (hasDuplicateOptionValues(b)) {
+        throw new ValidationError(`\u06AF\u0632\u06CC\u0646\u0647\u200C\u0647\u0627\u06CC \xAB${b.label}\xBB \u0645\u0642\u062F\u0627\u0631 \u062A\u06A9\u0631\u0627\u0631\u06CC \u062F\u0627\u0631\u0646\u062F`);
+      }
+    }
+  }
+  __name(assertBlocksSane, "assertBlocksSane");
+  const service = {
+    async list() {
+      const rows = await db.query(`${FORM_SELECT} ORDER BY created_at DESC, id DESC LIMIT 200`);
+      return rows.map(formRowToDomain);
+    },
+    async getById(id) {
+      const row = await db.queryOne(`${FORM_SELECT} AND id = ?`, [id]);
+      return row ? formRowToDomain(row) : null;
+    },
+    async create(input2, actor) {
+      await assertSlugFree(input2.slug);
+      assertBlocksSane(input2.blocks);
+      const id = crypto.randomUUID();
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      await db.transaction(async (tx) => {
+        await tx.execute(
+          `INSERT INTO forms (id, slug, title, description, blocks, published, academic_year, created_by, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            id,
+            input2.slug,
+            input2.title,
+            input2.description ?? null,
+            JSON.stringify(input2.blocks),
+            input2.published ? 1 : 0,
+            currentSchoolYear(),
+            actor.staffId,
+            now,
+            now
+          ]
+        );
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: "form.create",
+          resourceType: "form",
+          resourceId: id,
+          changes: { slug: { from: null, to: input2.slug }, blocks: { from: null, to: input2.blocks.length } }
+        });
+      });
+      log.info("form.created", { id, slug: input2.slug });
+      return formRowToDomain(await loadForm(id));
+    },
+    /* ویرایش کل‌جایگزین — ویرایشگر همیشه کل فرم را می‌فرستد (عین الگوی ثبت نتیجهٔ ارزیابی) */
+    async update(id, input2, actor) {
+      const current = await loadForm(id);
+      if (current.slug !== input2.slug) await assertSlugFree(input2.slug, id);
+      assertBlocksSane(input2.blocks);
+      await db.transaction(async (tx) => {
+        await tx.execute(
+          `UPDATE forms
+             SET slug = ?, title = ?, description = ?, blocks = ?, published = ?, updated_at = ?
+           WHERE id = ?`,
+          [
+            input2.slug,
+            input2.title,
+            input2.description ?? null,
+            JSON.stringify(input2.blocks),
+            input2.published ? 1 : 0,
+            (/* @__PURE__ */ new Date()).toISOString(),
+            id
+          ]
+        );
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: "form.update",
+          resourceType: "form",
+          resourceId: id,
+          changes: {
+            slug: { from: current.slug, to: input2.slug },
+            published: { from: current.published === 1, to: input2.published },
+            blocks: { from: parseBlocks(current.blocks).length, to: input2.blocks.length }
+          }
+        });
+      });
+      log.info("form.updated", { id, slug: input2.slug });
+      return formRowToDomain(await loadForm(id));
+    },
+    async remove(id, actor) {
+      const current = await loadForm(id);
+      await db.transaction(async (tx) => {
+        await tx.execute(`UPDATE forms SET deleted_at = ?, updated_at = datetime('now') WHERE id = ?`, [
+          (/* @__PURE__ */ new Date()).toISOString(),
+          id
+        ]);
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: "form.delete",
+          resourceType: "form",
+          resourceId: id,
+          changes: { slug: { from: current.slug, to: null } }
+        });
+      });
+      log.info("form.deleted", { id });
+    },
+    async getBySlugPublished(slug) {
+      const row = await db.queryOne(`${FORM_SELECT} AND slug = ? AND published = 1`, [slug]);
+      return row ? formRowToDomain(row) : null;
+    },
+    /* ثبت پاسخ عمومی — فقط فرم منتشرشده؛ اعتبارسنجی کامل پاسخ‌ها در برابر بلوک‌های زندهٔ فرم */
+    async submitResponse(slug, input2, meta3) {
+      const form = await db.queryOne(`${FORM_SELECT} AND slug = ? AND published = 1`, [slug]);
+      if (!form) throw new NotFoundError("\u0641\u0631\u0645");
+      const blocks = parseBlocks(form.blocks);
+      const check2 = validateAnswers(blocks, input2.answers);
+      if (!check2.ok) throw new ValidationError(check2.error ?? "\u067E\u0627\u0633\u062E\u200C\u0647\u0627 \u0645\u0639\u062A\u0628\u0631 \u0646\u06CC\u0633\u062A\u0646\u062F");
+      const id = crypto.randomUUID();
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      const channel = input2.token ? "bot" : "web";
+      await db.transaction(async (tx) => {
+        await tx.execute(
+          `INSERT INTO form_responses
+             (id, form_id, answers, respondent_name, respondent_phone, channel, token, academic_year, status, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'new', ?, ?)`,
+          [
+            id,
+            form.id,
+            JSON.stringify(check2.normalized),
+            input2.respondent_name,
+            input2.respondent_phone ?? null,
+            channel,
+            input2.token ?? null,
+            currentSchoolYear(),
+            now,
+            now
+          ]
+        );
+        await audit.logInTransaction(tx, {
+          actorId: "public",
+          action: "form.response_submit",
+          resourceType: "form",
+          resourceId: form.id,
+          changes: {
+            slug: { from: null, to: form.slug },
+            answers: { from: null, to: check2.normalized.length },
+            channel: { from: null, to: channel }
+          }
+        });
+      });
+      log.info("form.response.submitted", { formId: form.id, slug: form.slug, ip: meta3.ip });
+      return responseRowToDomain(await db.queryOne(RESPONSE_BY_ID, [id]));
+    },
+    async listResponses(formId, status) {
+      const where = ["deleted_at IS NULL", "form_id = ?"];
+      const params = [formId];
+      if (status) {
+        where.push("status = ?");
+        params.push(status);
+      }
+      const rows = await db.query(
+        `SELECT * FROM form_responses
+          WHERE ${where.join(" AND ")}
+          ORDER BY created_at DESC, id DESC
+          LIMIT ${FORM_RESPONSE_LIMIT}`,
+        params
+      );
+      return rows.map(responseRowToDomain);
+    },
+    async markResponseSeen(id, actor) {
+      const row = await db.queryOne(RESPONSE_BY_ID, [id]);
+      if (!row) throw new NotFoundError("\u067E\u0627\u0633\u062E");
+      await db.transaction(async (tx) => {
+        await tx.execute(`UPDATE form_responses SET status = 'seen', updated_at = ? WHERE id = ?`, [
+          (/* @__PURE__ */ new Date()).toISOString(),
+          id
+        ]);
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: "form.response_seen",
+          resourceType: "form_response",
+          resourceId: id,
+          changes: { status: { from: row.status, to: "seen" } }
+        });
+      });
+      log.info("form.response.seen", { id });
+      return responseRowToDomain(await db.queryOne(RESPONSE_BY_ID, [id]));
+    }
+  };
+  return service;
+}
+__name(createFormBuilderService, "createFormBuilderService");
+
+// src/domain/form-builder/form-page.ts
+var PAGE_STYLES2 = `
+:root{--bg:#f6f7fb;--card:#ffffff;--ink:#1f2430;--muted:#6b7280;--brand:#2563eb;--brand-soft:#eef2ff;
+--ok:#16a34a;--err:#dc2626;--line:#e5e7eb;--r:14px}
+*{box-sizing:border-box}html,body{margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font-family:Vazirmatn,Tahoma,'Segoe UI',sans-serif;
+font-size:16px;line-height:1.9;direction:rtl}
+.bar{position:fixed;top:0;right:0;left:0;height:5px;background:var(--line);z-index:5}
+.bar__fill{height:100%;width:0;background:var(--brand);transition:width .3s ease}
+.app{max-width:560px;margin:0 auto;padding:32px 16px 64px;min-height:100vh}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:24px;
+box-shadow:0 1px 3px rgba(15,23,42,.06)}
+.step-no{color:var(--muted);font-size:13px;margin-bottom:8px}
+h1{font-size:20px;margin:0 0 6px}h2{font-size:19px;margin:0 0 10px}
+p.lead{color:var(--muted);margin:0 0 18px;font-size:14.5px}
+.badge-free{display:inline-block;background:#e7f7ee;color:var(--ok);border-radius:999px;
+padding:4px 14px;font-size:13.5px;font-weight:700;margin-bottom:14px}
+.btn{display:inline-flex;align-items:center;justify-content:center;border:none;cursor:pointer;
+border-radius:12px;padding:12px 22px;font-family:inherit;font-size:15.5px;font-weight:700;width:100%}
+.btn--primary{background:var(--brand);color:#fff}
+.btn--primary:disabled{opacity:.45;cursor:not-allowed}
+.btn--ghost{background:transparent;color:var(--brand);border:1.5px solid var(--brand)}
+.btn--sm{width:auto;padding:9px 16px;font-size:14px}
+.btnrow{display:flex;gap:10px;margin-top:20px}.btnrow .btn{flex:1}
+.choice{display:block;background:var(--card);border:2px solid var(--line);border-radius:var(--r);
+padding:14px 18px;margin-bottom:12px;cursor:pointer;transition:border-color .15s,background .15s;
+font-family:inherit;font-size:15px;text-align:start;width:100%}
+.choice:hover{border-color:var(--brand)}
+.choice.sel{border-color:var(--brand);background:var(--brand-soft)}
+label.f{display:block;font-weight:700;margin:0 0 6px}
+input.i,select.i,textarea.i{width:100%;border:1.5px solid var(--line);border-radius:12px;padding:11px 14px;
+font-family:inherit;font-size:15.5px;background:#fff;color:var(--ink)}
+input.i:focus,textarea.i:focus{outline:none;border-color:var(--brand)}
+textarea.i{min-height:110px;resize:vertical}
+.field{margin-bottom:16px}
+.err-msg{color:var(--err);font-size:13.5px;margin-top:4px;display:none}
+.err-msg.show{display:block}
+.hint{color:var(--muted);font-size:13px;margin-top:4px}
+.review{border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-top:6px}
+.review__row{display:flex;align-items:flex-start;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line)}
+.review__row:last-child{border-bottom:none}
+.review__row .k{color:var(--muted);font-size:13px;min-width:110px;padding-top:2px}
+.review__row .v{flex:1;font-size:14.5px;white-space:pre-wrap}
+.review__row .e{background:none;border:none;color:var(--brand);cursor:pointer;font-family:inherit;
+font-size:13px;font-weight:700;padding:2px 4px}
+.aware{font-size:15.5px;line-height:2.2;white-space:pre-wrap}
+.done{text-align:center}.done .big{font-size:46px;margin-bottom:6px}
+@media (prefers-reduced-motion: reduce){.bar__fill{transition:none}}
+`;
+var PAGE_SCRIPT2 = `
+(function(){
+'use strict';
+var F = window.__FORM__; var app = document.getElementById('app'); var bar = document.getElementById('bar');
+var REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+var state = { step: 0, answers: {}, name: '', phone: '', submitting: false };
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function normDigits(s){return String(s==null?'':s).replace(/[\u06F0-\u06F9]/g,function(d){return String('\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9'.indexOf(d));}).replace(/[\u0660-\u0669]/g,function(d){return String('\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669'.indexOf(d));});}
+function normPhone(s){var v=normDigits(s).replace(/[\\s\\-().]/g,'');if(v.indexOf('+98')===0){v='0'+v.slice(3);}else if(v.indexOf('98')===0&&v.length===12){v='0'+v.slice(2);}return v;}
+function validPhone(s){return /^09\\d{9}$/.test(normPhone(s));}
+/* \u0635\u0641\u062D\u0627\u062A \u062A\u0639\u0627\u0645\u0644\u06CC = \u0628\u0644\u0648\u06A9\u200C\u0647\u0627\u06CC \u063A\u06CC\u0631 note + \u0635\u0641\u062D\u0647\u0654 \u0645\u0634\u062E\u0635\u0627\u062A + \u0645\u0631\u0648\u0631 */
+var interactive = [];
+for (var i=0;i<F.blocks.length;i++){ if(F.blocks[i].kind!=='note') interactive.push(i); }
+var TOTAL = interactive.length + 3; // \u062E\u0648\u0634\u200C\u0622\u0645\u062F + \u0628\u0644\u0648\u06A9\u200C\u0647\u0627 + \u0645\u0634\u062E\u0635\u0627\u062A + \u0645\u0631\u0648\u0631
+function setBar(){ bar.style.width = Math.round(Math.min(state.step, TOTAL-1)/(TOTAL-1)*100)+'%'; }
+function stepNo(){ return '\u06AF\u0627\u0645 '+(state.step+1)+' \u0627\u0632 '+TOTAL; }
+function blockInput(i, b){
+  var k=b.kind;
+  if(k==='text'||k==='phone'||k==='number'){
+    var type = k==='number'?'number':(k==='phone'?'tel':'text');
+    var extra = k==='phone'?' dir="ltr" placeholder="09xxxxxxxxx" inputmode="tel"':(k==='number'?' dir="ltr" inputmode="decimal"':'');
+    return '<input class="i" id="in" type="'+type+'"'+extra+' value="'+esc(valueOf(i))+'">';
+  }
+  if(k==='longtext'){ return '<textarea class="i" id="in">'+esc(valueOf(i))+'</textarea>'; }
+  if(k==='select'){
+    return b.options.map(function(o){ return '<button class="choice'+(valueOf(i)===o.value?' sel':'')+'" data-v="'+esc(o.value)+'">'+esc(o.label)+'</button>'; }).join('');
+  }
+  if(k==='multi'){
+    var cur = Array.isArray(valueOf(i))?valueOf(i):[];
+    return b.options.map(function(o){
+      return '<button class="choice'+(cur.indexOf(o.value)>=0?' sel':'')+'" data-mv="'+esc(o.value)+'">'+esc(o.label)+'</button>';
+    }).join('');
+  }
+  if(k==='yes_no'){
+    return '<button class="choice'+(valueOf(i)==='yes'?' sel':'')+'" data-v="yes">\u0628\u0644\u0647</button>'+
+           '<button class="choice'+(valueOf(i)==='no'?' sel':'')+'" data-v="no">\u062E\u06CC\u0631</button>';
+  }
+  return '';
+}
+function valueOf(i){ return state.answers[i]!==undefined?state.answers[i]:''; }
+function setValue(i, v){ state.answers[i]=v; }
+function labelOf(v){
+  if(v===null||v===undefined||v==='')return '\u2014';
+  if(Array.isArray(v))return v.map(function(x){return optLabel(v.length&&x);}).join('\u060C ');
+  return String(v);
+}
+function optLabel(v){ return String(v); }
+function displayValue(i){
+  var b=F.blocks[i];var v=state.answers[i];
+  if(v===undefined||v===null||v===''||(Array.isArray(v)&&!v.length))return '\u2014';
+  if(b.kind==='select'||b.kind==='multi'){
+    var arr=Array.isArray(v)?v:[v];
+    return arr.map(function(x){var o=(b.options||[]).filter(function(o){return o.value===x;})[0];return o?o.label:x;}).join('\u060C ');
+  }
+  if(b.kind==='yes_no')return v==='yes'?'\u0628\u0644\u0647':'\u062E\u06CC\u0631';
+  return String(v);
+}
+function err(id, show, msg){
+  var el=document.getElementById(id);if(!el)return;
+  el.className=show?'err-msg show':'err-msg';if(msg)el.textContent=msg;
+}
+function btnRow(nextLabel, backTo, okId){
+  return '<div class="btnrow"><button class="btn btn--ghost" data-act="back" data-to="'+backTo+'">\u0628\u0627\u0632\u06AF\u0634\u062A</button>'+
+    '<button class="btn btn--primary" id="'+(okId||'__nx')+'">'+nextLabel+'</button></div>';
+}
+function renderIntro(){
+  setBar();
+  app.innerHTML='<div class="card"><div class="badge-free">\u067E\u0627\u0633\u062E \u062F\u0627\u062F\u0646 \u0628\u0647 \u0627\u06CC\u0646 \u0641\u0631\u0645 \u0631\u0627\u06CC\u06AF\u0627\u0646 \u0627\u0633\u062A</div>'+
+    '<h1>'+esc(F.title)+'</h1>'+
+    (F.description?'<p class="lead">'+esc(F.description)+'</p>':'')+
+    '<p class="hint">\u062D\u062F\u0648\u062F '+interactive.length+' \u067E\u0631\u0633\u0634 \u2014 \u062F\u0631 \u0647\u0631 \u0635\u0641\u062D\u0647 \u06CC\u06A9 \u067E\u0631\u0633\u0634.</p>'+
+    '<button class="btn btn--primary" id="startBtn">\u0634\u0631\u0648\u0639</button></div>';
+  document.getElementById('startBtn').addEventListener('click',function(){state.step=1;render();});
+}
+function renderBlock(){
+  setBar();
+  var nth=state.step-1;var i=interactive[nth];var b=F.blocks[i];
+  var req=b.required?'':' <span class="hint">(\u0627\u062E\u062A\u06CC\u0627\u0631\u06CC)</span>';
+  app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
+    '<h2>'+esc(b.label)+req+'</h2>'+
+    (b.kind==='longtext'?'<p class="hint">\u0647\u0631 \u0686\u06CC\u0632\u06CC \u06A9\u0647 \u0641\u06A9\u0631 \u0645\u06CC\u200C\u06A9\u0646\u06CC\u062F \u06A9\u0645\u06A9 \u0645\u06CC\u200C\u06A9\u0646\u062F \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F.</p>':'')+
+    '<div class="field">'+blockInput(i,b)+'<div class="err-msg" id="be"></div></div>'+
+    btnRow('\u0627\u062F\u0627\u0645\u0647', state.step-1)+
+    '</div>';
+  document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=Number(this.getAttribute('data-to'))||0;render();});
+  var nx=document.getElementById('__nx');nx.textContent='\u0627\u062F\u0627\u0645\u0647';
+  nx.addEventListener('click',function(){ if(checkBlock(i,b)){state.step=state.step+1;render();} });
+  bindBlock(i,b);
+}
+function bindBlock(i,b){
+  var app2=document.getElementById('app');
+  if(b.kind==='select'||b.kind==='yes_no'){
+    app2.querySelectorAll('[data-v]').forEach(function(el){
+      el.addEventListener('click',function(){
+        setValue(i,el.getAttribute('data-v'));
+        app2.querySelectorAll('[data-v]').forEach(function(x){x.classList.remove('sel');});
+        el.classList.add('sel');
+        setTimeout(function(){ if(checkBlock(i,b)){state.step=state.step+1;render();} },180);
+      });
+    });
+  } else if(b.kind==='multi'){
+    app2.querySelectorAll('[data-mv]').forEach(function(el){
+      el.addEventListener('click',function(){
+        var v=valueOf(i);var cur=Array.isArray(v)?v.slice():[];
+        var val=el.getAttribute('data-mv');
+        var idx=cur.indexOf(val);
+        if(idx>=0){cur.splice(idx,1);}else{cur.push(val);}
+        setValue(i,cur);el.classList.toggle('sel',cur.indexOf(val)>=0);
+      });
+    });
+  } else {
+    var inp=document.getElementById('in');
+    if(inp)inp.addEventListener('input',function(e){setValue(i,e.target.value);});
+  }
+}
+function checkBlock(i,b){
+  var v=state.answers[i];
+  var empty=v===undefined||v===null||v===''||(Array.isArray(v)&&!v.length);
+  if(b.required&&empty){err('be',true,'\u0627\u06CC\u0646 \u067E\u0631\u0633\u0634 \u0627\u062C\u0628\u0627\u0631\u06CC \u0627\u0633\u062A \u2014 \u067E\u0627\u0633\u062E \u062F\u0647\u06CC\u062F \u062A\u0627 \u0627\u062F\u0627\u0645\u0647 \u062F\u0647\u06CC\u062F');return false;}
+  if(b.kind==='phone'&&!empty&&!validPhone(String(v))){err('be',true,'\u0634\u0645\u0627\u0631\u0647 \u0628\u0627\u06CC\u062F \u06F1\u06F1 \u0631\u0642\u0645 \u0648 \u0628\u0627 \u06F0\u06F9 \u0634\u0631\u0648\u0639 \u0634\u0648\u062F');return false;}
+  err('be',false);return true;
+}
+function renderContact(){
+  setBar();
+  app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
+    '<h2>\u0627\u0633\u0645 \u0648 \u0631\u0627\u0647 \u062A\u0645\u0627\u0633 \u0634\u0645\u0627</h2><p class="lead">\u0628\u0631\u0627\u06CC \u0627\u06CC\u0646\u06A9\u0647 \u0628\u062A\u0648\u0627\u0646\u06CC\u0645 \u067E\u06CC\u06AF\u06CC\u0631\u06CC \u06CC\u0627 \u067E\u0627\u0633\u062E \u0628\u062F\u0647\u06CC\u0645.</p>'+
+    '<div class="field"><label class="f">\u0646\u0627\u0645 \u0648 \u0646\u0627\u0645 \u062E\u0627\u0646\u0648\u0627\u062F\u06AF\u06CC</label><input class="i" id="rn" value="'+esc(state.name)+'">'+
+    '<div class="err-msg" id="rnErr">\u0646\u0627\u0645 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A</div></div>'+
+    '<div class="field"><label class="f">\u0634\u0645\u0627\u0631\u0647 \u0645\u0648\u0628\u0627\u06CC\u0644 (\u0627\u062E\u062A\u06CC\u0627\u0631\u06CC)</label><input class="i" id="rp" dir="ltr" inputmode="tel" placeholder="09xxxxxxxxx" value="'+esc(state.phone)+'">'+
+    '<div class="err-msg" id="rpErr">\u0634\u0645\u0627\u0631\u0647 \u0628\u0627\u06CC\u062F \u06F1\u06F1 \u0631\u0642\u0645 \u0648 \u0628\u0627 \u06F0\u06F9 \u0634\u0631\u0648\u0639 \u0634\u0648\u062F</div></div>'+
+    btnRow('\u0627\u062F\u0627\u0645\u0647 \u0628\u0647 \u0645\u0631\u0648\u0631 \u0646\u0647\u0627\u06CC\u06CC', state.step-1)+
+    '</div>';
+  document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=Number(this.getAttribute('data-to'))||0;render();});
+  document.getElementById('rn').addEventListener('input',function(e){state.name=e.target.value;});
+  document.getElementById('rp').addEventListener('input',function(e){state.phone=e.target.value;});
+  var nx=document.getElementById('__nx');nx.textContent='\u0627\u062F\u0627\u0645\u0647 \u0628\u0647 \u0645\u0631\u0648\u0631 \u0646\u0647\u0627\u06CC\u06CC';
+  nx.addEventListener('click',function(){
+    var ok1=state.name.trim().length>=2;var ok2=state.phone.trim()===''||validPhone(state.phone);
+    err('rnErr',!ok1);err('rpErr',!ok2);
+    if(ok1&&ok2){state.phone=normPhone(state.phone);state.step=state.step+1;render();}
+  });
+}
+function renderReview(){
+  setBar();
+  var rows=interactive.map(function(i){
+    var b=F.blocks[i];
+    return '<div class="review__row"><span class="k">'+esc(b.label)+'</span><span class="v">'+esc(displayValue(i))+'</span>'+
+      '<button class="e" data-s="'+(i>=0?stepOfBlock(i):'')+'">\u0648\u06CC\u0631\u0627\u06CC\u0634</button></div>';
+  }).join('');
+  app.innerHTML='<div class="card"><h2>\u067E\u0627\u0633\u062E\u200C\u0647\u0627 \u0622\u0645\u0627\u062F\u0647 \u062B\u0628\u062A \u0627\u0633\u062A</h2>'+
+    '<p class="lead">\u0686\u06A9 \u06A9\u0646\u06CC\u062F\u061B \u0647\u0631 \u0633\u0637\u0631 \u0631\u0627 \u0645\u06CC\u200C\u062A\u0648\u0627\u0646\u06CC\u062F \u0647\u0645\u06CC\u0646 \u062D\u0627\u0644\u0627 \u0648\u06CC\u0631\u0627\u06CC\u0634 \u06A9\u0646\u06CC\u062F.</p>'+
+    '<div class="review">'+rows+
+    '<div class="review__row"><span class="k">\u0646\u0627\u0645 \u067E\u0627\u0633\u062E\u200C\u062F\u0647\u0646\u062F\u0647</span><span class="v">'+esc(state.name)+'</span>'+
+    '<button class="e" data-s="'+(TOTAL-2)+'">\u0648\u06CC\u0631\u0627\u06CC\u0634</button></div>'+
+    '<div class="review__row"><span class="k">\u0645\u0648\u0628\u0627\u06CC\u0644</span><span class="v">'+esc(state.phone||'\u2014')+'</span>'+
+    '<button class="e" data-s="'+(TOTAL-2)+'">\u0648\u06CC\u0631\u0627\u06CC\u0634</button></div></div>'+
+    '<div class="err-msg" id="subErr"></div>'+
+    '<div class="btnrow"><button class="btn btn--ghost" data-act="back" data-to="'+(TOTAL-2)+'">\u0628\u0627\u0632\u06AF\u0634\u062A \u0648 \u0648\u06CC\u0631\u0627\u06CC\u0634</button>'+
+    '<button class="btn btn--primary" id="confirmBtn">\u062B\u0628\u062A \u067E\u0627\u0633\u062E\u200C\u0647\u0627</button></div></div>';
+  app.querySelectorAll('.e').forEach(function(b2){
+    b2.addEventListener('click',function(){state.step=Number(b2.getAttribute('data-s'))||0;render();});
+  });
+  document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=TOTAL-2;render();});
+  document.getElementById('confirmBtn').addEventListener('click',function(){ submit(this); });
+}
+function stepOfBlock(blockIndex){
+  var n=interactive.indexOf(blockIndex);
+  return n>=0 ? n+1 : 0;
+}
+function submit(btnEl){
+  if(state.submitting)return;
+  state.submitting=true;btnEl.disabled=true;btnEl.textContent='\u062F\u0631 \u062D\u0627\u0644 \u062B\u0628\u062A\u2026';
+  var answers=Object.keys(state.answers).map(function(k){return {index:Number(k),value:state.answers[k]};});
+  fetch('/public/form/'+encodeURIComponent(F.slug)+'/submit',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({answers:answers,respondent_name:state.name,respondent_phone:state.phone||null,token:window.__FORM_TOKEN__||undefined})
+  }).then(function(r){return r.json().then(function(j){return {status:r.status,body:j};});})
+  .then(function(res){
+    state.submitting=false;
+    if(res.status===201){state.step=TOTAL-1;render();return;}
+    var msg=(res.body&&res.body.message)||('\u062B\u0628\u062A \u0646\u0634\u062F \u2014 \u06A9\u062F '+res.status);
+    var el=document.getElementById('subErr');
+    if(el){el.className='err-msg show';el.textContent=msg;}else{alert(msg);}
+    btnEl.disabled=false;btnEl.textContent='\u062B\u0628\u062A \u067E\u0627\u0633\u062E\u200C\u0647\u0627';
+  }).catch(function(){
+    state.submitting=false;btnEl.disabled=false;
+    var el=document.getElementById('subErr');
+    if(el){el.className='err-msg show';el.textContent='\u0627\u0631\u062A\u0628\u0627\u0637 \u0628\u0631\u0642\u0631\u0627\u0631 \u0646\u0634\u062F \u2014 \u0627\u06CC\u0646\u062A\u0631\u0646\u062A \u0631\u0627 \u0686\u06A9 \u06A9\u0646\u06CC\u062F \u0648 \u062F\u0648\u0628\u0627\u0631\u0647 \u0628\u0632\u0646\u06CC\u062F';}
+    btnEl.textContent='\u062B\u0628\u062A \u067E\u0627\u0633\u062E\u200C\u0647\u0627';
+  });
+}
+function renderDone(){
+  bar.style.width='100%';
+  app.innerHTML='<div class="card done"><div class="big">\u2705</div>'+
+    '<h2>\u067E\u0627\u0633\u062E\u200C\u0647\u0627 \u062B\u0628\u062A \u0634\u062F</h2><p class="lead">\u0645\u0645\u0646\u0648\u0646 \u0627\u0632 \u0648\u0642\u062A\u06CC \u06A9\u0647 \u06AF\u0630\u0627\u0634\u062A\u06CC\u062F. \u0627\u06AF\u0631 \u0644\u0627\u0632\u0645 \u0628\u0627\u0634\u062F \u0628\u0627 \u0634\u0645\u0627 \u062A\u0645\u0627\u0633 \u0645\u06CC\u200C\u06AF\u06CC\u0631\u06CC\u0645.</p>'+
+    '<p class="hint">\u0645\u0631\u06A9\u0632 \u062C\u0627\u0645\u0639 \u0633\u0646\u062C\u0634 \u0648 \u0627\u062E\u062A\u0644\u0627\u0644\u0627\u062A \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u2014 \u0647\u0645\u0647\u200C\u06CC \u062E\u062F\u0645\u0627\u062A \u0631\u0627\u06CC\u06AF\u0627\u0646</p></div>';
+}
+function render(){
+  if(state.step===0)return renderIntro();
+  var nth=state.step-1;
+  if(nth>=0&&nth<interactive.length)return renderBlock();
+  if(state.step===TOTAL-2)return renderContact();
+  if(state.step===TOTAL-1)return renderDone();
+  state.step=0;render();
+}
+render();
+})();
+`;
+function safeJsonEmbed(value) {
+  return JSON.stringify(value).replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
+}
+__name(safeJsonEmbed, "safeJsonEmbed");
+function renderFormPage(opts) {
+  const payload = {
+    slug: opts.form.slug,
+    title: opts.form.title,
+    description: opts.form.description ?? "",
+    blocks: opts.form.blocks
+  };
+  return `<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${opts.form.title.replace(/[<>&"]/g, "")}</title>
+<meta name="robots" content="noindex, nofollow">
+<style>${PAGE_STYLES2}</style>
+</head>
+<body>
+<div class="bar"><div class="bar__fill" id="bar"></div></div>
+<div class="app" id="app"></div>
+<script>window.__FORM__=${safeJsonEmbed(payload)};window.__FORM_TOKEN__='';</script>
+<script>${PAGE_SCRIPT2}</script>
+</body>
+</html>`;
+}
+__name(renderFormPage, "renderFormPage");
+function renderFormNotFoundPage() {
+  return `<!doctype html>
+<html lang="fa" dir="rtl">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>\u0641\u0631\u0645 \u06CC\u0627\u0641\u062A \u0646\u0634\u062F</title><meta name="robots" content="noindex, nofollow">
+<style>${PAGE_STYLES2}</style></head>
+<body><div class="app"><div class="card done"><div class="big">\u{1F50D}</div>
+<h1>\u0627\u06CC\u0646 \u0641\u0631\u0645 \u067E\u06CC\u062F\u0627 \u0646\u0634\u062F \u06CC\u0627 \u0647\u0646\u0648\u0632 \u0645\u0646\u062A\u0634\u0631 \u0646\u0634\u062F\u0647</h1>
+<p class="lead">\u0644\u06CC\u0646\u06A9 \u0631\u0627 \u062F\u0648\u0628\u0627\u0631\u0647 \u0686\u06A9 \u06A9\u0646\u06CC\u062F \u06CC\u0627 \u0628\u0627 \u0645\u0631\u06A9\u0632 \u062A\u0645\u0627\u0633 \u0628\u06AF\u06CC\u0631\u06CC\u062F \u2014 \u0647\u0645\u0647\u200C\u06CC \u062E\u062F\u0645\u0627\u062A \u0631\u0627\u06CC\u06AF\u0627\u0646 \u0627\u0633\u062A.</p>
+</div></div></body></html>`;
+}
+__name(renderFormNotFoundPage, "renderFormNotFoundPage");
+
+// src/domain/form-builder/routes.ts
+var formHits = /* @__PURE__ */ new Map();
+function formRateGuard(ip) {
+  const nowMs = Date.now();
+  const windowMs = 36e5;
+  const cur = formHits.get(`ip:${ip}`);
+  if (!cur || cur.resetAt < nowMs) {
+    formHits.set(`ip:${ip}`, { count: 1, resetAt: nowMs + windowMs });
+  } else if (cur.count >= FORM_RATE_PER_HOUR) {
+    throw new RateLimitError(3600, "\u062A\u0639\u062F\u0627\u062F \u062B\u0628\u062A\u200C\u0647\u0627 \u062F\u0631 \u0627\u06CC\u0646 \u0633\u0627\u0639\u062A \u0632\u06CC\u0627\u062F \u0627\u0633\u062A \u2014 \u06A9\u0645\u06CC \u0628\u0639\u062F \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F");
+  } else {
+    cur.count += 1;
+  }
+  if (formHits.size > 5e3) {
+    for (const [key, val] of formHits) {
+      if (val.resetAt < nowMs) formHits.delete(key);
+    }
+  }
+}
+__name(formRateGuard, "formRateGuard");
+function clientIp(c) {
+  return (c.req.header("cf-connecting-ip") ?? c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? "local").slice(0, 64);
+}
+__name(clientIp, "clientIp");
+var PAGE_HEADERS = {
+  "Content-Type": "text/html; charset=utf-8",
+  "Cache-Control": "no-store",
+  "X-Robots-Tag": "noindex, nofollow",
+  "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:"
+};
+function registerFormBuilderRoutes(app, service) {
+  app.get("/public/form/:slug", async (c) => {
+    const slug = c.req.param("slug").slice(0, 60);
+    const form = await service.getBySlugPublished(slug);
+    const html = form ? renderFormPage({ form }) : renderFormNotFoundPage();
+    return new Response(html, { status: form ? 200 : 404, headers: PAGE_HEADERS });
+  });
+  app.post("/public/form/:slug/submit", async (c) => {
+    const raw2 = await c.req.text();
+    if (raw2.length > 8192) {
+      return c.json({ error: "VALIDATION_ERROR", message: "\u062D\u062C\u0645 \u0627\u0637\u0644\u0627\u0639\u0627\u062A \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0645\u062C\u0627\u0632 \u0627\u0633\u062A" }, 400);
+    }
+    let parsedBody;
+    try {
+      parsedBody = JSON.parse(raw2);
+    } catch {
+      return c.json({ error: "VALIDATION_ERROR", message: "\u0628\u062F\u0646\u0647\u0654 \u062F\u0631\u062E\u0648\u0627\u0633\u062A JSON \u0645\u0639\u062A\u0628\u0631 \u0646\u06CC\u0633\u062A" }, 400);
+    }
+    const body = FormResponseSubmitSchema.parse(parsedBody);
+    formRateGuard(clientIp(c));
+    const slug = c.req.param("slug").slice(0, 60);
+    const created = await service.submitResponse(
+      slug,
+      {
+        answers: body.answers,
+        respondent_name: body.respondent_name,
+        respondent_phone: body.respondent_phone ?? null,
+        token: body.token
+      },
+      { ip: clientIp(c) }
+    );
+    return c.json({ data: created }, 201);
+  });
+  app.get("/api/forms", async (c) => {
+    const items = await service.list();
+    return c.json({ data: items }, 200);
+  });
+  app.get("/api/forms/:id", async (c) => {
+    const item = await service.getById(c.req.param("id"));
+    return c.json({ data: item }, 200);
+  });
+  app.post("/api/forms", requireRole("manager", "secretary"), async (c) => {
+    const actor = getAuthContext(c);
+    const body = FormUpsertSchema.parse(await c.req.json());
+    const created = await service.create(body, actor);
+    return c.json({ data: created }, 201);
+  });
+  app.patch("/api/forms/:id", requireRole("manager", "secretary"), async (c) => {
+    const actor = getAuthContext(c);
+    const body = FormUpsertSchema.parse(await c.req.json());
+    const updated = await service.update(c.req.param("id"), body, actor);
+    return c.json({ data: updated }, 200);
+  });
+  app.delete("/api/forms/:id", requireRole("manager"), async (c) => {
+    const actor = getAuthContext(c);
+    await service.remove(c.req.param("id"), actor);
+    return c.body(null, 204);
+  });
+  app.get("/api/forms/:id/responses", requireRole("manager", "secretary", "therapist"), async (c) => {
+    const items = await service.listResponses(
+      c.req.param("id"),
+      c.req.query("status") || void 0
+    );
+    return c.json({ data: items }, 200);
+  });
+  app.post("/api/forms/:id/responses/:rid/seen", requireRole("manager", "secretary"), async (c) => {
+    const actor = getAuthContext(c);
+    const item = await service.markResponseSeen(c.req.param("rid"), actor);
+    return c.json({ data: item }, 200);
+  });
+}
+__name(registerFormBuilderRoutes, "registerFormBuilderRoutes");
 
 // src/domain/followups/pure.ts
 var FOLLOWUP_TRANSITIONS = {
@@ -67246,14 +68037,14 @@ function matchEnum(raw2, options) {
   return null;
 }
 __name(matchEnum, "matchEnum");
-function normalizePhone(raw2) {
+function normalizePhone2(raw2) {
   const s = enDigits(raw2).trim();
   if (!s) return { ok: true, value: "" };
   const compact = s.replace(/[\s\u200c]/g, "");
   if (!/^[0-9+\-()]{3,20}$/.test(compact)) return { ok: false, value: compact };
   return { ok: true, value: compact };
 }
-__name(normalizePhone, "normalizePhone");
+__name(normalizePhone2, "normalizePhone");
 function normalizeCode(raw2) {
   return enDigits(raw2).trim().replace(/[\s\u200c]/g, "");
 }
@@ -67343,7 +68134,7 @@ function validateSchoolRow(raw2, colByKey) {
       display[key] = "";
       continue;
     }
-    const p = normalizePhone(rawVal);
+    const p = normalizePhone2(rawVal);
     if (!p.ok) errors.push(`\xAB${labelOf2(colByKey.get(key))}\xBB \u0645\u0639\u062A\u0628\u0631 \u0646\u06CC\u0633\u062A`);
     else if (p.value.length > 20) errors.push(`\xAB${labelOf2(colByKey.get(key))}\xBB \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F2\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A`);
     else {
@@ -67450,7 +68241,7 @@ function validateClassRow(raw2, colByKey) {
     normalized.teacher_phone = null;
     display.teacher_phone = "";
   } else {
-    const p = normalizePhone(phoneRaw);
+    const p = normalizePhone2(phoneRaw);
     if (!p.ok) errors.push("\xAB\u062A\u0644\u0641\u0646 \u0645\u0639\u0644\u0645\xBB \u0645\u0639\u062A\u0628\u0631 \u0646\u06CC\u0633\u062A");
     else if (p.value.length > 20) errors.push("\xAB\u062A\u0644\u0641\u0646 \u0645\u0639\u0644\u0645\xBB \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F2\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
     else {
@@ -79568,6 +80359,7 @@ function createApp(deps) {
   registerStudentTimelineRoutes(app, services.studentTimeline);
   registerSpecialNeedsRoutes(app, services.specialNeeds);
   registerWaitlistRoutes(app, services.waitlist);
+  registerFormBuilderRoutes(app, createFormBuilderService({ db: services.db, audit: services.audit, logger: services.logger }));
   registerFollowUpRoutes(app, services.followups);
   registerTodoRoutes(app, services.todos);
   registerExerciseBankRoutes(app, services.exerciseBank);

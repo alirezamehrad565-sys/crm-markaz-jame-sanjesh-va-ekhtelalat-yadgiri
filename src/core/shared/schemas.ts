@@ -1269,3 +1269,64 @@ export const ReferralRejectSchema = z.object({
     .min(2, 'دلیل رد لازم است — برای معرف قابل ارسال است')
     .max(REFERRAL_REJECT_REASON_MAX, `دلیل رد حداکثر ${REFERRAL_REJECT_REASON_MAX} نویسه است`)
 });
+
+/* ─── فرم‌ساز تعاملی عمومی (v1.27.34 — REFERRAL-DESIGN §A) ───
+ * بلوک‌ها JSON شِمادارند؛ select/multi حداقل دو گزینه و note (صفحهٔ آگاهی) متن لازم دارد. */
+export const FormBlockSchema = z
+  .object({
+    kind: z.enum(['text', 'longtext', 'number', 'phone', 'select', 'multi', 'yes_no', 'note'], {
+      message: 'نوع بلوک معتبر نیست'
+    }),
+    label: z
+      .string()
+      .trim()
+      .min(2, 'برچسب بلوک حداقل ۲ نویسه است')
+      .max(200, 'برچسب بلوک حداکثر ۲۰۰ نویسه است'),
+    required: z.boolean().optional().default(false),
+    options: z
+      .array(
+        z.object({
+          value: z.string().trim().min(1, 'مقدار گزینه لازم است').max(40),
+          label: z.string().trim().min(1, 'برچسب گزینه لازم است').max(100)
+        })
+      )
+      .max(12, 'حداکثر ۱۲ گزینه')
+      .optional(),
+    note: z.string().trim().max(2000, 'متن صفحهٔ آگاهی حداکثر ۲۰۰۰ نویسه است').optional()
+  })
+  .refine((b) => (b.kind === 'select' || b.kind === 'multi' ? (b.options?.length ?? 0) >= 2 : true), {
+    message: 'برای بلوک انتخاب، حداقل دو گزینه لازم است'
+  })
+  .refine((b) => (b.kind === 'note' ? Boolean(b.note && b.note.trim().length >= 4) : true), {
+    message: 'برای صفحهٔ آگاهی، متن لازم است'
+  });
+
+export const FormUpsertSchema = z.object({
+  title: z.string().trim().min(2, 'عنوان فرم حداقل ۲ نویسه است').max(120, 'عنوان فرم حداکثر ۱۲۰ نویسه است'),
+  slug: z
+    .string()
+    .trim()
+    .regex(/^[a-z0-9][a-z0-9-]{2,59}$/, 'اسلاگ فقط حروف لاتین کوچک، رقم و خط‌تیره (۳ تا ۶۰ نویسه)'),
+  description: z.string().trim().max(500, 'توضیح حداکثر ۵۰۰ نویسه است').optional(),
+  blocks: z.array(FormBlockSchema).max(60, 'حداکثر ۶۰ بلوک در هر فرم').default([]),
+  published: z.boolean().optional().default(false)
+});
+
+export const FormResponseSubmitSchema = z.object({
+  answers: z
+    .array(
+      z.object({
+        index: z.number().int().min(0, 'اندیس بلوک نامعتبر است').max(59),
+        value: z.union([
+          z.string().max(2000, 'پاسخ حداکثر ۲۰۰۰ نویسه است'),
+          z.array(z.string().max(100)).max(12, 'حداکثر ۱۲ انتخاب'),
+          z.number().finite('پاسخ عددی باید عدد باشد'),
+          z.boolean()
+        ])
+      })
+    )
+    .max(60),
+  respondent_name: z.string().trim().min(2, 'نام پاسخ‌دهنده حداقل ۲ نویسه است').max(80),
+  respondent_phone: GuardianPhoneSchema.nullish(),
+  token: z.string().trim().max(200).optional()
+});

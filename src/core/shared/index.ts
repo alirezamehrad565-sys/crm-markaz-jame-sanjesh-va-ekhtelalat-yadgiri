@@ -116,7 +116,10 @@ export {
   BOT_ABOUT_MAX,
   IqEvaluationCreateSchema, // ۱.۲۷.۳۳ — نتیجهٔ ارزیابی تخصصی «اظهارنظر و پیشنهاد»
   PublicReferralSubmissionSchema, // ۱.۲۷.۳۳ — فرم عمومی معرفی به مرکز
-  ReferralRejectSchema
+  ReferralRejectSchema,
+  FormBlockSchema, // ۱.۲۷.۳۴ — فرم‌ساز تعاملی عمومی
+  FormUpsertSchema,
+  FormResponseSubmitSchema
 } from './schemas';
 
 export type {
@@ -358,6 +361,16 @@ export {
   REFERRAL_LIST_LIMIT,
   REFERRAL_RATE_PER_HOUR,
   REFERRAL_RATE_PER_CHAT,
+  FORM_BLOCK_KINDS,
+  FORM_TITLE_MAX,
+  FORM_DESCRIPTION_MAX,
+  FORM_BLOCKS_MAX,
+  FORM_BLOCK_LABEL_MAX,
+  FORM_BLOCK_OPTIONS_MAX,
+  FORM_OPTION_MAX,
+  FORM_NOTE_MAX,
+  FORM_RESPONSE_LIMIT,
+  FORM_RATE_PER_HOUR,
 } from './constants';
 
 export {
