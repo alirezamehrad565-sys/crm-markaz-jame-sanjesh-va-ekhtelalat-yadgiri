@@ -516,7 +516,10 @@ export async function renderWaitlist(container, initialQuery = '', prefillName =
       label: 'نام متقاضی',
       render: (r) => el('div', {},
         el('strong', {}, `${r.firstName} ${r.lastName}`),
-        r.serviceType ? el('div', { class: 'muted', style: { fontSize: '12px' } }, r.serviceType) : null,
+        el('span', { style: { display: 'flex', gap: 'var(--sp-1)', flexWrap: 'wrap', marginTop: '2px' } },
+          r.serviceType ? el('div', { class: 'muted', style: { fontSize: '12px' } }, r.serviceType) : null,
+          r.serviceType === 'ارجاع اتیسم' ? el('span', { class: 'badge badge--info' }, 'اتیسم') : null
+        ),
         r.studentId
           ? el('button', {
               class: 'linklike', style: { fontSize: '12px', cursor: 'pointer', background: 'none', border: 'none', color: 'var(--primary)', padding: '0' },
@@ -659,6 +662,219 @@ export async function renderWaitlist(container, initialQuery = '', prefillName =
     el('strong', {}, 'نوبت داده شد'),
     ' · پذیرش = خروج خودکار از لیست'
   );
+
+  /* ─── v1.27.33 — تب «صندوق معرفی‌ها» (REFERRAL-DESIGN §H/I): معرفی‌های فرم عمومی خانواده/معلم
+     اینجا می‌نشینند؛ پذیرش از مسیر create اتمیک لیست انتظار می‌گذرد؛ badge اتیسم دستهٔ autism ─── */
+  const REFERRAL_CAT_LABELS = {
+    delayed: 'دیرآموز',
+    learning_disorder: 'اختلال یادگیری',
+    intellectual: 'مشکوک به کم‌توانی',
+    autism: 'ارجاع اتیسم',
+    speech: 'تأخیر گفتار و زبان',
+    other: 'سایر'
+  };
+  const WL_AUTISM_SERVICE_TYPE = REFERRAL_CAT_LABELS.autism;
+
+  const inboxZone = el('div', { style: { display: 'none' } });
+  const listZone = el('div', {});
+  let referralRows = [];
+  let showProcessed = false;
+  let inboxLoaded = false;
+
+  const tabListBtn = el('button', { class: 'btn btn--primary btn--sm', onclick: () => switchTab('list') }, icon('clock', 15), 'لیست انتظار');
+  const tabInboxBtn = el('button', { class: 'btn btn--ghost btn--sm', onclick: () => switchTab('inbox') }, icon('clipboard', 15), 'صندوق معرفی‌ها');
+  const tabbar = el('div', { class: 'week-bar', style: { marginBottom: 'var(--sp-3)' } }, tabListBtn, tabInboxBtn);
+
+  function switchTab(tab) {
+    const inbox = tab === 'inbox';
+    inboxZone.style.display = inbox ? '' : 'none';
+    listZone.style.display = inbox ? 'none' : '';
+    tabInboxBtn.className = `btn btn--sm ${inbox ? 'btn--primary' : 'btn--ghost'}`;
+    tabListBtn.className = `btn btn--sm ${inbox ? 'btn--ghost' : 'btn--primary'}`;
+    if (inbox && !inboxLoaded) loadInbox();
+  }
+
+  function wlCounters() {
+    const news = referralRows.filter((r) => r.status === 'new');
+    const autismCount = referralRows.filter((r) => r.concernCategory === 'autism' && r.status !== 'rejected').length;
+    const acceptedCount = referralRows.filter((r) => r.status === 'accepted').length;
+    const waiting = referralRows.length
+      ? state.rows.filter((r) => r.status === 'waiting' || r.status === 'called').length
+      : null;
+    return el('div', { class: 'kpi-grid', style: { marginBottom: 'var(--sp-3)' } },
+      el('div', { class: `kpi kpi--${news.length > 0 ? 'error' : 'neutral'}` },
+        el('div', { class: 'kpi__value' }, fa(news.length)),
+        el('div', { class: 'kpi__label' }, 'جدید در صندوق'),
+        el('div', { class: 'kpi__hint' }, 'در انتظار پذیرش/رد')
+      ),
+      el('div', { class: 'kpi kpi--primary' },
+        el('div', { class: 'kpi__value' }, waiting === null ? '—' : fa(waiting)),
+        el('div', { class: 'kpi__label' }, 'در انتظار تماس'),
+        el('div', { class: 'kpi__hint' }, 'لیست انتظار فعال')
+      ),
+      el('div', { class: 'kpi kpi--accent' },
+        el('div', { class: 'kpi__value' }, fa(autismCount)),
+        el('div', { class: 'kpi__label' }, 'ارجاع اتیسم'),
+        el('div', { class: 'kpi__hint' }, 'صف ارزیابی رفتاری')
+      ),
+      el('div', { class: 'kpi kpi--success' },
+        el('div', { class: 'kpi__value' }, fa(acceptedCount)),
+        el('div', { class: 'kpi__label' }, 'پذیرفته‌شده'),
+        el('div', { class: 'kpi__hint' }, 'از فرم معرفی')
+      )
+    );
+  }
+
+  function referralDetail(r) {
+    return el('div', { class: 'review', style: { marginTop: 'var(--sp-2)' } },
+      ...[
+        ['نام کودک', `${r.firstName}`],
+        ['تاریخ تولد', r.birthDate ?? '—'],
+        ['مدرسه / پایه / کلاس', [r.schoolText, r.gradeText, r.classText].filter(Boolean).join(' — ') || '—'],
+        ['دغدغه', [REFERRAL_CAT_LABELS[r.concernCategory] ?? null, r.concernText].filter(Boolean).join(' — ') || '—'],
+        ['ارزیابی قبلی', r.priorEval === true ? 'بله' + (r.priorEvalNote ? ` — ${r.priorEvalNote}` : '') : r.priorEval === false ? 'خیر' : '—'],
+        ['معرف', `${r.referrerName} (${r.refRole === 'teacher' ? 'معلم' : 'خانواده'}) — ${fa(r.referrerPhone)}`],
+        ['کانال ثبت', r.channel === 'web' ? 'فرم وب' : r.channel === 'bot' ? 'بات بله' : 'دستی'],
+        ['سال تحصیلی', r.academicYear ?? '—'],
+        ['تاریخ ثبت', r.createdAt?.slice(0, 10) ?? '—']
+      ].map(([k, v]) =>
+        el('div', { class: 'review__row' },
+          el('span', { class: 'k' }, k),
+          el('span', { class: 'v' }, String(v))
+        )
+      )
+    );
+  }
+
+  function openReferralDetail(r) {
+    openModal({
+      title: `معرفی — ${r.firstName}`,
+      wide: true,
+      body: referralDetail(r),
+      actions: [(close) => el('button', { class: 'btn btn--ghost btn--sm', onclick: close }, 'بستن')]
+    });
+  }
+
+  function openRejectModal(r) {
+    const reason = el('textarea', { class: 'input', placeholder: 'دلیل رد (برای معرف قابل ارسال است — اجباری)', style: { minHeight: '90px' } });
+    const errHint = el('div', { class: 'muted', style: { color: 'var(--error)', fontSize: '12px', marginTop: 'var(--sp-1)', display: 'none' } }, 'دلیل رد لازم است');
+    const shell = openModal({
+      title: `رد معرفی — ${r.firstName}`,
+      body: el('div', {}, reason, errHint),
+      actions: [
+        (close) => el('button', { class: 'btn btn--ghost btn--sm', onclick: close }, 'انصراف'),
+        (close) => {
+          const save = el('button', { class: 'btn btn--primary btn--sm' }, 'ثبت رد');
+          save.addEventListener('click', async () => {
+            const text = reason.value.trim();
+            if (text.length < 2) { errHint.style.display = ''; return; }
+            save.disabled = true;
+            try {
+              await api.post(`/api/waitlist/referrals/${r.id}/reject`, { reason: text });
+              toast('معرفی رد شد', 'success');
+              close();
+              loadInbox();
+            } catch (err) {
+              save.disabled = false;
+              toastError(err);
+            }
+          });
+          return save;
+        }
+      ]
+    });
+    return shell;
+  }
+
+  async function acceptOne(r) {
+    try {
+      await api.post(`/api/waitlist/referrals/${r.id}/accept`, {});
+      toast(`${r.firstName} به لیست انتظار اضافه شد`, 'success');
+      dispatchChanged();
+      ctl.quietSync();
+      loadInbox();
+    } catch (err) {
+      toastError(err);
+    }
+  }
+
+  function referralCard(r) {
+    const isNew = r.status === 'new';
+    return el('div', { class: 'card', style: { marginBottom: 'var(--sp-3)' } },
+      el('div', { class: 'card__body' },
+        el('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 'var(--sp-2)', alignItems: 'center' } },
+          el('strong', {}, r.firstName),
+          r.concernCategory ? el('span', { class: 'badge badge--neutral' }, REFERRAL_CAT_LABELS[r.concernCategory] ?? r.concernCategory) : null,
+          r.concernCategory === 'autism' ? el('span', { class: 'badge badge--info' }, 'اتیسم') : null,
+          el('span', { class: 'badge badge--' + (r.refRole === 'teacher' ? 'warning' : 'info') },
+            r.refRole === 'teacher' ? `معلم: ${r.referrerName}` : 'خانواده'),
+          el('span', { class: 'badge ' + (isNew ? 'badge--error' : r.status === 'accepted' ? 'badge--success' : 'badge--neutral') },
+            isNew ? 'جدید' : r.status === 'accepted' ? 'پذیرفته‌شده' : 'ردشده')
+        ),
+        el('div', { class: 'muted', style: { fontSize: '12px', marginTop: 'var(--sp-1)' } },
+          [r.schoolText, r.gradeText, r.classText].filter(Boolean).join(' — ') || 'بدون مشخصات مدرسه'),
+        el('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 'var(--sp-2)', alignItems: 'center', marginTop: 'var(--sp-2)' } },
+          phoneCell(r.guardianPhone || r.referrerPhone, `تماس با ولیّ ${r.firstName} — ${fa(r.guardianPhone || r.referrerPhone)}`),
+          el('span', { class: 'muted', style: { fontSize: '12px' } }, `ثبت: ${r.createdAt?.slice(0, 10) ?? '—'} · سال ${r.academicYear ?? '—'}`),
+          el('span', { class: 'spacer' }),
+          el('button', { class: 'btn btn--ghost btn--sm', onclick: () => openReferralDetail(r) }, 'مشاهدهٔ کامل'),
+          isNew && isOfficeUser
+            ? el('button', { class: 'btn btn--primary btn--sm', onclick: () => acceptOne(r) }, icon('plus', 13), 'پذیرش در لیست انتظار')
+            : null,
+          isNew && isOfficeUser
+            ? el('button', { class: 'btn btn--soft btn--sm', onclick: () => openRejectModal(r) }, 'رد با دلیل')
+            : null,
+          !isNew && r.status === 'rejected' && r.rejectReason
+            ? el('span', { class: 'muted', style: { fontSize: '12px' } }, `دلیل رد: ${r.rejectReason}`)
+            : null
+        ),
+        r.concernText
+          ? el('div', { style: { fontSize: '12px', marginTop: 'var(--sp-2)', color: 'var(--text)', opacity: '.75' } },
+              `دغدغه: ${r.concernText.slice(0, 160)}${r.concernText.length > 160 ? '…' : ''}`)
+          : null
+      )
+    );
+  }
+
+  async function loadInbox() {
+    try {
+      const res = await api.get('/api/waitlist/referrals');
+      referralRows = res.data ?? [];
+      inboxLoaded = true;
+      paintInbox();
+    } catch (err) {
+      toastError(err);
+    }
+  }
+
+  function paintInbox() {
+    const news = referralRows.filter((r) => r.status === 'new');
+    const processed = referralRows.filter((r) => r.status !== 'new');
+    tabInboxBtn.textContent = '';
+    tabInboxBtn.append(icon('clipboard', 15), `صندوق معرفی‌ها${news.length ? ` (${fa(news.length)})` : ''}`);
+    inboxZone.replaceChildren(
+      wlCounters(),
+      news.length === 0
+        ? el('div', { class: 'card' },
+            el('div', { class: 'card__body' },
+              emptyState({
+                iconName: 'check',
+                title: 'صندوق خالی است — همه‌ی ارجاع‌ها بررسی شده‌اند',
+                hint: 'معرفی‌های تازه از فرم عمومی خانواده/معلم و بات بله اینجا می‌نشینند؛ پذیرش هر مورد به لیست انتظار از مسیر اتمیک می‌گذرد.'
+              })
+            )
+          )
+        : el('div', {}, ...news.map(referralCard)),
+      processed.length > 0
+        ? el('div', {},
+            el('button', { class: 'btn btn--ghost btn--sm', style: { margin: 'var(--sp-2) 0' }, onclick: () => { showProcessed = !showProcessed; paintInbox(); } },
+              `${showProcessed ? 'پنهان' : 'نمایش'} موارد بررسی‌شده (${fa(processed.length)})`),
+            showProcessed ? el('div', {}, ...processed.map(referralCard)) : null
+          )
+        : null
+    );
+  }
+
   const toolbar = el('div', { class: 'week-bar' },
     statusSel, prioritySel, searchInput,
     el('div', { class: 'spacer' }),
@@ -671,9 +887,12 @@ export async function renderWaitlist(container, initialQuery = '', prefillName =
         icon('info', 17),
         el('span', {}, isSupervisor ? 'دسترسی شما: فقط مشاهدهٔ لیست انتظار.' : 'دسترسی شما: فقط ثبت متقاضی جدید.')); /* ۱.۲۵.۰۱ — ناظر */
 
-  container.replaceChildren(...[roleNote, toolbar, legend, table].filter(Boolean));
+  /* v1.27.33 — مونت تب‌دار: صندوق معرفی‌ها + لیست انتظار در یک نما؛ پیش‌فرض همان لیست است */
+  listZone.append(...[roleNote, toolbar, legend, table].filter(Boolean));
+  container.replaceChildren(tabbar, inboxZone, listZone);
   tbody.replaceChildren(stateRow(loadingState('بارگذاری لیست انتظار…')));
   await refreshRows();
+  loadInbox(); // — badge شمارندهٔ صندوق async؛ لیست انتظار منتظرش نمی‌ماند
 
   function wlActions(r) {
     const wrap = el('div', { class: 'wl-actions', onclick: (e) => e.stopPropagation() });
