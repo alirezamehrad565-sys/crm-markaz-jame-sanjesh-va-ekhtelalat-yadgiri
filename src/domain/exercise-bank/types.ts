@@ -380,6 +380,8 @@ export interface ExerciseBankService {
   mintDownloadToken(exerciseId: string, fileId?: string | null): Promise<string>;
   verifyDownloadToken(token: string): Promise<{ exerciseId: string; fileId: string | null } | null>;
   categories(): Promise<ExerciseCategoryGroup>;
+  /* ۱.۲۷.۳۸ — فهرست عمومیِ امن برای صفحهٔ /public/activities (فقط متادیتای منتشرشده) */
+  listPublicActivities(): Promise<PublicActivityItem[]>;
   assign(input: AssignExerciseInput, actor: AuthContext): Promise<AssignmentRecord>;
   listAssignments(filters: { studentId?: string; exerciseId?: string; limit?: number }): Promise<AssignmentRecord[]>;
 
@@ -390,4 +392,13 @@ export interface ExerciseBankService {
   addSubmission(input: AddSubmissionInput, actor: AuthContext): Promise<SubmissionRecord>;
   listSubmissions(filters: ListSubmissionsFilters): Promise<SubmissionRecord[]>;
   getSubmissionFile(submissionId: string): Promise<{ bytes: Uint8Array; filename: string; mime: string } | null>;
+}
+
+/* ۱.۲۷.۳۸ — یک کارت آماده در صفحهٔ عمومی تمرین‌ها؛ فقط متادیتای امن، بدون فایل */
+export interface PublicActivityItem {
+  id: string;
+  title: string;
+  description: string | null;
+  format: string; // worksheet | game | instruction
+  tags: string[];
 }

@@ -14,6 +14,7 @@ import {
 import { RateLimitError } from '@core/errors';
 import { getAuthContext, requireRole } from '@core/auth';
 import { renderReferralPage } from './referral-page';
+import { GUIDE_SLUGS, renderGuidePage } from './guide-page'; // ۱.۲۷.۳۸ — فایل راهنمای عمومی هر دسته
 import type { WaitlistService } from './types';
 
 /* محدودساز نرخ درون‌حافظهٔ فرم عمومی (بدون ردپای دائمی — الگوی §RUM قرارداد design.md):
@@ -230,6 +231,26 @@ export function registerWaitlistRoutes(app: AppHono, service: WaitlistService): 
   app.get('/public/referral', (c) => {
     const token = (c.req.query('token') ?? '').slice(0, 200) || null;
     const html = renderReferralPage({ token });
+    return new Response(html, {
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'no-store',
+        'X-Robots-Tag': 'noindex, nofollow',
+        'Content-Security-Policy':
+          "default-src 'none'; style-src 'unsafe-inline' https://cdn.jsdelivr.net; script-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src https://cdn.jsdelivr.net"
+      }
+    });
+  });
+
+  /* ─── فایل راهنمای عمومی هر دسته (۱.۲۷.۳۸) — لینکِ «توضیحات بیشتر» صفحه‌های آگاهی ───
+   * همان قرارداد سروِ /public/referral (no-store + noindex + CSP)؛ بدون دادهٔ بالینی؛
+   * اسلاگ ناشناخته → ۴۰۴ ساده. سه دسته: delayed / learning-disorder / intellectual */
+  app.get('/public/guide/:slug', (c) => {
+    const slug = c.req.param('slug');
+    if (!(GUIDE_SLUGS as readonly string[]).includes(slug)) {
+      return new Response('یافت نشد', { status: 404, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+    }
+    const html = renderGuidePage(slug);
     return new Response(html, {
       headers: {
         'Content-Type': 'text/html; charset=utf-8',

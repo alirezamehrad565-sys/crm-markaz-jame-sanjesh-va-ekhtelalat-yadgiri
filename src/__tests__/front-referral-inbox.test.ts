@@ -1,13 +1,11 @@
 /**
- * گیت فرانت ۱.۲۷.۳۷ — «صندوق ورودی» نمای مستقل منو (فاز بعدی صندوق)
- * خواست کارفرما: «تو سایت صندوق ورودی رو نمی‌بینم» — تب قدیمی صندوق معرفی‌ها در ۱.۲۷.۳۵
- * از لیست انتظار حذف شده بود (خواست همان زمان کارفرما) و معرفی‌های فرم عمومی بدون نمای مدیریتی
- * مانده بودند. این گیت سیم‌کشی نمای مستقل را پین می‌کند:
- * ① آیتم منو «صندوق ورودی» در گروه برنامه‌ریزی — فقط مدیر/منشی
- * ② register با lazyView + roleOnly + پیام دسترسی فارسی
- * ③ نمای صندوق: فیلتر وضعیت (جدید/پذیرفته‌شده/ردشده/همه) + جست‌وجو + KPI چهارگانه
- * ④ فرم تکمیلی خانواده در کارت و مودال (فرهنگی/مالی/همکاری) — بدون KPI اتیسم
- * ⑤ پذیرش/رد از همان API اتمیک + badge منو با شمار «جدید» + رویداد referrals:changed
+ * گیت فرانت ۱.۲۷.۳۸ — ادغام «صندوق ورودی» در لیست انتظار + افزودن به آرشیو + متن‌های محاوره‌ای
+ * خواست کارفرما (این نوبت):
+ * ① «قرار بود صندوق ورودی توی لیست انتظار ادغام بشه» — تب دوم داخل #/waitlist، بدون آیتم مستقل منو
+ * ② «از صندوق ورودی باید بشه دانش‌آموز رو به آرشیو اضافه کرد» — کنش پیش‌پُر از معرفی در فرم آرشیو
+ * ③ متن‌های دیرآموز/کم‌توان/اختلال یادگیری محاوره‌ای و مفصل‌تر، بدون تذکر تکراری «تشخیص»،
+ *    با لینک فایل راهنمای عمومی (/public/guide/<slug>)
+ * ④ بات: دکمهٔ «تمرین‌ها و کارت‌ها» برای مهمان + لینک صفحهٔ عمومی بانک محتوا (/public/activities)
  * الگو: front-12581.test.ts — گیت محتوایی سورس‌خوان
  */
 import { describe, it, expect } from 'vitest';
@@ -17,46 +15,83 @@ import { join } from 'node:path';
 const ROOT = join(__dirname, '../..');
 const read = (p: string) => readFileSync(join(ROOT, p), 'utf8');
 
-describe('گیت فرانت ۱.۲۷.۳۷ — صندوق ورودی معرفی‌ها (نمای مستقل)', () => {
+describe('گیت فرانت ۱.۲۷.۳۸ — صندوق ورودی در لیست انتظار + آرشیو + متن‌ها + بات', () => {
   const view = read('public/assets/js/views/referral-inbox.js');
+  const waitlist = read('public/assets/js/waitlist.js');
   const app = read('public/assets/js/app.js');
+  const archiveForm = read('public/assets/js/archive-form.js');
+  const referralPage = read('src/domain/waitlist/referral-page.ts');
+  const guidePage = read('src/domain/waitlist/guide-page.ts');
+  const waitRoutes = read('src/domain/waitlist/routes.ts');
+  const webhook = read('src/core/notify/bale/webhook.ts');
+  const botCommands = read('src/application/notify/bot-commands.ts');
+  const templates = read('src/core/notify/templates.ts');
+  const exbRoutes = read('src/domain/exercise-bank/routes.ts');
+  const exbTypes = read('src/domain/exercise-bank/types.ts');
+  const exbService = read('src/domain/exercise-bank/service.ts');
 
-  it('① آیتم منو «صندوق ورودی» بعد از لیست انتظار — فقط مدیر/منشی', () => {
-    expect(app).toContain("{ hash: '#/referral-inbox', label: 'صندوق ورودی', icon: 'clipboard', group: 'برنامه‌ریزی', roles: ['manager', 'secretary'] }");
-    expect(app.indexOf('#/referral-inbox')).toBeGreaterThan(app.indexOf("'#/waitlist', label: 'لیست انتظار'"));
+  it('① صندوق ورودی: تب دومِ لیست انتظار — بدون آیتم مستقل منو و بدون badge قدیمی', () => {
+    expect(waitlist).toContain("import { renderReferralInbox } from './views/referral-inbox.js'");
+    expect(waitlist).toContain('renderReferralInbox(inboxZone, { embedded: true, onCount: (n) => {');
+    expect(waitlist).toContain("'صندوق ورودی'");
+    expect(app).not.toContain('#/referral-inbox'); // آیتم منو + register + badge همه حذف شده‌اند
+    expect(app).not.toContain('nav__badge--referrals');
+    expect(app).not.toContain('updateReferralsBadge');
+    expect(view).toContain('const embedded = opts.embedded === true');
+    expect(view).toContain("opts.onCount?.(rows.filter((r) => r.status === 'new').length)");
   });
 
-  it('② register مسیر با lazyView + roleOnly + پیام دسترسی', () => {
-    expect(app).toContain("register('#/referral-inbox', { title: 'صندوق ورودی', render: roleOnly(['manager', 'secretary'], lazyView(() => import('./views/referral-inbox.js'), 'renderReferralInbox', '#/referral-inbox'), 'صندوق ورودی برای دفتر مرکز فعال است.') });");
+  it('② «افزودن به آرشیو» از صندوق — پیش‌پُر از معرفی در فرم آرشیو', () => {
+    expect(view).toContain("import { openArchiveStudentForm } from '../archive-form.js'");
+    expect(view).toContain("'افزودن به آرشیو'");
+    expect(view).toContain('initial: {');
+    expect(view).toContain("full_name: r.firstName ?? ''");
+    expect(archiveForm).toContain('const pre = initial && !student ? initial : null');
+    expect(archiveForm).toContain("preName[0] ?? ''"); // شکستن نام کامل به نام/نام‌خانوادگی
+    expect(archiveForm).toContain('meta.schools.find((s) => s.active && s.name === pre.school_text)');
+    expect(archiveForm).toContain('ثبت در آرشیو — از معرفی صندوق ورودی');
+    expect(archiveForm).toContain('/^\\d{8}$/.test(String(pre?.birth_date ?? \'\'))'); /* فقط عدد جلالی به تقویم */
   });
 
-  it('③ نمای صندوق: فیلتر وضعیت + جست‌وجو + شمارنده', () => {
-    expect(view).toContain("FILTERS = [");
-    expect(view).toContain("{ key: 'new', label: 'جدید' }");
-    expect(view).toContain("{ key: 'all', label: 'همه' }");
-    expect(view).toContain("'جست‌وجوی نام یا شماره…'");
-    expect(view).toContain('kpi-grid');
+  it('③ صفحه‌های آگاهی: محاوره‌ای، بدون تذکر تکراری «تشخیص»، با لینک فایل راهنما', () => {
+    expect(referralPage).toContain("g:'delayed'");
+    expect(referralPage).toContain("g:'learning-disorder'");
+    expect(referralPage).toContain("g:'intellectual'");
+    expect(referralPage).toContain('href="/public/guide/\'+a.g');
+    expect(referralPage).toContain('فایل راهنمای کامل‌تر این دسته');
+    expect(referralPage).not.toContain('تشخیصش کارِ ماست'); // تذکر تکراری حذف شد
+    expect(referralPage).not.toContain('شما تشخیص نمی‌دید');
+    expect(referralPage).not.toContain('تشخیص کار ماست');
+    // متن تازه مفصل‌تر و محاوره‌ای‌تر است
+    expect(referralPage).toContain('گام‌های کوچیک‌تر');
+    expect(referralPage).toContain('مغزش فقط یه مسیر رو متفاوت پردازش می‌کنه');
+    expect(referralPage).toContain('انتظارِ واقع‌بینانه');
   });
 
-  it('④ فرم تکمیلی خانواده هست؛ KPI/نشان اتیسم نیست (دادهٔ قدیمی فقط برچسب خنثی)', () => {
-    expect(view).toContain('culture');
-    expect(view).toContain('finance');
-    expect(view).toContain('cooperation');
-    expect(view).toContain('اولویت خدمات رایگان');
-    expect(view).toContain('سطح مالی کم‌برخوردار');
-    expect(view).not.toContain("'اتیسم'"); // نشان اتیسم قدیمی حذف شده
-    expect(view).not.toContain('ارجاع اتیسم');
+  it('③ راهنمای عمومی سه‌دسته سرو می‌شود — همان قرارداد /public/referral', () => {
+    expect(waitRoutes).toContain("app.get('/public/guide/:slug'");
+    expect(waitRoutes).toContain('GUIDE_SLUGS as readonly string[]).includes(slug)');
+    expect(waitRoutes).toContain("import { GUIDE_SLUGS, renderGuidePage } from './guide-page'");
+    expect(guidePage).toContain("GUIDE_SLUGS = ['delayed', 'learning-disorder', 'intellectual']");
+    expect(guidePage).toContain('/public/referral'); // CTA معرفی در هر راهنما
+    expect(guidePage).not.toContain('تشخیص کار ماست'); // بدون تذکر تکراری در راهنماها
+    expect(guidePage).toContain('همهٔ خدمات مرکز رایگان است');
   });
 
-  it('⑤ API اتمیک + badge منو + رویداد referrals:changed', () => {
-    expect(view).toContain("api.get('/api/waitlist/referrals')");
-    expect(view).toContain("/api/waitlist/referrals/${r.id}/accept");
-    expect(view).toContain("/api/waitlist/referrals/${r.id}/reject");
-    expect(view).toContain("window.dispatchEvent(new CustomEvent('referrals:changed'))");
-    expect(app).toContain('nav__badge--referrals');
-    expect(app).toContain('async function updateReferralsBadge()');
-    expect(app).toContain("window.addEventListener('referrals:changed', updateReferralsBadge)");
-    expect(app).toContain('updateReferralsBadge(); // ۱.۲۷.۳۷');
-    expect((app.match(/updateReferralsBadge\(\);/g) ?? []).length).toBe(2); // دو فراخوان: rebuildNavForRole + بوت پس از ورود
+  it('④ بات: دکمهٔ «تمرین‌ها و کارت‌ها» + لینک صفحهٔ عمومی بانک محتوا', () => {
+    expect(webhook).toContain('ACTIVITIES_LABELS');
+    expect(webhook).toContain("'تمرین‌ها و کارت‌ها'");
+    expect(webhook).toContain("kind: 'activities'");
+    expect(botCommands).toContain("['تمرین‌ها و کارت‌ها']");
+    expect(botCommands).toContain("case 'activities'");
+    expect(botCommands).toContain('handleActivitiesCommand');
+    expect(botCommands).toContain('/public/activities');
+    expect(botCommands).toContain('مرور تمرین‌ها و کارت‌های آمادهٔ مرکز');
+    expect(templates).toContain("case 'bot_activities'");
+    expect(exbRoutes).toContain("app.get('/public/activities'");
+    expect(exbRoutes).toContain('renderActivitiesPage');
+    expect(exbTypes).toContain('listPublicActivities(): Promise<PublicActivityItem[]>;');
+    expect(exbService).toContain('async listPublicActivities()');
+    expect(exbService).toContain('WHERE e.published = 1 AND e.deleted_at IS NULL'); // فقط منتشرشده‌ها
   });
 });

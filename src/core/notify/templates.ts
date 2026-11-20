@@ -725,6 +725,24 @@ export function renderTemplate(id: NotificationTemplateId, vars: TemplateVars = 
       ].join('\n');
     }
 
+    case 'bot_activities': {
+      /* ۱.۲۷.۳۸ — «تمرین‌ها و کارت‌ها»: لینک صفحهٔ عمومی بانک محتوای آمادهٔ مرکز */
+      const actLink = (vars.actLink ?? '').trim();
+      const refLink = (vars.refLink ?? '').trim();
+      const head = `🎲 تمرین‌ها و کارت‌های آمادهٔ ${clinic}`;
+      const lines = [
+        head,
+        '',
+        'مرکز یک بانک کامل از کاربرگ، بازی و راهنمای تمرین دارد — همه ساختهٔ تیم مرکز و بازبینی‌شده. این صفحه فهرست عمومی‌اش است؛ عنوان‌ها، برچسب‌ها و راهنمای استفاده:',
+        '',
+        actLink,
+        '',
+        'فایل هر تمرین پس از طرح درمان یا اتصال بات، مستقیم در همین گفت‌وگو برایتان ارسال می‌شود.'
+      ];
+      if (refLink) lines.push('', 'هنوز معرفی نکرده‌اید؟ فرم کوتاه معرفی:', refLink);
+      return lines.join('\n');
+    }
+
     case 'bot_public_files': {
       const list = (vars.list ?? '').trim();
       const mode = vars.mode ?? 'guest';

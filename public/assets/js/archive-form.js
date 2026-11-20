@@ -22,13 +22,22 @@ export function openArchiveStudentForm(args = {}) {
   return shell;
 }
 
-async function openArchiveStudentFormInner({ student = null, onSaved, into } = {}) {
+async function openArchiveStudentFormInner({ student = null, onSaved, into, initial = null } = {}) {
   const meta = await ensureFormMeta();
   const isEdit = Boolean(student);
+  /* ۱.۲۷.۳۸ — پیش‌پُر از «صندوق ورودی»: فقط برای ثبت جدید؛ نام کامل به نام/نام‌خانوادگی شکسته می‌شود،
+     مدرسه فقط با تطبیق دقیق نام مدرسهٔ همکار از پیش انتخاب می‌شود و پایه فقط اگر با فهرست بخواند. */
+  const pre = initial && !student ? initial : null;
+  const preName = String(pre?.full_name ?? '').trim().split(/\s+/).filter(Boolean);
+  const preFirstName = preName[0] ?? '';
+  const preLastName = preName.slice(1).join(' ');
+  const preSchool = pre?.school_text ? meta.schools.find((s) => s.active && s.name === pre.school_text) ?? null : null;
+  const preGrade = STUDENT_GRADES.includes(pre?.grade_text) ? pre.grade_text : '';
+  const preBirth = /^\d{8}$/.test(String(pre?.birth_date ?? '')) ? pre.birth_date : ''; // فقط عدد جلالی — متن آزاد به تقویم نمی‌رود
 
   formModal({
     into,
-    title: isEdit ? 'ویرایش پروندهٔ آرشیو' : 'دانش‌آموز جدید در آرشیو',
+    title: isEdit ? 'ویرایش پروندهٔ آرشیو' : pre ? 'ثبت در آرشیو — از معرفی صندوق ورودی' : 'دانش‌آموز جدید در آرشیو',
     wide: true,
     submitLabel: isEdit ? 'ذخیره' : 'ثبت در آرشیو',
     fields: [
@@ -37,9 +46,9 @@ async function openArchiveStudentFormInner({ student = null, onSaved, into } = {
           ? { name: 'national_id', label: 'کد ملی (ثبت نشده — اختیاری)', ltr: true, hint: 'اگر بعداً کد ملی را از خانواده گرفتید همین‌جا ثبت کنید — پس از ثبت قابل تغییر نیست', placeholder: '0012345679' }
           : { name: '_nid', label: 'کد ملی (غیرقابل تغییر)', ltr: true, value: student.nationalId, hint: 'برای تغییر کد ملی با مدیر سامانه تماس بگیرید' }
         : { name: 'national_id', label: 'کد ملی (اختیاری)', ltr: true, hint: 'برای پروندهٔ سال‌های قبل می‌تواند خالی بماند — بعداً هم قابل ثبت است', placeholder: '0012345679' },
-      { name: 'first_name', label: 'نام', required: true, value: student?.firstName },
-      { name: 'last_name', label: 'نام خانوادگی', required: true, value: student?.lastName },
-      { name: 'birth_date', label: 'تاریخ تولد', type: 'jalali-date', value: student?.birthDate, hint: 'اختیاری — از تقویم انتخاب کنید' },
+      { name: 'first_name', label: 'نام', required: true, value: student?.firstName ?? preFirstName, hint: pre ? 'پیش‌پُرشده از معرفی صندوق ورودی — بازبینی و تکمیل کنید' : undefined },
+      { name: 'last_name', label: 'نام خانوادگی', required: true, value: student?.lastName ?? preLastName },
+      { name: 'birth_date', label: 'تاریخ تولد', type: 'jalali-date', value: student?.birthDate ?? (preBirth || undefined), hint: 'اختیاری — از تقویم انتخاب کنید' },
       {
         name: 'gender', label: 'جنسیت', type: 'select',
         options: [{ value: 'male', label: 'پسر' }, { value: 'female', label: 'دختر' }],
@@ -49,18 +58,19 @@ async function openArchiveStudentFormInner({ student = null, onSaved, into } = {
         name: 'grade', label: 'سطح/پایهٔ فعلی', type: 'select',
         placeholder: 'بدون پایه',
         options: STUDENT_GRADES.map((g) => ({ value: g, label: g })),
-        value: student?.grade ?? ''
+        value: student?.grade ?? preGrade
       },
       {
         name: 'school_id', label: 'مدرسه (با جستجو)', type: 'searchable-select',
         placeholder: 'نام مدرسه را جستجو کنید… (اختیاری)',
         options: meta.schools.filter((s) => s.active).map((s) => ({ value: s.id, label: s.name })),
-        value: student?.schoolId ?? ''
+        value: student?.schoolId ?? preSchool?.id ?? '',
+        hint: pre && pre.school_text && !preSchool ? 'مدرسهٔ معرفی‌شده در فهرست مدارس همکار نبود — با جستجو انتخاب کنید' : undefined
       },
       { name: 'guardian_name', label: 'نام ولی (اختیاری)', value: student?.guardianName },
       {
         name: 'guardian_phone', label: 'تلفن ولی (اختیاری)',
-        type: 'tel', ltr: true, value: student?.guardianPhone,
+        type: 'tel', ltr: true, value: student?.guardianPhone ?? pre?.guardian_phone ?? '',
         hint: 'اگر بعداً پرونده فعال شود و ولیّ بات را متصل کند، یادآوری‌ها به همین شماره می‌رسد',
         placeholder: '09123456789'
       },

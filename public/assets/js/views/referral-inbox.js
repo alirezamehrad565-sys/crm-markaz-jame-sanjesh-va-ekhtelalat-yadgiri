@@ -1,13 +1,15 @@
-/* views/referral-inbox.js — صندوق ورودی معرفی‌ها (۱.۲۷.۳۷ — فاز بعدی صندوق)
+/* views/referral-inbox.js — صندوق ورودی معرفی‌ها (۱.۲۷.۳۸ — ادغام‌شده در لیست انتظار به خواست کارفرما)
  *
- * نمای مستقل منو برای دفتر (مدیر/منشی): معرفی‌هایی که از فرم عمومی خانواده/معلم و بات می‌آیند
- * اینجا بررسی می‌شوند؛ پذیرش از مسیر اتمیک waitlist.acceptReferral به لیست انتظار می‌رود.
- * نسبت به تب قدیمی v1.27.33: فیلتر وضعیت + جست‌وجو، کارت‌های فرم تکمیلی خانواده
- * (فرهنگی/مالی/همکاری — بدون تأکید اتیسم به خواست کارفرما)، اعداد فارسی، دکمه‌های هم‌اندازه.
+ * از ۱.۲۷.۳۸ این نما به‌صورت تبِ دوم داخل #/waitlist مونت می‌شود (opts.embedded) — نه آیتم مستقل منو.
+ * سه مسیر برای هر معرفی: پذیرش اتمیک در لیست انتظار، رد با دلیل،
+ * و «افزودن به آرشیو» — پروندهٔ آرشیو با پیش‌پُر از دادهٔ معرفی (۱.۲۷.۳۸).
+ * نسبت به تب قدیمی v1.27.33: فیلتر وضعیت + جست‌وجو، فرم تکمیلی خانواده (فرهنگی/مالی/همکاری)،
+ * بدون تأکید اتیسم به خواست کارفرما، اعداد فارسی، دکمه‌های هم‌اندازه.
  */
 import { api } from '../api.js';
 import { el, icon, openModal, toast, toastError, emptyState, loadingState } from '../ui.js';
 import { fa } from '../format.js';
+import { openArchiveStudentForm } from '../archive-form.js'; // ۱.۲۷.۳۸ — افزودن دانش‌آموز به آرشیو از صندوق
 
 const CAT_LABELS = {
   delayed: 'دیرآموزی',
@@ -33,15 +35,19 @@ const FILTERS = [
   { key: 'all', label: 'همه' }
 ];
 
-export async function renderReferralInbox(container) {
+export async function renderReferralInbox(container, opts = {}) {
+  const embedded = opts.embedded === true; // ۱.۲۷.۳۸ — مونت داخل نمای لیست انتظار: بدون سربرگ h1
   let rows = [];
   let filter = 'new';
   let query = '';
 
-  const head = el('div', { class: 'week-bar', style: { alignItems: 'center', gap: 'var(--sp-2)', flexWrap: 'wrap' } },
-    el('h1', { style: { fontSize: '22px', margin: '0' } }, 'صندوق ورودی'),
-    el('span', { class: 'muted', style: { fontSize: '13px' } }, 'معرفی‌های فرم عمومی خانواده/معلم — پذیرش هر مورد مستقیم به لیست انتظار نمی‌رود؛ از همین‌جا با بررسی شما اضافه می‌شود.')
-  );
+  const head = embedded
+    ? el('p', { class: 'muted', style: { fontSize: '13px', margin: '0 0 var(--sp-3)' } },
+        'معرفی‌های فرم عمومی خانواده/معلم — پذیرش هر مورد مستقیم به لیست انتظار نمی‌رود؛ از همین‌جا با بررسی شما اضافه می‌شود.')
+    : el('div', { class: 'week-bar', style: { alignItems: 'center', gap: 'var(--sp-2)', flexWrap: 'wrap' } },
+        el('h1', { style: { fontSize: '22px', margin: '0' } }, 'صندوق ورودی'),
+        el('span', { class: 'muted', style: { fontSize: '13px' } }, 'معرفی‌های فرم عمومی خانواده/معلم — پذیرش هر مورد مستقیم به لیست انتظار نمی‌رود؛ از همین‌جا با بررسی شما اضافه می‌شود.')
+      );
 
   const chipbar = el('div', { class: 'week-bar', style: { gap: 'var(--sp-2)', flexWrap: 'wrap' } });
   const search = el('input', {
@@ -100,7 +106,27 @@ export async function renderReferralInbox(container) {
           el('div', { class: 'review__row' }, el('span', { class: 'k' }, k), el('span', { class: 'v' }, String(v ?? '—')))
         )
       ),
-      actions: [(close) => el('button', { class: 'btn btn--ghost btn--sm', onclick: close }, 'بستن')]
+      actions: [
+        (close) => el('button', { class: 'btn btn--ghost btn--sm', onclick: close }, 'بستن'),
+        ...(r.status === 'new' ? [() => el('button', { class: 'btn btn--soft btn--sm', onclick: () => openArchivePrefill(r) }, icon('archive', 13), 'افزودن به آرشیو')] : [])
+      ]
+    });
+  }
+
+  /* ۱.۲۷.۳۸ — «افزودن به آرشیو»: فرم پروندهٔ آرشیو با پیش‌پُر از دادهٔ معرفی باز می‌شود؛
+     ثبت‌کننده بازبینی می‌کند و پس از ثبت، معرفی در صندوق می‌ماند تا مسیر پذیرش/رد هم طی شود. */
+  function openArchivePrefill(r) {
+    openArchiveStudentForm({
+      initial: {
+        full_name: r.firstName ?? '',
+        birth_date: r.birthDate ?? '',
+        school_text: r.schoolText ?? '',
+        grade_text: r.gradeText ?? '',
+        guardian_phone: r.guardianPhone ?? ''
+      },
+      onSaved: () => {
+        toast(`${r.firstName} به آرشیو اضافه شد`, 'success');
+      }
     });
   }
 
@@ -170,7 +196,8 @@ export async function renderReferralInbox(container) {
           el('span', { class: 'spacer' }),
           el('button', { class: 'btn btn--ghost btn--sm', onclick: () => detailModal(r) }, 'مشاهدهٔ کامل'),
           isNew ? el('button', { class: 'btn btn--primary btn--sm', onclick: () => acceptOne(r) }, icon('plus', 13), 'پذیرش در لیست انتظار') : null,
-          isNew ? el('button', { class: 'btn btn--soft btn--sm', onclick: () => rejectModal(r) }, 'رد با دلیل') : null,
+          isNew ? el('button', { class: 'btn btn--soft btn--sm', onclick: () => openArchivePrefill(r) }, icon('archive', 13), 'افزودن به آرشیو') : null,
+          isNew ? el('button', { class: 'btn btn--ghost btn--sm', onclick: () => rejectModal(r) }, 'رد با دلیل') : null,
           r.status === 'rejected' && r.rejectReason
             ? el('span', { class: 'muted', style: { fontSize: '12px' } }, `دلیل رد: ${r.rejectReason}`)
             : null
@@ -245,6 +272,7 @@ export async function renderReferralInbox(container) {
       const res = await api.get('/api/waitlist/referrals');
       rows = res.data ?? [];
       paint();
+      opts.onCount?.(rows.filter((r) => r.status === 'new').length); // ۱.۲۷.۳۸ — شمار تب «صندوق ورودی» در لیست انتظار
     } catch (err) {
       toastError(err);
       list.replaceChildren(el('div', { class: 'card' }, el('div', { class: 'card__body' }, emptyState({
