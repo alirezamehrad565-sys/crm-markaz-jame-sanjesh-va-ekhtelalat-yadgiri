@@ -122,6 +122,7 @@ const NAV = [
   { hash: '#/schools', label: 'مدارس', icon: 'school', group: 'دانش‌آموزان', roles: ['manager', 'secretary'] },
   { hash: '#/students', label: 'دانش‌آموزان', icon: 'student', group: 'دانش‌آموزان' },
   { hash: '#/waitlist', label: 'لیست انتظار', icon: 'waitlist', group: 'برنامه‌ریزی', roles: ['manager', 'secretary', 'therapist'] },
+  { hash: '#/referral-inbox', label: 'صندوق ورودی', icon: 'clipboard', group: 'برنامه‌ریزی', roles: ['manager', 'secretary'] }, // ۱.۲۷.۳۷ — صندوق مستقل معرفی‌ها (فاز بعدی)
   { hash: '#/archive', label: 'آرشیو', icon: 'archive', group: 'دانش‌آموزان', roles: ['manager', 'secretary'] },
   { hash: '#/treatment-plans', label: 'طرح درمان', icon: 'clipboard', group: 'ارزیابی و درمان', roles: ['manager', 'therapist'] }, // 
   { hash: '#/exercises', label: 'کارت‌های آماده', icon: 'grid', group: 'ارزیابی و درمان' }, // ریبرند بانک تمرین
@@ -190,6 +191,7 @@ function buildSidebar() {
           btn.addEventListener('touchstart', () => prefetchView(item.hash), { passive: true });
         }
         if (item.hash === '#/waitlist') btn.appendChild(el('span', { class: 'nav__badge nav__badge--waitlist', hidden: true }));
+        if (item.hash === '#/referral-inbox') btn.appendChild(el('span', { class: 'nav__badge nav__badge--referrals', hidden: true })); // ۱.۲۷.۳۷
         if (item.hash === '#/dashboard') btn.appendChild(el('span', { class: 'nav__badge nav__badge--todos', hidden: true }));
         return btn;
       });
@@ -225,6 +227,25 @@ async function updateWaitlistBadge() {
   }
 }
 window.addEventListener('waitlist:changed', updateWaitlistBadge);
+
+/* ۱.۲۷.۳۷ — badge صندوق ورودی: شمار معرفی‌های «جدید» برای دفتر؛ با پذیرش/رد هم به‌روز می‌شود */
+async function updateReferralsBadge() {
+  const badge = document.querySelector('.nav__badge--referrals');
+  if (!badge || !session.user || (session.user.role !== 'manager' && session.user.role !== 'secretary')) return;
+  try {
+    const res = await api.getDetached('/api/waitlist/referrals'); // پوسته‌محور: با ناوبری لغو نشود
+    const news = (res.data ?? []).filter((r) => r.status === 'new').length;
+    if (news > 0) {
+      badge.textContent = fa(news);
+      badge.hidden = false;
+    } else {
+      badge.hidden = true;
+    }
+  } catch {
+    badge.hidden = true;
+  }
+}
+window.addEventListener('referrals:changed', updateReferralsBadge);
 
 async function updateTodosBadge() {
   const badge = document.querySelector('.nav__badge--todos');
@@ -349,6 +370,7 @@ function rebuildNavForRole() {
   buildSidebar();
   syncNav(location.hash.replace(/^#\//, '') || 'dashboard');
   updateWaitlistBadge();
+  updateReferralsBadge(); // ۱.۲۷.۳۷
 }
 
 async function loadCurrentUser() {
@@ -599,6 +621,7 @@ register('#/students', { title: 'دانش‌آموزان', render: lazyView(() =
 register('#/students/:id', { title: 'پروفایل دانش‌آموز', render: lazyView(() => import('./views/student-profile.js'), 'renderStudentProfile', '#/students/') });
 register('#/students/:id/progress-report', { title: 'گزارش پیشرفت', render: lazyView(() => import('./views/progress-report.js'), 'renderProgressReport', '#/students/') }); // نقش‌ها در سرور کنترل می‌شوند (مثل ot/progress)
 register('#/waitlist', { title: 'لیست انتظار', render: roleOnly(['manager', 'secretary', 'therapist', 'supervisor'], lazyView(() => import('./waitlist.js'), 'renderWaitlistModule', '#/waitlist'), 'این بخش برای دفتر و ثبت متقاضی توسط درمانگر فعال است.') }); /* ۱.۲۵.۰۱ — ناظر: آیتم منو بدون گیت می‌افتاد روی «دسترسی مجاز نیست» */
+register('#/referral-inbox', { title: 'صندوق ورودی', render: roleOnly(['manager', 'secretary'], lazyView(() => import('./views/referral-inbox.js'), 'renderReferralInbox', '#/referral-inbox'), 'صندوق ورودی برای دفتر مرکز فعال است.') }); // ۱.۲۷.۳۷
 register('#/archive', { title: 'آرشیو', render: roleOnly(['manager', 'secretary', 'supervisor'], lazyView(() => import('./views/archive.js'), 'renderArchive', '#/archive')) }); /* ۱.۲۵.۰۱ — ناظر: فقط مشاهده؛ اکشن‌های ردیف در خود نما پنهان می‌شوند */
 register('#/exercises', { title: 'کارت‌های آماده', render: lazyView(() => import('./views/exercises.js'), 'renderExercises', '#/exercises') }); //
 register('#/games', { title: 'بازی‌ها', render: roleOnly(['manager', 'therapist'], lazyView(() => import('./views/games.js'), 'renderGames', '#/games'), 'بخش بازی‌ها برای مدیر و درمانگر فعال است.') }); // ۱.۲۵.۲۰ — نخستین گرهٔ UI حلقهٔ درمانگر بازی‌ها
@@ -668,6 +691,7 @@ loadCurrentUser().then((ok) => {
   if (!ok) return;
   start(outlet);
   updateWaitlistBadge();
+  updateReferralsBadge(); // ۱.۲۷.۳۷
   updateTodosBadge();
   armFirstRunCloudSetup(); // فاز C — هدایت یک‌بارهٔ اولین اجرا به ویزارد ابری (نرم و post-login؛ بوت را مسدود نمی‌کند)
   /* __CLOUD_SETUP_HOOK__ */
