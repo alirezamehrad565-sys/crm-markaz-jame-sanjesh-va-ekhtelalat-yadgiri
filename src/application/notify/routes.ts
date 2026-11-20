@@ -175,7 +175,9 @@ export function registerRoutes(app: AppHono, service: NotifyAppService): void {
     if (!service.isWebhookEnabled()) {
       return c.json({ error: { code: 'NOT_FOUND', message: 'webhook غیرفعال است' } }, 404);
     }
-    if (!service.isWebhookSecretValid(c.req.param('secret'))) {
+    /* ۱.۲۷.۴۳ — سکرت از مسیر یا هدر استاندارد X-Telegram-Bot-Api-Secret-Token (هر کدام حاضر)؛ مقایسه هم‌زمان‌ایمن */
+    const presentedSecret = c.req.param('secret') || c.req.header('x-telegram-bot-api-secret-token') || undefined;
+    if (!(await service.isWebhookSecretValid(presentedSecret))) {
       return c.json({ error: { code: 'FORBIDDEN', message: 'secret نامعتبر است' } }, 403);
     }
 

@@ -346,21 +346,31 @@ export function registerCaseEventPublicRoutes(
     return staff;
   }
 
+  /* ۱.۲۷.۴۳ — ممیزی نشتی‌ها: احراز «قبل از» خواندن بدنه + سقف حجم بدنهٔ عمومی (۴۱۳) */
+  const PREVIEW_BODY_MAX_BYTES = 512 * 1024;
+  const previewBodyTooLarge = (c: { req: { header: (k: string) => string | undefined } }): boolean => {
+    const len = Number(c.req.header('content-length') ?? '0');
+    return Number.isFinite(len) && len > PREVIEW_BODY_MAX_BYTES;
+  };
+
   app.post('/public/case-events/preview', async (c) => {
     let definition: unknown = null;
     let token = '';
+    if (previewBodyTooLarge(c)) { /* ۱.۲۷.۴۳ — سقف حجم پیش از هر خواندنی؛ احراز بلافاصله پس از پارس */
+      return c.html(renderPreviewErrorPage('حجم درخواست زیاد است', 'تعریف قالب حداکثر ۵۱۲ کیلوبایت است.'), 413);
+    }
     const ct = c.req.header('content-type') ?? '';
     if (ct.includes('application/json')) {
       const body = await c.req.json<{ definition?: unknown; token?: string }>().catch(() => null);
       definition = body?.definition ?? null;
-      token = String(body?.token ?? '');
+      token = String(body?.token ?? token);
     } else {
       const form = await c.req.formData().catch(() => null);
-      token = String(form?.get('token') ?? '');
+      token = String(form?.get('token') ?? token);
       try { definition = JSON.parse(String(form?.get('definition') ?? 'null')); }
       catch { definition = null; }
     }
-    await previewStaffOf(c.env, token);
+    await previewStaffOf(c.env, token); /* ۱.۲۷.۴۳ — احراز پس از پارس و پیش از هر رندر (دوباره‌نشانی: در وصلهٔ قبلی جا افتاده بود و گیت ۴۰۱ گرفت) */
     const parsed = CaseEventTypeInputSchema.safeParse(definition);
     if (!parsed.success) {
       const issue = parsed.error.issues[0];
@@ -378,7 +388,13 @@ export function registerCaseEventPublicRoutes(
   });
 
   app.post('/public/case-events/preview/analyze', async (c) => {
-    const body = await c.req.json<{ token?: string; definition?: unknown; answers?: Record<string, number | string> }>().catch(() => null);
+    if (previewBodyTooLarge(c)) {
+      return c.json({ error: { code: 'PAYLOAD_TOO_LARGE', message: 'حداکثر ۵۱۲ کیلوبایت' } }, 413);
+    }
+    const raw = await c.req.text();
+    type PreviewAnalyzeBody = { token?: string; definition?: unknown; answers?: Record<string, number | string> };
+    let body: PreviewAnalyzeBody | null = null;
+    try { body = JSON.parse(raw) as PreviewAnalyzeBody; } catch { body = null; }
     if (!body) {
       return c.json({ error: { code: 'BAD_REQUEST', message: 'درخواست نامعتبر است' } }, 400);
     }

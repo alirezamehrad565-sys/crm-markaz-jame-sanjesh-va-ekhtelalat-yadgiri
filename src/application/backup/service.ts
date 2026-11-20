@@ -149,7 +149,7 @@ export interface ScheduledAutoSendOutcome {
 export interface ArchiveOutcome {
   archived: boolean;
   bytes: number;
-  reason?: 'too_large' | 'schema_incompatible' | 'error';
+  reason?: 'too_large' | 'schema_incompatible' | 'error' | 'invalid_envelope'; /* ۱.۲۷.۴۳ — پاکت خراب */
 }
 
 /** پشتیبان آرشیوشدهٔ محلی — برای دانلود (۴-۲) */
@@ -886,7 +886,12 @@ export function createBackupService(deps: {
           return { archived: false, bytes: bytes.byteLength, reason: 'too_large' };
         }
         // «تأییدشده» = همان inspect پنل بازیابی (قالب + هم‌خوانی اسکیما) روی خودِ پاکت بگذرد
-        const envelope: unknown = JSON.parse(new TextDecoder().decode(bytes));
+        /* ۱.۲۷.۴۳ — ممیزی: پاکت خراب هرگز پرتاب نمی‌شود؛ reason صریح برمی‌گردد */
+        let envelope: unknown = null;
+        try { envelope = JSON.parse(new TextDecoder().decode(bytes)) as unknown; } catch { envelope = null; }
+        if (envelope === null) {
+          return { archived: false, bytes: bytes.byteLength, reason: 'invalid_envelope' };
+        }
         const summary = await service.inspect(envelope);
         if (!summary.schemaCompatible) {
           logger.warn('backup.archive.schema_incompatible', { problems: summary.problems });
@@ -933,7 +938,9 @@ export function createBackupService(deps: {
           BACKUP_ARCHIVE_KEY
         ]);
         if (!row?.value) return null;
-        const parsed: unknown = JSON.parse(row.value);
+        /* ۱.۲۷.۴۳ — ممیزی: سطر settings خراب = null، نه پرتاب */
+        let parsed: unknown = null;
+        try { parsed = JSON.parse(row.value) as unknown; } catch { parsed = null; }
         if (!parsed || typeof parsed !== 'object') return null;
         const meta = parsed as {
           format?: string;

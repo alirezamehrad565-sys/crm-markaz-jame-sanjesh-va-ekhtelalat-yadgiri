@@ -81,7 +81,7 @@ function surveyItemOf(r: SurveyListRow, publicBaseUrl: string | null): SurveyEve
   const nps = sub('nps');
   const payload = parseJson<Record<string, { value?: string; label?: string } | null> | null>(r.payload, null);
   const link = publicBaseUrl && r.status === 'pending_family' && r.fill_token
-    ? `${publicBaseUrl.replace(/\/+$/, '')}/public/case-events/${r.id}/fill?token=${r.fill_token}`
+    ? `${publicBaseUrl.replace(/\/+$/, '')}/public/case-events/${r.id}/fill?token=${r.fill_token}` /* __SEC_ACCEPT__: لینک دعوت one-time — توکن crypto.randomUUID، انقضای fill_expires_at، noindex/no-store (الگوی magic-link) */
     : null;
   return {
     id: r.id,
@@ -1346,7 +1346,7 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       );
       if (!row || row.status !== 'pending_family' || !row.fill_token) return null;
       const base = publicBaseUrl.replace(/\/+$/, '');
-      return `${base}/public/case-events/${id}/fill?token=${row.fill_token}`;
+      return `${base}/public/case-events/${id}/fill?token=${row.fill_token}`; /* __SEC_ACCEPT__: magic-link — همان قرارداد بالا */
     },
 
     async fillByFamily(id, input, actor) {
@@ -1501,7 +1501,7 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
           createdAt: nowIso,
           fillExpiresAt: fillExpires,
           sentAt: null,
-          link: base ? `${base.replace(/\/+$/, '')}/public/case-events/${id}/fill?token=${token}` : null,
+          link: base ? `${base.replace(/\/+$/, '')}/public/case-events/${id}/fill?token=${token}` : null, /* __SEC_ACCEPT__: magic-link — همان قرارداد بالا */
           kind: input.kind,
           typeKey: type.key,
           typeTitle: type.title,

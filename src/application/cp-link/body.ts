@@ -84,7 +84,7 @@ export async function readJsonCapped(
 ): Promise<unknown> {
   const bytes = await readBodyCapped(res, maxBytes);
   const text = new TextDecoder('utf-8').decode(bytes);
-  return JSON.parse(text) as unknown;
+  return JSON.parse(text) as unknown; /* __SEC_ACCEPT__: خطا عمداً به فراخوان می‌رسد و آن‌جا به outcome شبکه‌ای نگاشت می‌شود */
 }
 
 /** متن با سقف — برای بدنه‌های خطای CP (لاگ فقط سرِ بدنه می‌خواهد؛ بدنهٔ عظیم هم دور ریختنی است) */

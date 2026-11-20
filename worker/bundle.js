@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.27.42";
+var APP_VERSION = "1.27.43";
 var NODE_MIN_VERSION = "1.26.0";
 
 // node_modules/zod/v4/classic/external.js
@@ -42308,6 +42308,7 @@ function createCaseEventsService(deps) {
           fillExpiresAt: fillExpires,
           sentAt: null,
           link: base ? `${base.replace(/\/+$/, "")}/public/case-events/${id}/fill?token=${token}` : null,
+          /* __SEC_ACCEPT__: magic-link — همان قرارداد بالا */
           kind: input2.kind,
           typeKey: type.key,
           typeTitle: type.title,
@@ -42769,8 +42770,9 @@ function renderPreviewPage(def, token) {
 </div>
 <script>
 (function () {
-  var TOKEN = ${JSON.stringify(token)};
-  var DEFINITION = ${JSON.stringify(JSON.stringify(def))};
+  /* \u06F1.\u06F2\u06F7.\u06F4\u06F3 \u2014 \u062C\u0627\u0633\u0627\u0632\u06CC \u0627\u0645\u0646 JSON \u062F\u0631 <script>: \u06AF\u0631\u06CC\u0632 </ \u0648 U+2028/2029 (\u0627\u0644\u06AF\u0648\u06CC safeJsonEmbed \u0641\u0631\u0645\u200C\u0633\u0627\u0632) */
+  var TOKEN = ${JSON.stringify(token).replace(/</g, "\\u003c").replace(/>/g, "\\u003e")};
+  var DEFINITION = ${JSON.stringify(JSON.stringify(def)).replace(/</g, "\\u003c").replace(/>/g, "\\u003e")};
   var f = document.getElementById('f');
   var msg = document.getElementById('msg');
   var progText = document.getElementById('progText');
@@ -42819,7 +42821,7 @@ function renderPreviewPage(def, token) {
     fetch('/public/case-events/preview/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: TOKEN, definition: JSON.parse(DEFINITION), answers: answers })
+      body: JSON.stringify({ token: TOKEN, definition: JSON.parse(DEFINITION), answers: answers }) /* __SEC_ACCEPT__: DEFINITION \u062E\u0631\u0648\u062C\u06CC JSON.stringify \u0633\u0631\u0648\u0631 \u0627\u0633\u062A \u2014 \u067E\u0627\u0631\u0633 \u0647\u0645\u06CC\u0634\u0647 \u0645\u0639\u062A\u0628\u0631 */
     }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
       .then(function (res) {
         if (!res.ok) {
@@ -42879,7 +42881,7 @@ function renderPreviewPage(def, token) {
     fetch('/public/case-events/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: TOKEN, definition: JSON.parse(DEFINITION) })
+      body: JSON.stringify({ token: TOKEN, definition: JSON.parse(DEFINITION) }) /* __SEC_ACCEPT__: \u0647\u0645\u0627\u0646 \u0642\u0631\u0627\u0631\u062F\u0627\u062F \u0628\u0627\u0644\u0627 */
     }).then(function (r) { return r.text(); })
       .then(function (html) { document.open(); document.write(html); document.close(); });
   });
@@ -43192,17 +43194,25 @@ function registerCaseEventPublicRoutes(app, service, helpers) {
     return staff;
   }
   __name(previewStaffOf, "previewStaffOf");
+  const PREVIEW_BODY_MAX_BYTES = 512 * 1024;
+  const previewBodyTooLarge = /* @__PURE__ */ __name((c) => {
+    const len = Number(c.req.header("content-length") ?? "0");
+    return Number.isFinite(len) && len > PREVIEW_BODY_MAX_BYTES;
+  }, "previewBodyTooLarge");
   app.post("/public/case-events/preview", async (c) => {
     let definition = null;
     let token = "";
+    if (previewBodyTooLarge(c)) {
+      return c.html(renderPreviewErrorPage("\u062D\u062C\u0645 \u062F\u0631\u062E\u0648\u0627\u0633\u062A \u0632\u06CC\u0627\u062F \u0627\u0633\u062A", "\u062A\u0639\u0631\u06CC\u0641 \u0642\u0627\u0644\u0628 \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F5\u06F1\u06F2 \u06A9\u06CC\u0644\u0648\u0628\u0627\u06CC\u062A \u0627\u0633\u062A."), 413);
+    }
     const ct = c.req.header("content-type") ?? "";
     if (ct.includes("application/json")) {
       const body = await c.req.json().catch(() => null);
       definition = body?.definition ?? null;
-      token = String(body?.token ?? "");
+      token = String(body?.token ?? token);
     } else {
       const form = await c.req.formData().catch(() => null);
-      token = String(form?.get("token") ?? "");
+      token = String(form?.get("token") ?? token);
       try {
         definition = JSON.parse(String(form?.get("definition") ?? "null"));
       } catch {
@@ -43226,7 +43236,16 @@ function registerCaseEventPublicRoutes(app, service, helpers) {
     });
   });
   app.post("/public/case-events/preview/analyze", async (c) => {
-    const body = await c.req.json().catch(() => null);
+    if (previewBodyTooLarge(c)) {
+      return c.json({ error: { code: "PAYLOAD_TOO_LARGE", message: "\u062D\u062F\u0627\u06A9\u062B\u0631 \u06F5\u06F1\u06F2 \u06A9\u06CC\u0644\u0648\u0628\u0627\u06CC\u062A" } }, 413);
+    }
+    const raw2 = await c.req.text();
+    let body = null;
+    try {
+      body = JSON.parse(raw2);
+    } catch {
+      body = null;
+    }
     if (!body) {
       return c.json({ error: { code: "BAD_REQUEST", message: "\u062F\u0631\u062E\u0648\u0627\u0633\u062A \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A" } }, 400);
     }
@@ -43242,9 +43261,9 @@ function registerCaseEventPublicRoutes(app, service, helpers) {
     const displayPayload = /* @__PURE__ */ __name(() => {
       const payload2 = {};
       for (const f of def.fields) {
-        const raw2 = values[f.key];
-        if (raw2 === void 0 || raw2 === null || String(raw2).trim() === "") continue;
-        const display = f.type === "single" ? f.scoredOptions?.[Number(raw2)]?.label ?? String(raw2) : String(raw2);
+        const raw3 = values[f.key];
+        if (raw3 === void 0 || raw3 === null || String(raw3).trim() === "") continue;
+        const display = f.type === "single" ? f.scoredOptions?.[Number(raw3)]?.label ?? String(raw3) : String(raw3);
         payload2[f.key] = { value: display, label: f.label };
       }
       return payload2;
@@ -64544,7 +64563,12 @@ function parseScore(qualityRaw) {
 __name(parseScore, "parseScore");
 function mapRow(row) {
   let tags = [];
-  const parsed = row.tags ? JSON.parse(row.tags) : null;
+  let parsed = null;
+  try {
+    parsed = row.tags ? JSON.parse(row.tags) : null;
+  } catch {
+    parsed = null;
+  }
   if (Array.isArray(parsed)) tags = parsed.filter((t) => typeof t === "string");
   const kind = isContentKind(row.kind) ? row.kind : "exercise";
   const { quality, score } = parseScore(row.quality ?? null);
@@ -70644,6 +70668,21 @@ async function handleScoring(request, env) {
 }
 __name(handleScoring, "handleScoring");
 
+// src/core/security/timing.ts
+async function timingSafeEqualStr(a, b) {
+  const enc2 = new TextEncoder();
+  const [da, db] = await Promise.all([
+    crypto.subtle.digest("SHA-256", enc2.encode(a ?? "")),
+    crypto.subtle.digest("SHA-256", enc2.encode(b ?? ""))
+  ]);
+  const ba = new Uint8Array(da);
+  const bb = new Uint8Array(db);
+  let diff = 0;
+  for (let i = 0; i < ba.length; i += 1) diff |= ba[i] ^ bb[i];
+  return diff === 0;
+}
+__name(timingSafeEqualStr, "timingSafeEqualStr");
+
 // src/application/notify/reminders.ts
 function reminderDedupKey(appointmentId, studentId) {
   return `reminder:${appointmentId}:${studentId}`;
@@ -74170,9 +74209,9 @@ function createNotifyAppService(deps) {
     isWebhookEnabled() {
       return Boolean(deps.webhookSecret);
     },
-    isWebhookSecretValid(secret) {
+    async isWebhookSecretValid(secret) {
       if (!deps.webhookSecret || !secret) return false;
-      return secret === deps.webhookSecret;
+      return timingSafeEqualStr(secret, deps.webhookSecret);
     }
   };
 }
@@ -74318,7 +74357,8 @@ function registerRoutes9(app, service) {
     if (!service.isWebhookEnabled()) {
       return c.json({ error: { code: "NOT_FOUND", message: "webhook \u063A\u06CC\u0631\u0641\u0639\u0627\u0644 \u0627\u0633\u062A" } }, 404);
     }
-    if (!service.isWebhookSecretValid(c.req.param("secret"))) {
+    const presentedSecret = c.req.param("secret") || c.req.header("x-telegram-bot-api-secret-token") || void 0;
+    if (!await service.isWebhookSecretValid(presentedSecret)) {
       return c.json({ error: { code: "FORBIDDEN", message: "secret \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A" } }, 403);
     }
     let update;
@@ -75469,7 +75509,15 @@ function createBackupService(deps) {
           logger.warn("backup.archive.too_large", { bytes: bytes.byteLength });
           return { archived: false, bytes: bytes.byteLength, reason: "too_large" };
         }
-        const envelope = JSON.parse(new TextDecoder().decode(bytes));
+        let envelope = null;
+        try {
+          envelope = JSON.parse(new TextDecoder().decode(bytes));
+        } catch {
+          envelope = null;
+        }
+        if (envelope === null) {
+          return { archived: false, bytes: bytes.byteLength, reason: "invalid_envelope" };
+        }
         const summary = await service.inspect(envelope);
         if (!summary.schemaCompatible) {
           logger.warn("backup.archive.schema_incompatible", { problems: summary.problems });
@@ -75515,7 +75563,12 @@ function createBackupService(deps) {
           BACKUP_ARCHIVE_KEY
         ]);
         if (!row?.value) return null;
-        const parsed = JSON.parse(row.value);
+        let parsed = null;
+        try {
+          parsed = JSON.parse(row.value);
+        } catch {
+          parsed = null;
+        }
         if (!parsed || typeof parsed !== "object") return null;
         const meta3 = parsed;
         if (meta3.format !== BACKUP_FORMAT || !meta3.envelope) return null;
@@ -78790,13 +78843,13 @@ function bearerToken2(header) {
   return value.startsWith("Bearer ") ? value.slice(7).trim() || null : null;
 }
 __name(bearerToken2, "bearerToken");
-function timingSafeEqualStr(a, b) {
+function timingSafeEqualStr2(a, b) {
   const len = Math.max(a.length, b.length);
   let diff = a.length ^ b.length;
   for (let i = 0; i < len; i++) diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
   return diff === 0;
 }
-__name(timingSafeEqualStr, "timingSafeEqualStr");
+__name(timingSafeEqualStr2, "timingSafeEqualStr");
 var authFailed = /* @__PURE__ */ __name((c) => c.json({ error: "INSTANCE_AUTH_FAILED", message: "\u0627\u0639\u062A\u0628\u0627\u0631 \u0647\u0645\u200C\u06AF\u0627\u0645\u06CC \u0646\u0645\u0648\u0646\u0647 \u067E\u0630\u06CC\u0631\u0641\u062A\u0647 \u0646\u0634\u062F" }, 401), "authFailed");
 function createInstanceSyncApp(deps) {
   const { db, logger } = deps;
@@ -78810,7 +78863,7 @@ function createInstanceSyncApp(deps) {
     const token = bearerToken2(c.req.header("Authorization"));
     if (!token) return null;
     const expected = await resolveSessionSecret(c.env);
-    if (!timingSafeEqualStr(token, expected)) {
+    if (!timingSafeEqualStr2(token, expected)) {
       log.warn("instance_sync.auth_failed", {});
       return null;
     }
@@ -80548,7 +80601,9 @@ function createServices(deps) {
     audit,
     logger,
     storage: exerciseStorage,
-    downloadSecret: deps.downloadSecret ?? deps.webhookSecret ?? "insecure-dev-secret",
+    /* ۱.۲۷.۴۳ — راز دانلود هرگز رشتهٔ ثابت نیست: اگر AUTH/WEBHOOK تنظیم نشده باشد،
+       تصادفیِ هر بوت می‌شود (توکن‌های دانلود TTL کوتاه دارند؛ تاثیر ری‌استارت پذیرفته است) */
+    downloadSecret: deps.downloadSecret ?? deps.webhookSecret ?? crypto.randomUUID() + crypto.randomUUID(),
     publicBaseUrl: deps.publicBaseUrl ?? null,
     fileSender: exerciseFileSender
   });
