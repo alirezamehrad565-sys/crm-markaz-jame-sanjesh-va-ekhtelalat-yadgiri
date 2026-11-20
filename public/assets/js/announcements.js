@@ -34,6 +34,21 @@ export async function initAnnouncementBanners() {
   } catch {
     /* نرم — این منبع اختیاری است؛ منبع دیگر جبران می‌کند */
   }
+  /* rust-f15 — گیت فاز ۶ «نمایش UI اطلاعیه‌های سینک‌شده»: منبع سوم فقط در میز زنده است
+     (گیت CENTER_DESKTOP_ENGINE — تولید وب ۴۰۴ کم‌دست و نرم رد می‌شود)؛ ردیف‌های فعال
+     جدول نمایشی synced_announcements با نشان «از مرکز — سینک میز» به همان استک می‌نشینند. */
+  const syncedIds = new Set();
+  try {
+    const synced = await api.getDetached('/api/internal/sync/announcements');
+    for (const a of synced.data ?? []) {
+      if (Number(a.active) === 1) {
+        items.set(a.id, a);
+        syncedIds.add(a.id);
+      }
+    }
+  } catch {
+    /* نرم — تولید وب این منبع ندارد؛ باندل یکسان، شاخهٔ خاموش */
+  }
 
   if (items.size === 0) {
     mount.replaceChildren();
@@ -49,7 +64,10 @@ export async function initAnnouncementBanners() {
         { class: 'ann-banner' }, /* S9-31: role=status روی استک است، نه هر بنر (خواندن تکراری نشود) */
         icon('bell', 18),
         el('div', { class: 'ann-banner__text' },
-          el('b', {}, a.title),
+          el('b', {},
+            a.title,
+            ...(syncedIds.has(a.id) ? [el('span', { class: 'ann-banner__src' }, 'از مرکز — سینک میز')] : []) /* rust-f15 */
+          ),
           el('p', {}, a.body)
         ),
         el('button', {

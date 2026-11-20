@@ -21,7 +21,7 @@ import { getAuthContext } from '@core/auth';
 import type { DbClient } from '@core/db';
 import type { Logger } from '@core/logger';
 import { NotFoundError, ValidationError } from '@core/errors';
-import { IngestBodySchema, ingestInboxItem, inboxStatusCounts, splitByWhitelist, syncedAnnouncementsCount } from './service';
+import { IngestBodySchema, ingestInboxItem, inboxStatusCounts, splitByWhitelist, syncedAnnouncementsCount, listSyncedAnnouncements } from './service';
 import { buildOutboxPage, parseOutboxSince } from './outbox';
 
 export interface InternalSyncRoutesDeps {
@@ -71,6 +71,16 @@ export function registerInternalSyncRoutes(app: AppHono, deps: InternalSyncRoute
     // rust-f12-A — فیلد جدید نمایشی: شمارش synced_announcements (فیلدهای موجود دست‌نخورده)
     const synced_announcements = await syncedAnnouncementsCount(deps.db);
     return c.json({ data: { ...status, synced_announcements } }, 200);
+  });
+
+  // rust-f15 — گیت فاز ۶ «نمایش UI اطلاعیه‌های سینک‌شده»: فهرست نمایشی synced_announcements
+  // برای بنرهای داشبورد میز؛ هر نقش کارمندی — نمایشی است و هیچ دادهٔ بالینی ندارد.
+  app.get('/api/internal/sync/announcements', async (c) => {
+    requireDesktopEngine(c);
+    const ctx = getAuthContext(c); // هر نقش کارمندی جز ناظر طبق قرارداد گیت‌های میز
+    const items = await listSyncedAnnouncements(deps.db);
+    log.info('synced-ann.ok', { staffId: ctx.staffId, count: items.length });
+    return c.json({ data: items }, 200);
   });
 
   // rust-f11 — صندوق خروج push نود→ابر: آیتم‌های client_errors/health_ping برای client.push()

@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.27.38";
+var APP_VERSION = "1.27.39";
 var NODE_MIN_VERSION = "1.26.0";
 
 // node_modules/zod/v4/classic/external.js
@@ -78092,6 +78092,16 @@ async function syncedAnnouncementsCount(db) {
   return Number(row?.n ?? 0);
 }
 __name(syncedAnnouncementsCount, "syncedAnnouncementsCount");
+async function listSyncedAnnouncements(db, limit = 50) {
+  return db.query(
+    `SELECT id, title, body, published_at AS publishedAt, active, received_at AS receivedAt
+       FROM synced_announcements
+      ORDER BY (published_at IS NULL) ASC, published_at DESC, received_at DESC
+      LIMIT ?`,
+    [limit]
+  );
+}
+__name(listSyncedAnnouncements, "listSyncedAnnouncements");
 
 // src/internal-sync/outbox.ts
 var OUTBOX_MAX_ITEMS = 200;
@@ -78245,6 +78255,13 @@ function registerInternalSyncRoutes(app, deps) {
     const status = await inboxStatusCounts(deps.db);
     const synced_announcements = await syncedAnnouncementsCount(deps.db);
     return c.json({ data: { ...status, synced_announcements } }, 200);
+  });
+  app.get("/api/internal/sync/announcements", async (c) => {
+    requireDesktopEngine2(c);
+    const ctx = getAuthContext(c);
+    const items = await listSyncedAnnouncements(deps.db);
+    log.info("synced-ann.ok", { staffId: ctx.staffId, count: items.length });
+    return c.json({ data: items }, 200);
   });
   app.get("/api/internal/sync/outbox", async (c) => {
     requireDesktopEngine2(c);

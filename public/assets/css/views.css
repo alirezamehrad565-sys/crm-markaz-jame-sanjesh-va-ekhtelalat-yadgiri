@@ -634,6 +634,18 @@
 .ann-banner .ico { color: var(--accent); margin-top: 2px; }
 .ann-banner__text { flex: 1; min-width: 0; }
 .ann-banner__text b { display: block; margin-bottom: 2px; }
+/* rust-f15 — نشان منبع سینک روی بنرهای رسیده از ابر (فقط میز) */
+.ann-banner__src {
+  display: inline-block;
+  margin-inline-start: var(--sp-2);
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-radius: 999px;
+  padding: 1px 9px;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  vertical-align: 1px;
+}
 .ann-banner__text p { margin: 0; color: var(--text-2); font-size: var(--fs-sm); white-space: pre-wrap; }
 .ann-banner__close {
   border: none;
