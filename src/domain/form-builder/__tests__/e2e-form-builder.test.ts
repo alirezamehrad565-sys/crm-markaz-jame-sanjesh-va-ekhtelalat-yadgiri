@@ -80,6 +80,11 @@ describe('فرم‌ساز تعاملی عمومی (۱.۲۷.۳۴)', () => {
     const html = await res.text();
     expect(html).toContain('نظرسنجی جلسات');
     expect(html).toContain('کدام فعالیت مفیدتر بود؟');
+    // ۱.۲۷.۳۵ — وزیرمتن + افکت فید + جریان پیوسته؛ CSP فقط jsdelivr را برای فونت باز می‌گذارد
+    expect(html).toContain('Vazirmatn-font-face.css');
+    expect(html).toContain('@keyframes fadein');
+    expect(html).toContain('prefers-reduced-motion');
+    expect(res.headers.get('content-security-policy')).toContain('font-src https://cdn.jsdelivr.net');
     const missing = await A.app.request('/public/form/nope-404');
     expect(missing.status).toBe(404);
     expect(await missing.text()).toContain('پیدا نشد');

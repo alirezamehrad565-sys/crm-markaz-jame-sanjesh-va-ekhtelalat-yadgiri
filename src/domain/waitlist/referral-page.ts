@@ -92,7 +92,13 @@ cursor:pointer;font-family:inherit;font-size:14px}
 .done .big{font-size:46px;margin-bottom:6px}
 .switch-row{display:flex;align-items:center;justify-content:space-between;gap:10px;
 border:1.5px solid var(--line);border-radius:12px;padding:12px 14px}
-@media (prefers-reduced-motion: reduce){.caret{animation:none}.bar__fill{transition:none}}
+/* ۱.۲۷.۳۵ — افکت فید و جریان پیوسته؛ کاهش-حرکت رعایت می‌شود */
+.app>.card{animation:fadein .3s ease}
+@keyframes fadein{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.choice,.btn{transition:transform .12s ease,border-color .15s,background .15s}
+.choice:active{transform:scale(.98)}
+input.i:focus-visible,select.i:focus-visible,textarea.i:focus-visible,button:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+@media (prefers-reduced-motion: reduce){.caret{animation:none}.bar__fill{transition:none}.app>.card{animation:none}.choice,.btn{transition:none}}
 `;
 
 const PAGE_SCRIPT = `
@@ -588,6 +594,8 @@ function renderDone(){
 }
 
 function render(){
+  /* ۱.۲۷.۳۵ — جریان پیوسته: هر گام تازه به بالای صفحه برمی‌گردد */
+  try{window.scrollTo({top:0,behavior:'smooth'});}catch(_){window.scrollTo(0,0);}
   var s=state.step;
   if(s===0)return renderWelcome();
   if(s===1)return renderRole();
@@ -623,6 +631,9 @@ export function renderReferralPage(opts: ReferralPageOpts = {}): string {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>معرفی به مرکز — جامع سنجش و اختلالات یادگیری</title>
 <meta name="robots" content="noindex, nofollow">
+<!-- ۱.۲۷.۳۵ — وزیرمتن از CDN (CSP فقط jsdelivr را اجازه می‌دهد) -->
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css">
 <style>${PAGE_STYLES}</style>
 </head>
 <body>

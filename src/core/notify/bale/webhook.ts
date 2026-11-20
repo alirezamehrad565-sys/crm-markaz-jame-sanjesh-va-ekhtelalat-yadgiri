@@ -87,6 +87,14 @@ export type BotCommand =
   | { kind: 'clf_a'; chatId: string; value: number }
   | { kind: 'clf_do'; chatId: string }
   | { kind: 'clf_no'; chatId: string }
+  // ۱.۲۷.۳۵ — فلو «معرفی دانش‌آموز»: نقش پایه (خانواده/معلم) و عموم مردم بدون احراز
+  // (متن آزاد پارس نمی‌شود — گارد فلو در bot-commands پیش از early-return می‌گیرد)
+  | { kind: 'referral_root'; chatId: string }
+  | { kind: 'ref_role'; chatId: string; role: 'family' | 'teacher' }
+  | { kind: 'ref_count'; chatId: string; n: number }
+  | { kind: 'ref_cat'; chatId: string; idx: number; value: string }
+  | { kind: 'ref_do'; chatId: string }
+  | { kind: 'ref_no'; chatId: string }
   | { kind: 'unknown'; chatId: string; text: string };
 
 export type ExbCat = 'a' | 'd' | 'g' | 'o';
@@ -156,6 +164,7 @@ const EXB_LABELS = new Set(['بانک تمرین', 'بانک تمرینها', '�
 const CONTACT_LABELS = new Set(['شماره تماس', 'شمارهٔ تماس', 'تماس با ما', 'راه‌های ارتباطی', 'راه های ارتباطی', 'راههای ارتباطی', 'ارتباط با ما']);
 const FILES_LABELS = new Set(['فایل‌های آموزشی', 'فایلهای آموزشی', 'فایل های آموزشی']);
 const SERVICES_LABELS = new Set(['خدمات مرکز', 'معرفی خدمات مرکز', 'معرفی خدمات', 'خدمات']);
+const REFERRAL_LABELS = new Set(['معرفی دانش‌آموز', 'معرفی دانش آموز', 'معرفی دانشآموز', 'ثبت معرفی', 'معرفی به مرکز']); // ۱.۲۷.۳۵ — عموم/نقش پایه (نرمال‌ساز ZWNJ را می‌چسباند)
 const AUTH_LABELS = new Set(['احراز هویت', 'ورود به بات', 'اتصال گفتگو', 'اتصال']);
 const PENDING_HW_LABELS = new Set(['تمرین‌های انجام‌نشده', 'تمرینهای انجام نشده', 'تمرین های انجام نشده', 'تمرینهای انجامنشده', 'تکلیف‌های انجام‌نشده', 'تکلیفهای انجام نشده', 'تکلیفهای انجامنشده']);
 const CLASS_ACTIVITY_LABELS = new Set(['فعالیت کلاس', 'فعالیت های کلاس', 'فعالیت‌های کلاس', 'فعالیتهای کلاس']);
@@ -278,6 +287,31 @@ export function parseClfCallback(data: string, chatId: string): BotCommand | nul
   return null;
 }
 
+/* ۱.۲۷.۳۵ — کال‌بک‌های فلو «معرفی دانش‌آموز»: rf:role:<family|teacher> · rf:count:<n> ·
+ * rf:cat:<idx>:<category> · rf:do · rf:no — مقادیر دسته در REFERRAL_CATEGORIES (core/shared) */
+export function parseRefCallback(data: string, chatId: string): BotCommand | null {
+  const parts = data.split(':');
+  if (parts[1] === 'role') {
+    const role = parts[2] === 'teacher' ? 'teacher' : parts[2] === 'family' ? 'family' : null;
+    return role ? { kind: 'ref_role', chatId, role } : null;
+  }
+  if (parts[1] === 'count') {
+    const n = toIndex(parts[2]);
+    if (Number.isNaN(n) || n < 1 || n > 5) return null;
+    return { kind: 'ref_count', chatId, n };
+  }
+  if (parts[1] === 'cat') {
+    const idx = toIndex(parts[2]);
+    const value = (parts[3] ?? '').trim();
+    const valid = ['delayed', 'learning_disorder', 'intellectual', 'autism', 'speech', 'other'];
+    if (Number.isNaN(idx) || idx < 0 || !valid.includes(value)) return null;
+    return { kind: 'ref_cat', chatId, idx, value };
+  }
+  if (parts[1] === 'do') return { kind: 'ref_do', chatId };
+  if (parts[1] === 'no') return { kind: 'ref_no', chatId };
+  return null;
+}
+
 export function parseExbCallback(data: string, chatId: string): BotCommand | null {
   const parts = data.split(':');
   switch (parts[1]) {
@@ -351,6 +385,7 @@ export function parseBotUpdate(update: unknown): BotCommand | null {
     if (data === 'unlink:no') return { kind: 'unlink_no', chatId: String(cbChatId) };
     if (data.startsWith('dis:')) return parseAwarenessCallback(data, String(cbChatId));
     if (data.startsWith('clf:')) return parseClfCallback(data, String(cbChatId));
+    if (data.startsWith('rf:')) return parseRefCallback(data, String(cbChatId)); // ۱.۲۷.۳۵ — فلو معرفی
     const parsed = parseCallbackData(data);
     if (!parsed) return null;
     if (parsed.action === 'ask') return { kind: 'cancel_ask', chatId: String(cbChatId), appointmentId: parsed.targetId };
@@ -388,11 +423,12 @@ export function parseBotUpdate(update: unknown): BotCommand | null {
   if (PENDING_HW_LABELS.has(menuText)) return { kind: 'pending_homework', chatId: chatIdStr };
   if (CLASS_ACTIVITY_LABELS.has(menuText)) return { kind: 'class_activity', chatId: chatIdStr };
   if (AWARENESS_LABELS.has(menuText)) return { kind: 'awareness_root', chatId: chatIdStr };
+  if (REFERRAL_LABELS.has(menuText)) return { kind: 'referral_root', chatId: chatIdStr }; // ۱.۲۷.۳۵
   if (CLASS_APPTS_LABELS.has(menuText)) return { kind: 'my_next', chatId: chatIdStr };
   if (CLF_LIST_LABELS.has(menuText)) return { kind: 'clf_list', chatId: chatIdStr };
 
   if (!text.startsWith('/')) {
-    if (!isIdentityText(text)) return null;
+    if (!isIdentityText(text)) return null; // نویز → نادیده (قرارداد پین‌شدهٔ تست‌ها)؛ فلو معرفی خودش متن آزاد را می‌گیرد
     const digits = stripToDigits(text);
     if (digits.length >= 4 && digits.length <= 15) {
       return { kind: 'identify', chatId: chatIdStr, format: classifyIdentityDigits(digits), value: digits };
@@ -444,6 +480,8 @@ export function parseBotUpdate(update: unknown): BotCommand | null {
       return { kind: 'class_activity', chatId: chatIdStr };
     case '/awareness':
       return { kind: 'awareness_root', chatId: chatIdStr };
+    case '/referral': // ۱.۲۷.۳۵ — معرفی دانش‌آموز برای عموم و نقش پایه
+      return { kind: 'referral_root', chatId: chatIdStr };
     case '/checklist':
       return { kind: 'clf_list', chatId: chatIdStr };
     case '/link': {

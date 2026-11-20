@@ -326,6 +326,12 @@ export function createServices(deps: AppDeps): Services {
     publicBaseUrl: deps.publicBaseUrl ?? null,
     fileSender: exerciseFileSender,
     caseEvents,
+    // ۱.۲۷.۳۵ — فلو بات معرفی: ثبت از مسیر رسمی waitlist.submitReferral (کانال ردیف = bot)
+    referralSubmit: (input, meta) =>
+      waitlist.submitReferral(
+        input as import('@domain/waitlist').PublicReferralSubmitInput,
+        meta as import('@domain/waitlist').ReferralMeta
+      ),
     mediaFetcher:
       deps.mediaFetcher !== undefined
         ? deps.mediaFetcher

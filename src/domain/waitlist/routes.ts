@@ -236,7 +236,7 @@ export function registerWaitlistRoutes(app: AppHono, service: WaitlistService): 
         'Cache-Control': 'no-store',
         'X-Robots-Tag': 'noindex, nofollow',
         'Content-Security-Policy':
-          "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:"
+          "default-src 'none'; style-src 'unsafe-inline' https://cdn.jsdelivr.net; script-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src https://cdn.jsdelivr.net"
       }
     });
   });
