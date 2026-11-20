@@ -75,7 +75,9 @@ desktop/src-tauri/resources/
 desktop/src-tauri/engine-runtime-manifest.json
 
 
-# کور-دامپ کرش پروسه‌ها (هیچ‌وقت کامیت نشود)
-core
-core.*
-*.core
+# کور-دامپ کرش پروسه‌ها (هیچ‌وقت کامیت نشود) — ۱.۲۷.۴۵: لنگر به ریشه!
+# قانون بی‌لنگرِ «core» هر دایرکتوری/فایل به‌نام core در هر عمقی را می‌گرفت و
+# فایل تازهٔ src/core/security/timing.ts را بی‌صدا از گیت می‌انداخت (شکست بیلد داکر ۱.۲۷.۴۳).
+/core
+/core.*
+/*.core
