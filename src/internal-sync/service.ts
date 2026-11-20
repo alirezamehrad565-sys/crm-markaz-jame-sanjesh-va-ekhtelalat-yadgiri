@@ -147,3 +147,25 @@ export async function syncedAnnouncementsCount(db: DbClient): Promise<number> {
   const row = await db.queryOne<{ n: number }>('SELECT COUNT(*) AS n FROM synced_announcements');
   return Number(row?.n ?? 0);
 }
+
+/** rust-f15 — یک ردیف نمایشی اطلاعیهٔ سینک‌شده برای مصرف UI میز (بدون دادهٔ بالینی) */
+export interface SyncedAnnouncementRow {
+  id: string;
+  title: string;
+  body: string;
+  publishedAt: string | null;
+  active: number; // ۰/۱ نمایشی از payload ابر
+  receivedAt: string;
+}
+
+/** rust-f15 — فهرست نمایشی اطلاعیه‌های سینک‌شده از ابر (گیت فاز ۶: نمایش UI).
+ *  جدیدترین انتشار اول، بی‌تاریخ‌ها در انتها؛ سقف ۵۰ برای بنرهای داشبورد میز. */
+export async function listSyncedAnnouncements(db: DbClient, limit = 50): Promise<SyncedAnnouncementRow[]> {
+  return db.query<SyncedAnnouncementRow>(
+    `SELECT id, title, body, published_at AS publishedAt, active, received_at AS receivedAt
+       FROM synced_announcements
+      ORDER BY (published_at IS NULL) ASC, published_at DESC, received_at DESC
+      LIMIT ?`,
+    [limit]
+  );
+}
