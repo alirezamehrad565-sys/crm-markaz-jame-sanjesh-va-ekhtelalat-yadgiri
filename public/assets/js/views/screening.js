@@ -20,6 +20,7 @@ import {
   confirmModal,
   dataTable,
   emptyState,
+  openModal,
   skeletonState,
   errorState,
   tabs,
@@ -805,10 +806,13 @@ async function renderManagerTab(box, container, myGen) {
       )
     );
 
-    /* ۱.۲۷.۱۶ — خواست کارفرما: کارت پیگیری/«ثبت در لیست انتظار» فقط «ارجاع هوش» را نشان می‌دهد؛
+    /* ۱.۲۷.۱۶ — خواست کارفرما: کارت پیگیری فقط «ارجاع هوش» را نشان می‌دهد؛
        ارجاع بینایی/شنوایی (و جسمی‌حرکتی) به متخصصِ خودشان می‌رود و در این کارت فهرست نمی‌شود */
+    /* ۱.۲۷.۳۳ — قاعدهٔ کارفرما: برای ارجاع هوش فقط «یک» دکمهٔ «ثبت تست تخصصی» وجود دارد؛
+       با ثبت نتیجه ردیف از کارت فعال خارج و در «نتایج ثبت‌شده» (فقط‌خواندنی + ویرایش) می‌نشیند */
     const IQ_REFERRAL = 'ارجاع هوش';
-    const followUps = entries.filter((e) => e.tags.includes(IQ_REFERRAL));
+    const followUps = entries.filter((e) => e.tags.includes(IQ_REFERRAL) && !e.iqHandledAt);
+    const followHandled = entries.filter((e) => e.tags.includes(IQ_REFERRAL) && e.iqHandledAt);
     const followCard = el('div', { class: 'card', style: { marginTop: 'var(--sp-4)' } },
       el('div', { class: 'card__head' },
         el('div', { class: 'card__title' }, 'نیازمند پیگیری (ارجاع هوش)'),
@@ -816,7 +820,7 @@ async function renderManagerTab(box, container, myGen) {
       ),
       el('div', { class: 'card__body' },
         followUps.length === 0
-          ? emptyState({ iconName: 'check', title: 'در این بازه مورد ارجاع هوش وجود ندارد', hint: 'نوآموزانِ ارجاع‌شده به آزمون هوش برای تماس با خانواده و ثبت در لیست انتظار مرکز اینجا فهرست می‌شوند.' })
+          ? emptyState({ iconName: 'check', title: 'در این بازه مورد ارجاع هوش وجود ندارد', hint: 'نوآموزانِ ارجاع‌شده به آزمون هوش اینجا فهرست می‌شوند؛ با ثبت نتیجه از همین کارت به «نتایج ثبت‌شده» می‌روند.' })
           : el('div', { class: 'sanj-rows' },
               ...followUps.map((e) =>
                 el('div', { class: 'sanj-row' },
@@ -830,13 +834,43 @@ async function renderManagerTab(box, container, myGen) {
                   el('div', { class: 'sanj-row__actions' },
                     el('button', {
                       class: 'btn btn--soft btn--sm',
-                      title: 'ثبت این نوآموز در لیست انتظار مرکز (نام خودکار پر می‌شود)',
-                      onclick: () => { location.hash = `#/waitlist?prefill=${encodeURIComponent(e.name)}`; } // — ماژول مستقل
-                    }, icon('plus', 13), 'ثبت در لیست انتظار')
+                      title: 'مودال ثبت اظهارنظر و پیشنهاد ارزیابی — نتیجهٔ ارزیابی تخصصی',
+                      onclick: () => openIqResultModal(e, false, refreshResults)
+                    }, icon('clipboard', 13), 'ثبت تست تخصصی')
                   )
                 )
               )
             )
+      )
+    );
+
+    /* نتایج ثبت‌شده — بایگانی پیگیری هوش؛ فقط همین‌جا ویرایش نتیجه ممکن است */
+    const handledCard = followHandled.length === 0 ? null : el('div', { class: 'card', style: { marginTop: 'var(--sp-4)' } },
+      el('div', { class: 'card__head' },
+        el('div', { class: 'card__title' }, 'نتایج ثبت‌شده (ارجاع هوش)'),
+        el('span', { class: 'badge badge--success' }, fa(followHandled.length))
+      ),
+      el('div', { class: 'card__body' },
+        el('div', { class: 'sanj-rows' },
+          ...followHandled.map((e) =>
+            el('div', { class: 'sanj-row' },
+              el('div', { class: 'sanj-row__main' },
+                el('span', { class: 'cell-main' }, e.name),
+                el('span', { class: 'cell-sub' }, `نتیجه ثبت شد — ${formatJalaliShort(e.day)}`)
+              ),
+              el('div', { class: 'sanj-row__tags' },
+                el('span', { class: 'badge badge--success' }, 'ثبت‌شده')
+              ),
+              el('div', { class: 'sanj-row__actions' },
+                el('button', {
+                  class: 'btn btn--ghost btn--sm',
+                  title: 'ویرایش نتیجهٔ ثبت‌شده — همهٔ مقادیر قبلی در فرم بارگذاری می‌شود',
+                  onclick: () => openIqResultModal(e, true, refreshResults)
+                }, icon('edit', 13), 'ویرایش نتیجهٔ تست تخصصی')
+              )
+            )
+          )
+        )
       )
     );
 
@@ -859,7 +893,7 @@ async function renderManagerTab(box, container, myGen) {
       )
     );
 
-    resultsZone.replaceChildren(kpis, chartCard, breakdownCard, followCard, listCard);
+    resultsZone.replaceChildren(...[kpis, chartCard, breakdownCard, followCard, handledCard, listCard].filter(Boolean));
   }
 
   box.replaceChildren(filterCard, resultsZone);
@@ -872,6 +906,179 @@ function sanjKpi(label, value, hint, tone) {
     el('div', { class: 'kpi__label' }, label),
     el('div', { class: 'kpi__hint' }, hint)
   );
+}
+
+/* ═══════════ مودال «ثبت اظهارنظر و پیشنهاد ارزیابی» (۱.۲۷.۳۳ — INTAKE-DESIGN §۳.۵) ═══════════
+ * مشخصات کارفرما: هفت گزینهٔ انحصاری با متن کامل (کارت رادیویی، بدون انتخاب پیش‌فرض) + سوییچ
+ * مستقل «بررسی اختلال رفتاری (طیف اتیسم)» + سه نمرهٔ اختیاری (لی‌تر/وکسلر ۲ کلامی/گودیناف —
+ * فقط عدد اعشاری، بدون هیچ محاسبه/تفسیر) + مشاهدات بالینی اختیاری (رشد خودکار از ۱۲۰px).
+ * دکمهٔ «ثبت نتایج» فقط با انتخاب یکی از گزینه‌های ۱ تا ۷ فعال می‌شود؛ ثبت دوباره = ویرایش
+ * و همهٔ مقادیر قبلی در فرم بارگذاری می‌شوند. چهار داده مستقل‌اند و منطق ثبت یکی به دیگری وابسته نیست. */
+
+const IQ_RESULT_OPTIONS = [
+  { option: 1, title: 'گروه عادی (همسن)', text: 'آزمودنی در گروه عادی (همسن) قرار دارد و به مدرسه عادی معرفی می‌گردد.' },
+  { option: 2, title: 'گروه دیرآموز (مرزی)', text: 'آزمودنی در گروه دیرآموز (مرزی) قرار دارد و ثبت‌نام نامبرده در سال تحصیلی جاری در مدرسه عادی بلامانع است.' },
+  { option: 3, title: 'نارسایی هوشی خفیف (آموزش‌پذیر)', text: 'آزمودنی دارای نارسایی هوشی خفیف (آموزش‌پذیر) بوده و به مدرسه استثنایی معرفی می‌گردد.' },
+  { option: 4, title: 'نارسایی هوشی متوسط (آزمایشی)', text: 'آزمودنی دارای نارسایی هوشی متوسط (آزمایشی) بوده و به مدت یک سال به مدرسه استثنایی معرفی می‌گردد؛ در صورت عدم ارتقاء در پایان سال تحصیلی جهت ارزیابی مجدد مراجعه نماید.' },
+  { option: 5, title: 'نارسایی هوشی با معرفی به کلاس گروه سنی ۴ تا ۵/۹ سال', text: 'آزمودنی نارسایی هوشی دارد و جهت ثبت‌نام در کلاس گروه سنی (۴-۵/۹) سال مدارس استثنایی معرفی می‌گردد؛ ضروری است در پایان سال تحصیلی ارزیابی مجدد گردد.' },
+  { option: 6, title: 'عدم آمادگی برای ورود به مدرسه استثنایی', text: 'آزمودنی در حال حاضر آمادگی لازم برای ورود به مدرسه استثنایی را ندارد؛ لذا به مراکز توانبخشی بهزیستی معرفی می‌گردد، ضروری است در پایان سال تحصیلی ارزیابی مجدد گردد.' },
+  { option: 7, title: 'نارسایی هوشی شدید تا عمیق', text: 'آزمودنی دارای نارسایی هوشی شدید تا عمیق است و جهت استفاده از خدمات آموزشی و توانبخشی به سازمان بهزیستی معرفی می‌گردد.' }
+];
+
+const IQ_MODAL_CSS = `
+.iq-opt{display:block;width:100%;text-align:start;background:var(--surface);border:1.5px solid var(--border);
+border-radius:var(--radius-md);padding:var(--sp-2) var(--sp-3);margin-bottom:var(--sp-2);cursor:pointer;
+font-family:inherit;font-size:var(--fs-sm);line-height:var(--lh-relaxed);color:var(--text)}
+.iq-opt:hover{border-color:var(--border-strong)}
+.iq-opt--sel{border-color:var(--primary);background:var(--primary-soft)}
+.iq-opt__head{display:flex;align-items:center;gap:var(--sp-2);font-weight:700;margin-bottom:2px}
+.iq-opt__no{display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:24px;
+border-radius:var(--radius-full);background:var(--primary-soft);color:var(--primary);
+font-size:var(--fs-2xs);font-weight:800;flex-shrink:0}
+.iq-opt--sel .iq-opt__no{background:var(--primary);color:var(--on-primary)}
+.iq-opt__text{color:var(--text);opacity:.85}
+.iq-sep{border:none;border-top:1px solid var(--border);margin:var(--sp-4) 0}
+.iq-tests{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--sp-2)}
+@media (max-width:640px){.iq-tests{grid-template-columns:1fr}}
+.iq-autism{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-3);
+border:1px solid var(--border);border-radius:var(--radius-md);padding:var(--sp-3)}
+.iq-foot-hint{color:var(--warn);font-size:var(--fs-xs);margin-top:var(--sp-2);display:none}
+.iq-foot-hint.show{display:block}
+`;
+
+let iqCssDone = false;
+function ensureIqCss() {
+  if (iqCssDone) return;
+  iqCssDone = true;
+  const style = document.createElement('style');
+  style.textContent = IQ_MODAL_CSS;
+  document.head.appendChild(style);
+}
+
+/* عدد اعشاری از ورودی — ارقام فارسی/عربی هم پذیرفته می‌شود؛ خالی/نامعتبر = null و هیچ تفسیری نمی‌شود */
+function iqScoreVal(inputEl) {
+  const raw = String(inputEl.value ?? '').replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).trim();
+  if (!raw) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
+function openIqResultModal(entry, isEdit, onSaved) {
+  ensureIqCss();
+  let selected = 0; // — پیش‌فرض هیچ گزینه‌ای انتخاب نشده (مشخصات کارفرما)
+  const body = el('div', {});
+  const cards = IQ_RESULT_OPTIONS.map((o) =>
+    el('button', {
+      type: 'button',
+      class: 'iq-opt',
+      dataset: { option: String(o.option) },
+      onclick: () => {
+        selected = o.option;
+        cards.forEach((c) => c.classList.toggle('iq-opt--sel', c.dataset.option === String(o.option)));
+        saveBtn.disabled = false;
+        footHint.classList.remove('show');
+      }
+    },
+      el('span', { class: 'iq-opt__head' },
+        el('span', { class: 'iq-opt__no' }, fa(o.option)),
+        el('span', {}, o.title)
+      ),
+      el('span', { class: 'iq-opt__text' }, o.text)
+    )
+  );
+
+  const autismInput = el('input', { type: 'checkbox' });
+  const autismSwitch = el('label', { class: 'switch' }, autismInput, el('span', { class: 'switch__track' }));
+  const autismRow = el('div', { class: 'iq-autism' },
+    el('div', {},
+      el('div', { style: { fontWeight: '700', fontSize: 'var(--fs-sm)' } }, 'بررسی اختلال رفتاری (طیف اتیسم)'),
+      el('div', { class: 'muted', style: { fontSize: 'var(--fs-xs)' } }, 'مستقل از نتیجهٔ ارزیابی — روشن: آزمودنی نیاز به بررسی دارد')
+    ),
+    autismSwitch
+  );
+
+  const scoreInput = (label, key) =>
+    el('div', {},
+      el('label', { class: 'f', style: { fontSize: 'var(--fs-xs)' } }, label),
+      el('input', { class: 'input', type: 'number', step: '0.1', inputmode: 'decimal', dir: 'ltr', dataset: { iqscore: key } })
+    );
+  const leiterIn = scoreInput('لی‌تر', 'leiter');
+  const wIn = scoreInput('وکسلر ۲ کلامی', 'wechsler');
+  const gIn = scoreInput('گودیناف', 'goodenough');
+  const testsGrid = el('div', { class: 'iq-tests' }, leiterIn, wIn, gIn);
+  const obs = el('textarea', {
+    class: 'input',
+    placeholder: 'مشاهدات بالینی، وضعیت عملکردی، رفتار، میزان دقت و توجه و سایر نکات مهم ارزیابی را وارد کنید...',
+    style: { minHeight: '120px', resize: 'vertical', lineHeight: 'var(--lh-relaxed)' },
+    oninput: (e) => { e.target.style.height = 'auto'; e.target.style.height = Math.max(120, e.target.scrollHeight) + 'px'; }
+  });
+
+  body.append(
+    el('p', { class: 'muted', style: { fontSize: 'var(--fs-sm)', margin: '0 0 var(--sp-3)' } }, 'نتیجه نهایی ارزیابی را انتخاب کنید. فقط یک گزینه قابل انتخاب است.'),
+    ...cards,
+    el('hr', { class: 'iq-sep' }),
+    autismRow,
+    el('hr', { class: 'iq-sep' }),
+    el('div', { style: { fontWeight: '700', fontSize: 'var(--fs-sm)', marginBottom: 'var(--sp-2)' } }, 'نتایج آزمون‌های تخصصی'),
+    el('p', { class: 'muted', style: { fontSize: 'var(--fs-xs)', margin: '0 0 var(--sp-2)' } }, 'در صورت انجام آزمون‌های تخصصی، نمرات مربوطه را وارد کنید — اختیاری و بدون محاسبهٔ خودکار.'),
+    testsGrid,
+    el('hr', { class: 'iq-sep' }),
+    el('div', { style: { fontWeight: '700', fontSize: 'var(--fs-sm)', marginBottom: 'var(--sp-2)' } }, 'مشاهدات بالینی'),
+    obs
+  );
+
+  const saveBtn = el('button', { class: 'btn btn--primary', disabled: true, type: 'button' }, 'ثبت نتایج');
+  const footHint = el('div', { class: 'iq-foot-hint' }, 'برای ثبت، یکی از گزینه‌های ۱ تا ۷ را انتخاب کنید');
+
+  const shell = openModal({
+    title: `ثبت اظهارنظر و پیشنهاد ارزیابی — ${entry.name}`,
+    wide: true,
+    body,
+    actions: [
+      (close) => el('button', { class: 'btn btn--ghost', type: 'button', onclick: close }, 'انصراف'),
+      () => saveBtn,
+      () => footHint
+    ]
+  });
+
+  /* نمرات و مقادیر قبلی — در ویرایش، تمام اطلاعات ذخیره‌شده در فرم بارگذاری می‌شود */
+  if (isEdit) {
+    api.get(`/api/screening/${entry.id}/iq-evaluation`).then((res) => {
+      const d = res.data;
+      if (!d) return;
+      selected = d.resultOption;
+      cards.forEach((c) => c.classList.toggle('iq-opt--sel', Number(c.dataset.option) === selected));
+      saveBtn.disabled = false;
+      autismInput.checked = Boolean(d.autismReferral);
+      const byKey = { leiter: d.leiterScore, wechsler: d.wechslerVerbalScore, goodenough: d.goodenoughScore };
+      body.querySelectorAll('input[iqscore]').forEach((inp) => {
+        const v = byKey[inp.dataset.iqscore];
+        if (v !== null && v !== undefined) inp.value = String(v);
+      });
+      obs.value = d.clinicalObservations ?? '';
+    }).catch(() => undefined); // — ویرایش بدون دادهٔ قبلی هم مجاز است؛ فرم خالی می‌ماند
+  }
+
+  saveBtn.addEventListener('click', async () => {
+    if (!selected) { footHint.classList.add('show'); return; }
+    saveBtn.disabled = true;
+    try {
+      await api.post(`/api/screening/${entry.id}/iq-evaluation`, {
+        result_option: selected,
+        autism_referral: autismInput.checked,
+        leiter_score: iqScoreVal(leiterIn.querySelector('input')),
+        wechsler_verbal_score: iqScoreVal(wIn.querySelector('input')),
+        goodenough_score: iqScoreVal(gIn.querySelector('input')),
+        clinical_observations: obs.value
+      });
+      toast('نتیجهٔ ارزیابی تخصصی ثبت شد', 'success');
+      shell.close();
+      if (onSaved) onSaved();
+    } catch (err) {
+      saveBtn.disabled = false;
+      toastError(err);
+    }
+  });
 }
 
 function buildChartCard(byDay) {

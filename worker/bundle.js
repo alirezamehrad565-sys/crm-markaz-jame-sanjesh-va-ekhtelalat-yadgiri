@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.27.32";
+var APP_VERSION = "1.27.33";
 var NODE_MIN_VERSION = "1.26.0";
 
 // node_modules/zod/v4/classic/external.js
@@ -22419,6 +22419,20 @@ var WAITLIST_SERVICE_TYPE_MAX = 120;
 var WAITLIST_NOTE_MAX = 1e3;
 var WAITLIST_LIST_LIMIT = 500;
 var WAITLIST_ALERT_DAYS = 7;
+var REFERRAL_CATEGORIES = [
+  "delayed",
+  "learning_disorder",
+  "intellectual",
+  "autism",
+  "speech",
+  "other"
+];
+var REFERRAL_CHILDREN_MAX = 50;
+var REFERRAL_CONCERN_MAX = 1e3;
+var REFERRAL_REJECT_REASON_MAX = 300;
+var REFERRAL_LIST_LIMIT = 500;
+var REFERRAL_RATE_PER_HOUR = 20;
+var REFERRAL_RATE_PER_CHAT = 5;
 var TODO_STATUSES = ["pending", "done"];
 var TODO_PRIORITIES = ["normal", "urgent"];
 var TODO_BOXES = ["inbox", "outbox"];
@@ -22735,6 +22749,16 @@ function jalaliFullLabel(ymd) {
   return `${WEEKDAY_NAMES_FA[iranianWeekdayOfYmd(ymd)]} ${jalaliLabel(ymd)}`;
 }
 __name(jalaliFullLabel, "jalaliFullLabel");
+function schoolYearOfYmd(ymd) {
+  const [gy, gm, gd] = ymd.split("-").map(Number);
+  const j = toJalaliParts(gy, gm, gd);
+  return j.jm >= 7 ? j.jy : j.jy - 1;
+}
+__name(schoolYearOfYmd, "schoolYearOfYmd");
+function currentSchoolYear(now = /* @__PURE__ */ new Date()) {
+  return String(schoolYearOfYmd(tehranTodayYmd(now)));
+}
+__name(currentSchoolYear, "currentSchoolYear");
 
 // src/core/shared/schemas.ts
 var UUID_LOOSE_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
@@ -23459,6 +23483,45 @@ var ScreeningQuerySchema = external_exports.object({
   to: TehranYmdSchema.optional(),
   q: external_exports.string().trim().max(80).optional(),
   tag: external_exports.string().trim().max(800).optional()
+});
+var IqEvaluationCreateSchema = external_exports.object({
+  result_option: external_exports.number().int("\u06AF\u0632\u06CC\u0646\u0647\u0654 \u0646\u062A\u06CC\u062C\u0647 \u0628\u0627\u06CC\u062F \u0639\u062F\u062F \u0635\u062D\u06CC\u062D \u0628\u0627\u0634\u062F").min(1, "\u06CC\u06A9\u06CC \u0627\u0632 \u06AF\u0632\u06CC\u0646\u0647\u200C\u0647\u0627\u06CC \u06F1 \u062A\u0627 \u06F7 \u0631\u0627 \u0627\u0646\u062A\u062E\u0627\u0628 \u06A9\u0646\u06CC\u062F").max(7, "\u06CC\u06A9\u06CC \u0627\u0632 \u06AF\u0632\u06CC\u0646\u0647\u200C\u0647\u0627\u06CC \u06F1 \u062A\u0627 \u06F7 \u0631\u0627 \u0627\u0646\u062A\u062E\u0627\u0628 \u06A9\u0646\u06CC\u062F"),
+  autism_referral: external_exports.boolean().optional().default(false),
+  leiter_score: external_exports.number().finite("\u0646\u0645\u0631\u0647\u0654 \u0644\u06CC\u200C\u062A\u0631 \u0628\u0627\u06CC\u062F \u0639\u062F\u062F \u0628\u0627\u0634\u062F").nullish(),
+  wechsler_verbal_score: external_exports.number().finite("\u0646\u0645\u0631\u0647\u0654 \u0648\u06A9\u0633\u0644\u0631 \u0628\u0627\u06CC\u062F \u0639\u062F\u062F \u0628\u0627\u0634\u062F").nullish(),
+  goodenough_score: external_exports.number().finite("\u0646\u0645\u0631\u0647\u0654 \u06AF\u0648\u062F\u06CC\u0646\u0627\u0641 \u0628\u0627\u06CC\u062F \u0639\u062F\u062F \u0628\u0627\u0634\u062F").nullish(),
+  clinical_observations: external_exports.string().max(2e3, "\u0645\u0634\u0627\u0647\u062F\u0627\u062A \u0628\u0627\u0644\u06CC\u0646\u06CC \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F2\u06F0\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").optional()
+});
+var ReferralChildSchema = external_exports.object({
+  first_name: external_exports.string().trim().min(2, "\u0646\u0627\u0645 \u06A9\u0648\u062F\u06A9 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").max(80, "\u0646\u0627\u0645 \u06A9\u0648\u062F\u06A9 \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F8\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A"),
+  birth_date: TehranYmdSchema.nullish(),
+  /* تاریخ تولد شمسیِ تایپی از فرم عمومی — سرویس با jalaliToGregorianYmd به میلادی می‌بَرد؛
+     تبدیل در یک نقطهٔ سمت سرور تا الگوریتم مشترکِ تست‌شدهٔ سامانه تک‌منبع بماند */
+  birth_date_text: external_exports.string().trim().max(20, "\u062A\u0627\u0631\u06CC\u062E \u062A\u0648\u0644\u062F \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F2\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").optional(),
+  school_text: external_exports.string().trim().max(120).optional(),
+  grade_text: external_exports.string().trim().max(40).optional(),
+  class_text: external_exports.string().trim().max(40).optional(),
+  concern_category: external_exports.enum(REFERRAL_CATEGORIES).nullish(),
+  /* تلفن ولیّ هر کودک — در ثبت دسته‌ای معلم به‌ازای هر ردیف جدا می‌آید؛
+     در ثبت خانواده خود معرف همان ولیّ است و از referrer_phone استفاده می‌شود */
+  guardian_phone: GuardianPhoneSchema.nullish(),
+  concern_tags: external_exports.array(external_exports.string().trim().min(2).max(40)).max(8, "\u062D\u062F\u0627\u06A9\u062B\u0631 \u06F8 \u0628\u0631\u0686\u0633\u0628 \u062F\u063A\u062F\u063A\u0647").optional().default([]),
+  concern_text: external_exports.string().trim().max(REFERRAL_CONCERN_MAX).optional(),
+  prior_eval: external_exports.boolean().nullish(),
+  prior_eval_note: external_exports.string().trim().max(300).optional()
+});
+var PublicReferralSubmissionSchema = external_exports.object({
+  role: external_exports.enum(["family", "teacher"], { message: "\u0646\u0642\u0634 \u0645\u0639\u0631\u0641 \u0628\u0627\u06CC\u062F \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u06CC\u0627 \u0645\u0639\u0644\u0645 \u0628\u0627\u0634\u062F" }),
+  referrer_name: external_exports.string().trim().min(2, "\u0646\u0627\u0645 \u0645\u0639\u0631\u0641 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").max(80, "\u0646\u0627\u0645 \u0645\u0639\u0631\u0641 \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F8\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A"),
+  referrer_phone: GuardianPhoneSchema,
+  school_text: external_exports.string().trim().max(120).optional(),
+  grade_text: external_exports.string().trim().max(40).optional(),
+  class_text: external_exports.string().trim().max(40).optional(),
+  token: external_exports.string().trim().max(200).optional(),
+  children: external_exports.array(ReferralChildSchema).min(1, "\u062D\u062F\u0627\u0642\u0644 \u06CC\u06A9 \u06A9\u0648\u062F\u06A9 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A").max(REFERRAL_CHILDREN_MAX, `\u062D\u062F\u0627\u06A9\u062B\u0631 ${REFERRAL_CHILDREN_MAX} \u06A9\u0648\u062F\u06A9 \u062F\u0631 \u0647\u0631 \u062B\u0628\u062A`)
+});
+var ReferralRejectSchema = external_exports.object({
+  reason: external_exports.string().trim().min(2, "\u062F\u0644\u06CC\u0644 \u0631\u062F \u0644\u0627\u0632\u0645 \u0627\u0633\u062A \u2014 \u0628\u0631\u0627\u06CC \u0645\u0639\u0631\u0641 \u0642\u0627\u0628\u0644 \u0627\u0631\u0633\u0627\u0644 \u0627\u0633\u062A").max(REFERRAL_REJECT_REASON_MAX, `\u062F\u0644\u06CC\u0644 \u0631\u062F \u062D\u062F\u0627\u06A9\u062B\u0631 ${REFERRAL_REJECT_REASON_MAX} \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A`)
 });
 
 // src/core/shared/features.ts
@@ -29403,6 +29466,19 @@ var StudentTeacherSchema = external_exports.object({
   contact: external_exports.string().max(60).optional()
 });
 function registerRoutes3(app, service) {
+  app.get("/public/partner-schools", async (c) => {
+    const schools = await service.listSchools({ active: true });
+    const classes = await service.listClasses({ active: true });
+    return c.json(
+      {
+        data: {
+          schools: schools.map((s) => ({ id: s.id, name: s.name })),
+          classes: classes.map((cl) => ({ id: cl.id, schoolId: cl.schoolId, name: cl.name }))
+        }
+      },
+      200
+    );
+  });
   app.post("/api/schools", requireRole("manager"), async (c) => {
     const actor = getAuthContext(c);
     const body = NewSchoolSchema.parse(await c.req.json());
@@ -30764,6 +30840,16 @@ function appendNote(existing, label, text) {
 }
 __name(appendNote, "appendNote");
 
+// src/domain/waitlist/types.ts
+var REFERRAL_CATEGORY_LABELS = {
+  delayed: "\u062F\u06CC\u0631\u0622\u0645\u0648\u0632",
+  learning_disorder: "\u0627\u062E\u062A\u0644\u0627\u0644 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC",
+  intellectual: "\u0645\u0634\u06A9\u0648\u06A9 \u0628\u0647 \u06A9\u0645\u200C\u062A\u0648\u0627\u0646\u06CC",
+  autism: "\u0627\u0631\u062C\u0627\u0639 \u0627\u062A\u06CC\u0633\u0645",
+  speech: "\u062A\u0623\u062E\u06CC\u0631 \u06AF\u0641\u062A\u0627\u0631 \u0648 \u0632\u0628\u0627\u0646",
+  other: "\u0633\u0627\u06CC\u0631"
+};
+
 // src/domain/waitlist/service.ts
 function rowToEntry(row) {
   return {
@@ -30811,6 +30897,54 @@ var SELECT_BASE = `
     LEFT JOIN students st ON st.id = w.student_id
     LEFT JOIN schools s ON s.id = COALESCE(st.school_id, w.school_id)
     LEFT JOIN classes c ON c.id = COALESCE(st.class_id, w.class_id)`;
+var REFERRAL_BY_ID = `SELECT * FROM waitlist_referrals WHERE id = ? AND deleted_at IS NULL`;
+function referralRowToDomain(row) {
+  let tags = [];
+  try {
+    const parsed = JSON.parse(row.concern_tags);
+    if (Array.isArray(parsed)) tags = parsed.filter((t) => typeof t === "string");
+  } catch {
+  }
+  return {
+    id: row.id,
+    refRole: row.ref_role,
+    referrerName: row.referrer_name,
+    referrerPhone: row.referrer_phone,
+    firstName: row.first_name,
+    birthDate: row.birth_date,
+    guardianPhone: row.guardian_phone,
+    schoolText: row.school_text,
+    gradeText: row.grade_text,
+    classText: row.class_text,
+    concernCategory: row.concern_category,
+    concernTags: tags,
+    concernText: row.concern_text,
+    priorEval: row.prior_eval === null ? null : row.prior_eval === 1,
+    priorEvalNote: row.prior_eval_note,
+    channel: row.channel,
+    chatId: row.chat_id,
+    submissionGroup: row.submission_group,
+    status: row.status,
+    rejectReason: row.reject_reason,
+    waitlistId: row.waitlist_id,
+    academicYear: row.academic_year,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+__name(referralRowToDomain, "referralRowToDomain");
+function parseJalaliBirthDate(raw2) {
+  if (!raw2) return null;
+  const norm = String(raw2).replace(/[۰-۹]/g, (d) => String("\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9".indexOf(d))).replace(/[^\d/]/g, " ").trim().split(/\s+/)[0] ?? "";
+  const m = /^(\d{4})\/(\d{1,2})\/(\d{1,2})$/.exec(norm);
+  if (!m) return null;
+  const jy = Number(m[1]);
+  const jm = Number(m[2]);
+  const jd = Number(m[3]);
+  if (jy < 1300 || jy > 1500 || jm < 1 || jm > 12 || jd < 1 || jd > 31) return null;
+  return jalaliToGregorianYmd(jy, jm, jd);
+}
+__name(parseJalaliBirthDate, "parseJalaliBirthDate");
 function createWaitlistService(deps) {
   const { db, audit, logger } = deps;
   const log = logger.child("waitlist");
@@ -30820,6 +30954,18 @@ function createWaitlistService(deps) {
     return row;
   }
   __name(loadEntry, "loadEntry");
+  async function loadReferral(id) {
+    const row = await db.queryOne(REFERRAL_BY_ID, [id]);
+    if (!row) throw new NotFoundError("\u0645\u0639\u0631\u0641\u06CC");
+    return referralRowToDomain(row);
+  }
+  __name(loadReferral, "loadReferral");
+  async function loadReferralRow(id) {
+    const row = await db.queryOne(REFERRAL_BY_ID, [id]);
+    if (!row) throw new NotFoundError("\u0645\u0639\u0631\u0641\u06CC");
+    return row;
+  }
+  __name(loadReferralRow, "loadReferralRow");
   async function transitionEntry(tx, row, to, action, actorId, noteAppend) {
     if (!canTransition(row.status, to)) {
       throw new ConflictError(`\u062A\u063A\u06CC\u06CC\u0631 \u0648\u0636\u0639\u06CC\u062A \u0627\u0632 \xAB${row.status}\xBB \u0628\u0647 \xAB${to}\xBB \u0645\u062C\u0627\u0632 \u0646\u06CC\u0633\u062A`, void 0);
@@ -31346,13 +31492,823 @@ function createWaitlistService(deps) {
           error: err instanceof Error ? err.message : String(err)
         });
       }
+    },
+    /* ─── معرفی به مرکز (v1.27.33 — REFERRAL-DESIGN.md) ───
+     * ثبت عمومی خانواده (دقیقاً یک کودک) یا معلم (ثبت دسته‌ای تا سقف) — هر کودک یک ردیف مستقل؛
+     * ضدتکرار: نام کودک + تلفن معرف در همان سال تحصیلی (به‌جز ردشده‌ها). */
+    async submitReferral(input2, meta3) {
+      if (input2.role === "family" && input2.children.length !== 1) {
+        throw new ValidationError("\u0641\u0631\u0645 \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u062F\u0642\u06CC\u0642\u0627\u064B \u06CC\u06A9 \u06A9\u0648\u062F\u06A9 \u062B\u0628\u062A \u0645\u06CC\u200C\u06A9\u0646\u062F");
+      }
+      const academicYear = currentSchoolYear();
+      const channel = input2.token ? "bot" : "web";
+      const group = input2.children.length > 1 ? crypto.randomUUID() : null;
+      const created = [];
+      for (const child of input2.children) {
+        const dup = await db.queryOne(
+          `SELECT id FROM waitlist_referrals
+            WHERE first_name = ? AND referrer_phone = ? AND academic_year = ?
+              AND status != 'rejected' AND deleted_at IS NULL`,
+          [child.first_name, input2.referrer_phone, academicYear]
+        );
+        if (dup) {
+          throw new ConflictError("\u0627\u06CC\u0646 \u06A9\u0648\u062F\u06A9 \u0642\u0628\u0644\u0627\u064B \u062B\u0628\u062A \u0634\u062F\u0647 \u0627\u0633\u062A \u2014 \u0628\u0631\u0627\u06CC \u062A\u063A\u06CC\u06CC\u0631 \u0627\u0637\u0644\u0627\u0639\u0627\u062A \u0628\u0627 \u0645\u0631\u06A9\u0632 \u062A\u0645\u0627\u0633 \u0628\u06AF\u06CC\u0631\u06CC\u062F");
+        }
+        const id = crypto.randomUUID();
+        const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
+        await db.transaction(async (tx) => {
+          await tx.execute(
+            `INSERT INTO waitlist_referrals
+               (id, ref_role, referrer_name, referrer_phone, first_name, birth_date, guardian_phone, school_text, grade_text,
+                class_text, concern_category, concern_tags, concern_text, prior_eval, prior_eval_note,
+                channel, chat_id, token, submission_group, status, academic_year, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'new', ?, ?, ?)`,
+            [
+              id,
+              input2.role,
+              input2.referrer_name,
+              input2.referrer_phone,
+              child.first_name,
+              parseJalaliBirthDate(child.birth_date_text) ?? child.birth_date ?? null,
+              child.guardian_phone ?? null,
+              child.school_text ?? input2.school_text ?? null,
+              child.grade_text ?? input2.grade_text ?? null,
+              child.class_text ?? input2.class_text ?? null,
+              child.concern_category ?? null,
+              JSON.stringify(child.concern_tags ?? []),
+              child.concern_text ?? null,
+              child.prior_eval === true ? 1 : child.prior_eval === false ? 0 : null,
+              child.prior_eval_note ?? null,
+              channel,
+              meta3.chatId ?? null,
+              input2.token ?? null,
+              group,
+              academicYear,
+              nowIso2,
+              nowIso2
+            ]
+          );
+          await audit.logInTransaction(tx, {
+            actorId: "public",
+            action: "waitlist.referral_submit",
+            resourceType: "waitlist_referral",
+            resourceId: id,
+            changes: {
+              role: { from: null, to: input2.role },
+              channel: { from: null, to: channel }
+            }
+          });
+        });
+        const row = await db.queryOne(REFERRAL_BY_ID, [id]);
+        if (row) created.push(referralRowToDomain(row));
+      }
+      log.info("waitlist.referral.submitted", { role: input2.role, count: created.length, channel });
+      return created;
+    },
+    async listReferrals(filters) {
+      const where = ["deleted_at IS NULL"];
+      const params = [];
+      if (filters.status) {
+        where.push("status = ?");
+        params.push(filters.status);
+      }
+      if (filters.year) {
+        where.push("academic_year = ?");
+        params.push(filters.year);
+      }
+      const rows = await db.query(
+        `SELECT * FROM waitlist_referrals
+          WHERE ${where.join(" AND ")}
+          ORDER BY created_at DESC, id DESC
+          LIMIT ${REFERRAL_LIST_LIMIT}`,
+        params
+      );
+      return rows.map(referralRowToDomain);
+    },
+    /* پذیرش معرفی همیشه از مسیر create لیست انتظار می‌گذرد — تبدیل اتمیک به پرونده/نوبت دست‌نخورده؛
+     * پذیرش = خروج خودکار از لیست با اولین حضور، همان قرارداد قبلی. */
+    async acceptReferral(id, actor) {
+      const referral = await loadReferral(id);
+      if (referral.status !== "new") {
+        throw new ConflictError("\u0627\u06CC\u0646 \u0645\u0639\u0631\u0641\u06CC \u0642\u0628\u0644\u0627\u064B \u0628\u0631\u0631\u0633\u06CC \u0634\u062F\u0647 \u0627\u0633\u062A");
+      }
+      const entry = await service.create(
+        {
+          firstName: referral.firstName,
+          lastName: "",
+          phone: referral.guardianPhone || referral.referrerPhone,
+          source: referral.refRole === "teacher" ? "teacher" : "self",
+          serviceType: referral.concernCategory ? REFERRAL_CATEGORY_LABELS[referral.concernCategory] ?? void 0 : void 0,
+          priority: "normal",
+          note: appendNote(
+            null,
+            "\u0645\u0639\u0631\u0641\u06CC \u0622\u0646\u0644\u0627\u06CC\u0646",
+            [
+              referral.schoolText ? `\u0645\u062F\u0631\u0633\u0647: ${referral.schoolText}` : null,
+              referral.gradeText ? `\u067E\u0627\u06CC\u0647: ${referral.gradeText}` : null,
+              referral.classText ? `\u06A9\u0644\u0627\u0633: ${referral.classText}` : null,
+              referral.concernText ? `\u062F\u063A\u062F\u063A\u0647: ${referral.concernText.slice(0, 200)}` : null,
+              `\u0645\u0639\u0631\u0641: ${referral.referrerName} (${referral.refRole === "teacher" ? "\u0645\u0639\u0644\u0645" : "\u062E\u0627\u0646\u0648\u0627\u062F\u0647"})`
+            ].filter(Boolean).join(" \xB7 ")
+          ),
+          studentId: void 0
+        },
+        actor
+      );
+      try {
+        await db.transaction(async (tx) => {
+          await tx.execute(`UPDATE waitlist SET referral_id = ? WHERE id = ?`, [referral.id, entry.id]);
+          await tx.execute(
+            `UPDATE waitlist_referrals SET status = 'accepted', waitlist_id = ?, updated_at = ? WHERE id = ?`,
+            [entry.id, (/* @__PURE__ */ new Date()).toISOString(), referral.id]
+          );
+          await audit.logInTransaction(tx, {
+            actorId: actor.staffId,
+            action: "waitlist.referral_accept",
+            resourceType: "waitlist_referral",
+            resourceId: referral.id,
+            changes: {
+              status: { from: "new", to: "accepted" },
+              waitlist_id: { from: null, to: entry.id }
+            }
+          });
+        });
+      } catch (err) {
+        await service.softDelete(entry.id, actor).catch(() => void 0);
+        throw err;
+      }
+      log.info("waitlist.referral.accepted", { referralId: referral.id, waitlistId: entry.id });
+      return entry;
+    },
+    async rejectReferral(id, reason, actor) {
+      const referral = await loadReferral(id);
+      if (referral.status !== "new") {
+        throw new ConflictError("\u0627\u06CC\u0646 \u0645\u0639\u0631\u0641\u06CC \u0642\u0628\u0644\u0627\u064B \u0628\u0631\u0631\u0633\u06CC \u0634\u062F\u0647 \u0627\u0633\u062A");
+      }
+      await db.transaction(async (tx) => {
+        await tx.execute(
+          `UPDATE waitlist_referrals SET status = 'rejected', reject_reason = ?, updated_at = ? WHERE id = ?`,
+          [reason, (/* @__PURE__ */ new Date()).toISOString(), referral.id]
+        );
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: "waitlist.referral_reject",
+          resourceType: "waitlist_referral",
+          resourceId: referral.id,
+          changes: { status: { from: "new", to: "rejected" } }
+        });
+      });
+      log.info("waitlist.referral.rejected", { referralId: referral.id });
+      return referralRowToDomain(await loadReferralRow(id));
     }
   };
   return service;
 }
 __name(createWaitlistService, "createWaitlistService");
 
+// src/domain/waitlist/referral-page.ts
+function safeToken(raw2) {
+  return (raw2 ?? "").replace(/[^A-Za-z0-9._:\-]/g, "").slice(0, 200);
+}
+__name(safeToken, "safeToken");
+var PAGE_STYLES = `
+:root{--bg:#f6f7fb;--card:#ffffff;--ink:#1f2430;--muted:#6b7280;--brand:#2563eb;--brand-soft:#eef2ff;
+--ok:#16a34a;--warn:#d97706;--err:#dc2626;--line:#e5e7eb;--r:14px}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font-family:Vazirmatn,Tahoma,'Segoe UI',sans-serif;
+font-size:16px;line-height:1.9;direction:rtl}
+.bar{position:fixed;top:0;right:0;left:0;height:5px;background:var(--line);z-index:5}
+.bar__fill{height:100%;width:0;background:var(--brand);transition:width .3s ease}
+.app{max-width:560px;margin:0 auto;padding:32px 16px 64px;min-height:100vh}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:24px;
+box-shadow:0 1px 3px rgba(15,23,42,.06)}
+.step-no{color:var(--muted);font-size:13px;margin-bottom:8px}
+h1{font-size:20px;margin:0 0 6px}
+h2{font-size:19px;margin:0 0 10px}
+p.lead{color:var(--muted);margin:0 0 18px;font-size:14.5px}
+.welcome-text{font-size:17px;line-height:2.2;min-height:170px;white-space:pre-wrap}
+.caret{display:inline-block;width:2px;height:1.15em;background:var(--brand);vertical-align:-0.2em;
+animation:blink 1s steps(1) infinite;margin-inline-start:2px}
+@keyframes blink{50%{opacity:0}}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:none;cursor:pointer;
+border-radius:12px;padding:12px 22px;font-family:inherit;font-size:15.5px;font-weight:700;width:100%}
+.btn--primary{background:var(--brand);color:#fff}
+.btn--primary:disabled{opacity:.45;cursor:not-allowed}
+.btn--ghost{background:transparent;color:var(--brand);border:1.5px solid var(--brand)}
+.btn--sm{width:auto;padding:9px 16px;font-size:14px}
+.btnrow{display:flex;gap:10px;margin-top:20px}
+.btnrow .btn{flex:1}
+.choice{display:block;background:var(--card);border:2px solid var(--line);border-radius:var(--r);
+padding:16px 18px;margin-bottom:12px;cursor:pointer;transition:border-color .15s,background .15s}
+.choice:hover{border-color:var(--brand)}
+.choice.sel{border-color:var(--brand);background:var(--brand-soft)}
+.choice b{display:block;font-size:16px;margin-bottom:2px}
+.choice span{color:var(--muted);font-size:13.5px}
+.choice .no{display:inline-block;width:26px;height:26px;border-radius:50%;background:var(--brand-soft);
+color:var(--brand);text-align:center;line-height:26px;font-weight:800;margin-inline-end:8px;font-size:13px}
+label.f{display:block;font-weight:700;margin:0 0 6px}
+input.i,select.i,textarea.i{width:100%;border:1.5px solid var(--line);border-radius:12px;padding:11px 14px;
+font-family:inherit;font-size:15.5px;background:#fff;color:var(--ink)}
+input.i:focus,select.i:focus,textarea.i:focus{outline:none;border-color:var(--brand)}
+textarea.i{min-height:110px;resize:vertical}
+.field{margin-bottom:16px}
+.err-msg{color:var(--err);font-size:13.5px;margin-top:4px;display:none}
+.err-msg.show{display:block}
+.hint{color:var(--muted);font-size:13px;margin-top:4px}
+.badge-free{display:inline-block;background:#e7f7ee;color:var(--ok);border-radius:999px;
+padding:4px 14px;font-size:13.5px;font-weight:700;margin-bottom:14px}
+.review{border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-top:6px}
+.review__row{display:flex;align-items:flex-start;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line)}
+.review__row:last-child{border-bottom:none}
+.review__row .k{color:var(--muted);font-size:13px;min-width:110px;padding-top:2px}
+.review__row .v{flex:1;font-size:14.5px}
+.review__row .e{background:none;border:none;color:var(--brand);cursor:pointer;font-family:inherit;
+font-size:13px;font-weight:700;padding:2px 4px}
+.overlay{position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:10;display:flex;
+align-items:center;justify-content:center;padding:16px}
+.modal{background:#fff;border-radius:16px;max-width:480px;width:100%;max-height:85vh;overflow:auto;padding:22px}
+.aware{font-size:15.5px;line-height:2.2}
+.aware ul{padding-inline-start:20px;color:var(--muted)}
+.note{background:var(--brand-soft);border-radius:12px;padding:12px 14px;font-size:13.5px;
+color:#1e40af;margin-top:14px}
+.rowcard{border:1.5px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px;position:relative}
+.rowcard .rm{position:absolute;top:10px;left:10px;background:none;border:none;color:var(--err);
+cursor:pointer;font-family:inherit;font-size:13px;font-weight:700}
+.pills{display:flex;flex-wrap:wrap;gap:8px}
+.pill{border:1.5px solid var(--line);background:#fff;border-radius:999px;padding:7px 14px;
+cursor:pointer;font-family:inherit;font-size:14px}
+.pill.sel{border-color:var(--brand);background:var(--brand-soft);color:var(--brand);font-weight:700}
+.done{text-align:center}
+.done .big{font-size:46px;margin-bottom:6px}
+.switch-row{display:flex;align-items:center;justify-content:space-between;gap:10px;
+border:1.5px solid var(--line);border-radius:12px;padding:12px 14px}
+@media (prefers-reduced-motion: reduce){.caret{animation:none}.bar__fill{transition:none}}
+`;
+var PAGE_SCRIPT = `
+(function(){
+'use strict';
+var TOKEN = window.__REFERRAL_TOKEN__ || '';
+var app = document.getElementById('app');
+var bar = document.getElementById('bar');
+var REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+var GRADES = ['\u067E\u06CC\u0634\u200C\u062F\u0628\u0633\u062A\u0627\u0646\u06CC','\u0627\u0648\u0644 \u062F\u0628\u0633\u062A\u0627\u0646','\u062F\u0648\u0645 \u062F\u0628\u0633\u062A\u0627\u0646','\u0633\u0648\u0645 \u062F\u0628\u0633\u062A\u0627\u0646','\u0686\u0647\u0627\u0631\u0645 \u062F\u0628\u0633\u062A\u0627\u0646','\u067E\u0646\u062C\u0645 \u062F\u0628\u0633\u062A\u0627\u0646','\u0634\u0634\u0645 \u062F\u0628\u0633\u062A\u0627\u0646'];
+var CONCERNS = [
+  {v:'delayed', t:'\u062F\u06CC\u0631\u0622\u0645\u0648\u0632\u06CC', d:'\u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u06A9\u0646\u062F\u062A\u0631 \u0627\u0632 \u0647\u0645\u200C\u0633\u0646\u200C\u0648\u0633\u0627\u0644\u200C\u0647\u0627 \u2014 \u0648\u0644\u06CC \u06CC\u0627\u062F \u0645\u06CC\u200C\u06AF\u06CC\u0631\u062F'},
+  {v:'learning_disorder', t:'\u0627\u062E\u062A\u0644\u0627\u0644 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC', d:'\u0633\u062E\u062A\u06CC \u062F\u0631 \u062E\u0648\u0627\u0646\u062F\u0646\u060C \u0646\u0648\u0634\u062A\u0646 \u06CC\u0627 \u062D\u0633\u0627\u0628'},
+  {v:'intellectual', t:'\u0645\u0634\u06A9\u0648\u06A9 \u0628\u0647 \u06A9\u0645\u200C\u062A\u0648\u0627\u0646\u06CC \u0630\u0647\u0646\u06CC', d:'\u062A\u0623\u062E\u06CC\u0631 \u062C\u062F\u06CC \u062F\u0631 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u0648 \u0645\u0647\u0627\u0631\u062A\u200C\u0647\u0627\u06CC \u0631\u0648\u0632\u0645\u0631\u0647'},
+  {v:'speech', t:'\u062A\u0623\u062E\u06CC\u0631 \u06AF\u0641\u062A\u0627\u0631 \u0648 \u0632\u0628\u0627\u0646', d:'\u062F\u06CC\u0631 \u06CC\u0627 \u06A9\u0645 \u062D\u0631\u0641 \u0632\u062F\u0646 \u0646\u0633\u0628\u062A \u0628\u0647 \u0647\u0645\u200C\u0633\u0646\u200C\u0647\u0627'},
+  {v:'autism', t:'\u0645\u0634\u06A9\u0648\u06A9 \u0628\u0647 \u0637\u06CC\u0641 \u0627\u062A\u06CC\u0633\u0645', d:'\u062F\u0634\u0648\u0627\u0631\u06CC \u062F\u0631 \u062A\u0639\u0627\u0645\u0644 \u0648 \u0631\u0641\u062A\u0627\u0631'},
+  {v:'other', t:'\u0633\u0627\u06CC\u0631', d:'\u062F\u063A\u062F\u063A\u0647\u200C\u06CC \u062F\u06CC\u06AF\u0631\u06CC \u062F\u0627\u0631\u06CC\u062F'}
+];
+var TEACH_CATS = ['delayed','learning_disorder','intellectual','autism'];
+var TEACH_CAT_LABELS = {delayed:'\u062F\u06CC\u0631\u0622\u0645\u0648\u0632', learning_disorder:'\u0627\u062E\u062A\u0644\u0627\u0644 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC', intellectual:'\u0645\u0634\u06A9\u0648\u06A9 \u0628\u0647 \u06A9\u0645\u200C\u062A\u0648\u0627\u0646\u06CC', autism:'\u0645\u0634\u06A9\u0648\u06A9 \u0628\u0647 \u0627\u062A\u06CC\u0633\u0645'};
+var CAT_LABELS = {delayed:'\u062F\u06CC\u0631\u0622\u0645\u0648\u0632\u06CC', learning_disorder:'\u0627\u062E\u062A\u0644\u0627\u0644 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC', intellectual:'\u0645\u0634\u06A9\u0648\u06A9 \u0628\u0647 \u06A9\u0645\u200C\u062A\u0648\u0627\u0646\u06CC \u0630\u0647\u0646\u06CC', speech:'\u062A\u0623\u062E\u06CC\u0631 \u06AF\u0641\u062A\u0627\u0631 \u0648 \u0632\u0628\u0627\u0646', autism:'\u0645\u0634\u06A9\u0648\u06A9 \u0628\u0647 \u0637\u06CC\u0641 \u0627\u062A\u06CC\u0633\u0645', other:'\u0633\u0627\u06CC\u0631'};
+var AWARE = [
+  {t:'\u062F\u06CC\u0631\u0622\u0645\u0648\u0632 \u06A9\u06CC\u0647\u061F', b:'\u0628\u0686\u0647\u200C\u0627\u06CC \u06A9\u0647 \u0646\u0633\u0628\u062A \u0628\u0647 \u0647\u0645\u200C\u0633\u0646\u200C\u0648\u0633\u0627\u0644\u200C\u0647\u0627\u0634 \u06A9\u0646\u062F\u062A\u0631 \u06CC\u0627\u062F \u0645\u06CC\u200C\u06AF\u06CC\u0631\u0647 \u2014 \u0648\u0644\u06CC \u06CC\u0627\u062F \u0645\u06CC\u200C\u06AF\u06CC\u0631\u0647. \u0628\u0627 \u0622\u0645\u0648\u0632\u0634 \u0645\u0646\u0627\u0633\u0628 \u0648 \u0635\u0628\u0631\u060C \u0631\u0627\u0647 \u067E\u06CC\u0634\u0631\u0641\u062A\u0634 \u0628\u0627\u0632\u0647. \u0627\u06AF\u0631 \u062A\u0648\u06CC \u06A9\u0644\u0627\u0633\u062A\u0648\u0646 \u0686\u0646\u06CC\u0646 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\u06CC \u062F\u0627\u0631\u06CC\u062F\u060C \u0645\u0639\u0631\u0641\u06CC\u200C\u0634 \u0627\u0648\u0644\u06CC\u0646 \u0642\u062F\u0645 \u06A9\u0645\u06A9\u200C\u0647.'},
+  {t:'\u0627\u062E\u062A\u0644\u0627\u0644 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u0686\u06CC\u0647\u061F', b:'\u0628\u0686\u0647\u200C\u0627\u06CC \u06A9\u0647 \u0627\u0632 \u0646\u0638\u0631 \u0647\u0648\u0634\u06CC \u06A9\u0627\u0645\u0644\u0627\u064B \u0639\u0627\u062F\u06CC\u0647\u060C \u0648\u0644\u06CC \u062A\u0648\u06CC \u062E\u0648\u0627\u0646\u062F\u0646 (\u062F\u06CC\u0633\u0644\u06A9\u0633\u06CC)\u060C \u0646\u0648\u0634\u062A\u0646 (\u062F\u06CC\u0633\u200C\u06AF\u0631\u0627\u0641\u06CC) \u06CC\u0627 \u062D\u0633\u0627\u0628 (\u062F\u06CC\u0633\u200C\u06A9\u0627\u0644\u06A9\u0648\u0644\u06CC) \u0633\u062E\u062A\u06CC \u062F\u0627\u0631\u0647. \u062A\u0634\u062E\u06CC\u0635\u0634 \u06A9\u0627\u0631\u0650 \u0645\u0627\u0633\u062A\u061B \u06A9\u0627\u0631\u0650 \u0634\u0645\u0627 \u0641\u0642\u0637 \u0645\u0634\u0627\u0647\u062F\u0647 \u0648 \u0645\u0639\u0631\u0641\u06CC\u200C\u0633\u062A.'},
+  {t:'\u0646\u0634\u0648\u0646\u0647\u200C\u0647\u0627\u06CC \u0647\u0634\u062F\u0627\u0631 \u06A9\u0645\u200C\u062A\u0648\u0627\u0646\u06CC \u0630\u0647\u0646\u06CC', b:'\u062A\u0623\u062E\u06CC\u0631 \u062C\u062F\u06CC \u062F\u0631 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC\u200C\u0647\u0627\u06CC \u067E\u0627\u06CC\u0647\u060C \u062F\u0634\u0648\u0627\u0631\u06CC \u062F\u0631 \u06A9\u0627\u0631\u0647\u0627\u06CC \u0631\u0648\u0632\u0645\u0631\u0647\u060C \u0646\u06CC\u0627\u0632 \u0628\u0647 \u0622\u0645\u0648\u0632\u0634\u200C\u067E\u0630\u06CC\u0631\u06CC \u0648\u06CC\u0698\u0647. \u0627\u06CC\u0646 \u0628\u0686\u0647\u200C\u0647\u0627 \u0628\u0647 \u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u062A\u062E\u0635\u0635\u06CC \u0648 \u0645\u062F\u0627\u0631\u0633 \u0627\u0633\u062A\u062B\u0646\u0627\u06CC\u06CC \u0631\u0627\u0647\u0646\u0645\u0627\u06CC\u06CC \u0645\u06CC\u200C\u0634\u0646.'}
+];
+var state = {
+  step: 0, role: null, refName: '', refPhone: '',
+  school: '', schoolName: '', grade: '', klass: '',
+  childName: '', childBirth: '', concern: null, concernText: '',
+  priorEval: null, priorEvalNote: '',
+  rows: [], awareIdx: 0, meta: null, submitting: false
+};
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function normDigits(s){return String(s==null?'':s).replace(/[\u06F0-\u06F9]/g,function(d){return String('\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9'.indexOf(d));}).replace(/[\u0660-\u0669]/g,function(d){return String('\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669'.indexOf(d));});}
+function normPhone(s){var v = normDigits(s).replace(/[\\s\\-().]/g,'');if(v.indexOf('+98')===0){v='0'+v.slice(3);}else if(v.indexOf('98')===0&&v.length===12){v='0'+v.slice(2);}return v;}
+function validPhone(s){return /^09\\d{9}$/.test(normPhone(s));}
+function familyTotal(){return 11;}
+function teachTotal(){return 10;}
+function total(){return state.role==='teacher'?teachTotal():familyTotal();}
+function setBar(){var t=total();var pct=Math.round(Math.min(state.step,t-1)/(t-1)*100);bar.style.width=pct+'%';}
+function stepNo(){var t=total();return '\u06AF\u0627\u0645 '+(state.step+1)+' \u0627\u0632 '+t;}
+function esc2(v){return v?esc(v):'\u062B\u0628\u062A \u0646\u0634\u062F\u0647';}
+
+/* \u2500\u2500\u2500 \u0627\u0641\u06A9\u062A \u062A\u0627\u06CC\u067E \u062E\u0648\u0634\u200C\u0622\u0645\u062F (reduced-motion \u2192 \u0628\u06CC\u200C\u062F\u0631\u0646\u06AF) \u2500\u2500\u2500 */
+function typeInto(node, text, done){
+  if(REDUCED){node.textContent=text;done();return;}
+  var i=0;var caret=document.createElement('span');caret.className='caret';
+  node.textContent='';node.appendChild(caret);
+  var skip=function(){clearInterval(timer);node.textContent=text;node.appendChild(caret);caret.style.display='none';done();};
+  var timer=setInterval(function(){
+    i++;node.textContent=text.slice(0,i);node.appendChild(caret);
+    if(i>=text.length){clearInterval(timer);caret.style.display='none';done();}
+  },26);
+  app.addEventListener('click',skip,{once:true});
+}
+
+/* \u2500\u2500\u2500 \u0645\u062F\u0627\u0631\u0633 \u0647\u0645\u06A9\u0627\u0631 (\u0628\u062F\u0648\u0646 \u0644\u0627\u06AF\u06CC\u0646 \u2014 \u0641\u0642\u0637 \u0646\u0627\u0645 \u0645\u062F\u0631\u0633\u0647 \u0648 \u06A9\u0644\u0627\u0633\u200C\u0647\u0627) \u2500\u2500\u2500 */
+function loadMeta(cb){
+  if(state.meta){cb(state.meta);return;}
+  fetch('/public/partner-schools').then(function(r){return r.json();}).then(function(res){
+    state.meta=(res&&res.data)||{schools:[],classes:[]};cb(state.meta);
+  }).catch(function(){state.meta={schools:[],classes:[]};cb(state.meta);});
+}
+
+function btnRow(nextLabel, onOk, okId, backTo, disabled){
+  var back = backTo===null?'':('<button class="btn btn--ghost" data-act="back" data-to="'+backTo+'">\u0628\u0627\u0632\u06AF\u0634\u062A</button>');
+  return '<div class="btnrow">'+back+
+    '<button class="btn btn--primary" id="'+okId+'" '+(disabled?'disabled':'')+'>'+nextLabel+'</button></div>';
+}
+function fieldErr(id, show, msg){
+  var el=document.getElementById(id);if(!el)return;
+  el.className= show?'err-msg show':'err-msg';
+  if(msg)el.textContent=msg;
+}
+
+/* \u2500\u2500\u2500 \u0635\u0641\u062D\u0627\u062A \u2500\u2500\u2500 */
+function renderWelcome(){
+  setBar();
+  app.innerHTML='<div class="card"><div class="badge-free">\u0647\u0645\u0647\u200C\u06CC \u062E\u062F\u0645\u0627\u062A \u0645\u0631\u06A9\u0632 \u0631\u0627\u06CC\u06AF\u0627\u0646 \u0627\u0633\u062A</div>'+
+    '<div class="welcome-text" id="wt"></div>'+
+    '<div class="btnrow" id="wb" style="visibility:hidden">'+
+    '<button class="btn btn--primary" id="startBtn">\u0634\u0631\u0648\u0639</button></div></div>';
+  var text='\u0633\u0644\u0627\u0645! \u0628\u0647 \u0645\u0631\u06A9\u0632 \u062C\u0627\u0645\u0639 \u0633\u0646\u062C\u0634 \u0648 \u0627\u062E\u062A\u0644\u0627\u0644\u0627\u062A \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u062E\u0648\u0634 \u0627\u0648\u0645\u062F\u06CC\u062F.\\n\u0647\u0645\u0647\u200C\u06CC \u062E\u062F\u0645\u0627\u062A \u0645\u0627 \u0631\u0627\u06CC\u06AF\u0627\u0646\u0647. \u0642\u0631\u0627\u0631\u0647 \u062A\u0648\u06CC \u0686\u0646\u062F \u062F\u0642\u06CC\u0642\u0647 \u0627\u0637\u0644\u0627\u0639\u0627\u062A \u0644\u0627\u0632\u0645 \u0631\u0648 \u0628\u06AF\u06CC\u0631\u06CC\u0645 \u062A\u0627 \u0627\u0633\u0645 \u0641\u0631\u0632\u0646\u062F\u062A\u0648\u0646 \u06CC\u0627 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\u062A\u0648\u0646 \u0628\u0647 \u0644\u06CC\u0633\u062A \u0627\u0646\u062A\u0638\u0627\u0631 \u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u0627\u0636\u0627\u0641\u0647 \u0628\u0634\u0647.\\n\u0647\u0631 \u0648\u0642\u062A \u0622\u0645\u0627\u062F\u0647 \u0628\u0648\u062F\u06CC\u062F\u060C \u062F\u06A9\u0645\u0647\u200C\u06CC \xAB\u0634\u0631\u0648\u0639\xBB \u0631\u0648 \u0628\u0632\u0646\u06CC\u062F.';
+  typeInto(document.getElementById('wt'), text, function(){
+    document.getElementById('wb').style.visibility='visible';
+  });
+  document.getElementById('startBtn').addEventListener('click', function(){state.step=1;render();});
+}
+
+function renderRole(){
+  setBar();
+  app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
+    '<h2>\u0634\u0645\u0627 \u06A9\u062F\u0627\u0645\u200C\u06CC\u06A9 \u0647\u0633\u062A\u06CC\u062F\u061F</h2>'+
+    '<p class="lead">\u0686\u0646\u062F \u0633\u0624\u0627\u0644 \u0628\u0639\u062F\u06CC \u0628\u0631 \u0627\u0633\u0627\u0633 \u0647\u0645\u06CC\u0646 \u0627\u0646\u062A\u062E\u0627\u0628 \u0641\u0631\u0642 \u0645\u06CC\u200C\u06A9\u0646\u0647.</p>'+
+    '<button class="choice" id="rFamily"><span class="no">\u06F1</span><b>\u067E\u062F\u0631 \u06CC\u0627 \u0645\u0627\u062F\u0631 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632</b><span>\u0645\u06CC\u200C\u062E\u0648\u0627\u0645 \u0641\u0631\u0632\u0646\u062F\u0645 \u0631\u0648 \u0628\u0647 \u0645\u0631\u06A9\u0632 \u0645\u0639\u0631\u0641\u06CC \u06A9\u0646\u0645</span></button>'+
+    '<button class="choice" id="rTeacher"><span class="no">\u06F2</span><b>\u0645\u0639\u0644\u0645 \u0647\u0645\u06A9\u0627\u0631 \u0645\u0627</b><span>\u0645\u06CC\u200C\u062E\u0648\u0627\u0645 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\u0647\u0627\u06CC \u06A9\u0644\u0627\u0633\u0645 \u0631\u0648 \u0645\u0639\u0631\u0641\u06CC \u06A9\u0646\u0645</span></button>'+
+    '</div>';
+  var pick=function(role){
+    state.role=role;state.step=2;render();
+  };
+  document.getElementById('rFamily').addEventListener('click',function(){pick('family');});
+  document.getElementById('rTeacher').addEventListener('click',function(){pick('teacher');});
+}
+
+function renderContact(){
+  setBar();
+  app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
+    '<h2>\u0627\u0633\u0645 \u0648 \u0631\u0627\u0647 \u062A\u0645\u0627\u0633</h2><p class="lead">\u0642\u0628\u0644 \u0627\u0632 \u0647\u0631 \u0686\u06CC\u0632\u060C \u0627\u0633\u0645 \u0648 \u0634\u0645\u0627\u0631\u0647\u200C\u0627\u06CC \u06A9\u0647 \u0628\u062A\u0648\u0646\u06CC\u0645 \u0628\u0627\u0647\u0627\u062A\u0648\u0646 \u062A\u0645\u0627\u0633 \u0628\u06AF\u06CC\u0631\u06CC\u0645 \u0631\u0648 \u0628\u06AF\u06CC\u062F.</p>'+
+    '<div class="field"><label class="f" for="rn">\u0646\u0627\u0645 \u0648 \u0646\u0627\u0645 \u062E\u0627\u0646\u0648\u0627\u062F\u06AF\u06CC \u0634\u0645\u0627</label>'+
+    '<input class="i" id="rn" autocomplete="name">'+
+    '<div class="err-msg" id="rnErr">\u0646\u0627\u0645 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A</div></div>'+
+    '<div class="field"><label class="f" for="rp">\u0634\u0645\u0627\u0631\u0647 \u0645\u0648\u0628\u0627\u06CC\u0644</label>'+
+    '<input class="i" id="rp" inputmode="tel" dir="ltr" placeholder="09xxxxxxxxx">'+
+    '<div class="err-msg" id="rpErr">\u0634\u0645\u0627\u0631\u0647 \u0628\u0627\u06CC\u062F \u06F1\u06F1 \u0631\u0642\u0645 \u0648 \u0628\u0627 \u06F0\u06F9 \u0634\u0631\u0648\u0639 \u0634\u0648\u062F</div></div>'+
+    btnRow('\u0627\u062F\u0627\u0645\u0647','',null,1)+
+    '</div>';
+  document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=1;render();});
+  var rn=document.getElementById('rn');
+  var rp=document.getElementById('rp');
+  rn.value=state.refName;
+  rp.value=state.refPhone;
+  rn.addEventListener('input',function(e){state.refName=e.target.value;});
+  rp.addEventListener('input',function(e){state.refPhone=e.target.value;});
+  var nx=app.querySelector('.btnrow .btn--primary');
+  nx.addEventListener('click',function(){
+    var ok1=state.refName.trim().length>=2;
+    var ok2=validPhone(state.refPhone);
+    fieldErr('rnErr',!ok1);
+    fieldErr('rpErr',!ok2);
+    if(ok1&&ok2){state.refPhone=normPhone(state.refPhone);state.step=3;render();}
+  });
+}
+
+function renderSchool(){
+  setBar();
+  app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
+    '<h2>'+(state.role==='teacher'?'\u0645\u062F\u0631\u0633\u0647\u200C\u06CC \u062E\u0648\u062F\u062A\u0627\u0646':'\u06A9\u0648\u062F\u06A9 \u0634\u0645\u0627 \u062F\u0631 \u06A9\u062F\u0648\u0645 \u0645\u062F\u0631\u0633\u0647\u200C\u06CC \u0647\u0645\u06A9\u0627\u0631 \u0645\u0627 \u062F\u0631\u0633 \u0645\u06CC\u200C\u062E\u0648\u0646\u0647\u061F')+'</h2>'+
+    '<p class="lead">\u0641\u0642\u0637 \u0645\u062F\u0627\u0631\u0633 \u0647\u0645\u06A9\u0627\u0631 \u0645\u0627 \u062F\u0631 \u0641\u0647\u0631\u0633\u062A \u0647\u0633\u062A\u0646 \u2014 \u0627\u06AF\u0631 \u0646\u0628\u0648\u062F\u060C \u0627\u0633\u0645\u0634 \u0631\u0648 \u062F\u0633\u062A\u06CC \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F.</p>'+
+    '<div class="field"><label class="f" for="sc">\u0645\u062F\u0631\u0633\u0647</label>'+
+    '<select class="i" id="sc"><option value="">\u062F\u0631 \u062D\u0627\u0644 \u0628\u0627\u0631\u06AF\u0630\u0627\u0631\u06CC\u2026</option></select>'+
+    '<input class="i" id="scT" style="display:none;margin-top:8px" placeholder="\u0627\u0633\u0645 \u0645\u062F\u0631\u0633\u0647 \u0631\u0627 \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F" value="'+esc(state.schoolName)+'">'+
+    '</div>'+
+    '<div class="field"><label class="f" for="gr">\u067E\u0627\u06CC\u0647</label><select class="i" id="gr">'+
+    '<option value="">\u0627\u0646\u062A\u062E\u0627\u0628 \u06A9\u0646\u06CC\u062F</option>'+
+    GRADES.map(function(g){return '<option value="'+g+'"'+(state.grade===g?' selected':'')+'>'+g+'</option>';}).join('')+
+    '</select></div>'+
+    '<div class="field"><label class="f" for="kl">\u06A9\u0644\u0627\u0633 (\u0627\u062E\u062A\u06CC\u0627\u0631\u06CC)</label><select class="i" id="kl">'+
+    '<option value="">\u0627\u0646\u062A\u062E\u0627\u0628 \u06A9\u0646\u06CC\u062F</option></select></div>'+
+    btnRow('\u0627\u062F\u0627\u0645\u0647','',null,2)+
+    '</div>';
+  document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=2;render();});
+  loadMeta(function(meta){
+    var sc=document.getElementById('sc');var scT=document.getElementById('scT');
+    if(!sc)return;
+    if(!meta.schools.length){sc.style.display='none';scT.style.display='block';state.school='';}
+    else{
+      sc.innerHTML='<option value="">\u0627\u0646\u062A\u062E\u0627\u0628 \u06A9\u0646\u06CC\u062F</option>'+meta.schools.map(function(s){
+        return '<option value="'+esc(s.id)+'"'+(state.school===s.id?' selected':'')+'>'+esc(s.name)+'</option>';
+      }).join('');
+      sc.addEventListener('change',function(e){
+        state.school=e.target.value;
+        var sel=meta.schools.filter(function(s){return s.id===state.school;})[0];
+        state.schoolName=sel?sel.name:scT.value.trim();
+        fillClasses(meta);
+      });
+      var cur=meta.schools.filter(function(s){return s.id===state.school;})[0];
+      if(cur){state.schoolName=cur.name;fillClasses(meta);}
+    }
+    scT.addEventListener('input',function(e){state.schoolName=e.target.value.trim();state.school='';});
+    function fillClasses(m){
+      var kl=document.getElementById('kl');
+      var cs=m.classes.filter(function(c){return c.schoolId===state.school;});
+      kl.innerHTML='<option value="">\u0627\u0646\u062A\u062E\u0627\u0628 \u06A9\u0646\u06CC\u062F</option>'+cs.map(function(c){
+        return '<option value="'+esc(c.name)+'"'+(state.klass===c.name?' selected':'')+'>'+esc(c.name)+'</option>';
+      }).join('');
+    }
+  });
+  app.querySelector('.btnrow .btn--primary').addEventListener('click',function(){
+    if(!state.schoolName && state.school){var m=state.meta||{schools:[]};var sel=m.schools.filter(function(s){return s.id===state.school;})[0];state.schoolName=sel?sel.name:'';}
+    if(state.role==='teacher' && !state.schoolName){/* \u0645\u0639\u0644\u0645 \u0628\u062F\u0648\u0646 \u0645\u062F\u0631\u0633\u0647 \u062F\u0631 \u0641\u0647\u0631\u0633\u062A \u2014 \u0627\u062C\u0627\u0632\u0647 \u0628\u0627 \u062B\u0628\u062A \u062F\u0633\u062A\u06CC */}
+    state.step=4;render();
+  });
+  var nx=app.querySelector('.btnrow .btn--primary');nx.textContent='\u0627\u062F\u0627\u0645\u0647';
+}
+
+function renderChildName(){
+  setBar();
+  app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
+    '<h2>\u0627\u0633\u0645 \u0648 \u0641\u0627\u0645\u06CC\u0644 \u06A9\u0648\u062F\u06A9 \u0686\u06CC\u0647\u061F</h2>'+
+    '<div class="field"><label class="f" for="cn">\u0646\u0627\u0645 \u0648 \u0646\u0627\u0645 \u062E\u0627\u0646\u0648\u0627\u062F\u06AF\u06CC \u06A9\u0648\u062F\u06A9</label>'+
+    '<input class="i" id="cn" value="'+esc(state.childName)+'">'+
+    '<div class="err-msg" id="cnErr">\u0646\u0627\u0645 \u06A9\u0648\u062F\u06A9 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A</div></div>'+
+    btnRow('\u0627\u062F\u0627\u0645\u0647','',null,3)+
+    '</div>';
+  document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=3;render();});
+  var nx=app.querySelector('.btnrow .btn--primary');nx.textContent='\u0627\u062F\u0627\u0645\u0647';
+  nx.addEventListener('click',function(){
+    var ok=state.childName.trim().length>=2;fieldErr('cnErr',!ok);
+    if(ok){state.childName=state.childName.trim();state.step=5;render();}
+  });
+}
+
+function renderChildBirth(){
+  setBar();
+  app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
+    '<h2>\u062A\u0627\u0631\u06CC\u062E \u062A\u0648\u0644\u062F \u06A9\u0648\u062F\u06A9</h2><p class="lead">\u0627\u06AF\u0647 \u0628\u0644\u062F\u06CC\u062F \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F \u2014 \u0627\u06AF\u0647 \u0646\u0647\u060C \u062E\u0627\u0644\u06CC \u0628\u0630\u0627\u0631\u06CC\u062F \u0648 \u0628\u0630\u0627\u0631\u06CC\u062F \u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u062E\u0648\u062F\u0634 \u0628\u0641\u0647\u0645\u0647.</p>'+
+    '<div class="field"><label class="f" for="cb">\u062A\u0627\u0631\u06CC\u062E \u062A\u0648\u0644\u062F (\u0634\u0645\u0633\u06CC \u2014 \u0645\u062B\u0644 \u06F1\u06F3\u06F9\u06F8/\u06F0\u06F5/\u06F1\u06F2)</label>'+
+    '<input class="i" id="cb" inputmode="numeric" value="'+esc(state.childBirth)+'">'+
+    '<div class="hint">\u0627\u062E\u062A\u06CC\u0627\u0631\u06CC \u0627\u0633\u062A</div></div>'+
+    btnRow('\u0627\u062F\u0627\u0645\u0647','',null,4)+
+    '</div>';
+  document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=4;render();});
+  var nx=app.querySelector('.btnrow .btn--primary');nx.textContent='\u0627\u062F\u0627\u0645\u0647';
+  nx.addEventListener('click',function(){
+    state.childBirth=document.getElementById('cb').value.trim();
+    state.step=6;render();
+  });
+}
+
+function renderConcern(){
+  setBar();
+  var cards=CONCERNS.map(function(c,i){
+    return '<button class="choice'+(state.concern===c.v?' sel':'')+'" data-c="'+c.v+'">'+
+      '<span class="no">'+(i+1)+'</span><b>'+c.t+'</b><span>'+c.d+'</span></button>';
+  }).join('');
+  app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
+    '<h2>\u062F\u063A\u062F\u063A\u0647\u200C\u06CC \u0627\u0635\u0644\u06CC \u0634\u0645\u0627 \u0686\u06CC\u0647\u061F</h2><p class="lead">\u062F\u0642\u06CC\u0642 \u0628\u0648\u062F\u0646 \u0644\u0627\u0632\u0645 \u0646\u06CC\u0633\u062A \u2014 \u0646\u06AF\u0631\u0627\u0646\u06CC\u200C\u062A\u0648\u0646 \u0631\u0648 \u0628\u06AF\u06CC\u062F\u060C \u0628\u0642\u06CC\u0647\u200C\u0634 \u06A9\u0627\u0631 \u0645\u0627\u0633\u062A.</p>'+
+    cards+
+    '<div class="err-msg" id="ccErr">\u06CC\u06A9\u06CC \u0627\u0632 \u06AF\u0632\u06CC\u0646\u0647\u200C\u0647\u0627 \u0631\u0627 \u0627\u0646\u062A\u062E\u0627\u0628 \u06A9\u0646\u06CC\u062F</div>'+
+    btnRow('\u0627\u062F\u0627\u0645\u0647','',null,5)+
+    '</div>';
+  document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=5;render();});
+  app.querySelectorAll('[data-c]').forEach(function(b){
+    b.addEventListener('click',function(){
+      state.concern=b.getAttribute('data-c');
+      app.querySelectorAll('[data-c]').forEach(function(x){x.classList.remove('sel');});
+      b.classList.add('sel');
+    });
+  });
+  var nx=app.querySelector('.btnrow .btn--primary');nx.textContent='\u0627\u062F\u0627\u0645\u0647';
+  nx.addEventListener('click',function(){
+    if(!state.concern){fieldErr('ccErr',true);return;}
+    state.step=7;render();
+  });
+}
+
+function renderPrior(){
+  setBar();
+  app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
+    '<h2>\u0642\u0628\u0644\u0627\u064B \u06A9\u062C\u0627 \u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u06CC\u0627 \u062A\u0634\u062E\u06CC\u0635 \u062F\u0627\u0634\u062A\u0647\u061F</h2>'+
+    '<div class="pills" id="pe">'+
+    '<button class="pill'+(state.priorEval===true?' sel':'')+'" data-v="1">\u0628\u0644\u0647</button>'+
+    '<button class="pill'+(state.priorEval===false?' sel':'')+'" data-v="0">\u062E\u06CC\u0631</button>'+
+    '</div>'+
+    '<div class="field" id="pen" style="display:'+(state.priorEval===true?'block':'none')+';margin-top:12px">'+
+    '<label class="f" for="penote">\u06A9\u062C\u0627 \u0648 \u0686\u0647 \u0646\u062A\u06CC\u062C\u0647\u200C\u0627\u06CC\u061F (\u0627\u062E\u062A\u06CC\u0627\u0631\u06CC)</label>'+
+    '<input class="i" id="penote" value="'+esc(state.priorEvalNote)+'"></div>'+
+    btnRow('\u0627\u062F\u0627\u0645\u0647','',null,6)+
+    '</div>';
+  document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=6;render();});
+  app.querySelectorAll('#pe .pill').forEach(function(p){
+    p.addEventListener('click',function(){
+      state.priorEval=p.getAttribute('data-v')==='1';
+      app.querySelectorAll('#pe .pill').forEach(function(x){x.classList.remove('sel');});
+      p.classList.add('sel');
+      document.getElementById('pen').style.display=state.priorEval===true?'block':'none';
+    });
+  });
+  var nx=app.querySelector('.btnrow .btn--primary');nx.textContent='\u0627\u062F\u0627\u0645\u0647';
+  nx.addEventListener('click',function(){
+    state.priorEvalNote=document.getElementById('penote').value.trim();
+    state.step=8;render();
+  });
+}
+
+function renderNotes(){
+  setBar();
+  app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
+    '<h2>\u0646\u06A9\u062A\u0647\u200C\u0627\u06CC \u0647\u0633\u062A \u06A9\u0647 \u0628\u0647 \u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u06A9\u0645\u06A9 \u06A9\u0646\u062F\u061F</h2><p class="lead">\u0627\u062E\u062A\u06CC\u0627\u0631\u06CC \u0627\u0633\u062A \u2014 \u0647\u0631 \u0686\u06CC\u0632\u06CC \u06A9\u0647 \u0641\u06A9\u0631 \u0645\u06CC\u200C\u06A9\u0646\u06CC\u062F \u0628\u0627\u06CC\u062F \u0628\u062F\u0648\u0646\u06CC\u0645.</p>'+
+    '<div class="field"><textarea class="i" id="ct">'+esc(state.concernText)+'</textarea></div>'+
+    btnRow('\u0627\u062F\u0627\u0645\u0647 \u0628\u0647 \u0645\u0631\u0648\u0631 \u0646\u0647\u0627\u06CC\u06CC','',null,7)+
+    '</div>';
+  document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=7;render();});
+  var nx=app.querySelector('.btnrow .btn--primary');nx.textContent='\u0627\u062F\u0627\u0645\u0647 \u0628\u0647 \u0645\u0631\u0648\u0631 \u0646\u0647\u0627\u06CC\u06CC';
+  nx.addEventListener('click',function(){
+    state.concernText=document.getElementById('ct').value.trim();
+    state.step=9;render();
+  });
+}
+
+function familyChildren(){
+  return [{
+    first_name: state.childName,
+    birth_date_text: state.childBirth || null,
+    school_text: state.schoolName || null,
+    grade_text: state.grade || null,
+    class_text: state.klass || null,
+    concern_category: state.concern,
+    concern_tags: [],
+    concern_text: state.concernText || null,
+    prior_eval: state.priorEval===true?true:state.priorEval===false?false:null,
+    prior_eval_note: state.priorEvalNote || null
+  }];
+}
+
+/* \u2500\u2500\u2500 \u0645\u0648\u062F\u0627\u0644 \u0645\u0631\u0648\u0631 \u0646\u0647\u0627\u06CC\u06CC (Typeform-style) \u2014 \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u2500\u2500\u2500 */
+function renderReview(){
+  setBar();
+  var rows=[
+    {k:'\u0646\u0627\u0645 \u06A9\u0648\u062F\u06A9', v:esc(state.childName), s:4},
+    {k:'\u062A\u0627\u0631\u06CC\u062E \u062A\u0648\u0644\u062F', v:esc2(state.childBirth), s:5},
+    {k:'\u0645\u062F\u0631\u0633\u0647', v:esc2(state.schoolName), s:3},
+    {k:'\u067E\u0627\u06CC\u0647', v:esc2(state.grade), s:3},
+    {k:'\u06A9\u0644\u0627\u0633', v:esc2(state.klass), s:3},
+    {k:'\u062F\u063A\u062F\u063A\u0647 \u0627\u0635\u0644\u06CC', v:CAT_LABELS[state.concern]||'', s:6},
+    {k:'\u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u0642\u0628\u0644\u06CC', v:state.priorEval===true?'\u0628\u0644\u0647'+(state.priorEvalNote?' \u2014 '+esc(state.priorEvalNote):''):'\u062E\u06CC\u0631', s:7},
+    {k:'\u0646\u06A9\u0627\u062A', v:esc2(state.concernText), s:8},
+    {k:'\u0645\u0639\u0631\u0641', v:esc(state.refName)+' \u2014 '+esc(state.refPhone), s:2}
+  ].map(function(r){
+    return '<div class="review__row"><span class="k">'+r.k+'</span><span class="v">'+r.v+'</span>'+
+      '<button class="e" data-s="'+r.s+'">\u0648\u06CC\u0631\u0627\u06CC\u0634</button></div>';
+  }).join('');
+  app.innerHTML='<div class="card">'+
+    '<h2>\u0627\u06CC\u0646 \u0627\u0637\u0644\u0627\u0639\u0627\u062A \u0628\u0647 \u0644\u06CC\u0633\u062A \u0627\u0646\u062A\u0638\u0627\u0631 \u0627\u0636\u0627\u0641\u0647 \u0645\u06CC\u0634\u0647</h2>'+
+    '<p class="lead">\u0686\u06A9 \u06A9\u0646\u06CC\u062F\u061B \u0647\u0631 \u0633\u0637\u0631 \u0631\u0648 \u0645\u06CC\u200C\u062A\u0648\u0646\u06CC\u062F \u0647\u0645\u06CC\u0646 \u062D\u0627\u0644\u0627 \u0648\u06CC\u0631\u0627\u06CC\u0634 \u06A9\u0646\u06CC\u062F.</p>'+
+    '<div class="review">'+rows+'</div>'+
+    '<div class="err-msg" id="subErr"></div>'+
+    '<div class="btnrow"><button class="btn btn--ghost" data-act="back">\u0628\u0627\u0632\u06AF\u0634\u062A \u0648 \u0648\u06CC\u0631\u0627\u06CC\u0634</button>'+
+    '<button class="btn btn--primary" id="confirmBtn">\u062A\u0623\u06CC\u06CC\u062F \u0648 \u0627\u0641\u0632\u0648\u062F\u0646 \u0628\u0647 \u0644\u06CC\u0633\u062A \u0627\u0646\u062A\u0638\u0627\u0631</button></div></div>';
+  document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=8;render();});
+  app.querySelectorAll('.e').forEach(function(b){
+    b.addEventListener('click',function(){state.step=Number(b.getAttribute('data-s'));render();});
+  });
+  document.getElementById('confirmBtn').addEventListener('click',function(){
+    submit({role:'family', children:familyChildren()}, this);
+  });
+}
+
+function submit(payload, btnEl){
+  if(state.submitting)return;
+  state.submitting=true;btnEl.disabled=true;btnEl.textContent='\u062F\u0631 \u062D\u0627\u0644 \u062B\u0628\u062A\u2026';
+  fetch('/public/referrals',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
+    .then(function(r){return r.json().then(function(j){return {status:r.status, body:j};});})
+    .then(function(res){
+      state.submitting=false;
+      if(res.status===201){state.step=total()-1;render();return;}
+      var msg=(res.body&&res.body.message)||('\u062B\u0628\u062A \u0646\u0634\u062F \u2014 \u06A9\u062F '+res.status);
+      var el=document.getElementById('subErr');
+      if(el){el.className='err-msg show';el.textContent=msg;}
+      else{alert(msg);}
+      btnEl.disabled=false;btnEl.textContent=state.role==='teacher'?'\u062B\u0628\u062A \u0647\u0645\u0647 \u062F\u0631 \u0644\u06CC\u0633\u062A \u0627\u0646\u062A\u0638\u0627\u0631':'\u062A\u0623\u06CC\u06CC\u062F \u0648 \u0627\u0641\u0632\u0648\u062F\u0646 \u0628\u0647 \u0644\u06CC\u0633\u062A \u0627\u0646\u062A\u0638\u0627\u0631';
+    })
+    .catch(function(){
+      state.submitting=false;btnEl.disabled=false;
+      var el=document.getElementById('subErr');
+      if(el){el.className='err-msg show';el.textContent='\u0627\u0631\u062A\u0628\u0627\u0637 \u0628\u0631\u0642\u0631\u0627\u0631 \u0646\u0634\u062F \u2014 \u0627\u06CC\u0646\u062A\u0631\u0646\u062A \u0631\u0627 \u0686\u06A9 \u06A9\u0646\u06CC\u062F \u0648 \u062F\u0648\u0628\u0627\u0631\u0647 \u0628\u0632\u0646\u06CC\u062F';}
+      btnEl.textContent=state.role==='teacher'?'\u062B\u0628\u062A \u0647\u0645\u0647 \u062F\u0631 \u0644\u06CC\u0633\u062A \u0627\u0646\u062A\u0638\u0627\u0631':'\u062A\u0623\u06CC\u06CC\u062F \u0648 \u0627\u0641\u0632\u0648\u062F\u0646 \u0628\u0647 \u0644\u06CC\u0633\u062A \u0627\u0646\u062A\u0638\u0627\u0631';
+    });
+}
+
+/* \u2500\u2500\u2500 \u0633\u0647 \u0635\u0641\u062D\u0647 \u0622\u06AF\u0627\u0647\u06CC \u0645\u0639\u0644\u0645 \u2500\u2500\u2500 */
+function renderAware(){
+  setBar();
+  var a=AWARE[state.awareIdx];
+  app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
+    '<div class="badge-free">\u0635\u0641\u062D\u0647 \u0622\u06AF\u0627\u0647\u06CC '+ (state.awareIdx+1) +' \u0627\u0632 '+AWARE.length+'</div>'+
+    '<h2>'+a.t+'</h2><p class="aware">'+a.b+'</p>'+
+    '<div class="note">\u062A\u0648\u062C\u0647: \u0634\u0645\u0627 \u062A\u0634\u062E\u06CC\u0635 \u0646\u0645\u06CC\u200C\u062F\u06CC\u062F\u060C \u0641\u0642\u0637 \u0645\u0639\u0631\u0641\u06CC \u0645\u06CC\u200C\u06A9\u0646\u06CC\u062F\u061B \u0628\u0642\u06CC\u0647\u200C\u0634 \u06A9\u0627\u0631 \u0645\u0627\u0633\u062A.</div>'+
+    btnRow(state.awareIdx===AWARE.length-1?'\u0631\u0641\u062A\u0646 \u0628\u0647 \u062B\u0628\u062A \u0627\u0631\u062C\u0627\u0639\u200C\u0647\u0627':'\u0627\u062F\u0627\u0645\u0647','',null,state.awareIdx===0?3:state.awareIdx+3)+
+    '</div>';
+  document.querySelector('[data-act="back"]').addEventListener('click',function(){
+    if(state.awareIdx===0){state.step=3;}else{state.awareIdx--;}
+    render();
+  });
+  var nx=app.querySelector('.btnrow .btn--primary');
+  nx.textContent=state.awareIdx===AWARE.length-1?'\u0631\u0641\u062A\u0646 \u0628\u0647 \u062B\u0628\u062A \u0627\u0631\u062C\u0627\u0639\u200C\u0647\u0627':'\u0627\u062F\u0627\u0645\u0647';
+  nx.addEventListener('click',function(){
+    if(state.awareIdx<AWARE.length-1){state.awareIdx++;state.step=4+state.awareIdx;render();}
+    else{state.step=7;render();}
+  });
+}
+
+/* \u2500\u2500\u2500 \u062B\u0628\u062A \u062F\u0633\u062A\u0647\u200C\u0627\u06CC \u0645\u0639\u0644\u0645 \u2500\u2500\u2500 */
+function rowCardHtml(r, i){
+  var cats=TEACH_CATS.map(function(c){
+    return '<button class="pill'+(r.cat===c?' sel':'')+'" data-i="'+i+'" data-cat="'+c+'">'+TEACH_CAT_LABELS[c]+'</button>';
+  }).join('');
+  return '<div class="rowcard" data-i="'+i+'">'+
+    '<button class="rm" data-rm="'+i+'">\u062D\u0630\u0641</button>'+
+    '<div class="pills" style="margin-bottom:10px">'+cats+'</div>'+
+    '<div class="field"><label class="f">\u0646\u0627\u0645 \u0648 \u0646\u0627\u0645 \u062E\u0627\u0646\u0648\u0627\u062F\u06AF\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632</label>'+
+    '<input class="i rn" value="'+esc(r.name)+'"></div>'+
+    '<div class="field"><label class="f">\u0634\u0645\u0627\u0631\u0647 \u0645\u0648\u0628\u0627\u06CC\u0644 \u0648\u0627\u0644\u062F</label>'+
+    '<input class="i rp" inputmode="tel" dir="ltr" placeholder="09xxxxxxxxx" value="'+esc(r.phone)+'">'+
+    '<div class="err-msg">\u0634\u0645\u0627\u0631\u0647 \u0628\u0627\u06CC\u062F \u06F1\u06F1 \u0631\u0642\u0645 \u0648 \u0628\u0627 \u06F0\u06F9 \u0634\u0631\u0648\u0639 \u0634\u0648\u062F</div></div></div>';
+}
+
+function renderBatch(){
+  setBar();
+  if(state.rows.length===0)state.rows=[{cat:null,name:'',phone:''}];
+  app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
+    '<h2>\u062B\u0628\u062A \u0627\u0631\u062C\u0627\u0639\u200C\u0647\u0627\u06CC \u06A9\u0644\u0627\u0633 \u0634\u0645\u0627</h2>'+
+    '<p class="lead">\u0628\u0631\u0627\u06CC \u0647\u0631 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u062F\u0633\u062A\u0647 \u0631\u0648 \u0627\u0646\u062A\u062E\u0627\u0628 \u06A9\u0646\u06CC\u062F\u060C \u0627\u0633\u0645\u0634 \u0648 \u0634\u0645\u0627\u0631\u0647\u200C\u06CC \u0648\u0627\u0644\u062F\u0634 \u0631\u0648 \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F.</p>'+
+    '<div id="rows">'+state.rows.map(rowCardHtml).join('')+'</div>'+
+    '<button class="btn btn--ghost btn--sm" id="addRow">+ \u0627\u0641\u0632\u0648\u062F\u0646 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u062F\u06CC\u06AF\u0631</button>'+
+    '<div class="err-msg" id="bErr" style="margin-top:10px"></div>'+
+    btnRow('\u0627\u062F\u0627\u0645\u0647 \u0628\u0647 \u0645\u0631\u0648\u0631 \u0646\u0647\u0627\u06CC\u06CC','',null,6)+
+    '</div>';
+  document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=6;state.awareIdx=AWARE.length-1;render();});
+  bindBatch();
+  document.getElementById('addRow').addEventListener('click',function(){
+    state.rows.push({cat:null,name:'',phone:''});
+    document.getElementById('rows').insertAdjacentHTML('beforeend',rowCardHtml({cat:null,name:'',phone:''},state.rows.length-1));
+    bindBatch();
+  });
+  var nx=app.querySelector('.btnrow .btn--primary');nx.textContent='\u0627\u062F\u0627\u0645\u0647 \u0628\u0647 \u0645\u0631\u0648\u0631 \u0646\u0647\u0627\u06CC\u06CC';
+  nx.addEventListener('click',function(){
+    var inputs=document.querySelectorAll('#rows .rowcard');
+    var ok=true;
+    inputs.forEach(function(card,i){
+      var r=state.rows[i];if(!r)return;
+      r.name=card.querySelector('.rn').value.trim();
+      r.phone=normPhone(card.querySelector('.rp').value.trim());
+      var em=card.querySelector('.err-msg');
+      if(!r.name||r.name.length<2||!validPhone(r.phone)){ok=false;if(em)em.className='err-msg show';}
+      else if(em)em.className='err-msg';
+    });
+    var be=document.getElementById('bErr');
+    if(!ok){be.className='err-msg show';be.textContent='\u0646\u0627\u0645 \u0648 \u0634\u0645\u0627\u0631\u0647 \u0645\u0648\u0628\u0627\u06CC\u0644 \u0648\u0627\u0644\u062F \u0647\u0631 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u0631\u0627 \u06A9\u0627\u0645\u0644 \u0648 \u062F\u0631\u0633\u062A \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F';return;}
+    be.className='err-msg';
+    state.step=8;render();
+  });
+}
+
+function bindBatch(){
+  app.querySelectorAll('#rows .rowcard').forEach(function(card){
+    var i=Number(card.getAttribute('data-i'));
+    var r=state.rows[i];if(!r)return;
+    card.querySelectorAll('.pill').forEach(function(p){
+      p.addEventListener('click',function(){
+        r.cat=p.getAttribute('data-cat');
+        card.querySelectorAll('.pill').forEach(function(x){x.classList.remove('sel');});
+        p.classList.add('sel');
+      });
+    });
+    card.querySelector('.rn').addEventListener('input',function(e){r.name=e.target.value;});
+    card.querySelector('.rp').addEventListener('input',function(e){r.phone=e.target.value;});
+    var rm=card.querySelector('.rm');
+    if(rm)rm.addEventListener('click',function(){
+      state.rows.splice(i,1);render();
+    });
+  });
+}
+
+/* \u2500\u2500\u2500 \u0645\u0648\u062F\u0627\u0644 \u0645\u0631\u0648\u0631 \u0645\u0639\u0644\u0645 \u2500\u2500\u2500 */
+function renderTeachReview(){
+  setBar();
+  var rows=state.rows.map(function(r,i){
+    return '<div class="review__row"><span class="k">'+(i+1)+'. '+TEACH_CAT_LABELS[r.cat]+'</span>'+
+      '<span class="v">'+esc(r.name)+' \u2014 '+esc(r.phone)+'</span></div>';
+  }).join('');
+  app.innerHTML='<div class="card"><h2>\u0647\u0645\u0647 \u0686\u06CC\u0632 \u0622\u0645\u0627\u062F\u0647 \u062B\u0628\u062A \u0627\u0633\u062A</h2>'+
+    '<p class="lead">'+fa(state.rows.length)+' \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u0628\u0647 \u0644\u06CC\u0633\u062A \u0627\u0646\u062A\u0638\u0627\u0631 \u0627\u0636\u0627\u0641\u0647 \u0645\u06CC\u0634\u0647. \u0686\u06A9 \u06A9\u0646\u06CC\u062F:</p>'+
+    '<div class="review">'+rows+'</div>'+
+    '<div class="err-msg" id="subErr"></div>'+
+    '<div class="btnrow"><button class="btn btn--ghost" data-act="back">\u0628\u0627\u0632\u06AF\u0634\u062A \u0648 \u0648\u06CC\u0631\u0627\u06CC\u0634</button>'+
+    '<button class="btn btn--primary" id="confirmBtn">\u062B\u0628\u062A \u0647\u0645\u0647 \u062F\u0631 \u0644\u06CC\u0633\u062A \u0627\u0646\u062A\u0638\u0627\u0631</button></div></div>';
+  document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=7;render();});
+  document.getElementById('confirmBtn').addEventListener('click',function(){
+    var payload={
+      role:'teacher',
+      referrer_name:state.refName, referrer_phone:state.refPhone,
+      school_text:state.schoolName||null, grade_text:state.grade||null, class_text:state.klass||null,
+      token:TOKEN||undefined,
+      children:state.rows.map(function(r){
+        return {first_name:r.name, guardian_phone:r.phone, concern_category:r.cat, concern_tags:[], concern_text:null};
+      })
+    };
+    submit(payload, this);
+  });
+}
+
+function fa(n){var d='\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9';return String(n).replace(/\\d/g,function(x){return d[Number(x)];});}
+
+function renderDone(){
+  bar.style.width='100%';
+  var fam=state.role!=='teacher';
+  app.innerHTML='<div class="card done"><div class="big">'+(fam?'\u{1F389}':'\u{1F64F}')+'</div>'+
+    '<h2>'+(fam?'\u062E\u0648\u0634\u200C\u0622\u0645\u062F! \u0627\u0633\u0645\u062A\u0648\u0646 \u062A\u0648\u06CC \u0644\u06CC\u0633\u062A \u0627\u0646\u062A\u0638\u0627\u0631 \u062B\u0628\u062A \u0634\u062F':'\u0645\u0645\u0646\u0648\u0646 \u0627\u0632 \u0645\u0639\u0631\u0641\u06CC\u200C\u062A\u0648\u0646!')+'</h2>'+
+    '<p class="lead">'+(fam?'\u0647\u0645\u06A9\u0627\u0631\u0627\u0646 \u0645\u0627 \u0628\u0631\u0627\u06CC \u0648\u0642\u062A\u200C\u06AF\u06CC\u0631\u06CC \u062A\u0645\u0627\u0633 \u0645\u06CC\u200C\u06AF\u06CC\u0631\u0646. \u06CC\u0627\u062F\u062A\u0648\u0646 \u0628\u0627\u0634\u0647 \u0647\u0645\u0647\u200C\u06CC \u062E\u062F\u0645\u0627\u062A \u0645\u0631\u06A9\u0632 \u0631\u0627\u06CC\u06AF\u0627\u0646\u0647.':'\u0627\u0633\u0645 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\u0647\u0627 \u0628\u0647 \u0644\u06CC\u0633\u062A \u0627\u0646\u062A\u0638\u0627\u0631 \u0627\u0636\u0627\u0641\u0647 \u0634\u062F. \u062A\u06CC\u0645 \u0645\u0627 \u0628\u0631\u0627\u06CC \u062A\u0645\u0627\u0633 \u0628\u0627 \u062E\u0627\u0646\u0648\u0627\u062F\u0647\u200C\u0647\u0627 \u0627\u0642\u062F\u0627\u0645 \u0645\u06CC\u200C\u06A9\u0646\u0647.')+'</p>'+
+    '<p class="hint">\u0645\u0631\u06A9\u0632 \u062C\u0627\u0645\u0639 \u0633\u0646\u062C\u0634 \u0648 \u0627\u062E\u062A\u0644\u0627\u0644\u0627\u062A \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u2014 \u0647\u0645\u0647\u200C\u06CC \u062E\u062F\u0645\u0627\u062A \u0631\u0627\u06CC\u06AF\u0627\u0646</p></div>';
+}
+
+function render(){
+  var s=state.step;
+  if(s===0)return renderWelcome();
+  if(s===1)return renderRole();
+  if(s===2)return renderContact();
+  if(s===3)return renderSchool();
+  if(state.role==='family'){
+    if(s===4)return renderChildName();
+    if(s===5)return renderChildBirth();
+    if(s===6)return renderConcern();
+    if(s===7)return renderPrior();
+    if(s===8)return renderNotes();
+    if(s===9)return renderReview();
+    if(s===10)return renderDone();
+  }else{
+    if(s===4||s===5||s===6)return renderAware();
+    if(s===7)return renderBatch();
+    if(s===8)return renderTeachReview();
+    if(s===9)return renderDone();
+  }
+  state.step=0;render();
+}
+
+render();
+})();
+`;
+function renderReferralPage(opts = {}) {
+  const token = safeToken(opts.token);
+  return `<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>\u0645\u0639\u0631\u0641\u06CC \u0628\u0647 \u0645\u0631\u06A9\u0632 \u2014 \u062C\u0627\u0645\u0639 \u0633\u0646\u062C\u0634 \u0648 \u0627\u062E\u062A\u0644\u0627\u0644\u0627\u062A \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC</title>
+<meta name="robots" content="noindex, nofollow">
+<style>${PAGE_STYLES}</style>
+</head>
+<body>
+<div class="bar"><div class="bar__fill" id="bar"></div></div>
+<div class="app" id="app"></div>
+<script>window.__REFERRAL_TOKEN__=${JSON.stringify(token)};</script>
+<script>${PAGE_SCRIPT}</script>
+</body>
+</html>`;
+}
+__name(renderReferralPage, "renderReferralPage");
+
 // src/domain/waitlist/routes.ts
+var referralHits = /* @__PURE__ */ new Map();
+function referralRateGuard(ip, chatKey) {
+  const nowMs = Date.now();
+  const windowMs = 36e5;
+  const hit = /* @__PURE__ */ __name((key, max) => {
+    const cur = referralHits.get(key);
+    if (!cur || cur.resetAt < nowMs) {
+      referralHits.set(key, { count: 1, resetAt: nowMs + windowMs });
+      return;
+    }
+    if (cur.count >= max) {
+      throw new RateLimitError(3600, "\u062A\u0639\u062F\u0627\u062F \u0645\u0639\u0631\u0641\u06CC\u200C\u0647\u0627 \u062F\u0631 \u0627\u06CC\u0646 \u0633\u0627\u0639\u062A \u0632\u06CC\u0627\u062F \u0627\u0633\u062A \u2014 \u06A9\u0645\u06CC \u0628\u0639\u062F \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F \u06CC\u0627 \u0628\u0627 \u0645\u0631\u06A9\u0632 \u062A\u0645\u0627\u0633 \u0628\u06AF\u06CC\u0631\u06CC\u062F");
+    }
+    cur.count += 1;
+  }, "hit");
+  hit(`ip:${ip}`, REFERRAL_RATE_PER_HOUR);
+  if (chatKey) hit(`chat:${chatKey}`, REFERRAL_RATE_PER_CHAT);
+  if (referralHits.size > 5e3) {
+    for (const [key, val] of referralHits) {
+      if (val.resetAt < nowMs) referralHits.delete(key);
+    }
+  }
+}
+__name(referralRateGuard, "referralRateGuard");
 function registerWaitlistRoutes(app, service) {
   app.get("/api/waitlist", async (c) => {
     const status = c.req.query("status");
@@ -31368,6 +32324,24 @@ function registerWaitlistRoutes(app, service) {
   app.get("/api/waitlist/badge", async (c) => {
     const badge = await service.badge();
     return c.json({ data: badge }, 200);
+  });
+  app.get("/api/waitlist/referrals", async (c) => {
+    const items = await service.listReferrals({
+      status: c.req.query("status") || void 0,
+      year: c.req.query("year") || void 0
+    });
+    return c.json({ data: items }, 200);
+  });
+  app.post("/api/waitlist/referrals/:id/accept", requireRole("manager", "secretary"), async (c) => {
+    const actor = getAuthContext(c);
+    const entry = await service.acceptReferral(c.req.param("id"), actor);
+    return c.json({ data: entry }, 200);
+  });
+  app.post("/api/waitlist/referrals/:id/reject", requireRole("manager", "secretary"), async (c) => {
+    const actor = getAuthContext(c);
+    const body = ReferralRejectSchema.parse(await c.req.json());
+    const item = await service.rejectReferral(c.req.param("id"), body.reason, actor);
+    return c.json({ data: item }, 200);
   });
   app.post("/api/waitlist/reorder", requireRole("manager", "secretary"), async (c) => {
     const actor = getAuthContext(c);
@@ -31495,6 +32469,47 @@ function registerWaitlistRoutes(app, service) {
     const actor = getAuthContext(c);
     await service.softDelete(c.req.param("id"), actor);
     return c.body(null, 204);
+  });
+  app.get("/public/referral", (c) => {
+    const token = (c.req.query("token") ?? "").slice(0, 200) || null;
+    const html = renderReferralPage({ token });
+    return new Response(html, {
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-store",
+        "X-Robots-Tag": "noindex, nofollow",
+        "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:"
+      }
+    });
+  });
+  app.post("/public/referrals", async (c) => {
+    const raw2 = await c.req.text();
+    if (raw2.length > 8192) {
+      return c.json({ error: "VALIDATION_ERROR", message: "\u062D\u062C\u0645 \u0627\u0637\u0644\u0627\u0639\u0627\u062A \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0645\u062C\u0627\u0632 \u0627\u0633\u062A" }, 400);
+    }
+    let parsedBody;
+    try {
+      parsedBody = JSON.parse(raw2);
+    } catch {
+      return c.json({ error: "VALIDATION_ERROR", message: "\u0628\u062F\u0646\u0647\u0654 \u062F\u0631\u062E\u0648\u0627\u0633\u062A JSON \u0645\u0639\u062A\u0628\u0631 \u0646\u06CC\u0633\u062A" }, 400);
+    }
+    const body = PublicReferralSubmissionSchema.parse(parsedBody);
+    const ip = (c.req.header("cf-connecting-ip") ?? c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? "local").slice(0, 64);
+    referralRateGuard(ip, body.token ?? null);
+    const created = await service.submitReferral(
+      {
+        role: body.role,
+        referrer_name: body.referrer_name,
+        referrer_phone: body.referrer_phone,
+        school_text: body.school_text,
+        grade_text: body.grade_text,
+        class_text: body.class_text,
+        token: body.token,
+        children: body.children
+      },
+      {}
+    );
+    return c.json({ data: created }, 201);
   });
 }
 __name(registerWaitlistRoutes, "registerWaitlistRoutes");
@@ -58939,6 +59954,24 @@ function parseTagsJson(raw2) {
   }
 }
 __name(parseTagsJson, "parseTagsJson");
+var IQ_EVAL_BY_ENTRY = `SELECT * FROM iq_evaluations WHERE screening_entry_id = ? AND deleted_at IS NULL`;
+function iqRowToEval(r) {
+  return {
+    id: r.id,
+    screeningEntryId: r.screening_entry_id,
+    resultOption: r.result_option,
+    autismReferral: r.autism_referral === 1,
+    leiterScore: r.leiter_score,
+    wechslerVerbalScore: r.wechsler_verbal_score,
+    goodenoughScore: r.goodenough_score,
+    clinicalObservations: r.clinical_observations,
+    academicYear: r.academic_year,
+    createdBy: r.created_by,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at
+  };
+}
+__name(iqRowToEval, "iqRowToEval");
 function rowToEntry2(r) {
   return {
     id: r.id,
@@ -58948,6 +59981,7 @@ function rowToEntry2(r) {
     birthDate: r.birth_date ?? null,
     readinessScore: r.readiness_score ?? null,
     note: r.note ?? null,
+    iqHandledAt: r.iq_referral_handled_at ?? null,
     createdBy: r.created_by,
     creatorName: r.creator_name,
     createdAt: r.created_at,
@@ -58957,7 +59991,7 @@ function rowToEntry2(r) {
 __name(rowToEntry2, "rowToEntry");
 var SELECT = `
   SELECT e.id, e.name, e.day, e.tags, e.birth_date, e.readiness_score, e.note,
-         e.created_by, e.created_at, e.updated_at,
+         e.iq_referral_handled_at, e.created_by, e.created_at, e.updated_at,
          st.full_name AS creator_name
     FROM screening_entries e
     LEFT JOIN staff st ON st.id = e.created_by
@@ -59137,6 +60171,83 @@ function createScreeningService(deps) {
         });
       });
       log.info("screening.deleted", { id });
+    },
+    /* ─── نتیجهٔ ارزیابی تخصصی «اظهارنظر و پیشنهاد» (v1.27.33 — خواست کارفرما) ───
+     * یک ردیف فعال به‌ازای هر سنجش — ثبت دوباره = ویرایش همان ردیف (upsert)؛ ثبت نتیجه،
+     * ردیف را از پیگیری فعال خارج می‌کند (iq_referral_handled_at) و سال تحصیلی از day سنجش می‌نشیند. */
+    async getIqEvaluation(entryId) {
+      const row = await db.queryOne(IQ_EVAL_BY_ENTRY, [entryId]);
+      return row ? iqRowToEval(row) : null;
+    },
+    async saveIqEvaluation(entryId, input2, actor) {
+      const entry = await getEntryRow(entryId);
+      const existing = await db.queryOne(IQ_EVAL_BY_ENTRY, [entryId]);
+      const score = /* @__PURE__ */ __name((v) => typeof v === "number" && Number.isFinite(v) ? v : null, "score");
+      const observations = typeof input2.clinical_observations === "string" && input2.clinical_observations.length > 0 ? input2.clinical_observations : null;
+      const autism = input2.autism_referral ? 1 : 0;
+      const academicYear = String(schoolYearOfYmd(entry.day));
+      const id = existing?.id ?? crypto.randomUUID();
+      const now = nowSql();
+      await db.transaction(async (tx) => {
+        if (existing) {
+          await tx.execute(
+            `UPDATE iq_evaluations
+               SET result_option = ?, autism_referral = ?, leiter_score = ?, wechsler_verbal_score = ?,
+                   goodenough_score = ?, clinical_observations = ?, academic_year = ?, updated_at = ?
+             WHERE id = ?`,
+            [
+              input2.result_option,
+              autism,
+              score(input2.leiter_score),
+              score(input2.wechsler_verbal_score),
+              score(input2.goodenough_score),
+              observations,
+              academicYear,
+              now,
+              id
+            ]
+          );
+        } else {
+          await tx.execute(
+            `INSERT INTO iq_evaluations
+               (id, screening_entry_id, result_option, autism_referral, leiter_score, wechsler_verbal_score,
+                goodenough_score, clinical_observations, academic_year, created_by, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              id,
+              entryId,
+              input2.result_option,
+              autism,
+              score(input2.leiter_score),
+              score(input2.wechsler_verbal_score),
+              score(input2.goodenough_score),
+              observations,
+              academicYear,
+              actor.staffId,
+              now,
+              now
+            ]
+          );
+        }
+        await tx.execute(
+          `UPDATE screening_entries SET iq_referral_handled_at = COALESCE(iq_referral_handled_at, ?) WHERE id = ?`,
+          [now, entryId]
+        );
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: "screening.iq_result",
+          resourceType: "screening_entry",
+          resourceId: entryId,
+          changes: {
+            result_option: { from: existing?.result_option ?? null, to: input2.result_option },
+            autism_referral: { from: existing?.autism_referral ?? null, to: autism }
+          }
+        });
+      });
+      log.info("screening.iq_result.saved", { entryId, edited: Boolean(existing) });
+      const saved = await db.queryOne(IQ_EVAL_BY_ENTRY, [entryId]);
+      if (!saved) throw new NotFoundError("\u0646\u062A\u06CC\u062C\u0647\u0654 \u0627\u0631\u0632\u06CC\u0627\u0628\u06CC");
+      return iqRowToEval(saved);
     }
   };
 }
@@ -59204,6 +60315,27 @@ function registerScreeningRoutes(app, service) {
     const actor = getAuthContext(c);
     await service.remove(c.req.param("id"), actor);
     return c.json({ data: { ok: true } }, 200);
+  });
+  app.get("/api/screening/:id/iq-evaluation", async (c) => {
+    const data = await service.getIqEvaluation(c.req.param("id"));
+    return c.json({ data }, 200);
+  });
+  app.post("/api/screening/:id/iq-evaluation", requireRole("manager", "secretary", "therapist"), async (c) => {
+    const actor = getAuthContext(c);
+    const body = IqEvaluationCreateSchema.parse(await c.req.json());
+    const saved = await service.saveIqEvaluation(
+      c.req.param("id"),
+      {
+        result_option: body.result_option,
+        autism_referral: body.autism_referral,
+        leiter_score: body.leiter_score ?? null,
+        wechsler_verbal_score: body.wechsler_verbal_score ?? null,
+        goodenough_score: body.goodenough_score ?? null,
+        clinical_observations: body.clinical_observations ?? null
+      },
+      actor
+    );
+    return c.json({ data: saved }, 200);
   });
 }
 __name(registerScreeningRoutes, "registerScreeningRoutes");
@@ -59985,12 +61117,12 @@ function escapeLike2(raw2) {
   return String(raw2 ?? "").replace(/[%_\\]/g, (ch) => `\\${ch}`);
 }
 __name(escapeLike2, "escapeLike");
-function schoolYearOfYmd(ymd) {
+function schoolYearOfYmd2(ymd) {
   const [gy, gm, gd] = ymd.split("-").map(Number);
   const j = toJalaliParts(gy, gm, gd);
   return j.jm >= 7 ? j.jy : j.jy - 1;
 }
-__name(schoolYearOfYmd, "schoolYearOfYmd");
+__name(schoolYearOfYmd2, "schoolYearOfYmd");
 function shiftYmdByJalaliYears(ymd, n) {
   const [gy, gm, gd] = ymd.split("-").map(Number);
   const j = toJalaliParts(gy, gm, gd);
@@ -60770,9 +61902,9 @@ function createClearbookService(deps) {
     async copyYear(fromYear, toYear, actor) {
       assertOffice(actor);
       const all = await db.query(`SELECT id, from_date FROM clearbook_plans`);
-      const source = all.filter((r) => schoolYearOfYmd(r.from_date) === fromYear);
+      const source = all.filter((r) => schoolYearOfYmd2(r.from_date) === fromYear);
       if (source.length === 0) throw new ValidationError("\u0628\u0631\u0627\u06CC \u0633\u0627\u0644 \u062A\u062D\u0635\u06CC\u0644\u06CC \u0645\u0628\u062F\u0623 \u0641\u0627\u0632\u06CC \u062B\u0628\u062A \u0646\u0634\u062F\u0647 \u0627\u0633\u062A");
-      const targetExists = all.some((r) => schoolYearOfYmd(r.from_date) === toYear);
+      const targetExists = all.some((r) => schoolYearOfYmd2(r.from_date) === toYear);
       if (targetExists) throw new ConflictError("\u0633\u0627\u0644 \u0645\u0642\u0635\u062F \u0627\u0632 \u0642\u0628\u0644 \u062A\u0642\u0648\u06CC\u0645 \u062F\u0627\u0631\u062F \u2014 \u0627\u0628\u062A\u062F\u0627 \u0641\u0627\u0632\u0647\u0627\u06CC \u0622\u0646 \u0633\u0627\u0644 \u0631\u0627 \u062D\u0630\u0641 \u06A9\u0646\u06CC\u062F");
       const shift = toYear - fromYear;
       const sourceIds = source.map((r) => r.id);
@@ -60826,7 +61958,7 @@ function createClearbookService(deps) {
       );
       const years = /* @__PURE__ */ new Set();
       for (const r of rows) {
-        if (/^\d{4}-\d{2}-\d{2}$/.test(r.d)) years.add(schoolYearOfYmd(r.d));
+        if (/^\d{4}-\d{2}-\d{2}$/.test(r.d)) years.add(schoolYearOfYmd2(r.d));
       }
       return [...years].sort((a, b) => b - a);
     }

@@ -74,7 +74,11 @@ import {
   WAITLIST_PRIORITIES,
   WAITLIST_SERVICE_TYPE_MAX,
   WAITLIST_SOURCES,
-  WAITLIST_STATUSES
+  WAITLIST_STATUSES,
+  REFERRAL_CATEGORIES,
+  REFERRAL_CHILDREN_MAX,
+  REFERRAL_CONCERN_MAX,
+  REFERRAL_REJECT_REASON_MAX,
 } from './constants';
 import { isValidIranianNationalId, normalizeNationalId } from './national-id';
 import { isOnGrid, tehranTodayYmd } from './time';
@@ -1201,4 +1205,67 @@ export const ScreeningQuerySchema = z.object({
   to: TehranYmdSchema.optional(),
   q: z.string().trim().max(80).optional(),
   tag: z.string().trim().max(800).optional()
+});
+
+/* ─── نتیجهٔ ارزیابی تخصصی «اظهارنظر و پیشنهاد» (v1.27.33 — INTAKE-DESIGN §۳.۵) ───
+ * تنها الزام ثبت، انتخاب یکی از گزینه‌های ۱ تا ۷ است؛ اتیسم/نمرات/مشاهدات چهار دادهٔ مستقل‌اند
+ * و هیچ تفسیر یا محاسبهٔ خودکاری روی نمرات اعمال نمی‌شود. */
+export const IqEvaluationCreateSchema = z.object({
+  result_option: z
+    .number()
+    .int('گزینهٔ نتیجه باید عدد صحیح باشد')
+    .min(1, 'یکی از گزینه‌های ۱ تا ۷ را انتخاب کنید')
+    .max(7, 'یکی از گزینه‌های ۱ تا ۷ را انتخاب کنید'),
+  autism_referral: z.boolean().optional().default(false),
+  leiter_score: z.number().finite('نمرهٔ لی‌تر باید عدد باشد').nullish(),
+  wechsler_verbal_score: z.number().finite('نمرهٔ وکسلر باید عدد باشد').nullish(),
+  goodenough_score: z.number().finite('نمرهٔ گودیناف باید عدد باشد').nullish(),
+  clinical_observations: z.string().max(2000, 'مشاهدات بالینی حداکثر ۲۰۰۰ نویسه است').optional()
+});
+
+/* ─── معرفی به مرکز از فرم عمومی خانواده/معلم (v1.27.33 — REFERRAL-DESIGN.md) ───
+ * خانواده دقیقاً یک کودک می‌فرستد؛ معلم تا سقف REFERRAL_CHILDREN_MAX در یک ثبت دسته‌ای. */
+export const ReferralChildSchema = z.object({
+  first_name: z.string().trim().min(2, 'نام کودک حداقل ۲ نویسه است').max(80, 'نام کودک حداکثر ۸۰ نویسه است'),
+  birth_date: TehranYmdSchema.nullish(),
+  /* تاریخ تولد شمسیِ تایپی از فرم عمومی — سرویس با jalaliToGregorianYmd به میلادی می‌بَرد؛
+     تبدیل در یک نقطهٔ سمت سرور تا الگوریتم مشترکِ تست‌شدهٔ سامانه تک‌منبع بماند */
+  birth_date_text: z.string().trim().max(20, 'تاریخ تولد حداکثر ۲۰ نویسه است').optional(),
+  school_text: z.string().trim().max(120).optional(),
+  grade_text: z.string().trim().max(40).optional(),
+  class_text: z.string().trim().max(40).optional(),
+  concern_category: z.enum(REFERRAL_CATEGORIES).nullish(),
+  /* تلفن ولیّ هر کودک — در ثبت دسته‌ای معلم به‌ازای هر ردیف جدا می‌آید؛
+     در ثبت خانواده خود معرف همان ولیّ است و از referrer_phone استفاده می‌شود */
+  guardian_phone: GuardianPhoneSchema.nullish(),
+  concern_tags: z
+    .array(z.string().trim().min(2).max(40))
+    .max(8, 'حداکثر ۸ برچسب دغدغه')
+    .optional()
+    .default([]),
+  concern_text: z.string().trim().max(REFERRAL_CONCERN_MAX).optional(),
+  prior_eval: z.boolean().nullish(),
+  prior_eval_note: z.string().trim().max(300).optional()
+});
+
+export const PublicReferralSubmissionSchema = z.object({
+  role: z.enum(['family', 'teacher'], { message: 'نقش معرف باید خانواده یا معلم باشد' }),
+  referrer_name: z.string().trim().min(2, 'نام معرف حداقل ۲ نویسه است').max(80, 'نام معرف حداکثر ۸۰ نویسه است'),
+  referrer_phone: GuardianPhoneSchema,
+  school_text: z.string().trim().max(120).optional(),
+  grade_text: z.string().trim().max(40).optional(),
+  class_text: z.string().trim().max(40).optional(),
+  token: z.string().trim().max(200).optional(),
+  children: z
+    .array(ReferralChildSchema)
+    .min(1, 'حداقل یک کودک لازم است')
+    .max(REFERRAL_CHILDREN_MAX, `حداکثر ${REFERRAL_CHILDREN_MAX} کودک در هر ثبت`)
+});
+
+export const ReferralRejectSchema = z.object({
+  reason: z
+    .string()
+    .trim()
+    .min(2, 'دلیل رد لازم است — برای معرف قابل ارسال است')
+    .max(REFERRAL_REJECT_REASON_MAX, `دلیل رد حداکثر ${REFERRAL_REJECT_REASON_MAX} نویسه است`)
 });

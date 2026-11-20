@@ -259,7 +259,8 @@ describe('گیت ممیزی UI/UX Pro Max (uupm.cc) — 1.09.0', () => {
     // ریتم ثبت زنجیره‌ای: بعد از هر ثبت/ویرایش فوکوس باکس حفظ می‌شود
     expect(screening).toMatch(/input\.focus\(\)/);
     // گزارش/KPI: کارت فیلتر یک‌بار مونت، فقط ناحیهٔ نتایج عوض می‌شود؛ هک refocus حذف شد
-    expect(screening).toMatch(/resultsZone\.replaceChildren\(kpis, chartCard, breakdownCard, followCard, listCard\)/);
+    // ۱.۲۷.۳۳ — کارت «نتایج ثبت‌شده» هم به ناحیهٔ نتایج اضافه شد؛ null-پذیر با filter(Boolean)
+    expect(screening).toMatch(/resultsZone\.replaceChildren\(\.\.\.\[kpis, chartCard, breakdownCard, followCard, handledCard, listCard\]\.filter\(Boolean\)\)/);
     expect(screening).not.toMatch(/searchRefocus/);
 
     const students = readFileSync(join(__dirname, '../../public/assets/js/views/students.js'), 'utf8');

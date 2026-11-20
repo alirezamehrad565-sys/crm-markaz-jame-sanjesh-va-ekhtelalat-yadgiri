@@ -428,6 +428,26 @@ export const WAITLIST_LIST_LIMIT = 500;
 
 export const WAITLIST_ALERT_DAYS = 7;
 
+/* ─── معرفی به مرکز (waitlist_referrals — v1.27.33 · REFERRAL-DESIGN.md) ───
+ * enumها الگوی D7: در SQL هیچ CHECKی نیست؛ اعمال رنج فقط از مسیر همین ثابت‌ها + zod. */
+export const REFERRAL_ROLES = ['family', 'teacher'] as const;
+export const REFERRAL_CHANNELS = ['web', 'bot', 'manual'] as const;
+export const REFERRAL_STATUSES = ['new', 'accepted', 'rejected'] as const;
+export const REFERRAL_CATEGORIES = [
+  'delayed',
+  'learning_disorder',
+  'intellectual',
+  'autism',
+  'speech',
+  'other'
+] as const;
+export const REFERRAL_CHILDREN_MAX = 50;      // سقف ثبت دسته‌ای معلم در هر بار
+export const REFERRAL_CONCERN_MAX = 1000;     // شرح دغدغهٔ اصلی
+export const REFERRAL_REJECT_REASON_MAX = 300;
+export const REFERRAL_LIST_LIMIT = 500;
+export const REFERRAL_RATE_PER_HOUR = 20;      // به‌ازای هر IP — بدنه‌های >۸KB اصلاً پارس نمی‌شوند
+export const REFERRAL_RATE_PER_CHAT = 5;       // به‌ازای هر توکن بات (سقف پنجرهٔ یک‌ساعته)
+
 export const TODO_STATUSES = ['pending', 'done'] as const;
 
 export const TODO_PRIORITIES = ['normal', 'urgent'] as const;

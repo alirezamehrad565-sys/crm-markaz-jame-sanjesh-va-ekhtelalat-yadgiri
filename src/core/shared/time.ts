@@ -204,3 +204,17 @@ export function jalaliLabel(ymd: string): string {
 export function jalaliFullLabel(ymd: string): string {
   return `${WEEKDAY_NAMES_FA[iranianWeekdayOfYmd(ymd)]} ${jalaliLabel(ymd)}`;
 }
+
+/** سال تحصیلی مهر-محور: مهر ۱۴۰۴ تا شهریور ۱۴۰۵ = سال تحصیلی ۱۴۰۴.
+ *  منبع یگانهٔ جریان پذیرش (لیست انتظار/سنجش/معرفی/نتیجهٔ ارزیابی) — آینهٔ همان تابع در
+ *  clearbook/pure.ts که دفتر بالینی از آن استفاده می‌کند؛ اینجا برای کل shared در دسترس است. */
+export function schoolYearOfYmd(ymd: string): number {
+  const [gy, gm, gd] = ymd.split('-').map(Number);
+  const j = toJalaliParts(gy, gm, gd);
+  return j.jm >= 7 ? j.jy : j.jy - 1;
+}
+
+/** سال تحصیلیِ «الان» به وقت تهران — مقدار پیش‌فرض ستون academic_year جریان پذیرش */
+export function currentSchoolYear(now: Date = new Date()): string {
+  return String(schoolYearOfYmd(tehranTodayYmd(now)));
+}

@@ -44,7 +44,8 @@ describe('۱.۲۷.۱۶ — فلوی ویرایش سوابق در تب «ثبت �
 describe('۱.۲۷.۱۶ — کارت پیگیری فقط «ارجاع هوش»', () => {
   it('followUps فقط برچسب ارجاع هوش را شامل می‌شود و عنوان کارت عوض شده', () => {
     expect(screening).toMatch(/const IQ_REFERRAL = 'ارجاع هوش';/);
-    expect(screening).toMatch(/const followUps = entries\.filter\(\(e\) => e\.tags\.includes\(IQ_REFERRAL\)\);/);
+    // ۱.۲۷.۳۳ — ردیفِ نتیجهٔ ثبت‌شده (iqHandledAt) از کارت فعال خارج می‌شود و به «نتایج ثبت‌شده» می‌رود
+    expect(screening).toMatch(/const followUps = entries\.filter\(\(e\) => e\.tags\.includes\(IQ_REFERRAL\) && !e\.iqHandledAt\);/);
     expect(screening).toMatch(/نیازمند پیگیری \(ارجاع هوش\)/);
     // بج‌های ردیف هم فقط همان ارجاع هوش را نشان می‌دهند — نه بینایی/شنوایی
     expect(screening).toMatch(/e\.tags\.filter\(\(t\) => t === IQ_REFERRAL\)\.map\(\(t\) => tagBadge\(t\)\)/);
