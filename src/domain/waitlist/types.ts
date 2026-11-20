@@ -172,6 +172,7 @@ export const REFERRAL_CATEGORY_LABELS: Record<string, string> = {
   delayed: 'دیرآموز',
   learning_disorder: 'اختلال یادگیری',
   intellectual: 'مشکوک به کم‌توانی',
+  behavioral: 'رفتاری هیجانی',
   autism: 'ارجاع اتیسم',
   speech: 'تأخیر گفتار و زبان',
   other: 'سایر'

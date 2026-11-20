@@ -408,8 +408,8 @@ export async function renderCaseEventTypes(container) {
     const isChecklist = t.category === 'checklist';
     const subscales = t.subscales ?? [];
     return el('div', { class: 'card', dataset: { id: String(t.id) } }, /* ۱.۲۲.۰ — data-id برای پچ/حذف درجای کارت */
-      el('div', { class: 'card__body' },
-        el('div', { style: { display: 'flex', alignItems: 'flex-start', gap: 'var(--sp-3)' } },
+      el('div', { class: 'card__body', style: { display: 'flex', flexDirection: 'column', height: '100%' } }, /* ۱.۲۷.۴۲ — فوتر کارت‌ها هم‌تراز */
+        el('div', { style: { display: 'flex', alignItems: 'flex-start', gap: 'var(--sp-3)', flex: '1' } },
           el('div', {
             class: 'typegrid__icon typegrid__icon--lg',
             style: {
@@ -436,21 +436,33 @@ export async function renderCaseEventTypes(container) {
               (t.toolNorm ? ` — هنجار: ${t.toolNorm}` : '')),
             subscales.length > 0
               ? el('div', { style: { display: 'flex', gap: 'var(--sp-1)', flexWrap: 'wrap', marginTop: 'var(--sp-2)' } },
-                  ...subscales.map((s, i) => el('span', {
+                  ...subscales.slice(0, 4).map((s, i) => el('span', { /* ۱.۲۷.۴۲ — سقف نمایش چهار زیرمقیاس؛ بقیه با شمارنده */
                     class: 'chip',
                     style: { fontSize: 'var(--fs-2xs)', display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-1)' } /* S3-12 */
                   },
                   el('span', { style: { width: '8px', height: '8px', borderRadius: '50%', background: SUBSCALE_DOT_COLORS[i % SUBSCALE_DOT_COLORS.length], display: 'inline-block' } }),
-                  s.name + (s.excludeFromTotal ? ' (خارج از کل)' : ''))))
+                  s.name + (s.excludeFromTotal ? ' (خارج از کل)' : ''))),
+                  subscales.length > 4
+                    ? el('span', { class: 'chip', title: subscales.map((x) => x.name).join('، '), style: { fontSize: 'var(--fs-2xs)' } }, `+${fa(subscales.length - 4)} بیشتر`)
+                    : null)
               : null,
             tagChips.length > 0
               ? el('div', { style: { display: 'flex', gap: 'var(--sp-1)', flexWrap: 'wrap', marginTop: 'var(--sp-2)' } },
-                  ...tagChips.map((x) => el('span', { class: 'chip', style: { fontSize: 'var(--fs-2xs)' } }, `#${x.name}`))) /* S3-12 */
+                  ...tagChips.slice(0, 4).map((x) => el('span', { class: 'chip', style: { fontSize: 'var(--fs-2xs)' } }, `#${x.name}`)), /* S3-12 */
+                  tagChips.length > 4
+                    ? el('span', { class: 'chip', title: tagChips.map((x) => '#' + x.name).join(' '), style: { fontSize: 'var(--fs-2xs)' } }, `+${fa(tagChips.length - 4)} بیشتر`)
+                    : null)
               : null
           )
         ),
         /* UX-ممیزی فاز ۳: یک CTA + منوی «⋯» — مخرب‌ها («غیرفعال‌سازی/حذف») از دکمه‌های سطح کارت جدا شدند */
         el('div', { style: { display: 'flex', gap: 'var(--sp-2)', marginTop: 'var(--sp-3)', flexWrap: 'wrap', alignItems: 'center' } },
+          t.active
+            ? el('button', { /* ۱.۲۷.۴۲ — پیش‌نمایش درجای کارت: عین فرم خانواده/معلم، بدون ورود به ادیتور */
+                class: 'btn btn--ghost btn--sm',
+                onclick: () => openSavedPreview(t)
+              }, icon('eye', 14), 'پیش‌نمایش')
+            : null,
           isChecklist && t.familyFillable && t.active
             ? el('button', {
                 class: 'btn btn--primary btn--sm',
@@ -495,6 +507,31 @@ export async function renderCaseEventTypes(container) {
         scienceNote(TOOL_GUIDES[t.key])
       )
     );
+  }
+
+  /* ۱.۲۷.۴۲ — پیش‌نمایش قالب ذخیره‌شده از خود کارت — همان POST /public/case-events/preview
+     که «پیش‌نمایش از نگاه خانواده» ادیتور می‌زند؛ این‌بار از تعریف ذخیره‌شدهٔ قالب */
+  function openSavedPreview(t) {
+    const hidden = (name, value) => el('input', { type: 'hidden', name, value });
+    const definition = {
+      title: t.title,
+      category: t.category,
+      icon: t.icon ?? null,
+      familyFillable: Boolean(t.familyFillable),
+      fields: t.fields ?? [],
+      bands: t.category === 'checklist' ? (t.bands ?? null) : null,
+      subscales: t.category === 'checklist' ? (t.subscales?.length ? t.subscales : null) : null,
+      tags: t.tags ?? [],
+      audience: t.category === 'checklist' ? (t.audience ?? 'family') : 'family',
+      toolSource: t.toolSource ?? null,
+      toolNorm: t.toolNorm ?? null
+    };
+    const form = el('form', { method: 'POST', action: '/public/case-events/preview', target: '_blank', style: { display: 'none' } },
+      hidden('definition', JSON.stringify(definition)),
+      hidden('token', getToken() ?? ''));
+    document.body.appendChild(form);
+    form.submit();
+    setTimeout(() => form.remove(), 2000);
   }
 
   function openStudentPicker(type) {

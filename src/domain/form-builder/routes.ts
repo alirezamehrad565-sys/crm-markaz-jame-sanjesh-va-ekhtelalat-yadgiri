@@ -43,7 +43,7 @@ const PAGE_HEADERS: Record<string, string> = {
   'Cache-Control': 'no-store',
   'X-Robots-Tag': 'noindex, nofollow',
   'Content-Security-Policy':
-    "default-src 'none'; style-src 'unsafe-inline' https://cdn.jsdelivr.net; script-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src https://cdn.jsdelivr.net"
+    "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src 'self'"
 };
 
 export function registerFormBuilderRoutes(app: AppHono, service: FormBuilderService): void {

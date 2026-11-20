@@ -190,14 +190,15 @@ describe('فرم عمومی معرفی به مرکز + اینباکس لیست �
     expect(res.headers.get('x-robots-tag')).toContain('noindex');
     expect(res.headers.get('content-security-policy')).toContain('script-src');
     // ۱.۲۷.۳۵ — وزیرمتن + افکت فید روی صفحهٔ معرفی هم
-    expect(html).toContain('Vazirmatn-font-face.css');
+    expect(html).toContain('/assets/fonts/Vazirmatn-Variable.woff2') /* ۱.۲۷.۴۲ — فونت خودی */;
     expect(html).toContain('@keyframes fadein');
-    expect(res.headers.get('content-security-policy')).toContain('font-src https://cdn.jsdelivr.net');
+    expect(res.headers.get('content-security-policy')).toContain("font-src 'self'"); // ۱.۲۷.۴۲ — فونت فقط خودی
     /* ۱.۲۷.۳۶ — گام فرم تکمیلی خانواده هست؛ گزینهٔ اتیسم دیگر پیشنهاد نمی‌شود */
-    expect(html).toContain('وضع فرهنگی خانواده');
-    expect(html).toContain('سطح مالی خانواده');
-    expect(html).toContain('میزان همکاری خانواده');
-    expect(html).toContain('نمی‌دانم');
+    expect(html).not.toContain('وضعیت خانواده'); // ۱.۲۷.۴۲ — فرم تکمیلی خانواده حذف شد (خواست کارفرما)
+    expect(html).toContain('قبلاً جایی ارزیابی یا تشخیص داشته؟');
+    expect(html).not.toContain('سطح مالی خانواده') /* ۱.۲۷.۴۲ — فرم وضعیت خانواده حذف شد */;
+    expect(html).not.toContain('میزان همکاری خانواده') /* ۱.۲۷.۴۲ */;
+    expect(html).not.toContain('نمی‌دانم') /* ۱.۲۷.۴۲ — گام حذف‌شده */;
     expect(html).not.toContain('data-c="autism"'); // کارت دغدغهٔ اتیسم حذف شده
     expect(html).not.toContain('data-cat="autism"'); // دستهٔ معلم هم
     expect(html).toContain("flex:1 1 0"); // دکمه‌های هم‌اندازه

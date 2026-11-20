@@ -40,12 +40,13 @@ export function renderActivitiesPage(input: ActivitiesViewInput): string {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>تمرین‌ها و کارت‌های آماده — ${esc(input.clinicName)}</title>
-<!-- وزیرمتن از CDN (CSP فقط jsdelivr را اجازه می‌دهد) -->
-<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css">
+<!-- ۱.۲۷.۴۲ — وزیرمتن فقط خودی -->
 <style>
 :root{--ink:#2a2118;--muted:#6f675c;--brand:#0e7490;--brand-soft:#f0f7f8;--line:#e8e2d6}
 *{box-sizing:border-box}
+/* ۱.۲۷.۴۲ — فونت وزیر متن باندل‌شدهٔ خودی */
+@font-face{font-family:Vazirmatn;src:url('/assets/fonts/Vazirmatn-Variable.woff2') format('woff2');
+font-weight:100 900;font-style:normal;font-display:swap}
 body{margin:0;background:#f7f3ea;color:var(--ink);font-family:Vazirmatn,sans-serif;font-size:15.5px;line-height:2.1}
 .wrap{max-width:720px;margin:0 auto;padding:22px 16px 48px}
 header{text-align:center;padding:26px 0 18px}

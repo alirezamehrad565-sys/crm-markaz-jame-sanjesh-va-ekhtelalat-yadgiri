@@ -145,7 +145,7 @@ describe('حلقهٔ درخواست مدارک با بله (وبهوک واقع�
     fetchCalls.length = 0;
     const res = await bot(photo(CHAT_PARENT, 'DOC-FILE-1', 'عکس املاهای این هفته'));
     expect(res.handled).toBe(true);
-    expect(res.reply).toContain('دریافت شد');
+    expect(res.reply).toContain('به دستمون رسید');
     expect(res.reply).toContain(studentName.split(' ')[0]);
 
     expect(fetchCalls).toEqual(['DOC-FILE-1_b']);
@@ -185,7 +185,7 @@ describe('حلقهٔ درخواست مدارک با بله (وبهوک واقع�
 
   it('سند PDF بعدی → به همان درخواست باز ضمیمه می‌شود (چند مدرک)', async () => {
     const res = await bot(document(CHAT_PARENT, 'DOC-FILE-2', 'کارنامه-مهرماه.pdf', 'application/pdf'));
-    expect(res.reply).toContain('دریافت شد');
+    expect(res.reply).toContain('به دستمون رسید');
 
     const list = await manager.get(`/api/students/${studentId}/received-docs`);
     const docs = (list.body as { data: { fileName: string; mediaKind: string; mime: string }[] }).data;
@@ -296,7 +296,7 @@ describe('حلقهٔ درخواست مدارک با بله (وبهوک واقع�
 
     const ok = await bot(photo(CHAT_TEACHER, 'TEACHER-DOC-1', 'برگهٔ امتحان ریاضی'));
     expect(ok.handled).toBe(true);
-    expect(ok.reply).toContain('دریافت شد');
+    expect(ok.reply).toContain('به دستمون رسید');
     const st = A.sql.prepare(`SELECT status FROM document_requests WHERE id = ?`).get(tReqId) as { status: string };
     expect(st.status).toBe('received');
     const rows = A.sql

@@ -103,7 +103,7 @@ describe('بات نقش‌محور CRM + قفل اتصال + ناظر اداره
     expect(ok1.reply).toContain('اتصال');
 
     const hijack = await bot(A, tx(guardianPhone, CHAT_HIJACKER, 102));
-    expect(hijack.reply).toContain('متصل است');
+    expect(hijack.reply).toContain('وصله');
 
     const sid = findStudentId(A);
     const prefs = await manager.get(`/api/notifications/prefs/${sid}`);
@@ -118,7 +118,7 @@ describe('بات نقش‌محور CRM + قفل اتصال + ناظر اداره
 
   it('اتصال دوم با کد ملی دانش‌آموز هم رد می‌شود', async () => {
     const hijack2 = await bot(A, tx(studentNid, CHAT_HIJACKER, 103));
-    expect(hijack2.reply).toContain('متصل است');
+    expect(hijack2.reply).toContain('وصله');
   });
 
   it('بات مهمان: «شماره تماس» بدون تنظیم → پیام ثبت‌نشده؛ بعد از PUT تنظیمات → شماره می‌آید', async () => {

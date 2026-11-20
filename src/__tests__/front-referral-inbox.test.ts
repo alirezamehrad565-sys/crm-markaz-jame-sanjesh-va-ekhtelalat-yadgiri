@@ -75,7 +75,7 @@ describe('گیت فرانت ۱.۲۷.۳۸ — صندوق ورودی در لیست
     expect(guidePage).toContain("GUIDE_SLUGS = ['delayed', 'learning-disorder', 'intellectual']");
     expect(guidePage).toContain('/public/referral'); // CTA معرفی در هر راهنما
     expect(guidePage).not.toContain('تشخیص کار ماست'); // بدون تذکر تکراری در راهنماها
-    expect(guidePage).toContain('همهٔ خدمات مرکز رایگان است');
+    expect(guidePage).toContain('همهٔ خدمات مرکز رایگانه'); // ۱.۲۷.۴۲ — متن بازبینی‌شدهٔ کارفرما
   });
 
   it('④ بات: دکمهٔ «تمرین‌ها و کارت‌ها» + لینک صفحهٔ عمومی بانک محتوا', () => {

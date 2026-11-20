@@ -445,6 +445,7 @@ export const REFERRAL_CATEGORIES = [
   'delayed',
   'learning_disorder',
   'intellectual',
+  'behavioral',
   'autism',
   'speech',
   'other'

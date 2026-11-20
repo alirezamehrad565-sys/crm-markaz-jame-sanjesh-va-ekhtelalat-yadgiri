@@ -20,7 +20,7 @@ describe('۱.۲۷.۳۸ — راهنمای عمومی + صفحهٔ تمرین‌�
       expect(res.status).toBe(200);
       const html = await res.text();
       expect(html).toContain('معرفی این دانش‌آموز به مرکز');
-      expect(html).toContain('همهٔ خدمات مرکز رایگان است');
+      expect(html).toContain('همهٔ خدمات مرکز رایگانه'); // ۱.۲۷.۴۲
       expect(html).not.toContain('تشخیص کار ماست');
       expect(html).not.toContain('تشخیصش کارِ ماست');
       expect(res.headers.get('cache-control')).toBe('no-store');
@@ -40,7 +40,8 @@ describe('۱.۲۷.۳۸ — راهنمای عمومی + صفحهٔ تمرین‌�
     expect(html).toContain('چطور از این محتواها استفاده کنم');
     expect(html).toContain('/public/referral');
     expect(html).not.toContain('file_key');
-    expect(res.headers.get('content-security-policy')).toContain("style-src 'unsafe-inline' https://cdn.jsdelivr.net");
+    expect(res.headers.get('content-security-policy')).toContain("style-src 'unsafe-inline'");
+    expect(res.headers.get('content-security-policy')).toContain("font-src 'self'"); // ۱.۲۷.۴۲ — فونت فقط خودی
   });
 
   it('③ دکمهٔ «تمرین‌ها و کارت‌ها» مهمان → پیام با لینک صفحهٔ عمومی + فرم معرفی', async () => {

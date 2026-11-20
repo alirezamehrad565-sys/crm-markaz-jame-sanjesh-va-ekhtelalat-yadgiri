@@ -366,6 +366,8 @@ export async function runEngine(opts) {
   const port = await resolvePort(opts.port, '', opts.bind);
   const gamesPort = await resolvePort(opts.gamesPort, 'بازی‌ها', opts.bind);
   // v1.27.۱۸ — لینک‌های عمومی (/m/:token) در بایند شبکه‌ای باید از LAN باز شوند
+  // وصلهٔ ۱.۲۷.۴۲ — base باید قبل از استفاده تعریف شود (با --bind 127.0.0.1 خطای TDZ می‌داد)
+  const base = `http://127.0.0.1:${port}`;
   const lanList = opts.bind === '127.0.0.1' ? [] : lanUrls(port);
   const publicBase = lanList[0] ?? base;
   const authSecret = resolveAuthSecret(dbPath);
@@ -391,7 +393,6 @@ export async function runEngine(opts) {
 
   // ۴) موتور — حالت workerd: سایدکار کرانفایل؛ حالت adapter: سرورهای HTTP در همین فرایند
   // (بدون هیچ باینری بومی خارجی — ریشهٔ کرش ویندوزی حذف شد)
-  const base = `http://127.0.0.1:${port}`;
   const gamesBase = `http://127.0.0.1:${gamesPort}`;
 
   // کودک جاری بین بوت/ری‌استارت‌های ناظر جابه‌جا می‌شود؛ هندل‌های خروج هر بار دوباره بسته می‌شوند

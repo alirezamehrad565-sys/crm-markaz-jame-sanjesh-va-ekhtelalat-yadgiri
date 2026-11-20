@@ -4,9 +4,11 @@
  * یک فایل خودکفا: HTML + CSS + JS همه inline است تا به هیچ باندل/کش وابسته نباشد و روی
  * هر مرورگری حتی موبایل خانواده باز شود. CSP این مسیر فقط inline خودش را اجازه می‌دهد.
  *
- * جریان (بازطراحی ۱.۲۷.۳۶ — خواست کارفرما): خوش‌آمد با افکت تایپ → نقش معرف → مشخصات تماس →
- * مدرسه/پایه/کلاس → شاخهٔ خانواده: نام کودک → تولد → دغدغه (بدون اتیسم) → **فرم تکمیلی خانواده
- * (فرهنگی/مالی/همکاری)** → ارزیابی قبلی → نکات → مرور → ثبت؛ شاخهٔ معلم: سه صفحهٔ آگاهی → ثبت دسته‌ای → مرور → ثبت.
+ * جریان (۱.۲۷.۴۲ — خواست کارفرما): خوش‌آمد با افکت تایپ → نقش معرف → مشخصات تماس →
+ * مدرسه/پایه/کلاس → شاخهٔ خانواده: نام کودک → تولد → دغدغه → ارزیابی قبلی → نکات → مرور → ثبت؛
+ * شاخهٔ معلم: سه صفحهٔ آگاهی → ثبت دسته‌ای → مرور → ثبت.
+ * ۱.۲۷.۴۲ — «فرم تکمیلی خانواده (وضعیت خانواده)» حذف شد (خواست کارفرما: جایش در نقش معلم مدرسه بود،
+ * نه ولی دانش‌آموز؛ کارفرما آن را حذف کرد — مقادیر schema اختیاری‌اند و ثبت قدیمی دست‌نخورده می‌ماند).
  * UI/UX: دکمه‌های هم‌اندازه (flex-basis صفر + ارتفاع یکسان)، انتخاب‌گرها با تیک، متن‌های انسانی و گرم.
  * رعایت prefers-reduced-motion؛ هیچ تشخیصی در فرم انجام نمی‌شود — فرم فقط معرفی است.
  */
@@ -24,6 +26,9 @@ const PAGE_STYLES = `
 :root{--bg:#f6f7fb;--card:#ffffff;--ink:#1f2430;--muted:#6b7280;--brand:#2563eb;--brand-soft:#eef2ff;
 --ok:#16a34a;--warn:#d97706;--err:#dc2626;--line:#e5e7eb;--r:14px}
 *{box-sizing:border-box}
+/* ۱.۲۷.۴۲ — فونت وزیر متن باندل‌شدهٔ خودی؛ پیش‌تر فقط CDN بود که آفلاین/کندی می‌شکست و Tahoma می‌نشست */
+@font-face{font-family:Vazirmatn;src:url('/assets/fonts/Vazirmatn-Variable.woff2') format('woff2');
+font-weight:100 900;font-style:normal;font-display:swap}
 html,body{margin:0;padding:0}
 /* ۱.۲۷.۴۰ — پس‌زمینهٔ گرادینتی سه‌لایه با دو هالهٔ رنگی ثابت (خواست کارفرما) — بدون تصویر، بدون لود اضافه */
 body{color:var(--ink);font-family:Vazirmatn,Tahoma,'Segoe UI',sans-serif;
@@ -35,7 +40,8 @@ linear-gradient(168deg,#eef4ff 0%,#f6f7fb 46%,#fdf2f8 100%);
 background-attachment:fixed}
 .bar{position:fixed;top:0;right:0;left:0;height:5px;background:rgba(37,99,235,.14);z-index:5}
 .bar__fill{height:100%;width:0;background:linear-gradient(90deg,#2563eb,#7c3aed);transition:width .3s ease}
-.app{max-width:560px;margin:0 auto;padding:32px 16px 64px;min-height:100vh}
+.app{max-width:560px;margin:0 auto;padding:24px 16px;min-height:100dvh;
+display:flex;flex-direction:column;justify-content:safe center}
 .card{background:linear-gradient(180deg,#ffffff,#fbfcff);border:1px solid rgba(226,232,240,.9);
 border-radius:var(--r);padding:24px;box-shadow:0 10px 30px -14px rgba(37,99,235,.18),0 2px 8px rgba(15,23,42,.05)}
 .step-no{color:var(--muted);font-size:13px;margin-bottom:8px}
@@ -139,37 +145,29 @@ var bar = document.getElementById('bar');
 var REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 var GRADES = ['پیش‌دبستانی','اول دبستان','دوم دبستان','سوم دبستان','چهارم دبستان','پنجم دبستان','ششم دبستان'];
 /* ۱.۲۷.۳۶ — گزینهٔ «مشکوک به اتیسم» حذف شد (خواست کارفرما)؛ مقدار autism در داده‌های قبلی باقی است */
+/* ۱.۲۷.۴۲ — متن‌های کارفرما؛ «تأخیر گفتار و زبان» از گزینه‌های فرم حذف و «مشکلات رفتاری هیجانی» نشست
+   (مقدار speech در داده‌های قبلی و برچسب‌های پذیرش باقی است) */
 var CONCERNS = [
-  {v:'delayed', t:'دیرآموزی', d:'یادگیری کندتر از هم‌سن‌وسال‌ها — ولی یاد می‌گیرد'},
+  {v:'delayed', t:'دیرآموزی', d:'یادگیری کندتر از هم‌سن‌وسال‌ها — ولی یاد می‌گیره'},
   {v:'learning_disorder', t:'اختلال یادگیری', d:'سختی در خواندن، نوشتن یا حساب'},
   {v:'intellectual', t:'مشکوک به کم‌توانی ذهنی', d:'تأخیر جدی در یادگیری و مهارت‌های روزمره'},
-  {v:'speech', t:'تأخیر گفتار و زبان', d:'دیر یا کم حرف زدن نسبت به هم‌سن‌ها'},
-  {v:'other', t:'سایر', d:'دغدغه‌ی دیگری دارید'}
+  {v:'behavioral', t:'مشکلات رفتاری هیجانی', d:'مثل بیش‌فعالی و تکانشگری، ترس، اضطراب و…'},
+  {v:'other', t:'سایر', d:'هر دغدغه‌ی دیگری دارید…'}
 ];
 var TEACH_CATS = ['delayed','learning_disorder','intellectual'];
 var TEACH_CAT_LABELS = {delayed:'دیرآموز', learning_disorder:'اختلال یادگیری', intellectual:'مشکوک به کم‌توانی'};
-var CAT_LABELS = {delayed:'دیرآموزی', learning_disorder:'اختلال یادگیری', intellectual:'مشکوک به کم‌توانی ذهنی', speech:'تأخیر گفتار و زبان', autism:'مشکوک به طیف اتیسم', other:'سایر'};
-/* ۱.۲۷.۳۶ — فرم تکمیلی خانواده: سه پرسش با سطح سه‌گانه + «نمی‌دانم» (null ارسال می‌شود) */
-var FAM_QUESTIONS = [
-  {key:'culture', label:'وضع فرهنگی خانواده', hint:'کتاب، گفت‌وگو و فعالیت یادگیری در خانه چقدر هست؟',
-   opts:[['low','کم'],['mid','متوسط'],['high','غنی']]},
-  {key:'finance', label:'سطح مالی خانواده', hint:'فقط برای اولویت‌بندی خدمات رایگان و کمک‌ها است — روی پذیرش اثری ندارد.',
-   opts:[['low','کم‌برخوردار'],['mid','متوسط'],['high','برخوردار']]},
-  {key:'cooperation', label:'میزان همکاری خانواده', hint:'تماس، پیگیری تمرین‌ها و حضور در جلسات.',
-   opts:[['low','کم'],['mid','متوسط'],['high','زیاد']]}
-];
+var CAT_LABELS = {delayed:'دیرآموزی', learning_disorder:'اختلال یادگیری', intellectual:'مشکوک به کم‌توانی ذهنی', behavioral:'مشکلات رفتاری هیجانی', speech:'تأخیر گفتار و زبان', autism:'مشکوک به طیف اتیسم', other:'سایر'};
 var AWARE = [
   /* ۱.۲۷.۳۸ — بازنویسی محاوره‌ای و مفصل‌تر؛ بدون تذکر تکراری «تشخیص» به خواست کارفرما،
      با لینک فایل راهنمای عمومی هر دسته (/public/guide/<slug>) برای توضیحات بیشتر */
-  {t:'دیرآموز کیه؟', g:'delayed', b:'دیرآموز یعنی بچه‌ای که یادگیریش از بچه‌های هم‌سن‌وسالش کندتر پیش می‌ره — ولی این یعنی «کُند»، نه «نمی‌تونه». این بچه‌ها با توضیح ساده‌تر، تمرین بیشتر و کمی صبر، همون مسیر بقیه رو طی می‌کنن؛ فقط با گام‌های کوچیک‌تر. توی کلاس معمولاً دیرتر شروع می‌کنه به خوندن و نوشتن، واژه‌های جدید دیرتر می‌چسبه، و وقتی درس یه‌کو کمی سخت می‌شه زود خسته می‌شه و انگیزه‌ش می‌ریزه. چیزی که بیشتر از هرچیزی لازم داره تجربهٔ موفقیت‌ه: تکلیف کوچیک‌تر، تشویق واقعی، و اینکه کسی بهش نگاه نکنه که «بی‌استعداده». اگه توی کلاس یا خونه‌تون چنین بچه‌ای دارید، معرفی‌کردنش اولین قدم کمکِ واقعی‌ه.'},
-  {t:'اختلال یادگیری چیه؟', g:'learning-disorder', b:'اختلال یادگیری یعنی بچه از نظر هوش و فهم کاملاً عادیه — توی بازی، گفت‌وگو و درک ماجراها اصلاً از بقیه کم نمیاره — ولی توی یکی از مهارت‌های درسی گیر می‌کنه: خوندن (کلمه‌ها رو جابه‌جا، برعکس یا با غلط‌های تکراری می‌خونه)، نوشتن (خیلی کند می‌نویسه، دست‌خطش ناخواناست) یا حساب (جدول ضرب نمی‌چسبه، جمعِ ذهنی براش سخته). نکتهٔ مهم: این بچه «تنبل» یا «بی‌مزه» نیست؛ مغزش فقط یه مسیر رو متفاوت پردازش می‌کنه. با روش چندحسی (دیداری + شنیداری + دست‌ورزی) همین بچه‌ها معمولاً به هم‌ترازی می‌رسن. هرچی زودتر معرفی بشن، زودتر به روش درست می‌رسن و اعتمادبه‌نفسی‌شون کمتر آسیب می‌بینه.'},
-  {t:'نشونه‌های کم‌توانی ذهنی چیه؟', g:'intellectual', b:'نشانهٔ اصلی تأخیرِ هم‌زمان در چند حوزه‌ست، نه فقط درس: یادگیری مطالب پایه (شکل‌ها، رنگ‌ها و اعداد خیلی دیر می‌چسبن)، مهارت‌های روزمره (پوشیدن لباس، غذا خوردن مستقل، بازی با قواعد)، و گاهی گفتار. این بچه‌ها محیط آرام‌تر، تکرار بیشتر و انتظارِ واقع‌بینانه لازم دارن — و پشتیبانی تخصصی. اگه بچه‌ای توی چندتا از این زمینه‌ها هم‌زمان عقب‌تر از هم‌سن‌هاشه، معرفی‌ش کمک می‌کنه زودتر مسیر آموزشی مناسبش پیدا بشه: چه همون مدرسه با برنامهٔ فردی، چه مدرسهٔ استثنایی. برای خانواده هم خیلی مهمه که بدن از بچه چه انتظاری داشته باشن و خونه رو چطور برای یادگیری آماده کنن.'}
+  {t:'دیرآموز کیه؟', g:'delayed', b:'دیرآموز یعنی بچه‌ای که به صورت محسوس تو عملکردش در همه حیطه‌ها با همسالان خودش تفاوت مشهود داره، یادگیریش از بچه‌های هم‌سن‌وسالش کندتر پیش می‌ره — ولی این یعنی «کُند»، به معنی نمی‌تونه نیست. این بچه‌ها با توضیح ساده‌تر، تمرین بیشتر و کمی صبر، همون مسیر بقیه رو طی می‌کنن؛ فقط با گام‌های کوچیک‌تر اما متعددتری لازم دارن. توی کلاس معمولاً دیرتر شروع می‌کنه به خوندن و نوشتن، واژه‌های جدید رو دیرتر می‌فهمه و وقتی درس کمی سخت می‌شه زود خسته می‌شه و انگیزه‌ش می‌افته. چیزی که بیشتر از هرچیزی لازم داره تجربهٔ موفقیت‌ه: تکلیف کوچیک‌تر، تشویق واقعی، و اینکه کسی بهش نگاه نکنه که «بی‌استعداده». اگه توی کلاس یا خونه‌تون چنین بچه‌ای دارید، معرفی‌کردنش اولین قدم کمکِ واقعیه به اونه.'},
+  {t:'اختلال یادگیری چیه؟', g:'learning-disorder', b:'اختلال یادگیری یعنی بچه از نظر هوش و فهم کاملاً عادیه — توی بازی، گفت‌وگو و درک ماجراها اصلاً از بقیه کم نمیاره حتی بهتره — ولی توی یکی از مهارت‌های درسی گیر می‌کنه: خوندن (کلمه‌ها رو جابه‌جا، برعکس یا با غلط‌های تکراری می‌خونه)، نوشتن (خیلی کند می‌نویسه، دست‌خطش ناخواناست) یا حساب (جدول ضرب نمی‌چسبه، جمعِ ذهنی براش سخته). نکتهٔ مهم: این بچه «تنبل» یا بی‌دقت نیست؛ مغزش فقط یه مسیر رو متفاوت پردازش می‌کنه. با روش چندحسی (دیداری + شنیداری + دست‌ورزی) همین بچه‌ها معمولاً به هم‌ترازی در یادگیری می‌رسن. هرچی زودتر معرفی بشن، اقدامات مؤثرتری می‌شه براشون انجام داد و اعتمادبه‌نفسی‌شون کمتر آسیب می‌بینه.'},
+  {t:'نشونه‌های کم‌توانی ذهنی چیه؟', g:'intellectual', b:'نشانهٔ اصلی تأخیرِ هم‌زمان در چند حوزه‌ست، نه فقط درس: یادگیری مطالب پایه (شکل‌ها، رنگ‌ها و اعداد خیلی دیر می‌چسبن)، مهارت‌های روزمره (پوشیدن لباس، غذا خوردن مستقل، بازی با قواعد)، و گاهی گفتار. این بچه‌ها محیط آرام‌تر، تکرار بیشتر و انتظارِ واقع‌بینانه لازم دارن — و پشتیبانی تخصصی. اگه بچه‌ای توی چندتا از این زمینه‌ها هم‌زمان عقب‌تر از هم‌سن‌هاشه، معرفی‌ش کمک می‌کنه زودتر مسیر آموزشی مناسبش پیدا بشه. شاید نیازه که مجدد ارزیابی و جای‌دهی بشه: چه همون مدرسه با برنامهٔ فردی، چه مدرسهٔ استثنایی. برای خانواده هم خیلی مهمه که بدونن از بچه چه انتظاری داشته باشن و خونه رو چطور برای یادگیری آماده کنن.'}
 ];
 var state = {
   step: 0, role: null, refName: '', refPhone: '',
   school: '', schoolName: '', grade: '', klass: '',
   childName: '', childBirth: '', concern: null, concernText: '',
-  famCulture: null, famFinance: null, famCoop: null, /* ۱.۲۷.۳۶ — پیش‌فرض «نمی‌دانم»؛ مقدار low/mid/high پس از انتخاب */
   priorEval: null, priorEvalNote: '',
   rows: [], awareIdx: 0, meta: null, submitting: false
 };
@@ -177,7 +175,7 @@ function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'
 function normDigits(s){return String(s==null?'':s).replace(/[۰-۹]/g,function(d){return String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d));}).replace(/[٠-٩]/g,function(d){return String('٠١٢٣٤٥٦٧٨٩'.indexOf(d));});}
 function normPhone(s){var v = normDigits(s).replace(/[\\s\\-().]/g,'');if(v.indexOf('+98')===0){v='0'+v.slice(3);}else if(v.indexOf('98')===0&&v.length===12){v='0'+v.slice(2);}return v;}
 function validPhone(s){return /^09\\d{9}$/.test(normPhone(s));}
-function familyTotal(){return 12;}
+function familyTotal(){return 11;}
 function teachTotal(){return 10;}
 function total(){return state.role==='teacher'?teachTotal():familyTotal();}
 function setBar(){var t=total();var pct=Math.round(Math.min(state.step,t-1)/(t-1)*100);bar.style.width=pct+'%';}
@@ -219,7 +217,7 @@ function fieldErr(id, show, msg){
 /* ─── صفحات ─── */
 function renderWelcome(){
   setBar();
-  app.innerHTML='<div class="card"><div class="badge-free">همه‌ی خدمات مرکز رایگان است</div>'+
+  app.innerHTML='<div class="card"><div class="badge-free">همه‌ی خدمات مرکز رایگانه</div>'+
     '<div class="welcome-text" id="wt"></div>'+
     '<div class="btnrow" id="wb" style="visibility:hidden">'+
     '<button class="btn btn--primary" id="startBtn">شروع</button></div></div>';
@@ -234,7 +232,7 @@ function renderRole(){
   setBar();
   app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
     '<h2>شما کدام‌یک هستید؟</h2>'+
-    '<p class="lead">بر اساس همین انتخاب، فرم برای شما کوتاه یا بلند می‌شود.</p>'+
+    '<p class="lead">بر اساس همین انتخاب، فرم برای شما کوتاه یا بلند می‌شه.</p>'+
     '<div class="choices">'+
     '<button class="choice" id="rFamily"><span class="no">۱</span><b>پدر یا مادر دانش‌آموز</b><span class="d">می‌خوام فرزندم رو به مرکز معرفی کنم</span></button>'+
     '<button class="choice" id="rTeacher"><span class="no">۲</span><b>معلم همکار ما</b><span class="d">می‌خوام دانش‌آموزهای کلاسم رو معرفی کنم</span></button>'+
@@ -252,10 +250,10 @@ function renderContact(){
     '<h2>خودتان را معرفی کنید</h2><p class="lead">اسم و شماره‌ای که راحت بشود با شما حرف زد.</p>'+
     '<div class="field"><label class="f" for="rn">نام و نام خانوادگی شما</label>'+
     '<input class="i" id="rn" autocomplete="name">'+
-    '<div class="err-msg" id="rnErr">نام را کامل بنویسید — دست‌کم دو حرف</div></div>'+
+    '<div class="err-msg" id="rnErr">نام رو کامل بنویسید — دست‌کم دو حرف</div></div>'+
     '<div class="field"><label class="f" for="rp">شماره موبایل</label>'+
     '<input class="i" id="rp" inputmode="tel" dir="ltr" placeholder="09xxxxxxxxx">'+
-    '<div class="err-msg" id="rpErr">شماره موبایل ۱۱ رقم است و با ۰۹ شروع می‌شود</div></div>'+
+    '<div class="err-msg" id="rpErr">شماره موبایل ۱۱ رقم است و با ۰۹ شروع می‌شه</div></div>'+
     btnRow('ادامه','',null,1)+
     '</div>';
   document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=1;render();});
@@ -279,7 +277,7 @@ function renderSchool(){
   setBar();
   app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
     '<h2>'+(state.role==='teacher'?'مدرسه‌ی خودتان':'کودک شما در کدوم مدرسه‌ی همکار ما درس می‌خونه؟')+'</h2>'+
-    '<p class="lead">فقط مدارس همکار ما در فهرست هستن — اگر نبود، اسمش را دستی بنویسید؛ مشکلی نیست.</p>'+
+    '<p class="lead">فقط مدارس همکار ما در فهرست هستن — اگر نبود، اسمش رو دستی بنویسید؛ مشکلی نیست.</p>'+
     '<div class="field"><label class="f" for="sc">مدرسه</label>'+
     '<select class="i" id="sc"><option value="">در حال بارگذاری…</option></select>'+
     '<input class="i" id="scT" style="display:none;margin-top:8px" placeholder="اسم مدرسه را بنویسید" value="'+esc(state.schoolName)+'">'+
@@ -354,7 +352,7 @@ function renderChildName(){
 function renderChildBirth(){
   setBar();
   app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
-    '<h2>تاریخ تولد کودک</h2><p class="lead">اگر بلدید بنویسید — اگر نه، خالی بگذارید و بگذارید ارزیابی خودش بفهمد.</p>'+
+    '<h2>تاریخ تولد کودک</h2><p class="lead">اگر بلدید بنویسید — اگر نه، خالی بگذارید ما تو ارزیابی خودمون چک میکنیم.</p>'+
     '<div class="field"><label class="f" for="cb">تاریخ تولد (شمسی — مثل ۱۳۹۸/۰۵/۱۲)</label>'+
     '<input class="i" id="cb" inputmode="numeric" value="'+esc(state.childBirth)+'">'+
     '<div class="hint">اختیاری است</div></div>'+
@@ -375,7 +373,7 @@ function renderConcern(){
       '<span class="no">'+(i+1)+'</span><b>'+c.t+'</b><span class="d">'+c.d+'</span></button>';
   }).join('');
   app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
-    '<h2>دغدغه‌ی اصلی شما چیه؟</h2><p class="lead">لازم نیست دقیق باشد — نگرانی‌تان را همان‌طور که هست بنویسید.</p>'+
+    '<h2>دغدغه‌ی اصلی شما چیه؟</h2><p class="lead">لازم نیست دقیق باشد — نگرانی‌تان رو همان‌طور که هست بنویسید.</p>'+
     '<div class="choices">'+cards+'</div>'+
     '<div class="err-msg" id="ccErr">یکی از گزینه‌ها را انتخاب کنید</div>'+
     btnRow('ادامه','',null,5)+
@@ -395,54 +393,10 @@ function renderConcern(){
   });
 }
 
-/* ─── ۱.۲۷.۳۶ — فرم تکمیلی خانواده: وضع فرهنگی، سطح مالی، میزان همکاری ─── */
-function famPills(q){
-  return q.opts.map(function(o){
-    return '<button class="pill'+(state[q.key]===o[0]?' sel':'')+'" data-f="'+q.key+'" data-v="'+o[0]+'">'+o[1]+'</button>';
-  }).join('');
-}
-function renderFamily(){
-  setBar();
-  var groups=FAM_QUESTIONS.map(function(q,i){
-    return '<div class="field"><label class="f">'+(i+1)+'. '+q.label+'</label>'+
-      '<div class="pills" id="fq-'+q.key+'">'+famPills(q)+'</div>'+
-      '<div class="hint">'+q.hint+'</div></div>';
-  }).join('');
-  app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
-    '<h2>وضعیت خانواده</h2>'+
-    '<p class="lead">سه پرسش کوتاه درباره‌ی «'+esc(state.childName)+'» — همین‌ها به ما کمک می‌کند خدمات رایگان را درست اولویت‌بندی کنیم و جلسه‌ی اول آماده‌تر باشد.</p>'+
-    groups+
-    btnRow('ادامه','',null,6)+
-    '</div>';
-  document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=6;render();});
-  /* هر گروه یک پیل «نمی‌دانم» هم دارد (مقدار null — پیش‌فرض) */
-  FAM_QUESTIONS.forEach(function(q){
-    var box=document.getElementById('fq-'+q.key);
-    var unk=document.createElement('button');
-    unk.className='pill'+(state[q.key]===null?' sel':'');
-    unk.setAttribute('data-f',q.key);unk.setAttribute('data-v','unknown');
-    unk.textContent='نمی‌دانم';
-    box.appendChild(unk);
-  });
-  app.querySelectorAll('[data-f]').forEach(function(p){
-    p.addEventListener('click',function(){
-      var key=p.getAttribute('data-f');
-      var v=p.getAttribute('data-v');
-      state[key==='culture'?'famCulture':key==='finance'?'famFinance':'famCoop'] = v==='unknown'?null:v;
-      document.getElementById('fq-'+key).querySelectorAll('.pill').forEach(function(x){x.classList.remove('sel');});
-      p.classList.add('sel');
-    });
-  });
-  var nx=app.querySelector('.btnrow .btn--primary');nx.textContent='ادامه';
-  nx.addEventListener('click',function(){
-    state.step=8;render();
-  });
-}
-
 function renderPrior(){
   setBar();
   app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
-    '<h2>قبلاً کجا ارزیابی یا تشخیص داشته؟</h2>'+
+    '<h2>قبلاً جایی ارزیابی یا تشخیص داشته؟</h2>'+
     '<div class="pills" id="pe">'+
     '<button class="pill'+(state.priorEval===true?' sel':'')+'" data-v="1">بله</button>'+
     '<button class="pill'+(state.priorEval===false?' sel':'')+'" data-v="0">خیر</button>'+
@@ -450,7 +404,7 @@ function renderPrior(){
     '<div class="field" id="pen" style="display:'+(state.priorEval===true?'block':'none')+';margin-top:12px">'+
     '<label class="f" for="penote">کجا و چه نتیجه‌ای؟ (اختیاری)</label>'+
     '<input class="i" id="penote" value="'+esc(state.priorEvalNote)+'"></div>'+
-    btnRow('ادامه','',null,7)+
+    btnRow('ادامه','',null,6)+
     '</div>';
   document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=7;render();});
   app.querySelectorAll('#pe .pill').forEach(function(p){
@@ -464,7 +418,7 @@ function renderPrior(){
   var nx=app.querySelector('.btnrow .btn--primary');nx.textContent='ادامه';
   nx.addEventListener('click',function(){
     state.priorEvalNote=document.getElementById('penote').value.trim();
-    state.step=9;render();
+    state.step=8;render();
   });
 }
 
@@ -473,13 +427,13 @@ function renderNotes(){
   app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
     '<h2>نکته‌ای هست که به ارزیابی کمک کند؟</h2><p class="lead">اختیاری است — هر چیزی که فکر می‌کنید باید بدونیم.</p>'+
     '<div class="field"><textarea class="i" id="ct">'+esc(state.concernText)+'</textarea></div>'+
-    btnRow('ادامه به مرور نهایی','',null,8)+
+    btnRow('ادامه به مرور نهایی','',null,7)+
     '</div>';
-  document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=8;render();});
+  document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=7;render();});
   var nx=app.querySelector('.btnrow .btn--primary');nx.textContent='ادامه به مرور نهایی';
   nx.addEventListener('click',function(){
     state.concernText=document.getElementById('ct').value.trim();
-    state.step=10;render();
+    state.step=9;render();
   });
 }
 
@@ -494,18 +448,11 @@ function familyChildren(){
     concern_tags: [],
     concern_text: state.concernText || null,
     prior_eval: state.priorEval===true?true:state.priorEval===false?false:null,
-    prior_eval_note: state.priorEvalNote || null,
-    /* ۱.۲۷.۳۶ — فرم تکمیلی خانواده؛ «نمی‌دانم» = null */
-    family_culture: state.famCulture || null,
-    family_finance: state.famFinance || null,
-    family_cooperation: state.famCoop || null
+    prior_eval_note: state.priorEvalNote || null
   }];
 }
 
 /* ─── مودال مرور نهایی (Typeform-style) — خانواده ─── */
-function famLabel(v, map){
-  return v?(map[v]||v):null;
-}
 function renderReview(){
   setBar();
   var rows=[
@@ -515,11 +462,8 @@ function renderReview(){
     {k:'پایه', v:esc2(state.grade), s:3},
     {k:'کلاس', v:esc2(state.klass), s:3},
     {k:'دغدغه اصلی', v:CAT_LABELS[state.concern]||'', s:6},
-    {k:'وضع فرهنگی', v:esc2(famLabel(state.famCulture,{low:'کم',mid:'متوسط',high:'غنی'})), s:7},
-    {k:'سطح مالی', v:esc2(famLabel(state.famFinance,{low:'کم‌برخوردار',mid:'متوسط',high:'برخوردار'})), s:7},
-    {k:'همکاری خانواده', v:esc2(famLabel(state.famCoop,{low:'کم',mid:'متوسط',high:'زیاد'})), s:7},
-    {k:'ارزیابی قبلی', v:state.priorEval===true?'بله'+(state.priorEvalNote?' — '+esc(state.priorEvalNote):''):'خیر', s:8},
-    {k:'نکات', v:esc2(state.concernText), s:9},
+    {k:'ارزیابی قبلی', v:state.priorEval===true?'بله'+(state.priorEvalNote?' — '+esc(state.priorEvalNote):''):'خیر', s:7},
+    {k:'نکات', v:esc2(state.concernText), s:8},
     {k:'معرف', v:esc(state.refName)+' — '+esc(state.refPhone), s:2}
   ].map(function(r){
     return '<div class="review__row"><span class="k">'+r.k+'</span><span class="v">'+r.v+'</span>'+
@@ -527,12 +471,12 @@ function renderReview(){
   }).join('');
   app.innerHTML='<div class="card">'+
     '<h2>این اطلاعات به لیست انتظار اضافه میشه</h2>'+
-    '<p class="lead">یک نگاه بیندازید؛ هر سطر را همین‌جا می‌شود اصلاح کرد.</p>'+
+    '<p class="lead">یک نگاه بیندازید؛ هر سطر رو همین‌جا می‌شه اصلاح کرد.</p>'+
     '<div class="review">'+rows+'</div>'+
     '<div class="err-msg" id="subErr"></div>'+
     '<div class="btnrow"><button class="btn btn--ghost" data-act="back">بازگشت و ویرایش</button>'+
     '<button class="btn btn--primary" id="confirmBtn">تأیید و افزودن به لیست انتظار</button></div></div>';
-  document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=9;render();});
+  document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=8;render();});
   app.querySelectorAll('.e').forEach(function(b){
     b.addEventListener('click',function(){state.step=Number(b.getAttribute('data-s'));render();});
   });
@@ -558,7 +502,7 @@ function submit(payload, btnEl){
     .catch(function(){
       state.submitting=false;btnEl.disabled=false;
       var el=document.getElementById('subErr');
-      if(el){el.className='err-msg show';el.textContent='ارتباط برقرار نشد — اینترنت را چک کنید و دوباره بزنید';}
+      if(el){el.className='err-msg show';el.textContent='ارتباط برقرار نشد — اینترنت رو چک کنید و دوباره بزنید';}
       btnEl.textContent=state.role==='teacher'?'ثبت همه در لیست انتظار':'تأیید و افزودن به لیست انتظار';
     });
 }
@@ -598,7 +542,7 @@ function rowCardHtml(r, i){
     '<input class="i rn" value="'+esc(r.name)+'"></div>'+
     '<div class="field"><label class="f">شماره موبایل والد</label>'+
     '<input class="i rp" inputmode="tel" dir="ltr" placeholder="09xxxxxxxxx" value="'+esc(r.phone)+'">'+
-    '<div class="err-msg">شماره موبایل ۱۱ رقم است و با ۰۹ شروع می‌شود</div></div></div>';
+    '<div class="err-msg">شماره موبایل ۱۱ رقم است و با ۰۹ شروع می‌شه</div></div></div>';
 }
 
 function renderBatch(){
@@ -606,7 +550,7 @@ function renderBatch(){
   if(state.rows.length===0)state.rows=[{cat:null,name:'',phone:''}];
   app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
     '<h2>ثبت ارجاع‌های کلاس شما</h2>'+
-    '<p class="lead">برای هر دانش‌آموز دسته را انتخاب کنید، اسمش و شماره‌ی والدش را بنویسید.</p>'+
+    '<p class="lead">برای هر دانش‌آموز دسته رو انتخاب کنید، اسمش و شماره‌ی والدش رو بنویسید.</p>'+
     '<div id="rows">'+state.rows.map(rowCardHtml).join('')+'</div>'+
     '<button class="btn btn--ghost btn--sm" id="addRow">+ افزودن دانش‌آموز دیگر</button>'+
     '<div class="err-msg" id="bErr" style="margin-top:10px"></div>'+
@@ -632,7 +576,7 @@ function renderBatch(){
       else if(em)em.className='err-msg';
     });
     var be=document.getElementById('bErr');
-    if(!ok){be.className='err-msg show';be.textContent='نام و شماره موبایل والد هر دانش‌آموز را کامل و درست بنویسید';return;}
+    if(!ok){be.className='err-msg show';be.textContent='نام و شماره موبایل والد هر دانش‌آموز رو کامل و درست بنویسید';return;}
     be.className='err-msg';
     state.step=8;render();
   });
@@ -694,7 +638,7 @@ function renderDone(){
   app.innerHTML='<div class="card done"><div class="big">'+(fam?'🎉':'🙏')+'</div>'+
     '<h2>'+(fam?'خوش‌آمد! اسمتون توی لیست انتظار ثبت شد':'ممنون از معرفی‌تون!')+'</h2>'+
     '<p class="lead">'+(fam?'همکاران ما برای وقت‌گیری تماس می‌گیرن. یادتون باشه همه‌ی خدمات مرکز رایگانه.':'اسم دانش‌آموزها به لیست انتظار اضافه شد. تیم ما برای تماس با خانواده‌ها اقدام می‌کنه.')+'</p>'+
-    '<p class="hint">مرکز جامع سنجش و اختلالات یادگیری — همه‌ی خدمات رایگان</p></div>';
+    '<p class="hint">مرکز جامع سنجش و اختلالات یادگیری — همه‌ی خدمات رایگانه</p></div>';
 }
 
 function render(){
@@ -709,11 +653,10 @@ function render(){
     if(s===4)return renderChildName();
     if(s===5)return renderChildBirth();
     if(s===6)return renderConcern();
-    if(s===7)return renderFamily();
-    if(s===8)return renderPrior();
-    if(s===9)return renderNotes();
-    if(s===10)return renderReview();
-    if(s===11)return renderDone();
+    if(s===7)return renderPrior();
+    if(s===8)return renderNotes();
+    if(s===9)return renderReview();
+    if(s===10)return renderDone();
   }else{
     if(s===4||s===5||s===6)return renderAware();
     if(s===7)return renderBatch();
@@ -736,9 +679,7 @@ export function renderReferralPage(opts: ReferralPageOpts = {}): string {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>معرفی به مرکز — جامع سنجش و اختلالات یادگیری</title>
 <meta name="robots" content="noindex, nofollow">
-<!-- وزیرمتن از CDN (CSP فقط jsdelivr را اجازه می‌دهد) -->
-<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css">
+<!-- ۱.۲۷.۴۲ — وزیرمتن فقط خودی: فایل متغیر باندل‌شده از همان مبدا سرو می‌شود (بدون CDN بیرونی) -->
 <style>${PAGE_STYLES}</style>
 </head>
 <body>
