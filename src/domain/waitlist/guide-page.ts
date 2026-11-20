@@ -187,24 +187,32 @@ export function renderGuidePage(slug: string, opts?: { clinicName?: string }): s
 <style>
 :root{--ink:#2a2118;--muted:#6f675c;--brand:#0e7490;--brand-soft:#f0f7f8;--line:#e8e2d6}
 *{box-sizing:border-box}
-body{margin:0;background:#f7f3ea;color:var(--ink);font-family:Vazirmatn,sans-serif;font-size:15.5px;line-height:2.1}
+/* ۱.۲۷.۴۰ — هم‌زبان با فرم معرفی: پس‌زمینهٔ گرادینتی سه‌لایه با هاله‌های رنگی ثابت */
+body{margin:0;color:var(--ink);font-family:Vazirmatn,sans-serif;font-size:15.5px;line-height:2.1;
+background:radial-gradient(620px 320px at 90% -6%,rgba(14,116,144,.14),transparent 66%),
+radial-gradient(540px 300px at 4% 104%,rgba(14,165,233,.12),transparent 66%),
+linear-gradient(170deg,#eef6fb 0%,#f7f3ea 52%,#fdf2f8 100%);
+background-attachment:fixed}
 .wrap{max-width:720px;margin:0 auto;padding:22px 16px 48px}
 header{text-align:center;padding:26px 0 18px}
 h1{font-size:clamp(20px,5vw,26px);margin:0 0 10px;line-height:1.6}
 .lead{color:var(--muted);font-size:14.5px;margin:0}
-main{background:#fff;border:1px solid var(--line);border-radius:18px;padding:24px 20px}
+main{background:linear-gradient(180deg,#ffffff,#fcfdff);border:1px solid rgba(232,226,214,.85);
+border-radius:18px;padding:24px 20px;box-shadow:0 12px 32px -16px rgba(14,116,144,.25)}
 section{margin-bottom:22px}
 h2{font-size:17px;margin:0 0 8px;color:var(--brand)}
 p{margin:0 0 8px}
 ul{margin:6px 0 0;padding-inline-start:20px}
 li{margin-bottom:6px}
-.faq{background:var(--brand-soft);border-radius:12px;padding:12px 14px;margin-bottom:10px;font-size:14px}
+.faq{background:linear-gradient(135deg,var(--brand-soft),#fdf5f0);border-radius:12px;padding:12px 14px;margin-bottom:10px;font-size:14px}
 .faq b{display:block;margin-bottom:4px}
-.cta{display:block;text-align:center;background:var(--brand);color:#fff;border-radius:14px;padding:14px;
-font-weight:800;text-decoration:none;margin-top:20px;font-size:15px}
+/* ۱.۲۷.۴۰ — دکمهٔ پایانی گرادینتی هم‌زبان با فرم معرفی */
+.cta{display:block;text-align:center;background:linear-gradient(135deg,#0e7490 0%,#2563eb 100%);color:#fff;
+border-radius:14px;padding:14px;font-weight:800;text-decoration:none;margin-top:20px;font-size:15px;
+box-shadow:0 10px 24px -10px rgba(37,99,235,.5)}
 .cta:active{opacity:.85}
 footer{text-align:center;color:var(--muted);font-size:12.5px;margin-top:18px}
-@media print{header,footer{padding:8px 0}main{border:none}a.cta{display:none}}
+@media print{header,footer{padding:8px 0}main{border:none;box-shadow:none}a.cta{display:none}}
 </style>
 </head>
 <body>

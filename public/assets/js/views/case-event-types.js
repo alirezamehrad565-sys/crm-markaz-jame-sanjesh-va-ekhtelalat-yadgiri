@@ -98,13 +98,18 @@ export async function renderCaseEventTypes(container) {
       icon('plus', 16), 'قالب جدید')
   );
 
+  /* ۱.۲۷.۴۰ — فرم‌ساز تعاملی از آیتم مستقل منو به تب سوم همین نما منتقل شد (خواست کارفرما،
+     هم‌الگوی ادغام صندوق ورودی در لیست انتظار ۱.۲۷.۳۸)؛ #/form-builder فقط ریدایرکت می‌ماند. */
   const tabBtns = { /* ۱.۲۲.۰ — ارجاع تب‌ها برای تازه‌سازی شمارنده‌ها بدون rebuild */
     library: tabBtn('library', `کتابخانهٔ فرم‌ها (${fa(types.filter((t) => t.active).length)})`),
-    pending: tabBtn('pending', `در انتظار پاسخ (${fa(pending.length)})`)
+    pending: tabBtn('pending', `در انتظار پاسخ (${fa(pending.length)})`),
+    builder: tabBtn('builder', 'فرم‌ساز تعاملی') /* ۱.۲۷.۴۰ */
   }; /* ۱.۲۵.۶۰ — تب «نظرسنجی خانواده‌ها» حذف شد؛ ماژول مستقل #/family-surveys (فقط مدیر) */
   const tabs = el('div', { style: { display: 'flex', gap: 'var(--sp-2)', margin: '0 0 var(--sp-4)', flexWrap: 'wrap' } },
-    tabBtns.library, tabBtns.pending
+    tabBtns.library, tabBtns.pending, tabBtns.builder
   );
+  const TAB_INDEX = { library: 0, pending: 1, builder: 2 }; /* ۱.۲۷.۴۰ */
+  let builderStarted = false; /* ۱.۲۷.۴۰ — فرم‌ساز فقط بار اول lazy-import می‌شود؛ تعویض تب دوباره نمی‌سازد */
   function tabBtn(key, label) {
     return el('button', {
       class: `btn btn--sm ${state.tab === key ? 'btn--primary' : 'btn--soft'}`,
@@ -116,8 +121,7 @@ export async function renderCaseEventTypes(container) {
       b.classList.remove('btn--primary');
       b.classList.add('btn--soft');
     }
-    const idx = state.tab === 'library' ? 0 : 1;
-    const activeBtn = tabs.querySelectorAll('button')[idx];
+    const activeBtn = tabs.querySelectorAll('button')[TAB_INDEX[state.tab] ?? 0];
     activeBtn.classList.remove('btn--soft');
     activeBtn.classList.add('btn--primary');
     renderBodyZone(); /* ۱.۲۲.۰ — تعویض تب فقط ناحیهٔ بدنه را جابه‌جا می‌کند؛ شِل دست‌نخورده */
@@ -127,6 +131,7 @@ export async function renderCaseEventTypes(container) {
   const libraryFilters = buildLibraryFilters();
   const listZone = el('div', {});
   const pendingZone = el('div', {});
+  const builderZone = el('div', {}); /* ۱.۲۷.۴۰ */
   const body = el('div', {});
   container.replaceChildren(head, tabs, body);
   renderBodyZone();
@@ -135,6 +140,15 @@ export async function renderCaseEventTypes(container) {
     if (state.tab === 'library') {
       body.replaceChildren(libraryFilters, listZone);
       paintTypeZone();
+    } else if (state.tab === 'builder') {
+      /* ۱.۲۷.۴۰ — فرم‌ساز تعاملی: ماژول لِیزی خودش می‌ماند (چانک جدا؛ eager ratchet دست نمی‌خورد) */
+      body.replaceChildren(builderZone);
+      if (!builderStarted) {
+        builderStarted = true;
+        import('./form-builder.js').then((m) => m.renderFormBuilder(builderZone)).catch((err) => {
+          builderZone.replaceChildren(errorState(err instanceof Error ? err.message : 'بارگذاری فرم‌ساز شکست خورد', 'دوباره تلاش کنید', () => { builderStarted = false; renderTabs(); }));
+        });
+      }
     } else {
       body.replaceChildren(pendingZone);
       paintPendingZone();
@@ -156,12 +170,12 @@ export async function renderCaseEventTypes(container) {
       && (!q2 || String(t.title ?? '').includes(q2));
   }
 
-  /* ۱.۲۲.۰ — رندر «فقط ناحیهٔ فهرست قالب‌ها» از state محلی — بدون GET، بدون اسکلت، بدون پرش اسکرول */
+  /* ۱.۲۲.۰ — رندر «فقط ناحیهٔ فهرست قالب‌ها» از state محلی — بدون GET، بدون اسکلت، بدون پرش اسکرول
+     ۱.۲۷.۴۰ — خواست کارفرما: قالب‌های غیرفعال دیگر هیچ‌جا رندر نمی‌شوند (نه بخش جدا، نه کم‌رنگ) */
   function paintTypeZone() {
     if (!listZone.isConnected) return;
     updateCounts();
     const active = state.types.filter(matchesTypeFilter);
-    const inactive = state.types.filter((t) => !t.active);
     if (active.length === 0) {
       listZone.replaceChildren(emptyState({
         iconName: 'file',
@@ -170,34 +184,23 @@ export async function renderCaseEventTypes(container) {
       }));
       return;
     }
-    listZone.replaceChildren(...[
+    listZone.replaceChildren(
       el('div', { dataset: { zone: 'active' }, style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 'var(--sp-4)' } },
-        ...active.map((t) => typeCard(t))),
-      inactive.length > 0
-        ? el('div', { style: { marginTop: 'var(--sp-5)' } },
-            el('h3', { style: { marginBottom: 'var(--sp-3)', fontSize: 'var(--fs-md)' } }, 'غیرفعال'),
-            el('div', { dataset: { zone: 'inactive' }, style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 'var(--sp-4)', opacity: '0.65' } },
-              ...inactive.map((t) => typeCard(t))))
-        : null
-    ].filter(Boolean));
+        ...active.map((t) => typeCard(t)))
+    );
   }
 
-  /* ۱.۲۲.۰ — پس از جمع‌شدن نرمِ یک کارت، اگر بخش فعال خالی شده یا سرتیتر «غیرفعال»
-     دیگر لازم نیست، حالت درستِ همان ناحیه بی‌صدا بنشیند (بدون قطع انیمیشن) */
+  /* ۱.۲۲.۰ — پس از جمع‌شدن نرمِ یک کارت، اگر فهرست با state ناهم‌خوان شد حالت درستِ همان
+     ناحیه بی‌صدا بنشیند (بدون قطع انیمیشن) — ۱.۲۷.۴۰: بخش «غیرفعال» حذف شد */
   function ensureNonEmptyPaint() {
     setTimeout(() => {
       if (!listZone.isConnected) return;
       const grid = listZone.querySelector('[data-zone="active"]');
-      const inactiveGrid = listZone.querySelector('[data-zone="inactive"]');
       const stateActive = state.types.filter(matchesTypeFilter).length;
-      const stateInactive = state.types.filter((t) => !t.active).length;
       const activeMismatch = stateActive === 0
         ? Boolean(grid)
         : !grid || grid.querySelectorAll(':scope > [data-id]').length !== stateActive;
-      const inactiveMismatch = stateActive > 0 && stateInactive > 0
-        ? !inactiveGrid || inactiveGrid.querySelectorAll(':scope > [data-id]').length !== stateInactive
-        : Boolean(inactiveGrid);
-      if (activeMismatch || inactiveMismatch) paintTypeZone();
+      if (activeMismatch) paintTypeZone();
     }, 320);
   }
 
@@ -305,9 +308,9 @@ export async function renderCaseEventTypes(container) {
       state.types = state.types.map((x) => (x.id === t.id ? t : x));
       const old = listZone.querySelector(`[data-id="${CSS.escape(String(t.id))}"]`);
       if (!old) { ctl.quietSync(); return; } // با فیلتر فعلی تازه وارد دید شده — همگام‌سازی بی‌صدا
-      // از فیلتر دسته/مخاطب/جستجو خارج شد (فقط کارت‌های فعال فیلتر می‌شوند؛ بخش «غیرفعال» بی‌فیلتر است)
+      // از فیلتر دسته/مخاطب/جستجو خارج شد (فقط کارت‌های فعال فیلتر می‌شوند — ۱.۲۷.۴۰: غیرفعال‌ها اصلاً رندر نمی‌شوند)
       if (t.active && !matchesTypeFilter(t)) { collapseRemove(old); ensureNonEmptyPaint(); return; }
-      if (Boolean(prev?.active) !== Boolean(t.active)) { paintTypeZone(); return; } // جابه‌جایی فعال↔غیرفعال — مقصد در همین ناحیه است
+      if (Boolean(prev?.active) !== Boolean(t.active)) { paintTypeZone(); return; } // قالب غیرفعال شد → از فهرست پاک می‌شود
       const fresh = typeCard(t);
       old.replaceWith(fresh);
       flashNode(fresh);
@@ -420,8 +423,8 @@ export async function renderCaseEventTypes(container) {
             el('div', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', flexWrap: 'wrap' } },
               el('b', {}, t.title),
               el('span', { class: 'badge badge--neutral' }, CATEGORY_LABELS[t.category] ?? t.category),
-              el('span', { class: `badge ${fillTargetOf(t).badgeClass}` }, fillTargetOf(t).badge),
-              !t.active ? el('span', { class: 'badge badge--neutral' }, 'غیرفعال') : null
+              el('span', { class: `badge ${fillTargetOf(t).badgeClass}` }, fillTargetOf(t).badge)
+              /* ۱.۲۷.۴۰ — نشان «غیرفعال» حذف شد: قالب غیرفعال اصلاً رندر نمی‌شود */
             ),
             el('div', { class: 'cell-sub', style: { marginTop: 'var(--sp-1)' } },
               `${fa((t.fields ?? []).length)} فیلد` +
