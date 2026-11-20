@@ -768,7 +768,7 @@ export function createApp(deps: AppDeps): AppHono {
   registerStudentTimelineRoutes(app, services.studentTimeline); // فاز ۶: تایم‌لاین §11
   registerSpecialNeedsRoutes(app, services.specialNeeds); // فاز ۷: نیازهای ویژه §12 + وضعیت مدرسه §15
 
-  registerWaitlistRoutes(app, services.waitlist);
+  registerWaitlistRoutes(app, services.waitlist, { publicBaseUrl: deps.publicBaseUrl ?? null }); /* ۱.۲۷.۴۴ */
 
   // ۱.۲۷.۳۴ — فرم‌ساز تعاملی عمومی: CRUD فرم‌ها (مدیر/منشی) + صفحهٔ بدون‌لاگین /public/form/:slug
   // و ثبت پاسخ با سقف نرخ درون‌حافظه — ماژول مستقل @domain/form-builder (MIGRATIONS.md: 0120)
