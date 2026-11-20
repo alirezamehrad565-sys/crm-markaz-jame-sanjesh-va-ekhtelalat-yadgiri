@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.27.43";
+var APP_VERSION = "1.27.44";
 var NODE_MIN_VERSION = "1.26.0";
 
 // node_modules/zod/v4/classic/external.js
@@ -32677,7 +32677,7 @@ function referralRateGuard(ip, chatKey) {
   }
 }
 __name(referralRateGuard, "referralRateGuard");
-function registerWaitlistRoutes(app, service) {
+function registerWaitlistRoutes(app, service, opts) {
   app.get("/api/waitlist", async (c) => {
     const status = c.req.query("status");
     const priority = c.req.query("priority");
@@ -32698,7 +32698,7 @@ function registerWaitlistRoutes(app, service) {
       status: c.req.query("status") || void 0,
       year: c.req.query("year") || void 0
     });
-    return c.json({ data: items }, 200);
+    return c.json({ data: items, public_base_url: opts?.publicBaseUrl ?? null }, 200);
   });
   app.post("/api/waitlist/referrals/:id/accept", requireRole("manager", "secretary"), async (c) => {
     const actor = getAuthContext(c);
@@ -80980,7 +80980,7 @@ function createApp(deps) {
   registerRoutes3(app, services.studentProfile);
   registerStudentTimelineRoutes(app, services.studentTimeline);
   registerSpecialNeedsRoutes(app, services.specialNeeds);
-  registerWaitlistRoutes(app, services.waitlist);
+  registerWaitlistRoutes(app, services.waitlist, { publicBaseUrl: deps.publicBaseUrl ?? null });
   registerFormBuilderRoutes(app, createFormBuilderService({ db: services.db, audit: services.audit, logger: services.logger }));
   registerFollowUpRoutes(app, services.followups);
   registerTodoRoutes(app, services.todos);

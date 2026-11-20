@@ -45,7 +45,12 @@ function referralRateGuard(ip: string, chatKey: string | null): void {
   }
 }
 
-export function registerWaitlistRoutes(app: AppHono, service: WaitlistService): void {
+export function registerWaitlistRoutes(
+  app: AppHono,
+  service: WaitlistService,
+  /* ۱.۲۷.۴۴ — پایهٔ لینک عمومی معرفی برای جعبهٔ اشتراک پنل (از env استقرار؛ دسکتاپ null) */
+  opts?: { publicBaseUrl?: string | null }
+): void {
   app.get('/api/waitlist', async (c) => {
     const status = c.req.query('status') as never | undefined;
     const priority = c.req.query('priority') as never | undefined;
@@ -69,7 +74,9 @@ export function registerWaitlistRoutes(app: AppHono, service: WaitlistService): 
       status: c.req.query('status') || undefined,
       year: c.req.query('year') || undefined
     });
-    return c.json({ data: items }, 200);
+    /* ۱.۲۷.۴۴ — جعبهٔ «لینک عمومی معرفی» پنل از همین فیلد می‌خواند؛ در موتور محلی null است
+       و نما به location.origin برمی‌گردد (لینک LAN فقط برای شبکهٔ داخلی معنا دارد). */
+    return c.json({ data: items, public_base_url: opts?.publicBaseUrl ?? null }, 200);
   });
 
   app.post('/api/waitlist/referrals/:id/accept', requireRole('manager', 'secretary'), async (c) => {

@@ -1,0 +1,19 @@
+{
+  "files": 435,
+  "totalLoc": 106920,
+  "fnCount": 2810,
+  "fnLen": {
+    "p50": 7,
+    "p90": 51,
+    "p99": 341,
+    "max": 1839
+  },
+  "fnsOver80": 169,
+  "fnsOver150": 88,
+  "filesOver600": 48,
+  "maxFileLoc": 2375,
+  "topFilesSum": 20290,
+  "dupRatio": 0.0293,
+  "elFiles": 69,
+  "htmlFiles": 9
+}
