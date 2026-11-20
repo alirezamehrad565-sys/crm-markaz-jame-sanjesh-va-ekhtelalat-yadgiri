@@ -31,6 +31,8 @@ import { createSpecialNeedsService, registerSpecialNeedsRoutes } from '@app/spec
 import type { SpecialNeedsService } from '@app/special-needs';
 import { createWaitlistService, registerWaitlistRoutes } from '@domain/waitlist';
 import type { WaitlistService } from '@domain/waitlist';
+import { createFormBuilderService, registerFormBuilderRoutes } from '@domain/form-builder'; // ۱.۲۷.۳۴ — فرم‌ساز تعاملی عمومی
+import type { FormBuilderService } from '@domain/form-builder';
 import { createFollowUpsService, registerFollowUpRoutes } from '@domain/followups';
 import type { FollowUpsService } from '@domain/followups';
 import { createTodosService, registerTodoRoutes } from '@domain/todos';
@@ -765,6 +767,10 @@ export function createApp(deps: AppDeps): AppHono {
   registerSpecialNeedsRoutes(app, services.specialNeeds); // فاز ۷: نیازهای ویژه §12 + وضعیت مدرسه §15
 
   registerWaitlistRoutes(app, services.waitlist);
+
+  // ۱.۲۷.۳۴ — فرم‌ساز تعاملی عمومی: CRUD فرم‌ها (مدیر/منشی) + صفحهٔ بدون‌لاگین /public/form/:slug
+  // و ثبت پاسخ با سقف نرخ درون‌حافظه — ماژول مستقل @domain/form-builder (MIGRATIONS.md: 0120)
+  registerFormBuilderRoutes(app, createFormBuilderService({ db: services.db, audit: services.audit, logger: services.logger }));
 
   registerFollowUpRoutes(app, services.followups);
 

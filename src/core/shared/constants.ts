@@ -448,6 +448,27 @@ export const REFERRAL_LIST_LIMIT = 500;
 export const REFERRAL_RATE_PER_HOUR = 20;      // به‌ازای هر IP — بدنه‌های >۸KB اصلاً پارس نمی‌شوند
 export const REFERRAL_RATE_PER_CHAT = 5;       // به‌ازای هر توکن بات (سقف پنجرهٔ یک‌ساعته)
 
+/* ─── فرم‌ساز تعاملی عمومی (form-builder — v1.27.34 · REFERRAL-DESIGN §A) ─── */
+export const FORM_BLOCK_KINDS = [
+  'text',
+  'longtext',
+  'number',
+  'phone',
+  'select',
+  'multi',
+  'yes_no',
+  'note'
+] as const;
+export const FORM_TITLE_MAX = 120;
+export const FORM_DESCRIPTION_MAX = 500;
+export const FORM_BLOCKS_MAX = 60;
+export const FORM_BLOCK_LABEL_MAX = 200;
+export const FORM_BLOCK_OPTIONS_MAX = 12;
+export const FORM_OPTION_MAX = 100;
+export const FORM_NOTE_MAX = 2000;
+export const FORM_RESPONSE_LIMIT = 500;
+export const FORM_RATE_PER_HOUR = 30;          // به‌ازای هر IP برای ثبت پاسخ عمومی
+
 export const TODO_STATUSES = ['pending', 'done'] as const;
 
 export const TODO_PRIORITIES = ['normal', 'urgent'] as const;
