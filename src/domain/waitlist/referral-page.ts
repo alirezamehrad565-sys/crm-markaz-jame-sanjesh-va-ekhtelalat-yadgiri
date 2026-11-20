@@ -273,6 +273,8 @@ function renderSchool(){
     btnRow('ادامه','',null,2)+
     '</div>';
   document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=2;render();});
+  /* ۱.۲۷.۳۶ — وصلهٔ اشکال قدیمی: پایه هم به state بسته نمی‌شد */
+  document.getElementById('gr').addEventListener('change',function(e){state.grade=e.target.value;});
   loadMeta(function(meta){
     var sc=document.getElementById('sc');var scT=document.getElementById('scT');
     if(!sc)return;
@@ -297,6 +299,8 @@ function renderSchool(){
       kl.innerHTML='<option value="">انتخاب کنید</option>'+cs.map(function(c){
         return '<option value="'+esc(c.name)+'"'+(state.klass===c.name?' selected':'')+'>'+esc(c.name)+'</option>';
       }).join('');
+      /* ۱.۲۷.۳۶ — وصلهٔ اشکال قدیمی: انتخاب کلاس به state بسته نمی‌شد و ثبت نمی‌گشت */
+      kl.addEventListener('change',function(e){state.klass=e.target.value;});
     }
   });
   app.querySelector('.btnrow .btn--primary').addEventListener('click',function(){
@@ -318,6 +322,8 @@ function renderChildName(){
     btnRow('ادامه','',null,3)+
     '</div>';
   document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=3;render();});
+  /* ۱.۲۷.۳۶ — وصلهٔ اشکال قدیمی (از v1.۲۷.۳۳): input نام کودک به state بسته نمی‌شد و گام جلو نمی‌رفت */
+  document.getElementById('cn').addEventListener('input',function(e){state.childName=e.target.value;});
   var nx=app.querySelector('.btnrow .btn--primary');nx.textContent='ادامه';
   nx.addEventListener('click',function(){
     var ok=state.childName.trim().length>=2;fieldErr('cnErr',!ok);

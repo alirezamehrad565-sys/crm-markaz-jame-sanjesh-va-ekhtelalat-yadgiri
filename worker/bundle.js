@@ -31999,6 +31999,8 @@ function renderSchool(){
     btnRow('\u0627\u062F\u0627\u0645\u0647','',null,2)+
     '</div>';
   document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=2;render();});
+  /* \u06F1.\u06F2\u06F7.\u06F3\u06F6 \u2014 \u0648\u0635\u0644\u0647\u0654 \u0627\u0634\u06A9\u0627\u0644 \u0642\u062F\u06CC\u0645\u06CC: \u067E\u0627\u06CC\u0647 \u0647\u0645 \u0628\u0647 state \u0628\u0633\u062A\u0647 \u0646\u0645\u06CC\u200C\u0634\u062F */
+  document.getElementById('gr').addEventListener('change',function(e){state.grade=e.target.value;});
   loadMeta(function(meta){
     var sc=document.getElementById('sc');var scT=document.getElementById('scT');
     if(!sc)return;
@@ -32023,6 +32025,8 @@ function renderSchool(){
       kl.innerHTML='<option value="">\u0627\u0646\u062A\u062E\u0627\u0628 \u06A9\u0646\u06CC\u062F</option>'+cs.map(function(c){
         return '<option value="'+esc(c.name)+'"'+(state.klass===c.name?' selected':'')+'>'+esc(c.name)+'</option>';
       }).join('');
+      /* \u06F1.\u06F2\u06F7.\u06F3\u06F6 \u2014 \u0648\u0635\u0644\u0647\u0654 \u0627\u0634\u06A9\u0627\u0644 \u0642\u062F\u06CC\u0645\u06CC: \u0627\u0646\u062A\u062E\u0627\u0628 \u06A9\u0644\u0627\u0633 \u0628\u0647 state \u0628\u0633\u062A\u0647 \u0646\u0645\u06CC\u200C\u0634\u062F \u0648 \u062B\u0628\u062A \u0646\u0645\u06CC\u200C\u06AF\u0634\u062A */
+      kl.addEventListener('change',function(e){state.klass=e.target.value;});
     }
   });
   app.querySelector('.btnrow .btn--primary').addEventListener('click',function(){
@@ -32044,6 +32048,8 @@ function renderChildName(){
     btnRow('\u0627\u062F\u0627\u0645\u0647','',null,3)+
     '</div>';
   document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=3;render();});
+  /* \u06F1.\u06F2\u06F7.\u06F3\u06F6 \u2014 \u0648\u0635\u0644\u0647\u0654 \u0627\u0634\u06A9\u0627\u0644 \u0642\u062F\u06CC\u0645\u06CC (\u0627\u0632 v1.\u06F2\u06F7.\u06F3\u06F3): input \u0646\u0627\u0645 \u06A9\u0648\u062F\u06A9 \u0628\u0647 state \u0628\u0633\u062A\u0647 \u0646\u0645\u06CC\u200C\u0634\u062F \u0648 \u06AF\u0627\u0645 \u062C\u0644\u0648 \u0646\u0645\u06CC\u200C\u0631\u0641\u062A */
+  document.getElementById('cn').addEventListener('input',function(e){state.childName=e.target.value;});
   var nx=app.querySelector('.btnrow .btn--primary');nx.textContent='\u0627\u062F\u0627\u0645\u0647';
   nx.addEventListener('click',function(){
     var ok=state.childName.trim().length>=2;fieldErr('cnErr',!ok);
