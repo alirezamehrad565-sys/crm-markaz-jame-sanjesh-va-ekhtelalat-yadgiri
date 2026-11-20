@@ -149,6 +149,7 @@ export const NOTIFICATION_TEMPLATES = [
   'bot_about',
 
   'bot_contact',
+  'bot_activities',
   'bot_public_files',
   'bot_public_files_stale',
   'bot_file_sent',

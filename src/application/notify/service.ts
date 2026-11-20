@@ -129,6 +129,7 @@ export interface NotifyAppService {
   handleAuthGuideCommand(): Promise<BotReply>;
   handlePendingHomeworkCommand(chatId: string): Promise<BotReply>;
   handlePublicFilesCommand(chatId: string): Promise<BotReply>;
+  handleActivitiesCommand(): Promise<BotReply>; // ۱.۲۷.۳۸ — لینک تمرین‌ها و کارت‌های آمادهٔ مرکز
   handleParentFileGet(chatId: string, idx: number): Promise<BotReply>;
   notifyWaitlistSlotFreed(appointment: Appointment): Promise<void>;
   sendDailyDigest(nowDate?: Date): Promise<DigestSummary>;

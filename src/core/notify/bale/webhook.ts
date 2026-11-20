@@ -65,6 +65,7 @@ export type BotCommand =
   | { kind: 'unlink_no'; chatId: string }
   | { kind: 'contact'; chatId: string }
   | { kind: 'public_files'; chatId: string }
+  | { kind: 'activities'; chatId: string } // ۱.۲۷.۳۸ — لینک استفاده از تمرین‌ها و کارت‌های آمادهٔ مرکز
   | { kind: 'pfile_get'; chatId: string; idx: number }
   | { kind: 'services'; chatId: string }
   | { kind: 'auth_guide'; chatId: string }
@@ -158,6 +159,7 @@ const UNLINK_LABELS = new Set(['قطع اتصال', 'خروج از نقش', 'ق�
 const EXB_LABELS = new Set(['بانک تمرین', 'بانک تمرینها', 'بانک تمرین ها', 'بانکتمرین', 'بانکتمرینها', 'کارت‌های آماده', 'کارت های آماده', 'کارتهای آماده', 'کارت‌های آمادهها', 'کارت‌های آماده ها', 'کارتهایآماده']); // نام جدید + قدیم (سازگاری منوهای باز)
 const CONTACT_LABELS = new Set(['شماره تماس', 'شمارهٔ تماس', 'تماس با ما', 'راه‌های ارتباطی', 'راه های ارتباطی', 'راههای ارتباطی', 'ارتباط با ما']);
 const FILES_LABELS = new Set(['فایل‌های آموزشی', 'فایلهای آموزشی', 'فایل های آموزشی']);
+const ACTIVITIES_LABELS = new Set(['تمرین‌ها و کارت‌ها', 'تمرین ها و کارت ها', 'تمرینها و کارتها', 'تمرین‌ها و کارت‌های آماده', 'تمرینها و کارتهای اماده', 'کارت‌های آمادهٔ مرکز']); // ۱.۲۷.۳۸
 const SERVICES_LABELS = new Set(['خدمات مرکز', 'معرفی خدمات مرکز', 'معرفی خدمات', 'خدمات']);
 const REFERRAL_LABELS = new Set(['معرفی دانش‌آموز', 'معرفی دانش آموز', 'معرفی دانشآموز', 'ثبت معرفی', 'معرفی به مرکز']); // ۱.۲۷.۳۵ — عموم/نقش پایه (نرمال‌ساز ZWNJ را می‌چسباند)
 const AUTH_LABELS = new Set(['احراز هویت', 'ورود به بات', 'اتصال گفتگو', 'اتصال']);
@@ -387,6 +389,7 @@ export function parseBotUpdate(update: unknown): BotCommand | null {
   if (EXB_LABELS.has(menuText)) return { kind: 'exb_root', chatId: chatIdStr };
   if (CONTACT_LABELS.has(menuText)) return { kind: 'contact', chatId: chatIdStr };
   if (FILES_LABELS.has(menuText)) return { kind: 'public_files', chatId: chatIdStr };
+  if (ACTIVITIES_LABELS.has(menuText)) return { kind: 'activities', chatId: chatIdStr }; // ۱.۲۷.۳۸
   if (SERVICES_LABELS.has(menuText)) return { kind: 'services', chatId: chatIdStr };
   if (AUTH_LABELS.has(menuText)) return { kind: 'auth_guide', chatId: chatIdStr };
   if (PENDING_HW_LABELS.has(menuText)) return { kind: 'pending_homework', chatId: chatIdStr };
@@ -439,6 +442,8 @@ export function parseBotUpdate(update: unknown): BotCommand | null {
       return { kind: 'contact', chatId: chatIdStr };
     case '/files':
       return { kind: 'public_files', chatId: chatIdStr };
+    case '/activities':
+      return { kind: 'activities', chatId: chatIdStr }; // ۱.۲۷.۳۸
     case '/services':
       return { kind: 'services', chatId: chatIdStr };
     case '/auth':

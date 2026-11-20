@@ -157,6 +157,8 @@ export interface TemplateVars {
   phone?: string;         // شمارهٔ تماس مرکز (bot_contact)
   aboutText?: string;     // ۱.۲۵.۵۷ — متن «دربارهٔ مرکز» از تنظیمات (bot_about)
   list?: string;          // فهرست چندخطی آماده (bot_public_files/bot_class_activity)
+  actLink?: string;       // ۱.۲۷.۳۸ — لینک صفحهٔ عمومی تمرین‌ها و کارت‌های آماده (bot_activities)
+  refLink?: string;       // ۱.۲۷.۳۸ — لینک فرم عمومی معرفی (bot_activities)
   count?: string;         // شمارش فارسی (bot_pending_homework)
   title?: string;         // عنوان فایل/گزارش (bot_doc_received)
   senderName?: string;    // نام فرستنده (homework_graded)

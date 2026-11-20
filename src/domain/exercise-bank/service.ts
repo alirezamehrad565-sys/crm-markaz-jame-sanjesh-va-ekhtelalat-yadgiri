@@ -46,6 +46,7 @@ import type {
   PackageItem,
   PackageListResult,
   PackageSuggestion,
+  PublicActivityItem,
   ReassignExerciseInput,
   ReassignExerciseResult,
   StudentExerciseSuggestions,
@@ -1248,6 +1249,29 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
         grade: rows.filter((r) => r.category === 'grade').map(ref),
         other: rows.filter((r) => r.category === 'school_type' || r.category === 'custom').map(ref)
       };
+    },
+
+    /* ۱.۲۷.۳۸ — فهرست عمومیِ امن کارت‌های آماده برای صفحهٔ /public/activities:
+       فقط متادیتای منتشرشده (عنوان/توضیح/قالب/برچسب) — بدون کلید فایل، بدون دادهٔ دانش‌آموز */
+    async listPublicActivities(): Promise<PublicActivityItem[]> {
+      const rows = await db.query<{ id: string; title: string; description: string | null; format: string; tag_names: string }>(
+        `SELECT e.id, e.title, e.description, e.format,
+                COALESCE(GROUP_CONCAT(t.name), '') AS tag_names
+           FROM exercises e
+           LEFT JOIN exercise_tags et ON et.exercise_id = e.id
+           LEFT JOIN tags t ON t.id = et.tag_id AND t.active = 1
+          WHERE e.published = 1 AND e.deleted_at IS NULL
+          GROUP BY e.id
+          ORDER BY e.created_at DESC
+          LIMIT 80`
+      );
+      return rows.map((r) => ({
+        id: r.id,
+        title: r.title,
+        description: r.description,
+        format: r.format,
+        tags: r.tag_names ? r.tag_names.split(',').filter(Boolean) : []
+      }));
     },
 
     async listPackages(filters: ListPackagesFilters, _actor: AuthContext): Promise<PackageListResult> {

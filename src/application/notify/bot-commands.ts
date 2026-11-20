@@ -32,7 +32,8 @@ export function buildBotKeyboard(owner: { kind: string; role: string | null } | 
       ['معرفی دانش‌آموز'], // ۱.۲۷.۳۶ — دکمهٔ اول بات؛ ارجاع فقط از لینک فرم وب
       ['معرفی مرکز', 'خدمات مرکز'],
       ['راه‌های ارتباطی', 'احراز هویت'],
-      ['فایل‌های آموزشی']
+      ['فایل‌های آموزشی'],
+      ['تمرین‌ها و کارت‌ها'] // ۱.۲۷.۳۸ — لینک صفحهٔ عمومی استفاده از تمرین‌ها و کارت‌های آمادهٔ مرکز
     ];
   }
   if (owner.kind === 'staff') {
@@ -78,12 +79,14 @@ function extractMessageText(update: unknown): string | null {
 }
 
 
-export function createBotCommandsSection(ctx: NotifyCtx): Pick<NotifyAppService, 'handleBotUpdate' | 'processLinkCode' | 'handleScheduleCommand' | 'identifyAndReply' | 'handleMyNextCommand' | 'handleBotCancel' | 'resolveOwner' | 'handleFollowupsCommand' | 'handleFollowupDone' | 'handleAttendanceSummary' | 'handleUnlinkCommand' | 'handleClassActivityCommand' | 'handleHelpCommand' | 'handleContactCommand' | 'handleServicesCommand' | 'handleAuthGuideCommand' | 'handlePendingHomeworkCommand' | 'handlePublicFilesCommand' | 'handleParentFileGet'> {
+export function createBotCommandsSection(ctx: NotifyCtx): Pick<NotifyAppService, 'handleBotUpdate' | 'processLinkCode' | 'handleScheduleCommand' | 'identifyAndReply' | 'handleMyNextCommand' | 'handleBotCancel' | 'resolveOwner' | 'handleFollowupsCommand' | 'handleFollowupDone' | 'handleAttendanceSummary' | 'handleUnlinkCommand' | 'handleClassActivityCommand' | 'handleHelpCommand' | 'handleContactCommand' | 'handleServicesCommand' | 'handleAuthGuideCommand' | 'handlePendingHomeworkCommand' | 'handlePublicFilesCommand' | 'handleActivitiesCommand' | 'handleParentFileGet'> {
   const { deps, db, audit, log, now, appointments, students, followups, exbBot, subBot, clfBot, awBot, readPfState, writePfState, studentNamesMap, staffNamesMap } = ctx;
 
   // ۱.۲۷.۳۶ — ارجاع فقط از لینک (خواست کارفرما: پر کردن فرم با دکمه‌های بات سنگین است)؛
   // دکمهٔ اول بات = معرفی دانش‌آموز → پیام کوتاه با لینک فرم عمومی وب.
   const refWebLink = (deps.publicBaseUrl ?? '').replace(/\/+$/, '') + '/public/referral';
+  // ۱.۲۷.۳۸ — صفحهٔ عمومی «تمرین‌ها و کارت‌های آمادهٔ مرکز» (لینک اشتراکی برای خانواده/معلم)
+  const actWebLink = (deps.publicBaseUrl ?? '').replace(/\/+$/, '') + '/public/activities';
   const REFERRAL_LINK_MESSAGE =
     '🧩 معرفی دانش‌آموز به مرکز\n\n' +
     'اگر درباره یادگیری، گفتار، توجه یا رفتار یک کودک نگرانی دارید، با فرم کوتاهِ زیر چند دقیقه‌ای ثبتش کنید — ' +
@@ -212,6 +215,10 @@ export function createBotCommandsSection(ctx: NotifyCtx): Pick<NotifyAppService,
         }
         case 'public_files': {
           const out = await this.handlePublicFilesCommand(cmd.chatId);
+          return { handled: true, reply: out.text, buttons: out.buttons, keyboard: buildBotKeyboard(await this.resolveOwner(cmd.chatId)) };
+        }
+        case 'activities': {
+          const out = await this.handleActivitiesCommand();
           return { handled: true, reply: out.text, buttons: out.buttons, keyboard: buildBotKeyboard(await this.resolveOwner(cmd.chatId)) };
         }
         case 'pfile_get': {
@@ -1080,7 +1087,11 @@ export function createBotCommandsSection(ctx: NotifyCtx): Pick<NotifyAppService,
         return { text: renderTemplate('bot_public_files', { clinicName, mode: 'staff' }), buttons: null };
       }
       if (!owner) {
-        return { text: renderTemplate('bot_public_files', { clinicName, mode: 'guest' }), buttons: null };
+        /* ۱.۲۷.۳۸ — مهمان: علاوه بر توضیح اتصال، لینک فهرست عمومی تمرین‌ها و کارت‌های آماده */
+        return {
+          text: renderTemplate('bot_public_files', { clinicName, mode: 'guest' }) + `\n\n🔗 مرور تمرین‌ها و کارت‌های آمادهٔ مرکز:\n${actWebLink}`,
+          buttons: null
+        };
       }
       if (!deps.exerciseBank) {
         return { text: renderTemplate('bot_exercise_disabled'), buttons: null };
@@ -1131,6 +1142,16 @@ export function createBotCommandsSection(ctx: NotifyCtx): Pick<NotifyAppService,
       return {
         text: renderTemplate('bot_public_files', { clinicName, mode: 'parent', list: items.map((it) => `\u2022 ${it.t}`).join('\n') }),
         buttons
+      };
+    },
+
+    /* ۱.۲۷.۳۸ — «تمرین‌ها و کارت‌ها»: لینک صفحهٔ عمومی بانک محتوای آمادهٔ مرکز؛
+       برای مهمان/خانواده/همکار همه یک پاسخ — فایل‌ها همان مسیرهای قبلی (اتصال/طرح درمان) می‌آیند */
+    async handleActivitiesCommand(): Promise<BotReply> {
+      const clinicName = await deps.settings.getClinicName();
+      return {
+        text: renderTemplate('bot_activities', { clinicName, actLink: actWebLink, refLink: refWebLink }),
+        buttons: null
       };
     },
 
