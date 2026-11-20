@@ -183,6 +183,10 @@ describe('فرم عمومی معرفی به مرکز + اینباکس لیست �
     expect(res.headers.get('cache-control')).toBe('no-store');
     expect(res.headers.get('x-robots-tag')).toContain('noindex');
     expect(res.headers.get('content-security-policy')).toContain('script-src');
+    // ۱.۲۷.۳۵ — وزیرمتن + افکت فید روی صفحهٔ معرفی هم
+    expect(html).toContain('Vazirmatn-font-face.css');
+    expect(html).toContain('@keyframes fadein');
+    expect(res.headers.get('content-security-policy')).toContain('font-src https://cdn.jsdelivr.net');
   });
 
   it('GET /api/waitlist/referrals هرگز به‌عنوان id پارس نمی‌شود', async () => {

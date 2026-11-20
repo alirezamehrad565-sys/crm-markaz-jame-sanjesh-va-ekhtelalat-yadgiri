@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.27.34";
+var APP_VERSION = "1.27.35";
 var NODE_MIN_VERSION = "1.26.0";
 
 // node_modules/zod/v4/classic/external.js
@@ -25859,6 +25859,7 @@ var EXB_LABELS = /* @__PURE__ */ new Set(["\u0628\u0627\u0646\u06A9 \u062A\u0645
 var CONTACT_LABELS = /* @__PURE__ */ new Set(["\u0634\u0645\u0627\u0631\u0647 \u062A\u0645\u0627\u0633", "\u0634\u0645\u0627\u0631\u0647\u0654 \u062A\u0645\u0627\u0633", "\u062A\u0645\u0627\u0633 \u0628\u0627 \u0645\u0627", "\u0631\u0627\u0647\u200C\u0647\u0627\u06CC \u0627\u0631\u062A\u0628\u0627\u0637\u06CC", "\u0631\u0627\u0647 \u0647\u0627\u06CC \u0627\u0631\u062A\u0628\u0627\u0637\u06CC", "\u0631\u0627\u0647\u0647\u0627\u06CC \u0627\u0631\u062A\u0628\u0627\u0637\u06CC", "\u0627\u0631\u062A\u0628\u0627\u0637 \u0628\u0627 \u0645\u0627"]);
 var FILES_LABELS = /* @__PURE__ */ new Set(["\u0641\u0627\u06CC\u0644\u200C\u0647\u0627\u06CC \u0622\u0645\u0648\u0632\u0634\u06CC", "\u0641\u0627\u06CC\u0644\u0647\u0627\u06CC \u0622\u0645\u0648\u0632\u0634\u06CC", "\u0641\u0627\u06CC\u0644 \u0647\u0627\u06CC \u0622\u0645\u0648\u0632\u0634\u06CC"]);
 var SERVICES_LABELS = /* @__PURE__ */ new Set(["\u062E\u062F\u0645\u0627\u062A \u0645\u0631\u06A9\u0632", "\u0645\u0639\u0631\u0641\u06CC \u062E\u062F\u0645\u0627\u062A \u0645\u0631\u06A9\u0632", "\u0645\u0639\u0631\u0641\u06CC \u062E\u062F\u0645\u0627\u062A", "\u062E\u062F\u0645\u0627\u062A"]);
+var REFERRAL_LABELS = /* @__PURE__ */ new Set(["\u0645\u0639\u0631\u0641\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632", "\u0645\u0639\u0631\u0641\u06CC \u062F\u0627\u0646\u0634 \u0622\u0645\u0648\u0632", "\u0645\u0639\u0631\u0641\u06CC \u062F\u0627\u0646\u0634\u0622\u0645\u0648\u0632", "\u062B\u0628\u062A \u0645\u0639\u0631\u0641\u06CC", "\u0645\u0639\u0631\u0641\u06CC \u0628\u0647 \u0645\u0631\u06A9\u0632"]);
 var AUTH_LABELS = /* @__PURE__ */ new Set(["\u0627\u062D\u0631\u0627\u0632 \u0647\u0648\u06CC\u062A", "\u0648\u0631\u0648\u062F \u0628\u0647 \u0628\u0627\u062A", "\u0627\u062A\u0635\u0627\u0644 \u06AF\u0641\u062A\u06AF\u0648", "\u0627\u062A\u0635\u0627\u0644"]);
 var PENDING_HW_LABELS = /* @__PURE__ */ new Set(["\u062A\u0645\u0631\u06CC\u0646\u200C\u0647\u0627\u06CC \u0627\u0646\u062C\u0627\u0645\u200C\u0646\u0634\u062F\u0647", "\u062A\u0645\u0631\u06CC\u0646\u0647\u0627\u06CC \u0627\u0646\u062C\u0627\u0645 \u0646\u0634\u062F\u0647", "\u062A\u0645\u0631\u06CC\u0646 \u0647\u0627\u06CC \u0627\u0646\u062C\u0627\u0645 \u0646\u0634\u062F\u0647", "\u062A\u0645\u0631\u06CC\u0646\u0647\u0627\u06CC \u0627\u0646\u062C\u0627\u0645\u0646\u0634\u062F\u0647", "\u062A\u06A9\u0644\u06CC\u0641\u200C\u0647\u0627\u06CC \u0627\u0646\u062C\u0627\u0645\u200C\u0646\u0634\u062F\u0647", "\u062A\u06A9\u0644\u06CC\u0641\u0647\u0627\u06CC \u0627\u0646\u062C\u0627\u0645 \u0646\u0634\u062F\u0647", "\u062A\u06A9\u0644\u06CC\u0641\u0647\u0627\u06CC \u0627\u0646\u062C\u0627\u0645\u0646\u0634\u062F\u0647"]);
 var CLASS_ACTIVITY_LABELS = /* @__PURE__ */ new Set(["\u0641\u0639\u0627\u0644\u06CC\u062A \u06A9\u0644\u0627\u0633", "\u0641\u0639\u0627\u0644\u06CC\u062A \u0647\u0627\u06CC \u06A9\u0644\u0627\u0633", "\u0641\u0639\u0627\u0644\u06CC\u062A\u200C\u0647\u0627\u06CC \u06A9\u0644\u0627\u0633", "\u0641\u0639\u0627\u0644\u06CC\u062A\u0647\u0627\u06CC \u06A9\u0644\u0627\u0633"]);
@@ -25978,6 +25979,29 @@ function parseClfCallback(data, chatId) {
   return null;
 }
 __name(parseClfCallback, "parseClfCallback");
+function parseRefCallback(data, chatId) {
+  const parts = data.split(":");
+  if (parts[1] === "role") {
+    const role = parts[2] === "teacher" ? "teacher" : parts[2] === "family" ? "family" : null;
+    return role ? { kind: "ref_role", chatId, role } : null;
+  }
+  if (parts[1] === "count") {
+    const n = toIndex(parts[2]);
+    if (Number.isNaN(n) || n < 1 || n > 5) return null;
+    return { kind: "ref_count", chatId, n };
+  }
+  if (parts[1] === "cat") {
+    const idx = toIndex(parts[2]);
+    const value = (parts[3] ?? "").trim();
+    const valid = ["delayed", "learning_disorder", "intellectual", "autism", "speech", "other"];
+    if (Number.isNaN(idx) || idx < 0 || !valid.includes(value)) return null;
+    return { kind: "ref_cat", chatId, idx, value };
+  }
+  if (parts[1] === "do") return { kind: "ref_do", chatId };
+  if (parts[1] === "no") return { kind: "ref_no", chatId };
+  return null;
+}
+__name(parseRefCallback, "parseRefCallback");
 function parseExbCallback(data, chatId) {
   const parts = data.split(":");
   switch (parts[1]) {
@@ -26048,6 +26072,7 @@ function parseBotUpdate(update) {
     if (data === "unlink:no") return { kind: "unlink_no", chatId: String(cbChatId) };
     if (data.startsWith("dis:")) return parseAwarenessCallback(data, String(cbChatId));
     if (data.startsWith("clf:")) return parseClfCallback(data, String(cbChatId));
+    if (data.startsWith("rf:")) return parseRefCallback(data, String(cbChatId));
     const parsed = parseCallbackData(data);
     if (!parsed) return null;
     if (parsed.action === "ask") return { kind: "cancel_ask", chatId: String(cbChatId), appointmentId: parsed.targetId };
@@ -26080,6 +26105,7 @@ function parseBotUpdate(update) {
   if (PENDING_HW_LABELS.has(menuText)) return { kind: "pending_homework", chatId: chatIdStr };
   if (CLASS_ACTIVITY_LABELS.has(menuText)) return { kind: "class_activity", chatId: chatIdStr };
   if (AWARENESS_LABELS.has(menuText)) return { kind: "awareness_root", chatId: chatIdStr };
+  if (REFERRAL_LABELS.has(menuText)) return { kind: "referral_root", chatId: chatIdStr };
   if (CLASS_APPTS_LABELS.has(menuText)) return { kind: "my_next", chatId: chatIdStr };
   if (CLF_LIST_LABELS.has(menuText)) return { kind: "clf_list", chatId: chatIdStr };
   if (!text.startsWith("/")) {
@@ -26133,6 +26159,8 @@ function parseBotUpdate(update) {
       return { kind: "class_activity", chatId: chatIdStr };
     case "/awareness":
       return { kind: "awareness_root", chatId: chatIdStr };
+    case "/referral":
+      return { kind: "referral_root", chatId: chatIdStr };
     case "/checklist":
       return { kind: "clf_list", chatId: chatIdStr };
     case "/link": {
@@ -31786,7 +31814,13 @@ cursor:pointer;font-family:inherit;font-size:14px}
 .done .big{font-size:46px;margin-bottom:6px}
 .switch-row{display:flex;align-items:center;justify-content:space-between;gap:10px;
 border:1.5px solid var(--line);border-radius:12px;padding:12px 14px}
-@media (prefers-reduced-motion: reduce){.caret{animation:none}.bar__fill{transition:none}}
+/* \u06F1.\u06F2\u06F7.\u06F3\u06F5 \u2014 \u0627\u0641\u06A9\u062A \u0641\u06CC\u062F \u0648 \u062C\u0631\u06CC\u0627\u0646 \u067E\u06CC\u0648\u0633\u062A\u0647\u061B \u06A9\u0627\u0647\u0634-\u062D\u0631\u06A9\u062A \u0631\u0639\u0627\u06CC\u062A \u0645\u06CC\u200C\u0634\u0648\u062F */
+.app>.card{animation:fadein .3s ease}
+@keyframes fadein{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.choice,.btn{transition:transform .12s ease,border-color .15s,background .15s}
+.choice:active{transform:scale(.98)}
+input.i:focus-visible,select.i:focus-visible,textarea.i:focus-visible,button:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+@media (prefers-reduced-motion: reduce){.caret{animation:none}.bar__fill{transition:none}.app>.card{animation:none}.choice,.btn{transition:none}}
 `;
 var PAGE_SCRIPT = `
 (function(){
@@ -32281,6 +32315,8 @@ function renderDone(){
 }
 
 function render(){
+  /* \u06F1.\u06F2\u06F7.\u06F3\u06F5 \u2014 \u062C\u0631\u06CC\u0627\u0646 \u067E\u06CC\u0648\u0633\u062A\u0647: \u0647\u0631 \u06AF\u0627\u0645 \u062A\u0627\u0632\u0647 \u0628\u0647 \u0628\u0627\u0644\u0627\u06CC \u0635\u0641\u062D\u0647 \u0628\u0631\u0645\u06CC\u200C\u06AF\u0631\u062F\u062F */
+  try{window.scrollTo({top:0,behavior:'smooth'});}catch(_){window.scrollTo(0,0);}
   var s=state.step;
   if(s===0)return renderWelcome();
   if(s===1)return renderRole();
@@ -32315,6 +32351,9 @@ function renderReferralPage(opts = {}) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>\u0645\u0639\u0631\u0641\u06CC \u0628\u0647 \u0645\u0631\u06A9\u0632 \u2014 \u062C\u0627\u0645\u0639 \u0633\u0646\u062C\u0634 \u0648 \u0627\u062E\u062A\u0644\u0627\u0644\u0627\u062A \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC</title>
 <meta name="robots" content="noindex, nofollow">
+<!-- \u06F1.\u06F2\u06F7.\u06F3\u06F5 \u2014 \u0648\u0632\u06CC\u0631\u0645\u062A\u0646 \u0627\u0632 CDN (CSP \u0641\u0642\u0637 jsdelivr \u0631\u0627 \u0627\u062C\u0627\u0632\u0647 \u0645\u06CC\u200C\u062F\u0647\u062F) -->
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css">
 <style>${PAGE_STYLES}</style>
 </head>
 <body>
@@ -32521,7 +32560,7 @@ function registerWaitlistRoutes(app, service) {
         "Content-Type": "text/html; charset=utf-8",
         "Cache-Control": "no-store",
         "X-Robots-Tag": "noindex, nofollow",
-        "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:"
+        "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline' https://cdn.jsdelivr.net; script-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src https://cdn.jsdelivr.net"
       }
     });
   });
@@ -32950,7 +32989,13 @@ textarea.i{min-height:110px;resize:vertical}
 font-size:13px;font-weight:700;padding:2px 4px}
 .aware{font-size:15.5px;line-height:2.2;white-space:pre-wrap}
 .done{text-align:center}.done .big{font-size:46px;margin-bottom:6px}
-@media (prefers-reduced-motion: reduce){.bar__fill{transition:none}}
+/* \u06F1.\u06F2\u06F7.\u06F3\u06F5 \u2014 \u0627\u0641\u06A9\u062A \u0641\u06CC\u062F \u0648 \u062C\u0631\u06CC\u0627\u0646 \u067E\u06CC\u0648\u0633\u062A\u0647: \u0647\u0631 \u0635\u0641\u062D\u0647\u0654 \u062A\u0627\u0632\u0647 \u0628\u0627 \u0641\u06CC\u062F\u06CC\u0646 \u0646\u0631\u0645 \u0645\u06CC\u200C\u0646\u0634\u06CC\u0646\u062F\u061B \u06A9\u0627\u0647\u0634-\u062D\u0631\u06A9\u062A \u0631\u0639\u0627\u06CC\u062A \u0645\u06CC\u200C\u0634\u0648\u062F */
+.app>.card{animation:fadein .3s ease}
+@keyframes fadein{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.choice,.btn{transition:transform .12s ease,border-color .15s,background .15s}
+.choice:active{transform:scale(.98)}
+input.i:focus-visible,textarea.i:focus-visible,button:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+@media (prefers-reduced-motion: reduce){.bar__fill{transition:none}.app>.card{animation:none}.choice,.btn{transition:none}}
 `;
 var PAGE_SCRIPT2 = `
 (function(){
@@ -33064,7 +33109,17 @@ function bindBlock(i,b){
     });
   } else {
     var inp=document.getElementById('in');
-    if(inp)inp.addEventListener('input',function(e){setValue(i,e.target.value);});
+    if(inp){
+      inp.addEventListener('input',function(e){setValue(i,e.target.value);});
+      /* \u062C\u0631\u06CC\u0627\u0646 \u067E\u06CC\u0648\u0633\u062A\u0647 \u2014 Enter (\u06CC\u0627 Ctrl+Enter \u062F\u0631 \u0645\u062A\u0646 \u0628\u0644\u0646\u062F) = \u0627\u062F\u0627\u0645\u0647\u061B \u0628\u062F\u0648\u0646 \u067E\u0631\u0633\u0634 \u0627\u0636\u0627\u0641\u06CC */
+      inp.addEventListener('keydown',function(e){
+        var isTa=(e.target.tagName==='TEXTAREA');
+        if(e.key==='Enter'&&!isTa){e.preventDefault();var nx=document.getElementById('__nx');if(nx&&checkBlock(i,b)){state.step=state.step+1;render();}}
+        else if(e.key==='Enter'&&isTa&&e.ctrlKey){e.preventDefault();var nx2=document.getElementById('__nx');if(nx2&&checkBlock(i,b)){state.step=state.step+1;render();}}
+      });
+      /* \u0641\u0648\u06A9\u0648\u0633 \u062E\u0648\u062F\u06A9\u0627\u0631 \u2014 \u06A9\u0627\u0631\u0628\u0631 \u0647\u0645\u0627\u0646\u200C\u062C\u0627 \u06A9\u0647 \u0628\u0648\u062F \u062A\u0627\u06CC\u067E \u0645\u06CC\u200C\u06A9\u0646\u062F */
+      setTimeout(function(){try{inp.focus({preventScroll:true});}catch(_){try{inp.focus();}catch(__){}}},60);
+    }
   }
 }
 function checkBlock(i,b){
@@ -33150,6 +33205,8 @@ function renderDone(){
     '<p class="hint">\u0645\u0631\u06A9\u0632 \u062C\u0627\u0645\u0639 \u0633\u0646\u062C\u0634 \u0648 \u0627\u062E\u062A\u0644\u0627\u0644\u0627\u062A \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u2014 \u0647\u0645\u0647\u200C\u06CC \u062E\u062F\u0645\u0627\u062A \u0631\u0627\u06CC\u06AF\u0627\u0646</p></div>';
 }
 function render(){
+  /* \u062C\u0631\u06CC\u0627\u0646 \u067E\u06CC\u0648\u0633\u062A\u0647 \u2014 \u0647\u0631 \u06AF\u0627\u0645 \u062A\u0627\u0632\u0647 \u0628\u0647 \u0628\u0627\u0644\u0627\u06CC \u0635\u0641\u062D\u0647 \u0628\u0631\u0645\u06CC\u200C\u06AF\u0631\u062F\u062F (\u0627\u0633\u06A9\u0631\u0648\u0644 \u0646\u0631\u0645\u061B \u06A9\u0627\u0647\u0634-\u062D\u0631\u06A9\u062A \u2192 \u0628\u06CC\u200C\u062F\u0631\u0646\u06AF) */
+  if(state.step>0){try{window.scrollTo({top:0,behavior:REDUCED?'auto':'smooth'});}catch(_){window.scrollTo(0,0);}}
   if(state.step===0)return renderIntro();
   var nth=state.step-1;
   if(nth>=0&&nth<interactive.length)return renderBlock();
@@ -33178,6 +33235,9 @@ function renderFormPage(opts) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${opts.form.title.replace(/[<>&"]/g, "")}</title>
 <meta name="robots" content="noindex, nofollow">
+<!-- \u0648\u0632\u06CC\u0631\u0645\u062A\u0646 \u0627\u0632 CDN \u2014 \u062A\u0627\u06CC\u067E\u0648\u06AF\u0631\u0627\u0641\u06CC \u0641\u0627\u0631\u0633\u06CC \u06CC\u06A9\u062F\u0633\u062A (CSP \u0641\u0642\u0637 jsdelivr \u0631\u0627 \u0627\u062C\u0627\u0632\u0647 \u0645\u06CC\u200C\u062F\u0647\u062F) -->
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css">
 <style>${PAGE_STYLES2}</style>
 </head>
 <body>
@@ -33194,6 +33254,9 @@ function renderFormNotFoundPage() {
 <html lang="fa" dir="rtl">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>\u0641\u0631\u0645 \u06CC\u0627\u0641\u062A \u0646\u0634\u062F</title><meta name="robots" content="noindex, nofollow">
+<!-- \u0648\u0632\u06CC\u0631\u0645\u062A\u0646 \u0627\u0632 CDN \u2014 \u062A\u0627\u06CC\u067E\u0648\u06AF\u0631\u0627\u0641\u06CC \u0641\u0627\u0631\u0633\u06CC \u06CC\u06A9\u062F\u0633\u062A (CSP \u0641\u0642\u0637 jsdelivr \u0631\u0627 \u0627\u062C\u0627\u0632\u0647 \u0645\u06CC\u200C\u062F\u0647\u062F) -->
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css">
 <style>${PAGE_STYLES2}</style></head>
 <body><div class="app"><div class="card done"><div class="big">\u{1F50D}</div>
 <h1>\u0627\u06CC\u0646 \u0641\u0631\u0645 \u067E\u06CC\u062F\u0627 \u0646\u0634\u062F \u06CC\u0627 \u0647\u0646\u0648\u0632 \u0645\u0646\u062A\u0634\u0631 \u0646\u0634\u062F\u0647</h1>
@@ -33230,7 +33293,7 @@ var PAGE_HEADERS = {
   "Content-Type": "text/html; charset=utf-8",
   "Cache-Control": "no-store",
   "X-Robots-Tag": "noindex, nofollow",
-  "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:"
+  "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline' https://cdn.jsdelivr.net; script-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src https://cdn.jsdelivr.net"
 };
 function registerFormBuilderRoutes(app, service) {
   app.get("/public/form/:slug", async (c) => {
@@ -71246,6 +71309,326 @@ function createAwarenessBot(deps) {
 }
 __name(createAwarenessBot, "createAwarenessBot");
 
+// src/application/notify/referral-bot.ts
+var REF_CAT_LABELS = {
+  delayed: "\u062F\u06CC\u0631\u0622\u0645\u0648\u0632\u06CC / \u062A\u0623\u062E\u06CC\u0631 \u0631\u0634\u062F",
+  learning_disorder: "\u0627\u062E\u062A\u0644\u0627\u0644 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC (\u062E\u0648\u0627\u0646\u062F\u0646/\u0646\u0648\u0634\u062A\u0646/\u0631\u06CC\u0627\u0636\u06CC)",
+  intellectual: "\u0645\u0634\u06A9\u0648\u06A9 \u0628\u0647 \u06A9\u0645\u200C\u062A\u0648\u0627\u0646\u06CC \u0630\u0647\u0646\u06CC",
+  autism: "\u0645\u0634\u06A9\u0648\u06A9 \u0628\u0647 \u0637\u06CC\u0641 \u0627\u062A\u06CC\u0633\u0645",
+  speech: "\u062A\u0623\u062E\u06CC\u0631 \u06AF\u0641\u062A\u0627\u0631 \u0648 \u0632\u0628\u0627\u0646",
+  other: "\u0633\u0627\u06CC\u0631 / \u0646\u0645\u06CC\u200C\u062F\u0627\u0646\u0645"
+};
+var CAT_BUTTONS = [
+  [
+    { text: "\u06F1. \u062F\u06CC\u0631\u0622\u0645\u0648\u0632\u06CC", callbackData: "rf:cat:X:delayed" },
+    { text: "\u06F2. \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC", callbackData: "rf:cat:X:learning_disorder" }
+  ],
+  [
+    { text: "\u06F3. \u06A9\u0645\u200C\u062A\u0648\u0627\u0646\u06CC \u0630\u0647\u0646\u06CC", callbackData: "rf:cat:X:intellectual" },
+    { text: "\u06F4. \u0627\u062A\u06CC\u0633\u0645", callbackData: "rf:cat:X:autism" }
+  ],
+  [
+    { text: "\u06F5. \u06AF\u0641\u062A\u0627\u0631 \u0648 \u0632\u0628\u0627\u0646", callbackData: "rf:cat:X:speech" },
+    { text: "\u06F6. \u0633\u0627\u06CC\u0631", callbackData: "rf:cat:X:other" }
+  ]
+];
+function catButtons(idx) {
+  return CAT_BUTTONS.map(
+    (row) => row.map((b) => ({ text: b.text, callbackData: b.callbackData.replace("X", String(idx)) }))
+  );
+}
+__name(catButtons, "catButtons");
+function normalizePhone3(raw2) {
+  let s = String(raw2 ?? "").replace(/[۰-۹]/g, (d) => String("\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9".indexOf(d))).replace(/[٠-٩]/g, (d) => String("\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669".indexOf(d))).replace(/[\s+\-().]/g, "");
+  if (s.startsWith("+98")) s = "0" + s.slice(3);
+  else if (s.startsWith("98") && s.length === 12) s = "0" + s.slice(2);
+  return s;
+}
+__name(normalizePhone3, "normalizePhone");
+function createReferralBot(deps) {
+  const { db, audit, logger } = deps;
+  const log = logger.child("referral-bot");
+  const now = deps.now ?? (() => /* @__PURE__ */ new Date());
+  const base = (deps.publicBaseUrl ?? "").replace(/\/+$/, "");
+  const chatHits = /* @__PURE__ */ new Map();
+  async function readState(chatId) {
+    const row = await db.queryOne(`SELECT payload FROM bot_menu_state WHERE chat_id = ?`, [chatId]);
+    if (!row) return null;
+    try {
+      const parsed = JSON.parse(row.payload);
+      return parsed && parsed.v === 1 && parsed.flow === "referral" ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+  __name(readState, "readState");
+  async function writeState(chatId, state) {
+    await db.execute(
+      `INSERT INTO bot_menu_state (chat_id, payload, updated_at)
+       VALUES (?, ?, ?)
+       ON CONFLICT(chat_id) DO UPDATE SET payload = excluded.payload, updated_at = excluded.updated_at`,
+      [chatId, JSON.stringify(state), now().toISOString()]
+    );
+  }
+  __name(writeState, "writeState");
+  async function clearState(chatId) {
+    await db.execute(`DELETE FROM bot_menu_state WHERE chat_id = ?`, [chatId]);
+  }
+  __name(clearState, "clearState");
+  const webFormLine = base ? `
+\u{1F310} \u0641\u0631\u0645 \u06A9\u0627\u0645\u0644 \u0648\u0628 (\u062A\u0627\u0631\u06CC\u062E \u062A\u0648\u0644\u062F \u0648 \u062C\u0632\u0626\u06CC\u0627\u062A \u0628\u06CC\u0634\u062A\u0631):
+${base}/public/referral` : "";
+  function rateBlocked(chatId) {
+    const nowMs = Date.now();
+    const cur = chatHits.get(chatId);
+    if (!cur || cur.resetAt < nowMs) {
+      chatHits.set(chatId, { count: 1, resetAt: nowMs + 36e5 });
+      return false;
+    }
+    if (cur.count >= REFERRAL_RATE_PER_CHAT) return true;
+    cur.count += 1;
+    return false;
+  }
+  __name(rateBlocked, "rateBlocked");
+  function childPrompt(state, i) {
+    return {
+      text: `\u{1F476} \u06A9\u0648\u062F\u06A9 ${faDigits(String(i + 1))} \u0627\u0632 ${faDigits(String(state.count))} \u2014 \u0646\u0627\u0645 \u06A9\u0648\u062F\u06A9 \u0631\u0627 \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F (\u0646\u0627\u0645 \u0648 \u0646\u0627\u0645 \u062E\u0627\u0646\u0648\u0627\u062F\u06AF\u06CC \u06CC\u0627 \u0641\u0642\u0637 \u0646\u0627\u0645):`,
+      buttons: null
+    };
+  }
+  __name(childPrompt, "childPrompt");
+  function summaryText(state) {
+    const head = [
+      "\u{1F4CB} \u0645\u0631\u0648\u0631 \u0646\u0647\u0627\u06CC\u06CC \u0645\u0639\u0631\u0641\u06CC:",
+      `\u0646\u0642\u0634: ${state.role === "teacher" ? "\u0645\u0639\u0644\u0645" : "\u062E\u0627\u0646\u0648\u0627\u062F\u0647 / \u0633\u0631\u067E\u0631\u0633\u062A"}`,
+      `\u0645\u0639\u0631\u0641: ${state.name} \u2014 ${faDigits(state.phone)}`,
+      state.role === "teacher" && (state.school || state.grade || state.cls) ? `\u0645\u062F\u0631\u0633\u0647: ${[state.school, state.grade, state.cls].filter(Boolean).join(" \u2014 ")}` : null,
+      "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"
+    ].filter(Boolean);
+    const rows = state.children.map(
+      (c, i) => `${faDigits(String(i + 1))}) ${c.firstName} \u2014 ${c.category ? REF_CAT_LABELS[c.category] : "\u062F\u0633\u062A\u0647\u0654 \u062F\u063A\u062F\u063A\u0647 \u0646\u0627\u0645\u0634\u062E\u0635"}${c.text ? `
+    \u0634\u0631\u062D: ${c.text}` : ""}`
+    );
+    return [...head, ...rows, "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500", "\u062B\u0628\u062A \u06A9\u0646\u0645\u061F"].join("\n");
+  }
+  __name(summaryText, "summaryText");
+  return {
+    readActive(chatId) {
+      return readState(chatId).then((s) => s !== null);
+    },
+    /* ورود از منوی «معرفی دانش‌آموز» — عموم مردم و نقش پایه، بدون احراز هویت */
+    async root(chatId) {
+      await clearState(chatId);
+      return {
+        text: "\u{1F9E9} \u0645\u0639\u0631\u0641\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u0628\u0647 \u0645\u0631\u06A9\u0632 \u062C\u0627\u0645\u0639 \u0633\u0646\u062C\u0634 \u0648 \u0627\u062E\u062A\u0644\u0627\u0644\u0627\u062A \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC\n\n\u0627\u06AF\u0631 \u062F\u0631\u0628\u0627\u0631\u0647\u0654 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC\u060C \u06AF\u0641\u062A\u0627\u0631\u060C \u062A\u0648\u062C\u0647 \u06CC\u0627 \u0631\u0641\u062A\u0627\u0631 \u06CC\u06A9 \u06A9\u0648\u062F\u06A9 \u0646\u06AF\u0631\u0627\u0646\u06CC \u062F\u0627\u0631\u06CC\u062F\u060C \u0647\u0645\u06CC\u0646\u200C\u062C\u0627 \u0686\u0646\u062F \u067E\u0631\u0633\u0634 \u06A9\u0648\u062A\u0627\u0647 \u067E\u0627\u0633\u062E \u062F\u0647\u06CC\u062F \u062A\u0627 \u06A9\u0627\u0631\u0634\u0646\u0627\u0633\u0627\u0646 \u0645\u0631\u06A9\u0632 \u0628\u0631\u0631\u0633\u06CC \u0648 \u0628\u0627 \u0634\u0645\u0627 \u062A\u0645\u0627\u0633 \u0628\u06AF\u06CC\u0631\u0646\u062F.\n\n\u0647\u0645\u0647\u0654 \u062E\u062F\u0645\u0627\u062A \u0645\u0631\u06A9\u0632 \u0631\u0627\u06CC\u06AF\u0627\u0646 \u0627\u0633\u062A." + webFormLine,
+        buttons: [
+          [
+            { text: "\u{1F468}\u200D\u{1F469}\u200D\u{1F467} \u062E\u0627\u0646\u0648\u0627\u062F\u0647 / \u0633\u0631\u067E\u0631\u0633\u062A \u0647\u0633\u062A\u0645", callbackData: "rf:role:family" },
+            { text: "\u{1F3EB} \u0645\u0639\u0644\u0645 \u0647\u0633\u062A\u0645", callbackData: "rf:role:teacher" }
+          ]
+        ]
+      };
+    },
+    async start(chatId, role) {
+      const state = {
+        v: 1,
+        flow: "referral",
+        step: role === "teacher" ? "school" : "name",
+        role,
+        name: "",
+        phone: "",
+        school: null,
+        grade: null,
+        cls: null,
+        count: role === "teacher" ? 0 : 1,
+        idx: 0,
+        children: []
+      };
+      await writeState(chatId, state);
+      if (role === "teacher") {
+        return {
+          text: "\u{1F3EB} \u0646\u0627\u0645 \u0645\u062F\u0631\u0633\u0647\u200C\u062A\u0627\u0646 \u0631\u0627 \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F (\u0627\u06AF\u0631 \u0645\u0627\u06CC\u0644 \u0646\u06CC\u0633\u062A\u06CC\u062F\u060C \xAB\u0631\u062F\xBB \u0628\u0641\u0631\u0633\u062A\u06CC\u062F):",
+          buttons: null
+        };
+      }
+      return {
+        text: "\u{1F464} \u0646\u0627\u0645 \u0648 \u0646\u0627\u0645 \u062E\u0627\u0646\u0648\u0627\u062F\u06AF\u06CC \u062E\u0648\u062F\u062A\u0627\u0646 \u0631\u0627 \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F:",
+        buttons: null
+      };
+    },
+    async setCount(chatId, n) {
+      const state = await readState(chatId);
+      if (!state) return { text: "\u23F3 \u0627\u06CC\u0646 \u0645\u0646\u0648 \u0642\u062F\u06CC\u0645\u06CC \u0627\u0633\u062A \u2014 \u062F\u0648\u0628\u0627\u0631\u0647 \xAB\u0645\u0639\u0631\u0641\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\xBB \u0631\u0627 \u0628\u0632\u0646\u06CC\u062F.", buttons: null };
+      state.count = Math.min(Math.max(n, 1), 5);
+      state.idx = 0;
+      state.children = [];
+      state.step = "child_name";
+      await writeState(chatId, state);
+      return childPrompt(state, 0);
+    },
+    /* پاسخ‌های متنی هر گام — خروج «رد» گام اختیاری را رد می‌کند */
+    async answer(chatId, rawText) {
+      const state = await readState(chatId);
+      if (!state) return { text: "\u23F3 \u0627\u06CC\u0646 \u06AF\u0641\u062A\u06AF\u0648 \u0628\u0633\u062A\u0647 \u0634\u062F\u0647 \u2014 \u062F\u0648\u0628\u0627\u0631\u0647 \xAB\u0645\u0639\u0631\u0641\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\xBB \u0631\u0627 \u0628\u0632\u0646\u06CC\u062F.", buttons: null };
+      const text = rawText.trim().slice(0, 300);
+      const skipped = text === "\u0631\u062F" || text === "\u0631\u062F\u06A9\u0631\u062F\u0646" || text === "\u0631\u062F \u06A9\u0631\u062F\u0646" || text === "-";
+      switch (state.step) {
+        case "school": {
+          state.school = skipped ? null : text.slice(0, 120);
+          state.step = "grade";
+          await writeState(chatId, state);
+          return { text: "\u270F\uFE0F \u067E\u0627\u06CC\u0647 \u062A\u062D\u0635\u06CC\u0644\u06CC \u06A9\u0648\u062F\u06A9\u0627\u0646 \u0631\u0627 \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F (\u0645\u062B\u0644\u0627\u064B \u062F\u0648\u0645 \u2014 \u06CC\u0627 \xAB\u0631\u062F\xBB):", buttons: null };
+        }
+        case "grade": {
+          state.grade = skipped ? null : text.slice(0, 40);
+          state.step = "cls";
+          await writeState(chatId, state);
+          return { text: "\u270F\uFE0F \u06A9\u0644\u0627\u0633 \u0631\u0627 \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F (\u0645\u062B\u0644\u0627\u064B \u06F2\u06F1 \u2014 \u06CC\u0627 \xAB\u0631\u062F\xBB):", buttons: null };
+        }
+        case "cls": {
+          state.cls = skipped ? null : text.slice(0, 40);
+          state.step = "name";
+          await writeState(chatId, state);
+          const countRow = [
+            [1, 2, 3].map((n) => ({ text: faDigits(String(n)), callbackData: `rf:count:${n}` })),
+            [
+              { text: "\u06F4", callbackData: "rf:count:4" },
+              { text: "\u06F5", callbackData: "rf:count:5" }
+            ]
+          ];
+          return { text: `\u{1F469}\u200D\u{1F3EB} \u0686\u0646\u062F \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u0631\u0627 \u0645\u0639\u0631\u0641\u06CC \u0645\u06CC\u200C\u06A9\u0646\u06CC\u062F\u061F (\u062A\u0627 ${faDigits("5")} \u0646\u0641\u0631 \u062F\u0631 \u06CC\u06A9 \u062B\u0628\u062A)`, buttons: countRow };
+        }
+        case "name": {
+          if (text.length < 2) return { text: "\u26A0\uFE0F \u0646\u0627\u0645 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A \u2014 \u062F\u0648\u0628\u0627\u0631\u0647 \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F:", buttons: null };
+          state.name = text.slice(0, 80);
+          state.step = "phone";
+          await writeState(chatId, state);
+          return { text: "\u{1F4F1} \u0634\u0645\u0627\u0631\u0647\u0654 \u0645\u0648\u0628\u0627\u06CC\u0644 \u062E\u0648\u062F\u062A\u0627\u0646 \u0631\u0627 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F (\u0645\u062B\u0644\u0627\u064B \u06F0\u06F9\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9):", buttons: null };
+        }
+        case "phone": {
+          const phone = normalizePhone3(text);
+          if (!/^09\d{9}$/.test(phone)) {
+            return { text: "\u26A0\uFE0F \u0634\u0645\u0627\u0631\u0647 \u0645\u0639\u062A\u0628\u0631 \u0646\u06CC\u0633\u062A \u2014 \u0628\u0627\u06CC\u062F \u06F1\u06F1 \u0631\u0642\u0645 \u0648 \u0628\u0627 \u06F0\u06F9 \u0634\u0631\u0648\u0639 \u0634\u0648\u062F. \u062F\u0648\u0628\u0627\u0631\u0647 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F:", buttons: null };
+          }
+          state.phone = phone;
+          state.step = "child_name";
+          state.idx = 0;
+          state.children = [];
+          await writeState(chatId, state);
+          return childPrompt(state, 0);
+        }
+        case "child_name": {
+          if (text.length < 2) return { text: "\u26A0\uFE0F \u0646\u0627\u0645 \u06A9\u0648\u062F\u06A9 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A \u2014 \u062F\u0648\u0628\u0627\u0631\u0647 \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F:", buttons: null };
+          state.children[state.idx] = { firstName: text.slice(0, 80), category: null, text: null };
+          state.step = "child_text";
+          await writeState(chatId, state);
+          return {
+            text: `\u{1F50E} \xAB${state.children[state.idx].firstName}\xBB \u2014 \u06A9\u062F\u0627\u0645 \u062F\u0633\u062A\u0647\u0654 \u062F\u063A\u062F\u063A\u0647 \u0646\u0632\u062F\u06CC\u06A9\u200C\u062A\u0631 \u0627\u0633\u062A\u061F`,
+            buttons: catButtons(state.idx)
+          };
+        }
+        case "child_text": {
+          const child = state.children[state.idx];
+          if (!child) return { text: "\u23F3 \u0627\u06CC\u0646 \u06AF\u0641\u062A\u06AF\u0648 \u0628\u0647\u200C\u0647\u0645 \u0631\u06CC\u062E\u062A\u0647 \u2014 \u062F\u0648\u0628\u0627\u0631\u0647 \xAB\u0645\u0639\u0631\u0641\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\xBB \u0631\u0627 \u0628\u0632\u0646\u06CC\u062F.", buttons: null };
+          child.text = skipped ? null : text.slice(0, 1e3);
+          state.idx += 1;
+          if (state.idx < state.count) {
+            state.step = "child_name";
+            await writeState(chatId, state);
+            return childPrompt(state, state.idx);
+          }
+          state.step = "confirm";
+          await writeState(chatId, state);
+          return { text: summaryText(state), buttons: [[{ text: "\u2705 \u062B\u0628\u062A \u0646\u0647\u0627\u06CC\u06CC", callbackData: "rf:do" }, { text: "\u2716\uFE0F \u0627\u0646\u0635\u0631\u0627\u0641", callbackData: "rf:no" }]] };
+        }
+        case "confirm": {
+          return {
+            text: "\u0628\u0631\u0627\u06CC \u062B\u0628\u062A \u0627\u0632 \u062F\u06A9\u0645\u0647\u200C\u0647\u0627\u06CC \xAB\u2705 \u062B\u0628\u062A \u0646\u0647\u0627\u06CC\u06CC\xBB \u0632\u06CC\u0631 \u067E\u06CC\u0627\u0645 \u0645\u0631\u0648\u0631 \u0627\u0633\u062A\u0641\u0627\u062F\u0647 \u06A9\u0646\u06CC\u062F \u2014 \u06CC\u0627 \xAB\u2716\uFE0F \u0627\u0646\u0635\u0631\u0627\u0641\xBB.",
+            buttons: [[{ text: "\u2705 \u062B\u0628\u062A \u0646\u0647\u0627\u06CC\u06CC", callbackData: "rf:do" }, { text: "\u2716\uFE0F \u0627\u0646\u0635\u0631\u0627\u0641", callbackData: "rf:no" }]]
+          };
+        }
+        default:
+          return { text: "\u23F3 \u0627\u06CC\u0646 \u06AF\u0641\u062A\u06AF\u0648 \u0628\u0633\u062A\u0647 \u0634\u062F\u0647 \u2014 \u062F\u0648\u0628\u0627\u0631\u0647 \xAB\u0645\u0639\u0631\u0641\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\xBB \u0631\u0627 \u0628\u0632\u0646\u06CC\u062F.", buttons: null };
+      }
+    },
+    async setCategory(chatId, idx, value) {
+      const state = await readState(chatId);
+      if (!state || !state.children[idx]) {
+        return { text: "\u23F3 \u0627\u06CC\u0646 \u0645\u0646\u0648 \u0642\u062F\u06CC\u0645\u06CC \u0627\u0633\u062A \u2014 \u062F\u0648\u0628\u0627\u0631\u0647 \xAB\u0645\u0639\u0631\u0641\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\xBB \u0631\u0627 \u0628\u0632\u0646\u06CC\u062F.", buttons: null };
+      }
+      state.children[idx].category = value;
+      await writeState(chatId, state);
+      return {
+        text: `\u270D\uFE0F \u0634\u0631\u062D \u062F\u063A\u062F\u063A\u0647\u0654 \xAB${state.children[idx].firstName}\xBB \u0631\u0627 \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F (\u0686\u06CC\u0632\u06CC \u06A9\u0647 \u062F\u06CC\u062F\u0647\u200C\u0627\u06CC\u062F \u2014 \u06CC\u0627 \xAB\u0631\u062F\xBB):`,
+        buttons: null
+      };
+    },
+    /* ثبت نهایی — از مسیر رسمی waitlist.submitReferral با token بات */
+    async confirm(chatId) {
+      const state = await readState(chatId);
+      if (!state || state.children.length === 0) {
+        return { text: "\u23F3 \u0627\u06CC\u0646 \u06AF\u0641\u062A\u06AF\u0648 \u0628\u0633\u062A\u0647 \u0634\u062F\u0647 \u2014 \u062F\u0648\u0628\u0627\u0631\u0647 \xAB\u0645\u0639\u0631\u0641\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\xBB \u0631\u0627 \u0628\u0632\u0646\u06CC\u062F.", buttons: null };
+      }
+      if (!deps.submitReferral) {
+        return { text: "\u26A0\uFE0F \u062B\u0628\u062A \u0645\u0639\u0631\u0641\u06CC \u0641\u0639\u0644\u0627\u064B \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0646\u06CC\u0633\u062A \u2014 \u0627\u0632 \u0641\u0631\u0645 \u0648\u0628 \u0627\u0633\u062A\u0641\u0627\u062F\u0647 \u06A9\u0646\u06CC\u062F." + webFormLine, buttons: null };
+      }
+      if (rateBlocked(chatId)) {
+        return { text: "\u23F3 \u062A\u0639\u062F\u0627\u062F \u062B\u0628\u062A\u200C\u0647\u0627\u06CC \u0627\u06CC\u0646 \u06AF\u0641\u062A\u06AF\u0648 \u062F\u0631 \u06CC\u06A9 \u0633\u0627\u0639\u062A \u0632\u06CC\u0627\u062F \u0627\u0633\u062A \u2014 \u06A9\u0645\u06CC \u0628\u0639\u062F \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F \u06CC\u0627 \u0627\u0632 \u0641\u0631\u0645 \u0648\u0628 \u0627\u0633\u062A\u0641\u0627\u062F\u0647 \u06A9\u0646\u06CC\u062F." + webFormLine, buttons: null };
+      }
+      try {
+        const created = await deps.submitReferral(
+          {
+            role: state.role,
+            referrer_name: state.name,
+            referrer_phone: state.phone,
+            school_text: state.school ?? void 0,
+            grade_text: state.grade ?? void 0,
+            class_text: state.cls ?? void 0,
+            token: `bot:${chatId}`,
+            children: state.children.map((c) => ({
+              first_name: c.firstName,
+              concern_category: c.category,
+              concern_text: c.text ?? void 0
+            }))
+          },
+          { ip: void 0 }
+        );
+        const count = Array.isArray(created) ? created.length : state.children.length;
+        await audit.log({
+          actorId: "bale-bot",
+          action: "bot.referral_submit",
+          resourceType: "waitlist_referral",
+          resourceId: chatId,
+          changes: { count: { from: null, to: count }, role: { from: null, to: state.role } }
+        });
+        await clearState(chatId);
+        log.info("referral.bot.submitted", { chatId, count, role: state.role });
+        return {
+          text: `\u2705 \u062B\u0628\u062A \u0634\u062F \u2014 ${faDigits(String(count))} \u0645\u0639\u0631\u0641\u06CC \u0628\u0631\u0627\u06CC \u06A9\u0627\u0631\u0634\u0646\u0627\u0633\u0627\u0646 \u0645\u0631\u06A9\u0632 \u0627\u0631\u0633\u0627\u0644 \u0634\u062F.
+
+\u06A9\u0627\u0631\u0634\u0646\u0627\u0633\u0627\u0646 \u0628\u0631\u0631\u0633\u06CC \u0645\u06CC\u200C\u06A9\u0646\u0646\u062F \u0648 \u0628\u0627 \u0634\u0645\u0627 \u062A\u0645\u0627\u0633 \u0645\u06CC\u200C\u06AF\u06CC\u0631\u0646\u062F. \u0647\u0645\u0647\u0654 \u062E\u062F\u0645\u0627\u062A \u0631\u0627\u06CC\u06AF\u0627\u0646 \u0627\u0633\u062A.` + webFormLine,
+          buttons: null
+        };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "\u062E\u0637\u0627\u06CC \u0646\u0627\u0645\u0634\u062E\u0635";
+        log.warn("referral.bot.submit_failed", { chatId, error: msg });
+        return {
+          text: `\u26A0\uFE0F \u062B\u0628\u062A \u0627\u0646\u062C\u0627\u0645 \u0646\u0634\u062F: ${msg}
+\u0645\u06CC\u200C\u062A\u0648\u0627\u0646\u06CC\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \xAB\u2705 \u062B\u0628\u062A \u0646\u0647\u0627\u06CC\u06CC\xBB \u0631\u0627 \u0628\u0632\u0646\u06CC\u062F \u06CC\u0627 \u0627\u0632 \u0641\u0631\u0645 \u0648\u0628 \u0627\u0633\u062A\u0641\u0627\u062F\u0647 \u06A9\u0646\u06CC\u062F.` + webFormLine,
+          buttons: [[{ text: "\u2705 \u062B\u0628\u062A \u0646\u0647\u0627\u06CC\u06CC", callbackData: "rf:do" }, { text: "\u2716\uFE0F \u0627\u0646\u0635\u0631\u0627\u0641", callbackData: "rf:no" }]]
+        };
+      }
+    },
+    async abort(chatId) {
+      const had = await readState(chatId);
+      await clearState(chatId);
+      if (!had) return { text: "\u06AF\u0641\u062A\u06AF\u0648\u06CC \u0641\u0639\u0627\u0644\u06CC \u0646\u06CC\u0633\u062A.", buttons: null };
+      return { text: "\u2716\uFE0F \u0645\u0639\u0631\u0641\u06CC \u0644\u063A\u0648 \u0634\u062F \u2014 \u0647\u0631 \u0648\u0642\u062A \u062E\u0648\u0627\u0633\u062A\u06CC\u062F \u0627\u0632 \u0645\u0646\u0648\u06CC \xAB\u0645\u0639\u0631\u0641\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\xBB \u0634\u0631\u0648\u0639 \u06A9\u0646\u06CC\u062F.", buttons: null };
+    }
+  };
+}
+__name(createReferralBot, "createReferralBot");
+
 // src/application/notify/context.ts
 var BOT_ACTOR = {
   staffId: "bale-bot",
@@ -71819,7 +72202,8 @@ function buildBotKeyboard(owner) {
     return [
       ["\u0645\u0639\u0631\u0641\u06CC \u0645\u0631\u06A9\u0632", "\u062E\u062F\u0645\u0627\u062A \u0645\u0631\u06A9\u0632"],
       ["\u0631\u0627\u0647\u200C\u0647\u0627\u06CC \u0627\u0631\u062A\u0628\u0627\u0637\u06CC", "\u0627\u062D\u0631\u0627\u0632 \u0647\u0648\u06CC\u062A"],
-      ["\u0641\u0627\u06CC\u0644\u200C\u0647\u0627\u06CC \u0622\u0645\u0648\u0632\u0634\u06CC"]
+      ["\u0645\u0639\u0631\u0641\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632", "\u0641\u0627\u06CC\u0644\u200C\u0647\u0627\u06CC \u0622\u0645\u0648\u0632\u0634\u06CC"]
+      // ۱.۲۷.۳۵ — عموم مردم بدون احراز
     ];
   }
   if (owner.kind === "staff") {
@@ -71840,6 +72224,8 @@ function buildBotKeyboard(owner) {
     return [
       ["\u0646\u0648\u0628\u062A\u200C\u0647\u0627\u06CC \u06A9\u0644\u0627\u0633 \u0645\u0646", "\u0641\u0639\u0627\u0644\u06CC\u062A \u06A9\u0644\u0627\u0633"],
       ["\u06A9\u0627\u0631\u062A\u200C\u0647\u0627\u06CC \u0622\u0645\u0627\u062F\u0647", "\u0622\u06AF\u0627\u0647\u06CC\u200C\u0647\u0627\u06CC \u0627\u062E\u062A\u0644\u0627\u0644\u0627\u062A"],
+      ["\u0645\u0639\u0631\u0641\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632"],
+      // ۱.۲۷.۳۵ — معلمِ کلاس معرفی‌کنندهٔ اصلی است
       aboutRow,
       unlinkRow
     ];
@@ -71847,7 +72233,8 @@ function buildBotKeyboard(owner) {
   return [
     ["\u0646\u0648\u0628\u062A\u200C\u0647\u0627\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u0645\u0646", "\u062A\u0645\u0631\u06CC\u0646\u200C\u0647\u0627\u06CC \u0627\u0646\u062C\u0627\u0645\u200C\u0646\u0634\u062F\u0647"],
     ["\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A\u200C\u0647\u0627\u06CC \u0645\u0646", "\u062D\u0636\u0648\u0631 \u0641\u0631\u0632\u0646\u062F"],
-    ["\u0641\u0627\u06CC\u0644\u200C\u0647\u0627\u06CC \u0622\u0645\u0648\u0632\u0634\u06CC"],
+    ["\u0645\u0639\u0631\u0641\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632", "\u0641\u0627\u06CC\u0644\u200C\u0647\u0627\u06CC \u0622\u0645\u0648\u0632\u0634\u06CC"],
+    // ۱.۲۷.۳۵ — نقش پایه (خانواده)
     aboutRow,
     unlinkRow
   ];
@@ -71862,11 +72249,34 @@ function extractMessageText(update) {
 }
 __name(extractMessageText, "extractMessageText");
 function createBotCommandsSection(ctx) {
-  const { deps, db, audit, log, now, appointments, students, followups, exbBot, subBot, clfBot, awBot, readPfState, writePfState, studentNamesMap, staffNamesMap } = ctx;
+  const { deps, db, audit, log, now, appointments, students, followups, exbBot, subBot, clfBot, awBot, rfBot, readPfState, writePfState, studentNamesMap, staffNamesMap } = ctx;
   return {
     async handleBotUpdate(update) {
       const cmd = parseBotUpdate(update);
       const rawText = extractMessageText(update);
+      const refChat = (() => {
+        if (typeof update !== "object" || update === null) return null;
+        const u = update;
+        const id = u.callback_query?.message?.chat?.id ?? u.message?.chat?.id;
+        return id === void 0 || id === null ? null : String(id);
+      })();
+      if (refChat) {
+        const refActive = await rfBot.readActive(refChat);
+        if (refActive) {
+          const textual = cmd === null || cmd.kind === "identify" || cmd.kind === "unknown";
+          if (cmd && cmd.kind === "flow_cancel") {
+            const out = await rfBot.abort(refChat);
+            return { handled: true, reply: out.text, keyboard: buildBotKeyboard(await this.resolveOwner(refChat)) };
+          }
+          if (textual) {
+            const out = await rfBot.answer(refChat, (rawText ?? "").trim());
+            return { handled: true, reply: out.text, buttons: out.buttons };
+          }
+          if (cmd.kind !== "ref_role" && cmd.kind !== "ref_count" && cmd.kind !== "ref_cat" && cmd.kind !== "ref_do" && cmd.kind !== "ref_no" && cmd.kind !== "media_received" && cmd.kind !== "sub_pick") {
+            await rfBot.abort(refChat);
+          }
+        }
+      }
       if (!cmd) {
         return { handled: false, reply: null };
       }
@@ -71875,6 +72285,10 @@ function createBotCommandsSection(ctx) {
         if (clfActive) {
           const out = await clfBot.abortFill(cmd.chatId);
           return { handled: true, reply: out.text, buttons: out.buttons };
+        }
+        if (await rfBot.readActive(cmd.chatId)) {
+          const out = await rfBot.abort(cmd.chatId);
+          return { handled: true, reply: out.text, keyboard: buildBotKeyboard(await this.resolveOwner(cmd.chatId)) };
         }
         return { handled: false, reply: null };
       }
@@ -72024,6 +72438,31 @@ function createBotCommandsSection(ctx) {
         case "clf_no": {
           const out = await clfBot.abortFill(cmd.chatId);
           return { handled: true, reply: out.text, buttons: out.buttons };
+        }
+        // ۱.۲۷.۳۵ — فلو «معرفی دانش‌آموز»: عموم مردم و نقش پایه (خانواده/معلم)، بدون احراز
+        case "referral_root": {
+          const out = await rfBot.root(cmd.chatId);
+          return { handled: true, reply: out.text, buttons: out.buttons };
+        }
+        case "ref_role": {
+          const out = await rfBot.start(cmd.chatId, cmd.role);
+          return { handled: true, reply: out.text, buttons: out.buttons };
+        }
+        case "ref_count": {
+          const out = await rfBot.setCount(cmd.chatId, cmd.n);
+          return { handled: true, reply: out.text, buttons: out.buttons };
+        }
+        case "ref_cat": {
+          const out = await rfBot.setCategory(cmd.chatId, cmd.idx, cmd.value);
+          return { handled: true, reply: out.text, buttons: out.buttons };
+        }
+        case "ref_do": {
+          const out = await rfBot.confirm(cmd.chatId);
+          return { handled: true, reply: out.text, buttons: out.buttons, keyboard: out.buttons ? void 0 : buildBotKeyboard(await this.resolveOwner(cmd.chatId)) };
+        }
+        case "ref_no": {
+          const out = await rfBot.abort(cmd.chatId);
+          return { handled: true, reply: out.text, keyboard: buildBotKeyboard(await this.resolveOwner(cmd.chatId)) };
         }
         case "exb_root":
         case "exb_cats":
@@ -73423,6 +73862,14 @@ function createNotifyAppService(deps) {
     now
   });
   const awBot = createAwarenessBot({ publicBaseUrl: deps.publicBaseUrl ?? null });
+  const rfBot = createReferralBot({
+    db,
+    audit,
+    logger,
+    publicBaseUrl: deps.publicBaseUrl ?? null,
+    submitReferral: deps.referralSubmit ?? null,
+    now
+  });
   async function readPfState(chatId) {
     const row = await db.queryOne(
       `SELECT payload FROM bot_menu_state WHERE chat_id = ?`,
@@ -73479,7 +73926,7 @@ function createNotifyAppService(deps) {
     return base ? `${base}?start=${code}` : null;
   }
   __name(botDeepLink, "botDeepLink");
-  const ctx = { deps, db, audit, log, notify, now, appointments, students, followups, exbBot, subBot, clfBot, awBot, readPfState, writePfState, studentNamesMap, staffNamesMap, botDeepLink, botDeepLinkCache };
+  const ctx = { deps, db, audit, log, notify, now, appointments, students, followups, exbBot, subBot, clfBot, awBot, rfBot, readPfState, writePfState, studentNamesMap, staffNamesMap, botDeepLink, botDeepLinkCache };
   return {
     ...createBotLinksSection(ctx),
     ...createBotCommandsSection(ctx),
@@ -80052,6 +80499,11 @@ function createServices(deps) {
     publicBaseUrl: deps.publicBaseUrl ?? null,
     fileSender: exerciseFileSender,
     caseEvents,
+    // ۱.۲۷.۳۵ — فلو بات معرفی: ثبت از مسیر رسمی waitlist.submitReferral (کانال ردیف = bot)
+    referralSubmit: /* @__PURE__ */ __name((input2, meta3) => waitlist.submitReferral(
+      input2,
+      meta3
+    ), "referralSubmit"),
     mediaFetcher: deps.mediaFetcher !== void 0 ? deps.mediaFetcher : deps.baleToken ? createBaleMediaFetcher({ token: deps.baleToken }) : null
   });
   appointments.setLifecycleObserver({

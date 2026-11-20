@@ -53,7 +53,13 @@ textarea.i{min-height:110px;resize:vertical}
 font-size:13px;font-weight:700;padding:2px 4px}
 .aware{font-size:15.5px;line-height:2.2;white-space:pre-wrap}
 .done{text-align:center}.done .big{font-size:46px;margin-bottom:6px}
-@media (prefers-reduced-motion: reduce){.bar__fill{transition:none}}
+/* ۱.۲۷.۳۵ — افکت فید و جریان پیوسته: هر صفحهٔ تازه با فیدین نرم می‌نشیند؛ کاهش-حرکت رعایت می‌شود */
+.app>.card{animation:fadein .3s ease}
+@keyframes fadein{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.choice,.btn{transition:transform .12s ease,border-color .15s,background .15s}
+.choice:active{transform:scale(.98)}
+input.i:focus-visible,textarea.i:focus-visible,button:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+@media (prefers-reduced-motion: reduce){.bar__fill{transition:none}.app>.card{animation:none}.choice,.btn{transition:none}}
 `;
 
 const PAGE_SCRIPT = `
@@ -168,7 +174,17 @@ function bindBlock(i,b){
     });
   } else {
     var inp=document.getElementById('in');
-    if(inp)inp.addEventListener('input',function(e){setValue(i,e.target.value);});
+    if(inp){
+      inp.addEventListener('input',function(e){setValue(i,e.target.value);});
+      /* جریان پیوسته — Enter (یا Ctrl+Enter در متن بلند) = ادامه؛ بدون پرسش اضافی */
+      inp.addEventListener('keydown',function(e){
+        var isTa=(e.target.tagName==='TEXTAREA');
+        if(e.key==='Enter'&&!isTa){e.preventDefault();var nx=document.getElementById('__nx');if(nx&&checkBlock(i,b)){state.step=state.step+1;render();}}
+        else if(e.key==='Enter'&&isTa&&e.ctrlKey){e.preventDefault();var nx2=document.getElementById('__nx');if(nx2&&checkBlock(i,b)){state.step=state.step+1;render();}}
+      });
+      /* فوکوس خودکار — کاربر همان‌جا که بود تایپ می‌کند */
+      setTimeout(function(){try{inp.focus({preventScroll:true});}catch(_){try{inp.focus();}catch(__){}}},60);
+    }
   }
 }
 function checkBlock(i,b){
@@ -254,6 +270,8 @@ function renderDone(){
     '<p class="hint">مرکز جامع سنجش و اختلالات یادگیری — همه‌ی خدمات رایگان</p></div>';
 }
 function render(){
+  /* جریان پیوسته — هر گام تازه به بالای صفحه برمی‌گردد (اسکرول نرم؛ کاهش-حرکت → بی‌درنگ) */
+  if(state.step>0){try{window.scrollTo({top:0,behavior:REDUCED?'auto':'smooth'});}catch(_){window.scrollTo(0,0);}}
   if(state.step===0)return renderIntro();
   var nth=state.step-1;
   if(nth>=0&&nth<interactive.length)return renderBlock();
@@ -288,6 +306,9 @@ export function renderFormPage(opts: { form: FormDefinition }): string {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${opts.form.title.replace(/[<>&"]/g, '')}</title>
 <meta name="robots" content="noindex, nofollow">
+<!-- وزیرمتن از CDN — تایپوگرافی فارسی یکدست (CSP فقط jsdelivr را اجازه می‌دهد) -->
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css">
 <style>${PAGE_STYLES}</style>
 </head>
 <body>
@@ -304,6 +325,9 @@ export function renderFormNotFoundPage(): string {
 <html lang="fa" dir="rtl">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>فرم یافت نشد</title><meta name="robots" content="noindex, nofollow">
+<!-- وزیرمتن از CDN — تایپوگرافی فارسی یکدست (CSP فقط jsdelivr را اجازه می‌دهد) -->
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css">
 <style>${PAGE_STYLES}</style></head>
 <body><div class="app"><div class="card done"><div class="big">🔍</div>
 <h1>این فرم پیدا نشد یا هنوز منتشر نشده</h1>

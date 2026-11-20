@@ -23,6 +23,8 @@ import type { ExerciseSubmissionBot } from './exercise-submission-bot';
 import { createCaseEventsBot } from './case-events-bot';
 import { createAwarenessBot } from './awareness-bot';
 import type { AwarenessBot } from './awareness-bot';
+import { createReferralBot } from './referral-bot'; // ۱.۲۷.۳۵ — فلو معرفی دانش‌آموز
+import type { ReferralBot, ReferralSubmitFn } from './referral-bot';
 import { BOT_ACTOR, spreadStmt } from './context';
 import type { NotifyCtx } from './context';
 import { createBotLinksSection } from './bot-links';
@@ -50,6 +52,8 @@ export interface NotifyAppDeps {
   mediaFetcher?: MediaFetcher | null;
   caseEvents?: import('@domain/case-events').CaseEventsService | null;
   fileSender?: ExerciseFileSender | null;
+  /** ۱.۲۷.۳۵ — ثبت معرفی دانش‌آموز از فلو بات؛ در api-routing به waitlist.submitReferral می‌بندد */
+  referralSubmit?: ReferralSubmitFn | null;
   now?: () => Date;
 }
 
@@ -196,6 +200,16 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
 
   const awBot: AwarenessBot = createAwarenessBot({ publicBaseUrl: deps.publicBaseUrl ?? null });
 
+  // ۱.۲۷.۳۵ — فلو معرفی: ثبت از مسیر رسمی waitlist.submitReferral؛ بدون وابستگی مستقیم به دامنهٔ waitlist
+  const rfBot: ReferralBot = createReferralBot({
+    db,
+    audit,
+    logger,
+    publicBaseUrl: deps.publicBaseUrl ?? null,
+    submitReferral: deps.referralSubmit ?? null,
+    now
+  });
+
   async function readPfState(chatId: string): Promise<{ pfl?: Array<{ e: string; f: string; t: string }> }> {
     const row = await db.queryOne<{ payload: string }>(
       `SELECT payload FROM bot_menu_state WHERE chat_id = ?`,
@@ -254,7 +268,7 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
   }
 
   // همهٔ بخش‌ها همین سبد مشترک را می‌گیرند؛ این‌جا یک بار ساخته می‌شود
-  const ctx: NotifyCtx = { deps, db, audit, log, notify, now, appointments, students, followups, exbBot, subBot, clfBot, awBot, readPfState, writePfState, studentNamesMap, staffNamesMap, botDeepLink, botDeepLinkCache };
+  const ctx: NotifyCtx = { deps, db, audit, log, notify, now, appointments, students, followups, exbBot, subBot, clfBot, awBot, rfBot, readPfState, writePfState, studentNamesMap, staffNamesMap, botDeepLink, botDeepLinkCache };
 
   return {
     ...createBotLinksSection(ctx),
