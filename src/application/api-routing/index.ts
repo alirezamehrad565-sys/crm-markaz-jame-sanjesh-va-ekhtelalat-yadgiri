@@ -16,6 +16,7 @@ import { createConflictEngine } from '@domain/conflict-engine';
 import type { ConflictEngine } from '@domain/conflict-engine';
 import { createAppointmentService, registerRoutes as appointmentRoutes } from '@domain/appointment-core';
 import type { AppointmentService } from '@domain/appointment-core';
+import { createAssessmentBlockService, registerAssessmentBlockRoutes } from '@domain/assessment-blocks'; // ۱.۲۷.۱۴ — بلوک نوبت سنجش (خواست کارفرما)
 import { createAttendanceService, registerRoutes as attendanceRoutes } from '@domain/attendance';
 import type { AttendanceService } from '@domain/attendance';
 import { createStaffAttendanceService, registerStaffAttendanceRoutes as staffAttendanceRoutes } from '@domain/attendance';
@@ -30,6 +31,8 @@ import { createSpecialNeedsService, registerSpecialNeedsRoutes } from '@app/spec
 import type { SpecialNeedsService } from '@app/special-needs';
 import { createWaitlistService, registerWaitlistRoutes } from '@domain/waitlist';
 import type { WaitlistService } from '@domain/waitlist';
+import { createFormBuilderService, registerFormBuilderRoutes } from '@domain/form-builder'; // ۱.۲۷.۳۴ — فرم‌ساز تعاملی عمومی
+import type { FormBuilderService } from '@domain/form-builder';
 import { createFollowUpsService, registerFollowUpRoutes } from '@domain/followups';
 import type { FollowUpsService } from '@domain/followups';
 import { createTodosService, registerTodoRoutes } from '@domain/todos';
@@ -71,6 +74,7 @@ import type { ClientErrorsService } from '@app/client-errors';
 import { createHealthService, registerHealthRoutes } from '@app/health'; // ۱.۲۵.۶۷ — پنل سلامت (CP-3 ف۱)
 import type { HealthService } from '@app/health';
 import { registerSystemRoutes, registerSystemPublicRoutes, isRestartScheduled } from '@app/system'; // ۱.۲۶.۴ — دکمه‌های نجات (۴-۲) + بستهٔ خطا
+import { registerEngineCapabilitiesRoutes } from '@app/engine-capabilities'; // ۱.۲۷.۱۳ — پایانهٔ قابلیت‌های موتور (P0-1 ممیزی §۱)
 import { createGrowthService, registerGrowthRoutes } from '@app/growth'; // ف۴ — گزارش رشد جدول‌ها (بهداشت داده)
 import type { GrowthService } from '@app/growth';
 import { createContentScoreService, registerContentScoreRoutes } from '@domain/content-score'; // ۱.۲۵.۴۸ m6 — امتیاز شناسنامه
@@ -236,7 +240,9 @@ export function createServices(deps: AppDeps): Services {
     audit,
     logger,
     storage: exerciseStorage,
-    downloadSecret: deps.downloadSecret ?? deps.webhookSecret ?? 'insecure-dev-secret',
+    /* ۱.۲۷.۴۳ — راز دانلود هرگز رشتهٔ ثابت نیست: اگر AUTH/WEBHOOK تنظیم نشده باشد،
+       تصادفیِ هر بوت می‌شود (توکن‌های دانلود TTL کوتاه دارند؛ تاثیر ری‌استارت پذیرفته است) */
+    downloadSecret: deps.downloadSecret ?? deps.webhookSecret ?? (crypto.randomUUID() + crypto.randomUUID()),
     publicBaseUrl: deps.publicBaseUrl ?? null,
     fileSender: exerciseFileSender
   });
@@ -458,6 +464,7 @@ export function createServices(deps: AppDeps): Services {
   const otEngine = createOtEngineService({ db, audit, logger });
   const clinicalEngine = createClinicalEngineService({
     db, audit, logger,
+    publicBaseUrl: deps.publicBaseUrl ?? null, // ۱.۲۷.۲۷ — M4: پیوند برگهٔ پیشرفت خانواده
     exerciseIdsExist: (ids) => exerciseBank.idsExist(ids),
     formulationOt: {
       gatesOf: (studentId, actor) => otEngine.getGates(studentId, actor),
@@ -533,7 +540,7 @@ export function createApp(deps: AppDeps): AppHono {
 
   const app: AppHono = new Hono<{ Bindings: AppBindings; Variables: AppVariables }>();
 
-  // — هوک تستی: دسترسی به سرویس‌ها برای e2e (مثلاً setFillObserver در آزمون )
+  // — هوک تستی: دسترسی به سرویس‌ها برای e2e (مثلاً setFillObserver در آزمون)
   (app as unknown as { __services?: Services }).__services = services;
 
   app.use('*', async (c, next) => {
@@ -691,6 +698,12 @@ export function createApp(deps: AppDeps): AppHono {
   // ۱.۲۶.۴ — وضعیت مُهر ری‌استارت برای ناظر بیرونی (قبل از گیت auth؛ ناظر سشن اپ ندارد)
   registerSystemPublicRoutes(app, { db: services.db });
 
+  // ۱.۲۷.۱۳ — پایانهٔ قابلیت‌های موتور (P0-1 ممیزی §۱): عمومی و سبک، پیش از گیت auth —
+  // پوستهٔ Rust و صفحهٔ بوت سشن اپ ندارند؛ پاسخ فقط نسخهٔ باندل + نقشهٔ مسیرهای عمومی است
+  // (بدون هیچ دادهٔ کاربر — سنت حداقلی EXP-4). خودآزمایی بوت (P0-2) همین نسخه را با
+  // CARGO_PKG_VERSION مقایسه می‌کند و هشدار ناهم‌نسخه‌ای پنل سلامت با اولویت از همین می‌خورد.
+  registerEngineCapabilitiesRoutes(app);
+
   /* rust-f4 — زیراپ سینک نودهای دسکتاپ (/node/*): «پیش از» گیت authMiddleware ثبت می‌شود
      (زنجیرهٔ عمومی §۵)؛ احراز مسیرهای نودی خودش node_code+node_key است و مسیرهای مدیریتی
      درون زیراپ با همان گیت سشن بسته می‌شوند. سند: docs/rust/node-sync.md */
@@ -745,6 +758,9 @@ export function createApp(deps: AppDeps): AppHono {
   app.get('/api/me', (c) => c.json({ data: c.get('authContext') }, 200));
 
   appointmentRoutes(app, services.appointments);
+  // ۱.۲۷.۱۴ — بلوک نوبت سنجش: GET همهٔ احرازشده‌ها (سایهٔ تقویم) + POST/DELETE فقط مدیر؛
+  // سدِ سختِ ثبت/جابه‌جایی داخل سرویس نوبت (assertNoAssessmentBlockInRange) است
+  registerAssessmentBlockRoutes(app, createAssessmentBlockService({ db: services.db, audit: services.audit, logger: services.logger }));
   attendanceRoutes(app, services.attendance);
   staffAttendanceRoutes(app, services.staffAttendance); //: حضور و غیاب همکاران
   registerWorkingDayRoutes(app, services.workingDay); //: بورد روز کاری
@@ -753,6 +769,10 @@ export function createApp(deps: AppDeps): AppHono {
   registerSpecialNeedsRoutes(app, services.specialNeeds); // فاز ۷: نیازهای ویژه §12 + وضعیت مدرسه §15
 
   registerWaitlistRoutes(app, services.waitlist);
+
+  // ۱.۲۷.۳۴ — فرم‌ساز تعاملی عمومی: CRUD فرم‌ها (مدیر/منشی) + صفحهٔ بدون‌لاگین /public/form/:slug
+  // و ثبت پاسخ با سقف نرخ درون‌حافظه — ماژول مستقل @domain/form-builder (MIGRATIONS.md: 0120)
+  registerFormBuilderRoutes(app, createFormBuilderService({ db: services.db, audit: services.audit, logger: services.logger }));
 
   registerFollowUpRoutes(app, services.followups);
 
@@ -906,7 +926,10 @@ export function createApp(deps: AppDeps): AppHono {
                 part(services.clinicalEngine.listCaseAudits(actor, null))
               ]).then(([k, a]) => (k ? { kpis: k, audits: a ?? [] } : null))
             )
-          : Promise.resolve(null)
+          : actor.role === 'therapist'
+            ? /* M6 POLISH-3 (۱.۲۷.۲۹) — نمای فقط‌خواندنی درمانگر: حسابرسی پرونده‌های خودش (KPIهای دفتر نمی‌آید) */
+              part(services.clinicalEngine.listCaseAudits(actor, null).then((a) => ({ kpis: null, audits: a ?? [] })))
+            : Promise.resolve(null)
       ]);
 
     return c.json({ data: { today, summary, goal, scoring, me, knowledge, announcements, waitlist, dayAppts, followups, validation } }, 200);

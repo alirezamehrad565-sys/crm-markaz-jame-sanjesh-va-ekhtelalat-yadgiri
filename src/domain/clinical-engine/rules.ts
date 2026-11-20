@@ -17,11 +17,10 @@ export const ASD_B_FULL_CRITERIA = 2;
 export const SCARED_SCHOOL_CUTOFF = 3;
 export const BIF_IQ_RANGE = { min: 70, max: 85 } as const;
 
-export { FSIQ_BAND_RANGES, fsiqBandOf, fsiqBandFaOf } from './signals';
+export { FSIQ_BAND_RANGES, fsiqBandOf, } from './signals';
 export type { WechslerFsiqBand } from './signals';
 
 export const FSIQ_BAND_BIF = FSIQ_BAND_RANGES.find((b) => b.band === 'BIF') as { band: 'BIF'; min: number; max: number; fa: string };
-export const FSIQ_BAND_LOW_BORDER = FSIQ_BAND_RANGES.find((b) => b.band === 'LOW_BORDER') as { band: 'LOW_BORDER'; min: number; max: number; fa: string };
 export const ID_PATH_MAX_FSIQ = FSIQ_BAND_BIF.min;
 export const SCATTER_UNIFORM_MAX = 23;
 

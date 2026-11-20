@@ -81,7 +81,7 @@ function surveyItemOf(r: SurveyListRow, publicBaseUrl: string | null): SurveyEve
   const nps = sub('nps');
   const payload = parseJson<Record<string, { value?: string; label?: string } | null> | null>(r.payload, null);
   const link = publicBaseUrl && r.status === 'pending_family' && r.fill_token
-    ? `${publicBaseUrl.replace(/\/+$/, '')}/public/case-events/${r.id}/fill?token=${r.fill_token}`
+    ? `${publicBaseUrl.replace(/\/+$/, '')}/public/case-events/${r.id}/fill?token=${r.fill_token}` /* __SEC_ACCEPT__: لینک دعوت one-time — توکن crypto.randomUUID، انقضای fill_expires_at، noindex/no-store (الگوی magic-link) */
     : null;
   return {
     id: r.id,
@@ -184,6 +184,8 @@ interface TypeRow {
   bands: string | null;
   tags: string | null;          // — JSON آرایهٔ tag id
   audience: string | null;      // — family | teacher | both
+  tool_source: string | null;   // — ۱.۲۷.۲۸ M5: شناسنامهٔ ابزار — منبع/مرجع
+  tool_norm: string | null;     // — ۱.۲۷.۲۸ M5: شناسنامهٔ ابزار — هنجار سنی/روایی
   subscales: string | null;     // — JSON آرایهٔ زیرمقیاس‌ها
   active: number;
   is_system: number;            // — ابزار سیستمی باتری بالینی
@@ -265,6 +267,8 @@ function typeRowToRecord(r: TypeRow): CaseEventTypeRecord {
     subscales: r.subscales ? parseJson<CaseEventSubscale[] | null>(r.subscales, null) : null,
     tags: r.tags ? parseJson<string[]>(r.tags, []) : [],
     audience: (r.audience as CaseEventTypeRecord['audience']) ?? 'family',
+    toolSource: r.tool_source ?? null,
+    toolNorm: r.tool_norm ?? null,
     active: r.active === 1,
     isSystem: r.is_system === 1,
     createdAt: r.created_at,
@@ -511,8 +515,8 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       const id = crypto.randomUUID();
       const key = newTypeKey();
       await db.execute(
-        `INSERT INTO case_event_types (id, key, title, description, category, icon, family_fillable, fields, bands, subscales, tags, audience, active, created_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
+        `INSERT INTO case_event_types (id, key, title, description, category, icon, family_fillable, fields, bands, subscales, tags, audience, tool_source, tool_norm, active, created_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
         [
           id, key, input.title, input.description?.trim() || null, input.category, input.icon ?? null,
           input.familyFillable ? 1 : 0,
@@ -521,6 +525,8 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
           input.subscales && input.subscales.length > 0 ? JSON.stringify(input.subscales) : null,
           input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null,
           input.audience ?? 'family',
+          input.toolSource?.trim() || null,
+          input.toolNorm?.trim() || null,
           actor.staffId, now().toISOString(), now().toISOString()
         ]
       );
@@ -554,18 +560,21 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
         bands: input.bands !== undefined ? input.bands ?? null : current.bands,
         subscales: input.subscales !== undefined ? input.subscales ?? null : current.subscales,
         tags: input.tags !== undefined ? input.tags ?? [] : current.tags,
-        audience: input.audience !== undefined ? input.audience ?? 'family' : current.audience
+        audience: input.audience !== undefined ? input.audience ?? 'family' : current.audience,
+        toolSource: input.toolSource !== undefined ? input.toolSource?.trim() || null : current.toolSource,
+        toolNorm: input.toolNorm !== undefined ? input.toolNorm?.trim() || null : current.toolNorm
       };
       validateTypeDefinition({ category: next.category, fields: next.fields, bands: next.bands, familyFillable: next.familyFillable, subscales: next.subscales });
       await db.execute(
         `UPDATE case_event_types
-            SET title = ?, description = ?, category = ?, icon = ?, family_fillable = ?, fields = ?, bands = ?, subscales = ?, tags = ?, audience = ?, updated_at = ?
+            SET title = ?, description = ?, category = ?, icon = ?, family_fillable = ?, fields = ?, bands = ?, subscales = ?, tags = ?, audience = ?, tool_source = ?, tool_norm = ?, updated_at = ?
           WHERE id = ?`,
         [
           next.title, next.description, next.category, next.icon, next.familyFillable ? 1 : 0,
           JSON.stringify(next.fields), next.bands ? JSON.stringify(next.bands) : null,
           next.subscales && next.subscales.length > 0 ? JSON.stringify(next.subscales) : null,
           next.tags.length > 0 ? JSON.stringify(next.tags) : null, next.audience,
+          next.toolSource, next.toolNorm,
           now().toISOString(), id
         ]
       );
@@ -1327,7 +1336,7 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
         `SELECT fill_token FROM case_events WHERE id = ?`,
         [id]
       );
-      return Boolean(row?.fill_token) && row!.fill_token === token;
+      return row?.fill_token === token;
     },
 
     async mintFillLink(id, publicBaseUrl) {
@@ -1337,7 +1346,7 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       );
       if (!row || row.status !== 'pending_family' || !row.fill_token) return null;
       const base = publicBaseUrl.replace(/\/+$/, '');
-      return `${base}/public/case-events/${id}/fill?token=${row.fill_token}`;
+      return `${base}/public/case-events/${id}/fill?token=${row.fill_token}`; /* __SEC_ACCEPT__: magic-link — همان قرارداد بالا */
     },
 
     async fillByFamily(id, input, actor) {
@@ -1492,7 +1501,7 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
           createdAt: nowIso,
           fillExpiresAt: fillExpires,
           sentAt: null,
-          link: base ? `${base.replace(/\/+$/, '')}/public/case-events/${id}/fill?token=${token}` : null,
+          link: base ? `${base.replace(/\/+$/, '')}/public/case-events/${id}/fill?token=${token}` : null, /* __SEC_ACCEPT__: magic-link — همان قرارداد بالا */
           kind: input.kind,
           typeKey: type.key,
           typeTitle: type.title,

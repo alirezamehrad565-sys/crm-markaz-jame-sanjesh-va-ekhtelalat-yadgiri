@@ -53,6 +53,28 @@ export function tehranTimeLabel(isoUtc: string): string {
   return `${pad2(tehran.getUTCHours())}:${pad2(tehran.getUTCMinutes())}`;
 }
 
+/**
+ * ۱.۲۷.۱۴ — بازهٔ UTC معادل یک پنجرهٔ دقیقه‌محور تهران (بلوک نوبت سنجش): ymd + دقیقهٔ
+ * شروع/پایان از نیمه‌شب تهران → دو لَحظهٔ ISO UTC. با آفست ثابت +3:30 (هم‌قرارداد
+ * tehranDayRange — سامانه DST ندارد). مصرف: تداخل نوبت با بلوک سنجش + آزمون واحد.
+ */
+export function tehranMinuteWindow(ymd: string, fromMinute: number, toMinute: number): { start: string; end: string } {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) {
+    throw new Error(`INVALID_DATE: ${ymd}`);
+  }
+  if (
+    !Number.isFinite(fromMinute) || !Number.isFinite(toMinute) ||
+    fromMinute < 0 || toMinute <= 0 || toMinute > 1440 || toMinute <= fromMinute
+  ) {
+    throw new Error(`INVALID_MINUTE_RANGE: ${fromMinute}-${toMinute}`);
+  }
+  const base = Date.parse(`${ymd}T00:00:00.000Z`) - TEHRAN_OFFSET_MS;
+  return {
+    start: new Date(base + fromMinute * 60_000).toISOString(),
+    end: new Date(base + toMinute * 60_000).toISOString()
+  };
+}
+
 export function addDaysYmd(ymd: string, days: number): string {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) {
     throw new Error(`INVALID_DATE: ${ymd}`);
@@ -181,4 +203,18 @@ export function jalaliLabel(ymd: string): string {
 
 export function jalaliFullLabel(ymd: string): string {
   return `${WEEKDAY_NAMES_FA[iranianWeekdayOfYmd(ymd)]} ${jalaliLabel(ymd)}`;
+}
+
+/** سال تحصیلی مهر-محور: مهر ۱۴۰۴ تا شهریور ۱۴۰۵ = سال تحصیلی ۱۴۰۴.
+ *  منبع یگانهٔ جریان پذیرش (لیست انتظار/سنجش/معرفی/نتیجهٔ ارزیابی) — آینهٔ همان تابع در
+ *  clearbook/pure.ts که دفتر بالینی از آن استفاده می‌کند؛ اینجا برای کل shared در دسترس است. */
+export function schoolYearOfYmd(ymd: string): number {
+  const [gy, gm, gd] = ymd.split('-').map(Number);
+  const j = toJalaliParts(gy, gm, gd);
+  return j.jm >= 7 ? j.jy : j.jy - 1;
+}
+
+/** سال تحصیلیِ «الان» به وقت تهران — مقدار پیش‌فرض ستون academic_year جریان پذیرش */
+export function currentSchoolYear(now: Date = new Date()): string {
+  return String(schoolYearOfYmd(tehranTodayYmd(now)));
 }

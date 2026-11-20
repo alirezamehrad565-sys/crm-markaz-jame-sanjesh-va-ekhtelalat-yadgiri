@@ -31,6 +31,50 @@ function faNum(n: number): string {
   return String(n).replace(/[0-9]/g, (d) => FA_DIGITS[Number(d)]);
 }
 
+/* ۱.۲۵.۸۱ — بخش‌بندی مشترک فرم خانواده: هم مسیر واقعی /fill و هم پیش‌نمایش فرم‌ساز از همین
+   تابع می‌خوانند تا «پیش‌نمایش = عین چیزی که خانواده می‌بیند» به قاعدهٔ یکتا تبدیل شود؛
+   قبلاً همین منطق داخل routes.ts کپی بود و هر اصلاح باید دو جا می‌رفت. */
+export interface FamilySectionItem {
+  key: string;
+  label: string;
+  kind?: 'scale' | 'single' | 'longtext';
+  scaleMax?: number;
+  scoredOptions?: { label: string }[];
+  scaleLabels?: string[];
+  hint?: string | null;
+  teacherLabel?: string | null; // — فرم معلم: متن جایگزین گویه
+  teacherHint?: string | null;
+}
+
+export function familySectionsOf(
+  fields: { key: string; label: string; type: string; subscaleId?: string | null; scaleMax?: number; scoredOptions?: { label: string }[] | null; scaleLabels?: string[] | null; hint?: string | null; teacherLabel?: string | null; teacherHint?: string | null }[],
+  subscales?: { id: string; name: string }[] | null
+): { title: string | null; items: FamilySectionItem[] }[] {
+  const subscaleName = new Map((subscales ?? []).map((s) => [s.id, s.name] as const));
+  const sections: { title: string | null; items: FamilySectionItem[] }[] = [];
+  for (const f of fields) {
+    if (f.type !== 'scale' && f.type !== 'single' && f.type !== 'longtext') continue; // — آیتم نمره‌دار + متن آزاد به گیرنده می‌رسد
+    const title = f.subscaleId ? subscaleName.get(f.subscaleId) ?? null : null;
+    const item: FamilySectionItem = {
+      key: f.key, label: f.label,
+      kind: (f.type === 'longtext' ? 'longtext' : f.type) as 'scale' | 'single' | 'longtext',
+      scaleMax: f.scaleMax,
+      scoredOptions: f.scoredOptions?.map((o) => ({ label: o.label })),
+      scaleLabels: f.scaleLabels ?? undefined,
+      hint: f.hint ?? null,
+      teacherLabel: f.teacherLabel ?? null,
+      teacherHint: f.teacherHint ?? null
+    };
+    const last = sections[sections.length - 1];
+    if (last && last.title === title) {
+      last.items.push(item);
+    } else {
+      sections.push({ title, items: [item] });
+    }
+  }
+  return sections;
+}
+
 const SCALE_LABELS = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹', '۱۰'];
 
 export function renderFillFormPage(model: FillFormModel, token: string): string {
@@ -90,10 +134,23 @@ export function renderFillFormPage(model: FillFormModel, token: string): string 
 <style>
   :root { color-scheme: light; }
   * { box-sizing: border-box; }
-  body { margin: 0; background: #F7F3EA; color: #12384f;
-         font-family: Tahoma, "Segoe UI", sans-serif; line-height: 1.8; }
-  .wrap { max-width: 640px; margin: 0 auto; padding: 24px 16px 64px; }
-  .head { background: #12384f; color: #fff; border-radius: 16px; padding: 20px 22px; margin-bottom: 18px; }
+  /* ۱.۲۷.۴۲ — فونت وزیر متن باندل‌شدهٔ خودی (بدون URL بیرونی) — پیش‌تر فقط «اعلام» می‌شد و
+     در عمل Tahoma رندر می‌شد؛ حالا با فایل متغیر خودی واقعاً لود می‌شود */
+  @font-face { font-family: Vazirmatn; src: url('/assets/fonts/Vazirmatn-Variable.woff2') format('woff2');
+               font-weight: 100 900; font-style: normal; font-display: swap; }
+  /* ۱.۲۷.۴۲ — عمودی‌چین‌شدن مرحله در صفحهٔ بلند (خواست کارفرما: «فرم دقیقاً وسط صفحه») —
+     safe center در محتوای بلندتر از صفحه به start برمی‌گردد؛ بدون برشِ بالا */
+  body { margin: 0; color: #12384f;
+         font-family: Vazirmatn, Tahoma, "Segoe UI", sans-serif; line-height: 1.8;
+         background: radial-gradient(600px 320px at 88% -6%, rgba(34,158,217,.14), transparent 66%),
+                     radial-gradient(520px 300px at 8% 104%, rgba(37,99,235,.10), transparent 66%),
+                     linear-gradient(168deg,#eef6fb 0%,#f7f3ea 52%,#fdf2f8 100%);
+         background-attachment: fixed; }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 24px 16px;
+          min-height: 100dvh; display: flex; flex-direction: column; justify-content: safe center; }
+  .head { color: #fff; border-radius: 16px; padding: 20px 22px; margin-bottom: 18px;
+          background: linear-gradient(135deg,#12384f 0%,#1c5d80 55%,#229ED9 130%);
+          box-shadow: 0 10px 26px -12px rgba(18,56,79,.5); }
   .head h1 { margin: 0 0 6px; font-size: 18px; }
   .head p { margin: 0; font-size: 13px; opacity: .85; }
   .head .desc { margin-top: 10px; font-size: 13px; opacity: .95; line-height: 1.9;
@@ -101,41 +158,46 @@ export function renderFillFormPage(model: FillFormModel, token: string): string 
   .head .who { margin-top: 10px; font-size: 13.5px; font-weight: 700; line-height: 1.8;
                background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.25);
                border-radius: 10px; padding: 9px 12px; }
-  .progress { position: sticky; top: 8px; z-index: 5; background: #fff; border: 1px solid #E5DCCB;
+  .progress { position: sticky; top: 8px; z-index: 5; background: rgba(255,255,255,.94); border: 1px solid #E5DCCB;
               border-radius: 12px; padding: 8px 12px; margin-bottom: 14px; font-size: 12px; color: #1c5d80;
-              box-shadow: 0 1px 3px rgba(18,56,79,.10); }
+              box-shadow: 0 4px 14px -8px rgba(18,56,79,.25); }
   .progress__bar { height: 5px; background: #EFE8DC; border-radius: 999px; overflow: hidden; margin-top: 6px; }
-  .progress__fill { height: 100%; width: 0%; background: #229ED9; border-radius: 999px; transition: width .2s; }
+  /* ۱.۲۷.۴۰ — نوار پیشرفت گرادینتی */
+  .progress__fill { height: 100%; width: 0%; background: linear-gradient(90deg,#1c5d80,#229ED9); border-radius: 999px; transition: width .2s; }
   .subscale { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700;
               color: #1c5d80; margin: 16px 4px 8px; }
-  .subscale__dot { width: 9px; height: 9px; border-radius: 50%; background: #229ED9; display: inline-block; }
-  .card { background: #fff; border-radius: 16px; padding: 18px 20px; margin-bottom: 14px;
-          box-shadow: 0 1px 3px rgba(18,56,79,.08); }
+  .subscale__dot { width: 9px; height: 9px; border-radius: 50%; background: linear-gradient(135deg,#1c5d80,#229ED9); display: inline-block; }
+  .card { background: linear-gradient(180deg,#ffffff,#fcfdff); border-radius: 16px; padding: 18px 20px; margin-bottom: 14px;
+          box-shadow: 0 8px 22px -14px rgba(18,56,79,.25); }
   .item { padding: 12px 0; border-bottom: 1px solid #EFE8DC; }
   .item:last-child { border-bottom: 0; }
   .item.is-missing .q { color: #A12622; }
-  .q { font-weight: 700; font-size: 14px; margin-bottom: 8px; }
-  .hint { font-size: 12px; color: #8A8377; margin: -5px 0 8px; line-height: 1.9; }
+  .q { font-weight: 700; font-size: 15px; margin-bottom: 8px; }
+  .hint { font-size: 12.5px; color: #8A8377; margin: -5px 0 8px; line-height: 1.9; }
   .opts { display: flex; flex-wrap: wrap; gap: 8px; }
   .opt { display: inline-flex; align-items: center; gap: 5px; background: #F7F3EA;
          border: 1px solid #E5DCCB; border-radius: 10px; padding: 6px 10px; font-size: 13px; cursor: pointer; }
   .opt--wide { width: 100%; align-items: flex-start; }
-  .opt:has(input:checked) { background: #D9EDF7; border-color: #229ED9; }
-  .item--free .q { font-size: 13.5px; }
+  /* ۱.۲۷.۴۰ — گزینهٔ انتخاب‌شده با گرادینت ملایم */
+  .opt:has(input:checked) { background: linear-gradient(135deg,#D9EDF7,#E7E4FA); border-color: #229ED9; }
+  .item--free .q { font-size: 14px; }
   textarea.free { width: 100%; border: 1px solid #E5DCCB; border-radius: 10px; padding: 10px 12px;
-                  font-family: inherit; font-size: 13.5px; line-height: 1.9; resize: vertical; background: #FDFCF9; }
+                  font-family: inherit; font-size: 14px; line-height: 1.9; resize: vertical; background: #FDFCF9; }
   textarea.free:focus { outline: 2px solid #229ED9; outline-offset: -1px; }
   .focus { background: #FFF7E0; border: 1px solid #E8D48B; color: #6B5416; border-radius: 12px;
            padding: 11px 14px; margin-bottom: 14px; font-size: 13px; line-height: 1.9; }
-  .btn { display: block; width: 100%; border: 0; background: #229ED9; color: #fff;
+  /* ۱.۲۷.۴۰ — دکمهٔ ارسال گرادینتی هم‌زبان با فرم معرفی */
+  .btn { display: block; width: 100%; border: 0; color: #fff;
+         background: linear-gradient(135deg,#1c5d80 0%,#229ED9 100%);
          border-radius: 12px; padding: 14px; font-size: 16px; font-weight: 700; cursor: pointer;
-         font-family: inherit; margin-top: 6px; }
-  .btn:disabled { opacity: .6; }
+         font-family: inherit; margin-top: 6px; box-shadow: 0 10px 22px -10px rgba(28,127,184,.55); }
+  .btn:hover { filter: brightness(1.06); }
+  .btn:disabled { opacity: .6; filter: none; box-shadow: none; }
   .msg { display: none; border-radius: 12px; padding: 16px; margin-top: 12px; font-size: 14px; }
   .msg.ok { display: block; background: #E4F5E9; color: #1D6B39; }
   .msg.err { display: block; background: #FDE8E8; color: #A12622; }
   .foot { text-align: center; font-size: 12px; color: #8A8377; margin-top: 18px; }
-  .notice { text-align: center; font-size: 11.5px; color: #8A8377; margin: -4px 0 12px; }
+  .notice { text-align: center; font-size: 12px; color: #8A8377; margin: -4px 0 12px; }
 </style>
 </head>
 <body>

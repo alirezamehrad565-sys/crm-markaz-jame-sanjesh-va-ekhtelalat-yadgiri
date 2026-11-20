@@ -15,6 +15,22 @@ const StudentTeacherSchema = z.object({
 
 export function registerRoutes(app: AppHono, service: StudentProfileService): void {
 
+  /* v1.27.33 — فهرست عمومی مدارس همکار برای فرم معرفی (REFERRAL-DESIGN.md):
+   * بدون لاگین، فقط نام مدرسه و کلاس‌های فعال — هیچ دادهٔ دانش‌آموز/کارمند نمی‌آید */
+  app.get('/public/partner-schools', async (c) => {
+    const schools = await service.listSchools({ active: true });
+    const classes = await service.listClasses({ active: true });
+    return c.json(
+      {
+        data: {
+          schools: schools.map((s) => ({ id: s.id, name: s.name })),
+          classes: classes.map((cl) => ({ id: cl.id, schoolId: cl.schoolId, name: cl.name }))
+        }
+      },
+      200
+    );
+  });
+
   app.post('/api/schools', requireRole('manager'), async (c) => {
     const actor = getAuthContext(c);
     const body = NewSchoolSchema.parse(await c.req.json<unknown>());

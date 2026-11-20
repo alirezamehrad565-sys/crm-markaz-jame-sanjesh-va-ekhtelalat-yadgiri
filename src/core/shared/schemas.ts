@@ -74,7 +74,12 @@ import {
   WAITLIST_PRIORITIES,
   WAITLIST_SERVICE_TYPE_MAX,
   WAITLIST_SOURCES,
-  WAITLIST_STATUSES
+  WAITLIST_STATUSES,
+  REFERRAL_CATEGORIES,
+  REFERRAL_CHILDREN_MAX,
+  REFERRAL_CONCERN_MAX,
+  REFERRAL_REJECT_REASON_MAX,
+  REFERRAL_FAMILY_LEVELS,
 } from './constants';
 import { isValidIranianNationalId, normalizeNationalId } from './national-id';
 import { isOnGrid, tehranTodayYmd } from './time';
@@ -141,6 +146,39 @@ export const NewAppointmentSchema = z
     {
       message: `مدت نوبت باید بین ${MIN_APPOINTMENT_MINUTES} تا ${MAX_APPOINTMENT_MINUTES} دقیقه باشد`
     }
+  );
+
+/* ۱.۲۷.۱۴ — بلوک نوبت سنجش (خواست کارفرما): بازهٔ رزرو مدیر برای سنجش با درمانگران درگیر؛
+   در این بازه ثبت/جابه‌جایی نوبتِ درمانگر/منشی سد سخت می‌خورد (assertNoAssessmentBlockInRange
+   در appointment-core). دقیقه‌ها «از نیمه‌شب تهران» — هم‌واژگان مرکز ساعات کاری. */
+export const AssessmentBlockCreateSchema = z
+  .object({
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'تاریخ باید شکل YYYY-MM-DD باشد'),
+    start_minute: z.number().int().min(0).max(1439),
+    end_minute: z.number().int().min(1).max(1440),
+    therapist_ids: z.array(UuidSchema).max(30).default([]),
+    note: z.string().max(500).nullish()
+  })
+  .refine((v) => v.end_minute > v.start_minute, {
+    message: 'پایان بازهٔ سنجش باید بعد از شروع آن باشد',
+    path: ['end_minute']
+  });
+
+/* ۱.۲۷.۱۵ — پچ کارت نوبت سنجش (خواست کارفرما: کارت درگ‌پذیر به‌ازای هر درمانگر):
+   جابه‌جایی روز/ساعت، کش‌دادن پایان، جابه‌جایی به ستون درمانگر دیگر و نوشتن جزئیات —
+   با قفل خوش‌بینانهٔ نسخه (هم‌الگوی UpdateAppointmentSchema). */
+export const AssessmentBlockPatchSchema = z
+  .object({
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'تاریخ باید شکل YYYY-MM-DD باشد').optional(),
+    start_minute: z.number().int().min(0).max(1439).optional(),
+    end_minute: z.number().int().min(1).max(1440).optional(),
+    staff_id: UuidSchema.optional(),
+    note: z.string().max(500).nullish(),
+    version: z.number().int().positive()
+  })
+  .refine(
+    (v) => v.start_minute === undefined || v.end_minute === undefined || v.end_minute > v.start_minute,
+    { message: 'پایان بازهٔ سنجش باید بعد از شروع آن باشد', path: ['end_minute'] }
   );
 
 export const UpdateAppointmentSchema = z.object({
@@ -579,7 +617,7 @@ export const ReplaceStudentTagsSchema = z.object({
   tag_ids: z.array(UuidSchema).max(MAX_TAGS_PER_STUDENT, `حداکثر ${MAX_TAGS_PER_STUDENT} برچسب مجاز است`)
 });
 
-// پیوند درخت هدف با پروفایل دانش‌آموز؛ اعتبار کلید در سرویس (درخت در کد است، همان قرارداد )
+// پیوند درخت هدف با پروفایل دانش‌آموز؛ اعتبار کلید در سرویس (درخت در کد است، همان قرارداد)
 export const ReplaceStudentFocusSchema = z.object({
   focus_keys: z.array(z.string().trim().min(1).max(48)).max(8, 'حداکثر ۸ پیوند هدف مجاز است')
 });
@@ -1168,4 +1206,132 @@ export const ScreeningQuerySchema = z.object({
   to: TehranYmdSchema.optional(),
   q: z.string().trim().max(80).optional(),
   tag: z.string().trim().max(800).optional()
+});
+
+/* ─── نتیجهٔ ارزیابی تخصصی «اظهارنظر و پیشنهاد» (v1.27.33 — INTAKE-DESIGN §۳.۵) ───
+ * تنها الزام ثبت، انتخاب یکی از گزینه‌های ۱ تا ۷ است؛ اتیسم/نمرات/مشاهدات چهار دادهٔ مستقل‌اند
+ * و هیچ تفسیر یا محاسبهٔ خودکاری روی نمرات اعمال نمی‌شود. */
+export const IqEvaluationCreateSchema = z.object({
+  result_option: z
+    .number()
+    .int('گزینهٔ نتیجه باید عدد صحیح باشد')
+    .min(1, 'یکی از گزینه‌های ۱ تا ۷ را انتخاب کنید')
+    .max(7, 'یکی از گزینه‌های ۱ تا ۷ را انتخاب کنید'),
+  autism_referral: z.boolean().optional().default(false),
+  leiter_score: z.number().finite('نمرهٔ لی‌تر باید عدد باشد').nullish(),
+  wechsler_verbal_score: z.number().finite('نمرهٔ وکسلر باید عدد باشد').nullish(),
+  goodenough_score: z.number().finite('نمرهٔ گودیناف باید عدد باشد').nullish(),
+  clinical_observations: z.string().max(2000, 'مشاهدات بالینی حداکثر ۲۰۰۰ نویسه است').optional()
+});
+
+/* ─── معرفی به مرکز از فرم عمومی خانواده/معلم (v1.27.33 — REFERRAL-DESIGN.md) ───
+ * خانواده دقیقاً یک کودک می‌فرستد؛ معلم تا سقف REFERRAL_CHILDREN_MAX در یک ثبت دسته‌ای. */
+export const ReferralChildSchema = z.object({
+  first_name: z.string().trim().min(2, 'نام کودک حداقل ۲ نویسه است').max(80, 'نام کودک حداکثر ۸۰ نویسه است'),
+  birth_date: TehranYmdSchema.nullish(),
+  /* تاریخ تولد شمسیِ تایپی از فرم عمومی — سرویس با jalaliToGregorianYmd به میلادی می‌بَرد؛
+     تبدیل در یک نقطهٔ سمت سرور تا الگوریتم مشترکِ تست‌شدهٔ سامانه تک‌منبع بماند */
+  birth_date_text: z.string().trim().max(20, 'تاریخ تولد حداکثر ۲۰ نویسه است').optional(),
+  school_text: z.string().trim().max(120).optional(),
+  grade_text: z.string().trim().max(40).optional(),
+  class_text: z.string().trim().max(40).optional(),
+  concern_category: z.enum(REFERRAL_CATEGORIES).nullish(),
+  /* تلفن ولیّ هر کودک — در ثبت دسته‌ای معلم به‌ازای هر ردیف جدا می‌آید؛
+     در ثبت خانواده خود معرف همان ولیّ است و از referrer_phone استفاده می‌شود */
+  guardian_phone: GuardianPhoneSchema.nullish(),
+  concern_tags: z
+    .array(z.string().trim().min(2).max(40))
+    .max(8, 'حداکثر ۸ برچسب دغدغه')
+    .optional()
+    .default([]),
+  concern_text: z.string().trim().max(REFERRAL_CONCERN_MAX).optional(),
+  prior_eval: z.boolean().nullish(),
+  prior_eval_note: z.string().trim().max(300).optional(),
+  /* ۱.۲۷.۳۶ — فرم تکمیلی وضعیت خانواده زیر هر دانش‌آموز (اختیاری؛ «نمی‌دانم» ارسال نمی‌شود) */
+  family_culture: z.enum(REFERRAL_FAMILY_LEVELS).nullish(),
+  family_finance: z.enum(REFERRAL_FAMILY_LEVELS).nullish(),
+  family_cooperation: z.enum(REFERRAL_FAMILY_LEVELS).nullish()
+});
+
+export const PublicReferralSubmissionSchema = z.object({
+  role: z.enum(['family', 'teacher'], { message: 'نقش معرف باید خانواده یا معلم باشد' }),
+  referrer_name: z.string().trim().min(2, 'نام معرف حداقل ۲ نویسه است').max(80, 'نام معرف حداکثر ۸۰ نویسه است'),
+  referrer_phone: GuardianPhoneSchema,
+  school_text: z.string().trim().max(120).optional(),
+  grade_text: z.string().trim().max(40).optional(),
+  class_text: z.string().trim().max(40).optional(),
+  token: z.string().trim().max(200).optional(),
+  children: z
+    .array(ReferralChildSchema)
+    .min(1, 'حداقل یک کودک لازم است')
+    .max(REFERRAL_CHILDREN_MAX, `حداکثر ${REFERRAL_CHILDREN_MAX} کودک در هر ثبت`)
+});
+
+export const ReferralRejectSchema = z.object({
+  reason: z
+    .string()
+    .trim()
+    .min(2, 'دلیل رد لازم است — برای معرف قابل ارسال است')
+    .max(REFERRAL_REJECT_REASON_MAX, `دلیل رد حداکثر ${REFERRAL_REJECT_REASON_MAX} نویسه است`)
+});
+
+/* ─── فرم‌ساز تعاملی عمومی (v1.27.34 — REFERRAL-DESIGN §A) ───
+ * بلوک‌ها JSON شِمادارند؛ select/multi حداقل دو گزینه و note (صفحهٔ آگاهی) متن لازم دارد. */
+export const FormBlockSchema = z
+  .object({
+    kind: z.enum(['text', 'longtext', 'number', 'phone', 'select', 'multi', 'yes_no', 'note'], {
+      message: 'نوع بلوک معتبر نیست'
+    }),
+    label: z
+      .string()
+      .trim()
+      .min(2, 'برچسب بلوک حداقل ۲ نویسه است')
+      .max(200, 'برچسب بلوک حداکثر ۲۰۰ نویسه است'),
+    required: z.boolean().optional().default(false),
+    options: z
+      .array(
+        z.object({
+          value: z.string().trim().min(1, 'مقدار گزینه لازم است').max(40),
+          label: z.string().trim().min(1, 'برچسب گزینه لازم است').max(100)
+        })
+      )
+      .max(12, 'حداکثر ۱۲ گزینه')
+      .optional(),
+    note: z.string().trim().max(2000, 'متن صفحهٔ آگاهی حداکثر ۲۰۰۰ نویسه است').optional()
+  })
+  .refine((b) => (b.kind === 'select' || b.kind === 'multi' ? (b.options?.length ?? 0) >= 2 : true), {
+    message: 'برای بلوک انتخاب، حداقل دو گزینه لازم است'
+  })
+  .refine((b) => (b.kind === 'note' ? Boolean(b.note && b.note.trim().length >= 4) : true), {
+    message: 'برای صفحهٔ آگاهی، متن لازم است'
+  });
+
+export const FormUpsertSchema = z.object({
+  title: z.string().trim().min(2, 'عنوان فرم حداقل ۲ نویسه است').max(120, 'عنوان فرم حداکثر ۱۲۰ نویسه است'),
+  slug: z
+    .string()
+    .trim()
+    .regex(/^[a-z0-9][a-z0-9-]{2,59}$/, 'اسلاگ فقط حروف لاتین کوچک، رقم و خط‌تیره (۳ تا ۶۰ نویسه)'),
+  description: z.string().trim().max(500, 'توضیح حداکثر ۵۰۰ نویسه است').optional(),
+  blocks: z.array(FormBlockSchema).max(60, 'حداکثر ۶۰ بلوک در هر فرم').default([]),
+  published: z.boolean().optional().default(false)
+});
+
+export const FormResponseSubmitSchema = z.object({
+  answers: z
+    .array(
+      z.object({
+        index: z.number().int().min(0, 'اندیس بلوک نامعتبر است').max(59),
+        value: z.union([
+          z.string().max(2000, 'پاسخ حداکثر ۲۰۰۰ نویسه است'),
+          z.array(z.string().max(100)).max(12, 'حداکثر ۱۲ انتخاب'),
+          z.number().finite('پاسخ عددی باید عدد باشد'),
+          z.boolean()
+        ])
+      })
+    )
+    .max(60),
+  respondent_name: z.string().trim().min(2, 'نام پاسخ‌دهنده حداقل ۲ نویسه است').max(80),
+  respondent_phone: GuardianPhoneSchema.nullish(),
+  token: z.string().trim().max(200).optional()
 });

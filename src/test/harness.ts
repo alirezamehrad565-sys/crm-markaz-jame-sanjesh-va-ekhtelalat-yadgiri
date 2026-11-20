@@ -86,6 +86,8 @@ export interface TestApp {
     NODE_RATE_LIMIT_PER_MIN?: string;
     /** rust-f9 — گیت زمان‌اجرای میز: فقط در کانفیگ capnp موتور محلی بایند می‌شود */
     CENTER_DESKTOP_ENGINE?: string;
+    /** ۱.۲۷.۲۱ — نشانی LAN سرور محلی (رشتهٔ JSON از adapter)؛ آزمون /api/system/lan خودش مقدار می‌دهد */
+    LAN_INFO?: string;
   };
 }
 

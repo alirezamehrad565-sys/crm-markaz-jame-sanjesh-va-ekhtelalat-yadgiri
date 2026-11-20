@@ -121,7 +121,7 @@ const NAV = [
   { hash: '#/staff', label: 'کارکنان', icon: 'users', group: 'مرکز', roles: ['manager'] },
   { hash: '#/schools', label: 'مدارس', icon: 'school', group: 'دانش‌آموزان', roles: ['manager', 'secretary'] },
   { hash: '#/students', label: 'دانش‌آموزان', icon: 'student', group: 'دانش‌آموزان' },
-  { hash: '#/waitlist', label: 'لیست انتظار', icon: 'waitlist', group: 'برنامه‌ریزی', roles: ['manager', 'secretary', 'therapist'] },
+  { hash: '#/waitlist', label: 'لیست انتظار', icon: 'waitlist', group: 'برنامه‌ریزی', roles: ['manager', 'secretary', 'therapist'] }, // ۱.۲۷.۳۸ — صندوق ورودی داخل همین نما (تب دوم)؛ آیتم مستقل حذف شد
   { hash: '#/archive', label: 'آرشیو', icon: 'archive', group: 'دانش‌آموزان', roles: ['manager', 'secretary'] },
   { hash: '#/treatment-plans', label: 'طرح درمان', icon: 'clipboard', group: 'ارزیابی و درمان', roles: ['manager', 'therapist'] }, // 
   { hash: '#/exercises', label: 'کارت‌های آماده', icon: 'grid', group: 'ارزیابی و درمان' }, // ریبرند بانک تمرین
@@ -130,7 +130,7 @@ const NAV = [
   { hash: '#/clearbook', label: 'کلر بوک مرکز', icon: 'book', group: 'مرکز', roles: ['manager', 'secretary'] }, // 
   { hash: '#/docs', label: 'نمون‌برگ‌ها و اسناد خام', icon: 'file', group: 'مرکز', roles: ['manager', 'secretary'] }, // 
   { hash: '#/finance', label: 'بودجه و مالی', icon: 'calculator', group: 'مرکز', roles: ['manager'] }, // 
-  { hash: '#/case-event-types', label: 'فرم‌ها و پرسش‌نامه‌ها', icon: 'timeline', group: 'ارزیابی و درمان', roles: ['manager', 'secretary', 'therapist'] }, // — نام روایی
+  { hash: '#/case-event-types', label: 'فرم‌ها و پرسش‌نامه‌ها', icon: 'timeline', group: 'ارزیابی و درمان', roles: ['manager', 'secretary', 'therapist'] }, // — نام روایی؛ ۱.۲۷.۴۰ — فرم‌ساز تعاملی تب سوم همین نما شد و آیتم مستقل حذف شد
   { hash: '#/family-surveys', label: 'نظرسنجی خانواده‌ها', icon: 'heart', group: 'مرکز', roles: ['manager'] }, // ۱.۲۵.۶۰ — ماژول مستقل فقط-مدیر + دو فرم ساخت‌یافته (پایان دوره/حین درمان)
   // ۱.۲۵.۵۶ — «شاخص‌های مرکز» از منو قطع و در تب «گزارش دوره» همین نمای #/reports تلفیق شد (خواست کارفرما)
   // ۱.۲۵.۵۳ — «کتابخانهٔ شبکه» از منو قطع شد؛ شارژ محتوا CP↔سامانه کاملاً نامرئی و خودکار سمت سرور می‌ماند (خواست کارفرما)
@@ -141,8 +141,8 @@ const NAV = [
      دست‌نخورده‌ها: سورس نماها در views/health-panel.js و views/client-errors.js، ماژول سرور health/client-errors،
      مسیرهای GET /api/health/panel و GET /api/client-errors، گزارشگر خطای مرورگر روی /public/client-errors،
      و هشدارهای شبانه. بازگشت: دو خط NAV و دو register هم‌نام نما از کامیت ۱.۲۵.۷۰ (b17747a) برگردانده شود. */
-  // ۱.۲۵.۵۳ — لینک بیرونی «کنترل‌پلین شبکه» از منو قطع شد (خواست کارفرما)؛ سمت CP بی‌تغییر می‌ماند
-  // بازاعمال ۱.۲۵.۵۱ — جای کنترل‌پلین: گزارش باگ سامانه به پشتیبانی CP (همهٔ همکاران)
+  // ۱.۲۵.۵۳ — لینک بیرونی «شبکهٔ مراکز شبکه» از منو قطع شد (خواست کارفرما)؛ سمت CP بی‌تغییر می‌ماند
+  // بازاعمال ۱.۲۵.۵۱ — جای شبکهٔ مراکز: گزارش باگ سامانه به پشتیبانی CP (همهٔ همکاران)
   { hash: '#/bug-report', label: 'گزارش به پشتیبانی', icon: 'bug', group: 'مرکز' } // ۱.۲۵.۶۳ — آیکن bug واقعی جای عنکبوت (خواست کارفرما)
 ];
 
@@ -182,7 +182,7 @@ function buildSidebar() {
           icon(item.icon),
           el('span', {}, item.label)
         );
-        /* لینک بیرونی (کنترل‌پلین) چانک نمای محلی ندارد — پیش‌بارگذاری فقط برای ناوبری داخلی */
+        /* لینک بیرونی (شبکهٔ مراکز) چانک نمای محلی ندارد — پیش‌بارگذاری فقط برای ناوبری داخلی */
         if (!item.external) {
           btn.addEventListener('pointerenter', () => prefetchView(item.hash));
           btn.addEventListener('focus', () => prefetchView(item.hash));
@@ -393,6 +393,21 @@ function managerOnly(render) {
   return roleOnly(['manager'], render, 'این بخش فقط برای مدیر مرکز فعال است.'); /* S11-19 */
 }
 
+/* M2 POLISH-4 (۱.۲۷.۳۱) — قطع پلتفرمی: پنل سلامت و ویزارد پیکربندی ابری ابزار پوستهٔ میز هستند
+   (window.__TAURI__ — همان گارد server-pill)؛ روی نسخهٔ وب/کلادفلر این مسیرها با یادداشت نرم
+   جایگزین می‌شوند و بنر/هدایت اولین‌اجرای ابری هرگز نمی‌آید — سورس و chunk دست‌نخورده می‌ماند. */
+function isDesktopShell() {
+  return Boolean(globalThis.__TAURI__);
+}
+function desktopOnly(render) {
+  return (container, ctx) => {
+    if (isDesktopShell()) return render(container, ctx);
+    container.replaceChildren(
+      emptyState({ iconName: 'settings', title: 'این بخش در نسخهٔ میز مرکز است', hint: 'پنل سلامت و ویزارد پیکربندی ابری روی نسخهٔ وب/کلادفلر از رابط قطع شده‌اند؛ برای این بخش، نسخهٔ میز (دسکتاپ) مرکز را باز کنید.' })
+    );
+  };
+}
+
 /* ── فاز C — ورودی‌های سبک «پیکربندی اولیه اتصال ابری» (سند §۲-۵) ─────────────────
    دو فلگ سشن‌محلی/نصب‌محلی و دو ورودی بنر/هدایت اولین اجرا — هر دو post-login و بی‌await
    سنگین: بوت و نخستین رندر هرگز منتظر fetch وضعیت نمی‌مانند؛ خطای درگاه = بی‌بنر/بی‌هدایت
@@ -414,6 +429,7 @@ function withCloudSetupBanner(dashboardRender) {
     await dashboardRender(container, ctx);
     try {
       if (session.user?.role !== 'manager') return;
+      if (!isDesktopShell()) return; /* M2 POLISH-4 (۱.۲۷.۳۱) — بنر ابری فقط پوستهٔ میز */
       try {
         if (sessionStorage.getItem(CLOUD_SETUP_BANNER_KEY) === '1' || sessionStorage.getItem(CLOUD_SETUP_SKIP_KEY) === '1') return;
       } catch { /* حالت خصوصی — بنر می‌آید */ }
@@ -427,7 +443,9 @@ function withCloudSetupBanner(dashboardRender) {
         el('div', { class: 'alert__body' },
           el('span', {}, 'این نصب هنوز به ابر وصل نیست — هم‌گامی دوسویه و پشتیبان ابری فعال نیست. پیکربندی یک‌بار با ویزارد انجام می‌شود.'),
           el('div', { class: 'alert__actions' },
-            el('button', { class: 'btn btn--soft btn--sm', onclick: () => { location.hash = '#/cloud-setup'; } }, icon('settings', 14), 'شروع پیکربندی ابری'),
+            // فاز D2 — خواست کارفرما: جریان پیکربندی ابری حالا داخل کارت «اتصال ابری» پنل سلامت است —
+            // دکمه به همان کارت می‌رود (#/health-panel؛ مسیر #/cloud-setup فقط دیپ‌لینک می‌ماند)
+            el('button', { class: 'btn btn--soft btn--sm', onclick: () => { location.hash = '#/health-panel'; } }, icon('settings', 14), 'شروع پیکربندی ابری'),
             el('button', {
               class: 'btn btn--ghost btn--sm',
               onclick: (e) => {
@@ -449,6 +467,7 @@ function withCloudSetupBanner(dashboardRender) {
 function armFirstRunCloudSetup() {
   try {
     if (session.user?.role !== 'manager') return;
+    if (!isDesktopShell()) return; /* M2 POLISH-4 (۱.۲۷.۳۱) — هدایت اولین‌اجرای ابری فقط پوستهٔ میز */
     if (localStorage.getItem(CLOUD_SETUP_SEEN_KEY) === '1') return;
     if (!cloudSetupRouteActive()) return; // دیپ‌لینک کاربر را نمی‌رباییم
     api.getDetached('/api/instance-sync/status')
@@ -566,19 +585,19 @@ register('#/backup', { title: 'پشتیبان‌گیری و بازیابی', ren
    بازگشت = دو خط register از کامیت ۱.۲۵.۷۰ برگردانده شود؛ هش مستقیم اکنون ۴۰۴ می‌دهد) */
 /* فاز A — روت «پنل سلامت» دوباره وصل شد (فقط روت؛ آیتم سایدبار به حکم ۱.۲۵.۷۱ همچنان قطع است):
    pill سربرگ «سرور محلی» کلیک → همین مسیر — الگوی register از هم‌نمایان کامیت ۱.۲۵.۷۰. */
-register('#/health-panel', { title: 'پنل سلامت', render: managerOnly(lazyView(() => import('./views/health-panel.js'), 'renderHealthPanel', '#/health-panel')) });
+register('#/health-panel', { title: 'پنل سلامت', render: managerOnly(desktopOnly(lazyView(() => import('./views/health-panel.js'), 'renderHealthPanel', '#/health-panel'))) }); /* M2 POLISH-4: روی وب یادداشت نرم */
 /* فاز C — ویزارد «پیکربندی اولیه اتصال ابری» (سند server-cloud-update-design §۲-۵/§۶ فاز C):
    جریان پیکربندی نخست پس از نصب تازه — فقط مدیر؛ کل ویزارد (مدل خالص + جریان‌های B1/A1 +
    گام secret یک‌بارمصرف) در views/cloud-setup.js است و chunk فقط با ورود به مسیر می‌آید
    (import داینامیک literal در thunk — گیت بودجهٔ کارایی: boot_js_gz/eager_modules دست نمی‌خورد).
    آدرس کامل مسیر در نصب میز: http://127.0.0.1:8787/#/cloud-setup — از لینک پانویس boot-dist هم. */
-register('#/cloud-setup', { title: 'پیکربندی اتصال ابری', render: managerOnly(lazyView(() => import('./views/cloud-setup.js'), 'renderCloudSetup', '#/cloud-setup')) });
+register('#/cloud-setup', { title: 'پیکربندی اتصال ابری', render: managerOnly(desktopOnly(lazyView(() => import('./views/cloud-setup.js'), 'renderCloudSetup', '#/cloud-setup'))) }); /* M2 POLISH-4: روی وب یادداشت نرم */
 register('#/working-hours', { title: 'تنظیمات', render: lazyView(() => import('./views/settings.js'), 'renderSettings', '#/working-hours') }); // — مسیر قدیمی → تنظیمات
 register('#/schools', { title: 'مدارس', render: roleOnly(['manager', 'secretary'], lazyView(() => import('./views/schools.js'), 'renderSchools', '#/schools')) }); // — منشی مجاز
 register('#/students', { title: 'دانش‌آموزان', render: lazyView(() => import('./views/students.js'), 'renderStudents', '#/students') });
 register('#/students/:id', { title: 'پروفایل دانش‌آموز', render: lazyView(() => import('./views/student-profile.js'), 'renderStudentProfile', '#/students/') });
 register('#/students/:id/progress-report', { title: 'گزارش پیشرفت', render: lazyView(() => import('./views/progress-report.js'), 'renderProgressReport', '#/students/') }); // نقش‌ها در سرور کنترل می‌شوند (مثل ot/progress)
-register('#/waitlist', { title: 'لیست انتظار', render: roleOnly(['manager', 'secretary', 'therapist', 'supervisor'], lazyView(() => import('./waitlist.js'), 'renderWaitlistModule', '#/waitlist'), 'این بخش برای دفتر و ثبت متقاضی توسط درمانگر فعال است.') }); /* ۱.۲۵.۰۱ — ناظر: آیتم منو بدون گیت می‌افتاد روی «دسترسی مجاز نیست» */
+register('#/waitlist', { title: 'لیست انتظار', render: roleOnly(['manager', 'secretary', 'therapist', 'supervisor'], lazyView(() => import('./waitlist.js'), 'renderWaitlistModule', '#/waitlist'), 'این بخش برای دفتر و ثبت متقاضی توسط درمانگر فعال است.') }); /* ۱.۲۵.۰۱ — ناظر: آیتم منو بدون گیت می‌افتاد روی «دسترسی مجاز نیست»؛ ۱.۲۷.۳۸ — صندوق ورودی تبِ دوم همین نما */
 register('#/archive', { title: 'آرشیو', render: roleOnly(['manager', 'secretary', 'supervisor'], lazyView(() => import('./views/archive.js'), 'renderArchive', '#/archive')) }); /* ۱.۲۵.۰۱ — ناظر: فقط مشاهده؛ اکشن‌های ردیف در خود نما پنهان می‌شوند */
 register('#/exercises', { title: 'کارت‌های آماده', render: lazyView(() => import('./views/exercises.js'), 'renderExercises', '#/exercises') }); //
 register('#/games', { title: 'بازی‌ها', render: roleOnly(['manager', 'therapist'], lazyView(() => import('./views/games.js'), 'renderGames', '#/games'), 'بخش بازی‌ها برای مدیر و درمانگر فعال است.') }); // ۱.۲۵.۲۰ — نخستین گرهٔ UI حلقهٔ درمانگر بازی‌ها
@@ -589,6 +608,12 @@ register('#/docs', { title: 'نمون‌برگ‌ها و اسناد خام', ren
 register('#/docs/:id', { title: 'سند', render: roleOnly(['manager', 'secretary'], lazyView(() => import('./views/docs.js'), 'renderDocsDetail', '#/docs/'), 'اسناد خام فقط برای دفتر مرکز (مدیر و منشی) فعال است.') }); // RBAC دوم در بک‌اند
 register('#/finance', { title: 'بودجه و مالی', render: managerOnly(lazyView(() => import('./views/finance.js'), 'renderFinance', '#/finance')) }); // فقط مدیر
 register('#/case-event-types', { title: 'فرم‌ها و پرسش‌نامه‌ها', render: roleOnly(['manager', 'secretary', 'therapist'], lazyView(() => import('./views/case-event-types.js'), 'renderCaseEventTypes', '#/case-event-types'), 'این بخش برای همکاران مرکز فعال است.') }); // //
+/* ۱.۲۷.۴۰ — فرم‌ساز تعاملی داخل «فرم‌ها و پرسش‌نامه‌ها» (تب سوم) میزبانش است؛
+   لینک‌های قدیمی #/form-builder به همان نما هدایت می‌شوند — آیتم منو و ثبت مستقل حذف شد */
+register('#/form-builder', { title: 'فرم‌ها و پرسش‌نامه‌ها', render: roleOnly(['manager', 'secretary', 'therapist'], (container) => {
+  container.replaceChildren();
+  location.hash = '#/case-event-types';
+}) }); // ۱.۲۷.۳۴→۱.۲۷.۴۰ — ریدایرکت سازگاری
 register('#/family-surveys', { title: 'نظرسنجی خانواده‌ها', render: managerOnly(lazyView(() => import('./views/family-surveys.js'), 'renderFamilySurveys', '#/family-surveys')) }); // ۱.۲۵.۶۰ — ماژول مستقل فقط-مدیر
 register('#/special-needs', { title: 'نیازهای ویژه', render: roleOnly(['manager', 'secretary'], lazyView(() => import('./views/special-needs.js'), 'renderSpecialNeeds', '#/special-needs')) }); // لایهٔ دوم RBAC
 // ۱.۲۵.۵۶ — روت مستقل «#/center-kpi» حذف شد؛ همان بلوک در انتهای تب «گزارش دوره» (#/reports) رندر می‌شود

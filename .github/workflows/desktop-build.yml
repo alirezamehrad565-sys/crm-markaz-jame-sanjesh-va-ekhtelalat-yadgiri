@@ -1,14 +1,53 @@
-# گردش‌کار CI دسکتاپ (خط rust) — کامپایل و بسته‌بندی Tauri
-# بدون هیچ عملیات Cloudflare — فقط کامپایل Rust، بیلد NSIS و مونتاژ پک USB
+# گردش‌کار دسکتاپ — سیاست بازنویسی‌شدهٔ بیلد (v1.27.38 — خواست کارفرما)
+#
+# ═══ سیاست (بازنویسی کامل سیاستِ پیشین) ═══
+# ۱) پوش به main → فقط گِیت کامپایل لینوکس (cargo check/test) و فقط وقتی مسیرهای دسکتاپ/رانتایم
+#    تغییر کرده‌اند (paths زیر). هر پوش بیلد ویندوز ندارد — بیلد ۳۰ تا ۶۰ دقیقه‌ای فقط هنگام تحویل.
+# ۲) تگ v* → گیت + بیلد کامل ویندوز (نصاب NSIS فارسی — Setup.exe) + ریلیز draft با latest.json + امضای updater.
+# ۳) workflow_dispatch → همیشه بیلد کامل ویندوز و انتشار آرتیفکت (تحویل بدون تگ)؛ ریلیز draft
+#    فقط وقتی ورودی release=true باشد. تحویل «نسخهٔ دسکتاپ» از همین مسیر انجام می‌شود.
+# ۴) یکتایی و صرفه: concurrency بر اساس ref با لغو اجرای درجریان؛ هر دو job با گیت هم‌مِهری
+#    نسخه‌ها (check-versions) شروع می‌کنند — منشأ گزارش «نصب ارتقا ناقص» هرگز برنمی‌گردد.
+# ۵) بازتولیدپذیری: CLI تائوری پین دقیق (@tauri-apps/cli@2.11.5 — هم‌خط با core «2» در Cargo.toml)؛
+#    نسخهٔ سایدکار node از scripts/desktop/config.mjs (منبع یکتای پین)؛ نصب apt هرس‌شده.
+# ۶) نصاب NSIS فارسی: تلاش نخست عمداً برای کش‌شدن بستهٔ NSIS تائوری می‌شکند؛ پس از تزریق زبان
+#    Persian، فقط در صورت شکستِ تلاش نخست، تلاش دوم اجرا می‌شود (سبزی ناخواسته = بیلد دوباره نمی‌شود).
+# ۷) آرتیفکت‌ها ۳۰ روز نگهداری می‌شوند و نامشان شمارهٔ اجرا دارد تا تحویل‌های متوالی مخلوط نشوند.
+# ۸) رازهای updater (TAURI_UPDATER_PUBKEY/PRIVATE_KEY) اختیاری‌اند — نبودشان ریلیز را بی‌امضا
+#    می‌گذارد (کانال به‌روزرسانی دستی سالم می‌ماند) و هرگز شکست بیلد نمی‌سازد.
+#
+# گیت کامپایل سبک با پوشِ تغییرِ مسیرهای دسکتاپ؛ ساخت کامل فقط تگ یا درخواست دستی
 name: desktop-build
 
 on:
-  workflow_dispatch:
   push:
-    branches: [rust]
+    branches: [main]
+    paths:
+      - 'desktop/**'
+      - 'scripts/desktop/**'
+      - 'scripts/engine/**'
+      - 'scripts/engine/apply-migrations.mjs'
+      - 'scripts/engine/seed-demo.mjs'
+      - 'src/core/version.ts'
+      - '.github/workflows/desktop-build.yml'
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "ساخت ریلیز draft + latest.json + امضای updater (آرتیفکت به‌هرحال منتشر می‌شود)"
+        required: false
+        default: "false"
+
+# سیاست ۴ — اجرای درجریانِ همان شاخه لغو می‌شود؛ تگ‌ها هرگز لغو نمی‌شوند
+concurrency:
+  group: desktop-build-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/v') }}
 
 permissions:
   contents: read
+
+env:
+  TAURI_CLI: '@tauri-apps/cli@2.11.5' # سیاست ۵ — پین دقیق؛ ارتقا فقط با ویرایش همین خط
 
 jobs:
   cargo-check:
@@ -16,10 +55,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: وابستگی‌های سیستم برای cargo check گیت‌های Tauri 2
+      - name: وابستگی‌های سیستم برای cargo check گیت‌های Tauri 2 (هرس‌شده — سیاست ۵)
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libglib2.0-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libglib2.0-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -28,7 +67,11 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - name: مونتاژ رانتایم نصاب لینوکس — سایدکار workerd (tauri-build در کامپایل هم externalBin را الزامی می‌داند)
+      # v1.27.۱۹ — گیت هم‌مِهری نسخه‌ها پیش از هر مونتاژ: منشأ گزارش کارفرما (CARGO_PKG_VERSION
+      # جامانده روی ۱.۲۷.۱۴ → گیت «نصب ارتقا ناقص» پوسته بوت نصاب تازه را نمی‌گذراند)
+      - name: گیت هم‌مِهری نسخه‌ها (check-versions)
+        run: node scripts/check-versions.mjs
+      - name: مونتاژ رانتایم نصاب لینوکس — سایدکار node پین‌شده (tauri-build در کامپایل هم externalBin را الزامی می‌داند)
         run: |
           npm ci
           node scripts/desktop/build-installer-runtime.mjs --target x86_64-unknown-linux-gnu
@@ -40,8 +83,12 @@ jobs:
         run: cargo test --all-targets
 
   windows-build:
-    name: بیلد ویندوز — نصاب NSIS + پک USB
+    name: بیلد ویندوز — نصاب NSIS + ریلیز
+    # سیاست ۲ و ۳ — تگ یا درخواست دستی؛ پوش‌های عادی به این job نمی‌رسند
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -52,16 +99,34 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: گیت هم‌مِهری نسخه‌ها (check-versions)
+        run: node scripts/check-versions.mjs
+      - name: تزریق کلید عمومی updater در tauri.conf.json
+        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release == 'true')
+        shell: bash
+        env:
+          TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
+        run: |
+          if [ -n "$TAURI_UPDATER_PUBKEY" ]; then
+            node -e "const fs=require('fs');const f='desktop/src-tauri/tauri.conf.json';const j=JSON.parse(fs.readFileSync(f,'utf8'));j.plugins.updater.pubkey=process.env.TAURI_UPDATER_PUBKEY;fs.writeFileSync(f,JSON.stringify(j,null,2)+'\n')"
+            echo "کلید عمومی updater تزریق شد — کانال خودکار فعال است"
+          else
+            echo "⚠ راز TAURI_UPDATER_PUBKEY تنظیم نشده — کانال خودکار بی‌کلید می‌ماند؛ کانال دستی سالم است"
+          fi
+
       - name: نصب وابستگی‌ها و ساخت کلاینت (پر کردن frontendDist)
         run: |
           npm ci
           npm run build:client
-      - name: مونتاژ رانتایم نصاب — سایدکار workerd پین‌شده + قالب capnp + d1-seed + ثبت هش (rust-f13)
+      - name: مونتاژ رانتایم نصاب — سایدکار node پین‌شده + قالب capnp + d1-seed + ثبت هش (rust-f13)
         run: node scripts/desktop/build-installer-runtime.mjs --target x86_64-pc-windows-msvc
-      - name: بیلد Tauri — تلاش نخست (کش‌شدن NSIS بستهٔ تائوری؛ زبان فارسی در توزیع NSIS تائوری نیست → شکست انتظارشده)
-        run: npx @tauri-apps/cli@2 build
+      # سیاست ۶ — تلاش نخست برای کش‌شدن NSIS تائوری می‌شکند (زبان فارسی در توزیع نیست)
+      - name: بیلد Tauri — تلاش نخست (کش‌شدن NSIS؛ شکست انتظارشده)
+        id: build1
+        run: npx $env:TAURI_CLI build
         continue-on-error: true
       - name: افزودن زبان فارسی به NSIS کش‌شده (Farsi→Persian از مخزن رسمی nsis-dev/nsis)
+        if: steps.build1.outcome == 'failure'
         shell: pwsh
         run: |
           $lang = "$env:LOCALAPPDATA\tauri\NSIS\Contrib\Language files"
@@ -70,14 +135,35 @@ jobs:
           Invoke-WebRequest "$base/Farsi.nlf" -OutFile "$lang\Persian.nlf"
           Invoke-WebRequest "$base/Farsi.nsh" -OutFile "$lang\Persian.nsh"
           Get-ChildItem "$lang\Persian.*" | Select-Object Name, Length
-      - name: بیلد Tauri → نصاب NSIS فارسی (Setup.exe) — تلاش دوم
-        run: npx @tauri-apps/cli@2 build
-      - name: مونتاژ پک USB — کپی خودکار Setup.exe از خروجی NSIS
-        run: npm run usb:pack
+      - name: بیلد Tauri → نصاب NSIS فارسی (Setup.exe) — فقط پس از شکست تلاش نخست
+        if: steps.build1.outcome == 'failure'
+        run: npx $env:TAURI_CLI build
+      # سیاست ۷ — آرتیفکت فقط نصاب Setup.exe (خواست کارفرمای ۱.۲۷.۴۱: پک USB حذف شد)؛ نام با شمارهٔ اجرا + نگهداری ۳۰ روزه
       - uses: actions/upload-artifact@v4
         with:
-          name: usb-pack
-          path: |
-            dist/usb-pack/
-            desktop/src-tauri/target/release/bundle/nsis/*.exe
+          name: setup-run-${{ github.run_number }}
+          path: desktop/src-tauri/target/release/bundle/nsis/*.exe
+          retention-days: 30
           if-no-files-found: error
+
+      - name: ریلیز draft + latest.json + امضای updater
+        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release == 'true')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_UPDATER_PRIVATE_KEY: ${{ secrets.TAURI_UPDATER_PRIVATE_KEY }}
+          TAURI_UPDATER_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_UPDATER_PRIVATE_KEY_PASSWORD }}
+        run: |
+          VER=$(grep -o "APP_VERSION = '[^']*'" src/core/version.ts | cut -d"'" -f2)
+          EXE=$(ls desktop/src-tauri/target/release/bundle/nsis/*.exe | head -1)
+          SIG_ARGS=()
+          if [ -n "$TAURI_UPDATER_PRIVATE_KEY" ]; then
+            npx "$TAURI_CLI" signer sign -k "$TAURI_UPDATER_PRIVATE_KEY" -p "$TAURI_UPDATER_PRIVATE_KEY_PASSWORD" "$EXE"
+            SIG_ARGS=(--sig "${EXE}.sig")
+          else
+            echo "⚠ راز TAURI_UPDATER_PRIVATE_KEY تنظیم نشده — latest.json بی‌امضا؛ کانال خودکار فعال نمی‌شود، کانال دستی سالم است"
+          fi
+          node scripts/make-latest-json.mjs --installer "$EXE" "${SIG_ARGS[@]}" --out latest.json
+          gh release create "v$VER" --draft --target "$GITHUB_SHA" \
+            --title "دسکتاپ v$VER (draft)" \
+            --generate-notes "$EXE#نصاب-ویندوز-NSIS" latest.json#latest.json

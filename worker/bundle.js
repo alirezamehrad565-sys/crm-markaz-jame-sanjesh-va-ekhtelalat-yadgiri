@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.27.4";
+var APP_VERSION = "1.27.43";
 var NODE_MIN_VERSION = "1.26.0";
 
 // node_modules/zod/v4/classic/external.js
@@ -22310,8 +22310,6 @@ var DEFAULT_CENTER_HOURS = [
   { weekday: 3, startMinute: 9 * 60, endMinute: 17 * 60 },
   { weekday: 4, startMinute: 9 * 60, endMinute: 13 * 60 }
 ];
-var CALENDAR_DAY_START_MINUTE = 6 * 60;
-var CALENDAR_DAY_END_MINUTE = 22 * 60;
 var ANNOUNCEMENT_TITLE_MAX = 120;
 var ANNOUNCEMENT_BODY_MAX = 2e3;
 var KNOWLEDGE_TITLE_MAX = 140;
@@ -22421,6 +22419,28 @@ var WAITLIST_SERVICE_TYPE_MAX = 120;
 var WAITLIST_NOTE_MAX = 1e3;
 var WAITLIST_LIST_LIMIT = 500;
 var WAITLIST_ALERT_DAYS = 7;
+var REFERRAL_FAMILY_LEVELS = [
+  "low",
+  "mid",
+  "high"
+];
+var REFERRAL_CATEGORIES = [
+  "delayed",
+  "learning_disorder",
+  "intellectual",
+  "behavioral",
+  "autism",
+  "speech",
+  "other"
+];
+var REFERRAL_CHILDREN_MAX = 50;
+var REFERRAL_CONCERN_MAX = 1e3;
+var REFERRAL_REJECT_REASON_MAX = 300;
+var REFERRAL_LIST_LIMIT = 500;
+var REFERRAL_RATE_PER_HOUR = 20;
+var REFERRAL_RATE_PER_CHAT = 5;
+var FORM_RESPONSE_LIMIT = 500;
+var FORM_RATE_PER_HOUR = 30;
 var TODO_STATUSES = ["pending", "done"];
 var TODO_PRIORITIES = ["normal", "urgent"];
 var TODO_BOXES = ["inbox", "outbox"];
@@ -22587,6 +22607,20 @@ function tehranTimeLabel(isoUtc) {
   return `${pad2(tehran.getUTCHours())}:${pad2(tehran.getUTCMinutes())}`;
 }
 __name(tehranTimeLabel, "tehranTimeLabel");
+function tehranMinuteWindow(ymd, fromMinute, toMinute) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) {
+    throw new Error(`INVALID_DATE: ${ymd}`);
+  }
+  if (!Number.isFinite(fromMinute) || !Number.isFinite(toMinute) || fromMinute < 0 || toMinute <= 0 || toMinute > 1440 || toMinute <= fromMinute) {
+    throw new Error(`INVALID_MINUTE_RANGE: ${fromMinute}-${toMinute}`);
+  }
+  const base = Date.parse(`${ymd}T00:00:00.000Z`) - TEHRAN_OFFSET_MS;
+  return {
+    start: new Date(base + fromMinute * 6e4).toISOString(),
+    end: new Date(base + toMinute * 6e4).toISOString()
+  };
+}
+__name(tehranMinuteWindow, "tehranMinuteWindow");
 function addDaysYmd(ymd, days) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) {
     throw new Error(`INVALID_DATE: ${ymd}`);
@@ -22709,6 +22743,10 @@ function faDigits(input2) {
   return String(input2).replace(/\d/g, (d) => fa2[Number(d)]);
 }
 __name(faDigits, "faDigits");
+function minuteToLabel(minute) {
+  return `${pad2(Math.floor(minute / 60))}:${pad2(minute % 60)}`;
+}
+__name(minuteToLabel, "minuteToLabel");
 function jalaliLabel(ymd) {
   const [gy, gm, gd] = ymd.split("-").map(Number);
   const j = toJalaliParts(gy, gm, gd);
@@ -22719,6 +22757,16 @@ function jalaliFullLabel(ymd) {
   return `${WEEKDAY_NAMES_FA[iranianWeekdayOfYmd(ymd)]} ${jalaliLabel(ymd)}`;
 }
 __name(jalaliFullLabel, "jalaliFullLabel");
+function schoolYearOfYmd(ymd) {
+  const [gy, gm, gd] = ymd.split("-").map(Number);
+  const j = toJalaliParts(gy, gm, gd);
+  return j.jm >= 7 ? j.jy : j.jy - 1;
+}
+__name(schoolYearOfYmd, "schoolYearOfYmd");
+function currentSchoolYear(now = /* @__PURE__ */ new Date()) {
+  return String(schoolYearOfYmd(tehranTodayYmd(now)));
+}
+__name(currentSchoolYear, "currentSchoolYear");
 
 // src/core/shared/schemas.ts
 var UUID_LOOSE_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
@@ -22764,6 +22812,27 @@ var NewAppointmentSchema = external_exports.object({
   {
     message: `\u0645\u062F\u062A \u0646\u0648\u0628\u062A \u0628\u0627\u06CC\u062F \u0628\u06CC\u0646 ${MIN_APPOINTMENT_MINUTES} \u062A\u0627 ${MAX_APPOINTMENT_MINUTES} \u062F\u0642\u06CC\u0642\u0647 \u0628\u0627\u0634\u062F`
   }
+);
+var AssessmentBlockCreateSchema = external_exports.object({
+  date: external_exports.string().regex(/^\d{4}-\d{2}-\d{2}$/, "\u062A\u0627\u0631\u06CC\u062E \u0628\u0627\u06CC\u062F \u0634\u06A9\u0644 YYYY-MM-DD \u0628\u0627\u0634\u062F"),
+  start_minute: external_exports.number().int().min(0).max(1439),
+  end_minute: external_exports.number().int().min(1).max(1440),
+  therapist_ids: external_exports.array(UuidSchema).max(30).default([]),
+  note: external_exports.string().max(500).nullish()
+}).refine((v) => v.end_minute > v.start_minute, {
+  message: "\u067E\u0627\u06CC\u0627\u0646 \u0628\u0627\u0632\u0647\u0654 \u0633\u0646\u062C\u0634 \u0628\u0627\u06CC\u062F \u0628\u0639\u062F \u0627\u0632 \u0634\u0631\u0648\u0639 \u0622\u0646 \u0628\u0627\u0634\u062F",
+  path: ["end_minute"]
+});
+var AssessmentBlockPatchSchema = external_exports.object({
+  date: external_exports.string().regex(/^\d{4}-\d{2}-\d{2}$/, "\u062A\u0627\u0631\u06CC\u062E \u0628\u0627\u06CC\u062F \u0634\u06A9\u0644 YYYY-MM-DD \u0628\u0627\u0634\u062F").optional(),
+  start_minute: external_exports.number().int().min(0).max(1439).optional(),
+  end_minute: external_exports.number().int().min(1).max(1440).optional(),
+  staff_id: UuidSchema.optional(),
+  note: external_exports.string().max(500).nullish(),
+  version: external_exports.number().int().positive()
+}).refine(
+  (v) => v.start_minute === void 0 || v.end_minute === void 0 || v.end_minute > v.start_minute,
+  { message: "\u067E\u0627\u06CC\u0627\u0646 \u0628\u0627\u0632\u0647\u0654 \u0633\u0646\u062C\u0634 \u0628\u0627\u06CC\u062F \u0628\u0639\u062F \u0627\u0632 \u0634\u0631\u0648\u0639 \u0622\u0646 \u0628\u0627\u0634\u062F", path: ["end_minute"] }
 );
 var UpdateAppointmentSchema = external_exports.object({
   note: external_exports.string().max(2e3).nullish(),
@@ -23423,6 +23492,90 @@ var ScreeningQuerySchema = external_exports.object({
   q: external_exports.string().trim().max(80).optional(),
   tag: external_exports.string().trim().max(800).optional()
 });
+var IqEvaluationCreateSchema = external_exports.object({
+  result_option: external_exports.number().int("\u06AF\u0632\u06CC\u0646\u0647\u0654 \u0646\u062A\u06CC\u062C\u0647 \u0628\u0627\u06CC\u062F \u0639\u062F\u062F \u0635\u062D\u06CC\u062D \u0628\u0627\u0634\u062F").min(1, "\u06CC\u06A9\u06CC \u0627\u0632 \u06AF\u0632\u06CC\u0646\u0647\u200C\u0647\u0627\u06CC \u06F1 \u062A\u0627 \u06F7 \u0631\u0627 \u0627\u0646\u062A\u062E\u0627\u0628 \u06A9\u0646\u06CC\u062F").max(7, "\u06CC\u06A9\u06CC \u0627\u0632 \u06AF\u0632\u06CC\u0646\u0647\u200C\u0647\u0627\u06CC \u06F1 \u062A\u0627 \u06F7 \u0631\u0627 \u0627\u0646\u062A\u062E\u0627\u0628 \u06A9\u0646\u06CC\u062F"),
+  autism_referral: external_exports.boolean().optional().default(false),
+  leiter_score: external_exports.number().finite("\u0646\u0645\u0631\u0647\u0654 \u0644\u06CC\u200C\u062A\u0631 \u0628\u0627\u06CC\u062F \u0639\u062F\u062F \u0628\u0627\u0634\u062F").nullish(),
+  wechsler_verbal_score: external_exports.number().finite("\u0646\u0645\u0631\u0647\u0654 \u0648\u06A9\u0633\u0644\u0631 \u0628\u0627\u06CC\u062F \u0639\u062F\u062F \u0628\u0627\u0634\u062F").nullish(),
+  goodenough_score: external_exports.number().finite("\u0646\u0645\u0631\u0647\u0654 \u06AF\u0648\u062F\u06CC\u0646\u0627\u0641 \u0628\u0627\u06CC\u062F \u0639\u062F\u062F \u0628\u0627\u0634\u062F").nullish(),
+  clinical_observations: external_exports.string().max(2e3, "\u0645\u0634\u0627\u0647\u062F\u0627\u062A \u0628\u0627\u0644\u06CC\u0646\u06CC \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F2\u06F0\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").optional()
+});
+var ReferralChildSchema = external_exports.object({
+  first_name: external_exports.string().trim().min(2, "\u0646\u0627\u0645 \u06A9\u0648\u062F\u06A9 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").max(80, "\u0646\u0627\u0645 \u06A9\u0648\u062F\u06A9 \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F8\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A"),
+  birth_date: TehranYmdSchema.nullish(),
+  /* تاریخ تولد شمسیِ تایپی از فرم عمومی — سرویس با jalaliToGregorianYmd به میلادی می‌بَرد؛
+     تبدیل در یک نقطهٔ سمت سرور تا الگوریتم مشترکِ تست‌شدهٔ سامانه تک‌منبع بماند */
+  birth_date_text: external_exports.string().trim().max(20, "\u062A\u0627\u0631\u06CC\u062E \u062A\u0648\u0644\u062F \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F2\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").optional(),
+  school_text: external_exports.string().trim().max(120).optional(),
+  grade_text: external_exports.string().trim().max(40).optional(),
+  class_text: external_exports.string().trim().max(40).optional(),
+  concern_category: external_exports.enum(REFERRAL_CATEGORIES).nullish(),
+  /* تلفن ولیّ هر کودک — در ثبت دسته‌ای معلم به‌ازای هر ردیف جدا می‌آید؛
+     در ثبت خانواده خود معرف همان ولیّ است و از referrer_phone استفاده می‌شود */
+  guardian_phone: GuardianPhoneSchema.nullish(),
+  concern_tags: external_exports.array(external_exports.string().trim().min(2).max(40)).max(8, "\u062D\u062F\u0627\u06A9\u062B\u0631 \u06F8 \u0628\u0631\u0686\u0633\u0628 \u062F\u063A\u062F\u063A\u0647").optional().default([]),
+  concern_text: external_exports.string().trim().max(REFERRAL_CONCERN_MAX).optional(),
+  prior_eval: external_exports.boolean().nullish(),
+  prior_eval_note: external_exports.string().trim().max(300).optional(),
+  /* ۱.۲۷.۳۶ — فرم تکمیلی وضعیت خانواده زیر هر دانش‌آموز (اختیاری؛ «نمی‌دانم» ارسال نمی‌شود) */
+  family_culture: external_exports.enum(REFERRAL_FAMILY_LEVELS).nullish(),
+  family_finance: external_exports.enum(REFERRAL_FAMILY_LEVELS).nullish(),
+  family_cooperation: external_exports.enum(REFERRAL_FAMILY_LEVELS).nullish()
+});
+var PublicReferralSubmissionSchema = external_exports.object({
+  role: external_exports.enum(["family", "teacher"], { message: "\u0646\u0642\u0634 \u0645\u0639\u0631\u0641 \u0628\u0627\u06CC\u062F \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u06CC\u0627 \u0645\u0639\u0644\u0645 \u0628\u0627\u0634\u062F" }),
+  referrer_name: external_exports.string().trim().min(2, "\u0646\u0627\u0645 \u0645\u0639\u0631\u0641 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").max(80, "\u0646\u0627\u0645 \u0645\u0639\u0631\u0641 \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F8\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A"),
+  referrer_phone: GuardianPhoneSchema,
+  school_text: external_exports.string().trim().max(120).optional(),
+  grade_text: external_exports.string().trim().max(40).optional(),
+  class_text: external_exports.string().trim().max(40).optional(),
+  token: external_exports.string().trim().max(200).optional(),
+  children: external_exports.array(ReferralChildSchema).min(1, "\u062D\u062F\u0627\u0642\u0644 \u06CC\u06A9 \u06A9\u0648\u062F\u06A9 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A").max(REFERRAL_CHILDREN_MAX, `\u062D\u062F\u0627\u06A9\u062B\u0631 ${REFERRAL_CHILDREN_MAX} \u06A9\u0648\u062F\u06A9 \u062F\u0631 \u0647\u0631 \u062B\u0628\u062A`)
+});
+var ReferralRejectSchema = external_exports.object({
+  reason: external_exports.string().trim().min(2, "\u062F\u0644\u06CC\u0644 \u0631\u062F \u0644\u0627\u0632\u0645 \u0627\u0633\u062A \u2014 \u0628\u0631\u0627\u06CC \u0645\u0639\u0631\u0641 \u0642\u0627\u0628\u0644 \u0627\u0631\u0633\u0627\u0644 \u0627\u0633\u062A").max(REFERRAL_REJECT_REASON_MAX, `\u062F\u0644\u06CC\u0644 \u0631\u062F \u062D\u062F\u0627\u06A9\u062B\u0631 ${REFERRAL_REJECT_REASON_MAX} \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A`)
+});
+var FormBlockSchema = external_exports.object({
+  kind: external_exports.enum(["text", "longtext", "number", "phone", "select", "multi", "yes_no", "note"], {
+    message: "\u0646\u0648\u0639 \u0628\u0644\u0648\u06A9 \u0645\u0639\u062A\u0628\u0631 \u0646\u06CC\u0633\u062A"
+  }),
+  label: external_exports.string().trim().min(2, "\u0628\u0631\u0686\u0633\u0628 \u0628\u0644\u0648\u06A9 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").max(200, "\u0628\u0631\u0686\u0633\u0628 \u0628\u0644\u0648\u06A9 \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F2\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A"),
+  required: external_exports.boolean().optional().default(false),
+  options: external_exports.array(
+    external_exports.object({
+      value: external_exports.string().trim().min(1, "\u0645\u0642\u062F\u0627\u0631 \u06AF\u0632\u06CC\u0646\u0647 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A").max(40),
+      label: external_exports.string().trim().min(1, "\u0628\u0631\u0686\u0633\u0628 \u06AF\u0632\u06CC\u0646\u0647 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A").max(100)
+    })
+  ).max(12, "\u062D\u062F\u0627\u06A9\u062B\u0631 \u06F1\u06F2 \u06AF\u0632\u06CC\u0646\u0647").optional(),
+  note: external_exports.string().trim().max(2e3, "\u0645\u062A\u0646 \u0635\u0641\u062D\u0647\u0654 \u0622\u06AF\u0627\u0647\u06CC \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F2\u06F0\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").optional()
+}).refine((b) => b.kind === "select" || b.kind === "multi" ? (b.options?.length ?? 0) >= 2 : true, {
+  message: "\u0628\u0631\u0627\u06CC \u0628\u0644\u0648\u06A9 \u0627\u0646\u062A\u062E\u0627\u0628\u060C \u062D\u062F\u0627\u0642\u0644 \u062F\u0648 \u06AF\u0632\u06CC\u0646\u0647 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A"
+}).refine((b) => b.kind === "note" ? Boolean(b.note && b.note.trim().length >= 4) : true, {
+  message: "\u0628\u0631\u0627\u06CC \u0635\u0641\u062D\u0647\u0654 \u0622\u06AF\u0627\u0647\u06CC\u060C \u0645\u062A\u0646 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A"
+});
+var FormUpsertSchema = external_exports.object({
+  title: external_exports.string().trim().min(2, "\u0639\u0646\u0648\u0627\u0646 \u0641\u0631\u0645 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").max(120, "\u0639\u0646\u0648\u0627\u0646 \u0641\u0631\u0645 \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F1\u06F2\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A"),
+  slug: external_exports.string().trim().regex(/^[a-z0-9][a-z0-9-]{2,59}$/, "\u0627\u0633\u0644\u0627\u06AF \u0641\u0642\u0637 \u062D\u0631\u0648\u0641 \u0644\u0627\u062A\u06CC\u0646 \u06A9\u0648\u0686\u06A9\u060C \u0631\u0642\u0645 \u0648 \u062E\u0637\u200C\u062A\u06CC\u0631\u0647 (\u06F3 \u062A\u0627 \u06F6\u06F0 \u0646\u0648\u06CC\u0633\u0647)"),
+  description: external_exports.string().trim().max(500, "\u062A\u0648\u0636\u06CC\u062D \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F5\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").optional(),
+  blocks: external_exports.array(FormBlockSchema).max(60, "\u062D\u062F\u0627\u06A9\u062B\u0631 \u06F6\u06F0 \u0628\u0644\u0648\u06A9 \u062F\u0631 \u0647\u0631 \u0641\u0631\u0645").default([]),
+  published: external_exports.boolean().optional().default(false)
+});
+var FormResponseSubmitSchema = external_exports.object({
+  answers: external_exports.array(
+    external_exports.object({
+      index: external_exports.number().int().min(0, "\u0627\u0646\u062F\u06CC\u0633 \u0628\u0644\u0648\u06A9 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A").max(59),
+      value: external_exports.union([
+        external_exports.string().max(2e3, "\u067E\u0627\u0633\u062E \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F2\u06F0\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A"),
+        external_exports.array(external_exports.string().max(100)).max(12, "\u062D\u062F\u0627\u06A9\u062B\u0631 \u06F1\u06F2 \u0627\u0646\u062A\u062E\u0627\u0628"),
+        external_exports.number().finite("\u067E\u0627\u0633\u062E \u0639\u062F\u062F\u06CC \u0628\u0627\u06CC\u062F \u0639\u062F\u062F \u0628\u0627\u0634\u062F"),
+        external_exports.boolean()
+      ])
+    })
+  ).max(60),
+  respondent_name: external_exports.string().trim().min(2, "\u0646\u0627\u0645 \u067E\u0627\u0633\u062E\u200C\u062F\u0647\u0646\u062F\u0647 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").max(80),
+  respondent_phone: GuardianPhoneSchema.nullish(),
+  token: external_exports.string().trim().max(200).optional()
+});
 
 // src/core/shared/features.ts
 var FEATURES = {
@@ -23812,9 +23965,9 @@ function authMiddleware() {
         if (!payload2.sid) {
           throw new AuthError("\u062A\u0648\u06A9\u0646 \u0641\u0627\u0642\u062F \u0634\u0646\u0627\u0633\u0647\u0654 \u0646\u0634\u0633\u062A \u0627\u0633\u062A \u2014 \u0648\u0631\u0648\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A");
         }
-        const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+        const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
         const session = await db.prepare("SELECT revoked_at, expires_at FROM auth_sessions WHERE sid = ?").bind(payload2.sid).first();
-        if (!session || session.revoked_at !== null || session.expires_at <= nowIso) {
+        if (!session || session.revoked_at !== null || session.expires_at <= nowIso2) {
           throw new AuthError("\u0646\u0634\u0633\u062A \u0628\u0627\u0637\u0644 \u06CC\u0627 \u0645\u0646\u0642\u0636\u06CC \u0634\u062F\u0647 \u0627\u0633\u062A \u2014 \u0648\u0631\u0648\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A");
         }
         const staff2 = await getStaffById(db, payload2.sub);
@@ -24061,10 +24214,10 @@ function renderTemplate(id, vars = {}) {
         "\u{1F514} \u06CC\u0627\u062F\u0622\u0648\u0631\u06CC \u0646\u0648\u0628\u062A",
         "",
         line([vars.studentName, "\u0639\u0632\u06CC\u0632\u060C"]),
-        `\u0646\u0648\u0628\u062A \u0634\u0645\u0627 \u062F\u0631 ${clinic} \u0628\u0631\u0627\u06CC \u062A\u0627\u0631\u06CC\u062E ${vars.dateYmd ?? "\u2014"} \u0633\u0627\u0639\u062A ${vars.timeLabel ?? "\u2014"} \u062B\u0628\u062A \u0634\u062F\u0647 \u0627\u0633\u062A.`,
+        `\u0646\u0648\u0628\u062A \u0634\u0645\u0627 \u062F\u0631 ${clinic} \u0628\u0631\u0627\u06CC \u062A\u0627\u0631\u06CC\u062E ${vars.dateYmd ?? "\u2014"} \u0633\u0627\u0639\u062A ${vars.timeLabel ?? "\u2014"} \u062B\u0628\u062A \u0634\u062F\u0647\u200C\u0647.`,
         vars.staffName ? `\u0645\u062A\u062E\u0635\u0635: ${vars.staffName}` : void 0,
         "",
-        "\u062F\u0631 \u0635\u0648\u0631\u062A \u0639\u062F\u0645 \u0627\u0645\u06A9\u0627\u0646 \u062D\u0636\u0648\u0631\u060C \u0644\u0637\u0641\u0627\u064B \u0627\u0632 \u0637\u0631\u06CC\u0642 \u062F\u0641\u062A\u0631 \u0645\u0631\u06A9\u0632 \u0627\u0637\u0644\u0627\u0639 \u062F\u0647\u06CC\u062F."
+        "\u0627\u06AF\u0647 \u0646\u0645\u06CC\u200C\u062A\u0648\u0646\u06CC\u062F \u062F\u0631 \u062C\u0644\u0633\u0647 \u062D\u0627\u0636\u0631 \u0628\u0634\u06CC\u062F\u060C \u0644\u0637\u0641\u0627\u064B \u0627\u0632 \u0637\u0631\u06CC\u0642 \u062F\u0641\u062A\u0631 \u0645\u0631\u06A9\u0632 \u062E\u0628\u0631 \u0628\u062F\u06CC\u062F."
       ].filter((l) => l !== void 0).join("\n");
     case "appointment_created":
       return [
@@ -24074,7 +24227,7 @@ function renderTemplate(id, vars = {}) {
         `\u0646\u0648\u0628\u062A \u0634\u0645\u0627 \u062F\u0631 ${clinic} \u0628\u0631\u0627\u06CC ${vars.dateYmd ? jalaliFullLabel(vars.dateYmd) : "\u2014"} \u0633\u0627\u0639\u062A ${faDigits(vars.timeLabel ?? "\u2014")} \u062B\u0628\u062A \u0634\u062F.`,
         vars.staffName ? `\u0645\u062A\u062E\u0635\u0635: ${vars.staffName}` : void 0,
         "",
-        "\u06CC\u0627\u062F\u0622\u0648\u0631\u06CC \u0646\u0648\u0628\u062A\u060C \u0686\u0646\u062F \u0633\u0627\u0639\u062A \u0642\u0628\u0644 \u0627\u0632 \u0645\u0648\u0639\u062F \u0628\u0631\u0627\u06CC \u0634\u0645\u0627 \u0627\u0631\u0633\u0627\u0644 \u0645\u06CC\u200C\u0634\u0648\u062F."
+        "\u06CC\u0627\u062F\u0622\u0648\u0631\u06CC \u0646\u0648\u0628\u062A\u060C \u0686\u0646\u062F \u0633\u0627\u0639\u062A \u0642\u0628\u0644 \u0627\u0632 \u0645\u0648\u0639\u062F \u0628\u0631\u0627\u06CC \u0634\u0645\u0627 \u0627\u0631\u0633\u0627\u0644 \u0645\u06CC\u200C\u0634\u0647."
       ].filter((l) => l !== void 0).join("\n");
     case "appointment_cancelled":
       return [
@@ -24119,10 +24272,11 @@ function renderTemplate(id, vars = {}) {
       ].filter((l) => l !== void 0).join("\n");
     case "bot_welcome":
       return [
-        `\u0633\u0644\u0627\u0645! \u0628\u0647 \u0633\u0627\u0645\u0627\u0646\u0647 ${clinic} \u062E\u0648\u0634 \u0622\u0645\u062F\u06CC\u062F. \u{1F44B}`,
+        `\u0633\u0644\u0627\u0645! \u0628\u0647 \u0633\u0627\u0645\u0627\u0646\u0647 ${clinic} \u062E\u0648\u0634 \u0627\u0648\u0645\u062F\u06CC\u062F. \u{1F44B}`,
         "",
-        "\u0628\u0631\u0627\u06CC \u062F\u06CC\u062F\u0646 \u0646\u0648\u0628\u062A\u200C\u0647\u0627 \u0648 \u062F\u0631\u06CC\u0627\u0641\u062A \u06CC\u0627\u062F\u0622\u0648\u0631\u06CC\u060C \u06AF\u0641\u062A\u06AF\u0648\u06CC \u062E\u0648\u062F \u0631\u0627 \u0645\u062A\u0635\u0644 \u06A9\u0646\u06CC\u062F:",
-        "\u{1F511} \u06A9\u062F \u0645\u0644\u06CC \u06F1\u06F0 \u0631\u0642\u0645\u06CC \u06CC\u0627 \u0634\u0645\u0627\u0631\u0647 \u0647\u0645\u0631\u0627\u0647 \u06F0\u06F9\u2026 \u062E\u0648\u062F \u0631\u0627 \u0647\u0645\u06CC\u0646\u200C\u062C\u0627 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F.",
+        "\u0628\u0631\u0627\u06CC \u062F\u06CC\u062F\u0646 \u0646\u0648\u0628\u062A\u200C\u0647\u0627 \u0648 \u062F\u0631\u06CC\u0627\u0641\u062A \u06CC\u0627\u062F\u0622\u0648\u0631\u06CC\u060C \u06AF\u0641\u062A\u06AF\u0648\u06CC \u062E\u0648\u062F\u062A\u0648\u0646 \u0631\u0648 \u0645\u062A\u0635\u0644 \u06A9\u0646\u06CC\u062F:",
+        "\u{1F511} \u0627\u06AF\u0647 \u0648\u0627\u0644\u062F \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u0645\u0627 \u06CC\u0627 \u062F\u0631\u0645\u0627\u0646\u06AF\u0631 \u0645\u0631\u06A9\u0632 \u0647\u0633\u062A\u06CC\u062F \u06A9\u062F \u0645\u0644\u06CC \u06F1\u06F0 \u0631\u0642\u0645\u06CC \u06CC\u0627 \u0634\u0645\u0627\u0631\u0647 \u0647\u0645\u0631\u0627\u0647 \u06F0\u06F9\u2026 \u062E\u0648\u062F \u0631\u0648 \u0647\u0645\u06CC\u0646\u200C\u062C\u0627 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F.",
+        "\u0627\u06AF\u0631 \u0647\u0645\u06A9\u0627\u0631\u0650 \u0645\u0639\u0644\u0645 \u0645\u0627 \u062F\u0631 \u0645\u062F\u0627\u0631\u0633 \u0647\u0633\u062A\u06CC\u062F \u0644\u0637\u0641\u0627\u064B \u0644\u06CC\u0646\u06A9 \u0648\u0631\u0648\u062F \u0631\u0648 \u0627\u0632 \u0645\u0631\u06A9\u0632 \u0628\u06AF\u06CC\u0631\u06CC\u062F.",
         "",
         "\u0631\u0627\u0647\u0646\u0645\u0627: /help"
       ].join("\n");
@@ -24146,7 +24300,7 @@ function renderTemplate(id, vars = {}) {
         "\u2705 \u0627\u062A\u0635\u0627\u0644 \u0628\u0627 \u0645\u0648\u0641\u0642\u06CC\u062A \u0627\u0646\u062C\u0627\u0645 \u0634\u062F.",
         "",
         line(["\u067E\u0631\u0648\u0646\u062F\u0647:", vars.studentName]),
-        "\u0627\u0632 \u0627\u06CC\u0646 \u067E\u0633 \u06CC\u0627\u062F\u0622\u0648\u0631\u06CC \u0646\u0648\u0628\u062A\u200C\u0647\u0627 \u0628\u0631\u0627\u06CC \u0627\u06CC\u0646 \u06AF\u0641\u062A\u06AF\u0648 \u0627\u0631\u0633\u0627\u0644 \u0645\u06CC\u200C\u0634\u0648\u062F.",
+        "\u0627\u0632 \u0627\u06CC\u0646 \u0628\u0647 \u0628\u0639\u062F \u06CC\u0627\u062F\u0622\u0648\u0631\u06CC \u0646\u0648\u0628\u062A\u200C\u0647\u0627 \u0628\u0631\u0627\u06CC \u0627\u06CC\u0646 \u06AF\u0641\u062A\u06AF\u0648 \u0627\u0631\u0633\u0627\u0644 \u0645\u06CC\u200C\u0634\u0647.",
         vars.extra ? `
 ${vars.extra}` : void 0
       ].filter((l) => l !== void 0).join("\n");
@@ -24154,7 +24308,7 @@ ${vars.extra}` : void 0
       return [
         "\u26A0\uFE0F \u06A9\u062F \u0627\u062A\u0635\u0627\u0644 \u0645\u0639\u062A\u0628\u0631 \u0646\u06CC\u0633\u062A.",
         "",
-        "\u06A9\u062F \u0631\u0627 \u0627\u0632 \u0645\u0646\u0634\u06CC \u0645\u0631\u06A9\u0632 \u062F\u0631\u06CC\u0627\u0641\u062A \u06A9\u0646\u06CC\u062F \u0648 \u062F\u0648\u0628\u0627\u0631\u0647 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F:",
+        "\u06A9\u062F \u0631\u0648 \u0627\u0632 \u0645\u0646\u0634\u06CC \u0645\u0631\u06A9\u0632 \u062F\u0631\u06CC\u0627\u0641\u062A \u06A9\u0646\u06CC\u062F \u0648 \u062F\u0648\u0628\u0627\u0631\u0647 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F:",
         "/link CODE"
       ].join("\n");
     case "bot_link_already":
@@ -24186,7 +24340,7 @@ ${vars.extra}` : void 0
         line([vars.studentName, "\u062F\u0631 \u062C\u0644\u0633\u0647", vars.dateYmd ? jalaliFullLabel(vars.dateYmd) : "\u2014", `\u0633\u0627\u0639\u062A ${faDigits(vars.timeLabel ?? "\u2014")}`]),
         `\u062D\u0636\u0648\u0631 \u0646\u062F\u0627\u0634\u062A.`,
         "",
-        "\u062F\u0631 \u0635\u0648\u0631\u062A \u062A\u0645\u0627\u06CC\u0644 \u0628\u0631\u0627\u06CC \u0647\u0645\u0627\u0647\u0646\u06AF\u06CC \u062C\u0644\u0633\u0647 \u062C\u0627\u06CC\u06AF\u0632\u06CC\u0646 \u0628\u0627 \u0645\u0631\u06A9\u0632 \u062A\u0645\u0627\u0633 \u0628\u06AF\u06CC\u0631\u06CC\u062F."
+        "\u0627\u06AF\u0647 \u062E\u0648\u0627\u0633\u062A\u06CC\u062F \u0628\u0631\u0627\u06CC \u0647\u0645\u0627\u0647\u0646\u06AF\u06CC \u062C\u0644\u0633\u0647 \u062C\u0627\u06CC\u06AF\u0632\u06CC\u0646 \u0628\u0627 \u0645\u0631\u06A9\u0632 \u062A\u0645\u0627\u0633 \u0628\u06AF\u06CC\u0631\u06CC\u062F."
       ].filter((l) => l !== "").join("\n");
     case "staff_attendance_nudge":
       return [
@@ -24268,15 +24422,15 @@ ${vars.extra}` : void 0
       return [
         "\u26A0\uFE0F \u067E\u0631\u0648\u0646\u062F\u0647\u200C\u0627\u06CC \u0628\u0627 \u0627\u06CC\u0646 \u06A9\u062F \u0645\u0644\u06CC/\u0634\u0645\u0627\u0631\u0647 \u067E\u06CC\u062F\u0627 \u0646\u0634\u062F.",
         "",
-        "\u06A9\u062F \u0645\u0644\u06CC \u06F1\u06F0 \u0631\u0642\u0645\u06CC \u06CC\u0627 \u0634\u0645\u0627\u0631\u0647 \u0647\u0645\u0631\u0627\u0647 \u06F0\u06F9\u2026 \u0631\u0627 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F\u060C",
-        "\u06CC\u0627 \u06A9\u062F \u0627\u062A\u0635\u0627\u0644 \u0631\u0627 \u0627\u0632 \u0645\u0646\u0634\u06CC \u0645\u0631\u06A9\u0632 \u0628\u06AF\u06CC\u0631\u06CC\u062F:",
+        "\u06A9\u062F \u0645\u0644\u06CC \u06F1\u06F0 \u0631\u0642\u0645\u06CC \u06CC\u0627 \u0634\u0645\u0627\u0631\u0647 \u0647\u0645\u0631\u0627\u0647 \u06F0\u06F9\u2026 \u0631\u0648 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F\u060C",
+        "\u06CC\u0627 \u06A9\u062F \u0627\u062A\u0635\u0627\u0644 \u0631\u0648 \u0627\u0632 \u0645\u0646\u0634\u06CC \u0645\u0631\u06A9\u0632 \u0628\u06AF\u06CC\u0631\u06CC\u062F:",
         "/link CODE"
       ].join("\n");
     case "bot_identify_invalid":
       return [
         "\u26A0\uFE0F \u0642\u0627\u0644\u0628 \u0634\u0646\u0627\u0633\u0647 \u062F\u0631\u0633\u062A \u0646\u06CC\u0633\u062A.",
         "",
-        "\u06A9\u062F \u0645\u0644\u06CC \u06F1\u06F0 \u0631\u0642\u0645\u06CC \u06CC\u0627 \u0634\u0645\u0627\u0631\u0647 \u0647\u0645\u0631\u0627\u0647 \u06F0\u06F9\u2026 \u0631\u0627 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F.",
+        "\u06A9\u062F \u0645\u0644\u06CC \u06F1\u06F0 \u0631\u0642\u0645\u06CC \u06CC\u0627 \u0634\u0645\u0627\u0631\u0647 \u0647\u0645\u0631\u0627\u0647 \u06F0\u06F9\u2026 \u0631\u0648 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F.",
         "\u0645\u062B\u0627\u0644: \u06F0\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F9 \u06CC\u0627 \u06F0\u06F9\u06F1\u06F2\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7"
       ].join("\n");
     case "bot_identify_ambiguous":
@@ -24406,7 +24560,7 @@ ${vars.extra}` : void 0
         "/myid \u2014 \u0646\u0645\u0627\u06CC\u0634 \u0634\u0646\u0627\u0633\u0647 \u0627\u06CC\u0646 \u06AF\u0641\u062A\u06AF\u0648",
         "/help \u2014 \u0647\u0645\u06CC\u0646 \u0631\u0627\u0647\u0646\u0645\u0627",
         "",
-        "\u067E\u0633 \u0627\u0632 \u0627\u062A\u0635\u0627\u0644\u060C \u062F\u0633\u062A\u0648\u0631\u0647\u0627\u06CC \u0646\u0642\u0634 \u0634\u0645\u0627 \u0641\u0639\u0627\u0644 \u0645\u06CC\u200C\u0634\u0648\u062F \u0648 \u062F\u06A9\u0645\u0647\u0654 \xAB\u0642\u0637\u0639 \u0627\u062A\u0635\u0627\u0644\xBB \u0647\u0645 \u0627\u0636\u0627\u0641\u0647 \u0645\u06CC\u200C\u0634\u0648\u062F."
+        "\u0628\u0639\u062F \u0627\u0632 \u0627\u062A\u0635\u0627\u0644\u060C \u062F\u0633\u062A\u0648\u0631\u0647\u0627\u06CC \u0646\u0642\u0634 \u0634\u0645\u0627 \u0641\u0639\u0627\u0644 \u0645\u06CC\u200C\u0634\u0647 \u0648 \u062F\u06A9\u0645\u0647\u0654 \xAB\u0642\u0637\u0639 \u0627\u062A\u0635\u0627\u0644\xBB \u0647\u0645 \u0627\u0636\u0627\u0641\u0647 \u0645\u06CC\u200C\u0634\u0647."
       ].join("\n");
     case "bot_help_office":
       return [
@@ -24448,7 +24602,7 @@ ${vars.extra}` : void 0
         "\u{1F3E5} \xAB\u062F\u0631\u0628\u0627\u0631\u0647 \u0645\u0631\u06A9\u0632\xBB \u2014 \u0645\u0639\u0631\u0641\u06CC \u0645\u0631\u06A9\u0632",
         "\u{1F50C} \xAB\u0642\u0637\u0639 \u0627\u062A\u0635\u0627\u0644\xBB \u2014 \u062E\u0631\u0648\u062C \u0627\u0632 \u0646\u0642\u0634 \u0648 \u0642\u0637\u0639 \u0627\u06CC\u0646 \u06AF\u0641\u062A\u06AF\u0648",
         "",
-        "\u0645\u0639\u0631\u0641\u06CC \u0645\u062A\u0642\u0627\u0636\u06CC \u062C\u062F\u06CC\u062F \u0648 \u0645\u062F\u06CC\u0631\u06CC\u062A \u06A9\u0644\u0627\u0633 \u0627\u0632 \u067E\u0646\u0644 \u0648\u0628 \u0627\u0646\u062C\u0627\u0645 \u0645\u06CC\u200C\u0634\u0648\u062F\u061B",
+        "\u0645\u0639\u0631\u0641\u06CC \u0645\u062A\u0642\u0627\u0636\u06CC \u062C\u062F\u06CC\u062F \u0648 \u0645\u062F\u06CC\u0631\u06CC\u062A \u06A9\u0644\u0627\u0633 \u0627\u0632 \u067E\u0646\u0644 \u0648\u0628 \u0627\u0646\u062C\u0627\u0645 \u0645\u06CC\u200C\u0634\u0647\u061B",
         "\u0628\u0631\u0627\u06CC \u0645\u0639\u0631\u0641\u06CC \u0645\u0648\u0631\u062F \u062C\u062F\u06CC\u062F \u0628\u0627 \u062F\u0641\u062A\u0631 \u0645\u0631\u06A9\u0632 \u062A\u0645\u0627\u0633 \u0628\u06AF\u06CC\u0631\u06CC\u062F."
       ].join("\n");
     case "bot_help_parent":
@@ -24457,10 +24611,10 @@ ${vars.extra}` : void 0
         "",
         "\u{1F5D3} \xAB\u0646\u0648\u0628\u062A\u200C\u0647\u0627\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u0645\u0646\xBB \u2014 \u0646\u0648\u0628\u062A\u200C\u0647\u0627\u06CC \u067E\u06CC\u0634\u200C\u0631\u0648\u06CC \u0641\u0631\u0632\u0646\u062F\u0627\u0646 (/today \xB7 /week)",
         "\u{1F4DA} \xAB\u062A\u0645\u0631\u06CC\u0646\u200C\u0647\u0627\u06CC \u0627\u0646\u062C\u0627\u0645\u200C\u0646\u0634\u062F\u0647\xBB \u2014 \u062A\u06A9\u0644\u06CC\u0641\u200C\u0647\u0627\u06CC \u0628\u0627\u0632 \u0641\u0631\u0632\u0646\u062F\u0627\u0646",
-        "\u{1F4DD} \xAB\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A\u200C\u0647\u0627\u06CC \u0645\u0646\xBB \u2014 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A\u200C\u0647\u0627\u06CC \u062F\u0631 \u0627\u0646\u062A\u0638\u0627\u0631 \u067E\u0627\u0633\u062E \u0634\u0645\u0627 + \u0646\u062A\u0627\u06CC\u062C \u0642\u0628\u0644\u06CC",
+        "\u{1F4DD} \xAB\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A\u200C\u0647\u0627\u06CC \u0645\u0646\xBB \u2014 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A\u200C\u0647\u0627\u06CC \u0645\u0646\u062A\u0638\u0631 \u067E\u0627\u0633\u062E \u0634\u0645\u0627 + \u0646\u062A\u0627\u06CC\u062C \u0642\u0628\u0644\u06CC",
         "\u{1F4CA} \xAB\u062D\u0636\u0648\u0631 \u0641\u0631\u0632\u0646\u062F\xBB \u2014 \u0622\u0645\u0627\u0631 \u06F3\u06F0 \u0631\u0648\u0632 \u0627\u062E\u06CC\u0631",
         "\u{1F4C1} \xAB\u0641\u0627\u06CC\u0644\u200C\u0647\u0627\u06CC \u0622\u0645\u0648\u0632\u0634\u06CC\xBB \u2014 \u0641\u0627\u06CC\u0644\u200C\u0647\u0627\u06CC \u0639\u0645\u0648\u0645\u06CC \u0645\u0631\u06A9\u0632",
-        "\u{1F4E4} \u0627\u0631\u0633\u0627\u0644 \u0646\u062A\u06CC\u062C\u0647\u0654 \u062A\u06A9\u0644\u06CC\u0641 \u2014 \u0639\u06A9\u0633 \u06CC\u0627 \u0641\u0627\u06CC\u0644 \u0646\u062A\u06CC\u062C\u0647 \u0631\u0627 \u0647\u0645\u06CC\u0646\u200C\u062C\u0627 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F",
+        "\u{1F4E4} \u0627\u0631\u0633\u0627\u0644 \u0646\u062A\u06CC\u062C\u0647\u0654 \u062A\u06A9\u0644\u06CC\u0641 \u2014 \u0639\u06A9\u0633 \u06CC\u0627 \u0641\u0627\u06CC\u0644 \u0646\u062A\u06CC\u062C\u0647 \u0631\u0648 \u0647\u0645\u06CC\u0646\u200C\u062C\u0627 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F",
         "\u{1F3E5} \xAB\u062F\u0631\u0628\u0627\u0631\u0647 \u0645\u0631\u06A9\u0632\xBB \u2014 \u0645\u0639\u0631\u0641\u06CC \u0645\u0631\u06A9\u0632",
         "\u{1F50C} \xAB\u0642\u0637\u0639 \u0627\u062A\u0635\u0627\u0644\xBB \u2014 \u062E\u0631\u0648\u062C \u0627\u0632 \u0646\u0642\u0634 \u0648 \u0642\u0637\u0639 \u0627\u06CC\u0646 \u06AF\u0641\u062A\u06AF\u0648",
         "",
@@ -24471,17 +24625,17 @@ ${vars.extra}` : void 0
         "\u{1F50C} \u0642\u0637\u0639 \u0627\u062A\u0635\u0627\u0644 \u0627\u06CC\u0646 \u06AF\u0641\u062A\u06AF\u0648\u061F",
         "",
         "\u0628\u0627 \u0642\u0637\u0639 \u0627\u062A\u0635\u0627\u0644:",
-        "\u2022 \u0627\u0639\u0644\u0627\u0646\u200C\u0647\u0627 \u0648 \u06CC\u0627\u062F\u0622\u0648\u0631\u06CC\u200C\u0647\u0627 \u062F\u06CC\u06AF\u0631 \u0628\u0647 \u0627\u06CC\u0646 \u06AF\u0641\u062A\u06AF\u0648 \u0646\u0645\u06CC\u200C\u0622\u06CC\u062F",
-        "\u2022 \u062F\u0633\u062A\u0648\u0631\u0647\u0627\u06CC \u0646\u0642\u0634 \u0634\u0645\u0627 (\u0646\u0648\u0628\u062A\u200C\u0647\u0627\u060C \u067E\u06CC\u06AF\u06CC\u0631\u06CC\u200C\u0647\u0627\u060C \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A\u200C\u0647\u0627 \u0648\u2026) \u063A\u06CC\u0631\u0641\u0639\u0627\u0644 \u0645\u06CC\u200C\u0634\u0648\u062F",
+        "\u2022 \u0627\u0639\u0644\u0627\u0646\u200C\u0647\u0627 \u0648 \u06CC\u0627\u062F\u0622\u0648\u0631\u06CC\u200C\u0647\u0627 \u062F\u06CC\u06AF\u0631 \u0628\u0647 \u0627\u06CC\u0646 \u06AF\u0641\u062A\u06AF\u0648 \u0646\u0645\u06CC\u0627\u062F",
+        "\u2022 \u062F\u0633\u062A\u0648\u0631\u0647\u0627\u06CC \u0646\u0642\u0634 \u0634\u0645\u0627 (\u0646\u0648\u0628\u062A\u200C\u0647\u0627\u060C \u067E\u06CC\u06AF\u06CC\u0631\u06CC\u200C\u0647\u0627\u060C \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A\u200C\u0647\u0627 \u0648\u2026) \u063A\u06CC\u0631\u0641\u0639\u0627\u0644 \u0645\u06CC\u200C\u0634\u0647",
         "",
-        "\u0628\u0631\u0627\u06CC \u0627\u062A\u0635\u0627\u0644 \u062F\u0648\u0628\u0627\u0631\u0647 \u06A9\u0627\u0641\u06CC \u0627\u0633\u062A \u06A9\u062F \u0645\u0644\u06CC/\u0634\u0645\u0627\u0631\u0647\u0654 \u0647\u0645\u0631\u0627\u0647 \u062E\u0648\u062F \u0631\u0627 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F \u06CC\u0627 /link CODE \u0628\u0632\u0646\u06CC\u062F."
+        "\u0628\u0631\u0627\u06CC \u0627\u062A\u0635\u0627\u0644 \u062F\u0648\u0628\u0627\u0631\u0647 \u06A9\u0627\u0641\u06CC \u0627\u0633\u062A \u06A9\u062F \u0645\u0644\u06CC/\u0634\u0645\u0627\u0631\u0647\u0654 \u0647\u0645\u0631\u0627\u0647 \u062E\u0648\u062F \u0631\u0648 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F \u06CC\u0627 /link CODE \u0628\u0632\u0646\u06CC\u062F."
       ].join("\n");
     case "bot_unlink_done":
       return [
         "\u2705 \u0627\u062A\u0635\u0627\u0644 \u0627\u06CC\u0646 \u06AF\u0641\u062A\u06AF\u0648 \u0642\u0637\u0639 \u0634\u062F.",
         "",
-        "\u0627\u0632 \u0627\u06CC\u0646 \u067E\u0633 \u0627\u0639\u0644\u0627\u0646\u06CC \u062F\u0631\u06CC\u0627\u0641\u062A \u0646\u0645\u06CC\u200C\u06A9\u0646\u06CC\u062F.",
-        "\u0628\u0631\u0627\u06CC \u0634\u0631\u0648\u0639 \u062F\u0648\u0628\u0627\u0631\u0647: \u06A9\u062F \u0645\u0644\u06CC \u06CC\u0627 \u0634\u0645\u0627\u0631\u0647\u0654 \u0647\u0645\u0631\u0627\u0647 \u062B\u0628\u062A\u200C\u0634\u062F\u0647 \u0631\u0627 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F\u060C \u06CC\u0627 \u06A9\u062F \u0627\u062A\u0635\u0627\u0644 \u0627\u0632 \u062F\u0641\u062A\u0631 \u0645\u0631\u06A9\u0632 \u0628\u06AF\u06CC\u0631\u06CC\u062F \u0648 /link CODE \u0628\u0632\u0646\u06CC\u062F."
+        "\u0627\u0632 \u0627\u06CC\u0646 \u0628\u0647 \u0628\u0639\u062F \u0627\u0639\u0644\u0627\u0646\u06CC \u062F\u0631\u06CC\u0627\u0641\u062A \u0646\u0645\u06CC\u200C\u06A9\u0646\u06CC\u062F.",
+        "\u0628\u0631\u0627\u06CC \u0634\u0631\u0648\u0639 \u062F\u0648\u0628\u0627\u0631\u0647: \u06A9\u062F \u0645\u0644\u06CC \u06CC\u0627 \u0634\u0645\u0627\u0631\u0647\u0654 \u0647\u0645\u0631\u0627\u0647 \u062B\u0628\u062A\u200C\u0634\u062F\u0647 \u0631\u0648 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F\u060C \u06CC\u0627 \u06A9\u062F \u0627\u062A\u0635\u0627\u0644 \u0627\u0632 \u062F\u0641\u062A\u0631 \u0645\u0631\u06A9\u0632 \u0628\u06AF\u06CC\u0631\u06CC\u062F \u0648 /link CODE \u0628\u0632\u0646\u06CC\u062F."
       ].join("\n");
     case "bot_unlink_not_connected":
       return [
@@ -24506,15 +24660,15 @@ ${vars.extra}` : void 0
         `\u{1F3E5} ${clinic}`,
         "\u062F\u0631\u0628\u0627\u0631\u0647\u0654 \u0645\u0631\u06A9\u0632",
         "",
-        "\u0627\u06CC\u0646 \u0645\u0631\u06A9\u0632 \u0628\u0627 \u0647\u062F\u0641 \u067E\u0634\u062A\u06CC\u0628\u0627\u0646\u06CC \u0627\u0632 \u0631\u0634\u062F \u0648 \u0633\u0644\u0627\u0645\u062A \u06A9\u0648\u062F\u06A9\u0627\u0646 \u0648 \u0646\u0648\u062C\u0648\u0627\u0646\u0627\u0646\u060C \u0686\u0647\u0627\u0631 \u062E\u062F\u0645\u062A \u0627\u0635\u0644\u06CC \u0631\u0627 \u06A9\u0646\u0627\u0631 \u0647\u0645 \u0627\u0631\u0627\u0626\u0647 \u0645\u06CC\u200C\u06A9\u0646\u062F:",
-        "\u2022 \u0633\u0646\u062C\u0634 \u0648 \u063A\u0631\u0628\u0627\u0644\u06AF\u0631\u06CC \u2014 \u0627\u0631\u0632\u06CC\u0627\u0628\u06CC\u200C\u0647\u0627\u06CC \u0631\u0634\u062F\u06CC\u060C \u06AF\u0641\u062A\u0627\u0631\u060C \u062D\u0631\u06A9\u062A\u06CC \u0648 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u0628\u0631\u0627\u06CC \u0634\u0646\u0627\u062E\u062A \u0628\u0647\u200C\u0645\u0648\u0642\u0639 \u0646\u06CC\u0627\u0632 \u0647\u0631 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632",
-        "\u2022 \u0622\u0645\u0648\u0632\u0634 \u2014 \u062A\u0648\u0627\u0646\u0645\u0646\u062F\u0633\u0627\u0632\u06CC \u062E\u0627\u0646\u0648\u0627\u062F\u0647\u060C \u0645\u0639\u0644\u0645\u0627\u0646 \u0645\u062F\u0627\u0631\u0633 \u0648 \u0647\u0645\u06A9\u0627\u0631\u0627\u0646 \u0645\u0631\u06A9\u0632 \u0628\u0627 \u06A9\u0627\u0631\u06AF\u0627\u0647\u200C\u0647\u0627 \u0648 \u062F\u0641\u0627\u062A\u0631 \u0622\u0645\u0648\u0632\u0634\u06CC",
-        "\u2022 \u062A\u0648\u0627\u0646\u200C\u0628\u062E\u0634\u06CC \u2014 \u062C\u0644\u0633\u0627\u062A \u062F\u0631\u0645\u0627\u0646\u06AF\u0631\u0627\u0646 (\u06AF\u0641\u062A\u0627\u0631\u062F\u0631\u0645\u0627\u0646\u06CC\u060C \u06A9\u0627\u0631\u062F\u0631\u0645\u0627\u0646\u06CC\u060C \u0631\u0648\u0627\u0646\u200C\u0634\u0646\u0627\u0633\u06CC \u0648\u2026) \u0628\u0631 \u067E\u0627\u06CC\u0647\u0654 \u067E\u0631\u0648\u0646\u062F\u0647\u0654 \u0627\u0644\u06A9\u062A\u0631\u0648\u0646\u06CC\u06A9 \u0648 \u0628\u0631\u0646\u0627\u0645\u0647\u0654 \u0641\u0631\u062F\u06CC",
-        "\u2022 \u0645\u062F\u0627\u062E\u0644\u0647\u0654 \u0628\u0647\u0646\u06AF\u0627\u0645 \u0631\u0634\u062F\u06CC \u2014 \u067E\u06CC\u06AF\u06CC\u0631\u06CC \u0648 \u0645\u062F\u0627\u062E\u0644\u0647\u0654 \u0632\u0648\u062F\u0647\u0646\u06AF\u0627\u0645\u060C \u067E\u06CC\u0634 \u0627\u0632 \u0622\u0646\u06A9\u0647 \u0645\u0634\u06A9\u0644 \u0631\u0634\u062F \u06A9\u0646\u062F",
+        "\u0627\u06CC\u0646 \u0645\u0631\u06A9\u0632 \u0628\u0627 \u0647\u062F\u0641 \u067E\u0627\u06CC\u0634 \u0648 \u067E\u0634\u062A\u06CC\u0628\u0627\u0646\u06CC \u06A9\u0648\u062F\u06A9\u0627\u0646 \u062F\u0628\u0633\u062A\u0627\u0646\u06CC \u0648 \u067E\u06CC\u0634\u200C\u062F\u0628\u0633\u062A\u0627\u0646\u06CC \u0686\u0647\u0627\u0631 \u062E\u062F\u0645\u062A \u0627\u0635\u0644\u06CC \u0631\u0648 \u06A9\u0646\u0627\u0631 \u0647\u0645 \u0627\u0631\u0627\u0626\u0647 \u0645\u06CC\u200C\u06A9\u0646\u0647:",
+        "\u2022 \u0633\u0646\u062C\u0634 \u0648 \u063A\u0631\u0628\u0627\u0644\u06AF\u0631\u06CC \u2014 \u0627\u0631\u0632\u06CC\u0627\u0628\u06CC\u200C\u0647\u0627\u06CC \u0631\u0634\u062F\u06CC\u060C \u06AF\u0641\u062A\u0627\u0631\u060C \u0647\u0648\u0634 \u0648 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u0628\u0631\u0627\u06CC \u0634\u0646\u0627\u062E\u062A \u0628\u0647\u200C\u0645\u0648\u0642\u0639 \u0646\u06CC\u0627\u0632 \u0647\u0631 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632.",
+        "\u2022 \u062A\u0648\u0627\u0646\u200C\u0628\u062E\u0634\u06CC \u2014 \u062C\u0644\u0633\u0627\u062A \u062F\u0631\u0645\u0627\u0646\u06AF\u0631\u0627\u0646 (\u06AF\u0641\u062A\u0627\u0631\u062F\u0631\u0645\u0627\u0646\u06CC\u060C \u06A9\u0627\u0631\u062F\u0631\u0645\u0627\u0646\u06CC\u060C \u0631\u0648\u0627\u0646\u200C\u0634\u0646\u0627\u0633\u06CC \u0648\u2026) \u0628\u0631 \u067E\u0627\u06CC\u0647\u0654 \u067E\u0631\u0648\u0646\u062F\u0647\u0654 \u0627\u0644\u06A9\u062A\u0631\u0648\u0646\u06CC\u06A9 \u0648 \u0628\u0631\u0646\u0627\u0645\u0647\u0654 \u0641\u0631\u062F\u06CC.",
+        "\u2022 \u0622\u0645\u0648\u0632\u0634 \u2014 \u062A\u0648\u0627\u0646\u0645\u0646\u062F\u0633\u0627\u0632\u06CC \u062E\u0627\u0646\u0648\u0627\u062F\u0647\u060C \u0645\u0639\u0644\u0645\u0627\u0646 \u0645\u062F\u0627\u0631\u0633 \u0648 \u0647\u0645\u06A9\u0627\u0631\u0627\u0646 \u0645\u0631\u06A9\u0632 \u0628\u0627 \u06A9\u0627\u0631\u06AF\u0627\u0647\u200C\u0647\u0627 \u0648 \u062F\u0641\u0627\u062A\u0631 \u0622\u0645\u0648\u0632\u0634\u06CC.",
+        "\u2022 \u0645\u062F\u0627\u062E\u0644\u0647\u0654 \u0628\u0647\u0646\u06AF\u0627\u0645 \u0631\u0634\u062F\u06CC \u2014 \u067E\u06CC\u06AF\u06CC\u0631\u06CC \u0648 \u0645\u062F\u0627\u062E\u0644\u0647\u0654 \u0632\u0648\u062F\u0647\u0646\u06AF\u0627\u0645\u060C \u067E\u06CC\u0634 \u0627\u0632 \u0622\u0646\u06A9\u0647 \u0645\u0634\u06A9\u0644 \u0631\u0634\u062F \u06A9\u0646\u062F.",
         "",
-        "\u0647\u0645\u06A9\u0627\u0631\u06CC \u0645\u062F\u0631\u0633\u0647 + \u062E\u0627\u0646\u0648\u0627\u062F\u0647 + \u0645\u0631\u06A9\u0632\u060C \u0633\u062A\u0648\u0646 \u06A9\u0627\u0631 \u0645\u0627\u0633\u062A: \u0645\u0639\u0644\u0645 \u06A9\u0644\u0627\u0633 \u0645\u0634\u0627\u0647\u062F\u0647 \u0645\u06CC\u200C\u06A9\u0646\u062F\u060C \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u062F\u0631 \u062E\u0627\u0646\u0647 \u062A\u0645\u0631\u06CC\u0646 \u0645\u06CC\u200C\u06A9\u0646\u062F \u0648 \u0645\u0631\u06A9\u0632 \u0628\u0631\u0646\u0627\u0645\u0647\u0654 \u062A\u062E\u0635\u0635\u06CC \u0631\u0627 \u0647\u062F\u0627\u06CC\u062A \u0645\u06CC\u200C\u06A9\u0646\u062F.",
+        "\u0622\u062F\u0631\u0633: \u0633\u0631\u0648\u0633\u062A\u0627\u0646\u060C \u062E\u06CC\u0627\u0628\u0627\u0646 \u062C\u0645\u0647\u0648\u0631\u06CC\u060C \u06A9\u0648\u0686\u0647 \u06F3.",
         "",
-        "\u{1F4C5} \u0646\u0648\u0628\u062A \u0648 \u067E\u06CC\u06AF\u06CC\u0631\u06CC: \u0628\u0627 \u062F\u0641\u062A\u0631 \u0645\u0631\u06A9\u0632 \u062A\u0645\u0627\u0633 \u0628\u06AF\u06CC\u0631\u06CC\u062F \u06CC\u0627 \u06A9\u062F \u0645\u0644\u06CC/\u062A\u0644\u0641\u0646 \u062E\u0648\u062F \u0631\u0627 \u0647\u0645\u06CC\u0646\u200C\u062C\u0627 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F \u062A\u0627 \u06AF\u0641\u062A\u06AF\u0648 \u0645\u062A\u0635\u0644 \u0634\u0648\u062F.",
+        "\u{1F4C5} \u0646\u0648\u0628\u062A \u0648 \u067E\u06CC\u06AF\u06CC\u0631\u06CC: \u0628\u0627 \u062F\u0641\u062A\u0631 \u0645\u0631\u06A9\u0632 \u062A\u0645\u0627\u0633 \u0628\u06AF\u06CC\u0631\u06CC\u062F\u060C \u06CC\u0627 \u0627\u0632 \u0645\u0646\u0648\u06CC \u0645\u0639\u0631\u0641\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u0647\u0645\u06CC\u0646 \u0631\u0628\u0627\u062A \u0627\u0633\u062A\u0641\u0627\u062F\u0647 \u06A9\u0646\u06CC\u062F \u0648 \u062F\u0631\u062E\u0648\u0627\u0633\u062A \u0646\u0648\u0628\u062A \u0628\u062F\u06CC\u062F.",
         "/help \u2014 \u062F\u06CC\u062F\u0646 \u0627\u0645\u06A9\u0627\u0646\u0627\u062A \u0627\u06CC\u0646 \u0628\u0627\u062A \u0628\u0631 \u0627\u0633\u0627\u0633 \u0646\u0642\u0634 \u0634\u0645\u0627"
       ].join("\n");
     }
@@ -24533,7 +24687,7 @@ ${vars.extra}` : void 0
         "",
         vars.extra?.trim() || "",
         "",
-        "\u067E\u0633 \u0627\u0632 \u0627\u0646\u062C\u0627\u0645 \u062A\u0645\u0631\u06CC\u0646\u060C \u0646\u062A\u06CC\u062C\u0647 \u0631\u0627 \u0628\u0631\u0627\u06CC \u062F\u0641\u062A\u0631 \u0645\u0631\u06A9\u0632 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F \u06CC\u0627 \u062F\u0631 \u062C\u0644\u0633\u0647\u0654 \u0628\u0639\u062F \u0647\u0645\u0631\u0627\u0647 \u0628\u06CC\u0627\u0648\u0631\u06CC\u062F.",
+        "\u0628\u0639\u062F \u0627\u0632 \u0627\u0646\u062C\u0627\u0645 \u062A\u0645\u0631\u06CC\u0646\u060C \u0646\u062A\u06CC\u062C\u0647 \u0631\u0648 \u0628\u0631\u0627\u06CC \u062F\u0641\u062A\u0631 \u0645\u0631\u06A9\u0632 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F \u06CC\u0627 \u062F\u0631 \u062C\u0644\u0633\u0647\u0654 \u0628\u0639\u062F \u0647\u0645\u0631\u0627\u0647 \u0628\u06CC\u0627\u0648\u0631\u06CC\u062F.",
         `${clinic} \u2014 \u067E\u06CC\u0627\u0645 \u062E\u0648\u062F\u06A9\u0627\u0631 \u062F\u0641\u062A\u0631`
       ].filter((l) => l !== "").join("\n");
     case "bot_exercise_denied":
@@ -24574,7 +24728,7 @@ ${vars.extra}` : void 0
         vars.studentName ? `\u062F\u0631\u0628\u0627\u0631\u0647\u0654: ${vars.studentName}` : void 0,
         vars.extra?.trim() || void 0,
         "",
-        "\u067E\u0633 \u0627\u0632 \u062B\u0628\u062A \u067E\u0627\u0633\u062E\u060C \u0646\u062A\u06CC\u062C\u0647 \u0628\u0647\u200C\u0637\u0648\u0631 \u062E\u0648\u062F\u06A9\u0627\u0631 \u0628\u0631\u0627\u06CC \u062F\u0631\u0645\u0627\u0646\u06AF\u0631 \u0645\u0631\u06A9\u0632 \u0645\u06CC\u200C\u0622\u06CC\u062F."
+        "\u0628\u0639\u062F \u0627\u0632 \u062B\u0628\u062A \u067E\u0627\u0633\u062E\u060C \u0646\u062A\u06CC\u062C\u0647 \u0628\u0647\u200C\u0637\u0648\u0631 \u062E\u0648\u062F\u06A9\u0627\u0631 \u0628\u0631\u0627\u06CC \u062F\u0631\u0645\u0627\u0646\u06AF\u0631 \u0645\u0631\u06A9\u0632 \u0645\u06CC\u0627\u062F."
       ].filter((l) => l !== void 0 && l !== "").join("\n");
     case "bot_teacher_checklist_link":
       return [
@@ -24584,7 +24738,7 @@ ${vars.extra}` : void 0
         vars.studentName ? `\u062F\u0631\u0628\u0627\u0631\u0647\u0654 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632: ${vars.studentName}` : void 0,
         vars.extra?.trim() || void 0,
         "",
-        "\u067E\u0627\u0633\u062E\u200C\u0647\u0627 \u0628\u0627 \u0646\u0627\u0645 \u0634\u0645\u0627 \u0631\u0648\u06CC \u067E\u0631\u0648\u0646\u062F\u0647\u0654 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u062B\u0628\u062A \u0645\u06CC\u200C\u0634\u0648\u062F \u0648 \u0645\u0633\u062A\u0642\u06CC\u0645 \u0628\u0631\u0627\u06CC \u062F\u0631\u0645\u0627\u0646\u06AF\u0631 \u0645\u0631\u06A9\u0632 \u0645\u06CC\u200C\u0622\u06CC\u062F.",
+        "\u067E\u0627\u0633\u062E\u200C\u0647\u0627 \u0628\u0627 \u0646\u0627\u0645 \u0634\u0645\u0627 \u0631\u0648\u06CC \u067E\u0631\u0648\u0646\u062F\u0647\u0654 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u062B\u0628\u062A \u0645\u06CC\u200C\u0634\u0647 \u0648 \u0645\u0633\u062A\u0642\u06CC\u0645 \u0628\u0631\u0627\u06CC \u062F\u0631\u0645\u0627\u0646\u06AF\u0631 \u0645\u0631\u06A9\u0632 \u0645\u06CC\u0627\u062F.",
         "\u067E\u06CC\u0634\u0627\u067E\u06CC\u0634 \u0627\u0632 \u0648\u0642\u062A\u06CC \u06A9\u0647 \u0645\u06CC\u200C\u06AF\u0630\u0627\u0631\u06CC\u062F \u0645\u0645\u0646\u0648\u0646\u06CC\u0645 \u{1F64F}"
       ].filter((l) => l !== void 0 && l !== "").join("\n");
     case "homework_returned":
@@ -24595,7 +24749,7 @@ ${vars.extra}` : void 0
         `\u{1F4DA} \u062A\u0645\u0631\u06CC\u0646: ${vars.exerciseTitle ?? "\u2014"}`,
         vars.extra?.trim() || "",
         "",
-        "\u0641\u0627\u06CC\u0644 \u0646\u062A\u06CC\u062C\u0647 \u062F\u0631 \u067E\u0631\u0648\u0646\u062F\u0647\u0654 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 (\u062A\u0627\u06CC\u0645\u200C\u0644\u0627\u06CC\u0646) \u062B\u0628\u062A \u0634\u062F."
+        "\u0641\u0627\u06CC\u0644 \u0646\u062A\u06CC\u062C\u0647 \u062A\u0648\u06CC \u067E\u0631\u0648\u0646\u062F\u0647\u0654 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 (\u062A\u0627\u06CC\u0645\u200C\u0644\u0627\u06CC\u0646) \u062B\u0628\u062A \u0634\u062F."
       ].filter((l) => l !== "").join("\n");
     case "doc_request_sent":
       return [
@@ -24604,12 +24758,12 @@ ${vars.extra}` : void 0
         vars.studentName ? `${vars.studentName} \u0639\u0632\u06CC\u0632\u060C \u0633\u0644\u0627\u0645 \u{1F44B}` : "\u0633\u0644\u0627\u0645 \u{1F44B}",
         vars.extra?.trim() || "",
         "",
-        "\u06A9\u0627\u0641\u06CC \u0627\u0633\u062A \u0639\u06A9\u0633 \u06CC\u0627 \u0641\u0627\u06CC\u0644 \u0631\u0627 \u0647\u0645\u06CC\u0646\u200C\u062C\u0627 \u062F\u0631 \u0647\u0645\u06CC\u0646 \u06AF\u0641\u062A\u06AF\u0648 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F\u061B",
+        "\u06A9\u0627\u0641\u06CC \u0627\u0633\u062A \u0639\u06A9\u0633 \u06CC\u0627 \u0641\u0627\u06CC\u0644 \u0631\u0648 \u0647\u0645\u06CC\u0646\u200C\u062C\u0627 \u062A\u0648\u06CC \u0647\u0645\u06CC\u0646 \u06AF\u0641\u062A\u06AF\u0648 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F\u061B",
         `\u0645\u0633\u062A\u0642\u06CC\u0645 \u0628\u0647 \u067E\u0631\u0648\u0646\u062F\u0647\u0654 ${vars.studentName ?? "\u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632"} \u062F\u0631 ${clinic} \u0636\u0645\u06CC\u0645\u0647 \u0645\u06CC\u200C\u0634\u0648\u062F.`
       ].filter((l) => l !== void 0 && l !== "").join("\n");
     case "bot_doc_received":
       return [
-        `\u2705 ${vars.title ?? "\u0641\u0627\u06CC\u0644"} \u0634\u0645\u0627 \u062F\u0631\u06CC\u0627\u0641\u062A \u0634\u062F \u0648 \u0628\u0647 \u067E\u0631\u0648\u0646\u062F\u0647\u0654 ${vars.studentName ?? "\u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632"} \u0636\u0645\u06CC\u0645\u0647 \u0634\u062F.`,
+        `\u2705 ${vars.title ?? "\u0641\u0627\u06CC\u0644"} \u0634\u0645\u0627 \u0628\u0647 \u062F\u0633\u062A\u0645\u0648\u0646 \u0631\u0633\u06CC\u062F \u0648 \u0628\u0647 \u067E\u0631\u0648\u0646\u062F\u0647\u0654 ${vars.studentName ?? "\u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632"} \u0636\u0645\u06CC\u0645\u0647 \u0634\u062F.`,
         "",
         "\u0645\u0645\u0646\u0648\u0646 \u0627\u0632 \u0647\u0645\u0631\u0627\u0647\u06CC \u0634\u0645\u0627 \u{1F64F}"
       ].join("\n");
@@ -24617,13 +24771,13 @@ ${vars.extra}` : void 0
       return [
         "\u26A0\uFE0F \u0627\u06CC\u0646 \u0646\u0648\u0639 \u0641\u0627\u06CC\u0644 \u0645\u062C\u0627\u0632 \u0646\u06CC\u0633\u062A \u2014 \u0641\u0642\u0637 \u0639\u06A9\u0633\u060C PDF\u060C Word\u060C Excel \u0648 \u0645\u062A\u0646.",
         "",
-        "\u0644\u0637\u0641\u0627\u064B \u0645\u062F\u0631\u06A9 \u0631\u0627 \u0628\u0647\u200C\u0635\u0648\u0631\u062A \u0639\u06A9\u0633 \u06CC\u0627 PDF \u0628\u0641\u0631\u0633\u062A\u06CC\u062F."
+        "\u0644\u0637\u0641\u0627\u064B \u0645\u062F\u0631\u06A9 \u0631\u0648 \u0628\u0647\u200C\u0635\u0648\u0631\u062A \u0639\u06A9\u0633 \u06CC\u0627 PDF \u0628\u0641\u0631\u0633\u062A\u06CC\u062F."
       ].join("\n");
     case "bot_doc_too_large":
       return [
-        "\u26A0\uFE0F \u062D\u062C\u0645 \u0641\u0627\u06CC\u0644 \u0628\u06CC\u0634 \u0627\u0632 \u06F5\u06F1\u06F2 \u06A9\u06CC\u0644\u0648\u0628\u0627\u06CC\u062A \u0627\u0633\u062A.",
+        "\u26A0\uFE0F \u062D\u062C\u0645 \u0641\u0627\u06CC\u0644 \u0628\u06CC\u0634 \u0627\u0632 \u06F5\u06F1\u06F2 \u06A9\u06CC\u0644\u0648\u0628\u0627\u06CC\u062A\u200C\u0647.",
         "",
-        "\u0644\u0637\u0641\u0627\u064B \u0639\u06A9\u0633 \u0631\u0627 \u0628\u0627 \u06A9\u06CC\u0641\u06CC\u062A \u06A9\u0645\u062A\u0631 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F \u06CC\u0627 \u0641\u0642\u0637 \u0635\u0641\u062D\u0647\u200C\u0647\u0627\u06CC \u0627\u0635\u0644\u06CC \u0631\u0627 \u0639\u06A9\u0633 \u0628\u06AF\u06CC\u0631\u06CC\u062F."
+        "\u0644\u0637\u0641\u0627\u064B \u0639\u06A9\u0633 \u0631\u0648 \u0628\u0627 \u06A9\u06CC\u0641\u06CC\u062A \u06A9\u0645\u062A\u0631 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F \u06CC\u0627 \u0641\u0642\u0637 \u0635\u0641\u062D\u0647\u200C\u0647\u0627\u06CC \u0627\u0635\u0644\u06CC \u0631\u0648 \u0639\u06A9\u0633 \u0628\u06AF\u06CC\u0631\u06CC\u062F."
       ].join("\n");
     case "bot_doc_failed":
       return [
@@ -24635,7 +24789,7 @@ ${vars.extra}` : void 0
       return [
         `\u2705 \u0646\u062A\u06CC\u062C\u0647\u0654 \u062A\u0645\u0631\u06CC\u0646 \xAB${vars.exerciseTitle ?? "\u2014"}\xBB \u062F\u0631\u06CC\u0627\u0641\u062A \u0634\u062F.`,
         "",
-        "\u0628\u0647 \u062F\u0641\u062A\u0631 \u0645\u0631\u06A9\u0632 \u0627\u0637\u0644\u0627\u0639 \u062F\u0627\u062F\u0647 \u0634\u062F \u2014 \u0645\u0645\u0646\u0648\u0646 \u0627\u0632 \u067E\u06CC\u06AF\u06CC\u0631\u06CC \u0634\u0645\u0627 \u{1F64F}"
+        "\u0628\u0647 \u062F\u0641\u062A\u0631 \u0645\u0631\u06A9\u0632 \u062E\u0628\u0631 \u062F\u0627\u062F\u0647 \u0634\u062F \u2014 \u0645\u0645\u0646\u0648\u0646 \u0627\u0632 \u067E\u06CC\u06AF\u06CC\u0631\u06CC \u0634\u0645\u0627 \u{1F64F}"
       ].join("\n");
     case "bot_submission_no_pending":
       return [
@@ -24681,22 +24835,37 @@ ${vars.extra}` : void 0
       return [
         head,
         "",
-        "\u{1F552} \u067E\u0627\u0633\u062E\u06AF\u0648\u06CC\u06CC: \u0634\u0646\u0628\u0647 \u062A\u0627 \u0686\u0647\u0627\u0631\u0634\u0646\u0628\u0647 \u06F9 \u062A\u0627 \u06F1\u06F7\u060C \u067E\u0646\u062C\u0634\u0646\u0628\u0647 \u06F9 \u062A\u0627 \u06F1\u06F3",
-        "\u062B\u0628\u062A\u200C\u0646\u0627\u0645 \u0648 \u0646\u0648\u0628\u062A\u200C\u062F\u0647\u06CC \u0641\u0642\u0637 \u0628\u0627 \u062A\u0645\u0627\u0633 \u062A\u0644\u0641\u0646\u06CC \u0627\u0646\u062C\u0627\u0645 \u0645\u06CC\u200C\u0634\u0648\u062F."
+        "\u{1F552} \u067E\u0627\u0633\u062E\u06AF\u0648\u06CC\u06CC: \u0634\u0646\u0628\u0647 \u062A\u0627 \u0686\u0647\u0627\u0631\u0634\u0646\u0628\u0647 \u062F\u0631 \u0633\u0627\u0639\u0627\u062A \u0627\u062F\u0627\u0631\u06CC"
       ].join("\n");
+    }
+    case "bot_activities": {
+      const actLink = (vars.actLink ?? "").trim();
+      const refLink = (vars.refLink ?? "").trim();
+      const head = `\u{1F3B2} \u062A\u0645\u0631\u06CC\u0646\u200C\u0647\u0627 \u0648 \u06A9\u0627\u0631\u062A\u200C\u0647\u0627\u06CC \u0622\u0645\u0627\u062F\u0647\u0654 ${clinic}`;
+      const lines = [
+        head,
+        "",
+        "\u0645\u0631\u06A9\u0632 \u0645\u062C\u0645\u0648\u0639\u0647\u200C\u0627\u06CC \u0627\u0632 \u06A9\u0627\u0631\u0628\u0631\u06AF\u200C\u0647\u0627\u060C \u0628\u0627\u0632\u06CC\u200C\u0647\u0627 \u0648 \u0631\u0627\u0647\u0646\u0645\u0627\u0647\u0627\u06CC \u062A\u0645\u0631\u06CC\u0646\u06CC \u0622\u0645\u0627\u062F\u0647 \u0648 \u0628\u0627\u0632\u0628\u06CC\u0646\u06CC\u200C\u0634\u062F\u0647 \u062F\u0627\u0631\u062F\u061B \u0627\u06CC\u0646 \u0635\u0641\u062D\u0647 \u0641\u0647\u0631\u0633\u062A \u0639\u0645\u0648\u0645\u06CC \u062A\u0645\u0631\u06CC\u0646\u200C\u0647\u0627\u0633\u062A\u061B \u0639\u0646\u0648\u0627\u0646\u200C\u0647\u0627\u060C \u0628\u0631\u0686\u0633\u0628\u200C\u0647\u0627 \u0648 \u0631\u0627\u0647\u0646\u0645\u0627\u06CC \u0627\u0633\u062A\u0641\u0627\u062F\u0647:",
+        "",
+        actLink,
+        "",
+        "\u0641\u0627\u06CC\u0644 \u0647\u0631 \u062A\u0645\u0631\u06CC\u0646 \u067E\u0633 \u0627\u0632 \u0637\u0631\u062D \u062F\u0631\u0645\u0627\u0646 \u06CC\u0627 \u0627\u062A\u0635\u0627\u0644 \u0628\u0627\u062A\u060C \u0645\u0633\u062A\u0642\u06CC\u0645 \u062F\u0631 \u0647\u0645\u06CC\u0646 \u06AF\u0641\u062A\u200C\u0648\u06AF\u0648 \u0628\u0631\u0627\u06CC\u062A\u0627\u0646 \u0627\u0631\u0633\u0627\u0644 \u0645\u06CC\u200C\u0634\u0648\u062F."
+      ];
+      if (refLink) lines.push("", "\u0647\u0646\u0648\u0632 \u0645\u0639\u0631\u0641\u06CC \u0646\u06A9\u0631\u062F\u0647\u200C\u0627\u06CC\u062F\u061F \u0641\u0631\u0645 \u06A9\u0648\u062A\u0627\u0647 \u0645\u0639\u0631\u0641\u06CC:", refLink);
+      return lines.join("\n");
     }
     case "bot_public_files": {
       const list = (vars.list ?? "").trim();
       const mode = vars.mode ?? "guest";
       const head = `\u{1F4C1} \u0641\u0627\u06CC\u0644\u200C\u0647\u0627\u06CC \u0622\u0645\u0648\u0632\u0634\u06CC ${clinic}`;
       if (mode === "staff" || mode === "class") {
-        return [head, "", "\u0628\u0631\u0627\u06CC \u0645\u0631\u0648\u0631 \u06A9\u0627\u0631\u062A\u200C\u0647\u0627\u060C \xAB\u06A9\u0627\u0631\u062A\u200C\u0647\u0627\u06CC \u0622\u0645\u0627\u062F\u0647\xBB \u0631\u0627 \u0628\u0627\u0632 \u06A9\u0646\u06CC\u062F\u061B", "\u0628\u0627 \u0627\u0646\u062A\u062E\u0627\u0628 \u0647\u0631 \u06A9\u0627\u0631\u062A\u060C \u0647\u0645\u0647\u0654 \u0641\u0627\u06CC\u0644\u200C\u0647\u0627\u06CC\u0634 \u06CC\u06A9\u062C\u0627 \u0628\u0631\u0627\u06CC\u062A\u0627\u0646 \u0641\u0631\u0633\u062A\u0627\u062F\u0647 \u0645\u06CC\u200C\u0634\u0648\u062F."].join("\n");
+        return [head, "", "\u0628\u0631\u0627\u06CC \u0645\u0631\u0648\u0631 \u06A9\u0627\u0631\u062A\u200C\u0647\u0627\u060C \xAB\u06A9\u0627\u0631\u062A\u200C\u0647\u0627\u06CC \u0622\u0645\u0627\u062F\u0647\xBB \u0631\u0648 \u0628\u0627\u0632 \u06A9\u0646\u06CC\u062F\u061B", "\u0628\u0627 \u0627\u0646\u062A\u062E\u0627\u0628 \u0647\u0631 \u06A9\u0627\u0631\u062A\u060C \u0647\u0645\u0647\u0654 \u0641\u0627\u06CC\u0644\u200C\u0647\u0627\u06CC\u0634 \u06CC\u06A9\u062C\u0627 \u0628\u0631\u0627\u06CC\u062A\u0627\u0646 \u0641\u0631\u0633\u062A\u0627\u062F\u0647 \u0645\u06CC\u200C\u0634\u0647."].join("\n");
       }
       if (mode === "guest") {
-        return [head, "", "\u0641\u0627\u06CC\u0644 \u062A\u06A9\u0644\u06CC\u0641\u200C\u0647\u0627 \u0648 \u062A\u0645\u0631\u06CC\u0646\u200C\u0647\u0627\u060C \u0628\u0639\u062F \u0627\u0632 \u062B\u0628\u062A \u062A\u06A9\u0644\u06CC\u0641 \u0645\u0633\u062A\u0642\u06CC\u0645 \u062F\u0631 \u0647\u0645\u06CC\u0646 \u06AF\u0641\u062A\u06AF\u0648 \u0628\u0631\u0627\u06CC\u062A\u0627\u0646 \u0627\u0631\u0633\u0627\u0644 \u0645\u06CC\u200C\u0634\u0648\u062F.", "", "\u0628\u0631\u0627\u06CC \u0627\u062A\u0635\u0627\u0644\u060C \u06A9\u062F \u0645\u0644\u06CC \u06CC\u0627 \u0634\u0645\u0627\u0631\u0647\u0654 \u062E\u0648\u062F\u062A\u0627\u0646 \u0631\u0627 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F."].join("\n");
+        return [head, "", "\u0641\u0627\u06CC\u0644 \u062A\u06A9\u0644\u06CC\u0641\u200C\u0647\u0627 \u0648 \u062A\u0645\u0631\u06CC\u0646\u200C\u0647\u0627 \u0628\u0639\u062F \u0627\u0632 \u062B\u0628\u062A \u062A\u06A9\u0644\u06CC\u0641\u060C \u0645\u0633\u062A\u0642\u06CC\u0645 \u062A\u0648\u06CC \u0647\u0645\u06CC\u0646 \u06AF\u0641\u062A\u06AF\u0648 \u0628\u0631\u0627\u06CC\u062A\u0627\u0646 \u0627\u0631\u0633\u0627\u0644 \u0645\u06CC\u200C\u0634\u0647.", "", "\u0628\u0631\u0627\u06CC \u0627\u062A\u0635\u0627\u0644\u060C \u06A9\u062F \u0645\u0644\u06CC \u06CC\u0627 \u0634\u0645\u0627\u0631\u0647\u0654 \u062E\u0648\u062F\u062A\u0648\u0646 \u0631\u0648 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F."].join("\n");
       }
       if (mode === "parent_empty") {
-        return [head, "", "\u0641\u0639\u0644\u0627\u064B \u0641\u0627\u06CC\u0644\u06CC \u0628\u0631\u0627\u06CC \u062A\u0645\u0631\u06CC\u0646\u200C\u0647\u0627\u06CC \u0628\u0627\u0632 \u0641\u0631\u0632\u0646\u062F\u062A\u0627\u0646 \u0646\u062F\u0627\u0631\u06CC\u0645.", "\u0641\u0627\u06CC\u0644 \u062A\u06A9\u0644\u06CC\u0641\u200C\u0647\u0627\u06CC \u0628\u0639\u062F\u06CC\u060C \u0647\u0645\u0631\u0627\u0647 \u067E\u06CC\u0627\u0645 \u062A\u06A9\u0644\u06CC\u0641 \u0628\u0631\u0627\u06CC\u062A\u0627\u0646 \u0627\u0631\u0633\u0627\u0644 \u0645\u06CC\u200C\u0634\u0648\u062F."].join("\n");
+        return [head, "", "\u0641\u0639\u0644\u0627\u064B \u0641\u0627\u06CC\u0644\u06CC \u0628\u0631\u0627\u06CC \u062A\u0645\u0631\u06CC\u0646\u200C\u0647\u0627\u06CC \u0628\u0627\u0632 \u0641\u0631\u0632\u0646\u062F\u062A\u0627\u0646 \u0646\u062F\u0627\u0631\u06CC\u0645.", "\u0641\u0627\u06CC\u0644 \u062A\u06A9\u0644\u06CC\u0641\u200C\u0647\u0627\u06CC \u0628\u0639\u062F\u06CC\u060C \u0647\u0645\u0631\u0627\u0647 \u067E\u06CC\u0627\u0645 \u062A\u06A9\u0644\u06CC\u0641 \u0628\u0631\u0627\u06CC\u062A\u0627\u0646 \u0627\u0631\u0633\u0627\u0644 \u0645\u06CC\u200C\u0634\u0647."].join("\n");
       }
       return [head, "", "\u0631\u0648\u06CC \u0647\u0631 \u062A\u0645\u0631\u06CC\u0646 \u0628\u0632\u0646\u06CC\u062F \u062A\u0627 \u0641\u0627\u06CC\u0644\u0634 \u0647\u0645\u06CC\u0646\u200C\u062C\u0627 \u0641\u0631\u0633\u062A\u0627\u062F\u0647 \u0634\u0648\u062F:", "", list].filter((l) => l !== "").join("\n");
     }
@@ -24722,9 +24891,9 @@ ${vars.extra}` : void 0
       ].join("\n");
     case "bot_family_link_denied":
       return [
-        "\u{1F512} \u0627\u06CC\u0646 \u067E\u0631\u0648\u0646\u062F\u0647 \u0627\u0632 \u0642\u0628\u0644 \u0628\u0647 \u06CC\u06A9 \u06AF\u0641\u062A\u06AF\u0648\u06CC \u062F\u06CC\u06AF\u0631 \u0645\u062A\u0635\u0644 \u0627\u0633\u062A.",
+        "\u{1F512} \u0627\u06CC\u0646 \u067E\u0631\u0648\u0646\u062F\u0647 \u0627\u0632 \u0642\u0628\u0644 \u0628\u0647 \u06CC\u06A9 \u06AF\u0641\u062A\u06AF\u0648\u06CC \u062F\u06CC\u06AF\u0631 \u0648\u0635\u0644\u0647.",
         "",
-        "\u0628\u0631\u0627\u06CC \u0627\u062A\u0635\u0627\u0644 \u0628\u0627 \u0634\u0645\u0627\u0631\u0647\u0654 \u062C\u062F\u06CC\u062F\u060C \u0628\u0627 \u062F\u0641\u062A\u0631 \u0645\u0631\u06A9\u0632 \u062A\u0645\u0627\u0633 \u0628\u06AF\u06CC\u0631\u06CC\u062F\u061B \u0647\u0645\u06A9\u0627\u0631\u0627\u0646 \u0645\u0627 \u067E\u0633 \u0627\u0632 \u062A\u0623\u06CC\u06CC\u062F\u060C \u06A9\u062F \u0627\u062A\u0635\u0627\u0644 \u062A\u0627\u0632\u0647 \u0628\u0631\u0627\u06CC\u062A\u0627\u0646 \u0645\u06CC\u200C\u0633\u0627\u0632\u0646\u062F.",
+        "\u0628\u0631\u0627\u06CC \u0627\u062A\u0635\u0627\u0644 \u0628\u0627 \u0634\u0645\u0627\u0631\u0647\u0654 \u062C\u062F\u06CC\u062F\u060C \u0628\u0627 \u062F\u0641\u062A\u0631 \u0645\u0631\u06A9\u0632 \u062A\u0645\u0627\u0633 \u0628\u06AF\u06CC\u0631\u06CC\u062F\u061B \u0647\u0645\u06A9\u0627\u0631\u0627\u0646 \u0645\u0627 \u0628\u0639\u062F \u0627\u0632 \u062A\u0623\u06CC\u06CC\u062F\u060C \u06A9\u062F \u0627\u062A\u0635\u0627\u0644 \u062A\u0627\u0632\u0647 \u0628\u0631\u0627\u06CC\u062A\u0627\u0646 \u0645\u06CC\u200C\u0633\u0627\u0632\u0646\u062F.",
         `(${clinic})`
       ].join("\n");
     case "bot_help_supervisor":
@@ -24751,19 +24920,18 @@ ${vars.extra}` : void 0
       return [
         "\u{1F511} \u0627\u062D\u0631\u0627\u0632 \u0647\u0648\u06CC\u062A \u0648 \u0627\u062A\u0635\u0627\u0644 \u06AF\u0641\u062A\u06AF\u0648",
         "",
-        "\u0645\u0633\u06CC\u0631 \u06F1 (\u067E\u06CC\u0634\u0646\u0647\u0627\u062F\u06CC): \u06A9\u062F \u0645\u0644\u06CC \u06F1\u06F0 \u0631\u0642\u0645\u06CC \u06CC\u0627 \u0634\u0645\u0627\u0631\u0647\u0654 \u0647\u0645\u0631\u0627\u0647 \u06F0\u06F9\u2026 \u0631\u0627 \u0647\u0645\u06CC\u0646\u200C\u062C\u0627 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F.",
+        "\u0645\u0633\u06CC\u0631 \u06F1 (\u067E\u06CC\u0634\u0646\u0647\u0627\u062F\u06CC): \u06A9\u062F \u0645\u0644\u06CC \u06F1\u06F0 \u0631\u0642\u0645\u06CC \u06CC\u0627 \u0634\u0645\u0627\u0631\u0647\u0654 \u0647\u0645\u0631\u0627\u0647 \u06F0\u06F9\u2026 \u0631\u0648 \u0647\u0645\u06CC\u0646\u200C\u062C\u0627 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F.",
         "   \u2022 \u0648\u0627\u0644\u062F\u06CC\u0646: \u06A9\u062F \u0645\u0644\u06CC \u0641\u0631\u0632\u0646\u062F \u06CC\u0627 \u0634\u0645\u0627\u0631\u0647\u0654 \u062B\u0628\u062A\u200C\u0634\u062F\u0647\u0654 \u0648\u0644\u06CC\u0651",
-        "   \u2022 \u0647\u0645\u06A9\u0627\u0631\u0627\u0646 \u0645\u0631\u06A9\u0632: \u06A9\u062F \u0645\u0644\u06CC \u06CC\u0627 \u0634\u0645\u0627\u0631\u0647\u0654 \u062E\u0648\u062F\u062A\u0627\u0646",
+        "   \u2022 \u0647\u0645\u06A9\u0627\u0631\u0627\u0646 \u0645\u062F\u0627\u0631\u0633: \u0627\u06AF\u0631 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\u06CC \u0631\u0648 \u0628\u0647 \u0645\u0631\u06A9\u0632 \u0627\u0631\u062C\u0627\u0639 \u0628\u062F\u06CC\u062F \u0644\u06CC\u0646\u06A9 \u0627\u062A\u0635\u0627\u0644 \u0628\u0631\u0627\u06CC \u0634\u0645\u0627 \u067E\u06CC\u0627\u0645\u06A9 \u0645\u06CC\u200C\u0634\u0647",
         "",
         "\u0645\u0633\u06CC\u0631 \u06F2: \u06A9\u062F \u0627\u062A\u0635\u0627\u0644 \u06F6 \u062D\u0631\u0641\u06CC \u0627\u0632 \u062F\u0641\u062A\u0631 \u0645\u0631\u06A9\u0632 \u0628\u06AF\u06CC\u0631\u06CC\u062F \u0648 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F:",
         "/link CODE",
         "",
-        "\u067E\u0633 \u0627\u0632 \u0627\u062A\u0635\u0627\u0644\u060C \u0645\u0646\u0648\u06CC \u0645\u062E\u0635\u0648\u0635 \u0646\u0642\u0634 \u0634\u0645\u0627 \u0646\u0635\u0628 \u0645\u06CC\u200C\u0634\u0648\u062F:",
+        "\u0628\u0639\u062F \u0627\u0632 \u0627\u062A\u0635\u0627\u0644\u060C \u0645\u0646\u0648\u06CC \u0645\u062E\u0635\u0648\u0635 \u0646\u0642\u0634 \u0634\u0645\u0627 \u0646\u0635\u0628 \u0645\u06CC\u200C\u0634\u0647:",
         "\u2022 \u062E\u0627\u0646\u0648\u0627\u062F\u0647: \u0646\u0648\u0628\u062A\u200C\u0647\u0627\u060C \u062D\u0636\u0648\u0631\u060C \u062A\u06A9\u0644\u06CC\u0641\u200C\u0647\u0627",
         "\u2022 \u0645\u0639\u0644\u0645 \u0645\u062F\u0631\u0633\u0647: \u0628\u0631\u0646\u0627\u0645\u0647\u0654 \u06A9\u0644\u0627\u0633\u060C \u0628\u0627\u0646\u06A9 \u062A\u0645\u0631\u06CC\u0646\u060C \u062B\u0628\u062A \u0645\u062A\u0642\u0627\u0636\u06CC",
-        "\u2022 \u0647\u0645\u06A9\u0627\u0631\u0627\u0646: \u0646\u0648\u0628\u062A\u200C\u0647\u0627\u060C \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\u0627\u0646 \u0641\u0639\u0627\u0644\u060C \u067E\u06CC\u06AF\u06CC\u0631\u06CC\u200C\u0647\u0627",
         "",
-        "\u{1F512} \u0647\u0631 \u067E\u0631\u0648\u0646\u062F\u0647\u0654 \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u0641\u0642\u0637 \u0628\u0647 \u06CC\u06A9 \u06AF\u0641\u062A\u06AF\u0648 \u0645\u062A\u0635\u0644 \u0645\u06CC\u200C\u0634\u0648\u062F\u061B \u0628\u0631\u0627\u06CC \u0627\u0646\u062A\u0642\u0627\u0644 \u0628\u0647 \u0634\u0645\u0627\u0631\u0647\u0654 \u062C\u062F\u06CC\u062F \u0628\u0627 \u062F\u0641\u062A\u0631 \u0645\u0631\u06A9\u0632 \u062A\u0645\u0627\u0633 \u0628\u06AF\u06CC\u0631\u06CC\u062F."
+        "\u{1F512} \u0647\u0631 \u067E\u0631\u0648\u0646\u062F\u0647\u0654 \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u0641\u0642\u0637 \u0628\u0647 \u06CC\u06A9 \u06AF\u0641\u062A\u06AF\u0648 \u0645\u062A\u0635\u0644 \u0645\u06CC\u200C\u0634\u0647\u061B \u0628\u0631\u0627\u06CC \u0627\u0646\u062A\u0642\u0627\u0644 \u0628\u0647 \u0634\u0645\u0627\u0631\u0647\u0654 \u062C\u062F\u06CC\u062F \u0628\u0627 \u062F\u0641\u062A\u0631 \u0645\u0631\u06A9\u0632 \u062A\u0645\u0627\u0633 \u0628\u06AF\u06CC\u0631\u06CC\u062F."
       ].join("\n");
     case "bot_pending_homework":
       return [
@@ -24771,7 +24939,7 @@ ${vars.extra}` : void 0
         "",
         vars.list ?? "\u2014",
         "",
-        "\u0628\u0639\u062F \u0627\u0632 \u0627\u0646\u062C\u0627\u0645 \u062A\u0645\u0631\u06CC\u0646\u060C \u0639\u06A9\u0633 \u06CC\u0627 \u0641\u0627\u06CC\u0644 \u0646\u062A\u06CC\u062C\u0647 \u0631\u0627 \u0647\u0645\u06CC\u0646\u200C\u062C\u0627 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F \u062A\u0627 \u062F\u0631 \u067E\u0631\u0648\u0646\u062F\u0647 \u062B\u0628\u062A \u0634\u0648\u062F."
+        "\u0628\u0639\u062F \u0627\u0632 \u0627\u0646\u062C\u0627\u0645 \u062A\u0645\u0631\u06CC\u0646\u060C \u0639\u06A9\u0633 \u06CC\u0627 \u0641\u0627\u06CC\u0644 \u0646\u062A\u06CC\u062C\u0647 \u0631\u0648 \u0647\u0645\u06CC\u0646\u200C\u062C\u0627 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F \u062A\u0627 \u062A\u0648\u06CC \u067E\u0631\u0648\u0646\u062F\u0647 \u062B\u0628\u062A \u0634\u0648\u062F."
       ].join("\n");
     case "bot_class_activity":
       return [
@@ -24961,7 +25129,7 @@ function selectNotifications(filters) {
   };
 }
 __name(selectNotifications, "selectNotifications");
-function selectPendingNotifications(limit, maxAttempts, nowIso) {
+function selectPendingNotifications(limit, maxAttempts, nowIso2) {
   return {
     sql: `SELECT ${NOTIFICATION_COLS}
             FROM notifications
@@ -24969,71 +25137,71 @@ function selectPendingNotifications(limit, maxAttempts, nowIso) {
              AND (send_at IS NULL OR send_at <= ?)
            ORDER BY created_at
            LIMIT ?`,
-    params: [maxAttempts, nowIso, limit]
+    params: [maxAttempts, nowIso2, limit]
   };
 }
 __name(selectPendingNotifications, "selectPendingNotifications");
-function releaseNotificationById(id, nowIso) {
+function releaseNotificationById(id, nowIso2) {
   return {
     sql: `UPDATE notifications
              SET send_at = NULL, attempts = 0, status = 'pending', updated_at = ?
            WHERE id = ? AND status IN ('pending', 'failed')`,
-    params: [nowIso, id]
+    params: [nowIso2, id]
   };
 }
 __name(releaseNotificationById, "releaseNotificationById");
-function releaseAllDrafts(nowIso) {
+function releaseAllDrafts(nowIso2) {
   return {
     sql: `UPDATE notifications
              SET send_at = NULL, updated_at = ?
            WHERE status = 'pending' AND send_at IS NOT NULL`,
-    params: [nowIso]
+    params: [nowIso2]
   };
 }
 __name(releaseAllDrafts, "releaseAllDrafts");
-function stalePendingToSkipped(maxAttempts, nowIso) {
+function stalePendingToSkipped(maxAttempts, nowIso2) {
   return {
     sql: `UPDATE notifications
              SET status = 'skipped', last_error = 'MAX_ATTEMPTS', updated_at = ?
            WHERE status = 'pending' AND attempts >= ?`,
-    params: [nowIso, maxAttempts]
+    params: [nowIso2, maxAttempts]
   };
 }
 __name(stalePendingToSkipped, "stalePendingToSkipped");
-function markNotificationSent(id, externalId, nowIso) {
+function markNotificationSent(id, externalId, nowIso2) {
   return {
     sql: `UPDATE notifications
              SET status = 'sent', sent_at = ?, last_error = NULL,
                  attempts = attempts + 1, updated_at = ?
            WHERE id = ?`,
-    params: [nowIso, nowIso, id]
+    params: [nowIso2, nowIso2, id]
   };
 }
 __name(markNotificationSent, "markNotificationSent");
-function markNotificationFailed(id, error62, nowIso) {
+function markNotificationFailed(id, error62, nowIso2) {
   return {
     sql: `UPDATE notifications
              SET status = 'failed', last_error = ?, attempts = attempts + 1, updated_at = ?
            WHERE id = ?`,
-    params: [error62.slice(0, 500), nowIso, id]
+    params: [error62.slice(0, 500), nowIso2, id]
   };
 }
 __name(markNotificationFailed, "markNotificationFailed");
-function markNotificationSkipped(id, reason, nowIso) {
+function markNotificationSkipped(id, reason, nowIso2) {
   return {
     sql: `UPDATE notifications
              SET status = 'skipped', last_error = ?, updated_at = ?
            WHERE id = ? AND status = 'pending'`,
-    params: [reason.slice(0, 500), nowIso, id]
+    params: [reason.slice(0, 500), nowIso2, id]
   };
 }
 __name(markNotificationSkipped, "markNotificationSkipped");
-function retryFailedNotifications(limit, nowIso) {
+function retryFailedNotifications(limit, nowIso2) {
   return {
     sql: `UPDATE notifications
              SET status = 'pending', updated_at = ?
            WHERE id IN (SELECT id FROM notifications WHERE status = 'failed' ORDER BY created_at LIMIT ?)`,
-    params: [nowIso, limit]
+    params: [nowIso2, limit]
   };
 }
 __name(retryFailedNotifications, "retryFailedNotifications");
@@ -25116,12 +25284,12 @@ function selectBotLinks(filters) {
   };
 }
 __name(selectBotLinks, "selectBotLinks");
-function linkBotLink(id, chatId, nowIso) {
+function linkBotLink(id, chatId, nowIso2) {
   return {
     sql: `UPDATE bot_links
              SET status = 'linked', chat_id = ?, updated_at = ?
            WHERE id = ?`,
-    params: [chatId, nowIso, id]
+    params: [chatId, nowIso2, id]
   };
 }
 __name(linkBotLink, "linkBotLink");
@@ -25204,12 +25372,12 @@ function selectStaffLinks(filters) {
   };
 }
 __name(selectStaffLinks, "selectStaffLinks");
-function linkStaffLink(id, chatId, nowIso) {
+function linkStaffLink(id, chatId, nowIso2) {
   return {
     sql: `UPDATE staff_bot_links
              SET status = 'linked', chat_id = ?, updated_at = ?
            WHERE id = ?`,
-    params: [chatId, nowIso, id]
+    params: [chatId, nowIso2, id]
   };
 }
 __name(linkStaffLink, "linkStaffLink");
@@ -25272,12 +25440,12 @@ function selectClassLinks(filters) {
   };
 }
 __name(selectClassLinks, "selectClassLinks");
-function linkClassLink(id, chatId, nowIso) {
+function linkClassLink(id, chatId, nowIso2) {
   return {
     sql: `UPDATE class_bot_links
              SET status = 'linked', chat_id = ?, updated_at = ?
            WHERE id = ? AND status != 'revoked'`,
-    params: [chatId, nowIso, id]
+    params: [chatId, nowIso2, id]
   };
 }
 __name(linkClassLink, "linkClassLink");
@@ -25369,7 +25537,7 @@ function createNotifyService(deps) {
       return channels.get(name) ?? null;
     },
     async enqueue(input2) {
-      const nowIso = now().toISOString();
+      const nowIso2 = now().toISOString();
       if (input2.dedupKey) {
         const existing = await db.queryOne(
           "SELECT id FROM notifications WHERE dedup_key = ?",
@@ -25392,7 +25560,7 @@ function createNotifyService(deps) {
               payload: input2.payload,
               dedupKey: input2.dedupKey ?? null,
               sendAt: input2.sendAt ?? null,
-              nowIso
+              nowIso: nowIso2
             })
           )
         );
@@ -25406,23 +25574,23 @@ function createNotifyService(deps) {
       }
     },
     async dispatchPending(limit = 50) {
-      const nowIso = now().toISOString();
+      const nowIso2 = now().toISOString();
       const summary = { processed: 0, sent: 0, failed: 0, skipped: 0 };
-      await db.execute(...spreadInsert(stalePendingToSkipped(maxAttempts, nowIso)));
-      const pending = await db.query(...spreadInsert(selectPendingNotifications(limit, maxAttempts, nowIso))).then((rows) => rows.map(rowFromDb));
+      await db.execute(...spreadInsert(stalePendingToSkipped(maxAttempts, nowIso2)));
+      const pending = await db.query(...spreadInsert(selectPendingNotifications(limit, maxAttempts, nowIso2))).then((rows) => rows.map(rowFromDb));
       for (const row of pending) {
         summary.processed += 1;
         const channel = channels.get(row.channel);
         if (!channel) {
           await db.execute(
-            ...spreadInsert(markNotificationFailed(row.id, "CHANNEL_UNAVAILABLE", nowIso))
+            ...spreadInsert(markNotificationFailed(row.id, "CHANNEL_UNAVAILABLE", nowIso2))
           );
           summary.failed += 1;
           continue;
         }
         if (!row.recipient) {
           await db.execute(
-            ...spreadInsert(markNotificationSkipped(row.id, "NO_RECIPIENT", nowIso))
+            ...spreadInsert(markNotificationSkipped(row.id, "NO_RECIPIENT", nowIso2))
           );
           summary.skipped += 1;
           continue;
@@ -25441,12 +25609,12 @@ function createNotifyService(deps) {
         }
         if (result.ok) {
           await db.execute(
-            ...spreadInsert(markNotificationSent(row.id, result.externalId ?? null, nowIso))
+            ...spreadInsert(markNotificationSent(row.id, result.externalId ?? null, nowIso2))
           );
           summary.sent += 1;
         } else {
           await db.execute(
-            ...spreadInsert(markNotificationFailed(row.id, result.error ?? "SEND_FAILED", nowIso))
+            ...spreadInsert(markNotificationFailed(row.id, result.error ?? "SEND_FAILED", nowIso2))
           );
           summary.failed += 1;
           log.warn("dispatch.failed", { id: row.id, channel: row.channel, error: result.error });
@@ -25715,7 +25883,9 @@ var UNLINK_LABELS = /* @__PURE__ */ new Set(["\u0642\u0637\u0639 \u0627\u062A\u0
 var EXB_LABELS = /* @__PURE__ */ new Set(["\u0628\u0627\u0646\u06A9 \u062A\u0645\u0631\u06CC\u0646", "\u0628\u0627\u0646\u06A9 \u062A\u0645\u0631\u06CC\u0646\u0647\u0627", "\u0628\u0627\u0646\u06A9 \u062A\u0645\u0631\u06CC\u0646 \u0647\u0627", "\u0628\u0627\u0646\u06A9\u062A\u0645\u0631\u06CC\u0646", "\u0628\u0627\u0646\u06A9\u062A\u0645\u0631\u06CC\u0646\u0647\u0627", "\u06A9\u0627\u0631\u062A\u200C\u0647\u0627\u06CC \u0622\u0645\u0627\u062F\u0647", "\u06A9\u0627\u0631\u062A \u0647\u0627\u06CC \u0622\u0645\u0627\u062F\u0647", "\u06A9\u0627\u0631\u062A\u0647\u0627\u06CC \u0622\u0645\u0627\u062F\u0647", "\u06A9\u0627\u0631\u062A\u200C\u0647\u0627\u06CC \u0622\u0645\u0627\u062F\u0647\u0647\u0627", "\u06A9\u0627\u0631\u062A\u200C\u0647\u0627\u06CC \u0622\u0645\u0627\u062F\u0647 \u0647\u0627", "\u06A9\u0627\u0631\u062A\u0647\u0627\u06CC\u0622\u0645\u0627\u062F\u0647"]);
 var CONTACT_LABELS = /* @__PURE__ */ new Set(["\u0634\u0645\u0627\u0631\u0647 \u062A\u0645\u0627\u0633", "\u0634\u0645\u0627\u0631\u0647\u0654 \u062A\u0645\u0627\u0633", "\u062A\u0645\u0627\u0633 \u0628\u0627 \u0645\u0627", "\u0631\u0627\u0647\u200C\u0647\u0627\u06CC \u0627\u0631\u062A\u0628\u0627\u0637\u06CC", "\u0631\u0627\u0647 \u0647\u0627\u06CC \u0627\u0631\u062A\u0628\u0627\u0637\u06CC", "\u0631\u0627\u0647\u0647\u0627\u06CC \u0627\u0631\u062A\u0628\u0627\u0637\u06CC", "\u0627\u0631\u062A\u0628\u0627\u0637 \u0628\u0627 \u0645\u0627"]);
 var FILES_LABELS = /* @__PURE__ */ new Set(["\u0641\u0627\u06CC\u0644\u200C\u0647\u0627\u06CC \u0622\u0645\u0648\u0632\u0634\u06CC", "\u0641\u0627\u06CC\u0644\u0647\u0627\u06CC \u0622\u0645\u0648\u0632\u0634\u06CC", "\u0641\u0627\u06CC\u0644 \u0647\u0627\u06CC \u0622\u0645\u0648\u0632\u0634\u06CC"]);
+var ACTIVITIES_LABELS = /* @__PURE__ */ new Set(["\u062A\u0645\u0631\u06CC\u0646\u200C\u0647\u0627 \u0648 \u06A9\u0627\u0631\u062A\u200C\u0647\u0627", "\u062A\u0645\u0631\u06CC\u0646 \u0647\u0627 \u0648 \u06A9\u0627\u0631\u062A \u0647\u0627", "\u062A\u0645\u0631\u06CC\u0646\u0647\u0627 \u0648 \u06A9\u0627\u0631\u062A\u0647\u0627", "\u062A\u0645\u0631\u06CC\u0646\u200C\u0647\u0627 \u0648 \u06A9\u0627\u0631\u062A\u200C\u0647\u0627\u06CC \u0622\u0645\u0627\u062F\u0647", "\u062A\u0645\u0631\u06CC\u0646\u0647\u0627 \u0648 \u06A9\u0627\u0631\u062A\u0647\u0627\u06CC \u0627\u0645\u0627\u062F\u0647", "\u06A9\u0627\u0631\u062A\u200C\u0647\u0627\u06CC \u0622\u0645\u0627\u062F\u0647\u0654 \u0645\u0631\u06A9\u0632"]);
 var SERVICES_LABELS = /* @__PURE__ */ new Set(["\u062E\u062F\u0645\u0627\u062A \u0645\u0631\u06A9\u0632", "\u0645\u0639\u0631\u0641\u06CC \u062E\u062F\u0645\u0627\u062A \u0645\u0631\u06A9\u0632", "\u0645\u0639\u0631\u0641\u06CC \u062E\u062F\u0645\u0627\u062A", "\u062E\u062F\u0645\u0627\u062A"]);
+var REFERRAL_LABELS = /* @__PURE__ */ new Set(["\u0645\u0639\u0631\u0641\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632", "\u0645\u0639\u0631\u0641\u06CC \u062F\u0627\u0646\u0634 \u0622\u0645\u0648\u0632", "\u0645\u0639\u0631\u0641\u06CC \u062F\u0627\u0646\u0634\u0622\u0645\u0648\u0632", "\u062B\u0628\u062A \u0645\u0639\u0631\u0641\u06CC", "\u0645\u0639\u0631\u0641\u06CC \u0628\u0647 \u0645\u0631\u06A9\u0632"]);
 var AUTH_LABELS = /* @__PURE__ */ new Set(["\u0627\u062D\u0631\u0627\u0632 \u0647\u0648\u06CC\u062A", "\u0648\u0631\u0648\u062F \u0628\u0647 \u0628\u0627\u062A", "\u0627\u062A\u0635\u0627\u0644 \u06AF\u0641\u062A\u06AF\u0648", "\u0627\u062A\u0635\u0627\u0644"]);
 var PENDING_HW_LABELS = /* @__PURE__ */ new Set(["\u062A\u0645\u0631\u06CC\u0646\u200C\u0647\u0627\u06CC \u0627\u0646\u062C\u0627\u0645\u200C\u0646\u0634\u062F\u0647", "\u062A\u0645\u0631\u06CC\u0646\u0647\u0627\u06CC \u0627\u0646\u062C\u0627\u0645 \u0646\u0634\u062F\u0647", "\u062A\u0645\u0631\u06CC\u0646 \u0647\u0627\u06CC \u0627\u0646\u062C\u0627\u0645 \u0646\u0634\u062F\u0647", "\u062A\u0645\u0631\u06CC\u0646\u0647\u0627\u06CC \u0627\u0646\u062C\u0627\u0645\u0646\u0634\u062F\u0647", "\u062A\u06A9\u0644\u06CC\u0641\u200C\u0647\u0627\u06CC \u0627\u0646\u062C\u0627\u0645\u200C\u0646\u0634\u062F\u0647", "\u062A\u06A9\u0644\u06CC\u0641\u0647\u0627\u06CC \u0627\u0646\u062C\u0627\u0645 \u0646\u0634\u062F\u0647", "\u062A\u06A9\u0644\u06CC\u0641\u0647\u0627\u06CC \u0627\u0646\u062C\u0627\u0645\u0646\u0634\u062F\u0647"]);
 var CLASS_ACTIVITY_LABELS = /* @__PURE__ */ new Set(["\u0641\u0639\u0627\u0644\u06CC\u062A \u06A9\u0644\u0627\u0633", "\u0641\u0639\u0627\u0644\u06CC\u062A \u0647\u0627\u06CC \u06A9\u0644\u0627\u0633", "\u0641\u0639\u0627\u0644\u06CC\u062A\u200C\u0647\u0627\u06CC \u06A9\u0644\u0627\u0633", "\u0641\u0639\u0627\u0644\u06CC\u062A\u0647\u0627\u06CC \u06A9\u0644\u0627\u0633"]);
@@ -25932,11 +26102,13 @@ function parseBotUpdate(update) {
   if (EXB_LABELS.has(menuText)) return { kind: "exb_root", chatId: chatIdStr };
   if (CONTACT_LABELS.has(menuText)) return { kind: "contact", chatId: chatIdStr };
   if (FILES_LABELS.has(menuText)) return { kind: "public_files", chatId: chatIdStr };
+  if (ACTIVITIES_LABELS.has(menuText)) return { kind: "activities", chatId: chatIdStr };
   if (SERVICES_LABELS.has(menuText)) return { kind: "services", chatId: chatIdStr };
   if (AUTH_LABELS.has(menuText)) return { kind: "auth_guide", chatId: chatIdStr };
   if (PENDING_HW_LABELS.has(menuText)) return { kind: "pending_homework", chatId: chatIdStr };
   if (CLASS_ACTIVITY_LABELS.has(menuText)) return { kind: "class_activity", chatId: chatIdStr };
   if (AWARENESS_LABELS.has(menuText)) return { kind: "awareness_root", chatId: chatIdStr };
+  if (REFERRAL_LABELS.has(menuText)) return { kind: "referral_root", chatId: chatIdStr };
   if (CLASS_APPTS_LABELS.has(menuText)) return { kind: "my_next", chatId: chatIdStr };
   if (CLF_LIST_LABELS.has(menuText)) return { kind: "clf_list", chatId: chatIdStr };
   if (!text.startsWith("/")) {
@@ -25980,6 +26152,9 @@ function parseBotUpdate(update) {
       return { kind: "contact", chatId: chatIdStr };
     case "/files":
       return { kind: "public_files", chatId: chatIdStr };
+    case "/activities":
+      return { kind: "activities", chatId: chatIdStr };
+    // ۱.۲۷.۳۸
     case "/services":
       return { kind: "services", chatId: chatIdStr };
     case "/auth":
@@ -25990,6 +26165,8 @@ function parseBotUpdate(update) {
       return { kind: "class_activity", chatId: chatIdStr };
     case "/awareness":
       return { kind: "awareness_root", chatId: chatIdStr };
+    case "/referral":
+      return { kind: "referral_root", chatId: chatIdStr };
     case "/checklist":
       return { kind: "clf_list", chatId: chatIdStr };
     case "/link": {
@@ -26122,6 +26299,271 @@ function inPlaceholders(count) {
   return new Array(count).fill("?").join(", ");
 }
 __name(inPlaceholders, "inPlaceholders");
+
+// src/domain/assessment-blocks/service.ts
+var newId = /* @__PURE__ */ __name(() => crypto.randomUUID(), "newId");
+function rowToBlock(r) {
+  let therapistIds = [];
+  try {
+    const parsed = JSON.parse(r.therapist_ids ?? "[]");
+    if (Array.isArray(parsed)) therapistIds = parsed.filter((x) => typeof x === "string");
+  } catch {
+    therapistIds = [];
+  }
+  return {
+    id: r.id,
+    date: r.block_date,
+    startMinute: r.start_minute,
+    endMinute: r.end_minute,
+    therapistIds,
+    note: r.note ?? null,
+    version: r.version,
+    createdBy: r.created_by ?? null,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at
+  };
+}
+__name(rowToBlock, "rowToBlock");
+function tehranYmdsSpanned(startAt, endAt) {
+  const out = /* @__PURE__ */ new Set();
+  out.add(tehranYmdOf(startAt));
+  const innerEnd = new Date(Math.max(Date.parse(endAt) - 1, Date.parse(startAt))).toISOString();
+  out.add(tehranYmdOf(innerEnd));
+  return [...out];
+}
+__name(tehranYmdsSpanned, "tehranYmdsSpanned");
+async function findAssessmentBlockConflict(db, window, targetStaffId) {
+  const startMs = Date.parse(window.startAt);
+  const endMs = Date.parse(window.endAt);
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return null;
+  for (const ymd of tehranYmdsSpanned(window.startAt, window.endAt)) {
+    const rows = await db.query(
+      "SELECT * FROM assessment_blocks WHERE block_date = ? AND deleted_at IS NULL",
+      [ymd]
+    );
+    for (const row of rows) {
+      const blockWin = tehranMinuteWindow(ymd, row.start_minute, row.end_minute);
+      const blockStart = Date.parse(blockWin.start);
+      const blockEnd = Date.parse(blockWin.end);
+      if (blockStart >= endMs || blockEnd <= startMs) continue;
+      const block = rowToBlock(row);
+      if (block.therapistIds.length > 0) {
+        if (targetStaffId && block.therapistIds.includes(targetStaffId)) {
+          return { block, kind: "involved" };
+        }
+        continue;
+      }
+      return { block, kind: "time_only" };
+    }
+  }
+  return null;
+}
+__name(findAssessmentBlockConflict, "findAssessmentBlockConflict");
+async function assertNoAssessmentBlockInRange(db, window, actor, targetStaffId) {
+  const hit = await findAssessmentBlockConflict(db, window, targetStaffId);
+  if (!hit) return;
+  const when = `(${minuteToLabel(hit.block.startMinute)} \u062A\u0627 ${minuteToLabel(hit.block.endMinute)})`;
+  if (hit.kind === "involved") {
+    throw new ValidationError(
+      `\u0627\u06CC\u0646 \u0628\u0627\u0632\u0647 \u0628\u0631\u0627\u06CC \xAB\u0633\u0646\u062C\u0634\xBB \u0631\u0632\u0631\u0648 \u0634\u062F\u0647 \u0627\u0633\u062A ${when} \u2014 \u0646\u0648\u0628\u062A\u200C\u06AF\u06CC\u0631\u06CC\u0650 \u062F\u0631\u0645\u0627\u0646\u06AF\u0631\u0650 \u062F\u0631\u06AF\u06CC\u0631 \u062F\u0631 \u0627\u06CC\u0646 \u0632\u0645\u0627\u0646 \u0645\u0645\u06A9\u0646 \u0646\u06CC\u0633\u062A.`
+    );
+  }
+  if (actor.role === "manager" || actor.role === "supervisor") return;
+  throw new ValidationError(
+    `\u0627\u06CC\u0646 \u0628\u0627\u0632\u0647 \u0628\u0631\u0627\u06CC \xAB\u0633\u0646\u062C\u0634\xBB \u0631\u0632\u0631\u0648 \u0634\u062F\u0647 \u0627\u0633\u062A ${when} \u2014 \u062B\u0628\u062A \u06CC\u0627 \u062C\u0627\u0628\u0647\u200C\u062C\u0627\u06CC\u06CC \u0646\u0648\u0628\u062A \u062F\u0631 \u0627\u06CC\u0646 \u0632\u0645\u0627\u0646 \u0645\u0645\u06A9\u0646 \u0646\u06CC\u0633\u062A\u061B \u0628\u0627 \u0645\u062F\u06CC\u0631 \u0647\u0645\u0627\u0647\u0646\u06AF \u06A9\u0646\u06CC\u062F.`
+  );
+}
+__name(assertNoAssessmentBlockInRange, "assertNoAssessmentBlockInRange");
+function createAssessmentBlockService(deps) {
+  const { db, audit, logger } = deps;
+  const service = {
+    async create(input2, actor) {
+      if (input2.endMinute <= input2.startMinute) {
+        throw new ValidationError("\u067E\u0627\u06CC\u0627\u0646 \u0628\u0627\u0632\u0647\u0654 \u0633\u0646\u062C\u0634 \u0628\u0627\u06CC\u062F \u0628\u0639\u062F \u0627\u0632 \u0634\u0631\u0648\u0639 \u0622\u0646 \u0628\u0627\u0634\u062F");
+      }
+      const therapistIds = [...new Set(input2.therapistIds)];
+      if (therapistIds.length > 0) {
+        let knownCount = 0;
+        for (const chunk of inParamChunks(therapistIds)) {
+          const known = await db.query(
+            `SELECT id FROM staff WHERE id IN (${inPlaceholders(chunk.length)})`,
+            chunk
+          );
+          knownCount += known.length;
+        }
+        if (knownCount !== therapistIds.length) {
+          throw new ValidationError("\u06CC\u06A9 \u06CC\u0627 \u0686\u0646\u062F \u062F\u0631\u0645\u0627\u0646\u06AF\u0631\u0650 \u062F\u0631\u06AF\u06CC\u0631 \u062F\u0631 \u0641\u0647\u0631\u0633\u062A \u0647\u0645\u06A9\u0627\u0631\u0627\u0646 \u0646\u06CC\u0633\u062A");
+        }
+      }
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      const created = [];
+      const perTherapistRows = therapistIds.length > 0 ? therapistIds.map((t) => [t]) : [[]];
+      await db.transaction(async (tx) => {
+        for (const single of perTherapistRows) {
+          const id = newId();
+          await tx.execute(
+            `INSERT INTO assessment_blocks (id, block_date, start_minute, end_minute, therapist_ids, note, version, created_by, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
+            [id, input2.date, input2.startMinute, input2.endMinute, JSON.stringify(single), input2.note ?? null, actor.staffId, now, now]
+          );
+          await audit.logInTransaction(tx, {
+            actorId: actor.staffId,
+            action: "assessment_block.create",
+            resourceType: "assessment_block",
+            resourceId: id,
+            changes: {
+              date: { from: null, to: input2.date },
+              window: { from: null, to: `${minuteToLabel(input2.startMinute)}-${minuteToLabel(input2.endMinute)}` },
+              therapist_ids: { from: null, to: single }
+            }
+          });
+          created.push({
+            id,
+            date: input2.date,
+            startMinute: input2.startMinute,
+            endMinute: input2.endMinute,
+            therapistIds: single,
+            note: input2.note ?? null,
+            version: 1,
+            createdBy: actor.staffId,
+            createdAt: now,
+            updatedAt: now
+          });
+        }
+      });
+      logger.child("assessment-blocks").info("block.created", { date: input2.date, cards: created.length });
+      return created;
+    },
+    /* ۱.۲۷.۱۵ — پچ کارت سنجش (خواست کارفرما): درگ/دراپ روی تقویم، کش‌دادن پایان، پرتاب به
+       ستون درمانگر دیگر و ذخیرهٔ جزئیات از مودال کلیکِ کارت — قفل خوش‌بینانهٔ نسخه، هم‌الگوی
+       update/move سرویس نوبت. سدِ نوبت‌ها (findAssessmentBlockConflict) از ردیفِ به‌روزشده
+       خودکار پیروی می‌کند؛ تداخل بین خودِ بلوک‌ها مثل قبل آزاد است (پاریتی با create). */
+    async update(id, patch, actor) {
+      const row = await db.queryOne(
+        "SELECT * FROM assessment_blocks WHERE id = ? AND deleted_at IS NULL",
+        [id]
+      );
+      if (!row) throw new NotFoundError("\u0628\u0644\u0648\u06A9 \u0633\u0646\u062C\u0634");
+      if (row.version !== patch.version) {
+        throw new ConflictError("\u0627\u06CC\u0646 \u0628\u0627\u0632\u0647\u0654 \u0633\u0646\u062C\u0634 \u0647\u0645\u06CC\u0646 \u0627\u0644\u0627\u0646 \u062A\u0648\u0633\u0637 \u06A9\u0627\u0631\u0628\u0631 \u062F\u06CC\u06AF\u0631\u06CC \u062A\u063A\u06CC\u06CC\u0631 \u06A9\u0631\u062F.", row.version);
+      }
+      const date5 = patch.date ?? row.block_date;
+      const startMinute = patch.startMinute ?? row.start_minute;
+      const endMinute = patch.endMinute ?? row.end_minute;
+      if (endMinute <= startMinute) {
+        throw new ValidationError("\u067E\u0627\u06CC\u0627\u0646 \u0628\u0627\u0632\u0647\u0654 \u0633\u0646\u062C\u0634 \u0628\u0627\u06CC\u062F \u0628\u0639\u062F \u0627\u0632 \u0634\u0631\u0648\u0639 \u0622\u0646 \u0628\u0627\u0634\u062F");
+      }
+      const prevIds = rowToBlock(row).therapistIds;
+      const therapistIds = patch.staffId !== void 0 ? [patch.staffId] : prevIds;
+      if (patch.staffId !== void 0) {
+        const known = await db.queryOne("SELECT id FROM staff WHERE id = ?", [patch.staffId]);
+        if (!known) throw new ValidationError("\u062F\u0631\u0645\u0627\u0646\u06AF\u0631\u0650 \u0645\u0642\u0635\u062F \u062F\u0631 \u0641\u0647\u0631\u0633\u062A \u0647\u0645\u06A9\u0627\u0631\u0627\u0646 \u0646\u06CC\u0633\u062A");
+      }
+      const note = patch.note === void 0 ? row.note ?? null : (patch.note ?? "").trim().length > 0 ? patch.note.trim() : null;
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      await db.transaction(async (tx) => {
+        await tx.execute(
+          `UPDATE assessment_blocks
+             SET block_date = ?, start_minute = ?, end_minute = ?, therapist_ids = ?, note = ?, version = version + 1, updated_at = ?
+           WHERE id = ?`,
+          [date5, startMinute, endMinute, JSON.stringify(therapistIds), note, now, id]
+        );
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: "assessment_block.update",
+          resourceType: "assessment_block",
+          resourceId: id,
+          changes: {
+            date: { from: row.block_date, to: date5 },
+            window: {
+              from: `${minuteToLabel(row.start_minute)}-${minuteToLabel(row.end_minute)}`,
+              to: `${minuteToLabel(startMinute)}-${minuteToLabel(endMinute)}`
+            },
+            therapist_ids: { from: prevIds, to: therapistIds },
+            note: { from: row.note, to: note }
+          }
+        });
+      });
+      logger.child("assessment-blocks").info("block.updated", { id, movedDay: date5 !== row.block_date });
+      const fresh = await db.queryOne("SELECT * FROM assessment_blocks WHERE id = ?", [id]);
+      return rowToBlock(fresh);
+    },
+    async list(from, to) {
+      const rows = await db.query(
+        "SELECT * FROM assessment_blocks WHERE deleted_at IS NULL AND block_date >= ? AND block_date <= ? ORDER BY block_date, start_minute",
+        [from ?? "0000-01-01", to ?? "9999-12-31"]
+      );
+      return rows.map(rowToBlock);
+    },
+    async remove(id, actor) {
+      const row = await db.queryOne("SELECT * FROM assessment_blocks WHERE id = ? AND deleted_at IS NULL", [id]);
+      if (!row) throw new NotFoundError("\u0628\u0644\u0648\u06A9 \u0633\u0646\u062C\u0634");
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      await db.execute(
+        `UPDATE assessment_blocks SET deleted_at = ?, updated_at = ?, version = version + 1 WHERE id = ?`,
+        [now, now, id]
+      );
+      await audit.log({
+        actorId: actor.staffId,
+        action: "assessment_block.remove",
+        resourceType: "assessment_block",
+        resourceId: id,
+        changes: {
+          date: { from: row.block_date, to: row.block_date }
+        }
+      });
+    }
+  };
+  return service;
+}
+__name(createAssessmentBlockService, "createAssessmentBlockService");
+
+// src/domain/assessment-blocks/routes.ts
+function registerAssessmentBlockRoutes(app, service) {
+  app.get("/api/assessment-blocks", async (c) => {
+    getAuthContext(c);
+    const items = await service.list(c.req.query("from") || void 0, c.req.query("to") || void 0);
+    return c.json({ data: items }, 200);
+  });
+  app.post("/api/assessment-blocks", requireRole("manager"), async (c) => {
+    const actor = getAuthContext(c);
+    const body = AssessmentBlockCreateSchema.parse(await c.req.json());
+    const blocks = await service.create(
+      {
+        date: body.date,
+        startMinute: body.start_minute,
+        endMinute: body.end_minute,
+        therapistIds: body.therapist_ids,
+        note: body.note ?? null
+      },
+      actor
+    );
+    return c.json({ data: blocks }, 201);
+  });
+  app.patch("/api/assessment-blocks/:id", requireRole("manager"), async (c) => {
+    const actor = getAuthContext(c);
+    const body = AssessmentBlockPatchSchema.parse(await c.req.json());
+    const block = await service.update(
+      c.req.param("id"),
+      {
+        date: body.date,
+        startMinute: body.start_minute,
+        endMinute: body.end_minute,
+        staffId: body.staff_id,
+        note: body.note === void 0 ? void 0 : body.note ?? null,
+        version: body.version
+      },
+      actor
+    );
+    return c.json({ data: block }, 200);
+  });
+  app.delete("/api/assessment-blocks/:id", requireRole("manager"), async (c) => {
+    const actor = getAuthContext(c);
+    await service.remove(c.req.param("id"), actor);
+    return c.body(null, 204);
+  });
+}
+__name(registerAssessmentBlockRoutes, "registerAssessmentBlockRoutes");
 
 // src/domain/appointment-core/repository.ts
 function rowToAppointment(row, students) {
@@ -26280,6 +26722,16 @@ async function copyWeek(ctx) {
       });
       continue;
     }
+    const blockHit = await findAssessmentBlockConflict(db, { startAt: newStart, endAt: newEnd }, row.staff_id);
+    if (blockHit && (blockHit.kind === "involved" || actor.role !== "manager" && actor.role !== "supervisor")) {
+      conflicts.push({
+        type: "assessment_block",
+        staffId: row.staff_id,
+        proposedStartAt: newStart,
+        proposedEndAt: newEnd
+      });
+      continue;
+    }
     toCopy.push({ row, startAt: newStart, endAt: newEnd });
   }
   if (input2.dryRun) {
@@ -26287,15 +26739,15 @@ async function copyWeek(ctx) {
   }
   await db.transaction(async (tx) => {
     for (const item of toCopy) {
-      const newId = crypto.randomUUID();
+      const newId2 = crypto.randomUUID();
       await tx.execute(
         `INSERT INTO appointments (id, staff_id, start_at, end_at, status, session_type, note, version, batch_id, created_by)
          VALUES (?, ?, ?, ?, 'scheduled', ?, ?, 1, ?, ?)`,
-        [newId, item.row.staff_id, item.startAt, item.endAt, item.row.session_type, item.row.note, batchId, actor.staffId]
+        [newId2, item.row.staff_id, item.startAt, item.endAt, item.row.session_type, item.row.note, batchId, actor.staffId]
       );
       for (const s of studentsByAppt.get(item.row.id) ?? []) {
         await tx.execute(`INSERT INTO appointment_students (appointment_id, student_id, facet_id) VALUES (?, ?, ?)`, [
-          newId,
+          newId2,
           s.student_id,
           s.facet_id
         ]);
@@ -26518,6 +26970,7 @@ function createAppointmentService(deps) {
       }
       assertAppointmentScope(actor, input2.staffId);
       await assertStudentsInScope(tx, actor, input2.students.map((s) => s.studentId));
+      await assertNoAssessmentBlockInRange(tx, { startAt: input2.startAt, endAt: input2.endAt }, actor, input2.staffId);
       const id = crypto.randomUUID();
       await tx.execute(
         `INSERT INTO appointments (id, staff_id, start_at, end_at, status, session_type, note, version, created_by)
@@ -26620,6 +27073,7 @@ function createAppointmentService(deps) {
       const durationMin = (Date.parse(current.endAt) - Date.parse(current.startAt)) / 6e4;
       const newEndAt = addMinutes(newStartAt, durationMin);
       await db.transaction(async (tx) => {
+        await assertNoAssessmentBlockInRange(tx, { startAt: newStartAt, endAt: newEndAt }, actor, current.staffId);
         await tx.execute(
           `UPDATE appointments SET start_at = ?, end_at = ?, version = version + 1, updated_at = datetime('now') WHERE id = ? AND version = ?`,
           [newStartAt, newEndAt, id, version2]
@@ -26662,6 +27116,7 @@ function createAppointmentService(deps) {
         throw new ValidationError("\u0632\u0645\u0627\u0646 \u067E\u0627\u06CC\u0627\u0646 \u0628\u0627\u06CC\u062F \u0631\u0648\u06CC \u0634\u0628\u06A9\u0647 \u06F1\u06F5 \u062F\u0642\u06CC\u0642\u0647\u200C\u0627\u06CC \u0628\u0627\u0634\u062F");
       }
       await db.transaction(async (tx) => {
+        await assertNoAssessmentBlockInRange(tx, { startAt: current.startAt, endAt: newEndAt }, actor, current.staffId);
         await tx.execute(
           `UPDATE appointments SET end_at = ?, version = version + 1, updated_at = datetime('now') WHERE id = ? AND version = ?`,
           [newEndAt, id, version2]
@@ -27048,7 +27503,7 @@ function createAttendanceService(deps) {
       return { appointmentId, studentId, status };
     },
     async listPending(staffId) {
-      const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+      const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
       const sql = `
         SELECT s.appointment_id, s.student_id, st.first_name || ' ' || st.last_name AS student_name,
                a.staff_id, a.start_at, a.end_at
@@ -27061,7 +27516,7 @@ function createAttendanceService(deps) {
            ${staffId ? "AND a.staff_id = ?" : ""}
          ORDER BY a.start_at DESC
          LIMIT 200`;
-      const params = staffId ? [nowIso, staffId] : [nowIso];
+      const params = staffId ? [nowIso2, staffId] : [nowIso2];
       const rows = await db.query(sql, params);
       return rows.map((r) => ({
         appointmentId: r.appointment_id,
@@ -27244,14 +27699,14 @@ function createStaffAttendanceService(deps) {
         `SELECT id, staff_id, date, status, note, updated_at FROM staff_attendance WHERE staff_id = ? AND date = ?`,
         [input2.staffId, input2.date]
       );
-      const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+      const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
       let recordId = "";
       await db.transaction(async (tx) => {
         if (existing) {
           recordId = existing.id;
           await tx.execute(
             `UPDATE staff_attendance SET status = ?, note = COALESCE(?, note), updated_at = ? WHERE id = ?`,
-            [input2.status, input2.note ?? null, nowIso, existing.id]
+            [input2.status, input2.note ?? null, nowIso2, existing.id]
           );
           await audit.logInTransaction(tx, {
             actorId: actor.staffId,
@@ -27267,7 +27722,7 @@ function createStaffAttendanceService(deps) {
           await tx.execute(
             `INSERT INTO staff_attendance (id, staff_id, date, status, note, created_at, updated_at)
              VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [recordId, input2.staffId, input2.date, input2.status, input2.note ?? null, nowIso, nowIso]
+            [recordId, input2.staffId, input2.date, input2.status, input2.note ?? null, nowIso2, nowIso2]
           );
           await audit.logInTransaction(tx, {
             actorId: actor.staffId,
@@ -28227,7 +28682,7 @@ function createStudentProfileService(deps) {
         if (!owner || owner.active !== 1) throw new NotFoundError("\u0647\u0645\u06A9\u0627\u0631");
       }
       const active = input2.archived ? 0 : 1;
-      const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+      const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
       await tx.execute(
         `INSERT INTO students (id, national_id, first_name, last_name, birth_date, gender, grade, school_id, class_id,
                                guardian_name, guardian_relation, guardian_phone, owner_staff_id, active, pathway)
@@ -28283,7 +28738,7 @@ function createStudentProfileService(deps) {
         active: active === 1,
         ownerStaffId: input2.ownerStaffId ?? null,
         pathway: input2.pathway ?? null,
-        createdAt: nowIso
+        createdAt: nowIso2
       };
       return student;
     },
@@ -28653,9 +29108,9 @@ function createStudentProfileService(deps) {
         if (count > 0) blocks.push({ key, label: STUDENT_DELETE_LABELS[key] ?? key, count });
       }
       const asm = await db.queryOne(`SELECT COUNT(*) AS cnt FROM assessments WHERE student_id = ?`, [id]);
-      if ((asm?.cnt ?? 0) > 0) hardBlocks.push({ key: "assessment", label: STUDENT_DELETE_LABELS.assessment, count: asm.cnt });
+      if (asm && asm.cnt > 0) hardBlocks.push({ key: "assessment", label: STUDENT_DELETE_LABELS.assessment, count: asm.cnt });
       const don = await db.queryOne(`SELECT COUNT(*) AS cnt FROM finance_donations WHERE student_id = ?`, [id]);
-      if ((don?.cnt ?? 0) > 0) hardBlocks.push({ key: "donation", label: STUDENT_DELETE_LABELS.donation, count: don.cnt });
+      if (don && don.cnt > 0) hardBlocks.push({ key: "donation", label: STUDENT_DELETE_LABELS.donation, count: don.cnt });
       return {
         studentId: id,
         fullName,
@@ -28835,20 +29290,20 @@ function createStudentProfileService(deps) {
       const entryId = await db.transaction(async (tx) => {
         const student = await tx.queryOne(`SELECT id FROM students WHERE id = ?`, [studentId]);
         if (!student) throw new NotFoundError("\u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632");
-        const newId = crypto.randomUUID();
+        const newId2 = crypto.randomUUID();
         await tx.execute(
           `INSERT INTO student_education_history (id, student_id, study_year, school_name, level, notes, created_by, created_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%d %H:%M:%f','now'))`,
-          [newId, studentId, input2.studyYear, input2.schoolName ?? null, input2.level ?? null, input2.notes ?? null, actor.staffId ?? null]
+          [newId2, studentId, input2.studyYear, input2.schoolName ?? null, input2.level ?? null, input2.notes ?? null, actor.staffId ?? null]
         );
         await audit.logInTransaction(tx, {
           actorId: actor.staffId,
           action: "student.education_history.add",
           resourceType: "student",
           resourceId: studentId,
-          changes: { entry_id: { from: null, to: newId }, study_year: { from: null, to: input2.studyYear } }
+          changes: { entry_id: { from: null, to: newId2 }, study_year: { from: null, to: input2.studyYear } }
         });
-        return newId;
+        return newId2;
       });
       logger.child("student").info("student.education_history.added", { studentId });
       const row = await db.queryOne(
@@ -28902,19 +29357,19 @@ function createStudentProfileService(deps) {
           [studentId, name]
         );
         if (dup) throw new ConflictError("\u0627\u06CC\u0646 \u0645\u0639\u0644\u0645 \u0642\u0628\u0644\u0627\u064B \u0631\u0648\u06CC \u067E\u0631\u0648\u0646\u062F\u0647 \u062B\u0628\u062A \u0634\u062F\u0647 \u0627\u0633\u062A");
-        const newId = crypto.randomUUID();
+        const newId2 = crypto.randomUUID();
         await tx.execute(
           `INSERT INTO student_teachers (id, student_id, name, class_label, contact) VALUES (?, ?, ?, ?, ?)`,
-          [newId, studentId, name, classLabel, contact]
+          [newId2, studentId, name, classLabel, contact]
         );
         await audit.logInTransaction(tx, {
           actorId: actor.staffId,
           action: "student.teachers.add",
           resourceType: "student",
           resourceId: studentId,
-          changes: { teacher_id: { from: null, to: newId }, name: { from: null, to: name } }
+          changes: { teacher_id: { from: null, to: newId2 }, name: { from: null, to: name } }
         });
-        return newId;
+        return newId2;
       });
       logger.child("student").info("student.teachers.added", { studentId });
       const row = await db.queryOne(
@@ -29088,6 +29543,19 @@ var StudentTeacherSchema = external_exports.object({
   contact: external_exports.string().max(60).optional()
 });
 function registerRoutes3(app, service) {
+  app.get("/public/partner-schools", async (c) => {
+    const schools = await service.listSchools({ active: true });
+    const classes = await service.listClasses({ active: true });
+    return c.json(
+      {
+        data: {
+          schools: schools.map((s) => ({ id: s.id, name: s.name })),
+          classes: classes.map((cl) => ({ id: cl.id, schoolId: cl.schoolId, name: cl.name }))
+        }
+      },
+      200
+    );
+  });
   app.post("/api/schools", requireRole("manager"), async (c) => {
     const actor = getAuthContext(c);
     const body = NewSchoolSchema.parse(await c.req.json());
@@ -29921,8 +30389,8 @@ function createStudentTimelineService(db) {
       const merged = mergeTimelineEvents(raw2);
       const filtered = filterTimelineEvents(merged, filters);
       const { page: page2, hasMore } = paginateTimeline(filtered, filters.limit, filters.offset);
-      const nowIso = (/* @__PURE__ */ new Date()).toISOString();
-      const nextApptRow = appts.filter((a) => a.status === "scheduled" && a.start_at > nowIso).sort((a, b) => a.start_at < b.start_at ? -1 : 1)[0] ?? null;
+      const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
+      const nextApptRow = appts.filter((a) => a.status === "scheduled" && a.start_at > nowIso2).sort((a, b) => a.start_at < b.start_at ? -1 : 1)[0] ?? null;
       const nextAppt = nextApptRow ? { id: nextApptRow.id, startAt: nextApptRow.start_at, staffName: nextApptRow.staff_name } : null;
       const openFus = followups.filter((f) => FOLLOWUP_OPEN_STATUSES.includes(f.status)).map((f) => ({ id: f.id, title: f.title, dueAt: f.due_at }));
       const nextAction = deriveNextAction(nextAppt, openFus);
@@ -29995,8 +30463,8 @@ var ATTENTION_REASONS = [
 var DAY_MS2 = 864e5;
 var LONG_OPEN_FOLLOWUP_DAYS = 30;
 var RECENT_SESSION_DAYS = 30;
-function deriveAttentionReasons(input2, nowIso) {
-  const now = Date.parse(nowIso);
+function deriveAttentionReasons(input2, nowIso2) {
+  const now = Date.parse(nowIso2);
   const computed = [];
   const hasOverdue = input2.openFollowups.some((f) => f.dueAt !== null && Date.parse(f.dueAt) < now);
   if (hasOverdue) computed.push("overdue_followup");
@@ -30104,7 +30572,7 @@ function createSpecialNeedsService(deps) {
     return map2;
   }
   __name(openFollowupsOf, "openFollowupsOf");
-  async function sessionsOf(studentIds, nowIso) {
+  async function sessionsOf(studentIds, nowIso2) {
     const map2 = /* @__PURE__ */ new Map();
     if (studentIds.length === 0) return map2;
     const rows = [];
@@ -30117,14 +30585,14 @@ function createSpecialNeedsService(deps) {
          JOIN appointments a ON a.id = a_s.appointment_id
         WHERE a_s.student_id IN (${inPlaceholders(chunk.length)})
         GROUP BY a_s.student_id`,
-        [nowIso, nowIso, ...chunk]
+        [nowIso2, nowIso2, ...chunk]
       ));
     }
     for (const r of rows) map2.set(r.student_id, r);
     return map2;
   }
   __name(sessionsOf, "sessionsOf");
-  function toAttentionStudent(row, nowIso, fus, sessions) {
+  function toAttentionStudent(row, nowIso2, fus, sessions) {
     const reasons = deriveAttentionReasons(
       {
         caseStatus: row.case_status ?? null,
@@ -30133,7 +30601,7 @@ function createSpecialNeedsService(deps) {
         nextSessionAt: sessions?.next_upcoming ?? null,
         openFollowups: fus
       },
-      nowIso
+      nowIso2
     );
     return {
       student: {
@@ -30156,7 +30624,7 @@ function createSpecialNeedsService(deps) {
   __name(toAttentionStudent, "toAttentionStudent");
   return {
     async grid(filters, _actor) {
-      const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+      const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
       const conditions = [`s.active = 1`, `s.special_need_type IS NOT NULL`];
       const params = [];
       if (filters.schoolId) {
@@ -30204,7 +30672,7 @@ function createSpecialNeedsService(deps) {
       );
       const specialIds = specialRows.map((r) => r.id);
       const fus = await openFollowupsOf(specialIds);
-      const sessions = await sessionsOf(specialIds, nowIso);
+      const sessions = await sessionsOf(specialIds, nowIso2);
       const schoolMap = /* @__PURE__ */ new Map();
       const cellKey = /* @__PURE__ */ __name((grade) => grade ?? "\u2014", "cellKey");
       const gradesSet = /* @__PURE__ */ new Set();
@@ -30237,7 +30705,7 @@ function createSpecialNeedsService(deps) {
         addSpecial(row.totals, s.special_need_severity ?? null);
         const { student, reasons } = toAttentionStudent(
           s,
-          nowIso,
+          nowIso2,
           fus.get(s.id) ?? [],
           sessions.get(s.id)
         );
@@ -30251,7 +30719,7 @@ function createSpecialNeedsService(deps) {
       const overall = [...schoolMap.values()].reduce((acc, r) => mergeCells(acc, r.totals), emptyCell());
       const attentionSorted = sortAttentionStudents(attention);
       return {
-        generatedAt: nowIso,
+        generatedAt: nowIso2,
         grades: sortGrades(gradesSet, STUDENT_GRADES),
         schools: [...schoolMap.values()].sort((a, b) => {
           const an = a.schoolName ?? "";
@@ -30264,7 +30732,7 @@ function createSpecialNeedsService(deps) {
       };
     },
     async schoolOverview(schoolId, _actor) {
-      const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+      const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
       const school = await db.queryOne(
         `SELECT id, name, kind, active FROM schools WHERE id = ?`,
         [schoolId]
@@ -30305,7 +30773,7 @@ function createSpecialNeedsService(deps) {
           WHERE c.school_id = ? AND c.active = 1 AND l.status = 'linked'`,
         [schoolId]
       );
-      const now = Date.parse(nowIso);
+      const now = Date.parse(nowIso2);
       const from30 = new Date(now - 30 * 864e5).toISOString();
       const from60 = new Date(now - 60 * 864e5).toISOString();
       const sessionsLast30 = await count(
@@ -30314,7 +30782,7 @@ function createSpecialNeedsService(deps) {
            JOIN appointment_students a_s ON a_s.appointment_id = a.id
            JOIN students s ON s.id = a_s.student_id
           WHERE s.school_id = ? AND a.status != 'cancelled' AND a.start_at > ? AND a.start_at <= ?`,
-        [schoolId, from30, nowIso]
+        [schoolId, from30, nowIso2]
       );
       const sessionsPrev30 = await count(
         `SELECT COUNT(DISTINCT a.id) AS n
@@ -30339,10 +30807,10 @@ function createSpecialNeedsService(deps) {
       );
       const ids = specialRows.map((r) => r.id);
       const fus = await openFollowupsOf(ids);
-      const sessions = await sessionsOf(ids, nowIso);
+      const sessions = await sessionsOf(ids, nowIso2);
       const attention = [];
       for (const s of specialRows) {
-        const { student, reasons } = toAttentionStudent(s, nowIso, fus.get(s.id) ?? [], sessions.get(s.id));
+        const { student, reasons } = toAttentionStudent(s, nowIso2, fus.get(s.id) ?? [], sessions.get(s.id));
         if (reasons.length > 0) attention.push(student);
       }
       return {
@@ -30449,6 +30917,17 @@ function appendNote(existing, label, text) {
 }
 __name(appendNote, "appendNote");
 
+// src/domain/waitlist/types.ts
+var REFERRAL_CATEGORY_LABELS = {
+  delayed: "\u062F\u06CC\u0631\u0622\u0645\u0648\u0632",
+  learning_disorder: "\u0627\u062E\u062A\u0644\u0627\u0644 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC",
+  intellectual: "\u0645\u0634\u06A9\u0648\u06A9 \u0628\u0647 \u06A9\u0645\u200C\u062A\u0648\u0627\u0646\u06CC",
+  behavioral: "\u0631\u0641\u062A\u0627\u0631\u06CC \u0647\u06CC\u062C\u0627\u0646\u06CC",
+  autism: "\u0627\u0631\u062C\u0627\u0639 \u0627\u062A\u06CC\u0633\u0645",
+  speech: "\u062A\u0623\u062E\u06CC\u0631 \u06AF\u0641\u062A\u0627\u0631 \u0648 \u0632\u0628\u0627\u0646",
+  other: "\u0633\u0627\u06CC\u0631"
+};
+
 // src/domain/waitlist/service.ts
 function rowToEntry(row) {
   return {
@@ -30496,6 +30975,68 @@ var SELECT_BASE = `
     LEFT JOIN students st ON st.id = w.student_id
     LEFT JOIN schools s ON s.id = COALESCE(st.school_id, w.school_id)
     LEFT JOIN classes c ON c.id = COALESCE(st.class_id, w.class_id)`;
+var REFERRAL_BY_ID = `SELECT * FROM waitlist_referrals WHERE id = ? AND deleted_at IS NULL`;
+function referralRowToDomain(row) {
+  let tags = [];
+  try {
+    const parsed = JSON.parse(row.concern_tags);
+    if (Array.isArray(parsed)) tags = parsed.filter((t) => typeof t === "string");
+  } catch {
+  }
+  let familyContext = null;
+  if (row.family_context) {
+    try {
+      const fc = JSON.parse(row.family_context);
+      familyContext = {
+        culture: typeof fc.culture === "string" ? fc.culture : null,
+        finance: typeof fc.finance === "string" ? fc.finance : null,
+        cooperation: typeof fc.cooperation === "string" ? fc.cooperation : null
+      };
+    } catch {
+      familyContext = null;
+    }
+  }
+  return {
+    id: row.id,
+    refRole: row.ref_role,
+    referrerName: row.referrer_name,
+    referrerPhone: row.referrer_phone,
+    firstName: row.first_name,
+    birthDate: row.birth_date,
+    guardianPhone: row.guardian_phone,
+    schoolText: row.school_text,
+    gradeText: row.grade_text,
+    classText: row.class_text,
+    concernCategory: row.concern_category,
+    concernTags: tags,
+    concernText: row.concern_text,
+    priorEval: row.prior_eval === null ? null : row.prior_eval === 1,
+    priorEvalNote: row.prior_eval_note,
+    familyContext,
+    channel: row.channel,
+    chatId: row.chat_id,
+    submissionGroup: row.submission_group,
+    status: row.status,
+    rejectReason: row.reject_reason,
+    waitlistId: row.waitlist_id,
+    academicYear: row.academic_year,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+__name(referralRowToDomain, "referralRowToDomain");
+function parseJalaliBirthDate(raw2) {
+  if (!raw2) return null;
+  const norm = String(raw2).replace(/[۰-۹]/g, (d) => String("\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9".indexOf(d))).replace(/[^\d/]/g, " ").trim().split(/\s+/)[0] ?? "";
+  const m = /^(\d{4})\/(\d{1,2})\/(\d{1,2})$/.exec(norm);
+  if (!m) return null;
+  const jy = Number(m[1]);
+  const jm = Number(m[2]);
+  const jd = Number(m[3]);
+  if (jy < 1300 || jy > 1500 || jm < 1 || jm > 12 || jd < 1 || jd > 31) return null;
+  return jalaliToGregorianYmd(jy, jm, jd);
+}
+__name(parseJalaliBirthDate, "parseJalaliBirthDate");
 function createWaitlistService(deps) {
   const { db, audit, logger } = deps;
   const log = logger.child("waitlist");
@@ -30505,6 +31046,18 @@ function createWaitlistService(deps) {
     return row;
   }
   __name(loadEntry, "loadEntry");
+  async function loadReferral(id) {
+    const row = await db.queryOne(REFERRAL_BY_ID, [id]);
+    if (!row) throw new NotFoundError("\u0645\u0639\u0631\u0641\u06CC");
+    return referralRowToDomain(row);
+  }
+  __name(loadReferral, "loadReferral");
+  async function loadReferralRow(id) {
+    const row = await db.queryOne(REFERRAL_BY_ID, [id]);
+    if (!row) throw new NotFoundError("\u0645\u0639\u0631\u0641\u06CC");
+    return row;
+  }
+  __name(loadReferralRow, "loadReferralRow");
   async function transitionEntry(tx, row, to, action, actorId, noteAppend) {
     if (!canTransition(row.status, to)) {
       throw new ConflictError(`\u062A\u063A\u06CC\u06CC\u0631 \u0648\u0636\u0639\u06CC\u062A \u0627\u0632 \xAB${row.status}\xBB \u0628\u0647 \xAB${to}\xBB \u0645\u062C\u0627\u0632 \u0646\u06CC\u0633\u062A`, void 0);
@@ -31031,13 +31584,1099 @@ function createWaitlistService(deps) {
           error: err instanceof Error ? err.message : String(err)
         });
       }
+    },
+    /* ─── معرفی به مرکز (v1.27.33 — REFERRAL-DESIGN.md) ───
+     * ثبت عمومی خانواده (دقیقاً یک کودک) یا معلم (ثبت دسته‌ای تا سقف) — هر کودک یک ردیف مستقل؛
+     * ضدتکرار: نام کودک + تلفن معرف در همان سال تحصیلی (به‌جز ردشده‌ها). */
+    async submitReferral(input2, meta3) {
+      if (input2.role === "family" && input2.children.length !== 1) {
+        throw new ValidationError("\u0641\u0631\u0645 \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u062F\u0642\u06CC\u0642\u0627\u064B \u06CC\u06A9 \u06A9\u0648\u062F\u06A9 \u062B\u0628\u062A \u0645\u06CC\u200C\u06A9\u0646\u062F");
+      }
+      const academicYear = currentSchoolYear();
+      const channel = input2.token ? "bot" : "web";
+      const group = input2.children.length > 1 ? crypto.randomUUID() : null;
+      const created = [];
+      for (const child of input2.children) {
+        const dup = await db.queryOne(
+          `SELECT id FROM waitlist_referrals
+            WHERE first_name = ? AND referrer_phone = ? AND academic_year = ?
+              AND status != 'rejected' AND deleted_at IS NULL`,
+          [child.first_name, input2.referrer_phone, academicYear]
+        );
+        if (dup) {
+          throw new ConflictError("\u0627\u06CC\u0646 \u06A9\u0648\u062F\u06A9 \u0642\u0628\u0644\u0627\u064B \u062B\u0628\u062A \u0634\u062F\u0647 \u0627\u0633\u062A \u2014 \u0628\u0631\u0627\u06CC \u062A\u063A\u06CC\u06CC\u0631 \u0627\u0637\u0644\u0627\u0639\u0627\u062A \u0628\u0627 \u0645\u0631\u06A9\u0632 \u062A\u0645\u0627\u0633 \u0628\u06AF\u06CC\u0631\u06CC\u062F");
+        }
+        const id = crypto.randomUUID();
+        const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
+        await db.transaction(async (tx) => {
+          await tx.execute(
+            `INSERT INTO waitlist_referrals
+               (id, ref_role, referrer_name, referrer_phone, first_name, birth_date, guardian_phone, school_text, grade_text,
+                class_text, concern_category, concern_tags, concern_text, prior_eval, prior_eval_note, family_context,
+                channel, chat_id, token, submission_group, status, academic_year, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'new', ?, ?, ?)`,
+            [
+              id,
+              input2.role,
+              input2.referrer_name,
+              input2.referrer_phone,
+              child.first_name,
+              parseJalaliBirthDate(child.birth_date_text) ?? child.birth_date ?? null,
+              child.guardian_phone ?? null,
+              child.school_text ?? input2.school_text ?? null,
+              child.grade_text ?? input2.grade_text ?? null,
+              child.class_text ?? input2.class_text ?? null,
+              child.concern_category ?? null,
+              JSON.stringify(child.concern_tags ?? []),
+              child.concern_text ?? null,
+              child.prior_eval === true ? 1 : child.prior_eval === false ? 0 : null,
+              child.prior_eval_note ?? null,
+              /* ۱.۲۷.۳۶ — فرم تکمیلی خانواده (JSON) — هیچ‌کدام خالی؟ ستون NULL */
+              child.family_culture || child.family_finance || child.family_cooperation ? JSON.stringify({
+                culture: child.family_culture ?? null,
+                finance: child.family_finance ?? null,
+                cooperation: child.family_cooperation ?? null
+              }) : null,
+              channel,
+              meta3.chatId ?? null,
+              input2.token ?? null,
+              group,
+              academicYear,
+              nowIso2,
+              nowIso2
+            ]
+          );
+          await audit.logInTransaction(tx, {
+            actorId: "public",
+            action: "waitlist.referral_submit",
+            resourceType: "waitlist_referral",
+            resourceId: id,
+            changes: {
+              role: { from: null, to: input2.role },
+              channel: { from: null, to: channel }
+            }
+          });
+        });
+        const row = await db.queryOne(REFERRAL_BY_ID, [id]);
+        if (row) created.push(referralRowToDomain(row));
+      }
+      log.info("waitlist.referral.submitted", { role: input2.role, count: created.length, channel });
+      return created;
+    },
+    async listReferrals(filters) {
+      const where = ["deleted_at IS NULL"];
+      const params = [];
+      if (filters.status) {
+        where.push("status = ?");
+        params.push(filters.status);
+      }
+      if (filters.year) {
+        where.push("academic_year = ?");
+        params.push(filters.year);
+      }
+      const rows = await db.query(
+        `SELECT * FROM waitlist_referrals
+          WHERE ${where.join(" AND ")}
+          ORDER BY created_at DESC, id DESC
+          LIMIT ${REFERRAL_LIST_LIMIT}`,
+        params
+      );
+      return rows.map(referralRowToDomain);
+    },
+    /* پذیرش معرفی همیشه از مسیر create لیست انتظار می‌گذرد — تبدیل اتمیک به پرونده/نوبت دست‌نخورده؛
+     * پذیرش = خروج خودکار از لیست با اولین حضور، همان قرارداد قبلی. */
+    async acceptReferral(id, actor) {
+      const referral = await loadReferral(id);
+      if (referral.status !== "new") {
+        throw new ConflictError("\u0627\u06CC\u0646 \u0645\u0639\u0631\u0641\u06CC \u0642\u0628\u0644\u0627\u064B \u0628\u0631\u0631\u0633\u06CC \u0634\u062F\u0647 \u0627\u0633\u062A");
+      }
+      const entry = await service.create(
+        {
+          firstName: referral.firstName,
+          lastName: "",
+          phone: referral.guardianPhone || referral.referrerPhone,
+          source: referral.refRole === "teacher" ? "teacher" : "self",
+          serviceType: referral.concernCategory ? REFERRAL_CATEGORY_LABELS[referral.concernCategory] ?? void 0 : void 0,
+          priority: "normal",
+          note: appendNote(
+            null,
+            "\u0645\u0639\u0631\u0641\u06CC \u0622\u0646\u0644\u0627\u06CC\u0646",
+            [
+              referral.schoolText ? `\u0645\u062F\u0631\u0633\u0647: ${referral.schoolText}` : null,
+              referral.gradeText ? `\u067E\u0627\u06CC\u0647: ${referral.gradeText}` : null,
+              referral.classText ? `\u06A9\u0644\u0627\u0633: ${referral.classText}` : null,
+              referral.concernText ? `\u062F\u063A\u062F\u063A\u0647: ${referral.concernText.slice(0, 200)}` : null,
+              `\u0645\u0639\u0631\u0641: ${referral.referrerName} (${referral.refRole === "teacher" ? "\u0645\u0639\u0644\u0645" : "\u062E\u0627\u0646\u0648\u0627\u062F\u0647"})`
+            ].filter(Boolean).join(" \xB7 ")
+          ),
+          studentId: void 0
+        },
+        actor
+      );
+      try {
+        await db.transaction(async (tx) => {
+          await tx.execute(`UPDATE waitlist SET referral_id = ? WHERE id = ?`, [referral.id, entry.id]);
+          await tx.execute(
+            `UPDATE waitlist_referrals SET status = 'accepted', waitlist_id = ?, updated_at = ? WHERE id = ?`,
+            [entry.id, (/* @__PURE__ */ new Date()).toISOString(), referral.id]
+          );
+          await audit.logInTransaction(tx, {
+            actorId: actor.staffId,
+            action: "waitlist.referral_accept",
+            resourceType: "waitlist_referral",
+            resourceId: referral.id,
+            changes: {
+              status: { from: "new", to: "accepted" },
+              waitlist_id: { from: null, to: entry.id }
+            }
+          });
+        });
+      } catch (err) {
+        await service.softDelete(entry.id, actor).catch(() => void 0);
+        throw err;
+      }
+      log.info("waitlist.referral.accepted", { referralId: referral.id, waitlistId: entry.id });
+      return entry;
+    },
+    async rejectReferral(id, reason, actor) {
+      const referral = await loadReferral(id);
+      if (referral.status !== "new") {
+        throw new ConflictError("\u0627\u06CC\u0646 \u0645\u0639\u0631\u0641\u06CC \u0642\u0628\u0644\u0627\u064B \u0628\u0631\u0631\u0633\u06CC \u0634\u062F\u0647 \u0627\u0633\u062A");
+      }
+      await db.transaction(async (tx) => {
+        await tx.execute(
+          `UPDATE waitlist_referrals SET status = 'rejected', reject_reason = ?, updated_at = ? WHERE id = ?`,
+          [reason, (/* @__PURE__ */ new Date()).toISOString(), referral.id]
+        );
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: "waitlist.referral_reject",
+          resourceType: "waitlist_referral",
+          resourceId: referral.id,
+          changes: { status: { from: "new", to: "rejected" } }
+        });
+      });
+      log.info("waitlist.referral.rejected", { referralId: referral.id });
+      return referralRowToDomain(await loadReferralRow(id));
     }
   };
   return service;
 }
 __name(createWaitlistService, "createWaitlistService");
 
+// src/domain/waitlist/referral-page.ts
+function safeToken(raw2) {
+  return (raw2 ?? "").replace(/[^A-Za-z0-9._:\-]/g, "").slice(0, 200);
+}
+__name(safeToken, "safeToken");
+var PAGE_STYLES = `
+:root{--bg:#f6f7fb;--card:#ffffff;--ink:#1f2430;--muted:#6b7280;--brand:#2563eb;--brand-soft:#eef2ff;
+--ok:#16a34a;--warn:#d97706;--err:#dc2626;--line:#e5e7eb;--r:14px}
+*{box-sizing:border-box}
+/* \u06F1.\u06F2\u06F7.\u06F4\u06F2 \u2014 \u0641\u0648\u0646\u062A \u0648\u0632\u06CC\u0631 \u0645\u062A\u0646 \u0628\u0627\u0646\u062F\u0644\u200C\u0634\u062F\u0647\u0654 \u062E\u0648\u062F\u06CC\u061B \u067E\u06CC\u0634\u200C\u062A\u0631 \u0641\u0642\u0637 CDN \u0628\u0648\u062F \u06A9\u0647 \u0622\u0641\u0644\u0627\u06CC\u0646/\u06A9\u0646\u062F\u06CC \u0645\u06CC\u200C\u0634\u06A9\u0633\u062A \u0648 Tahoma \u0645\u06CC\u200C\u0646\u0634\u0633\u062A */
+@font-face{font-family:Vazirmatn;src:url('/assets/fonts/Vazirmatn-Variable.woff2') format('woff2');
+font-weight:100 900;font-style:normal;font-display:swap}
+html,body{margin:0;padding:0}
+/* \u06F1.\u06F2\u06F7.\u06F4\u06F0 \u2014 \u067E\u0633\u200C\u0632\u0645\u06CC\u0646\u0647\u0654 \u06AF\u0631\u0627\u062F\u06CC\u0646\u062A\u06CC \u0633\u0647\u200C\u0644\u0627\u06CC\u0647 \u0628\u0627 \u062F\u0648 \u0647\u0627\u0644\u0647\u0654 \u0631\u0646\u06AF\u06CC \u062B\u0627\u0628\u062A (\u062E\u0648\u0627\u0633\u062A \u06A9\u0627\u0631\u0641\u0631\u0645\u0627) \u2014 \u0628\u062F\u0648\u0646 \u062A\u0635\u0648\u06CC\u0631\u060C \u0628\u062F\u0648\u0646 \u0644\u0648\u062F \u0627\u0636\u0627\u0641\u0647 */
+body{color:var(--ink);font-family:Vazirmatn,Tahoma,'Segoe UI',sans-serif;
+font-size:16px;line-height:1.9;direction:rtl;
+background:radial-gradient(640px 340px at 88% -6%,rgba(37,99,235,.16),transparent 66%),
+radial-gradient(560px 320px at 6% 104%,rgba(139,92,246,.14),transparent 66%),
+radial-gradient(420px 260px at 10% -4%,rgba(14,165,233,.10),transparent 64%),
+linear-gradient(168deg,#eef4ff 0%,#f6f7fb 46%,#fdf2f8 100%);
+background-attachment:fixed}
+.bar{position:fixed;top:0;right:0;left:0;height:5px;background:rgba(37,99,235,.14);z-index:5}
+.bar__fill{height:100%;width:0;background:linear-gradient(90deg,#2563eb,#7c3aed);transition:width .3s ease}
+.app{max-width:560px;margin:0 auto;padding:24px 16px;min-height:100dvh;
+display:flex;flex-direction:column;justify-content:safe center}
+.card{background:linear-gradient(180deg,#ffffff,#fbfcff);border:1px solid rgba(226,232,240,.9);
+border-radius:var(--r);padding:24px;box-shadow:0 10px 30px -14px rgba(37,99,235,.18),0 2px 8px rgba(15,23,42,.05)}
+.step-no{color:var(--muted);font-size:13px;margin-bottom:8px}
+h1{font-size:20px;margin:0 0 6px}
+h2{font-size:19px;margin:0 0 10px}
+p.lead{color:var(--muted);margin:0 0 18px;font-size:14.5px}
+.welcome-text{font-size:17px;line-height:2.2;min-height:170px;white-space:pre-wrap}
+.caret{display:inline-block;width:2px;height:1.15em;background:var(--brand);vertical-align:-0.2em;
+animation:blink 1s steps(1) infinite;margin-inline-start:2px}
+@keyframes blink{50%{opacity:0}}
+/* \u06F1.\u06F2\u06F7.\u06F3\u06F6 \u2014 \u062F\u06A9\u0645\u0647\u200C\u0647\u0627\u06CC \u0647\u0645\u200C\u0627\u0646\u062F\u0627\u0632\u0647: flex-basis \u0635\u0641\u0631 \u06CC\u0639\u0646\u06CC \xAB\u0627\u062F\u0627\u0645\u0647\xBB \u0648 \xAB\u0628\u0627\u0632\u06AF\u0634\u062A\xBB \u0647\u0645\u06CC\u0634\u0647 \u0647\u0645\u200C\u067E\u0647\u0646\u0627\u061B
+   min-height \u0645\u0634\u062A\u0631\u06A9 \u06CC\u0639\u0646\u06CC \u0647\u0645\u200C\u0642\u062F \u2014 \u0641\u0627\u0631\u063A \u0627\u0632 \u0637\u0648\u0644 \u0645\u062A\u0646 */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:none;cursor:pointer;
+border-radius:12px;padding:12px 22px;font-family:inherit;font-size:15.5px;font-weight:700;width:100%;
+min-height:52px}
+/* \u06F1.\u06F2\u06F7.\u06F4\u06F0 \u2014 \u062F\u06A9\u0645\u0647\u0654 \u0627\u0635\u0644\u06CC \u06AF\u0631\u0627\u062F\u06CC\u0646\u062A\u06CC\u061B \u0644\u0628\u0647\u0654 \u0628\u0631\u062C\u0633\u062A\u0647 \u0628\u0627 \u0633\u0627\u06CC\u0647\u0654 \u0631\u0646\u06AF \u0628\u0631\u0646\u062F */
+.btn--primary{background:linear-gradient(135deg,#2563eb 0%,#6d5cf6 100%);color:#fff;
+box-shadow:0 8px 20px -8px rgba(79,70,229,.55)}
+.btn--primary:hover{filter:brightness(1.07)}
+.btn--primary:disabled{opacity:.45;cursor:not-allowed;filter:none;box-shadow:none}
+.btn--ghost{background:rgba(255,255,255,.85);color:var(--brand);border:1.5px solid var(--brand)}
+.btn--sm{width:auto;min-height:44px;padding:9px 16px;font-size:14px}
+.btnrow{display:flex;gap:10px;margin-top:20px}
+.btnrow .btn{flex:1 1 0}
+.choice{display:flex;align-items:flex-start;gap:12px;background:rgba(255,255,255,.92);border:2px solid var(--line);
+border-radius:var(--r);padding:16px 18px;cursor:pointer;transition:border-color .15s,background .15s,box-shadow .15s;
+text-align:start;width:100%;font-family:inherit;position:relative}
+.choice:hover{border-color:var(--brand);box-shadow:0 6px 16px -8px rgba(37,99,235,.25)}
+/* \u06F1.\u06F2\u06F7.\u06F4\u06F0 \u2014 \u0627\u0646\u062A\u062E\u0627\u0628 \u0628\u0627 \u06AF\u0631\u0627\u062F\u06CC\u0646\u062A \u0645\u0644\u0627\u06CC\u0645 \u062F\u0648 \u0631\u0646\u06AF \u0628\u0631\u0646\u062F */
+.choice.sel{border-color:var(--brand);background:linear-gradient(135deg,#eef2ff,#f5f1ff);
+box-shadow:0 8px 22px -10px rgba(79,70,229,.35)}
+.choice.sel .no{background:linear-gradient(135deg,#2563eb,#6d5cf6);color:#fff}
+.choice.sel::after{content:'\u2713';position:absolute;top:10px;left:14px;color:var(--brand);
+font-weight:800;font-size:16px}
+.choice b{display:block;font-size:16px;margin-bottom:2px}
+.choice span.d{color:var(--muted);font-size:13.5px}
+.choice .no{flex:none;width:28px;height:28px;border-radius:50%;background:var(--brand-soft);
+color:var(--brand);text-align:center;line-height:28px;font-weight:800;font-size:13px}
+/* \u06F1.\u06F2\u06F7.\u06F3\u06F6 \u2014 \u0631\u062F\u06CC\u0641 \u06A9\u0627\u0631\u062A\u200C\u0647\u0627 \u0628\u0627 \u0627\u0631\u062A\u0641\u0627\u0639 \u06CC\u06A9\u0633\u0627\u0646 (\u0628\u0644\u0646\u062F\u062A\u0631\u06CC\u0646 \u0645\u062D\u062A\u0648\u0627 \u0645\u0639\u06CC\u0627\u0631 \u0647\u0645\u0647 \u0627\u0633\u062A) */
+.choices{display:grid;gap:12px;grid-auto-rows:1fr}
+label.f{display:block;font-weight:700;margin:0 0 6px}
+input.i,select.i,textarea.i{width:100%;border:1.5px solid var(--line);border-radius:12px;padding:11px 14px;
+font-family:inherit;font-size:15.5px;background:#fff;color:var(--ink)}
+input.i:focus,select.i:focus,textarea.i:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+textarea.i{min-height:110px;resize:vertical}
+.field{margin-bottom:16px}
+.err-msg{color:var(--err);font-size:13.5px;margin-top:4px;display:none}
+.err-msg.show{display:block}
+.hint{color:var(--muted);font-size:13px;margin-top:4px}
+/* \u06F1.\u06F2\u06F7.\u06F4\u06F0 \u2014 \u0646\u0634\u0627\u0646 \xAB\u0631\u0627\u06CC\u06AF\u0627\u0646\xBB \u06AF\u0631\u0627\u062F\u06CC\u0646\u062A\u06CC */
+.badge-free{display:inline-block;background:linear-gradient(135deg,#dcfce7,#e0f2fe);color:#15803d;
+border-radius:999px;padding:4px 14px;font-size:13.5px;font-weight:700;margin-bottom:14px}
+.review{border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-top:6px;background:rgba(255,255,255,.9)}
+.review__row{display:flex;align-items:flex-start;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line)}
+.review__row:last-child{border-bottom:none}
+.review__row .k{color:var(--muted);font-size:13px;min-width:110px;padding-top:2px}
+.review__row .v{flex:1;font-size:14.5px}
+.review__row .e{background:none;border:none;color:var(--brand);cursor:pointer;font-family:inherit;
+font-size:13px;font-weight:700;padding:2px 4px}
+.overlay{position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:10;display:flex;
+align-items:center;justify-content:center;padding:16px}
+.modal{background:#fff;border-radius:16px;max-width:480px;width:100%;max-height:85vh;overflow:auto;padding:22px}
+.aware{font-size:15.5px;line-height:2.2}
+.aware ul{padding-inline-start:20px;color:var(--muted)}
+/* \u06F1.\u06F2\u06F7.\u06F4\u06F0 \u2014 \u0644\u06CC\u0646\u06A9 \u0631\u0627\u0647\u0646\u0645\u0627 \u0648 \u0646\u0648\u0627\u0631 \u06CC\u0627\u062F\u062F\u0627\u0634\u062A \u0628\u0627 \u067E\u0633\u200C\u0632\u0645\u06CC\u0646\u0647\u0654 \u06AF\u0631\u0627\u062F\u06CC\u0646\u062A\u06CC \u0645\u0644\u0627\u06CC\u0645 */
+.guide-link{display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,#eef2ff,#e0f2fe);
+color:#1e40af;border-radius:12px;padding:10px 14px;font-size:13.5px;font-weight:700;text-decoration:none;margin-top:14px}
+.guide-link:active{opacity:.85}
+.note{background:linear-gradient(135deg,#eef2ff,#e0f2fe);border-radius:12px;padding:12px 14px;font-size:13.5px;
+color:#1e40af;margin-top:14px}
+.rowcard{border:1.5px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px;position:relative;
+background:rgba(255,255,255,.92)}
+.rowcard .rm{position:absolute;top:10px;left:10px;background:none;border:none;color:var(--err);
+cursor:pointer;font-family:inherit;font-size:13px;font-weight:700}
+/* \u06F1.\u06F2\u06F7.\u06F3\u06F6 \u2014 \u067E\u06CC\u0644\u200C\u0647\u0627\u06CC \u0647\u0645\u200C\u0627\u0646\u062F\u0627\u0632\u0647 \u0648 \u0644\u0645\u0633\u200C\u067E\u0630\u06CC\u0631 (\u062D\u062F\u0627\u0642\u0644 \u06F4\u06F4px) */
+.pills{display:flex;flex-wrap:wrap;gap:10px}
+.pill{border:1.5px solid var(--line);background:#fff;border-radius:999px;padding:9px 18px;
+cursor:pointer;font-family:inherit;font-size:14px;min-height:44px;display:inline-flex;align-items:center}
+/* \u06F1.\u06F2\u06F7.\u06F4\u06F0 \u2014 \u067E\u06CC\u0644 \u0627\u0646\u062A\u062E\u0627\u0628\u200C\u0634\u062F\u0647 \u06AF\u0631\u0627\u062F\u06CC\u0646\u062A\u06CC */
+.pill.sel{border-color:var(--brand);background:linear-gradient(135deg,#eef2ff,#f5f1ff);color:var(--brand);
+font-weight:700;box-shadow:0 4px 12px -6px rgba(79,70,229,.4)}
+.done{text-align:center}
+.done .big{font-size:46px;margin-bottom:6px}
+.switch-row{display:flex;align-items:center;justify-content:space-between;gap:10px;
+border:1.5px solid var(--line);border-radius:12px;padding:12px 14px}
+/* \u06F1.\u06F2\u06F7.\u06F3\u06F5 \u2014 \u0627\u0641\u06A9\u062A \u0641\u06CC\u062F \u0648 \u062C\u0631\u06CC\u0627\u0646 \u067E\u06CC\u0648\u0633\u062A\u0647\u061B \u06A9\u0627\u0647\u0634-\u062D\u0631\u06A9\u062A \u0631\u0639\u0627\u06CC\u062A \u0645\u06CC\u200C\u0634\u0648\u062F */
+.app>.card{animation:fadein .3s ease}
+@keyframes fadein{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.choice,.btn,.pill{transition:transform .12s ease,border-color .15s,background .15s,box-shadow .15s}
+.choice:active,.pill:active{transform:scale(.98)}
+input.i:focus-visible,select.i:focus-visible,textarea.i:focus-visible,button:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+@media (prefers-reduced-motion: reduce){.caret{animation:none}.bar__fill{transition:none}.app>.card{animation:none}.choice,.btn,.pill{transition:none}}
+`;
+var PAGE_SCRIPT = `
+(function(){
+'use strict';
+var TOKEN = window.__REFERRAL_TOKEN__ || '';
+var app = document.getElementById('app');
+var bar = document.getElementById('bar');
+var REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+var GRADES = ['\u067E\u06CC\u0634\u200C\u062F\u0628\u0633\u062A\u0627\u0646\u06CC','\u0627\u0648\u0644 \u062F\u0628\u0633\u062A\u0627\u0646','\u062F\u0648\u0645 \u062F\u0628\u0633\u062A\u0627\u0646','\u0633\u0648\u0645 \u062F\u0628\u0633\u062A\u0627\u0646','\u0686\u0647\u0627\u0631\u0645 \u062F\u0628\u0633\u062A\u0627\u0646','\u067E\u0646\u062C\u0645 \u062F\u0628\u0633\u062A\u0627\u0646','\u0634\u0634\u0645 \u062F\u0628\u0633\u062A\u0627\u0646'];
+/* \u06F1.\u06F2\u06F7.\u06F3\u06F6 \u2014 \u06AF\u0632\u06CC\u0646\u0647\u0654 \xAB\u0645\u0634\u06A9\u0648\u06A9 \u0628\u0647 \u0627\u062A\u06CC\u0633\u0645\xBB \u062D\u0630\u0641 \u0634\u062F (\u062E\u0648\u0627\u0633\u062A \u06A9\u0627\u0631\u0641\u0631\u0645\u0627)\u061B \u0645\u0642\u062F\u0627\u0631 autism \u062F\u0631 \u062F\u0627\u062F\u0647\u200C\u0647\u0627\u06CC \u0642\u0628\u0644\u06CC \u0628\u0627\u0642\u06CC \u0627\u0633\u062A */
+/* \u06F1.\u06F2\u06F7.\u06F4\u06F2 \u2014 \u0645\u062A\u0646\u200C\u0647\u0627\u06CC \u06A9\u0627\u0631\u0641\u0631\u0645\u0627\u061B \xAB\u062A\u0623\u062E\u06CC\u0631 \u06AF\u0641\u062A\u0627\u0631 \u0648 \u0632\u0628\u0627\u0646\xBB \u0627\u0632 \u06AF\u0632\u06CC\u0646\u0647\u200C\u0647\u0627\u06CC \u0641\u0631\u0645 \u062D\u0630\u0641 \u0648 \xAB\u0645\u0634\u06A9\u0644\u0627\u062A \u0631\u0641\u062A\u0627\u0631\u06CC \u0647\u06CC\u062C\u0627\u0646\u06CC\xBB \u0646\u0634\u0633\u062A
+   (\u0645\u0642\u062F\u0627\u0631 speech \u062F\u0631 \u062F\u0627\u062F\u0647\u200C\u0647\u0627\u06CC \u0642\u0628\u0644\u06CC \u0648 \u0628\u0631\u0686\u0633\u0628\u200C\u0647\u0627\u06CC \u067E\u0630\u06CC\u0631\u0634 \u0628\u0627\u0642\u06CC \u0627\u0633\u062A) */
+var CONCERNS = [
+  {v:'delayed', t:'\u062F\u06CC\u0631\u0622\u0645\u0648\u0632\u06CC', d:'\u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u06A9\u0646\u062F\u062A\u0631 \u0627\u0632 \u0647\u0645\u200C\u0633\u0646\u200C\u0648\u0633\u0627\u0644\u200C\u0647\u0627 \u2014 \u0648\u0644\u06CC \u06CC\u0627\u062F \u0645\u06CC\u200C\u06AF\u06CC\u0631\u0647'},
+  {v:'learning_disorder', t:'\u0627\u062E\u062A\u0644\u0627\u0644 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC', d:'\u0633\u062E\u062A\u06CC \u062F\u0631 \u062E\u0648\u0627\u0646\u062F\u0646\u060C \u0646\u0648\u0634\u062A\u0646 \u06CC\u0627 \u062D\u0633\u0627\u0628'},
+  {v:'intellectual', t:'\u0645\u0634\u06A9\u0648\u06A9 \u0628\u0647 \u06A9\u0645\u200C\u062A\u0648\u0627\u0646\u06CC \u0630\u0647\u0646\u06CC', d:'\u062A\u0623\u062E\u06CC\u0631 \u062C\u062F\u06CC \u062F\u0631 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u0648 \u0645\u0647\u0627\u0631\u062A\u200C\u0647\u0627\u06CC \u0631\u0648\u0632\u0645\u0631\u0647'},
+  {v:'behavioral', t:'\u0645\u0634\u06A9\u0644\u0627\u062A \u0631\u0641\u062A\u0627\u0631\u06CC \u0647\u06CC\u062C\u0627\u0646\u06CC', d:'\u0645\u062B\u0644 \u0628\u06CC\u0634\u200C\u0641\u0639\u0627\u0644\u06CC \u0648 \u062A\u06A9\u0627\u0646\u0634\u06AF\u0631\u06CC\u060C \u062A\u0631\u0633\u060C \u0627\u0636\u0637\u0631\u0627\u0628 \u0648\u2026'},
+  {v:'other', t:'\u0633\u0627\u06CC\u0631', d:'\u0647\u0631 \u062F\u063A\u062F\u063A\u0647\u200C\u06CC \u062F\u06CC\u06AF\u0631\u06CC \u062F\u0627\u0631\u06CC\u062F\u2026'}
+];
+var TEACH_CATS = ['delayed','learning_disorder','intellectual'];
+var TEACH_CAT_LABELS = {delayed:'\u062F\u06CC\u0631\u0622\u0645\u0648\u0632', learning_disorder:'\u0627\u062E\u062A\u0644\u0627\u0644 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC', intellectual:'\u0645\u0634\u06A9\u0648\u06A9 \u0628\u0647 \u06A9\u0645\u200C\u062A\u0648\u0627\u0646\u06CC'};
+var CAT_LABELS = {delayed:'\u062F\u06CC\u0631\u0622\u0645\u0648\u0632\u06CC', learning_disorder:'\u0627\u062E\u062A\u0644\u0627\u0644 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC', intellectual:'\u0645\u0634\u06A9\u0648\u06A9 \u0628\u0647 \u06A9\u0645\u200C\u062A\u0648\u0627\u0646\u06CC \u0630\u0647\u0646\u06CC', behavioral:'\u0645\u0634\u06A9\u0644\u0627\u062A \u0631\u0641\u062A\u0627\u0631\u06CC \u0647\u06CC\u062C\u0627\u0646\u06CC', speech:'\u062A\u0623\u062E\u06CC\u0631 \u06AF\u0641\u062A\u0627\u0631 \u0648 \u0632\u0628\u0627\u0646', autism:'\u0645\u0634\u06A9\u0648\u06A9 \u0628\u0647 \u0637\u06CC\u0641 \u0627\u062A\u06CC\u0633\u0645', other:'\u0633\u0627\u06CC\u0631'};
+var AWARE = [
+  /* \u06F1.\u06F2\u06F7.\u06F3\u06F8 \u2014 \u0628\u0627\u0632\u0646\u0648\u06CC\u0633\u06CC \u0645\u062D\u0627\u0648\u0631\u0647\u200C\u0627\u06CC \u0648 \u0645\u0641\u0635\u0644\u200C\u062A\u0631\u061B \u0628\u062F\u0648\u0646 \u062A\u0630\u06A9\u0631 \u062A\u06A9\u0631\u0627\u0631\u06CC \xAB\u062A\u0634\u062E\u06CC\u0635\xBB \u0628\u0647 \u062E\u0648\u0627\u0633\u062A \u06A9\u0627\u0631\u0641\u0631\u0645\u0627\u060C
+     \u0628\u0627 \u0644\u06CC\u0646\u06A9 \u0641\u0627\u06CC\u0644 \u0631\u0627\u0647\u0646\u0645\u0627\u06CC \u0639\u0645\u0648\u0645\u06CC \u0647\u0631 \u062F\u0633\u062A\u0647 (/public/guide/<slug>) \u0628\u0631\u0627\u06CC \u062A\u0648\u0636\u06CC\u062D\u0627\u062A \u0628\u06CC\u0634\u062A\u0631 */
+  {t:'\u062F\u06CC\u0631\u0622\u0645\u0648\u0632 \u06A9\u06CC\u0647\u061F', g:'delayed', b:'\u062F\u06CC\u0631\u0622\u0645\u0648\u0632 \u06CC\u0639\u0646\u06CC \u0628\u0686\u0647\u200C\u0627\u06CC \u06A9\u0647 \u0628\u0647 \u0635\u0648\u0631\u062A \u0645\u062D\u0633\u0648\u0633 \u062A\u0648 \u0639\u0645\u0644\u06A9\u0631\u062F\u0634 \u062F\u0631 \u0647\u0645\u0647 \u062D\u06CC\u0637\u0647\u200C\u0647\u0627 \u0628\u0627 \u0647\u0645\u0633\u0627\u0644\u0627\u0646 \u062E\u0648\u062F\u0634 \u062A\u0641\u0627\u0648\u062A \u0645\u0634\u0647\u0648\u062F \u062F\u0627\u0631\u0647\u060C \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC\u0634 \u0627\u0632 \u0628\u0686\u0647\u200C\u0647\u0627\u06CC \u0647\u0645\u200C\u0633\u0646\u200C\u0648\u0633\u0627\u0644\u0634 \u06A9\u0646\u062F\u062A\u0631 \u067E\u06CC\u0634 \u0645\u06CC\u200C\u0631\u0647 \u2014 \u0648\u0644\u06CC \u0627\u06CC\u0646 \u06CC\u0639\u0646\u06CC \xAB\u06A9\u064F\u0646\u062F\xBB\u060C \u0628\u0647 \u0645\u0639\u0646\u06CC \u0646\u0645\u06CC\u200C\u062A\u0648\u0646\u0647 \u0646\u06CC\u0633\u062A. \u0627\u06CC\u0646 \u0628\u0686\u0647\u200C\u0647\u0627 \u0628\u0627 \u062A\u0648\u0636\u06CC\u062D \u0633\u0627\u062F\u0647\u200C\u062A\u0631\u060C \u062A\u0645\u0631\u06CC\u0646 \u0628\u06CC\u0634\u062A\u0631 \u0648 \u06A9\u0645\u06CC \u0635\u0628\u0631\u060C \u0647\u0645\u0648\u0646 \u0645\u0633\u06CC\u0631 \u0628\u0642\u06CC\u0647 \u0631\u0648 \u0637\u06CC \u0645\u06CC\u200C\u06A9\u0646\u0646\u061B \u0641\u0642\u0637 \u0628\u0627 \u06AF\u0627\u0645\u200C\u0647\u0627\u06CC \u06A9\u0648\u0686\u06CC\u06A9\u200C\u062A\u0631 \u0627\u0645\u0627 \u0645\u062A\u0639\u062F\u062F\u062A\u0631\u06CC \u0644\u0627\u0632\u0645 \u062F\u0627\u0631\u0646. \u062A\u0648\u06CC \u06A9\u0644\u0627\u0633 \u0645\u0639\u0645\u0648\u0644\u0627\u064B \u062F\u06CC\u0631\u062A\u0631 \u0634\u0631\u0648\u0639 \u0645\u06CC\u200C\u06A9\u0646\u0647 \u0628\u0647 \u062E\u0648\u0646\u062F\u0646 \u0648 \u0646\u0648\u0634\u062A\u0646\u060C \u0648\u0627\u0698\u0647\u200C\u0647\u0627\u06CC \u062C\u062F\u06CC\u062F \u0631\u0648 \u062F\u06CC\u0631\u062A\u0631 \u0645\u06CC\u200C\u0641\u0647\u0645\u0647 \u0648 \u0648\u0642\u062A\u06CC \u062F\u0631\u0633 \u06A9\u0645\u06CC \u0633\u062E\u062A \u0645\u06CC\u200C\u0634\u0647 \u0632\u0648\u062F \u062E\u0633\u062A\u0647 \u0645\u06CC\u200C\u0634\u0647 \u0648 \u0627\u0646\u06AF\u06CC\u0632\u0647\u200C\u0634 \u0645\u06CC\u200C\u0627\u0641\u062A\u0647. \u0686\u06CC\u0632\u06CC \u06A9\u0647 \u0628\u06CC\u0634\u062A\u0631 \u0627\u0632 \u0647\u0631\u0686\u06CC\u0632\u06CC \u0644\u0627\u0632\u0645 \u062F\u0627\u0631\u0647 \u062A\u062C\u0631\u0628\u0647\u0654 \u0645\u0648\u0641\u0642\u06CC\u062A\u200C\u0647: \u062A\u06A9\u0644\u06CC\u0641 \u06A9\u0648\u0686\u06CC\u06A9\u200C\u062A\u0631\u060C \u062A\u0634\u0648\u06CC\u0642 \u0648\u0627\u0642\u0639\u06CC\u060C \u0648 \u0627\u06CC\u0646\u06A9\u0647 \u06A9\u0633\u06CC \u0628\u0647\u0634 \u0646\u06AF\u0627\u0647 \u0646\u06A9\u0646\u0647 \u06A9\u0647 \xAB\u0628\u06CC\u200C\u0627\u0633\u062A\u0639\u062F\u0627\u062F\u0647\xBB. \u0627\u06AF\u0647 \u062A\u0648\u06CC \u06A9\u0644\u0627\u0633 \u06CC\u0627 \u062E\u0648\u0646\u0647\u200C\u062A\u0648\u0646 \u0686\u0646\u06CC\u0646 \u0628\u0686\u0647\u200C\u0627\u06CC \u062F\u0627\u0631\u06CC\u062F\u060C \u0645\u0639\u0631\u0641\u06CC\u200C\u06A9\u0631\u062F\u0646\u0634 \u0627\u0648\u0644\u06CC\u0646 \u0642\u062F\u0645 \u06A9\u0645\u06A9\u0650 \u0648\u0627\u0642\u0639\u06CC\u0647 \u0628\u0647 \u0627\u0648\u0646\u0647.'},
+  {t:'\u0627\u062E\u062A\u0644\u0627\u0644 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u0686\u06CC\u0647\u061F', g:'learning-disorder', b:'\u0627\u062E\u062A\u0644\u0627\u0644 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u06CC\u0639\u0646\u06CC \u0628\u0686\u0647 \u0627\u0632 \u0646\u0638\u0631 \u0647\u0648\u0634 \u0648 \u0641\u0647\u0645 \u06A9\u0627\u0645\u0644\u0627\u064B \u0639\u0627\u062F\u06CC\u0647 \u2014 \u062A\u0648\u06CC \u0628\u0627\u0632\u06CC\u060C \u06AF\u0641\u062A\u200C\u0648\u06AF\u0648 \u0648 \u062F\u0631\u06A9 \u0645\u0627\u062C\u0631\u0627\u0647\u0627 \u0627\u0635\u0644\u0627\u064B \u0627\u0632 \u0628\u0642\u06CC\u0647 \u06A9\u0645 \u0646\u0645\u06CC\u0627\u0631\u0647 \u062D\u062A\u06CC \u0628\u0647\u062A\u0631\u0647 \u2014 \u0648\u0644\u06CC \u062A\u0648\u06CC \u06CC\u06A9\u06CC \u0627\u0632 \u0645\u0647\u0627\u0631\u062A\u200C\u0647\u0627\u06CC \u062F\u0631\u0633\u06CC \u06AF\u06CC\u0631 \u0645\u06CC\u200C\u06A9\u0646\u0647: \u062E\u0648\u0646\u062F\u0646 (\u06A9\u0644\u0645\u0647\u200C\u0647\u0627 \u0631\u0648 \u062C\u0627\u0628\u0647\u200C\u062C\u0627\u060C \u0628\u0631\u0639\u06A9\u0633 \u06CC\u0627 \u0628\u0627 \u063A\u0644\u0637\u200C\u0647\u0627\u06CC \u062A\u06A9\u0631\u0627\u0631\u06CC \u0645\u06CC\u200C\u062E\u0648\u0646\u0647)\u060C \u0646\u0648\u0634\u062A\u0646 (\u062E\u06CC\u0644\u06CC \u06A9\u0646\u062F \u0645\u06CC\u200C\u0646\u0648\u06CC\u0633\u0647\u060C \u062F\u0633\u062A\u200C\u062E\u0637\u0634 \u0646\u0627\u062E\u0648\u0627\u0646\u0627\u0633\u062A) \u06CC\u0627 \u062D\u0633\u0627\u0628 (\u062C\u062F\u0648\u0644 \u0636\u0631\u0628 \u0646\u0645\u06CC\u200C\u0686\u0633\u0628\u0647\u060C \u062C\u0645\u0639\u0650 \u0630\u0647\u0646\u06CC \u0628\u0631\u0627\u0634 \u0633\u062E\u062A\u0647). \u0646\u06A9\u062A\u0647\u0654 \u0645\u0647\u0645: \u0627\u06CC\u0646 \u0628\u0686\u0647 \xAB\u062A\u0646\u0628\u0644\xBB \u06CC\u0627 \u0628\u06CC\u200C\u062F\u0642\u062A \u0646\u06CC\u0633\u062A\u061B \u0645\u063A\u0632\u0634 \u0641\u0642\u0637 \u06CC\u0647 \u0645\u0633\u06CC\u0631 \u0631\u0648 \u0645\u062A\u0641\u0627\u0648\u062A \u067E\u0631\u062F\u0627\u0632\u0634 \u0645\u06CC\u200C\u06A9\u0646\u0647. \u0628\u0627 \u0631\u0648\u0634 \u0686\u0646\u062F\u062D\u0633\u06CC (\u062F\u06CC\u062F\u0627\u0631\u06CC + \u0634\u0646\u06CC\u062F\u0627\u0631\u06CC + \u062F\u0633\u062A\u200C\u0648\u0631\u0632\u06CC) \u0647\u0645\u06CC\u0646 \u0628\u0686\u0647\u200C\u0647\u0627 \u0645\u0639\u0645\u0648\u0644\u0627\u064B \u0628\u0647 \u0647\u0645\u200C\u062A\u0631\u0627\u0632\u06CC \u062F\u0631 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u0645\u06CC\u200C\u0631\u0633\u0646. \u0647\u0631\u0686\u06CC \u0632\u0648\u062F\u062A\u0631 \u0645\u0639\u0631\u0641\u06CC \u0628\u0634\u0646\u060C \u0627\u0642\u062F\u0627\u0645\u0627\u062A \u0645\u0624\u062B\u0631\u062A\u0631\u06CC \u0645\u06CC\u200C\u0634\u0647 \u0628\u0631\u0627\u0634\u0648\u0646 \u0627\u0646\u062C\u0627\u0645 \u062F\u0627\u062F \u0648 \u0627\u0639\u062A\u0645\u0627\u062F\u0628\u0647\u200C\u0646\u0641\u0633\u06CC\u200C\u0634\u0648\u0646 \u06A9\u0645\u062A\u0631 \u0622\u0633\u06CC\u0628 \u0645\u06CC\u200C\u0628\u06CC\u0646\u0647.'},
+  {t:'\u0646\u0634\u0648\u0646\u0647\u200C\u0647\u0627\u06CC \u06A9\u0645\u200C\u062A\u0648\u0627\u0646\u06CC \u0630\u0647\u0646\u06CC \u0686\u06CC\u0647\u061F', g:'intellectual', b:'\u0646\u0634\u0627\u0646\u0647\u0654 \u0627\u0635\u0644\u06CC \u062A\u0623\u062E\u06CC\u0631\u0650 \u0647\u0645\u200C\u0632\u0645\u0627\u0646 \u062F\u0631 \u0686\u0646\u062F \u062D\u0648\u0632\u0647\u200C\u0633\u062A\u060C \u0646\u0647 \u0641\u0642\u0637 \u062F\u0631\u0633: \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u0645\u0637\u0627\u0644\u0628 \u067E\u0627\u06CC\u0647 (\u0634\u06A9\u0644\u200C\u0647\u0627\u060C \u0631\u0646\u06AF\u200C\u0647\u0627 \u0648 \u0627\u0639\u062F\u0627\u062F \u062E\u06CC\u0644\u06CC \u062F\u06CC\u0631 \u0645\u06CC\u200C\u0686\u0633\u0628\u0646)\u060C \u0645\u0647\u0627\u0631\u062A\u200C\u0647\u0627\u06CC \u0631\u0648\u0632\u0645\u0631\u0647 (\u067E\u0648\u0634\u06CC\u062F\u0646 \u0644\u0628\u0627\u0633\u060C \u063A\u0630\u0627 \u062E\u0648\u0631\u062F\u0646 \u0645\u0633\u062A\u0642\u0644\u060C \u0628\u0627\u0632\u06CC \u0628\u0627 \u0642\u0648\u0627\u0639\u062F)\u060C \u0648 \u06AF\u0627\u0647\u06CC \u06AF\u0641\u062A\u0627\u0631. \u0627\u06CC\u0646 \u0628\u0686\u0647\u200C\u0647\u0627 \u0645\u062D\u06CC\u0637 \u0622\u0631\u0627\u0645\u200C\u062A\u0631\u060C \u062A\u06A9\u0631\u0627\u0631 \u0628\u06CC\u0634\u062A\u0631 \u0648 \u0627\u0646\u062A\u0638\u0627\u0631\u0650 \u0648\u0627\u0642\u0639\u200C\u0628\u06CC\u0646\u0627\u0646\u0647 \u0644\u0627\u0632\u0645 \u062F\u0627\u0631\u0646 \u2014 \u0648 \u067E\u0634\u062A\u06CC\u0628\u0627\u0646\u06CC \u062A\u062E\u0635\u0635\u06CC. \u0627\u06AF\u0647 \u0628\u0686\u0647\u200C\u0627\u06CC \u062A\u0648\u06CC \u0686\u0646\u062F\u062A\u0627 \u0627\u0632 \u0627\u06CC\u0646 \u0632\u0645\u06CC\u0646\u0647\u200C\u0647\u0627 \u0647\u0645\u200C\u0632\u0645\u0627\u0646 \u0639\u0642\u0628\u200C\u062A\u0631 \u0627\u0632 \u0647\u0645\u200C\u0633\u0646\u200C\u0647\u0627\u0634\u0647\u060C \u0645\u0639\u0631\u0641\u06CC\u200C\u0634 \u06A9\u0645\u06A9 \u0645\u06CC\u200C\u06A9\u0646\u0647 \u0632\u0648\u062F\u062A\u0631 \u0645\u0633\u06CC\u0631 \u0622\u0645\u0648\u0632\u0634\u06CC \u0645\u0646\u0627\u0633\u0628\u0634 \u067E\u06CC\u062F\u0627 \u0628\u0634\u0647. \u0634\u0627\u06CC\u062F \u0646\u06CC\u0627\u0632\u0647 \u06A9\u0647 \u0645\u062C\u062F\u062F \u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u0648 \u062C\u0627\u06CC\u200C\u062F\u0647\u06CC \u0628\u0634\u0647: \u0686\u0647 \u0647\u0645\u0648\u0646 \u0645\u062F\u0631\u0633\u0647 \u0628\u0627 \u0628\u0631\u0646\u0627\u0645\u0647\u0654 \u0641\u0631\u062F\u06CC\u060C \u0686\u0647 \u0645\u062F\u0631\u0633\u0647\u0654 \u0627\u0633\u062A\u062B\u0646\u0627\u06CC\u06CC. \u0628\u0631\u0627\u06CC \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u0647\u0645 \u062E\u06CC\u0644\u06CC \u0645\u0647\u0645\u0647 \u06A9\u0647 \u0628\u062F\u0648\u0646\u0646 \u0627\u0632 \u0628\u0686\u0647 \u0686\u0647 \u0627\u0646\u062A\u0638\u0627\u0631\u06CC \u062F\u0627\u0634\u062A\u0647 \u0628\u0627\u0634\u0646 \u0648 \u062E\u0648\u0646\u0647 \u0631\u0648 \u0686\u0637\u0648\u0631 \u0628\u0631\u0627\u06CC \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u0622\u0645\u0627\u062F\u0647 \u06A9\u0646\u0646.'}
+];
+var state = {
+  step: 0, role: null, refName: '', refPhone: '',
+  school: '', schoolName: '', grade: '', klass: '',
+  childName: '', childBirth: '', concern: null, concernText: '',
+  priorEval: null, priorEvalNote: '',
+  rows: [], awareIdx: 0, meta: null, submitting: false
+};
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function normDigits(s){return String(s==null?'':s).replace(/[\u06F0-\u06F9]/g,function(d){return String('\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9'.indexOf(d));}).replace(/[\u0660-\u0669]/g,function(d){return String('\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669'.indexOf(d));});}
+function normPhone(s){var v = normDigits(s).replace(/[\\s\\-().]/g,'');if(v.indexOf('+98')===0){v='0'+v.slice(3);}else if(v.indexOf('98')===0&&v.length===12){v='0'+v.slice(2);}return v;}
+function validPhone(s){return /^09\\d{9}$/.test(normPhone(s));}
+function familyTotal(){return 11;}
+function teachTotal(){return 10;}
+function total(){return state.role==='teacher'?teachTotal():familyTotal();}
+function setBar(){var t=total();var pct=Math.round(Math.min(state.step,t-1)/(t-1)*100);bar.style.width=pct+'%';}
+function stepNo(){var t=total();return '\u06AF\u0627\u0645 '+(state.step+1)+' \u0627\u0632 '+t;}
+function esc2(v){return v?esc(v):'\u062B\u0628\u062A \u0646\u0634\u062F\u0647';}
+
+/* \u2500\u2500\u2500 \u0627\u0641\u06A9\u062A \u062A\u0627\u06CC\u067E \u062E\u0648\u0634\u200C\u0622\u0645\u062F (reduced-motion \u2192 \u0628\u06CC\u200C\u062F\u0631\u0646\u06AF) \u2500\u2500\u2500 */
+function typeInto(node, text, done){
+  if(REDUCED){node.textContent=text;done();return;}
+  var i=0;var caret=document.createElement('span');caret.className='caret';
+  node.textContent='';node.appendChild(caret);
+  var skip=function(){clearInterval(timer);node.textContent=text;node.appendChild(caret);caret.style.display='none';done();};
+  var timer=setInterval(function(){
+    i++;node.textContent=text.slice(0,i);node.appendChild(caret);
+    if(i>=text.length){clearInterval(timer);caret.style.display='none';done();}
+  },26);
+  app.addEventListener('click',skip,{once:true});
+}
+
+/* \u2500\u2500\u2500 \u0645\u062F\u0627\u0631\u0633 \u0647\u0645\u06A9\u0627\u0631 (\u0628\u062F\u0648\u0646 \u0644\u0627\u06AF\u06CC\u0646 \u2014 \u0641\u0642\u0637 \u0646\u0627\u0645 \u0645\u062F\u0631\u0633\u0647 \u0648 \u06A9\u0644\u0627\u0633\u200C\u0647\u0627) \u2500\u2500\u2500 */
+function loadMeta(cb){
+  if(state.meta){cb(state.meta);return;}
+  fetch('/public/partner-schools').then(function(r){return r.json();}).then(function(res){
+    state.meta=(res&&res.data)||{schools:[],classes:[]};cb(state.meta);
+  }).catch(function(){state.meta={schools:[],classes:[]};cb(state.meta);});
+}
+
+function btnRow(nextLabel, onOk, okId, backTo, disabled){
+  var back = backTo===null?'':('<button class="btn btn--ghost" data-act="back" data-to="'+backTo+'">\u0628\u0627\u0632\u06AF\u0634\u062A</button>');
+  return '<div class="btnrow">'+back+
+    '<button class="btn btn--primary" id="'+okId+'" '+(disabled?'disabled':'')+'>'+nextLabel+'</button></div>';
+}
+function fieldErr(id, show, msg){
+  var el=document.getElementById(id);if(!el)return;
+  el.className= show?'err-msg show':'err-msg';
+  if(msg)el.textContent=msg;
+}
+
+/* \u2500\u2500\u2500 \u0635\u0641\u062D\u0627\u062A \u2500\u2500\u2500 */
+function renderWelcome(){
+  setBar();
+  app.innerHTML='<div class="card"><div class="badge-free">\u0647\u0645\u0647\u200C\u06CC \u062E\u062F\u0645\u0627\u062A \u0645\u0631\u06A9\u0632 \u0631\u0627\u06CC\u06AF\u0627\u0646\u0647</div>'+
+    '<div class="welcome-text" id="wt"></div>'+
+    '<div class="btnrow" id="wb" style="visibility:hidden">'+
+    '<button class="btn btn--primary" id="startBtn">\u0634\u0631\u0648\u0639</button></div></div>';
+  var text='\u0633\u0644\u0627\u0645! \u0628\u0647 \u0645\u0631\u06A9\u0632 \u062C\u0627\u0645\u0639 \u0633\u0646\u062C\u0634 \u0648 \u0627\u062E\u062A\u0644\u0627\u0644\u0627\u062A \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u062E\u0648\u0634 \u0627\u0648\u0645\u062F\u06CC\u062F.\\n\u0647\u0645\u0647\u200C\u06CC \u062E\u062F\u0645\u0627\u062A \u0645\u0627 \u0631\u0627\u06CC\u06AF\u0627\u0646\u0647. \u0642\u0631\u0627\u0631\u0647 \u062A\u0648\u06CC \u0686\u0646\u062F \u062F\u0642\u06CC\u0642\u0647 \u0627\u0637\u0644\u0627\u0639\u0627\u062A \u0644\u0627\u0632\u0645 \u0631\u0648 \u0628\u06AF\u06CC\u0631\u06CC\u0645 \u062A\u0627 \u0627\u0633\u0645 \u0641\u0631\u0632\u0646\u062F\u062A\u0648\u0646 \u06CC\u0627 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\u062A\u0648\u0646 \u0628\u0647 \u0644\u06CC\u0633\u062A \u0627\u0646\u062A\u0638\u0627\u0631 \u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u0627\u0636\u0627\u0641\u0647 \u0628\u0634\u0647.\\n\u0647\u0631 \u0648\u0642\u062A \u0622\u0645\u0627\u062F\u0647 \u0628\u0648\u062F\u06CC\u062F\u060C \u062F\u06A9\u0645\u0647\u200C\u06CC \xAB\u0634\u0631\u0648\u0639\xBB \u0631\u0648 \u0628\u0632\u0646\u06CC\u062F.';
+  typeInto(document.getElementById('wt'), text, function(){
+    document.getElementById('wb').style.visibility='visible';
+  });
+  document.getElementById('startBtn').addEventListener('click', function(){state.step=1;render();});
+}
+
+function renderRole(){
+  setBar();
+  app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
+    '<h2>\u0634\u0645\u0627 \u06A9\u062F\u0627\u0645\u200C\u06CC\u06A9 \u0647\u0633\u062A\u06CC\u062F\u061F</h2>'+
+    '<p class="lead">\u0628\u0631 \u0627\u0633\u0627\u0633 \u0647\u0645\u06CC\u0646 \u0627\u0646\u062A\u062E\u0627\u0628\u060C \u0641\u0631\u0645 \u0628\u0631\u0627\u06CC \u0634\u0645\u0627 \u06A9\u0648\u062A\u0627\u0647 \u06CC\u0627 \u0628\u0644\u0646\u062F \u0645\u06CC\u200C\u0634\u0647.</p>'+
+    '<div class="choices">'+
+    '<button class="choice" id="rFamily"><span class="no">\u06F1</span><b>\u067E\u062F\u0631 \u06CC\u0627 \u0645\u0627\u062F\u0631 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632</b><span class="d">\u0645\u06CC\u200C\u062E\u0648\u0627\u0645 \u0641\u0631\u0632\u0646\u062F\u0645 \u0631\u0648 \u0628\u0647 \u0645\u0631\u06A9\u0632 \u0645\u0639\u0631\u0641\u06CC \u06A9\u0646\u0645</span></button>'+
+    '<button class="choice" id="rTeacher"><span class="no">\u06F2</span><b>\u0645\u0639\u0644\u0645 \u0647\u0645\u06A9\u0627\u0631 \u0645\u0627</b><span class="d">\u0645\u06CC\u200C\u062E\u0648\u0627\u0645 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\u0647\u0627\u06CC \u06A9\u0644\u0627\u0633\u0645 \u0631\u0648 \u0645\u0639\u0631\u0641\u06CC \u06A9\u0646\u0645</span></button>'+
+    '</div></div>';
+  var pick=function(role){
+    state.role=role;state.step=2;render();
+  };
+  document.getElementById('rFamily').addEventListener('click',function(){pick('family');});
+  document.getElementById('rTeacher').addEventListener('click',function(){pick('teacher');});
+}
+
+function renderContact(){
+  setBar();
+  app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
+    '<h2>\u062E\u0648\u062F\u062A\u0627\u0646 \u0631\u0627 \u0645\u0639\u0631\u0641\u06CC \u06A9\u0646\u06CC\u062F</h2><p class="lead">\u0627\u0633\u0645 \u0648 \u0634\u0645\u0627\u0631\u0647\u200C\u0627\u06CC \u06A9\u0647 \u0631\u0627\u062D\u062A \u0628\u0634\u0648\u062F \u0628\u0627 \u0634\u0645\u0627 \u062D\u0631\u0641 \u0632\u062F.</p>'+
+    '<div class="field"><label class="f" for="rn">\u0646\u0627\u0645 \u0648 \u0646\u0627\u0645 \u062E\u0627\u0646\u0648\u0627\u062F\u06AF\u06CC \u0634\u0645\u0627</label>'+
+    '<input class="i" id="rn" autocomplete="name">'+
+    '<div class="err-msg" id="rnErr">\u0646\u0627\u0645 \u0631\u0648 \u06A9\u0627\u0645\u0644 \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F \u2014 \u062F\u0633\u062A\u200C\u06A9\u0645 \u062F\u0648 \u062D\u0631\u0641</div></div>'+
+    '<div class="field"><label class="f" for="rp">\u0634\u0645\u0627\u0631\u0647 \u0645\u0648\u0628\u0627\u06CC\u0644</label>'+
+    '<input class="i" id="rp" inputmode="tel" dir="ltr" placeholder="09xxxxxxxxx">'+
+    '<div class="err-msg" id="rpErr">\u0634\u0645\u0627\u0631\u0647 \u0645\u0648\u0628\u0627\u06CC\u0644 \u06F1\u06F1 \u0631\u0642\u0645 \u0627\u0633\u062A \u0648 \u0628\u0627 \u06F0\u06F9 \u0634\u0631\u0648\u0639 \u0645\u06CC\u200C\u0634\u0647</div></div>'+
+    btnRow('\u0627\u062F\u0627\u0645\u0647','',null,1)+
+    '</div>';
+  document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=1;render();});
+  var rn=document.getElementById('rn');
+  var rp=document.getElementById('rp');
+  rn.value=state.refName;
+  rp.value=state.refPhone;
+  rn.addEventListener('input',function(e){state.refName=e.target.value;});
+  rp.addEventListener('input',function(e){state.refPhone=e.target.value;});
+  var nx=app.querySelector('.btnrow .btn--primary');
+  nx.addEventListener('click',function(){
+    var ok1=state.refName.trim().length>=2;
+    var ok2=validPhone(state.refPhone);
+    fieldErr('rnErr',!ok1);
+    fieldErr('rpErr',!ok2);
+    if(ok1&&ok2){state.refPhone=normPhone(state.refPhone);state.step=3;render();}
+  });
+}
+
+function renderSchool(){
+  setBar();
+  app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
+    '<h2>'+(state.role==='teacher'?'\u0645\u062F\u0631\u0633\u0647\u200C\u06CC \u062E\u0648\u062F\u062A\u0627\u0646':'\u06A9\u0648\u062F\u06A9 \u0634\u0645\u0627 \u062F\u0631 \u06A9\u062F\u0648\u0645 \u0645\u062F\u0631\u0633\u0647\u200C\u06CC \u0647\u0645\u06A9\u0627\u0631 \u0645\u0627 \u062F\u0631\u0633 \u0645\u06CC\u200C\u062E\u0648\u0646\u0647\u061F')+'</h2>'+
+    '<p class="lead">\u0641\u0642\u0637 \u0645\u062F\u0627\u0631\u0633 \u0647\u0645\u06A9\u0627\u0631 \u0645\u0627 \u062F\u0631 \u0641\u0647\u0631\u0633\u062A \u0647\u0633\u062A\u0646 \u2014 \u0627\u06AF\u0631 \u0646\u0628\u0648\u062F\u060C \u0627\u0633\u0645\u0634 \u0631\u0648 \u062F\u0633\u062A\u06CC \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F\u061B \u0645\u0634\u06A9\u0644\u06CC \u0646\u06CC\u0633\u062A.</p>'+
+    '<div class="field"><label class="f" for="sc">\u0645\u062F\u0631\u0633\u0647</label>'+
+    '<select class="i" id="sc"><option value="">\u062F\u0631 \u062D\u0627\u0644 \u0628\u0627\u0631\u06AF\u0630\u0627\u0631\u06CC\u2026</option></select>'+
+    '<input class="i" id="scT" style="display:none;margin-top:8px" placeholder="\u0627\u0633\u0645 \u0645\u062F\u0631\u0633\u0647 \u0631\u0627 \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F" value="'+esc(state.schoolName)+'">'+
+    '</div>'+
+    '<div class="field"><label class="f" for="gr">\u067E\u0627\u06CC\u0647</label><select class="i" id="gr">'+
+    '<option value="">\u0627\u0646\u062A\u062E\u0627\u0628 \u06A9\u0646\u06CC\u062F</option>'+
+    GRADES.map(function(g){return '<option value="'+g+'"'+(state.grade===g?' selected':'')+'>'+g+'</option>';}).join('')+
+    '</select></div>'+
+    '<div class="field"><label class="f" for="kl">\u06A9\u0644\u0627\u0633 (\u0627\u062E\u062A\u06CC\u0627\u0631\u06CC)</label><select class="i" id="kl">'+
+    '<option value="">\u0627\u0646\u062A\u062E\u0627\u0628 \u06A9\u0646\u06CC\u062F</option></select></div>'+
+    btnRow('\u0627\u062F\u0627\u0645\u0647','',null,2)+
+    '</div>';
+  document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=2;render();});
+  /* \u06F1.\u06F2\u06F7.\u06F3\u06F6 \u2014 \u0648\u0635\u0644\u0647\u0654 \u0627\u0634\u06A9\u0627\u0644 \u0642\u062F\u06CC\u0645\u06CC: \u067E\u0627\u06CC\u0647 \u0647\u0645 \u0628\u0647 state \u0628\u0633\u062A\u0647 \u0646\u0645\u06CC\u200C\u0634\u062F */
+  document.getElementById('gr').addEventListener('change',function(e){state.grade=e.target.value;});
+  loadMeta(function(meta){
+    var sc=document.getElementById('sc');var scT=document.getElementById('scT');
+    if(!sc)return;
+    if(!meta.schools.length){sc.style.display='none';scT.style.display='block';state.school='';}
+    else{
+      sc.innerHTML='<option value="">\u0627\u0646\u062A\u062E\u0627\u0628 \u06A9\u0646\u06CC\u062F</option>'+meta.schools.map(function(s){
+        return '<option value="'+esc(s.id)+'"'+(state.school===s.id?' selected':'')+'>'+esc(s.name)+'</option>';
+      }).join('');
+      sc.addEventListener('change',function(e){
+        state.school=e.target.value;
+        var sel=meta.schools.filter(function(s){return s.id===state.school;})[0];
+        state.schoolName=sel?sel.name:scT.value.trim();
+        fillClasses(meta);
+      });
+      var cur=meta.schools.filter(function(s){return s.id===state.school;})[0];
+      if(cur){state.schoolName=cur.name;fillClasses(meta);}
+    }
+    scT.addEventListener('input',function(e){state.schoolName=e.target.value.trim();state.school='';});
+    function fillClasses(m){
+      var kl=document.getElementById('kl');
+      var cs=m.classes.filter(function(c){return c.schoolId===state.school;});
+      kl.innerHTML='<option value="">\u0627\u0646\u062A\u062E\u0627\u0628 \u06A9\u0646\u06CC\u062F</option>'+cs.map(function(c){
+        return '<option value="'+esc(c.name)+'"'+(state.klass===c.name?' selected':'')+'>'+esc(c.name)+'</option>';
+      }).join('');
+      /* \u06F1.\u06F2\u06F7.\u06F3\u06F6 \u2014 \u0648\u0635\u0644\u0647\u0654 \u0627\u0634\u06A9\u0627\u0644 \u0642\u062F\u06CC\u0645\u06CC: \u0627\u0646\u062A\u062E\u0627\u0628 \u06A9\u0644\u0627\u0633 \u0628\u0647 state \u0628\u0633\u062A\u0647 \u0646\u0645\u06CC\u200C\u0634\u062F \u0648 \u062B\u0628\u062A \u0646\u0645\u06CC\u200C\u06AF\u0634\u062A */
+      kl.addEventListener('change',function(e){state.klass=e.target.value;});
+    }
+  });
+  app.querySelector('.btnrow .btn--primary').addEventListener('click',function(){
+    if(!state.schoolName && state.school){var m=state.meta||{schools:[]};var sel=m.schools.filter(function(s){return s.id===state.school;})[0];state.schoolName=sel?sel.name:'';}
+    if(state.role==='teacher' && !state.schoolName){/* \u0645\u0639\u0644\u0645 \u0628\u062F\u0648\u0646 \u0645\u062F\u0631\u0633\u0647 \u062F\u0631 \u0641\u0647\u0631\u0633\u062A \u2014 \u0627\u062C\u0627\u0632\u0647 \u0628\u0627 \u062B\u0628\u062A \u062F\u0633\u062A\u06CC */}
+    state.step=4;render();
+  });
+  var nx=app.querySelector('.btnrow .btn--primary');nx.textContent='\u0627\u062F\u0627\u0645\u0647';
+}
+
+function renderChildName(){
+  setBar();
+  app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
+    '<h2>\u0627\u0633\u0645 \u06A9\u0648\u062F\u06A9 \u0686\u06CC\u0633\u062A\u061F</h2>'+
+    '<p class="lead">\u0647\u0645\u0627\u0646\u200C\u0637\u0648\u0631 \u06A9\u0647 \u0635\u062F\u0627\u064A\u0634 \u0645\u06CC\u200C\u06A9\u0646\u06CC\u062F \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F.</p>'+
+    '<div class="field"><label class="f" for="cn">\u0646\u0627\u0645 \u0648 \u0646\u0627\u0645 \u062E\u0627\u0646\u0648\u0627\u062F\u06AF\u06CC \u06A9\u0648\u062F\u06A9</label>'+
+    '<input class="i" id="cn" value="'+esc(state.childName)+'">'+
+    '<div class="err-msg" id="cnErr">\u0627\u0633\u0645 \u06A9\u0648\u062F\u06A9 \u0631\u0627 \u06A9\u0627\u0645\u0644 \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F \u2014 \u062F\u0633\u062A\u200C\u06A9\u0645 \u062F\u0648 \u062D\u0631\u0641</div></div>'+
+    btnRow('\u0627\u062F\u0627\u0645\u0647','',null,3)+
+    '</div>';
+  document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=3;render();});
+  /* \u06F1.\u06F2\u06F7.\u06F3\u06F6 \u2014 \u0648\u0635\u0644\u0647\u0654 \u0627\u0634\u06A9\u0627\u0644 \u0642\u062F\u06CC\u0645\u06CC (\u0627\u0632 v1.\u06F2\u06F7.\u06F3\u06F3): input \u0646\u0627\u0645 \u06A9\u0648\u062F\u06A9 \u0628\u0647 state \u0628\u0633\u062A\u0647 \u0646\u0645\u06CC\u200C\u0634\u062F \u0648 \u06AF\u0627\u0645 \u062C\u0644\u0648 \u0646\u0645\u06CC\u200C\u0631\u0641\u062A */
+  document.getElementById('cn').addEventListener('input',function(e){state.childName=e.target.value;});
+  var nx=app.querySelector('.btnrow .btn--primary');nx.textContent='\u0627\u062F\u0627\u0645\u0647';
+  nx.addEventListener('click',function(){
+    var ok=state.childName.trim().length>=2;fieldErr('cnErr',!ok);
+    if(ok){state.childName=state.childName.trim();state.step=5;render();}
+  });
+}
+
+function renderChildBirth(){
+  setBar();
+  app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
+    '<h2>\u062A\u0627\u0631\u06CC\u062E \u062A\u0648\u0644\u062F \u06A9\u0648\u062F\u06A9</h2><p class="lead">\u0627\u06AF\u0631 \u0628\u0644\u062F\u06CC\u062F \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F \u2014 \u0627\u06AF\u0631 \u0646\u0647\u060C \u062E\u0627\u0644\u06CC \u0628\u06AF\u0630\u0627\u0631\u06CC\u062F \u0645\u0627 \u062A\u0648 \u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u062E\u0648\u062F\u0645\u0648\u0646 \u0686\u06A9 \u0645\u06CC\u06A9\u0646\u06CC\u0645.</p>'+
+    '<div class="field"><label class="f" for="cb">\u062A\u0627\u0631\u06CC\u062E \u062A\u0648\u0644\u062F (\u0634\u0645\u0633\u06CC \u2014 \u0645\u062B\u0644 \u06F1\u06F3\u06F9\u06F8/\u06F0\u06F5/\u06F1\u06F2)</label>'+
+    '<input class="i" id="cb" inputmode="numeric" value="'+esc(state.childBirth)+'">'+
+    '<div class="hint">\u0627\u062E\u062A\u06CC\u0627\u0631\u06CC \u0627\u0633\u062A</div></div>'+
+    btnRow('\u0627\u062F\u0627\u0645\u0647','',null,4)+
+    '</div>';
+  document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=4;render();});
+  var nx=app.querySelector('.btnrow .btn--primary');nx.textContent='\u0627\u062F\u0627\u0645\u0647';
+  nx.addEventListener('click',function(){
+    state.childBirth=document.getElementById('cb').value.trim();
+    state.step=6;render();
+  });
+}
+
+function renderConcern(){
+  setBar();
+  var cards=CONCERNS.map(function(c,i){
+    return '<button class="choice'+(state.concern===c.v?' sel':'')+'" data-c="'+c.v+'">'+
+      '<span class="no">'+(i+1)+'</span><b>'+c.t+'</b><span class="d">'+c.d+'</span></button>';
+  }).join('');
+  app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
+    '<h2>\u062F\u063A\u062F\u063A\u0647\u200C\u06CC \u0627\u0635\u0644\u06CC \u0634\u0645\u0627 \u0686\u06CC\u0647\u061F</h2><p class="lead">\u0644\u0627\u0632\u0645 \u0646\u06CC\u0633\u062A \u062F\u0642\u06CC\u0642 \u0628\u0627\u0634\u062F \u2014 \u0646\u06AF\u0631\u0627\u0646\u06CC\u200C\u062A\u0627\u0646 \u0631\u0648 \u0647\u0645\u0627\u0646\u200C\u0637\u0648\u0631 \u06A9\u0647 \u0647\u0633\u062A \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F.</p>'+
+    '<div class="choices">'+cards+'</div>'+
+    '<div class="err-msg" id="ccErr">\u06CC\u06A9\u06CC \u0627\u0632 \u06AF\u0632\u06CC\u0646\u0647\u200C\u0647\u0627 \u0631\u0627 \u0627\u0646\u062A\u062E\u0627\u0628 \u06A9\u0646\u06CC\u062F</div>'+
+    btnRow('\u0627\u062F\u0627\u0645\u0647','',null,5)+
+    '</div>';
+  document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=5;render();});
+  app.querySelectorAll('[data-c]').forEach(function(b){
+    b.addEventListener('click',function(){
+      state.concern=b.getAttribute('data-c');
+      app.querySelectorAll('[data-c]').forEach(function(x){x.classList.remove('sel');});
+      b.classList.add('sel');
+    });
+  });
+  var nx=app.querySelector('.btnrow .btn--primary');nx.textContent='\u0627\u062F\u0627\u0645\u0647';
+  nx.addEventListener('click',function(){
+    if(!state.concern){fieldErr('ccErr',true);return;}
+    state.step=7;render();
+  });
+}
+
+function renderPrior(){
+  setBar();
+  app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
+    '<h2>\u0642\u0628\u0644\u0627\u064B \u062C\u0627\u06CC\u06CC \u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u06CC\u0627 \u062A\u0634\u062E\u06CC\u0635 \u062F\u0627\u0634\u062A\u0647\u061F</h2>'+
+    '<div class="pills" id="pe">'+
+    '<button class="pill'+(state.priorEval===true?' sel':'')+'" data-v="1">\u0628\u0644\u0647</button>'+
+    '<button class="pill'+(state.priorEval===false?' sel':'')+'" data-v="0">\u062E\u06CC\u0631</button>'+
+    '</div>'+
+    '<div class="field" id="pen" style="display:'+(state.priorEval===true?'block':'none')+';margin-top:12px">'+
+    '<label class="f" for="penote">\u06A9\u062C\u0627 \u0648 \u0686\u0647 \u0646\u062A\u06CC\u062C\u0647\u200C\u0627\u06CC\u061F (\u0627\u062E\u062A\u06CC\u0627\u0631\u06CC)</label>'+
+    '<input class="i" id="penote" value="'+esc(state.priorEvalNote)+'"></div>'+
+    btnRow('\u0627\u062F\u0627\u0645\u0647','',null,6)+
+    '</div>';
+  document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=7;render();});
+  app.querySelectorAll('#pe .pill').forEach(function(p){
+    p.addEventListener('click',function(){
+      state.priorEval=p.getAttribute('data-v')==='1';
+      app.querySelectorAll('#pe .pill').forEach(function(x){x.classList.remove('sel');});
+      p.classList.add('sel');
+      document.getElementById('pen').style.display=state.priorEval===true?'block':'none';
+    });
+  });
+  var nx=app.querySelector('.btnrow .btn--primary');nx.textContent='\u0627\u062F\u0627\u0645\u0647';
+  nx.addEventListener('click',function(){
+    state.priorEvalNote=document.getElementById('penote').value.trim();
+    state.step=8;render();
+  });
+}
+
+function renderNotes(){
+  setBar();
+  app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
+    '<h2>\u0646\u06A9\u062A\u0647\u200C\u0627\u06CC \u0647\u0633\u062A \u06A9\u0647 \u0628\u0647 \u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u06A9\u0645\u06A9 \u06A9\u0646\u062F\u061F</h2><p class="lead">\u0627\u062E\u062A\u06CC\u0627\u0631\u06CC \u0627\u0633\u062A \u2014 \u0647\u0631 \u0686\u06CC\u0632\u06CC \u06A9\u0647 \u0641\u06A9\u0631 \u0645\u06CC\u200C\u06A9\u0646\u06CC\u062F \u0628\u0627\u06CC\u062F \u0628\u062F\u0648\u0646\u06CC\u0645.</p>'+
+    '<div class="field"><textarea class="i" id="ct">'+esc(state.concernText)+'</textarea></div>'+
+    btnRow('\u0627\u062F\u0627\u0645\u0647 \u0628\u0647 \u0645\u0631\u0648\u0631 \u0646\u0647\u0627\u06CC\u06CC','',null,7)+
+    '</div>';
+  document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=7;render();});
+  var nx=app.querySelector('.btnrow .btn--primary');nx.textContent='\u0627\u062F\u0627\u0645\u0647 \u0628\u0647 \u0645\u0631\u0648\u0631 \u0646\u0647\u0627\u06CC\u06CC';
+  nx.addEventListener('click',function(){
+    state.concernText=document.getElementById('ct').value.trim();
+    state.step=9;render();
+  });
+}
+
+function familyChildren(){
+  return [{
+    first_name: state.childName,
+    birth_date_text: state.childBirth || null,
+    school_text: state.schoolName || null,
+    grade_text: state.grade || null,
+    class_text: state.klass || null,
+    concern_category: state.concern,
+    concern_tags: [],
+    concern_text: state.concernText || null,
+    prior_eval: state.priorEval===true?true:state.priorEval===false?false:null,
+    prior_eval_note: state.priorEvalNote || null
+  }];
+}
+
+/* \u2500\u2500\u2500 \u0645\u0648\u062F\u0627\u0644 \u0645\u0631\u0648\u0631 \u0646\u0647\u0627\u06CC\u06CC (Typeform-style) \u2014 \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u2500\u2500\u2500 */
+function renderReview(){
+  setBar();
+  var rows=[
+    {k:'\u0646\u0627\u0645 \u06A9\u0648\u062F\u06A9', v:esc(state.childName), s:4},
+    {k:'\u062A\u0627\u0631\u06CC\u062E \u062A\u0648\u0644\u062F', v:esc2(state.childBirth), s:5},
+    {k:'\u0645\u062F\u0631\u0633\u0647', v:esc2(state.schoolName), s:3},
+    {k:'\u067E\u0627\u06CC\u0647', v:esc2(state.grade), s:3},
+    {k:'\u06A9\u0644\u0627\u0633', v:esc2(state.klass), s:3},
+    {k:'\u062F\u063A\u062F\u063A\u0647 \u0627\u0635\u0644\u06CC', v:CAT_LABELS[state.concern]||'', s:6},
+    {k:'\u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u0642\u0628\u0644\u06CC', v:state.priorEval===true?'\u0628\u0644\u0647'+(state.priorEvalNote?' \u2014 '+esc(state.priorEvalNote):''):'\u062E\u06CC\u0631', s:7},
+    {k:'\u0646\u06A9\u0627\u062A', v:esc2(state.concernText), s:8},
+    {k:'\u0645\u0639\u0631\u0641', v:esc(state.refName)+' \u2014 '+esc(state.refPhone), s:2}
+  ].map(function(r){
+    return '<div class="review__row"><span class="k">'+r.k+'</span><span class="v">'+r.v+'</span>'+
+      '<button class="e" data-s="'+r.s+'">\u0648\u06CC\u0631\u0627\u06CC\u0634</button></div>';
+  }).join('');
+  app.innerHTML='<div class="card">'+
+    '<h2>\u0627\u06CC\u0646 \u0627\u0637\u0644\u0627\u0639\u0627\u062A \u0628\u0647 \u0644\u06CC\u0633\u062A \u0627\u0646\u062A\u0638\u0627\u0631 \u0627\u0636\u0627\u0641\u0647 \u0645\u06CC\u0634\u0647</h2>'+
+    '<p class="lead">\u06CC\u06A9 \u0646\u06AF\u0627\u0647 \u0628\u06CC\u0646\u062F\u0627\u0632\u06CC\u062F\u061B \u0647\u0631 \u0633\u0637\u0631 \u0631\u0648 \u0647\u0645\u06CC\u0646\u200C\u062C\u0627 \u0645\u06CC\u200C\u0634\u0647 \u0627\u0635\u0644\u0627\u062D \u06A9\u0631\u062F.</p>'+
+    '<div class="review">'+rows+'</div>'+
+    '<div class="err-msg" id="subErr"></div>'+
+    '<div class="btnrow"><button class="btn btn--ghost" data-act="back">\u0628\u0627\u0632\u06AF\u0634\u062A \u0648 \u0648\u06CC\u0631\u0627\u06CC\u0634</button>'+
+    '<button class="btn btn--primary" id="confirmBtn">\u062A\u0623\u06CC\u06CC\u062F \u0648 \u0627\u0641\u0632\u0648\u062F\u0646 \u0628\u0647 \u0644\u06CC\u0633\u062A \u0627\u0646\u062A\u0638\u0627\u0631</button></div></div>';
+  document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=8;render();});
+  app.querySelectorAll('.e').forEach(function(b){
+    b.addEventListener('click',function(){state.step=Number(b.getAttribute('data-s'));render();});
+  });
+  document.getElementById('confirmBtn').addEventListener('click',function(){
+    submit({role:'family', children:familyChildren()}, this);
+  });
+}
+
+function submit(payload, btnEl){
+  if(state.submitting)return;
+  state.submitting=true;btnEl.disabled=true;btnEl.textContent='\u062F\u0631 \u062D\u0627\u0644 \u062B\u0628\u062A\u2026';
+  fetch('/public/referrals',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
+    .then(function(r){return r.json().then(function(j){return {status:r.status, body:j};});})
+    .then(function(res){
+      state.submitting=false;
+      if(res.status===201){state.step=total()-1;render();return;}
+      var msg=(res.body&&res.body.message)||('\u062B\u0628\u062A \u0646\u0634\u062F \u2014 \u06A9\u062F '+res.status);
+      var el=document.getElementById('subErr');
+      if(el){el.className='err-msg show';el.textContent=msg;}
+      else{alert(msg);}
+      btnEl.disabled=false;btnEl.textContent=state.role==='teacher'?'\u062B\u0628\u062A \u0647\u0645\u0647 \u062F\u0631 \u0644\u06CC\u0633\u062A \u0627\u0646\u062A\u0638\u0627\u0631':'\u062A\u0623\u06CC\u06CC\u062F \u0648 \u0627\u0641\u0632\u0648\u062F\u0646 \u0628\u0647 \u0644\u06CC\u0633\u062A \u0627\u0646\u062A\u0638\u0627\u0631';
+    })
+    .catch(function(){
+      state.submitting=false;btnEl.disabled=false;
+      var el=document.getElementById('subErr');
+      if(el){el.className='err-msg show';el.textContent='\u0627\u0631\u062A\u0628\u0627\u0637 \u0628\u0631\u0642\u0631\u0627\u0631 \u0646\u0634\u062F \u2014 \u0627\u06CC\u0646\u062A\u0631\u0646\u062A \u0631\u0648 \u0686\u06A9 \u06A9\u0646\u06CC\u062F \u0648 \u062F\u0648\u0628\u0627\u0631\u0647 \u0628\u0632\u0646\u06CC\u062F';}
+      btnEl.textContent=state.role==='teacher'?'\u062B\u0628\u062A \u0647\u0645\u0647 \u062F\u0631 \u0644\u06CC\u0633\u062A \u0627\u0646\u062A\u0638\u0627\u0631':'\u062A\u0623\u06CC\u06CC\u062F \u0648 \u0627\u0641\u0632\u0648\u062F\u0646 \u0628\u0647 \u0644\u06CC\u0633\u062A \u0627\u0646\u062A\u0638\u0627\u0631';
+    });
+}
+
+/* \u2500\u2500\u2500 \u0633\u0647 \u0635\u0641\u062D\u0647 \u0622\u06AF\u0627\u0647\u06CC \u0645\u0639\u0644\u0645 \u2500\u2500\u2500 */
+function renderAware(){
+  setBar();
+  var a=AWARE[state.awareIdx];
+  app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
+    '<div class="badge-free">\u0635\u0641\u062D\u0647 \u0622\u06AF\u0627\u0647\u06CC '+ (state.awareIdx+1) +' \u0627\u0632 '+AWARE.length+'</div>'+
+    '<h2>'+a.t+'</h2><p class="aware">'+a.b+'</p>'+
+    /* \u06F1.\u06F2\u06F7.\u06F3\u06F8 \u2014 \u062C\u0627\u06CC \u062A\u0630\u06A9\u0631 \u062A\u06A9\u0631\u0627\u0631\u06CC \xAB\u062A\u0634\u062E\u06CC\u0635\xBB\u060C \u0644\u06CC\u0646\u06A9 \u0641\u0627\u06CC\u0644 \u0631\u0627\u0647\u0646\u0645\u0627\u06CC \u0639\u0645\u0648\u0645\u06CC \u0628\u0631\u0627\u06CC \u062A\u0648\u0636\u06CC\u062D\u0627\u062A \u0628\u06CC\u0634\u062A\u0631 */
+    '<a class="guide-link" href="/public/guide/'+a.g+'" target="_blank" rel="noopener">\u{1F4C4} \u0641\u0627\u06CC\u0644 \u0631\u0627\u0647\u0646\u0645\u0627\u06CC \u06A9\u0627\u0645\u0644\u200C\u062A\u0631 \u0627\u06CC\u0646 \u062F\u0633\u062A\u0647</a>'+
+    btnRow(state.awareIdx===AWARE.length-1?'\u0631\u0641\u062A\u0646 \u0628\u0647 \u062B\u0628\u062A \u0627\u0631\u062C\u0627\u0639\u200C\u0647\u0627':'\u0627\u062F\u0627\u0645\u0647','',null,state.awareIdx===0?3:state.awareIdx+3)+
+    '</div>';
+  document.querySelector('[data-act="back"]').addEventListener('click',function(){
+    if(state.awareIdx===0){state.step=3;}else{state.awareIdx--;}
+    render();
+  });
+  var nx=app.querySelector('.btnrow .btn--primary');
+  nx.textContent=state.awareIdx===AWARE.length-1?'\u0631\u0641\u062A\u0646 \u0628\u0647 \u062B\u0628\u062A \u0627\u0631\u062C\u0627\u0639\u200C\u0647\u0627':'\u0627\u062F\u0627\u0645\u0647';
+  nx.addEventListener('click',function(){
+    if(state.awareIdx<AWARE.length-1){state.awareIdx++;state.step=4+state.awareIdx;render();}
+    else{state.step=7;render();}
+  });
+}
+
+/* \u2500\u2500\u2500 \u062B\u0628\u062A \u062F\u0633\u062A\u0647\u200C\u0627\u06CC \u0645\u0639\u0644\u0645 \u2500\u2500\u2500 */
+function rowCardHtml(r, i){
+  var cats=TEACH_CATS.map(function(c){
+    return '<button class="pill'+(r.cat===c?' sel':'')+'" data-i="'+i+'" data-cat="'+c+'">'+TEACH_CAT_LABELS[c]+'</button>';
+  }).join('');
+  return '<div class="rowcard" data-i="'+i+'">'+
+    '<button class="rm" data-rm="'+i+'">\u062D\u0630\u0641</button>'+
+    '<div class="pills" style="margin-bottom:10px">'+cats+'</div>'+
+    '<div class="field"><label class="f">\u0646\u0627\u0645 \u0648 \u0646\u0627\u0645 \u062E\u0627\u0646\u0648\u0627\u062F\u06AF\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632</label>'+
+    '<input class="i rn" value="'+esc(r.name)+'"></div>'+
+    '<div class="field"><label class="f">\u0634\u0645\u0627\u0631\u0647 \u0645\u0648\u0628\u0627\u06CC\u0644 \u0648\u0627\u0644\u062F</label>'+
+    '<input class="i rp" inputmode="tel" dir="ltr" placeholder="09xxxxxxxxx" value="'+esc(r.phone)+'">'+
+    '<div class="err-msg">\u0634\u0645\u0627\u0631\u0647 \u0645\u0648\u0628\u0627\u06CC\u0644 \u06F1\u06F1 \u0631\u0642\u0645 \u0627\u0633\u062A \u0648 \u0628\u0627 \u06F0\u06F9 \u0634\u0631\u0648\u0639 \u0645\u06CC\u200C\u0634\u0647</div></div></div>';
+}
+
+function renderBatch(){
+  setBar();
+  if(state.rows.length===0)state.rows=[{cat:null,name:'',phone:''}];
+  app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
+    '<h2>\u062B\u0628\u062A \u0627\u0631\u062C\u0627\u0639\u200C\u0647\u0627\u06CC \u06A9\u0644\u0627\u0633 \u0634\u0645\u0627</h2>'+
+    '<p class="lead">\u0628\u0631\u0627\u06CC \u0647\u0631 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u062F\u0633\u062A\u0647 \u0631\u0648 \u0627\u0646\u062A\u062E\u0627\u0628 \u06A9\u0646\u06CC\u062F\u060C \u0627\u0633\u0645\u0634 \u0648 \u0634\u0645\u0627\u0631\u0647\u200C\u06CC \u0648\u0627\u0644\u062F\u0634 \u0631\u0648 \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F.</p>'+
+    '<div id="rows">'+state.rows.map(rowCardHtml).join('')+'</div>'+
+    '<button class="btn btn--ghost btn--sm" id="addRow">+ \u0627\u0641\u0632\u0648\u062F\u0646 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u062F\u06CC\u06AF\u0631</button>'+
+    '<div class="err-msg" id="bErr" style="margin-top:10px"></div>'+
+    btnRow('\u0627\u062F\u0627\u0645\u0647 \u0628\u0647 \u0645\u0631\u0648\u0631 \u0646\u0647\u0627\u06CC\u06CC','',null,6)+
+    '</div>';
+  document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=6;state.awareIdx=AWARE.length-1;render();});
+  bindBatch();
+  document.getElementById('addRow').addEventListener('click',function(){
+    state.rows.push({cat:null,name:'',phone:''});
+    document.getElementById('rows').insertAdjacentHTML('beforeend',rowCardHtml({cat:null,name:'',phone:''},state.rows.length-1));
+    bindBatch();
+  });
+  var nx=app.querySelector('.btnrow .btn--primary');nx.textContent='\u0627\u062F\u0627\u0645\u0647 \u0628\u0647 \u0645\u0631\u0648\u0631 \u0646\u0647\u0627\u06CC\u06CC';
+  nx.addEventListener('click',function(){
+    var inputs=document.querySelectorAll('#rows .rowcard');
+    var ok=true;
+    inputs.forEach(function(card,i){
+      var r=state.rows[i];if(!r)return;
+      r.name=card.querySelector('.rn').value.trim();
+      r.phone=normPhone(card.querySelector('.rp').value.trim());
+      var em=card.querySelector('.err-msg');
+      if(!r.name||r.name.length<2||!validPhone(r.phone)){ok=false;if(em)em.className='err-msg show';}
+      else if(em)em.className='err-msg';
+    });
+    var be=document.getElementById('bErr');
+    if(!ok){be.className='err-msg show';be.textContent='\u0646\u0627\u0645 \u0648 \u0634\u0645\u0627\u0631\u0647 \u0645\u0648\u0628\u0627\u06CC\u0644 \u0648\u0627\u0644\u062F \u0647\u0631 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u0631\u0648 \u06A9\u0627\u0645\u0644 \u0648 \u062F\u0631\u0633\u062A \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F';return;}
+    be.className='err-msg';
+    state.step=8;render();
+  });
+}
+
+function bindBatch(){
+  app.querySelectorAll('#rows .rowcard').forEach(function(card){
+    var i=Number(card.getAttribute('data-i'));
+    var r=state.rows[i];if(!r)return;
+    card.querySelectorAll('.pill').forEach(function(p){
+      p.addEventListener('click',function(){
+        r.cat=p.getAttribute('data-cat');
+        card.querySelectorAll('.pill').forEach(function(x){x.classList.remove('sel');});
+        p.classList.add('sel');
+      });
+    });
+    card.querySelector('.rn').addEventListener('input',function(e){r.name=e.target.value;});
+    card.querySelector('.rp').addEventListener('input',function(e){r.phone=e.target.value;});
+    var rm=card.querySelector('.rm');
+    if(rm)rm.addEventListener('click',function(){
+      state.rows.splice(i,1);render();
+    });
+  });
+}
+
+/* \u2500\u2500\u2500 \u0645\u0648\u062F\u0627\u0644 \u0645\u0631\u0648\u0631 \u0645\u0639\u0644\u0645 \u2500\u2500\u2500 */
+function renderTeachReview(){
+  setBar();
+  var rows=state.rows.map(function(r,i){
+    return '<div class="review__row"><span class="k">'+(i+1)+'. '+TEACH_CAT_LABELS[r.cat]+'</span>'+
+      '<span class="v">'+esc(r.name)+' \u2014 '+esc(r.phone)+'</span></div>';
+  }).join('');
+  app.innerHTML='<div class="card"><h2>\u0647\u0645\u0647 \u0686\u06CC\u0632 \u0622\u0645\u0627\u062F\u0647 \u062B\u0628\u062A \u0627\u0633\u062A</h2>'+
+    '<p class="lead">'+fa(state.rows.length)+' \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u0628\u0647 \u0644\u06CC\u0633\u062A \u0627\u0646\u062A\u0638\u0627\u0631 \u0627\u0636\u0627\u0641\u0647 \u0645\u06CC\u0634\u0647. \u06CC\u06A9 \u0646\u06AF\u0627\u0647 \u0628\u06CC\u0646\u062F\u0627\u0632\u06CC\u062F:</p>'+
+    '<div class="review">'+rows+'</div>'+
+    '<div class="err-msg" id="subErr"></div>'+
+    '<div class="btnrow"><button class="btn btn--ghost" data-act="back">\u0628\u0627\u0632\u06AF\u0634\u062A \u0648 \u0648\u06CC\u0631\u0627\u06CC\u0634</button>'+
+    '<button class="btn btn--primary" id="confirmBtn">\u062B\u0628\u062A \u0647\u0645\u0647 \u062F\u0631 \u0644\u06CC\u0633\u062A \u0627\u0646\u062A\u0638\u0627\u0631</button></div></div>';
+  document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=7;render();});
+  document.getElementById('confirmBtn').addEventListener('click',function(){
+    var payload={
+      role:'teacher',
+      referrer_name:state.refName, referrer_phone:state.refPhone,
+      school_text:state.schoolName||null, grade_text:state.grade||null, class_text:state.klass||null,
+      token:TOKEN||undefined,
+      children:state.rows.map(function(r){
+        return {first_name:r.name, guardian_phone:r.phone, concern_category:r.cat, concern_tags:[], concern_text:null};
+      })
+    };
+    submit(payload, this);
+  });
+}
+
+function fa(n){var d='\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9';return String(n).replace(/\\d/g,function(x){return d[Number(x)];});}
+
+function renderDone(){
+  bar.style.width='100%';
+  var fam=state.role!=='teacher';
+  app.innerHTML='<div class="card done"><div class="big">'+(fam?'\u{1F389}':'\u{1F64F}')+'</div>'+
+    '<h2>'+(fam?'\u062E\u0648\u0634\u200C\u0622\u0645\u062F! \u0627\u0633\u0645\u062A\u0648\u0646 \u062A\u0648\u06CC \u0644\u06CC\u0633\u062A \u0627\u0646\u062A\u0638\u0627\u0631 \u062B\u0628\u062A \u0634\u062F':'\u0645\u0645\u0646\u0648\u0646 \u0627\u0632 \u0645\u0639\u0631\u0641\u06CC\u200C\u062A\u0648\u0646!')+'</h2>'+
+    '<p class="lead">'+(fam?'\u0647\u0645\u06A9\u0627\u0631\u0627\u0646 \u0645\u0627 \u0628\u0631\u0627\u06CC \u0648\u0642\u062A\u200C\u06AF\u06CC\u0631\u06CC \u062A\u0645\u0627\u0633 \u0645\u06CC\u200C\u06AF\u06CC\u0631\u0646. \u06CC\u0627\u062F\u062A\u0648\u0646 \u0628\u0627\u0634\u0647 \u0647\u0645\u0647\u200C\u06CC \u062E\u062F\u0645\u0627\u062A \u0645\u0631\u06A9\u0632 \u0631\u0627\u06CC\u06AF\u0627\u0646\u0647.':'\u0627\u0633\u0645 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\u0647\u0627 \u0628\u0647 \u0644\u06CC\u0633\u062A \u0627\u0646\u062A\u0638\u0627\u0631 \u0627\u0636\u0627\u0641\u0647 \u0634\u062F. \u062A\u06CC\u0645 \u0645\u0627 \u0628\u0631\u0627\u06CC \u062A\u0645\u0627\u0633 \u0628\u0627 \u062E\u0627\u0646\u0648\u0627\u062F\u0647\u200C\u0647\u0627 \u0627\u0642\u062F\u0627\u0645 \u0645\u06CC\u200C\u06A9\u0646\u0647.')+'</p>'+
+    '<p class="hint">\u0645\u0631\u06A9\u0632 \u062C\u0627\u0645\u0639 \u0633\u0646\u062C\u0634 \u0648 \u0627\u062E\u062A\u0644\u0627\u0644\u0627\u062A \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u2014 \u0647\u0645\u0647\u200C\u06CC \u062E\u062F\u0645\u0627\u062A \u0631\u0627\u06CC\u06AF\u0627\u0646\u0647</p></div>';
+}
+
+function render(){
+  /* \u06F1.\u06F2\u06F7.\u06F3\u06F5 \u2014 \u062C\u0631\u06CC\u0627\u0646 \u067E\u06CC\u0648\u0633\u062A\u0647: \u0647\u0631 \u06AF\u0627\u0645 \u062A\u0627\u0632\u0647 \u0628\u0647 \u0628\u0627\u0644\u0627\u06CC \u0635\u0641\u062D\u0647 \u0628\u0631\u0645\u06CC\u200C\u06AF\u0631\u062F\u062F */
+  try{window.scrollTo({top:0,behavior:'smooth'});}catch(_){window.scrollTo(0,0);}
+  var s=state.step;
+  if(s===0)return renderWelcome();
+  if(s===1)return renderRole();
+  if(s===2)return renderContact();
+  if(s===3)return renderSchool();
+  if(state.role==='family'){
+    if(s===4)return renderChildName();
+    if(s===5)return renderChildBirth();
+    if(s===6)return renderConcern();
+    if(s===7)return renderPrior();
+    if(s===8)return renderNotes();
+    if(s===9)return renderReview();
+    if(s===10)return renderDone();
+  }else{
+    if(s===4||s===5||s===6)return renderAware();
+    if(s===7)return renderBatch();
+    if(s===8)return renderTeachReview();
+    if(s===9)return renderDone();
+  }
+  state.step=0;render();
+}
+
+render();
+})();
+`;
+function renderReferralPage(opts = {}) {
+  const token = safeToken(opts.token);
+  return `<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>\u0645\u0639\u0631\u0641\u06CC \u0628\u0647 \u0645\u0631\u06A9\u0632 \u2014 \u062C\u0627\u0645\u0639 \u0633\u0646\u062C\u0634 \u0648 \u0627\u062E\u062A\u0644\u0627\u0644\u0627\u062A \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC</title>
+<meta name="robots" content="noindex, nofollow">
+<!-- \u06F1.\u06F2\u06F7.\u06F4\u06F2 \u2014 \u0648\u0632\u06CC\u0631\u0645\u062A\u0646 \u0641\u0642\u0637 \u062E\u0648\u062F\u06CC: \u0641\u0627\u06CC\u0644 \u0645\u062A\u063A\u06CC\u0631 \u0628\u0627\u0646\u062F\u0644\u200C\u0634\u062F\u0647 \u0627\u0632 \u0647\u0645\u0627\u0646 \u0645\u0628\u062F\u0627 \u0633\u0631\u0648 \u0645\u06CC\u200C\u0634\u0648\u062F (\u0628\u062F\u0648\u0646 CDN \u0628\u06CC\u0631\u0648\u0646\u06CC) -->
+<style>${PAGE_STYLES}</style>
+</head>
+<body>
+<div class="bar"><div class="bar__fill" id="bar"></div></div>
+<div class="app" id="app"></div>
+<script>window.__REFERRAL_TOKEN__=${JSON.stringify(token)};</script>
+<script>${PAGE_SCRIPT}</script>
+</body>
+</html>`;
+}
+__name(renderReferralPage, "renderReferralPage");
+
+// src/domain/waitlist/guide-page.ts
+var GUIDE_SLUGS = ["delayed", "learning-disorder", "intellectual"];
+var GUIDES = {
+  delayed: {
+    title: "\u0631\u0627\u0647\u0646\u0645\u0627\u06CC \u062F\u06CC\u0631\u0622\u0645\u0648\u0632\u06CC \u2014 \u0628\u0631\u0627\u06CC \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u0648 \u0645\u0639\u0644\u0645",
+    lead: "\u062F\u06CC\u0631\u0622\u0645\u0648\u0632 \u06CC\u0639\u0646\u06CC \u0628\u0686\u0647\u200C\u0627\u06CC \u06A9\u0647 \u0645\u0633\u06CC\u0631 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC\u0634 \u06A9\u064F\u0646\u062F\u062A\u0631 \u0627\u0632 \u0647\u0645\u200C\u0633\u0646\u200C\u0648\u0633\u0627\u0644\u200C\u0647\u0627\u0634 \u067E\u06CC\u0634 \u0645\u06CC\u200C\u0631\u0647 \u2014 \u0648\u0644\u06CC \u0627\u06CC\u0646 \xAB\u06A9\u064F\u0646\u062F\xBB \u0628\u0647 \u0645\u0639\u0646\u06CC \xAB\u0647\u0631\u06AF\u0632\xBB \u0646\u06CC\u0633\u062A. \u0627\u06CC\u0646 \u0641\u0627\u06CC\u0644 \u0628\u0647 \u0632\u0628\u0627\u0646 \u0633\u0627\u062F\u0647 \u062A\u0648\u0636\u06CC\u062D \u0645\u06CC\u200C\u062F\u0647\u062F \u0686\u0647 \u062E\u0628\u0631 \u0627\u0633\u062A\u060C \u0686\u0647 \u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC\u06CC \u062F\u0627\u0631\u062F\u060C \u0648 \u0647\u0645\u06CC\u0646 \u0627\u0645\u0631\u0648\u0632 \u0686\u0647 \u06A9\u0627\u0631\u06CC \u0627\u0632 \u062F\u0633\u062A \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u0648 \u0645\u0639\u0644\u0645 \u0628\u0631\u0645\u06CC\u200C\u0622\u06CC\u062F.",
+    sections: [
+      {
+        h: "\u062F\u06CC\u0631\u0622\u0645\u0648\u0632\u06CC \u06CC\u0639\u0646\u06CC \u0686\u0647\u061F",
+        p: "\u062F\u06CC\u0631\u0622\u0645\u0648\u0632\u06CC \u06CC\u06A9 \xAB\u0646\u0627\u06A9\u0627\u0631\u0622\u0645\u062F\u06CC\xBB \u0646\u06CC\u0633\u062A\u061B \u06CC\u06A9 \u062A\u0641\u0627\u0648\u062A\u0650 \u0633\u0631\u0639\u062A\u200C\u0647. \u0627\u06CC\u0646 \u0628\u0686\u0647 \u0647\u0645 \u062F\u0631\u0633 \u0631\u0648 \u06CC\u0627\u062F \u0645\u06CC\u200C\u06AF\u06CC\u0631\u0647\u060C \u0647\u0645 \u0645\u0647\u0627\u0631\u062A \u0645\u06CC\u200C\u06AF\u06CC\u0631\u0647 \u2014 \u0641\u0642\u0637 \u0628\u0627 \u06AF\u0627\u0645\u200C\u0647\u0627\u06CC \u06A9\u0648\u0686\u06A9\u200C\u062A\u0631 \u0648 \u062A\u06A9\u0631\u0627\u0631 \u0628\u06CC\u0634\u062A\u0631. \u0645\u0639\u0645\u0648\u0644\u0627\u064B \u0645\u0634\u06A9\u0644\u0627\u062A\u0634 \u0647\u0645\u0647\u200C\u06AF\u06CC\u0631 \u0646\u06CC\u0633\u062A: \u062F\u0631 \u0628\u0627\u0632\u06CC \u0648 \u06AF\u0641\u062A\u200C\u0648\u06AF\u0648 \u0648 \u0634\u0646\u0627\u062E\u062A \u062F\u0646\u06CC\u0627 \u0645\u062B\u0644 \u0628\u0642\u06CC\u0647 \u0627\u0633\u062A\u060C \u0648\u0644\u06CC \u0648\u0642\u062A\u06CC \u067E\u0627\u06CC \u062E\u0648\u0627\u0646\u062F\u0646\u060C \u0646\u0648\u0634\u062A\u0646 \u0648 \u0645\u0641\u0627\u0647\u06CC\u0645 \u062F\u0631\u0633\u06CC \u0648\u0633\u0637 \u0628\u06CC\u0627\u06CC\u062F\u060C \u0639\u0642\u0628\u200C\u062A\u0631 \u0627\u0632 \u0635\u0641 \u0645\u06CC\u200C\u0645\u0648\u0646\u0647. \u0647\u0645\u06CC\u0646 \u062A\u0631\u06A9\u06CC\u0628 (\xAB\u062F\u0631 \u0632\u0646\u062F\u06AF\u06CC \u0639\u0627\u062F\u06CC \u062E\u0648\u0628\u060C \u062A\u0648\u06CC \u06A9\u0644\u0627\u0633 \u06A9\u064F\u0646\u062F\xBB) \u0645\u0647\u0645\u200C\u062A\u0631\u06CC\u0646 \u0633\u0631\u0646\u062E \u062F\u06CC\u0631\u0622\u0645\u0648\u0632\u06CC\u200C\u0647."
+      },
+      {
+        h: "\u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u0631\u0627\u06CC\u062C",
+        ul: [
+          "\u062F\u06CC\u0631\u062A\u0631 \u0627\u0632 \u0647\u0645\u200C\u06A9\u0644\u0627\u0633\u06CC\u200C\u0647\u0627 \u0634\u0631\u0648\u0639 \u0628\u0647 \u062E\u0648\u0627\u0646\u062F\u0646 \u0648 \u0646\u0648\u0634\u062A\u0646 \u06A9\u0631\u062F\u0647\u060C \u0648 \u0647\u0646\u0648\u0632 \u0628\u0627 \u062A\u0631\u062F\u06CC\u062F \u0648 \u06A9\u0646\u062F\u06CC \u0645\u06CC\u200C\u062E\u0648\u0627\u0646\u064E\u062F",
+          "\u0648\u0627\u0698\u0647\u200C\u0647\u0627 \u0648 \u0645\u0641\u0627\u0647\u06CC\u0645 \u062C\u062F\u06CC\u062F \u062F\u06CC\u0631 \u0645\u06CC\u200C\u0686\u0633\u0628\u0646\u062F\u061B \u0641\u0631\u062F\u0627 \u06A9\u0647 \u0645\u06CC\u200C\u067E\u0631\u0633\u06CC\u062F\u060C \u06CC\u0627\u062F\u0634 \u0631\u0641\u062A\u0647",
+          "\u0648\u0642\u062A\u06CC \u062F\u0631\u0633 \u06A9\u0645\u06CC \u0633\u062E\u062A \u0645\u06CC\u200C\u0634\u0647\u060C \u0632\u0648\u062F \u062E\u0633\u062A\u0647 \u0648 \u0628\u06CC\u200C\u0627\u0646\u06AF\u06CC\u0632\u0647 \u0645\u06CC\u200C\u0634\u0647 \u2014 \xAB\u062F\u06CC\u06AF\u0631 \u062F\u0648\u0633\u062A\u0634 \u0646\u062F\u0627\u0631\u0645\xBB \u0645\u06CC\u200C\u06AF\u0648\u06CC\u062F",
+          "\u0628\u0631\u0627\u06CC \u0627\u0646\u062C\u0627\u0645 \u062A\u06A9\u0644\u06CC\u0641 \u0633\u0627\u062F\u0647 \u0628\u0647 \u0648\u0642\u062A \u062E\u06CC\u0644\u06CC \u0628\u06CC\u0634\u062A\u0631 \u0627\u0632 \u0628\u0642\u06CC\u0647 \u0646\u06CC\u0627\u0632 \u062F\u0627\u0631\u062F",
+          "\u0627\u0639\u062A\u0645\u0627\u062F\u0628\u0647\u200C\u0646\u0641\u0633 \u062F\u0631\u0633\u06CC \u067E\u0627\u06CC\u06CC\u0646\u200C\u0647\u061B \u062E\u0648\u062F\u0634 \u0631\u0648 \xAB\u0628\u06CC\u200C\u0627\u0633\u062A\u0639\u062F\u0627\u062F\xBB \u0645\u06CC\u200C\u062F\u0648\u0646\u0647\u060C \u0647\u0631\u0686\u0646\u062F \u062F\u0631 \u06A9\u0627\u0631\u0647\u0627\u06CC \u063A\u06CC\u0631\u062F\u0631\u0633\u06CC \u062A\u0648\u0627\u0646\u0627\u0633\u062A"
+        ]
+      },
+      {
+        h: "\u062A\u0648\u06CC \u062E\u0648\u0646\u0647 \u0686\u0647 \u06A9\u0646\u06CC\u0645\u061F",
+        ul: [
+          "\u0647\u0631 \u0631\u0648\u0632\u060C \u0648\u0642\u062A\u0650 \u06A9\u0648\u062A\u0627\u0647: \u0628\u0647\u200C\u062C\u0627\u06CC \u06CC\u06A9 \u0633\u0627\u0639\u062A\u0650 \u062E\u0633\u062A\u0647\u200C\u06A9\u0646\u0646\u062F\u0647\u060C \u0631\u0648\u0632\u06CC \u06F1\u06F5\u2013\u06F2\u06F0 \u062F\u0642\u06CC\u0642\u0647 \u062A\u0645\u0631\u06CC\u0646\u0650 \u0634\u0627\u062F \u0648 \u062B\u0627\u0628\u062A",
+          "\u062A\u062C\u0631\u0628\u0647\u0654 \u0645\u0648\u0641\u0642\u06CC\u062A \u0628\u0633\u0627\u0632\u06CC\u062F: \u062A\u06A9\u0644\u06CC\u0641 \u0631\u0648 \u06A9\u0648\u0686\u06A9 \u0628\u0634\u06A9\u0646\u06CC\u062F \u0648 \u0647\u0631 \u06AF\u0627\u0645\u0650 \u06A9\u0648\u0686\u06A9 \u0631\u0648 \u062A\u0634\u0648\u06CC\u0642 \u0648\u0627\u0642\u0639\u06CC \u06A9\u0646\u06CC\u062F",
+          "\u0645\u0642\u0627\u06CC\u0633\u0647 \u0645\u0645\u0646\u0648\u0639: \xAB\u0645\u062B\u0644 \u062E\u0648\u0627\u0647\u0631\u062A \u062F\u0631\u0633 \u0628\u062E\u0648\u0627\u0646\xBB \u0633\u0645\u0650\u0651 \u0627\u0646\u06AF\u06CC\u0632\u0647 \u0627\u0633\u062A \u2014 \u0641\u0642\u0637 \u0628\u0627 \u062E\u0648\u062F\u0634 \u0645\u0642\u0627\u06CC\u0633\u0647\u200C\u0627\u0634 \u06A9\u0646\u06CC\u062F",
+          "\u0628\u0644\u0646\u062F\u062E\u0648\u0627\u0646\u06CC \u0645\u0634\u062A\u0631\u06A9: \u0647\u0631 \u0634\u0628 \u06CC\u06A9 \u062F\u0627\u0633\u062A\u0627\u0646 \u06A9\u0648\u062A\u0627\u0647\u061B \u06CC\u06A9 \u067E\u0627\u0631\u0627\u06AF\u0631\u0627\u0641 \u0634\u0645\u0627\u060C \u06CC\u06A9 \u067E\u0627\u0631\u0627\u06AF\u0631\u0627\u0641 \u0627\u0648",
+          "\u062E\u0648\u0627\u0628 \u0648 \u0628\u0627\u0632\u06CC \u06A9\u0627\u0641\u06CC: \u0645\u063A\u0632\u0650 \u062E\u0633\u062A\u0647 \u06CC\u0627\u062F \u0646\u0645\u06CC\u200C\u06AF\u06CC\u0631\u0647\u061B \u0628\u0627\u0632\u06CC \u0622\u0632\u0627\u062F \u0628\u0647\u062A\u0631\u06CC\u0646 \u062A\u0645\u0631\u06CC\u0646 \u0634\u0646\u0627\u062E\u062A\u06CC \u0627\u0633\u062A"
+        ]
+      },
+      {
+        h: "\u062A\u0648\u06CC \u06A9\u0644\u0627\u0633 \u0686\u0647 \u06A9\u0645\u06A9\u06CC \u0645\u06CC\u200C\u06A9\u0646\u0647\u061F",
+        ul: [
+          "\u0635\u0646\u062F\u0644\u06CC \u062C\u0644\u0648 \u0648 \u062A\u0645\u0627\u0633 \u0686\u0634\u0645\u06CC\u061B \u062F\u0633\u062A\u0648\u0631\u0627\u0644\u0639\u0645\u0644 \u0631\u0648 \u06A9\u0648\u062A\u0627\u0647 \u0648 \u06AF\u0627\u0645\u200C\u0628\u0647\u200C\u06AF\u0627\u0645 \u0628\u062F\u0647\u06CC\u062F",
+          "\u062A\u06A9\u0644\u06CC\u0641\u200C\u0647\u0627\u06CC \u0647\u0645\u200C\u0645\u062D\u062A\u0648\u0627 \u0627\u0645\u0627 \u06A9\u0648\u062A\u0627\u0647\u200C\u062A\u0631\u060C \u06CC\u0627 \u0632\u0645\u0627\u0646\u0650 \u0628\u06CC\u0634\u062A\u0631 \u0628\u0631\u0627\u06CC \u0647\u0645\u0627\u0646 \u06A9\u0627\u0631",
+          "\u067E\u0631\u0633\u0634\u200C\u0647\u0627\u06CC \u0627\u0648 \u0631\u0648 \u062C\u0627\u06CC\u06CC \u0628\u067E\u0631\u0633\u06CC\u062F \u06A9\u0647 \u0645\u0648\u0641\u0642 \u0628\u0634\u0648\u062F \u2014 \u067E\u0627\u0633\u062E\u200C\u0647\u0627\u06CC \u062F\u0631\u0633\u062A \u0631\u0648 \u0628\u0647 \u06A9\u0644\u0627\u0633 \u0628\u0631\u0633\u0627\u0646\u06CC\u062F",
+          "\u062B\u0628\u062A \u067E\u06CC\u0634\u0631\u0641\u062A\u0650 \u06A9\u0648\u0686\u06A9: \u0646\u0645\u0648\u062F\u0627\u0631 \u0633\u0627\u062F\u0647\u0654 \xAB\u0627\u0645\u0631\u0648\u0632 \u0628\u0647\u062A\u0631 \u0627\u0632 \u062F\u06CC\u0631\u0648\u0632\xBB \u0627\u0646\u06AF\u06CC\u0632\u0647\u200C\u0627\u0634 \u0631\u0648 \u0645\u06CC\u200C\u0633\u0627\u0632\u062F"
+        ]
+      },
+      {
+        h: "\u0645\u0631\u06A9\u0632 \u062F\u0631 \u0627\u06CC\u0646 \u0645\u0633\u06CC\u0631 \u0686\u0647 \u0645\u06CC\u200C\u06A9\u0646\u0647\u061F",
+        p: "\u0648\u0642\u062A\u06CC \u06A9\u0648\u062F\u06A9 \u0631\u0648 \u0645\u0639\u0631\u0641\u06CC \u0645\u06CC\u200C\u06A9\u0646\u06CC\u062F\u060C \u062A\u06CC\u0645 \u0645\u0631\u06A9\u0632 \u0627\u0628\u062A\u062F\u0627 \u06CC\u06A9 \u06AF\u0641\u062A\u200C\u0648\u06AF\u0648 \u0648 \u0628\u0631\u0631\u0633\u06CC \u062F\u0642\u06CC\u0642 \u062A\u0631\u062A\u06CC\u0628 \u0645\u06CC\u200C\u062F\u0647\u062F \u062A\u0627 \u0645\u0634\u062E\u0635 \u0634\u0648\u062F \u06A9\u0648\u062F\u06A9 \u062F\u0631 \u06A9\u062F\u0627\u0645 \u0645\u0647\u0627\u0631\u062A\u200C\u0647\u0627 \u0628\u0647 \u067E\u0634\u062A\u06CC\u0628\u0627\u0646\u06CC \u0646\u06CC\u0627\u0632 \u062F\u0627\u0631\u062F \u0648 \u0686\u0647 \u0646\u0648\u0639 \u06A9\u0645\u06A9\u0650 \u0622\u0645\u0648\u0632\u0634\u06CC \u0628\u0631\u0627\u06CC\u0634 \u062C\u0648\u0627\u0628 \u0645\u06CC\u200C\u062F\u0647\u062F\u061B \u0633\u067E\u0633 \u0645\u0633\u06CC\u0631 \u0645\u0646\u0627\u0633\u0628 \u2014 \u062C\u0644\u0633\u0627\u062A \u0622\u0645\u0648\u0632\u0634\u06CC\u060C \u062A\u0645\u0631\u06CC\u0646\u200C\u0647\u0627\u06CC \u062F\u0631\u0645\u0646\u0632\u0644\u06CC \u0648 \u0631\u0627\u0647\u0646\u0645\u0627\u06CC \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u2014 \u0628\u0627 \u0634\u0645\u0627 \u0647\u0645\u200C\u0642\u062F\u0645 \u0645\u06CC\u200C\u0634\u0647. \u0647\u0645\u0647\u0654 \u062E\u062F\u0645\u0627\u062A \u0645\u0631\u06A9\u0632 \u0631\u0627\u06CC\u06AF\u0627\u0646\u0647."
+      }
+    ],
+    faq: [
+      { q: "\u0627\u06AF\u0631 \u0641\u0642\u0637 \u0627\u06CC\u0646 \u0633\u0627\u0644 \u0639\u0642\u0628 \u0628\u0645\u0627\u0646\u062F\u060C \u0633\u0627\u0644 \u0628\u0639\u062F \u062C\u0628\u0631\u0627\u0646 \u0645\u06CC\u200C\u0634\u0647\u061F", a: "\u06AF\u0627\u0647\u06CC \u0628\u0644\u0647\u060C \u0648\u0644\u06CC \u0647\u0631 \u0633\u0627\u0644\u0650 \u062A\u0623\u062E\u06CC\u0631\u060C \u0634\u06A9\u0627\u0641 \u0631\u0648 \u0628\u0632\u0631\u06AF\u200C\u062A\u0631 \u0648 \u0627\u0639\u062A\u0645\u0627\u062F\u0628\u0647\u200C\u0646\u0641\u0633 \u0631\u0648 \u06A9\u0648\u0686\u06A9\u200C\u062A\u0631 \u0645\u06CC\u200C\u06A9\u0646\u0647. \u0645\u0639\u0631\u0641\u06CC\u0650 \u0632\u0648\u062F\u0647\u0646\u06AF\u0627\u0645 \u0647\u0645\u06CC\u0634\u0647 \u0627\u0631\u0632\u0627\u0646\u200C\u062A\u0631 \u0648 \u0645\u0624\u062B\u0631\u062A\u0631 \u0627\u0632 \u062C\u0628\u0631\u0627\u0646\u0650 \u062F\u06CC\u0631\u0647\u0646\u06AF\u0627\u0645\u200C\u0647." },
+      { q: "\u0645\u0639\u0631\u0641\u06CC \u06A9\u0631\u062F\u0646 \u06CC\u0639\u0646\u06CC \u0628\u0686\u0647 \xAB\u0645\u0634\u06A9\u0644\u200C\u062F\u0627\u0631\xBB \u062B\u0628\u062A \u0645\u06CC\u200C\u0634\u0647\u061F", a: "\u0646\u0647. \u0645\u0639\u0631\u0641\u06CC \u0641\u0642\u0637 \u06CC\u06A9 \u062F\u0631\u062E\u0648\u0627\u0633\u062A \u0628\u0631\u0631\u0633\u06CC\u200C\u0647\u061B \u0646\u062A\u06CC\u062C\u0647\u200C\u0627\u0634 \u0645\u06CC\u200C\u062A\u0648\u0646\u0647 \xAB\u0641\u0642\u0637 \u0646\u06CC\u0627\u0632 \u0628\u0647 \u062A\u0645\u0631\u06CC\u0646 \u0628\u06CC\u0634\u062A\u0631\xBB \u0647\u0645 \u0628\u0627\u0634\u0647. \u062B\u0628\u062A \u0645\u0639\u0631\u0641\u06CC \u0647\u06CC\u0686 \u0628\u0631\u0686\u0633\u0628\u06CC \u0628\u0631\u0627\u06CC \u0628\u0686\u0647 \u0646\u0645\u06CC\u200C\u0633\u0627\u0632\u062F." },
+      { q: "\u06A9\u0644\u0627\u0633\u0650 \u0627\u0636\u0627\u0641\u0647 \u0648 \u062A\u0645\u0631\u06CC\u0646\u0650 \u0628\u06CC\u0634\u062A\u0631\u060C \u062E\u0648\u062F\u0634 \u062D\u0644\u0634 \u0645\u06CC\u200C\u06A9\u0646\u0647\u061F", a: "\u062A\u0645\u0631\u06CC\u0646\u0650 \u0628\u06CC\u0634\u062A\u0631\u0650 \u0647\u0645\u0627\u0646 \u0631\u0648\u0634\u0650 \u0642\u0628\u0644\u06CC\u060C \u0641\u0642\u0637 \u062E\u0633\u062A\u06AF\u06CC \u0645\u06CC\u200C\u0633\u0627\u0632\u062F. \u0686\u06CC\u0632\u06CC \u06A9\u0647 \u06A9\u0627\u0631 \u0645\u06CC\u200C\u06A9\u0646\u0647 \u062A\u063A\u06CC\u06CC\u0631\u0650 \u0631\u0648\u0634 \u0627\u0633\u062A: \u06AF\u0627\u0645\u200C\u0647\u0627\u06CC \u06A9\u0648\u0686\u06A9\u200C\u062A\u0631\u060C \u0628\u0627\u0632\u062E\u0648\u0631\u062F \u0641\u0648\u0631\u06CC \u0648 \u062A\u062C\u0631\u0628\u0647\u0654 \u0645\u0648\u0641\u0642\u06CC\u062A." }
+    ]
+  },
+  "learning-disorder": {
+    title: "\u0631\u0627\u0647\u0646\u0645\u0627\u06CC \u0627\u062E\u062A\u0644\u0627\u0644 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u2014 \u0628\u0631\u0627\u06CC \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u0648 \u0645\u0639\u0644\u0645",
+    lead: "\u0627\u062E\u062A\u0644\u0627\u0644 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u06CC\u0639\u0646\u06CC \u0628\u0686\u0647 \u0628\u0627\u0647\u0648\u0634 \u0627\u0633\u062A \u0648 \u0647\u0645\u0647\u200C\u0686\u06CC\u0632 \u0631\u0648 \u0645\u06CC\u200C\u0641\u0647\u0645\u062F\u060C \u0648\u0644\u06CC \u062F\u0631 \u06CC\u06A9 \u0645\u0647\u0627\u0631\u062A\u0650 \u062F\u0631\u0633\u06CC\u0650 \u0645\u0634\u062E\u0635 \u2014 \u062E\u0648\u0627\u0646\u062F\u0646\u060C \u0646\u0648\u0634\u062A\u0646 \u06CC\u0627 \u062D\u0633\u0627\u0628 \u2014 \u06AF\u06CC\u0631 \u062F\u0627\u0631\u062F. \u0627\u06CC\u0646 \u0641\u0627\u06CC\u0644 \u0628\u0647 \u0632\u0628\u0627\u0646 \u0633\u0627\u062F\u0647 \u0645\u06CC\u200C\u06AF\u0648\u06CC\u062F \u0686\u0647 \u0634\u06A9\u0644\u06CC \u0627\u0633\u062A\u060C \u0686\u0637\u0648\u0631 \u0628\u0641\u0647\u0645\u06CC\u062F\u060C \u0648 \u062E\u0627\u0646\u0647 \u0648 \u06A9\u0644\u0627\u0633 \u0686\u0647 \u0645\u06CC\u200C\u062A\u0648\u0646\u0646 \u0628\u06A9\u0646\u0646\u062F.",
+    sections: [
+      {
+        h: "\u0627\u062E\u062A\u0644\u0627\u0644 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u06CC\u0639\u0646\u06CC \u0686\u0647\u061F",
+        p: "\u0628\u0686\u0647\u200C\u0627\u06CC \u06A9\u0647 \u0647\u0648\u0634 \u0648 \u0641\u0647\u0645\u0634 \u0639\u0627\u062F\u06CC \u0627\u0633\u062A \u0648\u0644\u06CC \u062F\u0631 \u06CC\u06A9\u06CC \u0627\u0632 \u0645\u0633\u06CC\u0631\u0647\u0627\u06CC \u067E\u0631\u062F\u0627\u0632\u0634\u0650 \u062F\u0631\u0633\u06CC \u06AF\u06CC\u0631 \u0645\u06CC\u200C\u06A9\u0646\u0647: \u062F\u0631 \u062E\u0648\u0627\u0646\u062F\u0646\u060C \u0646\u0648\u0634\u062A\u0646 \u06CC\u0627 \u062D\u0633\u0627\u0628. \u0639\u0628\u0627\u0631\u062A \u06A9\u0644\u06CC\u062F\u06CC \u0627\u06CC\u0646 \u0627\u0633\u062A: \xAB\u0634\u06A9\u0627\u0641\u0650 \u0647\u0648\u0634 \u0648 \u0639\u0645\u0644\u06A9\u0631\u062F\xBB. \u06CC\u0639\u0646\u06CC \u0647\u0631\u0686\u0647 \u0628\u06CC\u0634\u062A\u0631 \u062A\u0648\u0636\u06CC\u062D\u0634 \u0645\u06CC\u200C\u062F\u0647\u06CC\u062F\u060C \u0645\u06CC\u200C\u0641\u0647\u0645\u062F\u061B \u0648\u0644\u06CC \u0648\u0642\u062A\u06CC \u0645\u06CC\u200C\u062E\u0648\u0627\u062F \u0628\u062E\u0648\u0627\u0646\u064E\u062F \u06CC\u0627 \u0628\u0646\u0648\u06CC\u0633\u064E\u062F\u060C \u062F\u0633\u062A \u0648 \u0645\u063A\u0632\u0634 \u0647\u0645\u0627\u0646 \u06A9\u0627\u0631 \u0631\u0648 \u0646\u0645\u06CC\u200C\u062F\u0647\u062F. \u0627\u06CC\u0646 \u0628\u0686\u0647 \xAB\u062A\u0646\u0628\u0644\xBB \u0646\u06CC\u0633\u062A \u2014 \u0645\u0633\u06CC\u0631 \u067E\u0631\u062F\u0627\u0632\u0634\u0634 \u0645\u062A\u0641\u0627\u0648\u062A\u200C\u0647."
+      },
+      {
+        h: "\u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627 \u062F\u0631 \u0647\u0631 \u062D\u0648\u0632\u0647",
+        ul: [
+          "\u062E\u0648\u0627\u0646\u062F\u0646: \u062E\u0648\u0627\u0646\u062F\u0646\u0650 \u06A9\u0646\u062F \u0648 \u0628\u0631\u06CC\u062F\u0647\u200C\u0628\u0631\u06CC\u062F\u0647\u060C \u062C\u0627\u0628\u0647\u200C\u062C\u0627 \u06A9\u0631\u062F\u0646 \u062D\u0631\u0648\u0641 (\u0628\u0640/\u062A\u060C \u0635/\u0633)\u060C \u062D\u0630\u0641 \u06CC\u0627 \u0627\u0636\u0627\u0641\u0647 \u06A9\u0631\u062F\u0646 \u0648\u0627\u0698\u0647\u060C \u062A\u0631\u062C\u06CC\u062D\u0650 \u0634\u0646\u06CC\u062F\u0646 \u0628\u0647 \u062E\u0648\u0627\u0646\u062F\u0646",
+          "\u0646\u0648\u0634\u062A\u0646: \u062F\u0633\u062A\u200C\u062E\u0637 \u0646\u0627\u062E\u0648\u0627\u0646\u0627\u060C \u063A\u0644\u0637\u200C\u0647\u0627\u06CC \u062A\u06A9\u0631\u0627\u0631\u06CC\u0650 \u0647\u0645\u06CC\u0634\u0647\u200C\u06CC\u06A9\u06CC\u060C \u0641\u0636\u0627\u06CC \u0628\u06CC\u200C\u0646\u0638\u0645 \u0631\u0648\u06CC \u0628\u0631\u06AF\u0647\u060C \u0646\u0648\u0634\u062A\u0646\u0650 \u062E\u06CC\u0644\u06CC \u06A9\u0646\u062F \u0648 \u062E\u0633\u062A\u0647\u200C\u06A9\u0646\u0646\u062F\u0647 \u0628\u0631\u0627\u06CC\u0634",
+          "\u062D\u0633\u0627\u0628: \u0686\u0633\u0628\u06CC\u062F\u0646 \u0646\u06A9\u0631\u062F\u0646 \u062C\u062F\u0648\u0644 \u0636\u0631\u0628\u060C \u0633\u062E\u062A\u06CC \u062F\u0631 \u062C\u0645\u0639 \u0648 \u062A\u0641\u0631\u06CC\u0642\u0650 \u0630\u0647\u0646\u06CC\u060C \u0648\u0627\u0631\u0648\u0646\u0647 \u0646\u0648\u0634\u062A\u0646 \u0627\u0639\u062F\u0627\u062F\u060C \u062A\u0631\u0633 \u0627\u0632 \u062F\u0631\u0633 \u0631\u06CC\u0627\u0636\u06CC"
+        ]
+      },
+      {
+        h: "\u062A\u0648\u06CC \u062E\u0648\u0646\u0647 \u0686\u0647 \u06A9\u0646\u06CC\u0645\u061F",
+        ul: [
+          "\u0686\u0646\u062F\u062D\u0633\u06CC \u062A\u0645\u0631\u06CC\u0646 \u06A9\u0646\u06CC\u062F: \u0628\u0628\u06CC\u0646\u064E\u062F\u060C \u0628\u0634\u0646\u0648\u064E\u062F\u060C \u0628\u0627 \u062F\u0633\u062A \u0628\u0646\u0648\u06CC\u0633\u064E\u062F (\u0645\u0627\u0633\u0647\u060C \u062E\u0645\u06CC\u0631\u060C \u0647\u0648\u0627\u06CC\u06CC) \u2014 \u0645\u0633\u06CC\u0631\u0647\u0627\u06CC \u062F\u06CC\u06AF\u0631 \u0628\u0631\u0627\u06CC \u06CC\u06A9 \u0645\u0641\u0647\u0648\u0645",
+          "\u06A9\u062A\u0627\u0628 \u0635\u0648\u062A\u06CC \u0647\u0645\u0631\u0627\u0647 \u0645\u062A\u0646: \u0686\u0634\u0645 \u0647\u0645\u0631\u0627\u0647 \u06AF\u0648\u0634 \u0645\u06CC\u200C\u062E\u0648\u0627\u0646\u064E\u062F \u0648 \u062E\u0648\u0627\u0646\u062F\u0646 \u0622\u0631\u0627\u0645\u200C\u0622\u0631\u0627\u0645 \u0631\u0648\u0627\u0646 \u0645\u06CC\u200C\u0634\u0647",
+          "\u0628\u0631\u0627\u06CC \u0646\u0648\u0634\u062A\u0646\u060C \u06A9\u06CC\u0641\u06CC\u062A \u0645\u0647\u0645 \u0627\u0633\u062A \u0646\u0647 \u062A\u0639\u062F\u0627\u062F: \u06CC\u06A9 \u062C\u0645\u0644\u0647\u0654 \u062F\u0631\u0633\u062A \u0648 \u062E\u0648\u0627\u0646\u0627 \u0628\u0647\u062A\u0631 \u0627\u0632 \u062F\u0647 \u062E\u0637\u0650 \u0628\u06CC\u200C\u0646\u0638\u0645",
+          "\u0631\u06CC\u0627\u0636\u06CC \u0631\u0648 \u0645\u0644\u0645\u0648\u0633 \u06A9\u0646\u06CC\u062F: \u067E\u0648\u0644 \u0648\u0627\u0642\u0639\u06CC\u060C \u0648\u0633\u0627\u06CC\u0644 \u062E\u0627\u0646\u0647\u060C \u0628\u0627\u0632\u06CC\u0650 \u0641\u0631\u0648\u0634\u06AF\u0627\u0647 \u2014 \u0645\u0641\u0647\u0648\u0645 \u0642\u0628\u0644 \u0627\u0632 \u0641\u0631\u0645\u0648\u0644",
+          "\u0628\u0631 \u063A\u0644\u0637\u200C\u0647\u0627\u06CC \u062A\u06A9\u0631\u0627\u0631\u06CC \u062A\u0645\u0631\u06A9\u0632 \u06A9\u0646\u06CC\u062F\u060C \u0646\u0647 \u0647\u0645\u0647\u0654 \u063A\u0644\u0637\u200C\u0647\u0627: \u0647\u0631 \u0647\u0641\u062A\u0647 \u06CC\u06A9 \u0627\u0644\u06AF\u0648"
+        ]
+      },
+      {
+        h: "\u062A\u0648\u06CC \u06A9\u0644\u0627\u0633 \u0686\u0647 \u06A9\u0645\u06A9\u06CC \u0645\u06CC\u200C\u06A9\u0646\u0647\u061F",
+        ul: [
+          "\u062A\u0645\u0627\u0633 \u06A9\u0627\u0631\u0628\u0631\u06AF \u0628\u0627 \u062A\u0627\u06CC\u067E \u06CC\u0627 \u0634\u0641\u0627\u0647\u06CC \u067E\u0627\u0633\u062E \u062F\u0627\u062F\u0646 \u2014 \u0645\u062D\u062A\u0648\u0627 \u0645\u0647\u0645 \u0627\u0633\u062A\u060C \u0646\u0647 \u062E\u0637",
+          "\u0645\u062A\u0646\u200C\u0647\u0627\u06CC \u06A9\u0648\u062A\u0627\u0647\u200C\u062A\u0631 \u0628\u0627 \u0647\u0645\u0627\u0646 \u0645\u0641\u0647\u0648\u0645\u061B \u062A\u0633\u062A\u0650 \u062E\u0648\u0627\u0646\u062F\u0646\u06CC\u0650 \u0637\u0648\u0644\u0627\u0646\u06CC \u0631\u0648 \u0628\u0634\u06A9\u0646\u06CC\u062F",
+          "\u0641\u0631\u0635\u062A\u0650 \u067E\u0627\u0633\u062E \u0634\u0641\u0627\u0647\u06CC \u0628\u0639\u062F \u0627\u0632 \u062E\u0648\u0627\u0646\u062F\u0646\u060C \u062A\u0627 \u0641\u0647\u0645\u0650 \u0648\u0627\u0642\u0639\u06CC\u200C\u0627\u0634 \u062F\u06CC\u062F\u0647 \u0634\u0648\u062F",
+          "\u0646\u0634\u0633\u062A\u0646 \u062F\u0648\u0631 \u0627\u0632 \u067E\u0646\u062C\u0631\u0647 \u0648 \u0631\u0627\u0647\u0631\u0648\u061B \u06A9\u0627\u0647\u0634 \u0646\u0648\u06CC\u0632\u060C \u0646\u06CC\u0645\u0647\u0654 \u062A\u0645\u0631\u06CC\u0646\u200C\u0647\u0627 \u0631\u0648 \u0628\u06CC\u0634\u062A\u0631 \u0645\u06CC\u200C\u06A9\u0646\u0647"
+        ]
+      },
+      {
+        h: "\u0645\u0631\u06A9\u0632 \u062F\u0631 \u0627\u06CC\u0646 \u0645\u0633\u06CC\u0631 \u0686\u0647 \u0645\u06CC\u200C\u06A9\u0646\u0647\u061F",
+        p: "\u0628\u0639\u062F \u0627\u0632 \u0645\u0639\u0631\u0641\u06CC\u060C \u062A\u06CC\u0645 \u0645\u0631\u06A9\u0632 \u0628\u0627 \u0628\u0631\u0631\u0633\u06CC \u062F\u0642\u06CC\u0642 \u0645\u0634\u062E\u0635 \u0645\u06CC\u200C\u06A9\u0646\u0647 \u06A9\u062F\u0627\u0645 \u0645\u0647\u0627\u0631\u062A\u0650 \u067E\u0631\u062F\u0627\u0632\u0634\u06CC \u06AF\u0650\u0631\u0650 \u0627\u0635\u0644\u06CC \u0627\u0633\u062A \u0648 \u0686\u0647 \u0628\u0633\u062A\u0647\u0654 \u062A\u0645\u0631\u06CC\u0646\u06CC \u0628\u0631\u0627\u06CC\u0634 \u0645\u0646\u0627\u0633\u0628\u200C\u0647\u061B \u0633\u067E\u0633 \u062A\u0645\u0631\u06CC\u0646\u200C\u0647\u0627\u06CC \u0647\u062F\u0641\u0645\u0646\u062F (\u062F\u06CC\u062F\u0627\u0631\u06CC\u060C \u0634\u0646\u06CC\u062F\u0627\u0631\u06CC\u060C \u0686\u0646\u062F\u062D\u0633\u06CC) \u06A9\u0646\u0627\u0631 \u0631\u0627\u0647\u0646\u0645\u0627\u06CC \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u0648 \u0645\u0639\u0644\u0645 \u0634\u0631\u0648\u0639 \u0645\u06CC\u200C\u0634\u0647 \u0648 \u067E\u06CC\u0634\u0631\u0641\u062A \u062F\u0648\u0631\u0647\u200C\u0627\u06CC \u0628\u0627\u0632\u0628\u06CC\u0646\u06CC \u0645\u06CC\u200C\u0634\u0647. \u062A\u062C\u0631\u0628\u0647 \u0646\u0634\u0627\u0646 \u0645\u06CC\u200C\u062F\u0647\u062F \u0647\u0631 \u0686\u0647 \u0632\u0648\u062F\u062A\u0631 \u0634\u0631\u0648\u0639 \u0634\u0648\u062F\u060C \u0641\u0627\u0635\u0644\u0647 \u0628\u0627 \u0647\u0645\u200C\u0633\u0627\u0644\u0627\u0646 \u0633\u0631\u06CC\u0639\u200C\u062A\u0631 \u0628\u0633\u062A\u0647 \u0645\u06CC\u200C\u0634\u0647. \u0647\u0645\u0647\u0654 \u062E\u062F\u0645\u0627\u062A \u0645\u0631\u06A9\u0632 \u0631\u0627\u06CC\u06AF\u0627\u0646\u0647."
+      }
+    ],
+    faq: [
+      { q: "\u0645\u06AF\u0631 \u062E\u0644\u0627\u0642\u06CC\u062A \u0628\u0686\u0647 \u0645\u0647\u0645\u200C\u062A\u0631 \u0627\u0632 \u0633\u0631\u0639\u062A \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC\u0634 \u0646\u06CC\u0633\u062A\u061F", a: "\u0647\u06CC\u0686\u200C\u06A9\u062F\u0627\u0645 \u0642\u0631\u0628\u0627\u0646\u06CC\u0650 \u062F\u06CC\u06AF\u0631\u06CC \u0646\u0645\u06CC\u200C\u0634\u0646. \u0645\u0633\u06CC\u0631 \u06A9\u0645\u06A9\u060C \u062F\u0642\u06CC\u0642\u0627\u064B \u0637\u0648\u0631\u06CC \u0637\u0631\u0627\u062D\u06CC \u0645\u06CC\u200C\u0634\u0647 \u06A9\u0647 \u0627\u0639\u062A\u0645\u0627\u062F\u0628\u0647\u200C\u0646\u0641\u0633 \u0648 \u0628\u0627\u0632\u06CC \u0648 \u0632\u0646\u062F\u06AF\u06CC\u0650 \u0639\u0627\u062F\u06CC \u0628\u0686\u0647 \u062D\u0641\u0638 \u0634\u0648\u062F \u2014 \u0633\u0631\u0639\u062A \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u0628\u0627 \u0631\u0648\u0634 \u062F\u0631\u0633\u062A \u0628\u0627\u0644\u0627 \u0645\u06CC\u0627\u062F." },
+      { q: "\u0686\u0631\u0627 \u0628\u0686\u0647\u200C\u0627\u0645 \u062A\u0648\u06CC \u062E\u0648\u0646\u0647 \u0631\u0648\u0627\u0646 \u0645\u06CC\u200C\u062E\u0648\u0627\u0646\u064E\u062F \u0648\u0644\u06CC \u062A\u0648\u06CC \u06A9\u0644\u0627\u0633 \u0642\u0641\u0644 \u0645\u06CC\u200C\u06A9\u0646\u0647\u061F", a: "\u0641\u0634\u0627\u0631\u0650 \u062F\u06CC\u062F\u0647\u200C\u0634\u062F\u0646\u060C \u067E\u0631\u062F\u0627\u0632\u0634 \u0631\u0648 \u0642\u0641\u0644 \u0645\u06CC\u200C\u06A9\u0646\u0647. \u06A9\u0627\u0647\u0634 \u0627\u0636\u0637\u0631\u0627\u0628 \u2014 \u062A\u0645\u0631\u06CC\u0646 \u0628\u0627 \u062E\u0646\u062F\u0647\u060C \u0628\u062F\u0648\u0646 \u062A\u0627\u06CC\u0645\u0631 \u2014 \u0628\u062E\u0634\u06CC \u0627\u0632 \u062E\u0648\u062F\u0650 \u06A9\u0627\u0631 \u0627\u0633\u062A\u060C \u0646\u0647 \u062C\u062F\u0627 \u0627\u0632 \u0622\u0646." },
+      { q: "\u0628\u0627 \u062F\u0648 \u0632\u0628\u0627\u0646 \u062A\u0648\u06CC \u062E\u0648\u0646\u0647 \u062D\u0631\u0641 \u0628\u0632\u0646\u06CC\u0645 \u0628\u062F\u062A\u0631 \u0645\u06CC\u200C\u0634\u0647\u061F", a: "\u062E\u06CC\u0631. \u063A\u0646\u0627\u06CC \u0632\u0628\u0627\u0646\u0650 \u0645\u0627\u062F\u0631\u06CC \u0628\u0647 \u0647\u0645\u0647\u0654 \u0632\u0628\u0627\u0646\u200C\u0647\u0627 \u06A9\u0645\u06A9 \u0645\u06CC\u200C\u06A9\u0646\u0647\u061B \u062F\u0648 \u0632\u0628\u0627\u0646\u0647 \u0628\u0648\u062F\u0646 \u0628\u0647\u200C\u062E\u0648\u062F\u06CC\u200C\u062E\u0648\u062F \u0639\u0644\u062A \u0627\u062E\u062A\u0644\u0627\u0644 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u0646\u06CC\u0633\u062A \u0648 \u0646\u0645\u06CC\u200C\u0634\u0647." }
+    ]
+  },
+  intellectual: {
+    title: "\u0631\u0627\u0647\u0646\u0645\u0627\u06CC \u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u06A9\u0645\u200C\u062A\u0648\u0627\u0646\u06CC \u0630\u0647\u0646\u06CC \u2014 \u0628\u0631\u0627\u06CC \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u0648 \u0645\u0639\u0644\u0645",
+    lead: "\u06A9\u0645\u200C\u062A\u0648\u0627\u0646\u06CC \u0630\u0647\u0646\u06CC \u06CC\u0639\u0646\u06CC \u062A\u0623\u062E\u06CC\u0631\u0650 \u0647\u0645\u200C\u0632\u0645\u0627\u0646 \u062F\u0631 \u0686\u0646\u062F \u062D\u0648\u0632\u0647\u0654 \u0631\u0634\u062F \u2014 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC\u060C \u0645\u0647\u0627\u0631\u062A\u200C\u0647\u0627\u06CC \u0631\u0648\u0632\u0645\u0631\u0647 \u0648 \u06AF\u0627\u0647\u06CC \u06AF\u0641\u062A\u0627\u0631. \u0627\u06CC\u0646 \u0641\u0627\u06CC\u0644 \u0645\u06CC\u200C\u06AF\u0648\u06CC\u062F \u0686\u0647 \u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC\u06CC \u062C\u062F\u06CC \u0627\u0633\u062A\u060C \u062E\u0627\u0646\u0647 \u0648 \u06A9\u0644\u0627\u0633 \u0686\u0647 \u0645\u06CC\u200C\u062A\u0648\u0646\u0646 \u0628\u06A9\u0646\u0646\u062F\u060C \u0648 \u0645\u0633\u06CC\u0631\u0650 \u06A9\u0645\u06A9\u0650 \u0645\u0631\u06A9\u0632 \u0686\u06AF\u0648\u0646\u0647\u200C\u0647.",
+    sections: [
+      {
+        h: "\u06A9\u0645\u200C\u062A\u0648\u0627\u0646\u06CC \u0630\u0647\u0646\u06CC \u06CC\u0639\u0646\u06CC \u0686\u0647\u061F",
+        p: "\u0646\u0634\u0627\u0646\u0647\u0654 \u0627\u0635\u0644\u06CC\u060C \xAB\u0647\u0645\u200C\u0632\u0645\u0627\u0646\u06CC\xBB \u0627\u0633\u062A: \u0646\u0647 \u0641\u0642\u0637 \u0639\u0642\u0628\u200C\u0645\u0627\u0646\u062F\u0646 \u062F\u0631 \u062F\u0631\u0633\u060C \u0628\u0644\u06A9\u0647 \u062A\u0623\u062E\u06CC\u0631 \u062F\u0631 \u0686\u0646\u062F \u0632\u0645\u06CC\u0646\u0647 \u0628\u0627 \u0647\u0645. \u0627\u06CC\u0646 \u0628\u0686\u0647 \u062F\u0631 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u0645\u0637\u0627\u0644\u0628 \u067E\u0627\u06CC\u0647 (\u0634\u06A9\u0644\u200C\u0647\u0627\u060C \u0631\u0646\u06AF\u200C\u0647\u0627\u060C \u0627\u0639\u062F\u0627\u062F)\u060C \u062F\u0631 \u06A9\u0627\u0631\u0647\u0627\u06CC \u0631\u0648\u0632\u0645\u0631\u0647\u0654 \u0645\u0633\u062A\u0642\u0644 (\u067E\u0648\u0634\u06CC\u062F\u0646\u060C \u063A\u0630\u0627 \u062E\u0648\u0631\u062F\u0646\u060C \u0628\u0647\u062F\u0627\u0634\u062A) \u0648 \u06AF\u0627\u0647\u06CC \u062F\u0631 \u06AF\u0641\u062A\u0627\u0631\u060C \u0647\u0645\u200C\u0632\u0645\u0627\u0646 \u0639\u0642\u0628\u200C\u062A\u0631 \u0627\u0632 \u0647\u0645\u200C\u0633\u0646\u200C\u0647\u0627\u0634\u200C\u0647. \u0647\u0631\u0686\u0647 \u062A\u0623\u062E\u06CC\u0631 \u062F\u0631 \u062D\u0648\u0632\u0647\u200C\u0647\u0627\u06CC \u0628\u06CC\u0634\u062A\u0631 \u0648 \u0639\u0645\u06CC\u0642\u200C\u062A\u0631 \u0628\u0627\u0634\u062F\u060C \u0646\u06CC\u0627\u0632 \u0628\u0647 \u067E\u0634\u062A\u06CC\u0628\u0627\u0646\u06CC\u0650 \u062A\u062E\u0635\u0635\u06CC\u200C\u062A\u0631 \u062C\u062F\u06CC\u200C\u062A\u0631 \u0627\u0633\u062A \u2014 \u0648 \u0634\u0646\u0627\u062E\u062A\u0650 \u062F\u0631\u0633\u062A\u0650 \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u0627\u0632 \u0627\u0646\u062A\u0638\u0627\u0631\u0627\u062A\u0650 \u0648\u0627\u0642\u0639\u200C\u0628\u06CC\u0646\u0627\u0646\u0647\u060C \u0622\u0631\u0627\u0645\u0634\u0650 \u062E\u0627\u0646\u0647 \u0631\u0648 \u0645\u06CC\u200C\u0633\u0627\u0632\u062F."
+      },
+      {
+        h: "\u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u0631\u0627\u06CC\u062C",
+        ul: [
+          "\u0686\u0633\u0628\u06CC\u062F\u0646\u0650 \u062E\u06CC\u0644\u06CC \u062F\u06CC\u0631 \u0645\u0641\u0627\u0647\u06CC\u0645 \u067E\u0627\u06CC\u0647: \u0634\u06A9\u0644\u200C\u0647\u0627\u060C \u0631\u0646\u06AF\u200C\u0647\u0627\u060C \u0634\u0645\u0627\u0631\u0634\u060C \u0631\u0648\u0632\u0647\u0627\u06CC \u0647\u0641\u062A\u0647",
+          "\u062F\u0634\u0648\u0627\u0631\u06CC \u062F\u0631 \u06A9\u0627\u0631\u0647\u0627\u06CC \u0631\u0648\u0632\u0645\u0631\u0647\u0654 \u0645\u0633\u062A\u0642\u0644 \u0646\u0633\u0628\u062A \u0628\u0647 \u0633\u0646: \u067E\u0648\u0634\u06CC\u062F\u0646 \u0644\u0628\u0627\u0633\u060C \u0628\u0633\u062A\u0646 \u062F\u06A9\u0645\u0647\u060C \u0645\u0631\u062A\u0628 \u06A9\u0631\u062F\u0646 \u0648\u0633\u0627\u06CC\u0644",
+          "\u06AF\u0641\u062A\u0627\u0631\u0650 \u06A9\u0648\u062A\u0627\u0647 \u0648 \u0633\u0627\u062F\u0647 \u0628\u0631\u0627\u06CC \u0633\u0646\u060C \u06CC\u0627 \u062F\u06CC\u0631 \u0634\u0631\u0648\u0639 \u0634\u062F\u0646\u0650 \u062C\u0645\u0644\u0627\u062A\u0650 \u0645\u0639\u0646\u0627\u062F\u0627\u0631",
+          "\u0628\u0627\u0632\u06CC\u0650 \u0646\u0645\u0627\u062F\u06CC\u0646 \u06A9\u0645: \u0628\u0647\u200C\u062C\u0627\u06CC \u0646\u0642\u0634 \u0628\u0627\u0632\u06CC \u06A9\u0631\u062F\u0646\u060C \u062A\u06A9\u0631\u0627\u0631\u0650 \u0633\u0627\u062F\u0647\u0654 \u062D\u0631\u06A9\u062A\u200C\u0647\u0627",
+          "\u0646\u06CC\u0627\u0632 \u0628\u0647 \u062A\u06A9\u0631\u0627\u0631 \u0648 \u0631\u0627\u0647\u0646\u0645\u0627\u06CC\u06CC\u0650 \u06AF\u0627\u0645\u200C\u0628\u0647\u200C\u06AF\u0627\u0645 \u0628\u0631\u0627\u06CC \u06A9\u0627\u0631\u0647\u0627\u06CC\u06CC \u06A9\u0647 \u0647\u0645\u200C\u0633\u0646\u200C\u0647\u0627 \u0628\u0627 \u06CC\u06A9 \u062A\u0648\u0636\u06CC\u062D \u0645\u06CC\u200C\u06A9\u0646\u0646"
+        ]
+      },
+      {
+        h: "\u062A\u0648\u06CC \u062E\u0648\u0646\u0647 \u0686\u0647 \u06A9\u0646\u06CC\u0645\u061F",
+        ul: [
+          "\u06A9\u0627\u0631\u0647\u0627\u06CC \u0631\u0648\u0632\u0645\u0631\u0647 \u0631\u0648 \u0628\u0647 \u06AF\u0627\u0645\u200C\u0647\u0627\u06CC \u06A9\u0648\u0686\u06A9\u0650 \u062A\u0635\u0648\u06CC\u0631\u06CC \u0628\u0634\u06A9\u0646\u06CC\u062F \u2014 \u06CC\u06A9 \u06AF\u0627\u0645\u060C \u06CC\u06A9 \u062C\u0645\u0644\u0647",
+          "\u0631\u0648\u062A\u06CC\u0646 \u062B\u0627\u0628\u062A \u0628\u0633\u0627\u0632\u06CC\u062F: \u062E\u0648\u0627\u0628\u060C \u063A\u0630\u0627\u060C \u062A\u0645\u0631\u06CC\u0646 \u2014 \u067E\u06CC\u0634\u200C\u0628\u06CC\u0646\u06CC\u200C\u067E\u0630\u06CC\u0631\u06CC\u060C \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u0631\u0648 \u0686\u0646\u062F \u0628\u0631\u0627\u0628\u0631 \u0645\u06CC\u200C\u06A9\u0646\u0647",
+          "\u0627\u0646\u062A\u0638\u0627\u0631\u0650 \u0648\u0627\u0642\u0639\u200C\u0628\u06CC\u0646\u0627\u0646\u0647: \u0645\u0648\u0641\u0642\u06CC\u062A\u0650 \u06A9\u0648\u0686\u06A9\u0650 \u0647\u0631 \u0631\u0648\u0632\u060C \u0628\u0647\u062A\u0631 \u0627\u0632 \u0647\u062F\u0641\u0650 \u0628\u0632\u0631\u06AF\u0650 \u062F\u0633\u062A\u200C\u0646\u06CC\u0627\u0641\u062A\u0646\u06CC",
+          "\u0627\u0633\u062A\u0642\u0644\u0627\u0644 \u0631\u0648 \u062A\u0645\u0631\u06CC\u0646 \u0628\u062F\u0647\u06CC\u062F\u060C \u062D\u062A\u06CC \u06A9\u0646\u062F\u062A\u0631: \xAB\u0628\u06AF\u0630\u0627\u0631 \u062E\u0648\u062F\u0634 \u0628\u0628\u0646\u062F\u062F\xBB \u0645\u0647\u0645\u200C\u062A\u0631 \u0627\u0632 \u0633\u0631\u0650 \u0648\u0642\u062A \u0631\u0641\u062A\u0646 \u0627\u0633\u062A",
+          "\u062E\u0648\u062F\u062A\u0627\u0646 \u0647\u0645 \u0645\u0631\u0627\u0642\u0628\u062A \u06A9\u0646\u06CC\u062F: \u06AF\u0631\u0648\u0647\u200C\u0647\u0627\u06CC \u062D\u0645\u0627\u06CC\u062A \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u0628\u062E\u0634\u06CC \u0627\u0632 \u0645\u0633\u06CC\u0631 \u062F\u0631\u0645\u0627\u0646\u200C\u0627\u0646\u062F"
+        ]
+      },
+      {
+        h: "\u062A\u0648\u06CC \u06A9\u0644\u0627\u0633 \u0686\u0647 \u06A9\u0645\u06A9\u06CC \u0645\u06CC\u200C\u06A9\u0646\u0647\u061F",
+        ul: [
+          "\u0628\u0631\u0646\u0627\u0645\u0647\u0654 \u0641\u0631\u062F\u06CC\u0650 \u0633\u0627\u062F\u0647: \u0647\u062F\u0641\u200C\u0647\u0627\u06CC \u06A9\u0648\u0686\u06A9\u0650 \u0647\u0641\u062A\u06AF\u06CC \u06A9\u0647 \u0634\u062F\u0646\u06CC \u0628\u0627\u0634\u0646\u062F \u0648 \u062B\u0628\u062A \u0634\u0648\u0646\u062F",
+          "\u062A\u06A9\u0631\u0627\u0631\u0650 \u0686\u0646\u062F\u0634\u06A9\u0644\u06CC: \u0647\u0645\u0627\u0646 \u0645\u0641\u0647\u0648\u0645 \u0628\u0627 \u06A9\u0627\u0631\u062A\u060C \u0628\u0627 \u0628\u0627\u0632\u06CC\u060C \u0628\u0627 \u062D\u0631\u06A9\u062A \u2014 \u0633\u0647 \u0628\u0627\u0631\u060C \u0633\u0647 \u0634\u06A9\u0644",
+          "\u0647\u0645\u200C\u0646\u0634\u06CC\u0646\u06CC \u0628\u0627 \u0627\u0644\u06AF\u0648: \u06A9\u0646\u0627\u0631 \u0628\u0686\u0647\u200C\u0627\u06CC \u06A9\u0647 \u0622\u0631\u0627\u0645 \u0648 \u0645\u0646\u0638\u0645 \u0627\u0633\u062A\u060C \u0646\u0638\u0645 \u0645\u0633\u0631\u06CC \u0627\u0633\u062A",
+          "\u062E\u0628\u0631 \u062F\u0627\u062F\u0646\u0650 \u067E\u06CC\u0634 \u0627\u0632 \u062A\u063A\u06CC\u06CC\u0631\u0647\u0627: \u062A\u063A\u06CC\u06CC\u0631\u0650 \u0631\u0648\u062A\u06CC\u0646\u0650 \u0646\u0627\u06AF\u0647\u0627\u0646\u06CC \u0628\u0631\u0627\u06CC \u0627\u06CC\u0646 \u0628\u0686\u0647\u200C\u0647\u0627 \u0633\u062E\u062A\u200C\u062A\u0631\u06CC\u0646 \u0627\u0633\u062A"
+        ]
+      },
+      {
+        h: "\u0645\u0631\u06A9\u0632 \u062F\u0631 \u0627\u06CC\u0646 \u0645\u0633\u06CC\u0631 \u0686\u0647 \u0645\u06CC\u200C\u06A9\u0646\u0647\u061F",
+        p: "\u0628\u0639\u062F \u0627\u0632 \u0645\u0639\u0631\u0641\u06CC\u060C \u062A\u06CC\u0645 \u0645\u0631\u06A9\u0632 \u0628\u0627 \u0628\u0631\u0631\u0633\u06CC \u062F\u0642\u06CC\u0642 \u062A\u0639\u06CC\u06CC\u0646 \u0645\u06CC\u200C\u06A9\u0646\u0647 \u06A9\u0648\u062F\u06A9 \u062F\u0631 \u06A9\u062F\u0627\u0645 \u0645\u0647\u0627\u0631\u062A\u200C\u0647\u0627 \u0628\u0647 \u0686\u0647 \u0633\u0637\u062D\u06CC \u0627\u0632 \u067E\u0634\u062A\u06CC\u0628\u0627\u0646\u06CC \u0646\u06CC\u0627\u0632 \u062F\u0627\u0631\u062F \u0648 \u0645\u0633\u06CC\u0631 \u0622\u0645\u0648\u0632\u0634\u06CC \u0645\u0646\u0627\u0633\u0628\u0634 \u06A9\u062F\u0627\u0645 \u0627\u0633\u062A \u2014 \u0647\u0645\u0627\u0646 \u0645\u062F\u0631\u0633\u0647 \u0628\u0627 \u0628\u0631\u0646\u0627\u0645\u0647\u0654 \u0641\u0631\u062F\u06CC\u060C \u06A9\u0644\u0627\u0633\u200C\u0647\u0627\u06CC \u062A\u0648\u0627\u0646\u200C\u0628\u062E\u0634\u06CC \u0645\u0631\u06A9\u0632\u060C \u06CC\u0627 \u0645\u0639\u0631\u0641\u06CC \u0628\u0647 \u0645\u062F\u0627\u0631\u0633 \u0627\u0633\u062A\u062B\u0646\u0627\u06CC\u06CC. \u06A9\u0646\u0627\u0631\u0634\u060C \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u0622\u0645\u0648\u0632\u0634 \u0645\u06CC\u200C\u0628\u06CC\u0646\u062F \u062A\u0627 \u062E\u0627\u0646\u0647 \u0627\u062F\u0627\u0645\u0647\u0654 \u0645\u0633\u06CC\u0631 \u0628\u0627\u0634\u062F. \u0645\u0647\u0645 \u0627\u0633\u062A \u0628\u062F\u0627\u0646\u06CC\u062F \u0645\u0639\u0631\u0641\u06CC \u06A9\u0631\u062F\u0646\u060C \u0645\u0633\u06CC\u0631\u0650 \u062D\u0645\u0627\u06CC\u062A\u0650 \u062F\u0631\u0633\u062A \u0631\u0648 \u0632\u0648\u062F\u062A\u0631 \u0628\u0627\u0632 \u0645\u06CC\u200C\u06A9\u0646\u0647 \u0648 \u0628\u0647 \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u0647\u0645 \u0622\u0631\u0627\u0645\u0634\u0650 \xAB\u0645\u06CC\u200C\u062F\u0627\u0646\u0645 \u0628\u0627\u06CC\u062F \u0686\u0647 \u06A9\u0646\u0645\xBB \u0645\u06CC\u200C\u062F\u0647. \u0647\u0645\u0647\u0654 \u062E\u062F\u0645\u0627\u062A \u0645\u0631\u06A9\u0632 \u0631\u0627\u06CC\u06AF\u0627\u0646\u0647."
+      }
+    ],
+    faq: [
+      { q: "\u0645\u0639\u0631\u0641\u06CC \u06A9\u0631\u062F\u0646 \u0628\u0686\u0647 \u0631\u0648 \xAB\u0627\u0633\u062A\u062B\u0646\u0627\u06CC\u06CC\xBB \u062B\u0628\u062A \u0645\u06CC\u200C\u06A9\u0646\u0647\u061F", a: "\u0646\u0647. \u0645\u0639\u0631\u0641\u06CC \u06CC\u06A9 \u062F\u0631\u062E\u0648\u0627\u0633\u062A\u0650 \u0628\u0631\u0631\u0633\u06CC\u200C\u0647\u061B \u062A\u0639\u06CC\u06CC\u0646\u0650 \u0645\u0633\u06CC\u0631\u0650 \u0622\u0645\u0648\u0632\u0634\u06CC \u2014 \u0627\u0632 \u0628\u0631\u0646\u0627\u0645\u0647\u0654 \u0641\u0631\u062F\u06CC \u062A\u0627 \u0645\u062F\u0631\u0633\u0647\u0654 \u0627\u0633\u062A\u062B\u0646\u0627\u06CC\u06CC \u2014 \u0628\u0639\u062F \u0627\u0632 \u0628\u0631\u0631\u0633\u06CC \u062F\u0642\u06CC\u0642 \u0648 \u0628\u0627 \u06AF\u0641\u062A\u200C\u0648\u06AF\u0648 \u0628\u0627 \u0634\u0645\u0627 \u0627\u0646\u062C\u0627\u0645 \u0645\u06CC\u200C\u0634\u0647\u060C \u0646\u0647 \u0628\u0627 \u06CC\u06A9 \u0641\u0631\u0645." },
+      { q: "\u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u0686\u0647 \u0686\u06CC\u0632\u06CC \u0628\u06CC\u0634\u062A\u0631\u06CC\u0646 \u062A\u0641\u0627\u0648\u062A \u0631\u0648 \u0645\u06CC\u200C\u0633\u0627\u0632\u062F\u061F", a: "\u0631\u0648\u062A\u06CC\u0646 \u062B\u0627\u0628\u062A\u060C \u06AF\u0627\u0645\u200C\u0647\u0627\u06CC \u06A9\u0648\u0686\u06A9\u060C \u0648 \u0627\u0646\u062A\u0638\u0627\u0631\u0650 \u0648\u0627\u0642\u0639\u200C\u0628\u06CC\u0646\u0627\u0646\u0647. \u0627\u06CC\u0646 \u0633\u0647\u060C \u0627\u062B\u0631 \u0647\u0631 \u0645\u062F\u0627\u062E\u0644\u0647\u0654 \u062A\u062E\u0635\u0635\u06CC \u0631\u0648 \u0686\u0646\u062F \u0628\u0631\u0627\u0628\u0631 \u0645\u06CC\u200C\u06A9\u0646\u0646." },
+      { q: "\u0628\u0627 \u062A\u0645\u0631\u06CC\u0646 \u0648 \u06A9\u0627\u0631\u062A\u200C\u0647\u0627\u06CC \u062A\u0645\u0631\u06CC\u0646\u06CC \u06A9\u0645 \u0645\u06CC\u200C\u0634\u0647\u061F", a: "\u062A\u0645\u0631\u06CC\u0646\u0650 \u0645\u0646\u0638\u0645 \u0648 \u0686\u0646\u062F\u0634\u06A9\u0644\u06CC\u060C \u067E\u06CC\u0634\u0631\u0641\u062A \u0631\u0648 \u0645\u062D\u0633\u0648\u0633 \u0645\u06CC\u200C\u06A9\u0646\u0647 \u2014 \u0648\u0644\u06CC \u0686\u06CC\u0632\u06CC \u06A9\u0647 \u0645\u0633\u06CC\u0631 \u0631\u0648 \u06A9\u0627\u0645\u0644 \u0645\u06CC\u200C\u06A9\u0646\u0647\u060C \u062A\u0631\u06A9\u06CC\u0628\u0650 \u067E\u0634\u062A\u06CC\u0628\u0627\u0646\u06CC \u062A\u062E\u0635\u0635\u06CC + \u0622\u0645\u0648\u0632\u0634 \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u0627\u0633\u062A\u060C \u0646\u0647 \u06CC\u06A9\u06CC \u0628\u0647\u200C\u062A\u0646\u0647\u0627\u06CC\u06CC." }
+    ]
+  }
+};
+var GUIDE_CLINIC_FALLBACK = "\u0645\u0631\u06A9\u0632 \u062C\u0627\u0645\u0639 \u0633\u0646\u062C\u0634\u060C \u0622\u0645\u0648\u0632\u0634\u060C \u062A\u0648\u0627\u0646\u200C\u0628\u062E\u0634\u06CC \u0648 \u0645\u062F\u0627\u062E\u0644\u0627\u062A \u0628\u0647\u0646\u06AF\u0627\u0645";
+function renderGuidePage(slug, opts) {
+  const content = GUIDES[slug];
+  if (!content) return "";
+  const esc4 = /* @__PURE__ */ __name((s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"), "esc");
+  const body = content.sections.map(
+    (s) => `<section><h2>${esc4(s.h)}</h2>${s.p ? `<p>${esc4(s.p)}</p>` : ""}${s.ul ? `<ul>${s.ul.map((li) => `<li>${esc4(li)}</li>`).join("")}</ul>` : ""}</section>`
+  ).join("\n");
+  const faq = content.faq.map(
+    (f) => `<div class="faq"><b>${esc4(f.q)}</b><p>${esc4(f.a)}</p></div>`
+  ).join("\n");
+  return `<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${esc4(content.title)}</title>
+<!-- \u06F1.\u06F2\u06F7.\u06F4\u06F2 \u2014 \u0648\u0632\u06CC\u0631\u0645\u062A\u0646 \u0641\u0642\u0637 \u062E\u0648\u062F\u06CC: \u0641\u0627\u06CC\u0644 \u0645\u062A\u063A\u06CC\u0631 \u0628\u0627\u0646\u062F\u0644\u200C\u0634\u062F\u0647 \u0627\u0632 \u0647\u0645\u0627\u0646 \u0645\u0628\u062F\u0627 (\u0628\u062F\u0648\u0646 CDN \u0628\u06CC\u0631\u0648\u0646\u06CC) -->
+<style>
+:root{--ink:#2a2118;--muted:#6f675c;--brand:#0e7490;--brand-soft:#f0f7f8;--line:#e8e2d6}
+*{box-sizing:border-box}
+@font-face{font-family:Vazirmatn;src:url('/assets/fonts/Vazirmatn-Variable.woff2') format('woff2');
+font-weight:100 900;font-style:normal;font-display:swap}
+/* \u06F1.\u06F2\u06F7.\u06F4\u06F0 \u2014 \u0647\u0645\u200C\u0632\u0628\u0627\u0646 \u0628\u0627 \u0641\u0631\u0645 \u0645\u0639\u0631\u0641\u06CC: \u067E\u0633\u200C\u0632\u0645\u06CC\u0646\u0647\u0654 \u06AF\u0631\u0627\u062F\u06CC\u0646\u062A\u06CC \u0633\u0647\u200C\u0644\u0627\u06CC\u0647 \u0628\u0627 \u0647\u0627\u0644\u0647\u200C\u0647\u0627\u06CC \u0631\u0646\u06AF\u06CC \u062B\u0627\u0628\u062A */
+body{margin:0;color:var(--ink);font-family:Vazirmatn,sans-serif;font-size:15.5px;line-height:2.1;
+background:radial-gradient(620px 320px at 90% -6%,rgba(14,116,144,.14),transparent 66%),
+radial-gradient(540px 300px at 4% 104%,rgba(14,165,233,.12),transparent 66%),
+linear-gradient(170deg,#eef6fb 0%,#f7f3ea 52%,#fdf2f8 100%);
+background-attachment:fixed}
+.wrap{max-width:720px;margin:0 auto;padding:22px 16px 48px}
+header{text-align:center;padding:26px 0 18px}
+h1{font-size:clamp(20px,5vw,26px);margin:0 0 10px;line-height:1.6}
+.lead{color:var(--muted);font-size:14.5px;margin:0}
+main{background:linear-gradient(180deg,#ffffff,#fcfdff);border:1px solid rgba(232,226,214,.85);
+border-radius:18px;padding:24px 20px;box-shadow:0 12px 32px -16px rgba(14,116,144,.25)}
+section{margin-bottom:22px}
+h2{font-size:17px;margin:0 0 8px;color:var(--brand)}
+p{margin:0 0 8px}
+ul{margin:6px 0 0;padding-inline-start:20px}
+li{margin-bottom:6px}
+.faq{background:linear-gradient(135deg,var(--brand-soft),#fdf5f0);border-radius:12px;padding:12px 14px;margin-bottom:10px;font-size:14px}
+.faq b{display:block;margin-bottom:4px}
+/* \u06F1.\u06F2\u06F7.\u06F4\u06F0 \u2014 \u062F\u06A9\u0645\u0647\u0654 \u067E\u0627\u06CC\u0627\u0646\u06CC \u06AF\u0631\u0627\u062F\u06CC\u0646\u062A\u06CC \u0647\u0645\u200C\u0632\u0628\u0627\u0646 \u0628\u0627 \u0641\u0631\u0645 \u0645\u0639\u0631\u0641\u06CC */
+.cta{display:block;text-align:center;background:linear-gradient(135deg,#0e7490 0%,#2563eb 100%);color:#fff;
+border-radius:14px;padding:14px;font-weight:800;text-decoration:none;margin-top:20px;font-size:15px;
+box-shadow:0 10px 24px -10px rgba(37,99,235,.5)}
+.cta:active{opacity:.85}
+footer{text-align:center;color:var(--muted);font-size:12.5px;margin-top:18px}
+@media print{header,footer{padding:8px 0}main{border:none;box-shadow:none}a.cta{display:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>${esc4(content.title)}</h1>
+    <p class="lead">${esc4(content.lead)}</p>
+  </header>
+  <main>
+    ${body}
+    <section><h2>\u067E\u0631\u0633\u0634\u200C\u0647\u0627\u06CC \u067E\u0631\u062A\u06A9\u0631\u0627\u0631</h2>${faq}</section>
+    <a class="cta" href="/public/referral">\u{1F9E9} \u0645\u0639\u0631\u0641\u06CC \u0627\u06CC\u0646 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u0628\u0647 \u0645\u0631\u06A9\u0632 \u2014 \u0641\u0631\u0645 \u06A9\u0648\u062A\u0627\u0647 \u0686\u0646\u062F \u062F\u0642\u06CC\u0642\u0647\u200C\u0627\u06CC</a>
+  </main>
+  <footer>${esc4(opts?.clinicName ?? GUIDE_CLINIC_FALLBACK)} \xB7 \u0647\u0645\u0647\u0654 \u062E\u062F\u0645\u0627\u062A \u0645\u0631\u06A9\u0632 \u0631\u0627\u06CC\u06AF\u0627\u0646\u0647 \xB7 \u0627\u06CC\u0646 \u0631\u0627\u0647\u0646\u0645\u0627 \u0628\u0631\u0627\u06CC \u0686\u0627\u067E \u0648 \u0627\u0634\u062A\u0631\u0627\u06A9\u200C\u06AF\u0630\u0627\u0631\u06CC \u062F\u0631 \u062C\u0644\u0633\u0647\u0654 \u0627\u0648\u0644\u06CC\u0627 \u0645\u0646\u0627\u0633\u0628 \u0627\u0633\u062A</footer>
+</div>
+</body>
+</html>`;
+}
+__name(renderGuidePage, "renderGuidePage");
+
 // src/domain/waitlist/routes.ts
+var referralHits = /* @__PURE__ */ new Map();
+function referralRateGuard(ip, chatKey) {
+  const nowMs = Date.now();
+  const windowMs = 36e5;
+  const hit = /* @__PURE__ */ __name((key, max) => {
+    const cur = referralHits.get(key);
+    if (!cur || cur.resetAt < nowMs) {
+      referralHits.set(key, { count: 1, resetAt: nowMs + windowMs });
+      return;
+    }
+    if (cur.count >= max) {
+      throw new RateLimitError(3600, "\u062A\u0639\u062F\u0627\u062F \u0645\u0639\u0631\u0641\u06CC\u200C\u0647\u0627 \u062F\u0631 \u0627\u06CC\u0646 \u0633\u0627\u0639\u062A \u0632\u06CC\u0627\u062F \u0627\u0633\u062A \u2014 \u06A9\u0645\u06CC \u0628\u0639\u062F \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F \u06CC\u0627 \u0628\u0627 \u0645\u0631\u06A9\u0632 \u062A\u0645\u0627\u0633 \u0628\u06AF\u06CC\u0631\u06CC\u062F");
+    }
+    cur.count += 1;
+  }, "hit");
+  hit(`ip:${ip}`, REFERRAL_RATE_PER_HOUR);
+  if (chatKey) hit(`chat:${chatKey}`, REFERRAL_RATE_PER_CHAT);
+  if (referralHits.size > 5e3) {
+    for (const [key, val] of referralHits) {
+      if (val.resetAt < nowMs) referralHits.delete(key);
+    }
+  }
+}
+__name(referralRateGuard, "referralRateGuard");
 function registerWaitlistRoutes(app, service) {
   app.get("/api/waitlist", async (c) => {
     const status = c.req.query("status");
@@ -31053,6 +32692,24 @@ function registerWaitlistRoutes(app, service) {
   app.get("/api/waitlist/badge", async (c) => {
     const badge = await service.badge();
     return c.json({ data: badge }, 200);
+  });
+  app.get("/api/waitlist/referrals", async (c) => {
+    const items = await service.listReferrals({
+      status: c.req.query("status") || void 0,
+      year: c.req.query("year") || void 0
+    });
+    return c.json({ data: items }, 200);
+  });
+  app.post("/api/waitlist/referrals/:id/accept", requireRole("manager", "secretary"), async (c) => {
+    const actor = getAuthContext(c);
+    const entry = await service.acceptReferral(c.req.param("id"), actor);
+    return c.json({ data: entry }, 200);
+  });
+  app.post("/api/waitlist/referrals/:id/reject", requireRole("manager", "secretary"), async (c) => {
+    const actor = getAuthContext(c);
+    const body = ReferralRejectSchema.parse(await c.req.json());
+    const item = await service.rejectReferral(c.req.param("id"), body.reason, actor);
+    return c.json({ data: item }, 200);
   });
   app.post("/api/waitlist/reorder", requireRole("manager", "secretary"), async (c) => {
     const actor = getAuthContext(c);
@@ -31181,8 +32838,840 @@ function registerWaitlistRoutes(app, service) {
     await service.softDelete(c.req.param("id"), actor);
     return c.body(null, 204);
   });
+  app.get("/public/referral", (c) => {
+    const token = (c.req.query("token") ?? "").slice(0, 200) || null;
+    const html = renderReferralPage({ token });
+    return new Response(html, {
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-store",
+        "X-Robots-Tag": "noindex, nofollow",
+        "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src 'self'"
+      }
+    });
+  });
+  app.get("/public/guide/:slug", (c) => {
+    const slug = c.req.param("slug");
+    if (!GUIDE_SLUGS.includes(slug)) {
+      return new Response("\u06CC\u0627\u0641\u062A \u0646\u0634\u062F", { status: 404, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+    }
+    const html = renderGuidePage(slug);
+    return new Response(html, {
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-store",
+        "X-Robots-Tag": "noindex, nofollow",
+        "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src 'self'"
+      }
+    });
+  });
+  app.post("/public/referrals", async (c) => {
+    const raw2 = await c.req.text();
+    if (raw2.length > 8192) {
+      return c.json({ error: "VALIDATION_ERROR", message: "\u062D\u062C\u0645 \u0627\u0637\u0644\u0627\u0639\u0627\u062A \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0645\u062C\u0627\u0632 \u0627\u0633\u062A" }, 400);
+    }
+    let parsedBody;
+    try {
+      parsedBody = JSON.parse(raw2);
+    } catch {
+      return c.json({ error: "VALIDATION_ERROR", message: "\u0628\u062F\u0646\u0647\u0654 \u062F\u0631\u062E\u0648\u0627\u0633\u062A JSON \u0645\u0639\u062A\u0628\u0631 \u0646\u06CC\u0633\u062A" }, 400);
+    }
+    const body = PublicReferralSubmissionSchema.parse(parsedBody);
+    const ip = (c.req.header("cf-connecting-ip") ?? c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? "local").slice(0, 64);
+    referralRateGuard(ip, body.token ?? null);
+    const created = await service.submitReferral(
+      {
+        role: body.role,
+        referrer_name: body.referrer_name,
+        referrer_phone: body.referrer_phone,
+        school_text: body.school_text,
+        grade_text: body.grade_text,
+        class_text: body.class_text,
+        token: body.token,
+        children: body.children
+      },
+      {}
+    );
+    return c.json({ data: created }, 201);
+  });
 }
 __name(registerWaitlistRoutes, "registerWaitlistRoutes");
+
+// src/domain/form-builder/pure.ts
+function normalizeLatinDigits(raw2) {
+  return String(raw2 ?? "").replace(/[۰-۹]/g, (d) => String("\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9".indexOf(d))).replace(/[٠-٩]/g, (d) => String("\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669".indexOf(d)));
+}
+__name(normalizeLatinDigits, "normalizeLatinDigits");
+function normalizePhone(raw2) {
+  let s = normalizeLatinDigits(raw2).replace(/[\s\-().]/g, "");
+  if (s.startsWith("+98")) s = "0" + s.slice(3);
+  else if (s.startsWith("98") && s.length === 12) s = "0" + s.slice(2);
+  return s;
+}
+__name(normalizePhone, "normalizePhone");
+function validateAnswers(blocks, answers) {
+  const byIndex = /* @__PURE__ */ new Map();
+  for (const a of answers) {
+    if (!Number.isInteger(a.index) || a.index < 0 || a.index >= blocks.length) {
+      return { ok: false, error: "\u067E\u0627\u0633\u062E \u0628\u0647 \u0628\u0644\u0648\u06A9\u06CC \u0646\u0627\u0645\u0648\u062C\u0648\u062F \u0627\u0633\u062A", normalized: [] };
+    }
+    byIndex.set(a.index, a.value);
+  }
+  const normalized = [];
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i];
+    if (block.kind === "note") continue;
+    const raw2 = byIndex.get(i);
+    const present = raw2 !== void 0 && raw2 !== null && !(typeof raw2 === "string" && raw2.trim().length === 0) && !(Array.isArray(raw2) && raw2.length === 0);
+    if (block.required && !present) {
+      return { ok: false, error: `\u067E\u0627\u0633\u062E \u0628\u0647 \xAB${block.label}\xBB \u0627\u0644\u0632\u0627\u0645\u06CC \u0627\u0633\u062A`, normalized: [] };
+    }
+    if (!present) continue;
+    if (block.kind === "select") {
+      const v2 = String(raw2);
+      if (!block.options?.some((o) => o.value === v2)) {
+        return { ok: false, error: `\u067E\u0627\u0633\u062E \xAB${block.label}\xBB \u06CC\u06A9\u06CC \u0627\u0632 \u06AF\u0632\u06CC\u0646\u0647\u200C\u0647\u0627\u06CC \u062A\u0639\u0631\u06CC\u0641\u200C\u0634\u062F\u0647 \u0646\u06CC\u0633\u062A`, normalized: [] };
+      }
+      normalized.push({ index: i, value: v2 });
+      continue;
+    }
+    if (block.kind === "multi") {
+      const arr = Array.isArray(raw2) ? raw2.map(String) : [String(raw2)];
+      if (arr.some((v2) => !block.options?.some((o) => o.value === v2))) {
+        return { ok: false, error: `\u067E\u0627\u0633\u062E \xAB${block.label}\xBB \u06AF\u0632\u06CC\u0646\u0647\u0654 \u0646\u0627\u0634\u0646\u0627\u062E\u062A\u0647 \u062F\u0627\u0631\u062F`, normalized: [] };
+      }
+      if (new Set(arr).size !== arr.length) {
+        return { ok: false, error: `\u067E\u0627\u0633\u062E \xAB${block.label}\xBB \u062A\u06A9\u0631\u0627\u0631\u06CC \u062F\u0627\u0631\u062F`, normalized: [] };
+      }
+      normalized.push({ index: i, value: arr });
+      continue;
+    }
+    if (block.kind === "yes_no") {
+      const v2 = String(raw2);
+      if (v2 !== "yes" && v2 !== "no") {
+        return { ok: false, error: `\u067E\u0627\u0633\u062E \xAB${block.label}\xBB \u0628\u0627\u06CC\u062F \u0628\u0644\u0647 \u06CC\u0627 \u062E\u06CC\u0631 \u0628\u0627\u0634\u062F`, normalized: [] };
+      }
+      normalized.push({ index: i, value: v2 });
+      continue;
+    }
+    if (block.kind === "number") {
+      const n = typeof raw2 === "number" ? raw2 : Number(normalizeLatinDigits(String(raw2)));
+      if (!Number.isFinite(n)) {
+        return { ok: false, error: `\u067E\u0627\u0633\u062E \xAB${block.label}\xBB \u0628\u0627\u06CC\u062F \u0639\u062F\u062F \u0628\u0627\u0634\u062F`, normalized: [] };
+      }
+      normalized.push({ index: i, value: n });
+      continue;
+    }
+    if (block.kind === "phone") {
+      const v2 = normalizePhone(String(raw2));
+      if (!/^09\d{9}$/.test(v2)) {
+        return { ok: false, error: `\u0634\u0645\u0627\u0631\u0647\u0654 \xAB${block.label}\xBB \u0645\u0639\u062A\u0628\u0631 \u0646\u06CC\u0633\u062A \u2014 \u0628\u0627\u06CC\u062F \u06F1\u06F1 \u0631\u0642\u0645 \u0648 \u0628\u0627 \u06F0\u06F9 \u0634\u0631\u0648\u0639 \u0634\u0648\u062F`, normalized: [] };
+      }
+      normalized.push({ index: i, value: v2 });
+      continue;
+    }
+    const v = String(raw2);
+    if (v.length > 2e3) {
+      return { ok: false, error: `\u067E\u0627\u0633\u062E \xAB${block.label}\xBB \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F2\u06F0\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A`, normalized: [] };
+    }
+    normalized.push({ index: i, value: v });
+  }
+  return { ok: true, normalized };
+}
+__name(validateAnswers, "validateAnswers");
+function hasDuplicateOptionValues(block) {
+  if (!block.options) return false;
+  const values = block.options.map((o) => o.value);
+  return new Set(values).size !== values.length;
+}
+__name(hasDuplicateOptionValues, "hasDuplicateOptionValues");
+
+// src/domain/form-builder/service.ts
+function parseBlocks(raw2) {
+  try {
+    const parsed = JSON.parse(raw2);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+__name(parseBlocks, "parseBlocks");
+function parseAnswers(raw2) {
+  try {
+    const parsed = JSON.parse(raw2);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+__name(parseAnswers, "parseAnswers");
+function formRowToDomain(r) {
+  return {
+    id: r.id,
+    slug: r.slug,
+    title: r.title,
+    description: r.description,
+    blocks: parseBlocks(r.blocks),
+    published: r.published === 1,
+    academicYear: r.academic_year,
+    createdBy: r.created_by,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at
+  };
+}
+__name(formRowToDomain, "formRowToDomain");
+function responseRowToDomain(r) {
+  return {
+    id: r.id,
+    formId: r.form_id,
+    answers: parseAnswers(r.answers),
+    respondentName: r.respondent_name,
+    respondentPhone: r.respondent_phone,
+    channel: r.channel,
+    status: r.status,
+    academicYear: r.academic_year,
+    createdAt: r.created_at
+  };
+}
+__name(responseRowToDomain, "responseRowToDomain");
+var FORM_SELECT = `SELECT * FROM forms WHERE deleted_at IS NULL`;
+var RESPONSE_BY_ID = `SELECT * FROM form_responses WHERE id = ? AND deleted_at IS NULL`;
+function createFormBuilderService(deps) {
+  const { db, audit, logger } = deps;
+  const log = logger.child("form-builder");
+  async function loadForm(id) {
+    const row = await db.queryOne(`${FORM_SELECT} AND id = ?`, [id]);
+    if (!row) throw new NotFoundError("\u0641\u0631\u0645");
+    return row;
+  }
+  __name(loadForm, "loadForm");
+  async function assertSlugFree(slug, exceptId) {
+    const dup = await db.queryOne(
+      `${FORM_SELECT} AND slug = ? AND (? IS NULL OR id != ?) LIMIT 1`,
+      [slug, exceptId ?? null, exceptId ?? null]
+    );
+    if (dup) throw new ConflictError("\u0627\u06CC\u0646 \u0627\u0633\u0644\u0627\u06AF \u0642\u0628\u0644\u0627\u064B \u06AF\u0631\u0641\u062A\u0647 \u0634\u062F\u0647 \u2014 \u0644\u06CC\u0646\u06A9 \u0639\u0645\u0648\u0645\u06CC \u0628\u0627\u06CC\u062F \u06CC\u06A9\u062A\u0627 \u0628\u0645\u0627\u0646\u062F");
+  }
+  __name(assertSlugFree, "assertSlugFree");
+  function assertBlocksSane(blocks) {
+    const parsed = blocks;
+    for (const b of parsed) {
+      if (hasDuplicateOptionValues(b)) {
+        throw new ValidationError(`\u06AF\u0632\u06CC\u0646\u0647\u200C\u0647\u0627\u06CC \xAB${b.label}\xBB \u0645\u0642\u062F\u0627\u0631 \u062A\u06A9\u0631\u0627\u0631\u06CC \u062F\u0627\u0631\u0646\u062F`);
+      }
+    }
+  }
+  __name(assertBlocksSane, "assertBlocksSane");
+  const service = {
+    async list() {
+      const rows = await db.query(`${FORM_SELECT} ORDER BY created_at DESC, id DESC LIMIT 200`);
+      return rows.map(formRowToDomain);
+    },
+    async getById(id) {
+      const row = await db.queryOne(`${FORM_SELECT} AND id = ?`, [id]);
+      return row ? formRowToDomain(row) : null;
+    },
+    async create(input2, actor) {
+      await assertSlugFree(input2.slug);
+      assertBlocksSane(input2.blocks);
+      const id = crypto.randomUUID();
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      await db.transaction(async (tx) => {
+        await tx.execute(
+          `INSERT INTO forms (id, slug, title, description, blocks, published, academic_year, created_by, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            id,
+            input2.slug,
+            input2.title,
+            input2.description ?? null,
+            JSON.stringify(input2.blocks),
+            input2.published ? 1 : 0,
+            currentSchoolYear(),
+            actor.staffId,
+            now,
+            now
+          ]
+        );
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: "form.create",
+          resourceType: "form",
+          resourceId: id,
+          changes: { slug: { from: null, to: input2.slug }, blocks: { from: null, to: input2.blocks.length } }
+        });
+      });
+      log.info("form.created", { id, slug: input2.slug });
+      return formRowToDomain(await loadForm(id));
+    },
+    /* ویرایش کل‌جایگزین — ویرایشگر همیشه کل فرم را می‌فرستد (عین الگوی ثبت نتیجهٔ ارزیابی) */
+    async update(id, input2, actor) {
+      const current = await loadForm(id);
+      if (current.slug !== input2.slug) await assertSlugFree(input2.slug, id);
+      assertBlocksSane(input2.blocks);
+      await db.transaction(async (tx) => {
+        await tx.execute(
+          `UPDATE forms
+             SET slug = ?, title = ?, description = ?, blocks = ?, published = ?, updated_at = ?
+           WHERE id = ?`,
+          [
+            input2.slug,
+            input2.title,
+            input2.description ?? null,
+            JSON.stringify(input2.blocks),
+            input2.published ? 1 : 0,
+            (/* @__PURE__ */ new Date()).toISOString(),
+            id
+          ]
+        );
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: "form.update",
+          resourceType: "form",
+          resourceId: id,
+          changes: {
+            slug: { from: current.slug, to: input2.slug },
+            published: { from: current.published === 1, to: input2.published },
+            blocks: { from: parseBlocks(current.blocks).length, to: input2.blocks.length }
+          }
+        });
+      });
+      log.info("form.updated", { id, slug: input2.slug });
+      return formRowToDomain(await loadForm(id));
+    },
+    async remove(id, actor) {
+      const current = await loadForm(id);
+      await db.transaction(async (tx) => {
+        await tx.execute(`UPDATE forms SET deleted_at = ?, updated_at = datetime('now') WHERE id = ?`, [
+          (/* @__PURE__ */ new Date()).toISOString(),
+          id
+        ]);
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: "form.delete",
+          resourceType: "form",
+          resourceId: id,
+          changes: { slug: { from: current.slug, to: null } }
+        });
+      });
+      log.info("form.deleted", { id });
+    },
+    async getBySlugPublished(slug) {
+      const row = await db.queryOne(`${FORM_SELECT} AND slug = ? AND published = 1`, [slug]);
+      return row ? formRowToDomain(row) : null;
+    },
+    /* ثبت پاسخ عمومی — فقط فرم منتشرشده؛ اعتبارسنجی کامل پاسخ‌ها در برابر بلوک‌های زندهٔ فرم */
+    async submitResponse(slug, input2, meta3) {
+      const form = await db.queryOne(`${FORM_SELECT} AND slug = ? AND published = 1`, [slug]);
+      if (!form) throw new NotFoundError("\u0641\u0631\u0645");
+      const blocks = parseBlocks(form.blocks);
+      const check2 = validateAnswers(blocks, input2.answers);
+      if (!check2.ok) throw new ValidationError(check2.error ?? "\u067E\u0627\u0633\u062E\u200C\u0647\u0627 \u0645\u0639\u062A\u0628\u0631 \u0646\u06CC\u0633\u062A\u0646\u062F");
+      const id = crypto.randomUUID();
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      const channel = input2.token ? "bot" : "web";
+      await db.transaction(async (tx) => {
+        await tx.execute(
+          `INSERT INTO form_responses
+             (id, form_id, answers, respondent_name, respondent_phone, channel, token, academic_year, status, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'new', ?, ?)`,
+          [
+            id,
+            form.id,
+            JSON.stringify(check2.normalized),
+            input2.respondent_name,
+            input2.respondent_phone ?? null,
+            channel,
+            input2.token ?? null,
+            currentSchoolYear(),
+            now,
+            now
+          ]
+        );
+        await audit.logInTransaction(tx, {
+          actorId: "public",
+          action: "form.response_submit",
+          resourceType: "form",
+          resourceId: form.id,
+          changes: {
+            slug: { from: null, to: form.slug },
+            answers: { from: null, to: check2.normalized.length },
+            channel: { from: null, to: channel }
+          }
+        });
+      });
+      log.info("form.response.submitted", { formId: form.id, slug: form.slug, ip: meta3.ip });
+      return responseRowToDomain(await db.queryOne(RESPONSE_BY_ID, [id]));
+    },
+    async listResponses(formId, status) {
+      const where = ["deleted_at IS NULL", "form_id = ?"];
+      const params = [formId];
+      if (status) {
+        where.push("status = ?");
+        params.push(status);
+      }
+      const rows = await db.query(
+        `SELECT * FROM form_responses
+          WHERE ${where.join(" AND ")}
+          ORDER BY created_at DESC, id DESC
+          LIMIT ${FORM_RESPONSE_LIMIT}`,
+        params
+      );
+      return rows.map(responseRowToDomain);
+    },
+    async markResponseSeen(id, actor) {
+      const row = await db.queryOne(RESPONSE_BY_ID, [id]);
+      if (!row) throw new NotFoundError("\u067E\u0627\u0633\u062E");
+      await db.transaction(async (tx) => {
+        await tx.execute(`UPDATE form_responses SET status = 'seen', updated_at = ? WHERE id = ?`, [
+          (/* @__PURE__ */ new Date()).toISOString(),
+          id
+        ]);
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: "form.response_seen",
+          resourceType: "form_response",
+          resourceId: id,
+          changes: { status: { from: row.status, to: "seen" } }
+        });
+      });
+      log.info("form.response.seen", { id });
+      return responseRowToDomain(await db.queryOne(RESPONSE_BY_ID, [id]));
+    }
+  };
+  return service;
+}
+__name(createFormBuilderService, "createFormBuilderService");
+
+// src/domain/form-builder/form-page.ts
+var PAGE_STYLES2 = `
+:root{--bg:#f6f7fb;--card:#ffffff;--ink:#1f2430;--muted:#6b7280;--brand:#2563eb;--brand-soft:#eef2ff;
+--ok:#16a34a;--err:#dc2626;--line:#e5e7eb;--r:14px}
+*{box-sizing:border-box}html,body{margin:0;padding:0}
+/* \u06F1.\u06F2\u06F7.\u06F4\u06F2 \u2014 \u0641\u0648\u0646\u062A \u0648\u0632\u06CC\u0631 \u0645\u062A\u0646 \u0628\u0627\u0646\u062F\u0644\u200C\u0634\u062F\u0647\u0654 \u062E\u0648\u062F\u06CC (\u0628\u062F\u0648\u0646 \u0648\u0628\u200C\u0641\u0648\u0646\u062A \u0628\u06CC\u0631\u0648\u0646\u06CC) \u2014 \u0648\u0627\u0642\u0639\u0627\u064B \u0644\u0648\u062F \u0645\u06CC\u200C\u0634\u0648\u062F */
+@font-face{font-family:Vazirmatn;src:url('/assets/fonts/Vazirmatn-Variable.woff2') format('woff2');
+font-weight:100 900;font-style:normal;font-display:swap}
+body{background:var(--bg);color:var(--ink);font-family:Vazirmatn,Tahoma,'Segoe UI',sans-serif;
+font-size:16px;line-height:1.9;direction:rtl}
+.bar{position:fixed;top:0;right:0;left:0;height:5px;background:var(--line);z-index:5}
+.bar__fill{height:100%;width:0;background:var(--brand);transition:width .3s ease}
+/* \u06F1.\u06F2\u06F7.\u06F4\u06F2 \u2014 \u0639\u0645\u0648\u062F\u06CC\u200C\u0686\u06CC\u0646\u200C\u0634\u062F\u0646 \u0645\u0631\u062D\u0644\u0647 (\u062E\u0648\u0627\u0633\u062A \u06A9\u0627\u0631\u0641\u0631\u0645\u0627: \u0641\u0631\u0645 \u062F\u0642\u06CC\u0642\u0627\u064B \u0648\u0633\u0637 \u0635\u0641\u062D\u0647)\u061B safe center = \u0628\u062F\u0648\u0646 \u0628\u0631\u0634 \u062F\u0631 \u0645\u062D\u062A\u0648\u0627\u06CC \u0628\u0644\u0646\u062F\u061B \u067E\u062F\u06CC\u0646\u06AF \u0645\u062A\u0642\u0627\u0631\u0646 \u062A\u0627 \u0645\u0631\u06A9\u0632 \u0628\u0635\u0631\u06CC \u062F\u0642\u06CC\u0642 \u0628\u0627\u0634\u062F */
+.app{max-width:560px;margin:0 auto;padding:24px 16px;min-height:100dvh;
+display:flex;flex-direction:column;justify-content:safe center}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:24px;
+box-shadow:0 1px 3px rgba(15,23,42,.06)}
+.step-no{color:var(--muted);font-size:13px;margin-bottom:8px}
+h1{font-size:20px;margin:0 0 6px}h2{font-size:19px;margin:0 0 10px}
+p.lead{color:var(--muted);margin:0 0 18px;font-size:14.5px}
+.badge-free{display:inline-block;background:#e7f7ee;color:var(--ok);border-radius:999px;
+padding:4px 14px;font-size:13.5px;font-weight:700;margin-bottom:14px}
+/* \u06F1.\u06F2\u06F7.\u06F3\u06F6 \u2014 \u062F\u06A9\u0645\u0647\u200C\u0647\u0627\u06CC \u0647\u0645\u200C\u0627\u0646\u062F\u0627\u0632\u0647: basis \u0635\u0641\u0631 \u06CC\u0639\u0646\u06CC \xAB\u0627\u062F\u0627\u0645\u0647\xBB \u0648 \xAB\u0628\u0627\u0632\u06AF\u0634\u062A\xBB \u0647\u0645\u06CC\u0634\u0647 \u0647\u0645\u200C\u067E\u0647\u0646\u0627\u061B min-height \u0647\u0645\u200C\u0642\u062F */
+.btn{display:inline-flex;align-items:center;justify-content:center;border:none;cursor:pointer;
+border-radius:12px;padding:12px 22px;font-family:inherit;font-size:15.5px;font-weight:700;width:100%;
+min-height:52px}
+.btn--primary{background:var(--brand);color:#fff}
+.btn--primary:disabled{opacity:.45;cursor:not-allowed}
+.btn--ghost{background:transparent;color:var(--brand);border:1.5px solid var(--brand)}
+.btn--sm{width:auto;min-height:44px;padding:9px 16px;font-size:14px}
+.btnrow{display:flex;gap:10px;margin-top:20px}.btnrow .btn{flex:1 1 0}
+.choice{display:block;background:var(--card);border:2px solid var(--line);border-radius:var(--r);
+padding:14px 18px;margin-bottom:12px;cursor:pointer;transition:border-color .15s,background .15s,box-shadow .15s;
+font-family:inherit;font-size:15px;text-align:start;width:100%;position:relative}
+.choice:hover{border-color:var(--brand)}
+.choice.sel{border-color:var(--brand);background:var(--brand-soft);box-shadow:0 2px 10px rgba(37,99,235,.12)}
+.choice.sel::after{content:'\u2713';position:absolute;top:10px;left:14px;color:var(--brand);font-weight:800;font-size:15px}
+label.f{display:block;font-weight:700;margin:0 0 6px}
+input.i,select.i,textarea.i{width:100%;border:1.5px solid var(--line);border-radius:12px;padding:11px 14px;
+font-family:inherit;font-size:15.5px;background:#fff;color:var(--ink)}
+input.i:focus,textarea.i:focus{outline:none;border-color:var(--brand)}
+textarea.i{min-height:110px;resize:vertical}
+.field{margin-bottom:16px}
+.err-msg{color:var(--err);font-size:13.5px;margin-top:4px;display:none}
+.err-msg.show{display:block}
+.hint{color:var(--muted);font-size:13px;margin-top:4px}
+.review{border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-top:6px}
+.review__row{display:flex;align-items:flex-start;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line)}
+.review__row:last-child{border-bottom:none}
+.review__row .k{color:var(--muted);font-size:13px;min-width:110px;padding-top:2px}
+.review__row .v{flex:1;font-size:14.5px;white-space:pre-wrap}
+.review__row .e{background:none;border:none;color:var(--brand);cursor:pointer;font-family:inherit;
+font-size:13px;font-weight:700;padding:2px 4px}
+.aware{font-size:15.5px;line-height:2.2;white-space:pre-wrap}
+.done{text-align:center}.done .big{font-size:46px;margin-bottom:6px}
+/* \u06F1.\u06F2\u06F7.\u06F3\u06F5 \u2014 \u0627\u0641\u06A9\u062A \u0641\u06CC\u062F \u0648 \u062C\u0631\u06CC\u0627\u0646 \u067E\u06CC\u0648\u0633\u062A\u0647: \u0647\u0631 \u0635\u0641\u062D\u0647\u0654 \u062A\u0627\u0632\u0647 \u0628\u0627 \u0641\u06CC\u062F\u06CC\u0646 \u0646\u0631\u0645 \u0645\u06CC\u200C\u0646\u0634\u06CC\u0646\u062F\u061B \u06A9\u0627\u0647\u0634-\u062D\u0631\u06A9\u062A \u0631\u0639\u0627\u06CC\u062A \u0645\u06CC\u200C\u0634\u0648\u062F */
+.app>.card{animation:fadein .3s ease}
+@keyframes fadein{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.choice,.btn{transition:transform .12s ease,border-color .15s,background .15s}
+.choice:active{transform:scale(.98)}
+input.i:focus-visible,textarea.i:focus-visible,button:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+@media (prefers-reduced-motion: reduce){.bar__fill{transition:none}.app>.card{animation:none}.choice,.btn{transition:none}}
+`;
+var PAGE_SCRIPT2 = `
+(function(){
+'use strict';
+var F = window.__FORM__; var app = document.getElementById('app'); var bar = document.getElementById('bar');
+var REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+var state = { step: 0, answers: {}, name: '', phone: '', submitting: false };
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function normDigits(s){return String(s==null?'':s).replace(/[\u06F0-\u06F9]/g,function(d){return String('\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9'.indexOf(d));}).replace(/[\u0660-\u0669]/g,function(d){return String('\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669'.indexOf(d));});}
+function normPhone(s){var v=normDigits(s).replace(/[\\s\\-().]/g,'');if(v.indexOf('+98')===0){v='0'+v.slice(3);}else if(v.indexOf('98')===0&&v.length===12){v='0'+v.slice(2);}return v;}
+function validPhone(s){return /^09\\d{9}$/.test(normPhone(s));}
+/* \u0635\u0641\u062D\u0627\u062A \u062A\u0639\u0627\u0645\u0644\u06CC = \u0628\u0644\u0648\u06A9\u200C\u0647\u0627\u06CC \u063A\u06CC\u0631 note + \u0635\u0641\u062D\u0647\u0654 \u0645\u0634\u062E\u0635\u0627\u062A + \u0645\u0631\u0648\u0631 */
+var interactive = [];
+for (var i=0;i<F.blocks.length;i++){ if(F.blocks[i].kind!=='note') interactive.push(i); }
+var TOTAL = interactive.length + 3; // \u062E\u0648\u0634\u200C\u0622\u0645\u062F + \u0628\u0644\u0648\u06A9\u200C\u0647\u0627 + \u0645\u0634\u062E\u0635\u0627\u062A + \u0645\u0631\u0648\u0631
+function setBar(){ bar.style.width = Math.round(Math.min(state.step, TOTAL-1)/(TOTAL-1)*100)+'%'; }
+function stepNo(){ return '\u06AF\u0627\u0645 '+(state.step+1)+' \u0627\u0632 '+TOTAL; }
+function blockInput(i, b){
+  var k=b.kind;
+  if(k==='text'||k==='phone'||k==='number'){
+    var type = k==='number'?'number':(k==='phone'?'tel':'text');
+    var extra = k==='phone'?' dir="ltr" placeholder="09xxxxxxxxx" inputmode="tel"':(k==='number'?' dir="ltr" inputmode="decimal"':'');
+    return '<input class="i" id="in" type="'+type+'"'+extra+' value="'+esc(valueOf(i))+'">';
+  }
+  if(k==='longtext'){ return '<textarea class="i" id="in">'+esc(valueOf(i))+'</textarea>'; }
+  if(k==='select'){
+    return b.options.map(function(o){ return '<button class="choice'+(valueOf(i)===o.value?' sel':'')+'" data-v="'+esc(o.value)+'">'+esc(o.label)+'</button>'; }).join('');
+  }
+  if(k==='multi'){
+    var cur = Array.isArray(valueOf(i))?valueOf(i):[];
+    return b.options.map(function(o){
+      return '<button class="choice'+(cur.indexOf(o.value)>=0?' sel':'')+'" data-mv="'+esc(o.value)+'">'+esc(o.label)+'</button>';
+    }).join('');
+  }
+  if(k==='yes_no'){
+    return '<button class="choice'+(valueOf(i)==='yes'?' sel':'')+'" data-v="yes">\u0628\u0644\u0647</button>'+
+           '<button class="choice'+(valueOf(i)==='no'?' sel':'')+'" data-v="no">\u062E\u06CC\u0631</button>';
+  }
+  return '';
+}
+function valueOf(i){ return state.answers[i]!==undefined?state.answers[i]:''; }
+function setValue(i, v){ state.answers[i]=v; }
+function labelOf(v){
+  if(v===null||v===undefined||v==='')return '\u2014';
+  if(Array.isArray(v))return v.map(function(x){return optLabel(v.length&&x);}).join('\u060C ');
+  return String(v);
+}
+function optLabel(v){ return String(v); }
+function displayValue(i){
+  var b=F.blocks[i];var v=state.answers[i];
+  if(v===undefined||v===null||v===''||(Array.isArray(v)&&!v.length))return '\u2014';
+  if(b.kind==='select'||b.kind==='multi'){
+    var arr=Array.isArray(v)?v:[v];
+    return arr.map(function(x){var o=(b.options||[]).filter(function(o){return o.value===x;})[0];return o?o.label:x;}).join('\u060C ');
+  }
+  if(b.kind==='yes_no')return v==='yes'?'\u0628\u0644\u0647':'\u062E\u06CC\u0631';
+  return String(v);
+}
+function err(id, show, msg){
+  var el=document.getElementById(id);if(!el)return;
+  el.className=show?'err-msg show':'err-msg';if(msg)el.textContent=msg;
+}
+function btnRow(nextLabel, backTo, okId){
+  return '<div class="btnrow"><button class="btn btn--ghost" data-act="back" data-to="'+backTo+'">\u0628\u0627\u0632\u06AF\u0634\u062A</button>'+
+    '<button class="btn btn--primary" id="'+(okId||'__nx')+'">'+nextLabel+'</button></div>';
+}
+function renderIntro(){
+  setBar();
+  app.innerHTML='<div class="card"><div class="badge-free">\u067E\u0627\u0633\u062E \u062F\u0627\u062F\u0646 \u0628\u0647 \u0627\u06CC\u0646 \u0641\u0631\u0645 \u0631\u0627\u06CC\u06AF\u0627\u0646 \u0627\u0633\u062A</div>'+
+    '<h1>'+esc(F.title)+'</h1>'+
+    (F.description?'<p class="lead">'+esc(F.description)+'</p>':'')+
+    '<p class="hint">\u062D\u062F\u0648\u062F '+interactive.length+' \u067E\u0631\u0633\u0634 \u2014 \u062F\u0631 \u0647\u0631 \u0635\u0641\u062D\u0647 \u06CC\u06A9 \u067E\u0631\u0633\u0634.</p>'+
+    '<button class="btn btn--primary" id="startBtn">\u0634\u0631\u0648\u0639</button></div>';
+  document.getElementById('startBtn').addEventListener('click',function(){state.step=1;render();});
+}
+function renderBlock(){
+  setBar();
+  var nth=state.step-1;var i=interactive[nth];var b=F.blocks[i];
+  var req=b.required?'':' <span class="hint">(\u0627\u062E\u062A\u06CC\u0627\u0631\u06CC)</span>';
+  app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
+    '<h2>'+esc(b.label)+req+'</h2>'+
+    (b.kind==='longtext'?'<p class="hint">\u0647\u0631 \u0686\u06CC\u0632\u06CC \u06A9\u0647 \u0641\u06A9\u0631 \u0645\u06CC\u200C\u06A9\u0646\u06CC\u062F \u06A9\u0645\u06A9 \u0645\u06CC\u200C\u06A9\u0646\u062F \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F.</p>':'')+
+    '<div class="field">'+blockInput(i,b)+'<div class="err-msg" id="be"></div></div>'+
+    btnRow('\u0627\u062F\u0627\u0645\u0647', state.step-1)+
+    '</div>';
+  document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=Number(this.getAttribute('data-to'))||0;render();});
+  var nx=document.getElementById('__nx');nx.textContent='\u0627\u062F\u0627\u0645\u0647';
+  nx.addEventListener('click',function(){ if(checkBlock(i,b)){state.step=state.step+1;render();} });
+  bindBlock(i,b);
+}
+function bindBlock(i,b){
+  var app2=document.getElementById('app');
+  if(b.kind==='select'||b.kind==='yes_no'){
+    app2.querySelectorAll('[data-v]').forEach(function(el){
+      el.addEventListener('click',function(){
+        setValue(i,el.getAttribute('data-v'));
+        app2.querySelectorAll('[data-v]').forEach(function(x){x.classList.remove('sel');});
+        el.classList.add('sel');
+        setTimeout(function(){ if(checkBlock(i,b)){state.step=state.step+1;render();} },180);
+      });
+    });
+  } else if(b.kind==='multi'){
+    app2.querySelectorAll('[data-mv]').forEach(function(el){
+      el.addEventListener('click',function(){
+        var v=valueOf(i);var cur=Array.isArray(v)?v.slice():[];
+        var val=el.getAttribute('data-mv');
+        var idx=cur.indexOf(val);
+        if(idx>=0){cur.splice(idx,1);}else{cur.push(val);}
+        setValue(i,cur);el.classList.toggle('sel',cur.indexOf(val)>=0);
+      });
+    });
+  } else {
+    var inp=document.getElementById('in');
+    if(inp){
+      inp.addEventListener('input',function(e){setValue(i,e.target.value);});
+      /* \u062C\u0631\u06CC\u0627\u0646 \u067E\u06CC\u0648\u0633\u062A\u0647 \u2014 Enter (\u06CC\u0627 Ctrl+Enter \u062F\u0631 \u0645\u062A\u0646 \u0628\u0644\u0646\u062F) = \u0627\u062F\u0627\u0645\u0647\u061B \u0628\u062F\u0648\u0646 \u067E\u0631\u0633\u0634 \u0627\u0636\u0627\u0641\u06CC */
+      inp.addEventListener('keydown',function(e){
+        var isTa=(e.target.tagName==='TEXTAREA');
+        if(e.key==='Enter'&&!isTa){e.preventDefault();var nx=document.getElementById('__nx');if(nx&&checkBlock(i,b)){state.step=state.step+1;render();}}
+        else if(e.key==='Enter'&&isTa&&e.ctrlKey){e.preventDefault();var nx2=document.getElementById('__nx');if(nx2&&checkBlock(i,b)){state.step=state.step+1;render();}}
+      });
+      /* \u0641\u0648\u06A9\u0648\u0633 \u062E\u0648\u062F\u06A9\u0627\u0631 \u2014 \u06A9\u0627\u0631\u0628\u0631 \u0647\u0645\u0627\u0646\u200C\u062C\u0627 \u06A9\u0647 \u0628\u0648\u062F \u062A\u0627\u06CC\u067E \u0645\u06CC\u200C\u06A9\u0646\u062F */
+      setTimeout(function(){try{inp.focus({preventScroll:true});}catch(_){try{inp.focus();}catch(__){}}},60);
+    }
+  }
+}
+function checkBlock(i,b){
+  var v=state.answers[i];
+  var empty=v===undefined||v===null||v===''||(Array.isArray(v)&&!v.length);
+  if(b.required&&empty){err('be',true,'\u0628\u0631\u0627\u06CC \u0627\u062F\u0627\u0645\u0647 \u0628\u0647 \u0627\u06CC\u0646 \u067E\u0631\u0633\u0634 \u067E\u0627\u0633\u062E \u0628\u062F\u0647\u06CC\u062F');return false;}
+  if(b.kind==='phone'&&!empty&&!validPhone(String(v))){err('be',true,'\u0634\u0645\u0627\u0631\u0647 \u0645\u0648\u0628\u0627\u06CC\u0644 \u06F1\u06F1 \u0631\u0642\u0645 \u0627\u0633\u062A \u0648 \u0628\u0627 \u06F0\u06F9 \u0634\u0631\u0648\u0639 \u0645\u06CC\u200C\u0634\u0648\u062F');return false;}
+  err('be',false);return true;
+}
+function renderContact(){
+  setBar();
+  app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
+    '<h2>\u0627\u0633\u0645 \u0648 \u0631\u0627\u0647 \u062A\u0645\u0627\u0633 \u0634\u0645\u0627</h2><p class="lead">\u0628\u0631\u0627\u06CC \u0627\u06CC\u0646\u06A9\u0647 \u0628\u062A\u0648\u0627\u0646\u06CC\u0645 \u067E\u06CC\u06AF\u06CC\u0631\u06CC \u06CC\u0627 \u067E\u0627\u0633\u062E \u0628\u062F\u0647\u06CC\u0645.</p>'+
+    '<div class="field"><label class="f">\u0646\u0627\u0645 \u0648 \u0646\u0627\u0645 \u062E\u0627\u0646\u0648\u0627\u062F\u06AF\u06CC</label><input class="i" id="rn" value="'+esc(state.name)+'">'+
+    '<div class="err-msg" id="rnErr">\u0646\u0627\u0645 \u0631\u0627 \u06A9\u0627\u0645\u0644 \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F \u2014 \u062F\u0633\u062A\u200C\u06A9\u0645 \u062F\u0648 \u062D\u0631\u0641</div></div>'+
+    '<div class="field"><label class="f">\u0634\u0645\u0627\u0631\u0647 \u0645\u0648\u0628\u0627\u06CC\u0644 (\u0627\u062E\u062A\u06CC\u0627\u0631\u06CC)</label><input class="i" id="rp" dir="ltr" inputmode="tel" placeholder="09xxxxxxxxx" value="'+esc(state.phone)+'">'+
+    '<div class="err-msg" id="rpErr">\u0634\u0645\u0627\u0631\u0647 \u0645\u0648\u0628\u0627\u06CC\u0644 \u06F1\u06F1 \u0631\u0642\u0645 \u0627\u0633\u062A \u0648 \u0628\u0627 \u06F0\u06F9 \u0634\u0631\u0648\u0639 \u0645\u06CC\u200C\u0634\u0648\u062F</div></div>'+
+    btnRow('\u0627\u062F\u0627\u0645\u0647 \u0628\u0647 \u0645\u0631\u0648\u0631 \u0646\u0647\u0627\u06CC\u06CC', state.step-1)+
+    '</div>';
+  document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=Number(this.getAttribute('data-to'))||0;render();});
+  document.getElementById('rn').addEventListener('input',function(e){state.name=e.target.value;});
+  document.getElementById('rp').addEventListener('input',function(e){state.phone=e.target.value;});
+  var nx=document.getElementById('__nx');nx.textContent='\u0627\u062F\u0627\u0645\u0647 \u0628\u0647 \u0645\u0631\u0648\u0631 \u0646\u0647\u0627\u06CC\u06CC';
+  nx.addEventListener('click',function(){
+    var ok1=state.name.trim().length>=2;var ok2=state.phone.trim()===''||validPhone(state.phone);
+    err('rnErr',!ok1);err('rpErr',!ok2);
+    if(ok1&&ok2){state.phone=normPhone(state.phone);state.step=state.step+1;render();}
+  });
+}
+function renderReview(){
+  setBar();
+  var rows=interactive.map(function(i){
+    var b=F.blocks[i];
+    return '<div class="review__row"><span class="k">'+esc(b.label)+'</span><span class="v">'+esc(displayValue(i))+'</span>'+
+      '<button class="e" data-s="'+(i>=0?stepOfBlock(i):'')+'">\u0648\u06CC\u0631\u0627\u06CC\u0634</button></div>';
+  }).join('');
+  app.innerHTML='<div class="card"><h2>\u067E\u0627\u0633\u062E\u200C\u0647\u0627 \u0622\u0645\u0627\u062F\u0647 \u062B\u0628\u062A \u0627\u0633\u062A</h2>'+
+    '<p class="lead">\u0686\u06A9 \u06A9\u0646\u06CC\u062F\u061B \u0647\u0631 \u0633\u0637\u0631 \u0631\u0627 \u0645\u06CC\u200C\u062A\u0648\u0627\u0646\u06CC\u062F \u0647\u0645\u06CC\u0646 \u062D\u0627\u0644\u0627 \u0648\u06CC\u0631\u0627\u06CC\u0634 \u06A9\u0646\u06CC\u062F.</p>'+
+    '<div class="review">'+rows+
+    '<div class="review__row"><span class="k">\u0646\u0627\u0645 \u067E\u0627\u0633\u062E\u200C\u062F\u0647\u0646\u062F\u0647</span><span class="v">'+esc(state.name)+'</span>'+
+    '<button class="e" data-s="'+(TOTAL-2)+'">\u0648\u06CC\u0631\u0627\u06CC\u0634</button></div>'+
+    '<div class="review__row"><span class="k">\u0645\u0648\u0628\u0627\u06CC\u0644</span><span class="v">'+esc(state.phone||'\u2014')+'</span>'+
+    '<button class="e" data-s="'+(TOTAL-2)+'">\u0648\u06CC\u0631\u0627\u06CC\u0634</button></div></div>'+
+    '<div class="err-msg" id="subErr"></div>'+
+    '<div class="btnrow"><button class="btn btn--ghost" data-act="back" data-to="'+(TOTAL-2)+'">\u0628\u0627\u0632\u06AF\u0634\u062A \u0648 \u0648\u06CC\u0631\u0627\u06CC\u0634</button>'+
+    '<button class="btn btn--primary" id="confirmBtn">\u062B\u0628\u062A \u067E\u0627\u0633\u062E\u200C\u0647\u0627</button></div></div>';
+  app.querySelectorAll('.e').forEach(function(b2){
+    b2.addEventListener('click',function(){state.step=Number(b2.getAttribute('data-s'))||0;render();});
+  });
+  document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=TOTAL-2;render();});
+  document.getElementById('confirmBtn').addEventListener('click',function(){ submit(this); });
+}
+function stepOfBlock(blockIndex){
+  var n=interactive.indexOf(blockIndex);
+  return n>=0 ? n+1 : 0;
+}
+function submit(btnEl){
+  if(state.submitting)return;
+  state.submitting=true;btnEl.disabled=true;btnEl.textContent='\u062F\u0631 \u062D\u0627\u0644 \u062B\u0628\u062A\u2026';
+  var answers=Object.keys(state.answers).map(function(k){return {index:Number(k),value:state.answers[k]};});
+  fetch('/public/form/'+encodeURIComponent(F.slug)+'/submit',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({answers:answers,respondent_name:state.name,respondent_phone:state.phone||null,token:window.__FORM_TOKEN__||undefined})
+  }).then(function(r){return r.json().then(function(j){return {status:r.status,body:j};});})
+  .then(function(res){
+    state.submitting=false;
+    if(res.status===201){state.step=TOTAL-1;render();return;}
+    var msg=(res.body&&res.body.message)||('\u062B\u0628\u062A \u0646\u0634\u062F \u2014 \u06A9\u062F '+res.status);
+    var el=document.getElementById('subErr');
+    if(el){el.className='err-msg show';el.textContent=msg;}else{alert(msg);}
+    btnEl.disabled=false;btnEl.textContent='\u062B\u0628\u062A \u067E\u0627\u0633\u062E\u200C\u0647\u0627';
+  }).catch(function(){
+    state.submitting=false;btnEl.disabled=false;
+    var el=document.getElementById('subErr');
+    if(el){el.className='err-msg show';el.textContent='\u0627\u0631\u062A\u0628\u0627\u0637 \u0628\u0631\u0642\u0631\u0627\u0631 \u0646\u0634\u062F \u2014 \u0627\u06CC\u0646\u062A\u0631\u0646\u062A \u0631\u0627 \u0686\u06A9 \u06A9\u0646\u06CC\u062F \u0648 \u062F\u0648\u0628\u0627\u0631\u0647 \u0628\u0632\u0646\u06CC\u062F';}
+    btnEl.textContent='\u062B\u0628\u062A \u067E\u0627\u0633\u062E\u200C\u0647\u0627';
+  });
+}
+function renderDone(){
+  bar.style.width='100%';
+  app.innerHTML='<div class="card done"><div class="big">\u2705</div>'+
+    '<h2>\u067E\u0627\u0633\u062E\u200C\u0647\u0627 \u062B\u0628\u062A \u0634\u062F</h2><p class="lead">\u0645\u0645\u0646\u0648\u0646 \u0627\u0632 \u0648\u0642\u062A\u06CC \u06A9\u0647 \u06AF\u0630\u0627\u0634\u062A\u06CC\u062F. \u0627\u06AF\u0631 \u0644\u0627\u0632\u0645 \u0628\u0627\u0634\u062F \u0628\u0627 \u0634\u0645\u0627 \u062A\u0645\u0627\u0633 \u0645\u06CC\u200C\u06AF\u06CC\u0631\u06CC\u0645.</p>'+
+    '<p class="hint">\u0645\u0631\u06A9\u0632 \u062C\u0627\u0645\u0639 \u0633\u0646\u062C\u0634 \u0648 \u0627\u062E\u062A\u0644\u0627\u0644\u0627\u062A \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u2014 \u0647\u0645\u0647\u200C\u06CC \u062E\u062F\u0645\u0627\u062A \u0631\u0627\u06CC\u06AF\u0627\u0646</p></div>';
+}
+function render(){
+  /* \u062C\u0631\u06CC\u0627\u0646 \u067E\u06CC\u0648\u0633\u062A\u0647 \u2014 \u0647\u0631 \u06AF\u0627\u0645 \u062A\u0627\u0632\u0647 \u0628\u0647 \u0628\u0627\u0644\u0627\u06CC \u0635\u0641\u062D\u0647 \u0628\u0631\u0645\u06CC\u200C\u06AF\u0631\u062F\u062F (\u0627\u0633\u06A9\u0631\u0648\u0644 \u0646\u0631\u0645\u061B \u06A9\u0627\u0647\u0634-\u062D\u0631\u06A9\u062A \u2192 \u0628\u06CC\u200C\u062F\u0631\u0646\u06AF) */
+  if(state.step>0){try{window.scrollTo({top:0,behavior:REDUCED?'auto':'smooth'});}catch(_){window.scrollTo(0,0);}}
+  if(state.step===0)return renderIntro();
+  var nth=state.step-1;
+  if(nth>=0&&nth<interactive.length)return renderBlock();
+  if(state.step===TOTAL-2)return renderContact();
+  if(state.step===TOTAL-1)return renderDone();
+  state.step=0;render();
+}
+render();
+})();
+`;
+function safeJsonEmbed(value) {
+  return JSON.stringify(value).replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
+}
+__name(safeJsonEmbed, "safeJsonEmbed");
+function renderFormPage(opts) {
+  const payload = {
+    slug: opts.form.slug,
+    title: opts.form.title,
+    description: opts.form.description ?? "",
+    blocks: opts.form.blocks
+  };
+  return `<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${opts.form.title.replace(/[<>&"]/g, "")}</title>
+<meta name="robots" content="noindex, nofollow">
+<!-- \u06F1.\u06F2\u06F7.\u06F4\u06F2 \u2014 \u0648\u0632\u06CC\u0631\u0645\u062A\u0646 \u0641\u0642\u0637 \u062E\u0648\u062F\u06CC: @font-face \u062F\u0631 CSS \u0647\u0645\u06CC\u0646 \u0635\u0641\u062D\u0647 \u0627\u0632 /assets/fonts \u0645\u06CC\u200C\u062E\u0648\u0627\u0646\u062F -->
+<style>${PAGE_STYLES2}</style>
+</head>
+<body>
+<div class="bar"><div class="bar__fill" id="bar"></div></div>
+<div class="app" id="app"></div>
+<script>window.__FORM__=${safeJsonEmbed(payload)};window.__FORM_TOKEN__='';</script>
+<script>${PAGE_SCRIPT2}</script>
+</body>
+</html>`;
+}
+__name(renderFormPage, "renderFormPage");
+function renderFormNotFoundPage() {
+  return `<!doctype html>
+<html lang="fa" dir="rtl">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>\u0641\u0631\u0645 \u06CC\u0627\u0641\u062A \u0646\u0634\u062F</title><meta name="robots" content="noindex, nofollow">
+<!-- \u06F1.\u06F2\u06F7.\u06F4\u06F2 \u2014 \u0648\u0632\u06CC\u0631\u0645\u062A\u0646 \u0641\u0642\u0637 \u062E\u0648\u062F\u06CC: @font-face \u062F\u0631 CSS \u0647\u0645\u06CC\u0646 \u0635\u0641\u062D\u0647 \u0627\u0632 /assets/fonts \u0645\u06CC\u200C\u062E\u0648\u0627\u0646\u062F -->
+<style>${PAGE_STYLES2}</style></head>
+<body><div class="app"><div class="card done"><div class="big">\u{1F50D}</div>
+<h1>\u0627\u06CC\u0646 \u0641\u0631\u0645 \u067E\u06CC\u062F\u0627 \u0646\u0634\u062F \u06CC\u0627 \u0647\u0646\u0648\u0632 \u0645\u0646\u062A\u0634\u0631 \u0646\u0634\u062F\u0647</h1>
+<p class="lead">\u0644\u06CC\u0646\u06A9 \u0631\u0627 \u062F\u0648\u0628\u0627\u0631\u0647 \u0686\u06A9 \u06A9\u0646\u06CC\u062F \u06CC\u0627 \u0628\u0627 \u0645\u0631\u06A9\u0632 \u062A\u0645\u0627\u0633 \u0628\u06AF\u06CC\u0631\u06CC\u062F \u2014 \u0647\u0645\u0647\u200C\u06CC \u062E\u062F\u0645\u0627\u062A \u0631\u0627\u06CC\u06AF\u0627\u0646 \u0627\u0633\u062A.</p>
+</div></div></body></html>`;
+}
+__name(renderFormNotFoundPage, "renderFormNotFoundPage");
+
+// src/domain/form-builder/routes.ts
+var formHits = /* @__PURE__ */ new Map();
+function formRateGuard(ip) {
+  const nowMs = Date.now();
+  const windowMs = 36e5;
+  const cur = formHits.get(`ip:${ip}`);
+  if (!cur || cur.resetAt < nowMs) {
+    formHits.set(`ip:${ip}`, { count: 1, resetAt: nowMs + windowMs });
+  } else if (cur.count >= FORM_RATE_PER_HOUR) {
+    throw new RateLimitError(3600, "\u062A\u0639\u062F\u0627\u062F \u062B\u0628\u062A\u200C\u0647\u0627 \u062F\u0631 \u0627\u06CC\u0646 \u0633\u0627\u0639\u062A \u0632\u06CC\u0627\u062F \u0627\u0633\u062A \u2014 \u06A9\u0645\u06CC \u0628\u0639\u062F \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F");
+  } else {
+    cur.count += 1;
+  }
+  if (formHits.size > 5e3) {
+    for (const [key, val] of formHits) {
+      if (val.resetAt < nowMs) formHits.delete(key);
+    }
+  }
+}
+__name(formRateGuard, "formRateGuard");
+function clientIp(c) {
+  return (c.req.header("cf-connecting-ip") ?? c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? "local").slice(0, 64);
+}
+__name(clientIp, "clientIp");
+var PAGE_HEADERS = {
+  "Content-Type": "text/html; charset=utf-8",
+  "Cache-Control": "no-store",
+  "X-Robots-Tag": "noindex, nofollow",
+  "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src 'self'"
+};
+function registerFormBuilderRoutes(app, service) {
+  app.get("/public/form/:slug", async (c) => {
+    const slug = c.req.param("slug").slice(0, 60);
+    const form = await service.getBySlugPublished(slug);
+    const html = form ? renderFormPage({ form }) : renderFormNotFoundPage();
+    return new Response(html, { status: form ? 200 : 404, headers: PAGE_HEADERS });
+  });
+  app.post("/public/form/:slug/submit", async (c) => {
+    const raw2 = await c.req.text();
+    if (raw2.length > 8192) {
+      return c.json({ error: "VALIDATION_ERROR", message: "\u062D\u062C\u0645 \u0627\u0637\u0644\u0627\u0639\u0627\u062A \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0645\u062C\u0627\u0632 \u0627\u0633\u062A" }, 400);
+    }
+    let parsedBody;
+    try {
+      parsedBody = JSON.parse(raw2);
+    } catch {
+      return c.json({ error: "VALIDATION_ERROR", message: "\u0628\u062F\u0646\u0647\u0654 \u062F\u0631\u062E\u0648\u0627\u0633\u062A JSON \u0645\u0639\u062A\u0628\u0631 \u0646\u06CC\u0633\u062A" }, 400);
+    }
+    const body = FormResponseSubmitSchema.parse(parsedBody);
+    formRateGuard(clientIp(c));
+    const slug = c.req.param("slug").slice(0, 60);
+    const created = await service.submitResponse(
+      slug,
+      {
+        answers: body.answers,
+        respondent_name: body.respondent_name,
+        respondent_phone: body.respondent_phone ?? null,
+        token: body.token
+      },
+      { ip: clientIp(c) }
+    );
+    return c.json({ data: created }, 201);
+  });
+  app.get("/api/forms", async (c) => {
+    const items = await service.list();
+    return c.json({ data: items }, 200);
+  });
+  app.get("/api/forms/:id", async (c) => {
+    const item = await service.getById(c.req.param("id"));
+    return c.json({ data: item }, 200);
+  });
+  app.post("/api/forms", requireRole("manager", "secretary"), async (c) => {
+    const actor = getAuthContext(c);
+    const body = FormUpsertSchema.parse(await c.req.json());
+    const created = await service.create(body, actor);
+    return c.json({ data: created }, 201);
+  });
+  app.patch("/api/forms/:id", requireRole("manager", "secretary"), async (c) => {
+    const actor = getAuthContext(c);
+    const body = FormUpsertSchema.parse(await c.req.json());
+    const updated = await service.update(c.req.param("id"), body, actor);
+    return c.json({ data: updated }, 200);
+  });
+  app.delete("/api/forms/:id", requireRole("manager"), async (c) => {
+    const actor = getAuthContext(c);
+    await service.remove(c.req.param("id"), actor);
+    return c.body(null, 204);
+  });
+  app.get("/api/forms/:id/responses", requireRole("manager", "secretary", "therapist"), async (c) => {
+    const items = await service.listResponses(
+      c.req.param("id"),
+      c.req.query("status") || void 0
+    );
+    return c.json({ data: items }, 200);
+  });
+  app.post("/api/forms/:id/responses/:rid/seen", requireRole("manager", "secretary"), async (c) => {
+    const actor = getAuthContext(c);
+    const item = await service.markResponseSeen(c.req.param("rid"), actor);
+    return c.json({ data: item }, 200);
+  });
+}
+__name(registerFormBuilderRoutes, "registerFormBuilderRoutes");
 
 // src/domain/followups/pure.ts
 var FOLLOWUP_TRANSITIONS = {
@@ -31215,8 +33704,8 @@ function followUpGroupOf(row, now = /* @__PURE__ */ new Date()) {
   if (!row.dueAt) return "open";
   const due = Date.parse(row.dueAt);
   if (Number.isNaN(due)) return "open";
-  const { nowIso, todayEnd, weekEnd } = groupBoundaries(now);
-  if (due < Date.parse(nowIso)) return "overdue";
+  const { nowIso: nowIso2, todayEnd, weekEnd } = groupBoundaries(now);
+  if (due < Date.parse(nowIso2)) return "overdue";
   if (due <= Date.parse(todayEnd)) return "today";
   if (due <= Date.parse(weekEnd)) return "week";
   return "future";
@@ -31275,14 +33764,14 @@ function createFollowUpsService(deps) {
   function groupCondition(group, params) {
     if (group === "all") return "1=1";
     if (!group || group === "open") return `f.status IN (${OPEN_LIST})`;
-    const { nowIso, todayEnd, weekEnd } = groupBoundaries(/* @__PURE__ */ new Date());
+    const { nowIso: nowIso2, todayEnd, weekEnd } = groupBoundaries(/* @__PURE__ */ new Date());
     const dated = `f.status IN (${OPEN_LIST}) AND f.due_at IS NOT NULL`;
     if (group === "overdue") {
-      params.push(nowIso);
+      params.push(nowIso2);
       return `${dated} AND f.due_at < ?`;
     }
     if (group === "today") {
-      params.push(nowIso, todayEnd);
+      params.push(nowIso2, todayEnd);
       return `${dated} AND f.due_at >= ? AND f.due_at <= ?`;
     }
     if (group === "week") {
@@ -31314,7 +33803,7 @@ function createFollowUpsService(deps) {
         due_at: { from: null, to: dueAt }
       }
     });
-    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+    const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
     return {
       id,
       entityType: input2.entityType,
@@ -31329,8 +33818,8 @@ function createFollowUpsService(deps) {
       dueAt,
       status: "open",
       completedAt: null,
-      createdAt: nowIso,
-      updatedAt: nowIso
+      createdAt: nowIso2,
+      updatedAt: nowIso2
     };
   }
   __name(insertWithinTx, "insertWithinTx");
@@ -33399,6 +35888,28 @@ function createExerciseBankService(deps) {
         other: rows.filter((r) => r.category === "school_type" || r.category === "custom").map(ref)
       };
     },
+    /* ۱.۲۷.۳۸ — فهرست عمومیِ امن کارت‌های آماده برای صفحهٔ /public/activities:
+       فقط متادیتای منتشرشده (عنوان/توضیح/قالب/برچسب) — بدون کلید فایل، بدون دادهٔ دانش‌آموز */
+    async listPublicActivities() {
+      const rows = await db.query(
+        `SELECT e.id, e.title, e.description, e.format,
+                COALESCE(GROUP_CONCAT(t.name), '') AS tag_names
+           FROM exercises e
+           LEFT JOIN exercise_tags et ON et.exercise_id = e.id
+           LEFT JOIN tags t ON t.id = et.tag_id AND t.active = 1
+          WHERE e.published = 1 AND e.deleted_at IS NULL
+          GROUP BY e.id
+          ORDER BY e.created_at DESC
+          LIMIT 80`
+      );
+      return rows.map((r) => ({
+        id: r.id,
+        title: r.title,
+        description: r.description,
+        format: r.format,
+        tags: r.tag_names ? r.tag_names.split(",").filter(Boolean) : []
+      }));
+    },
     async listPackages(filters, _actor) {
       const rawPageSize = filters.pageSize;
       const pageSize = Math.min(Math.max(Number.isFinite(rawPageSize) ? Number(rawPageSize) : 20, 1), 100);
@@ -34202,6 +36713,87 @@ function createExerciseBankService(deps) {
 }
 __name(createExerciseBankService, "createExerciseBankService");
 
+// src/domain/exercise-bank/activities-page.ts
+var FORMAT_LABELS = {
+  worksheet: "\u06A9\u0627\u0631\u0628\u0631\u06AF",
+  game: "\u0628\u0627\u0632\u06CC",
+  instruction: "\u0631\u0627\u0647\u0646\u0645\u0627"
+};
+var FORMAT_ICONS = {
+  worksheet: "\u{1F4DD}",
+  game: "\u{1F3B2}",
+  instruction: "\u{1F9ED}"
+};
+function renderActivitiesPage(input2) {
+  const esc4 = /* @__PURE__ */ __name((s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"), "esc");
+  const cards = input2.items.map(
+    (it) => `<div class="card"><div class="card-h"><span>${FORMAT_ICONS[it.format] ?? "\u{1F4DD}"}</span><b>${esc4(it.title)}</b><span class="fmt">${FORMAT_LABELS[it.format] ?? "\u062A\u0645\u0631\u06CC\u0646"}</span></div>` + (it.description ? `<p>${esc4(it.description)}</p>` : "") + (it.tags.length ? `<div class="tags">${it.tags.slice(0, 4).map((t) => `<span>${esc4(t)}</span>`).join("")}</div>` : "") + `</div>`
+  ).join("\n");
+  const count = input2.items.length;
+  return `<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>\u062A\u0645\u0631\u06CC\u0646\u200C\u0647\u0627 \u0648 \u06A9\u0627\u0631\u062A\u200C\u0647\u0627\u06CC \u0622\u0645\u0627\u062F\u0647 \u2014 ${esc4(input2.clinicName)}</title>
+<!-- \u06F1.\u06F2\u06F7.\u06F4\u06F2 \u2014 \u0648\u0632\u06CC\u0631\u0645\u062A\u0646 \u0641\u0642\u0637 \u062E\u0648\u062F\u06CC -->
+<style>
+:root{--ink:#2a2118;--muted:#6f675c;--brand:#0e7490;--brand-soft:#f0f7f8;--line:#e8e2d6}
+*{box-sizing:border-box}
+/* \u06F1.\u06F2\u06F7.\u06F4\u06F2 \u2014 \u0641\u0648\u0646\u062A \u0648\u0632\u06CC\u0631 \u0645\u062A\u0646 \u0628\u0627\u0646\u062F\u0644\u200C\u0634\u062F\u0647\u0654 \u062E\u0648\u062F\u06CC */
+@font-face{font-family:Vazirmatn;src:url('/assets/fonts/Vazirmatn-Variable.woff2') format('woff2');
+font-weight:100 900;font-style:normal;font-display:swap}
+body{margin:0;background:#f7f3ea;color:var(--ink);font-family:Vazirmatn,sans-serif;font-size:15.5px;line-height:2.1}
+.wrap{max-width:720px;margin:0 auto;padding:22px 16px 48px}
+header{text-align:center;padding:26px 0 18px}
+h1{font-size:clamp(20px,5vw,26px);margin:0 0 10px;line-height:1.6}
+.lead{color:var(--muted);font-size:14.5px;margin:0}
+main{background:#fff;border:1px solid var(--line);border-radius:18px;padding:24px 20px}
+h2{font-size:17px;margin:22px 0 10px;color:var(--brand)}
+.card{border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:12px}
+.card-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.card-h b{font-size:15px}
+.card p{margin:6px 0 0;color:var(--muted);font-size:14px}
+.fmt{margin-inline-start:auto;background:var(--brand-soft);color:var(--brand);border-radius:999px;
+padding:2px 10px;font-size:12px;font-weight:700}
+.tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.tags span{background:#f7f3ea;border:1px solid var(--line);border-radius:999px;padding:1px 10px;font-size:12px;color:var(--muted)}
+.how{background:var(--brand-soft);border-radius:14px;padding:14px 16px;margin-top:14px}
+.how ul{margin:8px 0 0;padding-inline-start:20px}
+.how li{margin-bottom:6px;font-size:14px}
+.cta{display:block;text-align:center;background:var(--brand);color:#fff;border-radius:14px;padding:14px;
+font-weight:800;text-decoration:none;margin-top:20px;font-size:15px}
+.cta:active{opacity:.85}
+footer{text-align:center;color:var(--muted);font-size:12.5px;margin-top:18px}
+@media print{header,footer{padding:8px 0}main{border:none}a.cta{display:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>\u{1F3B2} \u062A\u0645\u0631\u06CC\u0646\u200C\u0647\u0627 \u0648 \u06A9\u0627\u0631\u062A\u200C\u0647\u0627\u06CC \u0622\u0645\u0627\u062F\u0647\u0654 \u0645\u0631\u06A9\u0632</h1>
+    <p class="lead">\u0645\u062D\u062A\u0648\u0627\u06CC \u0622\u0645\u0627\u062F\u0647\u0654 \u062A\u06CC\u0645 \u0645\u0631\u06A9\u0632 \u0628\u0631\u0627\u06CC \u062A\u0645\u0631\u06CC\u0646 \u062F\u0631 \u062E\u0627\u0646\u0647 \u0648 \u06A9\u0644\u0627\u0633 \u2014 \u0647\u0645\u0647 \u0633\u0627\u062E\u062A\u0647\u200C\u0634\u062F\u0647 \u0648 \u0628\u0627\u0632\u0628\u06CC\u0646\u06CC\u200C\u0634\u062F\u0647\u061B ${count ? `${input2.items.length.toLocaleString("fa-IR")} \u0645\u0648\u0631\u062F \u062F\u0631 \u0627\u06CC\u0646 \u0641\u0647\u0631\u0633\u062A` : "\u062F\u0631 \u062D\u0627\u0644 \u0622\u0645\u0627\u062F\u0647\u200C\u0633\u0627\u0632\u06CC"}. \u0641\u0627\u06CC\u0644 \u0647\u0631 \u062A\u0645\u0631\u06CC\u0646 \u067E\u0633 \u0627\u0632 \u0637\u0631\u062D \u062F\u0631\u0645\u0627\u0646 \u06CC\u0627 \u0627\u062A\u0635\u0627\u0644 \u0628\u0627\u062A\u060C \u0645\u0633\u062A\u0642\u06CC\u0645 \u0628\u0631\u0627\u06CC\u062A\u0627\u0646 \u0627\u0631\u0633\u0627\u0644 \u0645\u06CC\u200C\u0634\u0648\u062F.</p>
+  </header>
+  <main>
+    ${cards || "<p>\u0641\u0639\u0644\u0627\u064B \u06A9\u0627\u0631\u062A\u06CC \u062F\u0631 \u0641\u0647\u0631\u0633\u062A \u0639\u0645\u0648\u0645\u06CC \u0645\u0646\u062A\u0634\u0631 \u0646\u0634\u062F\u0647 \u2014 \u0628\u0647\u200C\u0632\u0648\u062F\u06CC \u0645\u062D\u062A\u0648\u0627\u0647\u0627 \u0627\u0636\u0627\u0641\u0647 \u0645\u06CC\u200C\u0634\u0648\u0646\u062F.</p>"}
+    <h2>\u0686\u0637\u0648\u0631 \u0627\u0632 \u0627\u06CC\u0646 \u0645\u062D\u062A\u0648\u0627\u0647\u0627 \u0627\u0633\u062A\u0641\u0627\u062F\u0647 \u06A9\u0646\u0645\u061F</h2>
+    <div class="how">
+      <ul>
+        <li><b>\u062E\u0627\u0646\u0648\u0627\u062F\u0647\u200C\u0647\u0627:</b> \u067E\u0633 \u0627\u0632 \u062C\u0644\u0633\u0647 \u0648 \u0637\u0631\u062D \u062F\u0631\u0645\u0627\u0646\u060C \u0641\u0627\u06CC\u0644 \u062A\u0645\u0631\u06CC\u0646\u200C\u0647\u0627\u06CC \u0628\u0627\u0632 \u0641\u0631\u0632\u0646\u062F\u062A\u0627\u0646 \u062F\u0631 \u0628\u0627\u062A \u0628\u062E\u0634 \xAB\u0641\u0627\u06CC\u0644\u200C\u0647\u0627\u06CC \u0622\u0645\u0648\u0632\u0634\u06CC\xBB \u0627\u0631\u0633\u0627\u0644 \u0645\u06CC\u200C\u0634\u0648\u062F.</li>
+        <li><b>\u0645\u0639\u0644\u0645\u200C\u0647\u0627\u06CC \u0647\u0645\u06A9\u0627\u0631:</b> \u0628\u0627 \u0627\u062A\u0635\u0627\u0644 \u0628\u0627\u062A \u0628\u0647 \u0633\u0627\u0645\u0627\u0646\u0647\u060C \u062F\u06A9\u0645\u0647\u0654 \xAB\u06A9\u0627\u0631\u062A\u200C\u0647\u0627\u06CC \u0622\u0645\u0627\u062F\u0647\xBB \u06A9\u0644 \u0628\u0627\u0646\u06A9 \u0631\u0627 \u0628\u0631\u0686\u0633\u0628\u200C\u0628\u0647\u200C\u0628\u0631\u0686\u0633\u0628 \u0628\u0627 \u0641\u0627\u06CC\u0644\u200C\u0647\u0627 \u0645\u06CC\u200C\u0641\u0631\u0633\u062A\u062F.</li>
+        <li><b>\u0645\u0631\u062C\u0639 \u062A\u0627\u0632\u0647:</b> \u0628\u0627 \u0641\u0631\u0645 \u0645\u0639\u0631\u0641\u06CC \u062B\u0628\u062A\u200C\u0646\u0627\u0645 \u06A9\u0646\u06CC\u062F \u062A\u0627 \u0645\u0633\u06CC\u0631 \u062A\u0645\u0631\u06CC\u0646 \u0645\u0646\u0627\u0633\u0628 \u0634\u0645\u0627 \u0633\u0627\u062E\u062A\u0647 \u0634\u0648\u062F.</li>
+        <li><b>\u0628\u0627\u0632\u06CC\u200C\u0647\u0627\u06CC \u0634\u0646\u0627\u062E\u062A\u06CC:</b> \u0646\u0633\u062E\u0647\u0654 \u0628\u0627\u0632\u06CC\u200C\u0645\u062D\u0648\u0631 \u0647\u0631 \u062A\u0645\u0631\u06CC\u0646 \u0628\u0627 \u0644\u06CC\u0646\u06A9 \u0627\u062E\u062A\u0635\u0627\u0635\u06CC \u0628\u0631\u0627\u06CC \u0647\u0631 \u06A9\u0648\u062F\u06A9 \u0633\u0627\u062E\u062A\u0647 \u0645\u06CC\u200C\u0634\u0648\u062F \u0648 \u062F\u0631 \u0647\u0645\u0627\u0646 \u06AF\u0641\u062A\u200C\u0648\u06AF\u0648\u06CC \u0628\u0627\u062A \u0645\u06CC\u200C\u0622\u06CC\u062F.</li>
+      </ul>
+    </div>
+    <a class="cta" href="/public/referral">\u{1F9E9} \u0645\u0639\u0631\u0641\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u0628\u0647 \u0645\u0631\u06A9\u0632 \u2014 \u0641\u0631\u0645 \u06A9\u0648\u062A\u0627\u0647 \u0686\u0646\u062F \u062F\u0642\u06CC\u0642\u0647\u200C\u0627\u06CC</a>
+  </main>
+  <footer>${esc4(input2.clinicName)} \xB7 \u0647\u0645\u0647\u0654 \u062E\u062F\u0645\u0627\u062A \u0645\u0631\u06A9\u0632 \u0631\u0627\u06CC\u06AF\u0627\u0646 \u0627\u0633\u062A \xB7 \u0627\u06CC\u0646 \u0641\u0647\u0631\u0633\u062A \u0628\u0631\u0627\u06CC \u0686\u0627\u067E \u0648 \u0627\u0634\u062A\u0631\u0627\u06A9 \u0628\u0627 \u0627\u0648\u0644\u06CC\u0627 \u0645\u0646\u0627\u0633\u0628 \u0627\u0633\u062A</footer>
+</div>
+</body>
+</html>`;
+}
+__name(renderActivitiesPage, "renderActivitiesPage");
+
 // src/domain/exercise-bank/multipart.ts
 var SEGMENT_TARGET = 15e5;
 var HEADERS_MAX = 64 * 1024;
@@ -34421,6 +37013,18 @@ function downloadHeaders(filename, mimeType, inline) {
 }
 __name(downloadHeaders, "downloadHeaders");
 function registerExerciseBankRoutes(app, service) {
+  app.get("/public/activities", async (c) => {
+    const items = await service.listPublicActivities();
+    const html = renderActivitiesPage({ clinicName: "\u0645\u0631\u06A9\u0632 \u062C\u0627\u0645\u0639 \u0633\u0646\u062C\u0634\u060C \u0622\u0645\u0648\u0632\u0634\u060C \u062A\u0648\u0627\u0646\u200C\u0628\u062E\u0634\u06CC \u0648 \u0645\u062F\u0627\u062E\u0644\u0627\u062A \u0628\u0647\u0646\u06AF\u0627\u0645", items });
+    return new Response(html, {
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-store",
+        "X-Robots-Tag": "noindex, nofollow",
+        "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src 'self'"
+      }
+    });
+  });
   app.get("/api/exercises/meta", async (c) => {
     const categories = await service.categories();
     const facets = await service.facets();
@@ -35246,7 +37850,7 @@ var FIELD_LABEL_MAX = 240;
 var FIELD_KEY_MAX = 60;
 var FIELD_OPTION_MAX = 120;
 var FIELD_OPTIONS_MAX = 16;
-var FIELDS_MAX = 45;
+var FIELDS_MAX = 120;
 var SCALE_MAX_LIMIT = 10;
 var EVENT_TEXT_MAX = 200;
 var EVENT_LONGTEXT_MAX = 2e3;
@@ -35367,11 +37971,15 @@ var CaseEventTypeInputSchema = external_exports.object({
   category: external_exports.enum(CASE_EVENT_CATEGORIES),
   icon: external_exports.string().max(TYPE_ICON_MAX).nullish(),
   familyFillable: external_exports.boolean().optional(),
-  fields: external_exports.array(CaseEventFieldSchema).min(1, "\u062D\u062F\u0627\u0642\u0644 \u06CC\u06A9 \u0641\u06CC\u0644\u062F \u0641\u0631\u0645 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A").max(FIELDS_MAX),
+  fields: external_exports.array(CaseEventFieldSchema).min(1, "\u062D\u062F\u0627\u0642\u0644 \u06CC\u06A9 \u0641\u06CC\u0644\u062F \u0641\u0631\u0645 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A").max(FIELDS_MAX, `\u062D\u062F\u0627\u06A9\u062B\u0631 ${faNum2(FIELDS_MAX)} \u0622\u06CC\u062A\u0645 \u062F\u0631 \u0647\u0631 \u0642\u0627\u0644\u0628 \u0645\u062C\u0627\u0632 \u0627\u0633\u062A`),
   bands: external_exports.array(CaseEventBandSchema).max(BANDS_MAX).nullish(),
   subscales: external_exports.array(CaseEventSubscaleSchema).max(SUBSCALES_MAX, `\u062D\u062F\u0627\u06A9\u062B\u0631 ${SUBSCALES_MAX} \u0632\u06CC\u0631\u0645\u0642\u06CC\u0627\u0633`).nullish(),
   tags: external_exports.array(external_exports.string().min(8).max(64)).max(12, "\u062D\u062F\u0627\u06A9\u062B\u0631 \u06F1\u06F2 \u0628\u0631\u0686\u0633\u0628 \u0628\u0631\u0627\u06CC \u0647\u0631 \u0642\u0627\u0644\u0628").nullish(),
-  audience: external_exports.enum(["family", "teacher", "both"]).nullish()
+  audience: external_exports.enum(["family", "teacher", "both"]).nullish(),
+  toolSource: external_exports.string().max(TYPE_DESCRIPTION_MAX).nullish(),
+  // ۱.۲۷.۲۸ — M5: شناسنامهٔ ابزار — منبع/مرجع
+  toolNorm: external_exports.string().max(TYPE_DESCRIPTION_MAX).nullish()
+  // ۱.۲۷.۲۸ — M5: شناسنامهٔ ابزار — هنجار سنی/روایی
 });
 var CaseEventTypeUpdateSchema = CaseEventTypeInputSchema.partial();
 var SurveyCreateSchema = external_exports.object({
@@ -38072,7 +40680,7 @@ function profileSignals(result) {
   if (!result || result.ok === false || !snap)
     return [];
   const out = [];
-  const push = /* @__PURE__ */ __name((domain2, key, value, fa2) => {
+  const push2 = /* @__PURE__ */ __name((domain2, key, value, fa2) => {
     out.push({ domain: domain2, key, value: Math.max(0, Math.min(1, value)), source: "wechsler", fa: fa2 });
   }, "push");
   const subScaled = /* @__PURE__ */ __name((code) => {
@@ -38081,12 +40689,12 @@ function profileSignals(result) {
   }, "subScaled");
   if (typeof snap.fsiq === "number") {
     const bandEntry = FSIQ_BANDS.find((b) => snap.fsiq >= b.min && snap.fsiq <= b.max) ?? FSIQ_BANDS[FSIQ_BANDS.length - 1];
-    push("cognitive_level", "cog_level.fsiq_band", 1, `\u0647\u0648\u0634\u200C\u0628\u0647\u0631 \u06A9\u0644 ${faNum3(snap.fsiq)} \u062F\u0631 ${bandEntry.fa} \u0642\u0631\u0627\u0631 \u062F\u0627\u0631\u062F.`);
+    push2("cognitive_level", "cog_level.fsiq_band", 1, `\u0647\u0648\u0634\u200C\u0628\u0647\u0631 \u06A9\u0644 ${faNum3(snap.fsiq)} \u062F\u0631 ${bandEntry.fa} \u0642\u0631\u0627\u0631 \u062F\u0627\u0631\u062F.`);
   }
   const scatter = snap.indexScatter ?? 0;
-  push("cognitive_level", "cog_level.index_scatter", scatter / 23, `\u067E\u0631\u0627\u06A9\u0646\u062F\u06AF\u06CC \u0628\u06CC\u0646\u200C\u0634\u0627\u062E\u0635\u06CC ${faNum3(scatter)} \u0646\u0645\u0631\u0647 \u0627\u0633\u062A (\u0633\u0642\u0641 \u062A\u0641\u0633\u06CC\u0631 \u0648\u0627\u062D\u062F \u06F2\u06F3).`);
+  push2("cognitive_level", "cog_level.index_scatter", scatter / 23, `\u067E\u0631\u0627\u06A9\u0646\u062F\u06AF\u06CC \u0628\u06CC\u0646\u200C\u0634\u0627\u062E\u0635\u06CC ${faNum3(scatter)} \u0646\u0645\u0631\u0647 \u0627\u0633\u062A (\u0633\u0642\u0641 \u062A\u0641\u0633\u06CC\u0631 \u0648\u0627\u062D\u062F \u06F2\u06F3).`);
   if (scatter >= 23) {
-    push("validity", "validity.scatter", scatter / 23, `\u067E\u0631\u0627\u06A9\u0646\u062F\u06AF\u06CC \u0628\u06CC\u0646\u200C\u0634\u0627\u062E\u0635\u06CC ${faNum3(scatter)} \u0646\u0645\u0631\u0647 \u0627\u0633\u062A (\u2265\u06F2\u06F3): \u0647\u0648\u0634\u200C\u0628\u0647\u0631 \u06A9\u0644 \u062A\u0635\u0648\u06CC\u0631 \u0648\u0627\u062D\u062F\u06CC \u0627\u0632 \u062A\u0648\u0627\u0646 \u06A9\u0644\u06CC \u0646\u0645\u06CC\u200C\u062F\u0647\u062F \u0648 \u062A\u0641\u0633\u06CC\u0631 \u0628\u0647 \u0633\u0637\u062D \u0634\u0627\u062E\u0635\u200C\u0647\u0627 \u0645\u0646\u062A\u0642\u0644 \u0645\u06CC\u200C\u0634\u0648\u062F.`);
+    push2("validity", "validity.scatter", scatter / 23, `\u067E\u0631\u0627\u06A9\u0646\u062F\u06AF\u06CC \u0628\u06CC\u0646\u200C\u0634\u0627\u062E\u0635\u06CC ${faNum3(scatter)} \u0646\u0645\u0631\u0647 \u0627\u0633\u062A (\u2265\u06F2\u06F3): \u0647\u0648\u0634\u200C\u0628\u0647\u0631 \u06A9\u0644 \u062A\u0635\u0648\u06CC\u0631 \u0648\u0627\u062D\u062F\u06CC \u0627\u0632 \u062A\u0648\u0627\u0646 \u06A9\u0644\u06CC \u0646\u0645\u06CC\u200C\u062F\u0647\u062F \u0648 \u062A\u0641\u0633\u06CC\u0631 \u0628\u0647 \u0633\u0637\u062D \u0634\u0627\u062E\u0635\u200C\u0647\u0627 \u0645\u0646\u062A\u0642\u0644 \u0645\u06CC\u200C\u0634\u0648\u062F.`);
   }
   const patternValue = /* @__PURE__ */ __name((codes) => {
     const vals = codes.map((c) => subScaled(c) ?? 0);
@@ -38098,14 +40706,14 @@ function profileSignals(result) {
     const s = subScaled(c);
     return s !== null && s <= 7;
   })) {
-    push("academic", "profile.acid", patternValue(acidCodes), "\u0627\u0644\u06AF\u0648\u06CC ACID \u0641\u0639\u0627\u0644 \u0627\u0633\u062A: \u062D\u0633\u0627\u0628\u060C \u0631\u0645\u0632\u06AF\u0631\u062F\u0627\u0646\u06CC\u060C \u0627\u0637\u0644\u0627\u0639\u0627\u062A \u0648 \u0641\u0631\u0627\u062E\u0646\u0627\u06CC \u0627\u0631\u0642\u0627\u0645 \u0647\u0645\u200C\u0632\u0645\u0627\u0646 \u0636\u0639\u06CC\u0641\u200C\u0627\u0646\u062F \u2014 \u0646\u0634\u0627\u0646\u0647\u0654 \u06A9\u0644\u0627\u0633\u06CC\u06A9 \u0641\u0634\u0627\u0631 \u0628\u0631 \u0641\u0631\u0627\u06CC\u0646\u062F \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC.");
+    push2("academic", "profile.acid", patternValue(acidCodes), "\u0627\u0644\u06AF\u0648\u06CC ACID \u0641\u0639\u0627\u0644 \u0627\u0633\u062A: \u062D\u0633\u0627\u0628\u060C \u0631\u0645\u0632\u06AF\u0631\u062F\u0627\u0646\u06CC\u060C \u0627\u0637\u0644\u0627\u0639\u0627\u062A \u0648 \u0641\u0631\u0627\u062E\u0646\u0627\u06CC \u0627\u0631\u0642\u0627\u0645 \u0647\u0645\u200C\u0632\u0645\u0627\u0646 \u0636\u0639\u06CC\u0641\u200C\u0627\u0646\u062F \u2014 \u0646\u0634\u0627\u0646\u0647\u0654 \u06A9\u0644\u0627\u0633\u06CC\u06A9 \u0641\u0634\u0627\u0631 \u0628\u0631 \u0641\u0631\u0627\u06CC\u0646\u062F \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC.");
   }
   const cadCodes = ["AR", "CD", "DS"];
   if (cadCodes.every((c) => {
     const s = subScaled(c);
     return s !== null && s <= 7;
   })) {
-    push("attention", "profile.cad", patternValue(cadCodes), "\u0627\u0644\u06AF\u0648\u06CC CAD \u0641\u0639\u0627\u0644 \u0627\u0633\u062A: \u062D\u0633\u0627\u0628\u060C \u0631\u0645\u0632\u06AF\u0631\u062F\u0627\u0646\u06CC \u0648 \u0641\u0631\u0627\u062E\u0646\u0627\u06CC \u0627\u0631\u0642\u0627\u0645 \u0647\u0645\u200C\u0632\u0645\u0627\u0646 \u0636\u0639\u06CC\u0641\u200C\u0627\u0646\u062F \u2014 \u0646\u0634\u0627\u0646\u0647\u0654 \u0641\u0634\u0627\u0631 \u0628\u0631 \u062D\u0627\u0641\u0638\u0647\u0654 \u0641\u0639\u0627\u0644 \u0648 \u062A\u0645\u0631\u06A9\u0632 \u062F\u0631 \u06A9\u0627\u0631 \u0639\u062F\u062F\u06CC.");
+    push2("attention", "profile.cad", patternValue(cadCodes), "\u0627\u0644\u06AF\u0648\u06CC CAD \u0641\u0639\u0627\u0644 \u0627\u0633\u062A: \u062D\u0633\u0627\u0628\u060C \u0631\u0645\u0632\u06AF\u0631\u062F\u0627\u0646\u06CC \u0648 \u0641\u0631\u0627\u062E\u0646\u0627\u06CC \u0627\u0631\u0642\u0627\u0645 \u0647\u0645\u200C\u0632\u0645\u0627\u0646 \u0636\u0639\u06CC\u0641\u200C\u0627\u0646\u062F \u2014 \u0646\u0634\u0627\u0646\u0647\u0654 \u0641\u0634\u0627\u0631 \u0628\u0631 \u062D\u0627\u0641\u0638\u0647\u0654 \u0641\u0639\u0627\u0644 \u0648 \u062A\u0645\u0631\u06A9\u0632 \u062F\u0631 \u06A9\u0627\u0631 \u0639\u062F\u062F\u06CC.");
   }
   for (const row of snap.s5rows ?? []) {
     if (row.strength !== WEAKNESS && row.strength !== STRENGTH)
@@ -38114,16 +40722,16 @@ function profileSignals(result) {
     const absDiff = Math.abs(num(row.diff));
     const intensity = absDiff / 10;
     if (row.strength === WEAKNESS) {
-      push("cognitive_level", `cog_level.step5_weak.${row.key}`, intensity, `\u06AF\u0627\u0645 \u06F5 \u067E\u0631\u0648\u0641\u0627\u06CC\u0644 \u0634\u062E\u0635\u06CC: ${faName} \u0646\u0633\u0628\u062A \u0628\u0647 \u0645\u06CC\u0627\u0646\u06AF\u06CC\u0646 \u0634\u0627\u062E\u0635\u200C\u0647\u0627\u06CC \u062E\u0648\u062F ${faNum3(absDiff)} \u0646\u0645\u0631\u0647 \u0636\u0639\u0641 \u062F\u0627\u0631\u062F (\u0622\u0633\u062A\u0627\u0646\u0647\u0654 ${faNum3(row.cut)}).`);
+      push2("cognitive_level", `cog_level.step5_weak.${row.key}`, intensity, `\u06AF\u0627\u0645 \u06F5 \u067E\u0631\u0648\u0641\u0627\u06CC\u0644 \u0634\u062E\u0635\u06CC: ${faName} \u0646\u0633\u0628\u062A \u0628\u0647 \u0645\u06CC\u0627\u0646\u06AF\u06CC\u0646 \u0634\u0627\u062E\u0635\u200C\u0647\u0627\u06CC \u062E\u0648\u062F ${faNum3(absDiff)} \u0646\u0645\u0631\u0647 \u0636\u0639\u0641 \u062F\u0627\u0631\u062F (\u0622\u0633\u062A\u0627\u0646\u0647\u0654 ${faNum3(row.cut)}).`);
     } else {
-      push("cognitive_level", `cog_level.step5_strong.${row.key}`, intensity, `\u06AF\u0627\u0645 \u06F5 \u067E\u0631\u0648\u0641\u0627\u06CC\u0644 \u0634\u062E\u0635\u06CC: ${faName} \u0646\u0633\u0628\u062A \u0628\u0647 \u0645\u06CC\u0627\u0646\u06AF\u06CC\u0646 \u0634\u0627\u062E\u0635\u200C\u0647\u0627\u06CC \u062E\u0648\u062F ${faNum3(absDiff)} \u0646\u0645\u0631\u0647 \u0642\u0648\u062A \u062F\u0627\u0631\u062F (\u0622\u0633\u062A\u0627\u0646\u0647\u0654 ${faNum3(row.cut)}).`);
+      push2("cognitive_level", `cog_level.step5_strong.${row.key}`, intensity, `\u06AF\u0627\u0645 \u06F5 \u067E\u0631\u0648\u0641\u0627\u06CC\u0644 \u0634\u062E\u0635\u06CC: ${faName} \u0646\u0633\u0628\u062A \u0628\u0647 \u0645\u06CC\u0627\u0646\u06AF\u06CC\u0646 \u0634\u0627\u062E\u0635\u200C\u0647\u0627\u06CC \u062E\u0648\u062F ${faNum3(absDiff)} \u0646\u0645\u0631\u0647 \u0642\u0648\u062A \u062F\u0627\u0631\u062F (\u0622\u0633\u062A\u0627\u0646\u0647\u0654 ${faNum3(row.cut)}).`);
     }
   }
   if (analysis?.gai && analysis.gai.validity === INVALID2) {
-    push("validity", "cog_level.gai_invalid", 1, `\u0634\u0627\u062E\u0635 \u062A\u0648\u0627\u0646\u0627\u06CC\u06CC \u06A9\u0644\u06CC (GAI) \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A: \u0627\u062E\u062A\u0644\u0627\u0641 VCI \u0648 PRI \u0628\u0631\u0627\u0628\u0631 ${faNum3(num(analysis.gai.diff))} \u0646\u0645\u0631\u0647 \u0648 \u0628\u06CC\u0634 \u0627\u0632 \u0633\u0642\u0641 \u0645\u062C\u0627\u0632 \u06F2\u06F3 \u0627\u0633\u062A.`);
+    push2("validity", "cog_level.gai_invalid", 1, `\u0634\u0627\u062E\u0635 \u062A\u0648\u0627\u0646\u0627\u06CC\u06CC \u06A9\u0644\u06CC (GAI) \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A: \u0627\u062E\u062A\u0644\u0627\u0641 VCI \u0648 PRI \u0628\u0631\u0627\u0628\u0631 ${faNum3(num(analysis.gai.diff))} \u0646\u0645\u0631\u0647 \u0648 \u0628\u06CC\u0634 \u0627\u0632 \u0633\u0642\u0641 \u0645\u062C\u0627\u0632 \u06F2\u06F3 \u0627\u0633\u062A.`);
   }
   if ((snap.substitutes ?? []).length) {
-    push("validity", "validity.substitute_index", 1, `\u0634\u0627\u062E\u0635 ${snap.substitutes.join(" \u0648 ")} \u0628\u0627 \u0632\u06CC\u0631\u0622\u0632\u0645\u0648\u0646 \u062C\u0627\u0646\u0634\u06CC\u0646 \u0633\u0627\u062E\u062A\u0647 \u0634\u062F\u0647 \u0627\u0633\u062A\u061B \u062A\u0641\u0633\u06CC\u0631 \u0628\u0627 \u0627\u062D\u062A\u06CC\u0627\u0637 \u0627\u0646\u062C\u0627\u0645 \u0634\u0648\u062F.`);
+    push2("validity", "validity.substitute_index", 1, `\u0634\u0627\u062E\u0635 ${snap.substitutes.join(" \u0648 ")} \u0628\u0627 \u0632\u06CC\u0631\u0622\u0632\u0645\u0648\u0646 \u062C\u0627\u0646\u0634\u06CC\u0646 \u0633\u0627\u062E\u062A\u0647 \u0634\u062F\u0647 \u0627\u0633\u062A\u061B \u062A\u0641\u0633\u06CC\u0631 \u0628\u0627 \u0627\u062D\u062A\u06CC\u0627\u0637 \u0627\u0646\u062C\u0627\u0645 \u0634\u0648\u062F.`);
   }
   out.sort((a, b) => {
     if (a.key !== b.key)
@@ -38519,6 +41127,8 @@ function typeRowToRecord(r) {
     subscales: r.subscales ? parseJson(r.subscales, null) : null,
     tags: r.tags ? parseJson(r.tags, []) : [],
     audience: r.audience ?? "family",
+    toolSource: r.tool_source ?? null,
+    toolNorm: r.tool_norm ?? null,
     active: r.active === 1,
     isSystem: r.is_system === 1,
     createdAt: r.created_at,
@@ -38754,8 +41364,8 @@ function createCaseEventsService(deps) {
       const id = crypto.randomUUID();
       const key = newTypeKey();
       await db.execute(
-        `INSERT INTO case_event_types (id, key, title, description, category, icon, family_fillable, fields, bands, subscales, tags, audience, active, created_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
+        `INSERT INTO case_event_types (id, key, title, description, category, icon, family_fillable, fields, bands, subscales, tags, audience, tool_source, tool_norm, active, created_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
         [
           id,
           key,
@@ -38769,6 +41379,8 @@ function createCaseEventsService(deps) {
           input2.subscales && input2.subscales.length > 0 ? JSON.stringify(input2.subscales) : null,
           input2.tags && input2.tags.length > 0 ? JSON.stringify(input2.tags) : null,
           input2.audience ?? "family",
+          input2.toolSource?.trim() || null,
+          input2.toolNorm?.trim() || null,
           actor.staffId,
           now().toISOString(),
           now().toISOString()
@@ -38803,12 +41415,14 @@ function createCaseEventsService(deps) {
         bands: input2.bands !== void 0 ? input2.bands ?? null : current.bands,
         subscales: input2.subscales !== void 0 ? input2.subscales ?? null : current.subscales,
         tags: input2.tags !== void 0 ? input2.tags ?? [] : current.tags,
-        audience: input2.audience !== void 0 ? input2.audience ?? "family" : current.audience
+        audience: input2.audience !== void 0 ? input2.audience ?? "family" : current.audience,
+        toolSource: input2.toolSource !== void 0 ? input2.toolSource?.trim() || null : current.toolSource,
+        toolNorm: input2.toolNorm !== void 0 ? input2.toolNorm?.trim() || null : current.toolNorm
       };
       validateTypeDefinition({ category: next.category, fields: next.fields, bands: next.bands, familyFillable: next.familyFillable, subscales: next.subscales });
       await db.execute(
         `UPDATE case_event_types
-            SET title = ?, description = ?, category = ?, icon = ?, family_fillable = ?, fields = ?, bands = ?, subscales = ?, tags = ?, audience = ?, updated_at = ?
+            SET title = ?, description = ?, category = ?, icon = ?, family_fillable = ?, fields = ?, bands = ?, subscales = ?, tags = ?, audience = ?, tool_source = ?, tool_norm = ?, updated_at = ?
           WHERE id = ?`,
         [
           next.title,
@@ -38821,6 +41435,8 @@ function createCaseEventsService(deps) {
           next.subscales && next.subscales.length > 0 ? JSON.stringify(next.subscales) : null,
           next.tags.length > 0 ? JSON.stringify(next.tags) : null,
           next.audience,
+          next.toolSource,
+          next.toolNorm,
           now().toISOString(),
           id
         ]
@@ -39540,7 +42156,7 @@ function createCaseEventsService(deps) {
         `SELECT fill_token FROM case_events WHERE id = ?`,
         [id]
       );
-      return Boolean(row?.fill_token) && row.fill_token === token;
+      return row?.fill_token === token;
     },
     async mintFillLink(id, publicBaseUrl) {
       const row = await db.queryOne(
@@ -39654,7 +42270,7 @@ function createCaseEventsService(deps) {
       }
       const base = deps.publicBaseUrl?.trim() || null;
       const created = [];
-      const nowIso = now().toISOString();
+      const nowIso2 = now().toISOString();
       const fillExpires = new Date(now().getTime() + fillExpiryHours * 36e5).toISOString();
       for (const studentId of ids) {
         await assertStudent(studentId);
@@ -39665,7 +42281,7 @@ function createCaseEventsService(deps) {
             `INSERT INTO case_events (id, event_type_id, student_id, staff_id, appointment_id, occurred_at,
                                       status, payload, analysis, summary, fill_token, fill_expires_at, created_by, created_at, updated_at)
              VALUES (?, ?, ?, ?, NULL, ?, 'pending_family', NULL, NULL, NULL, ?, ?, ?, ?, ?)`,
-            [id, type.id, studentId, therapistId ?? actor.staffId, nowIso, token, fillExpires, actor.staffId, nowIso, nowIso]
+            [id, type.id, studentId, therapistId ?? actor.staffId, nowIso2, token, fillExpires, actor.staffId, nowIso2, nowIso2]
           );
           await audit.logInTransaction(tx, {
             actorId: actor.staffId,
@@ -39687,11 +42303,12 @@ function createCaseEventsService(deps) {
           therapistId: therapistId ?? actor.staffId,
           therapistName: null,
           status: "pending_family",
-          occurredAt: nowIso,
-          createdAt: nowIso,
+          occurredAt: nowIso2,
+          createdAt: nowIso2,
           fillExpiresAt: fillExpires,
           sentAt: null,
           link: base ? `${base.replace(/\/+$/, "")}/public/case-events/${id}/fill?token=${token}` : null,
+          /* __SEC_ACCEPT__: magic-link — همان قرارداد بالا */
           kind: input2.kind,
           typeKey: type.key,
           typeTitle: type.title,
@@ -39755,9 +42372,36 @@ function faNum4(n) {
   return String(n).replace(/[0-9]/g, (d) => FA_DIGITS[Number(d)]);
 }
 __name(faNum4, "faNum");
+function familySectionsOf(fields, subscales) {
+  const subscaleName = new Map((subscales ?? []).map((s) => [s.id, s.name]));
+  const sections = [];
+  for (const f of fields) {
+    if (f.type !== "scale" && f.type !== "single" && f.type !== "longtext") continue;
+    const title = f.subscaleId ? subscaleName.get(f.subscaleId) ?? null : null;
+    const item = {
+      key: f.key,
+      label: f.label,
+      kind: f.type === "longtext" ? "longtext" : f.type,
+      scaleMax: f.scaleMax,
+      scoredOptions: f.scoredOptions?.map((o) => ({ label: o.label })),
+      scaleLabels: f.scaleLabels ?? void 0,
+      hint: f.hint ?? null,
+      teacherLabel: f.teacherLabel ?? null,
+      teacherHint: f.teacherHint ?? null
+    };
+    const last = sections[sections.length - 1];
+    if (last && last.title === title) {
+      last.items.push(item);
+    } else {
+      sections.push({ title, items: [item] });
+    }
+  }
+  return sections;
+}
+__name(familySectionsOf, "familySectionsOf");
 var SCALE_LABELS = ["\u06F0", "\u06F1", "\u06F2", "\u06F3", "\u06F4", "\u06F5", "\u06F6", "\u06F7", "\u06F8", "\u06F9", "\u06F1\u06F0"];
 function renderFillFormPage(model, token) {
-  const esc3 = /* @__PURE__ */ __name((s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"), "esc");
+  const esc4 = /* @__PURE__ */ __name((s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"), "esc");
   let counter = 0;
   const total = model.sections.reduce((sum, s) => sum + s.items.filter((f) => f.kind !== "longtext").length, 0);
   const isTeacherForm = model.audience === "teacher" || !!model.teacherLabel;
@@ -39770,13 +42414,13 @@ function renderFillFormPage(model, token) {
       const qHint = isTeacherForm && f.teacherHint ? f.teacherHint : f.hint;
       if (f.kind === "longtext") {
         counter -= 1;
-        return `<div class="item item--free"><div class="q">${esc3(qLabel)}</div>${qHint ? `<div class="hint">${esc3(qHint)}</div>` : ""}<textarea class="free" name="${esc3(f.key)}" maxlength="1500" rows="3" placeholder="\u0627\u062E\u062A\u06CC\u0627\u0631\u06CC \u2014 \u0627\u06AF\u0631 \u0686\u06CC\u0632\u06CC \u0628\u0631\u0627\u06CC \u06AF\u0641\u062A\u0646 \u062F\u0627\u0631\u06CC\u062F \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F"></textarea></div>`;
+        return `<div class="item item--free"><div class="q">${esc4(qLabel)}</div>${qHint ? `<div class="hint">${esc4(qHint)}</div>` : ""}<textarea class="free" name="${esc4(f.key)}" maxlength="1500" rows="3" placeholder="\u0627\u062E\u062A\u06CC\u0627\u0631\u06CC \u2014 \u0627\u06AF\u0631 \u0686\u06CC\u0632\u06CC \u0628\u0631\u0627\u06CC \u06AF\u0641\u062A\u0646 \u062F\u0627\u0631\u06CC\u062F \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F"></textarea></div>`;
       }
       let opts = [];
       if (f.scoredOptions && f.scoredOptions.length > 0) {
         opts = f.scoredOptions.map(
-          (o, idx) => `<label class="opt opt--wide"><input type="radio" name="${esc3(f.key)}" value="${idx}" required />
-           <span>${esc3(o.label)}</span></label>`
+          (o, idx) => `<label class="opt opt--wide"><input type="radio" name="${esc4(f.key)}" value="${idx}" required />
+           <span>${esc4(o.label)}</span></label>`
         );
       } else {
         const max = Math.min(Math.max(f.scaleMax ?? 3, 1), 10);
@@ -39784,14 +42428,14 @@ function renderFillFormPage(model, token) {
         for (let v = 0; v <= max; v++) {
           const lbl = labels ? labels[v] : SCALE_LABELS[v] ?? faNum4(v);
           opts.push(
-            `<label class="opt"><input type="radio" name="${esc3(f.key)}" value="${v}" required />
-             <span>${esc3(lbl)}</span></label>`
+            `<label class="opt"><input type="radio" name="${esc4(f.key)}" value="${v}" required />
+             <span>${esc4(lbl)}</span></label>`
           );
         }
       }
-      return `<div class="item" data-key="${esc3(f.key)}"><div class="q">${faNum4(counter)}. ${esc3(qLabel)}</div>${qHint ? `<div class="hint">${esc3(qHint)}</div>` : ""}<div class="opts">${opts.join("")}</div></div>`;
+      return `<div class="item" data-key="${esc4(f.key)}"><div class="q">${faNum4(counter)}. ${esc4(qLabel)}</div>${qHint ? `<div class="hint">${esc4(qHint)}</div>` : ""}<div class="opts">${opts.join("")}</div></div>`;
     }).join("");
-    const head = sec.title ? `<div class="subscale"><span class="subscale__dot"></span>${esc3(sec.title)}</div>` : "";
+    const head = sec.title ? `<div class="subscale"><span class="subscale__dot"></span>${esc4(sec.title)}</div>` : "";
     return `${head}<div class="card">${items}</div>`;
   }).join("");
   return `<!doctype html>
@@ -39800,14 +42444,27 @@ function renderFillFormPage(model, token) {
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="robots" content="noindex, nofollow" />
-<title>${esc3(model.typeTitle)}</title>
+<title>${esc4(model.typeTitle)}</title>
 <style>
   :root { color-scheme: light; }
   * { box-sizing: border-box; }
-  body { margin: 0; background: #F7F3EA; color: #12384f;
-         font-family: Tahoma, "Segoe UI", sans-serif; line-height: 1.8; }
-  .wrap { max-width: 640px; margin: 0 auto; padding: 24px 16px 64px; }
-  .head { background: #12384f; color: #fff; border-radius: 16px; padding: 20px 22px; margin-bottom: 18px; }
+  /* \u06F1.\u06F2\u06F7.\u06F4\u06F2 \u2014 \u0641\u0648\u0646\u062A \u0648\u0632\u06CC\u0631 \u0645\u062A\u0646 \u0628\u0627\u0646\u062F\u0644\u200C\u0634\u062F\u0647\u0654 \u062E\u0648\u062F\u06CC (\u0628\u062F\u0648\u0646 URL \u0628\u06CC\u0631\u0648\u0646\u06CC) \u2014 \u067E\u06CC\u0634\u200C\u062A\u0631 \u0641\u0642\u0637 \xAB\u0627\u0639\u0644\u0627\u0645\xBB \u0645\u06CC\u200C\u0634\u062F \u0648
+     \u062F\u0631 \u0639\u0645\u0644 Tahoma \u0631\u0646\u062F\u0631 \u0645\u06CC\u200C\u0634\u062F\u061B \u062D\u0627\u0644\u0627 \u0628\u0627 \u0641\u0627\u06CC\u0644 \u0645\u062A\u063A\u06CC\u0631 \u062E\u0648\u062F\u06CC \u0648\u0627\u0642\u0639\u0627\u064B \u0644\u0648\u062F \u0645\u06CC\u200C\u0634\u0648\u062F */
+  @font-face { font-family: Vazirmatn; src: url('/assets/fonts/Vazirmatn-Variable.woff2') format('woff2');
+               font-weight: 100 900; font-style: normal; font-display: swap; }
+  /* \u06F1.\u06F2\u06F7.\u06F4\u06F2 \u2014 \u0639\u0645\u0648\u062F\u06CC\u200C\u0686\u06CC\u0646\u200C\u0634\u062F\u0646 \u0645\u0631\u062D\u0644\u0647 \u062F\u0631 \u0635\u0641\u062D\u0647\u0654 \u0628\u0644\u0646\u062F (\u062E\u0648\u0627\u0633\u062A \u06A9\u0627\u0631\u0641\u0631\u0645\u0627: \xAB\u0641\u0631\u0645 \u062F\u0642\u06CC\u0642\u0627\u064B \u0648\u0633\u0637 \u0635\u0641\u062D\u0647\xBB) \u2014
+     safe center \u062F\u0631 \u0645\u062D\u062A\u0648\u0627\u06CC \u0628\u0644\u0646\u062F\u062A\u0631 \u0627\u0632 \u0635\u0641\u062D\u0647 \u0628\u0647 start \u0628\u0631\u0645\u06CC\u200C\u06AF\u0631\u062F\u062F\u061B \u0628\u062F\u0648\u0646 \u0628\u0631\u0634\u0650 \u0628\u0627\u0644\u0627 */
+  body { margin: 0; color: #12384f;
+         font-family: Vazirmatn, Tahoma, "Segoe UI", sans-serif; line-height: 1.8;
+         background: radial-gradient(600px 320px at 88% -6%, rgba(34,158,217,.14), transparent 66%),
+                     radial-gradient(520px 300px at 8% 104%, rgba(37,99,235,.10), transparent 66%),
+                     linear-gradient(168deg,#eef6fb 0%,#f7f3ea 52%,#fdf2f8 100%);
+         background-attachment: fixed; }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 24px 16px;
+          min-height: 100dvh; display: flex; flex-direction: column; justify-content: safe center; }
+  .head { color: #fff; border-radius: 16px; padding: 20px 22px; margin-bottom: 18px;
+          background: linear-gradient(135deg,#12384f 0%,#1c5d80 55%,#229ED9 130%);
+          box-shadow: 0 10px 26px -12px rgba(18,56,79,.5); }
   .head h1 { margin: 0 0 6px; font-size: 18px; }
   .head p { margin: 0; font-size: 13px; opacity: .85; }
   .head .desc { margin-top: 10px; font-size: 13px; opacity: .95; line-height: 1.9;
@@ -39815,57 +42472,62 @@ function renderFillFormPage(model, token) {
   .head .who { margin-top: 10px; font-size: 13.5px; font-weight: 700; line-height: 1.8;
                background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.25);
                border-radius: 10px; padding: 9px 12px; }
-  .progress { position: sticky; top: 8px; z-index: 5; background: #fff; border: 1px solid #E5DCCB;
+  .progress { position: sticky; top: 8px; z-index: 5; background: rgba(255,255,255,.94); border: 1px solid #E5DCCB;
               border-radius: 12px; padding: 8px 12px; margin-bottom: 14px; font-size: 12px; color: #1c5d80;
-              box-shadow: 0 1px 3px rgba(18,56,79,.10); }
+              box-shadow: 0 4px 14px -8px rgba(18,56,79,.25); }
   .progress__bar { height: 5px; background: #EFE8DC; border-radius: 999px; overflow: hidden; margin-top: 6px; }
-  .progress__fill { height: 100%; width: 0%; background: #229ED9; border-radius: 999px; transition: width .2s; }
+  /* \u06F1.\u06F2\u06F7.\u06F4\u06F0 \u2014 \u0646\u0648\u0627\u0631 \u067E\u06CC\u0634\u0631\u0641\u062A \u06AF\u0631\u0627\u062F\u06CC\u0646\u062A\u06CC */
+  .progress__fill { height: 100%; width: 0%; background: linear-gradient(90deg,#1c5d80,#229ED9); border-radius: 999px; transition: width .2s; }
   .subscale { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700;
               color: #1c5d80; margin: 16px 4px 8px; }
-  .subscale__dot { width: 9px; height: 9px; border-radius: 50%; background: #229ED9; display: inline-block; }
-  .card { background: #fff; border-radius: 16px; padding: 18px 20px; margin-bottom: 14px;
-          box-shadow: 0 1px 3px rgba(18,56,79,.08); }
+  .subscale__dot { width: 9px; height: 9px; border-radius: 50%; background: linear-gradient(135deg,#1c5d80,#229ED9); display: inline-block; }
+  .card { background: linear-gradient(180deg,#ffffff,#fcfdff); border-radius: 16px; padding: 18px 20px; margin-bottom: 14px;
+          box-shadow: 0 8px 22px -14px rgba(18,56,79,.25); }
   .item { padding: 12px 0; border-bottom: 1px solid #EFE8DC; }
   .item:last-child { border-bottom: 0; }
   .item.is-missing .q { color: #A12622; }
-  .q { font-weight: 700; font-size: 14px; margin-bottom: 8px; }
-  .hint { font-size: 12px; color: #8A8377; margin: -5px 0 8px; line-height: 1.9; }
+  .q { font-weight: 700; font-size: 15px; margin-bottom: 8px; }
+  .hint { font-size: 12.5px; color: #8A8377; margin: -5px 0 8px; line-height: 1.9; }
   .opts { display: flex; flex-wrap: wrap; gap: 8px; }
   .opt { display: inline-flex; align-items: center; gap: 5px; background: #F7F3EA;
          border: 1px solid #E5DCCB; border-radius: 10px; padding: 6px 10px; font-size: 13px; cursor: pointer; }
   .opt--wide { width: 100%; align-items: flex-start; }
-  .opt:has(input:checked) { background: #D9EDF7; border-color: #229ED9; }
-  .item--free .q { font-size: 13.5px; }
+  /* \u06F1.\u06F2\u06F7.\u06F4\u06F0 \u2014 \u06AF\u0632\u06CC\u0646\u0647\u0654 \u0627\u0646\u062A\u062E\u0627\u0628\u200C\u0634\u062F\u0647 \u0628\u0627 \u06AF\u0631\u0627\u062F\u06CC\u0646\u062A \u0645\u0644\u0627\u06CC\u0645 */
+  .opt:has(input:checked) { background: linear-gradient(135deg,#D9EDF7,#E7E4FA); border-color: #229ED9; }
+  .item--free .q { font-size: 14px; }
   textarea.free { width: 100%; border: 1px solid #E5DCCB; border-radius: 10px; padding: 10px 12px;
-                  font-family: inherit; font-size: 13.5px; line-height: 1.9; resize: vertical; background: #FDFCF9; }
+                  font-family: inherit; font-size: 14px; line-height: 1.9; resize: vertical; background: #FDFCF9; }
   textarea.free:focus { outline: 2px solid #229ED9; outline-offset: -1px; }
   .focus { background: #FFF7E0; border: 1px solid #E8D48B; color: #6B5416; border-radius: 12px;
            padding: 11px 14px; margin-bottom: 14px; font-size: 13px; line-height: 1.9; }
-  .btn { display: block; width: 100%; border: 0; background: #229ED9; color: #fff;
+  /* \u06F1.\u06F2\u06F7.\u06F4\u06F0 \u2014 \u062F\u06A9\u0645\u0647\u0654 \u0627\u0631\u0633\u0627\u0644 \u06AF\u0631\u0627\u062F\u06CC\u0646\u062A\u06CC \u0647\u0645\u200C\u0632\u0628\u0627\u0646 \u0628\u0627 \u0641\u0631\u0645 \u0645\u0639\u0631\u0641\u06CC */
+  .btn { display: block; width: 100%; border: 0; color: #fff;
+         background: linear-gradient(135deg,#1c5d80 0%,#229ED9 100%);
          border-radius: 12px; padding: 14px; font-size: 16px; font-weight: 700; cursor: pointer;
-         font-family: inherit; margin-top: 6px; }
-  .btn:disabled { opacity: .6; }
+         font-family: inherit; margin-top: 6px; box-shadow: 0 10px 22px -10px rgba(28,127,184,.55); }
+  .btn:hover { filter: brightness(1.06); }
+  .btn:disabled { opacity: .6; filter: none; box-shadow: none; }
   .msg { display: none; border-radius: 12px; padding: 16px; margin-top: 12px; font-size: 14px; }
   .msg.ok { display: block; background: #E4F5E9; color: #1D6B39; }
   .msg.err { display: block; background: #FDE8E8; color: #A12622; }
   .foot { text-align: center; font-size: 12px; color: #8A8377; margin-top: 18px; }
-  .notice { text-align: center; font-size: 11.5px; color: #8A8377; margin: -4px 0 12px; }
+  .notice { text-align: center; font-size: 12px; color: #8A8377; margin: -4px 0 12px; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="head">
-    <h1>${esc3(model.typeTitle)}</h1>
-    ${headSub ? `<p>${esc3(headSub)}</p>` : ""}
-    ${model.teacherLabel ? `<div class="who">${esc3(model.teacherLabel)}</div>` : ""}
-    ${model.description ? `<div class="desc">${esc3(model.description)}</div>` : ""}
+    <h1>${esc4(model.typeTitle)}</h1>
+    ${headSub ? `<p>${esc4(headSub)}</p>` : ""}
+    ${model.teacherLabel ? `<div class="who">${esc4(model.teacherLabel)}</div>` : ""}
+    ${model.description ? `<div class="desc">${esc4(model.description)}</div>` : ""}
   </div>
   <div class="progress" id="prog">
     <span id="progText">\u067E\u0627\u0633\u062E \u062F\u0627\u062F\u0647\u200C\u0634\u062F\u0647: \u06F0 \u0627\u0632 ${faNum4(total)}</span>
     <div class="progress__bar"><div class="progress__fill" id="progFill"></div></div>
   </div>
   <div class="notice">\u0627\u06CC\u0646 \u0641\u0631\u0645 \u062A\u0634\u062E\u06CC\u0635 \u0646\u06CC\u0633\u062A\u061B \u0641\u0642\u0637 \u0628\u0647 \u062A\u0635\u0645\u06CC\u0645\u200C\u06AF\u06CC\u0631\u06CC \u062F\u0631\u0645\u0627\u0646\u06AF\u0631 \u06A9\u0645\u06A9 \u0645\u06CC\u200C\u06A9\u0646\u062F.</div>
-  ${model.focusNote ? `<div class="focus">\u{1F3AF} \u06A9\u0627\u0646\u0648\u0646\u200C\u0647\u0627\u06CC \u0627\u06CC\u0646 \u062F\u0648\u0631\u0647 \u0627\u0632 \u0622\u062E\u0631\u06CC\u0646 \u062C\u0645\u0639\u200C\u0628\u0646\u062F\u06CC \u067E\u0631\u0648\u0646\u062F\u0647: <b>${esc3(model.focusNote)}</b> \u2014 \u0647\u0645\u06CC\u0646 \u0628\u062E\u0634\u200C\u0647\u0627 \u062F\u0631 \u0627\u0628\u062A\u062F\u0627\u06CC \u0641\u0631\u0645 \u0622\u0645\u062F\u0647\u200C\u0627\u0646\u062F.</div>` : ""}
+  ${model.focusNote ? `<div class="focus">\u{1F3AF} \u06A9\u0627\u0646\u0648\u0646\u200C\u0647\u0627\u06CC \u0627\u06CC\u0646 \u062F\u0648\u0631\u0647 \u0627\u0632 \u0622\u062E\u0631\u06CC\u0646 \u062C\u0645\u0639\u200C\u0628\u0646\u062F\u06CC \u067E\u0631\u0648\u0646\u062F\u0647: <b>${esc4(model.focusNote)}</b> \u2014 \u0647\u0645\u06CC\u0646 \u0628\u062E\u0634\u200C\u0647\u0627 \u062F\u0631 \u0627\u0628\u062A\u062F\u0627\u06CC \u0641\u0631\u0645 \u0622\u0645\u062F\u0647\u200C\u0627\u0646\u062F.</div>` : ""}
   <form id="f" novalidate>
     ${sections}
     <button class="btn" type="submit">\u0627\u0631\u0633\u0627\u0644 \u067E\u0627\u0633\u062E\u200C\u0647\u0627</button>
@@ -39949,6 +42611,301 @@ function renderFillFormPage(model, token) {
 </html>`;
 }
 __name(renderFillFormPage, "renderFillFormPage");
+
+// src/domain/case-events/preview-form.ts
+var FA_DIGITS2 = "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9";
+function faNum5(n) {
+  return String(n).replace(/[0-9]/g, (d) => FA_DIGITS2[Number(d)]);
+}
+__name(faNum5, "faNum");
+function renderPreviewPage(def, token) {
+  const esc4 = /* @__PURE__ */ __name((s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"), "esc");
+  const sections = familySectionsOf(def.fields, def.subscales ?? null);
+  let counter = 0;
+  const total = sections.reduce((sum, s) => sum + s.items.filter((f) => f.kind !== "longtext").length, 0);
+  const rendered = sections.map((sec) => {
+    const items = sec.items.map((f) => {
+      counter += 1;
+      if (f.kind === "longtext") {
+        counter -= 1;
+        return `<div class="item item--free"><div class="q">${esc4(f.label)}</div>${f.hint ? `<div class="hint">${esc4(f.hint)}</div>` : ""}<textarea class="free" name="${esc4(f.key)}" maxlength="1500" rows="3" placeholder="\u0627\u062E\u062A\u06CC\u0627\u0631\u06CC \u2014 \u0627\u06AF\u0631 \u0686\u06CC\u0632\u06CC \u0628\u0631\u0627\u06CC \u06AF\u0641\u062A\u0646 \u062F\u0627\u0631\u06CC\u062F \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F"></textarea></div>`;
+      }
+      const opts = [];
+      if (f.scoredOptions && f.scoredOptions.length > 0) {
+        for (const o of f.scoredOptions) {
+          opts.push(`<label class="opt opt--wide"><input type="radio" name="${esc4(f.key)}" value="${opts.length}" required /><span>${esc4(o.label)}</span></label>`);
+        }
+      } else {
+        const max = Math.min(Math.max(f.scaleMax ?? 3, 1), 10);
+        const labels = f.scaleLabels && f.scaleLabels.length === max + 1 ? f.scaleLabels : null;
+        for (let v = 0; v <= max; v++) {
+          const lbl = labels ? labels[v] : ["\u06F0", "\u06F1", "\u06F2", "\u06F3", "\u06F4", "\u06F5", "\u06F6", "\u06F7", "\u06F8", "\u06F9", "\u06F1\u06F0"][v] ?? faNum5(v);
+          opts.push(`<label class="opt"><input type="radio" name="${esc4(f.key)}" value="${v}" required /><span>${esc4(lbl)}</span></label>`);
+        }
+      }
+      return `<div class="item" data-key="${esc4(f.key)}"><div class="q">${faNum5(counter)}. ${esc4(f.label)}</div>${f.hint ? `<div class="hint">${esc4(f.hint)}</div>` : ""}<div class="opts">${opts.join("")}</div></div>`;
+    }).join("");
+    const head = sec.title ? `<div class="subscale"><span class="subscale__dot"></span>${esc4(sec.title)}</div>` : "";
+    return `${head}<div class="card">${items}</div>`;
+  }).join("");
+  return `<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex, nofollow" />
+<title>\u067E\u06CC\u0634\u200C\u0646\u0645\u0627\u06CC\u0634 \u2014 ${esc4(def.title)}</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  /* \u06F1.\u06F2\u06F7.\u06F4\u06F2 \u2014 \u0639\u06CC\u0646 \u0641\u0631\u0645 \u062E\u0627\u0646\u0648\u0627\u062F\u0647: \u0641\u0648\u0646\u062A \u0648\u0632\u06CC\u0631 \u0645\u062A\u0646 \u0628\u0627\u0646\u062F\u0644\u200C\u0634\u062F\u0647\u0654 \u062E\u0648\u062F\u06CC \u0648\u0627\u0642\u0639\u0627\u064B \u0644\u0648\u062F \u0645\u06CC\u200C\u0634\u0648\u062F */
+  @font-face { font-family: Vazirmatn; src: url('/assets/fonts/Vazirmatn-Variable.woff2') format('woff2');
+               font-weight: 100 900; font-style: normal; font-display: swap; }
+  body { margin: 0; color: #12384f;
+         font-family: Vazirmatn, Tahoma, "Segoe UI", sans-serif; line-height: 1.8;
+         /* \u06F1.\u06F2\u06F7.\u06F4\u06F0 \u2014 \u0639\u06CC\u0646 \u0641\u0631\u0645 \u062E\u0627\u0646\u0648\u0627\u062F\u0647: \u067E\u0633\u200C\u0632\u0645\u06CC\u0646\u0647\u0654 \u06AF\u0631\u0627\u062F\u06CC\u0646\u062A\u06CC + \u0647\u0627\u0644\u0647\u0654 \u0631\u0646\u06AF\u06CC \u062B\u0627\u0628\u062A */
+         background: radial-gradient(600px 320px at 88% -6%, rgba(34,158,217,.14), transparent 66%),
+                     radial-gradient(520px 300px at 8% 104%, rgba(37,99,235,.10), transparent 66%),
+                     linear-gradient(168deg,#eef6fb 0%,#f7f3ea 52%,#fdf2f8 100%);
+         background-attachment: fixed; }
+  /* \u06F1.\u06F2\u06F7.\u06F4\u06F2 \u2014 \u0639\u06CC\u0646 \u0641\u0631\u0645 \u062E\u0627\u0646\u0648\u0627\u062F\u0647: \u0639\u0645\u0648\u062F\u06CC\u200C\u0686\u06CC\u0646\u200C\u0634\u062F\u0646 \u0645\u0631\u062D\u0644\u0647 \u0628\u0627 safe center\u061B \u067E\u062F\u06CC\u0646\u06AF \u0645\u062A\u0642\u0627\u0631\u0646 */
+  .wrap { max-width: 640px; margin: 0 auto; padding: 24px 16px;
+          min-height: 100dvh; display: flex; flex-direction: column; justify-content: safe center; }
+  .banner { position: sticky; top: 0; z-index: 9; background: #FFF3CD; border: 1px solid #E8D48B;
+            color: #6B5416; border-radius: 12px; padding: 10px 14px; margin-bottom: 14px;
+            font-size: 13px; font-weight: 700; }
+  .banner span { font-weight: 400; display: block; font-size: 12px; }
+  .head { color: #fff; border-radius: 16px; padding: 20px 22px; margin-bottom: 18px;
+          background: linear-gradient(135deg,#12384f 0%,#1c5d80 55%,#229ED9 130%);
+          box-shadow: 0 10px 26px -12px rgba(18,56,79,.5); }
+  .head h1 { margin: 0 0 6px; font-size: 18px; }
+  .head p { margin: 0; font-size: 13px; opacity: .85; }
+  .head .desc { margin-top: 10px; font-size: 13px; opacity: .95; line-height: 1.9;
+                background: rgba(255,255,255,.08); border-radius: 10px; padding: 10px 12px; }
+  .progress { background: rgba(255,255,255,.94); border: 1px solid #E5DCCB; border-radius: 12px;
+              padding: 8px 12px; margin-bottom: 14px; font-size: 12px; color: #1c5d80; }
+  .progress__bar { height: 5px; background: #EFE8DC; border-radius: 999px; overflow: hidden; margin-top: 6px; }
+  .progress__fill { height: 100%; width: 0%; background: linear-gradient(90deg,#1c5d80,#229ED9); border-radius: 999px; transition: width .2s; }
+  .subscale { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700;
+              color: #1c5d80; margin: 16px 4px 8px; }
+  .subscale__dot { width: 9px; height: 9px; border-radius: 50%; background: linear-gradient(135deg,#1c5d80,#229ED9); display: inline-block; }
+  .card { background: linear-gradient(180deg,#ffffff,#fcfdff); border-radius: 16px; padding: 18px 20px; margin-bottom: 14px;
+          box-shadow: 0 8px 22px -14px rgba(18,56,79,.25); }
+  .item { padding: 12px 0; border-bottom: 1px solid #EFE8DC; }
+  .item:last-child { border-bottom: 0; }
+  .item.is-missing .q { color: #A12622; }
+  .q { font-weight: 700; font-size: 15px; margin-bottom: 8px; }
+  .hint { font-size: 12.5px; color: #8A8377; margin: -5px 0 8px; line-height: 1.9; }
+  .opts { display: flex; flex-wrap: wrap; gap: 8px; }
+  .opt { display: inline-flex; align-items: center; gap: 5px; background: #F7F3EA;
+         border: 1px solid #E5DCCB; border-radius: 10px; padding: 6px 10px; font-size: 13px; cursor: pointer; }
+  .opt--wide { width: 100%; align-items: flex-start; }
+  .opt:has(input:checked) { background: linear-gradient(135deg,#D9EDF7,#E7E4FA); border-color: #229ED9; }
+  .item--free .q { font-size: 14px; }
+  textarea.free { width: 100%; border: 1px solid #E5DCCB; border-radius: 10px; padding: 10px 12px;
+                  font-family: inherit; font-size: 14px; line-height: 1.9; resize: vertical; background: #FDFCF9; }
+  textarea.free:focus { outline: 2px solid #229ED9; outline-offset: -1px; }
+  .notice { text-align: center; font-size: 12px; color: #8A8377; margin: -4px 0 12px; }
+  .btn { display: block; width: 100%; border: 0; color: #fff;
+         background: linear-gradient(135deg,#1c5d80 0%,#229ED9 100%);
+         border-radius: 12px; padding: 14px; font-size: 16px; font-weight: 700; cursor: pointer;
+         font-family: inherit; margin-top: 6px; box-shadow: 0 10px 22px -10px rgba(28,127,184,.55); }
+  .btn:hover { filter: brightness(1.06); }
+  .btn:disabled { opacity: .6; filter: none; box-shadow: none; }
+  .btn--ghost { background: #fff; color: #1c5d80; border: 1px solid #E5DCCB; margin-top: 10px; box-shadow: none; }
+  .msg { display: none; border-radius: 12px; padding: 16px; margin-top: 12px; font-size: 14px; }
+  .msg.err { display: block; background: #FDE8E8; color: #A12622; }
+  .result { display: none; }
+  .result.show { display: block; }
+  .result__card { background: #fff; border-radius: 16px; padding: 20px; margin-bottom: 14px;
+                  box-shadow: 0 1px 3px rgba(18,56,79,.08); }
+  .result__score { font-size: 22px; font-weight: 700; color: #1c5d80; margin-bottom: 8px; }
+  .band { display: inline-block; border-radius: 999px; padding: 5px 14px; font-size: 13.5px; font-weight: 700; }
+  .band.ok { background: #E4F5E9; color: #1D6B39; }
+  .band.warn { background: #FFF7E0; color: #6B5416; }
+  .band.danger { background: #FDE8E8; color: #A12622; }
+  .band.none { background: #EFE8DC; color: #5A5347; }
+  .sub-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid #EFE8DC; font-size: 13.5px; }
+  .sub-row:last-child { border-bottom: 0; }
+  .sub-row .name { font-weight: 700; }
+  .interp { white-space: pre-line; background: #FDFCF9; border: 1px solid #E5DCCB; border-radius: 12px;
+            padding: 12px 14px; font-size: 13.5px; line-height: 2; }
+  .raw { margin-top: 10px; }
+  .raw details summary { cursor: pointer; font-size: 12.5px; color: #1c5d80; }
+  .raw .pair { display: flex; gap: 8px; font-size: 13px; padding: 4px 0; border-bottom: 1px dashed #EFE8DC; }
+  .raw .pair:last-child { border-bottom: 0; }
+  .raw .pair b { color: #5A5347; flex-shrink: 0; }
+  .foot { text-align: center; font-size: 12px; color: #8A8377; margin-top: 18px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="banner">\u26A0 \u0627\u06CC\u0646 \u0641\u0642\u0637 \u067E\u06CC\u0634\u200C\u0646\u0645\u0627\u06CC\u0634 \u0622\u0632\u0645\u0627\u06CC\u0634\u06CC \u0627\u0633\u062A \u2014 \u0647\u06CC\u0686 \u067E\u0627\u0633\u062E\u06CC \u062C\u0627\u06CC\u06CC \u0630\u062E\u06CC\u0631\u0647 \u0646\u0645\u06CC\u200C\u0634\u0648\u062F
+    <span>\u067E\u0631 \u06A9\u0631\u062F\u0646 \u0627\u06CC\u0646 \u0635\u0641\u062D\u0647 \xAB\u067E\u0627\u0633\u062E \u0648\u0627\u0642\u0639\u06CC\xBB \u062A\u0648\u0644\u06CC\u062F \u0646\u0645\u06CC\u200C\u06A9\u0646\u062F \u0648 \u062F\u0631 \u067E\u0631\u0648\u0646\u062F\u0647\u0654 \u0647\u06CC\u0686 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\u06CC \u062B\u0628\u062A \u0646\u0645\u06CC\u200C\u0634\u0648\u062F. \u0628\u0631\u0627\u06CC \u067E\u0627\u0633\u062E \u0648\u0627\u0642\u0639\u06CC\u060C \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u067E\u06CC\u0627\u0645\u200C\u06A9\u0648\u062A\u0627\u0647 \u0631\u0633\u0645\u06CC \u0631\u0627 \u067E\u0631 \u0645\u06CC\u200C\u06A9\u0646\u062F.</span>
+  </div>
+  <div class="head">
+    <h1>${esc4(def.title)}</h1>
+    <p>\u067E\u0631\u0633\u0634\u200C\u0646\u0627\u0645\u0647\u0654 \u0641\u0631\u0632\u0646\u062F \u0634\u0645\u0627 \u2014 \u0646\u0645\u0627\u06CC \u067E\u06CC\u0634\u200C\u0646\u0645\u0627\u06CC\u0634 \u0641\u0631\u0645\u200C\u0633\u0627\u0632</p>
+    ${def.description ? `<div class="desc">${esc4(def.description)}</div>` : ""}
+  </div>
+  <div class="progress" id="prog">
+    <span id="progText">\u067E\u0627\u0633\u062E \u062F\u0627\u062F\u0647\u200C\u0634\u062F\u0647: \u06F0 \u0627\u0632 ${faNum5(total)}</span>
+    <div class="progress__bar"><div class="progress__fill" id="progFill"></div></div>
+  </div>
+  <div class="notice">\u0627\u06CC\u0646 \u0641\u0631\u0645 \u062A\u0634\u062E\u06CC\u0635 \u0646\u06CC\u0633\u062A\u061B \u0641\u0642\u0637 \u0628\u0647 \u062A\u0635\u0645\u06CC\u0645\u200C\u06AF\u06CC\u0631\u06CC \u062F\u0631\u0645\u0627\u0646\u06AF\u0631 \u06A9\u0645\u06A9 \u0645\u06CC\u200C\u06A9\u0646\u062F.</div>
+  <form id="f" novalidate>
+    ${rendered}
+    <button class="btn" type="submit" id="submitBtn">\u062F\u06CC\u062F\u0646 \u0646\u062A\u06CC\u062C\u0647\u0654 \u062A\u062D\u0644\u06CC\u0644 (\u067E\u06CC\u0634\u200C\u0646\u0645\u0627\u06CC\u0634)</button>
+    <div class="msg" id="msg"></div>
+  </form>
+  <div class="result" id="result">
+    <div class="result__card">
+      <div style="font-size:14px;font-weight:700;margin-bottom:10px">\u0646\u062A\u06CC\u062C\u0647\u0654 \u062A\u062D\u0644\u06CC\u0644 \u2014 \u0647\u0645\u0627\u0646 \u06A9\u0647 \u067E\u0633 \u0627\u0632 \u0627\u0631\u0633\u0627\u0644 \u0648\u0627\u0642\u0639\u06CC \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u062F\u0631 \u067E\u0631\u0648\u0646\u062F\u0647 \u062B\u0628\u062A \u0645\u06CC\u200C\u0634\u0648\u062F</div>
+      <div id="resultBody"></div>
+    </div>
+    <button class="btn btn--ghost" type="button" id="againBtn">\u067E\u0631 \u06A9\u0631\u062F\u0646 \u062F\u0648\u0628\u0627\u0631\u0647</button>
+    <button class="btn btn--ghost" type="button" onclick="window.close()">\u0628\u0633\u062A\u0646 \u067E\u06CC\u0634\u200C\u0646\u0645\u0627\u06CC\u0634</button>
+  </div>
+  <div class="foot">\u067E\u06CC\u0634\u200C\u0646\u0645\u0627\u06CC\u0634 \u0641\u0631\u0645\u200C\u0633\u0627\u0632 \xAB\u0641\u0631\u0645\u200C\u0647\u0627 \u0648 \u067E\u0631\u0633\u0634\u200C\u0646\u0627\u0645\u0647\u200C\u0647\u0627\xBB \u2014 \u067E\u0627\u0633\u062E\u200C\u0647\u0627\u06CC \u0627\u06CC\u0646 \u0635\u0641\u062D\u0647 \u0647\u06CC\u0686\u200C\u062C\u0627 \u0630\u062E\u06CC\u0631\u0647 \u0646\u0645\u06CC\u200C\u0634\u0648\u0646\u062F.</div>
+</div>
+<script>
+(function () {
+  /* \u06F1.\u06F2\u06F7.\u06F4\u06F3 \u2014 \u062C\u0627\u0633\u0627\u0632\u06CC \u0627\u0645\u0646 JSON \u062F\u0631 <script>: \u06AF\u0631\u06CC\u0632 </ \u0648 U+2028/2029 (\u0627\u0644\u06AF\u0648\u06CC safeJsonEmbed \u0641\u0631\u0645\u200C\u0633\u0627\u0632) */
+  var TOKEN = ${JSON.stringify(token).replace(/</g, "\\u003c").replace(/>/g, "\\u003e")};
+  var DEFINITION = ${JSON.stringify(JSON.stringify(def)).replace(/</g, "\\u003c").replace(/>/g, "\\u003e")};
+  var f = document.getElementById('f');
+  var msg = document.getElementById('msg');
+  var progText = document.getElementById('progText');
+  var progFill = document.getElementById('progFill');
+  var TOTAL = ${total};
+  var FA = '\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9';
+  function fa(n) { return String(n).replace(/[0-9]/g, function (d) { return FA[Number(d)]; }); }
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+  function updateProgress() {
+    var answered = {};
+    f.querySelectorAll('.item input[type=radio]:checked').forEach(function (r) { answered[r.name] = true; });
+    var n = Object.keys(answered).length;
+    progText.textContent = '\u067E\u0627\u0633\u062E \u062F\u0627\u062F\u0647\u200C\u0634\u062F\u0647: ' + fa(n) + ' \u0627\u0632 ' + fa(TOTAL);
+    progFill.style.width = (TOTAL ? Math.round(n * 100 / TOTAL) : 0) + '%';
+  }
+  f.addEventListener('change', updateProgress);
+
+  f.addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var data = new FormData(f);
+    var answers = {};
+    document.querySelectorAll('#f .item input[type=radio]').forEach(function (radio) {
+      if (data.get(radio.name)) answers[radio.name] = Number(data.get(radio.name));
+    });
+    document.querySelectorAll('#f textarea.free').forEach(function (ta) {
+      var v = (ta.value || '').trim();
+      if (v) answers[ta.name] = v;
+    });
+    var missing = 0;
+    document.querySelectorAll('#f .item').forEach(function (item) {
+      if (item.classList.contains('item--free')) return;
+      var has = item.querySelector('input[type=radio]:checked');
+      item.classList.toggle('is-missing', !has);
+      if (!has) missing += 1;
+    });
+    if (missing > 0) {
+      msg.className = 'msg err';
+      msg.textContent = '\u0628\u0647 ' + fa(missing) + ' \u0633\u0624\u0627\u0644 \u067E\u0627\u0633\u062E \u0646\u062F\u0627\u062F\u0647\u200C\u0627\u06CC\u062F \u2014 \u0633\u0624\u0627\u0644\u200C\u0647\u0627\u06CC \u062C\u0627\u0645\u0627\u0646\u062F\u0647 \u0628\u0627 \u0631\u0646\u06AF \u0633\u0631\u062E \u0645\u0634\u062E\u0635 \u0634\u062F\u0647\u200C\u0627\u0646\u062F.';
+      var first = document.querySelector('#f .item.is-missing');
+      if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+    var btn = document.getElementById('submitBtn');
+    btn.disabled = true;
+    fetch('/public/case-events/preview/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: TOKEN, definition: JSON.parse(DEFINITION), answers: answers }) /* __SEC_ACCEPT__: DEFINITION \u062E\u0631\u0648\u062C\u06CC JSON.stringify \u0633\u0631\u0648\u0631 \u0627\u0633\u062A \u2014 \u067E\u0627\u0631\u0633 \u0647\u0645\u06CC\u0634\u0647 \u0645\u0639\u062A\u0628\u0631 */
+    }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        if (!res.ok) {
+          msg.className = 'msg err';
+          msg.textContent = (res.j && res.j.error && res.j.error.message) || '\u062A\u062D\u0644\u06CC\u0644 \u0627\u0646\u062C\u0627\u0645 \u0646\u0634\u062F.';
+          btn.disabled = false;
+          return;
+        }
+        showResult(res.j);
+      })
+      .catch(function () { msg.className = 'msg err'; msg.textContent = '\u062E\u0637\u0627\u06CC \u0634\u0628\u06A9\u0647 \u2014 \u062F\u0648\u0628\u0627\u0631\u0647 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F.'; btn.disabled = false; });
+  });
+
+  function bandChip(band, color) {
+    var cls = color === 'ok' || color === 'warn' || color === 'danger' ? color : 'none';
+    return band ? '<span class="band ' + cls + '">' + esc(band) + '</span>' : '';
+  }
+
+  function showResult(j) {
+    var parts = [];
+    var a = j.analysis;
+    if (a) {
+      parts.push('<div class="result__score">\u0646\u0645\u0631\u0647\u0654 \u06A9\u0644: ' + fa(a.score) + ' \u0627\u0632 ' + fa(a.maxScore ?? (a.total * 3)) + '</div>');
+      parts.push('<div style="margin-bottom:12px">' + (bandChip(a.band, null) || '<span class="band none">\u0628\u062F\u0648\u0646 \u0628\u0627\u0646\u062F \u062A\u062D\u0644\u06CC\u0644</span>') + '</div>');
+      if (a.subscaleScores && a.subscaleScores.length > 0) {
+        parts.push('<div style="margin-bottom:6px;font-size:13px;font-weight:700">\u0632\u06CC\u0631\u0645\u0642\u06CC\u0627\u0633\u200C\u0647\u0627</div>');
+        a.subscaleScores.forEach(function (s) {
+          parts.push('<div class="sub-row"><span class="name">' + esc(s.name) + '</span><span>' + fa(s.score) + ' \u0627\u0632 ' + fa(s.max) + '</span>' + bandChip(s.band, s.color) + '</div>');
+        });
+      }
+      if (a.flags && a.flags.length > 0) {
+        parts.push('<div style="margin:10px 0 6px;font-size:13px;font-weight:700;color:#A12622">\u0622\u06CC\u062A\u0645 \u0628\u062D\u0631\u0627\u0646\u06CC (' + fa(a.flags.length) + ' \u0645\u0648\u0631\u062F)</div>');
+        a.flags.forEach(function (fl) {
+          parts.push('<div style="font-size:13px;padding:3px 0">\u2022 ' + esc(fl.label) + '</div>');
+        });
+      }
+      parts.push('<div style="margin-top:12px" class="interp">' + esc(a.interpretation) + '</div>');
+      parts.push('<div style="margin-top:8px;font-size:12.5px;color:#5A5347">\u062C\u0645\u0639\u200C\u0628\u0646\u062F\u06CC \u062B\u0628\u062A\u200C\u0634\u062F\u0647 \u062F\u0631 \u067E\u0631\u0648\u0646\u062F\u0647: ' + esc(j.summary ?? '') + '</div>');
+    } else {
+      parts.push('<div class="band none">\u0627\u06CC\u0646 \u0642\u0627\u0644\u0628 \u062E\u0627\u0646\u0648\u0627\u062F\u0647\u200C\u067E\u0631\u06A9\u0646 \u0646\u06CC\u0633\u062A \u2014 \u0646\u0645\u0631\u0647\u0654 \u062E\u0648\u062F\u06A9\u0627\u0631 \u0641\u0642\u0637 \u0628\u0631\u0627\u06CC \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u0633\u0627\u062E\u062A\u0647 \u0645\u06CC\u200C\u0634\u0648\u062F.</div>');
+    }
+    var pairs = [];
+    var payload = j.payload ?? {};
+    Object.keys(payload).forEach(function (k) {
+      pairs.push('<div class="pair"><b>' + esc(payload[k].label) + ':</b><span>' + esc(payload[k].value) + '</span></div>');
+    });
+    parts.push('<div class="raw"><details><summary>\u062F\u06CC\u062A\u0627\u06CC \u062E\u0627\u0645 \u0641\u0631\u0645 (' + fa(pairs.length) + ' \u0641\u06CC\u0644\u062F)</summary>' + pairs.join('') + '</details></div>');
+    document.getElementById('resultBody').innerHTML = parts.join('');
+    f.style.display = 'none';
+    document.getElementById('prog').style.display = 'none';
+    var r = document.getElementById('result');
+    r.classList.add('show');
+    r.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  document.getElementById('againBtn').addEventListener('click', function () {
+    fetch('/public/case-events/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: TOKEN, definition: JSON.parse(DEFINITION) }) /* __SEC_ACCEPT__: \u0647\u0645\u0627\u0646 \u0642\u0631\u0627\u0631\u062F\u0627\u062F \u0628\u0627\u0644\u0627 */
+    }).then(function (r) { return r.text(); })
+      .then(function (html) { document.open(); document.write(html); document.close(); });
+  });
+
+  updateProgress();
+})();
+</script>
+</body>
+</html>`;
+}
+__name(renderPreviewPage, "renderPreviewPage");
+function renderPreviewErrorPage(title, message) {
+  const esc4 = /* @__PURE__ */ __name((s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"), "esc");
+  return `<!doctype html>
+<html lang="fa" dir="rtl"><head><meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex, nofollow" />
+<title>\u067E\u06CC\u0634\u200C\u0646\u0645\u0627\u06CC\u0634 \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0646\u06CC\u0633\u062A</title>
+<style>body{margin:0;background:#F7F3EA;color:#12384f;font-family:Tahoma,sans-serif;display:flex;min-height:100vh;align-items:center;justify-content:center}
+.box{background:#fff;border-radius:16px;padding:28px;max-width:440px;text-align:center;box-shadow:0 1px 3px rgba(18,56,79,.08);margin:16px}</style></head>
+<body><div class="box"><h1 style="font-size:17px">${esc4(title)}</h1><p style="font-size:13.5px;line-height:2">${esc4(message)}</p>
+<p style="font-size:12px;color:#8A8377">\u062F\u0631 \u067E\u0646\u062C\u0631\u0647\u0654 \u0641\u0631\u0645\u200C\u0633\u0627\u0632 \xAB\u0630\u062E\u06CC\u0631\u0647\xBB \u0628\u0632\u0646\u06CC\u062F \u062A\u0627 \u062E\u0637\u0627\u0647\u0627 \u062F\u0642\u06CC\u0642 \u0646\u0634\u0627\u0646 \u062F\u0627\u062F\u0647 \u0634\u0648\u062F\u060C \u0633\u067E\u0633 \u062F\u0648\u0628\u0627\u0631\u0647 \u067E\u06CC\u0634\u200C\u0646\u0645\u0627\u06CC\u0634 \u0628\u06AF\u06CC\u0631\u06CC\u062F.</p></div></body></html>`;
+}
+__name(renderPreviewErrorPage, "renderPreviewErrorPage");
 
 // src/domain/case-events/routes.ts
 function registerCaseEventsRoutes(app, service) {
@@ -40179,28 +43136,7 @@ function registerCaseEventPublicRoutes(app, service, helpers) {
       }
     }
     const subscaleName = new Map((type?.subscales ?? []).map((s) => [s.id, s.name]));
-    const sections = [];
-    for (const f of type?.fields ?? []) {
-      if (f.type !== "scale" && f.type !== "single" && f.type !== "longtext") continue;
-      const title = f.subscaleId ? subscaleName.get(f.subscaleId) ?? null : null;
-      const item = {
-        key: f.key,
-        label: f.label,
-        kind: f.type === "longtext" ? "longtext" : f.type,
-        scaleMax: f.scaleMax,
-        scoredOptions: f.scoredOptions?.map((o) => ({ label: o.label })),
-        scaleLabels: f.scaleLabels,
-        hint: f.hint ?? null,
-        teacherLabel: f.teacherLabel ?? null,
-        teacherHint: f.teacherHint ?? null
-      };
-      const last = sections[sections.length - 1];
-      if (last && last.title === title) {
-        last.items.push(item);
-      } else {
-        sections.push({ title, items: [item] });
-      }
-    }
+    const sections = familySectionsOf(type?.fields ?? [], type?.subscales ?? null);
     sections.sort((a, b) => {
       const keyOf = /* @__PURE__ */ __name((s) => [...subscaleName.entries()].find(([, n]) => n === s.title)?.[0] ?? null, "keyOf");
       const ai = focusKeys.has(keyOf(a) ?? "") ? 0 : 1;
@@ -40245,10 +43181,126 @@ function registerCaseEventPublicRoutes(app, service, helpers) {
       return c.json({ error: { code: "CONFLICT", message } }, code);
     }
   });
+  const STAFF_ROLES2 = ["manager", "secretary", "therapist"];
+  async function previewStaffOf(env, token) {
+    if (!token) throw new AuthError("\u062A\u0648\u06A9\u0646 \u062F\u0633\u062A\u0631\u0633\u06CC \u0645\u0648\u062C\u0648\u062F \u0646\u06CC\u0633\u062A");
+    const payload = await verifySessionJwt(token, await resolveSessionSecret(env));
+    if (!payload) throw new AuthError("\u062A\u0648\u06A9\u0646 \u062F\u0633\u062A\u0631\u0633\u06CC \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A");
+    const staff = await getStaffById(env.DB, payload.sub);
+    if (!staff || staff.active !== 1) throw new AuthError("\u06A9\u0627\u0631\u0628\u0631 \u06CC\u0627\u0641\u062A \u0646\u0634\u062F \u06CC\u0627 \u063A\u06CC\u0631\u0641\u0639\u0627\u0644 \u0627\u0633\u062A");
+    if (!STAFF_ROLES2.includes(staff.role)) {
+      throw new ForbiddenError("\u0646\u0642\u0634 \u06A9\u0627\u0631\u0628\u0631 \u0645\u062C\u0627\u0632 \u0646\u06CC\u0633\u062A");
+    }
+    return staff;
+  }
+  __name(previewStaffOf, "previewStaffOf");
+  const PREVIEW_BODY_MAX_BYTES = 512 * 1024;
+  const previewBodyTooLarge = /* @__PURE__ */ __name((c) => {
+    const len = Number(c.req.header("content-length") ?? "0");
+    return Number.isFinite(len) && len > PREVIEW_BODY_MAX_BYTES;
+  }, "previewBodyTooLarge");
+  app.post("/public/case-events/preview", async (c) => {
+    let definition = null;
+    let token = "";
+    if (previewBodyTooLarge(c)) {
+      return c.html(renderPreviewErrorPage("\u062D\u062C\u0645 \u062F\u0631\u062E\u0648\u0627\u0633\u062A \u0632\u06CC\u0627\u062F \u0627\u0633\u062A", "\u062A\u0639\u0631\u06CC\u0641 \u0642\u0627\u0644\u0628 \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F5\u06F1\u06F2 \u06A9\u06CC\u0644\u0648\u0628\u0627\u06CC\u062A \u0627\u0633\u062A."), 413);
+    }
+    const ct = c.req.header("content-type") ?? "";
+    if (ct.includes("application/json")) {
+      const body = await c.req.json().catch(() => null);
+      definition = body?.definition ?? null;
+      token = String(body?.token ?? token);
+    } else {
+      const form = await c.req.formData().catch(() => null);
+      token = String(form?.get("token") ?? token);
+      try {
+        definition = JSON.parse(String(form?.get("definition") ?? "null"));
+      } catch {
+        definition = null;
+      }
+    }
+    await previewStaffOf(c.env, token);
+    const parsed = CaseEventTypeInputSchema.safeParse(definition);
+    if (!parsed.success) {
+      const issue2 = parsed.error.issues[0];
+      const where = issue2.path.length > 0 ? ` (\u0641\u06CC\u0644\u062F: ${issue2.path.join(".")})` : "";
+      return c.html(renderPreviewErrorPage("\u062A\u0639\u0631\u06CC\u0641 \u0642\u0627\u0644\u0628 \u0647\u0646\u0648\u0632 \u06A9\u0627\u0645\u0644 \u0646\u06CC\u0633\u062A", `${issue2.message}${where} \u2014 \u067E\u06CC\u0634\u200C\u0646\u0645\u0627\u06CC\u0634 \u0641\u0642\u0637 \u0628\u0631\u0627\u06CC \u062A\u0639\u0631\u06CC\u0641 \u06A9\u0627\u0645\u0644 \u0645\u0639\u0646\u0627 \u062F\u0627\u0631\u062F.`), 400);
+    }
+    return new Response(renderPreviewPage(parsed.data, token), {
+      status: 200,
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-store",
+        "X-Robots-Tag": "noindex, nofollow"
+      }
+    });
+  });
+  app.post("/public/case-events/preview/analyze", async (c) => {
+    if (previewBodyTooLarge(c)) {
+      return c.json({ error: { code: "PAYLOAD_TOO_LARGE", message: "\u062D\u062F\u0627\u06A9\u062B\u0631 \u06F5\u06F1\u06F2 \u06A9\u06CC\u0644\u0648\u0628\u0627\u06CC\u062A" } }, 413);
+    }
+    const raw2 = await c.req.text();
+    let body = null;
+    try {
+      body = JSON.parse(raw2);
+    } catch {
+      body = null;
+    }
+    if (!body) {
+      return c.json({ error: { code: "BAD_REQUEST", message: "\u062F\u0631\u062E\u0648\u0627\u0633\u062A \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A" } }, 400);
+    }
+    await previewStaffOf(c.env, String(body.token ?? ""));
+    const parsed = CaseEventTypeInputSchema.safeParse(body.definition);
+    if (!parsed.success) {
+      const issue2 = parsed.error.issues[0];
+      const where = issue2.path.length > 0 ? ` (${issue2.path.join(".")})` : "";
+      return c.json({ error: { code: "VALIDATION", message: `${issue2.message}${where}` } }, 400);
+    }
+    const def = parsed.data;
+    const values = body.answers ?? {};
+    const displayPayload = /* @__PURE__ */ __name(() => {
+      const payload2 = {};
+      for (const f of def.fields) {
+        const raw3 = values[f.key];
+        if (raw3 === void 0 || raw3 === null || String(raw3).trim() === "") continue;
+        const display = f.type === "single" ? f.scoredOptions?.[Number(raw3)]?.label ?? String(raw3) : String(raw3);
+        payload2[f.key] = { value: display, label: f.label };
+      }
+      return payload2;
+    }, "displayPayload");
+    if (def.category !== "checklist") {
+      return c.json({
+        ok: true,
+        analysis: null,
+        summary: null,
+        payload: displayPayload(),
+        note: "\u0627\u06CC\u0646 \u0642\u0627\u0644\u0628 \u062E\u0627\u0646\u0648\u0627\u062F\u0647\u200C\u067E\u0631\u06A9\u0646 \u0646\u06CC\u0633\u062A \u2014 \u0646\u0645\u0631\u0647\u0654 \u062E\u0648\u062F\u06A9\u0627\u0631 \u0641\u0642\u0637 \u0628\u0631\u0627\u06CC \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u0633\u0627\u062E\u062A\u0647 \u0645\u06CC\u200C\u0634\u0648\u062F."
+      }, 200);
+    }
+    const scoredKeys = new Set(def.fields.filter((f) => f.type === "scale" || f.type === "single").map((f) => f.key));
+    for (const f of def.fields) {
+      if (f.type === "longtext" || f.type === "text") {
+        if (f.required && String(values[f.key] ?? "").trim() === "") {
+          throw new ValidationError(`\u0622\u06CC\u062A\u0645 \xAB${f.label}\xBB \u0628\u06CC\u200C\u067E\u0627\u0633\u062E \u0645\u0627\u0646\u062F\u0647 \u0627\u0633\u062A`);
+        }
+        continue;
+      }
+      if (values[f.key] === void 0 || values[f.key] === null) {
+        throw new ValidationError(`\u0622\u06CC\u062A\u0645 \xAB${f.label}\xBB \u0628\u06CC\u200C\u067E\u0627\u0633\u062E \u0645\u0627\u0646\u062F\u0647 \u0627\u0633\u062A`);
+      }
+    }
+    const numericValues = Object.fromEntries(
+      Object.entries(values).filter(([k]) => scoredKeys.has(k)).map(([k, v]) => [k, Number(v)])
+    );
+    const analysis = analyzeChecklist(def.fields, def.bands ?? null, numericValues, def.subscales ?? null);
+    const payload = displayPayload();
+    const summary = buildSummary(payload, analysis);
+    return c.json({ ok: true, analysis, summary, payload }, 200);
+  });
 }
 __name(registerCaseEventPublicRoutes, "registerCaseEventPublicRoutes");
 function fillErrorPage(message) {
-  const esc3 = /* @__PURE__ */ __name((s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"), "esc");
+  const esc4 = /* @__PURE__ */ __name((s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"), "esc");
   return `<!doctype html>
 <html lang="fa" dir="rtl"><head><meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -40256,7 +43308,7 @@ function fillErrorPage(message) {
 <title>\u0641\u0631\u0645 \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0646\u06CC\u0633\u062A</title>
 <style>body{margin:0;background:#F7F3EA;color:#12384f;font-family:Tahoma,sans-serif;display:flex;min-height:100vh;align-items:center;justify-content:center}
 .box{background:#fff;border-radius:16px;padding:28px;max-width:420px;text-align:center;box-shadow:0 1px 3px rgba(18,56,79,.08)}</style></head>
-<body><div class="box"><h1 style="font-size:18px">\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0646\u06CC\u0633\u062A</h1><p style="font-size:14px;line-height:1.9">${esc3(message)}</p></div></body></html>`;
+<body><div class="box"><h1 style="font-size:18px">\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0646\u06CC\u0633\u062A</h1><p style="font-size:14px;line-height:1.9">${esc4(message)}</p></div></body></html>`;
 }
 __name(fillErrorPage, "fillErrorPage");
 
@@ -41763,15 +44815,15 @@ function lintTexts(obj, path = "parent_copy") {
 __name(lintTexts, "lintTexts");
 function collectLetters(item) {
   const out = [];
-  const push = /* @__PURE__ */ __name((v) => {
+  const push2 = /* @__PURE__ */ __name((v) => {
     if (typeof v === "string") out.push(...Array.from(v));
     else if (v && typeof v === "object" && !Array.isArray(v)) {
-      for (const x of Object.values(v)) push(x);
-    } else if (Array.isArray(v)) for (const x of v) push(x);
+      for (const x of Object.values(v)) push2(x);
+    } else if (Array.isArray(v)) for (const x of v) push2(x);
   }, "push");
-  push(item.prompt);
-  push(item.stim);
-  for (const o of item.options ?? []) push(o.label);
+  push2(item.prompt);
+  push2(item.stim);
+  for (const o of item.options ?? []) push2(o.label);
   return out.filter((ch) => /[\u0600-\u06FF]/.test(ch));
 }
 __name(collectLetters, "collectLetters");
@@ -42009,7 +45061,6 @@ __name(stageOutcomeFor, "stageOutcomeFor");
 var NUMLINE_STAGE_MAX2 = GAME_KINDS.numline.levers.bank_caps;
 var SCAN_STAGE_THRESHOLDS = accuracyThresholdsOf(GAME_KINDS.scan.stage_rule);
 var SCAN_STAGE_MAX_TILES2 = GAME_KINDS.scan.levers.bank_caps;
-var ACCURACY_STAGE_THRESHOLDS = accuracyThresholdsOf(GAME_KINDS.stroop.stage_rule);
 var STROOP_STAGE_BANDS2 = GAME_KINDS.stroop.levers.bank_bands;
 var FLANKER_STAGE_MAX_DECOYS2 = GAME_KINDS.flanker.levers.bank_caps;
 var FLANKER_STAGE_BANDS2 = GAME_KINDS.flanker.levers.bank_bands;
@@ -42083,7 +45134,6 @@ function stageStimViewOf(stim, correctTouch, stageId) {
   return { ...base, ...correctTouch ? v.go : v.nogo };
 }
 __name(stageStimViewOf, "stageStimViewOf");
-var SEQ_MEMORY_STAGE_THRESHOLDS = accuracyThresholdsOf(GAME_KINDS.corsi.stage_rule);
 var CORSI_STAGE_MAX_SPAN2 = GAME_KINDS.corsi.levers.bank_caps;
 var SPAN_STAGE_MAX_DIGITS2 = GAME_KINDS.span.levers.bank_caps;
 var SIMON_STAGE_MAX_SPAN2 = GAME_KINDS.simon.levers.bank_caps;
@@ -42452,7 +45502,7 @@ function buildComparison(sessions) {
 }
 __name(buildComparison, "buildComparison");
 function reportToCsv(report) {
-  const esc3 = /* @__PURE__ */ __name((v) => {
+  const esc4 = /* @__PURE__ */ __name((v) => {
     const s = String(v ?? "");
     return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   }, "esc");
@@ -42503,7 +45553,7 @@ function reportToCsv(report) {
       num4(sum?.nback?.match_pct),
       num4(sum?.nback?.false_alarm_pct),
       num4(sum?.nback?.miss_pct)
-    ].map(esc3).join(","));
+    ].map(esc4).join(","));
   }
   return "\uFEFF" + lines.join("\r\n") + "\r\n";
 }
@@ -43825,11 +46875,11 @@ function createGamesService(deps) {
     const session = requireSessionIn(res, ["child_active"]);
     const mission = missionConfigOf(res);
     const attempts = await db.query(`SELECT * FROM game_attempts WHERE session_id = ? ORDER BY created_at`, [session.id]);
-    const nowIso = isoOf2(now());
+    const nowIso2 = isoOf2(now());
     const finishKind = gameKindOf(mission.game);
     const finishStage = finishKind !== "gonogo" ? stageById("7-12", session.stage_id, finishKind) : null;
     const finishTotal = finishStage ? mission.items.filter((it) => itemInStageFor(finishKind, it, finishStage.id)).length : mission.items.length;
-    const activity = [res.session?.started_at ?? null, ...attempts.map((a) => a.created_at), nowIso].filter((v) => typeof v === "string").map((v) => new Date(v).getTime());
+    const activity = [res.session?.started_at ?? null, ...attempts.map((a) => a.created_at), nowIso2].filter((v) => typeof v === "string").map((v) => new Date(v).getTime());
     const validity = decideValidity(activity, attempts.length, finishTotal);
     const metricIds = mission.metrics && mission.metrics.length > 0 ? mission.metrics : [mission.metric];
     const scoredRows = attempts.map((a) => ({
@@ -43874,7 +46924,7 @@ function createGamesService(deps) {
               metric: outcome.metricId,
               value: outcome.value,
               unit: unitFa(outcome.unit),
-              takenAt: nowIso,
+              takenAt: nowIso2,
               note: `\u0628\u0627\u0632\u06CC \xAB${mission.title ?? mission.id}\xBB \u2014 \u062C\u0644\u0633\u0647\u0654 \u0628\u0627\u0632\u06CC ${session.id.slice(0, 8)}${validity === "partial" ? " (\u0646\u0627\u0642\u0635)" : ""} \u2014 \u062E\u0648\u062F\u06A9\u0627\u0631`
             }, actor);
             outcome.injected = true;
@@ -43923,7 +46973,7 @@ function createGamesService(deps) {
     }
     await db.execute(
       `UPDATE game_sessions SET state = 'child_done', validity = ?, ended_at = ?, last_activity_at = ?, metrics_json = ?, summary_json = ?, quality_json = ? WHERE id = ?`,
-      [validity, nowIso, nowIso, metrics.length > 0 ? JSON.stringify(metrics) : null, JSON.stringify(summaryBody), serializeQuality(quality), session.id]
+      [validity, nowIso2, nowIso2, metrics.length > 0 ? JSON.stringify(metrics) : null, JSON.stringify(summaryBody), serializeQuality(quality), session.id]
     );
     const adaptiveEnabled = sessionMode === "training" && res.pkg.body.protocol != null && res.pkg.body.adaptive_enabled !== false;
     if (adaptiveEnabled) {
@@ -43990,16 +47040,16 @@ function createGamesService(deps) {
       `SELECT confirm1_at, confirm2_at FROM game_adherence WHERE mission_id = ?`,
       [res.mission.id]
     );
-    const nowIso = isoOf2(now());
+    const nowIso2 = isoOf2(now());
     if (!adherence || adherence.confirm1_at === null) {
       await db.execute(
         `INSERT INTO game_adherence (mission_id, confirm1_at) VALUES (?, ?)
          ON CONFLICT(mission_id) DO UPDATE SET confirm1_at = COALESCE(game_adherence.confirm1_at, excluded.confirm1_at)`,
-        [res.mission.id, nowIso]
+        [res.mission.id, nowIso2]
       );
     } else if (adherence.confirm2_at === null) {
-      await db.execute(`UPDATE game_adherence SET confirm2_at = ? WHERE mission_id = ?`, [nowIso, res.mission.id]);
-      await db.execute(`UPDATE game_sessions SET state = 'closed', last_activity_at = ? WHERE id = ?`, [nowIso, session.id]);
+      await db.execute(`UPDATE game_adherence SET confirm2_at = ? WHERE mission_id = ?`, [nowIso2, res.mission.id]);
+      await db.execute(`UPDATE game_sessions SET state = 'closed', last_activity_at = ? WHERE id = ?`, [nowIso2, session.id]);
     }
     const fresh = await resolveLink(token);
     return stateViewOf(fresh);
@@ -44183,11 +47233,11 @@ function createGamesService(deps) {
 __name(createGamesService, "createGamesService");
 
 // src/domain/games/page.ts
-var FA_DIGITS2 = "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9";
-function faNum5(n) {
-  return String(n).replace(/[0-9]/g, (d) => FA_DIGITS2[Number(d)]);
+var FA_DIGITS3 = "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9";
+function faNum6(n) {
+  return String(n).replace(/[0-9]/g, (d) => FA_DIGITS3[Number(d)]);
 }
-__name(faNum5, "faNum");
+__name(faNum6, "faNum");
 function esc2(s) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
@@ -44322,13 +47372,13 @@ function renderGamesPage(model, token) {
     const r = model.playStageResult;
     const STAR_PATH_D = "M60 8 L74 46 L115 46 L81 71 L94 112 L60 87 L26 112 L39 71 L5 46 L46 46 Z";
     const stageCard = r ? `<div class="stage-done">
-      <div class="stage-done__badge">\u0645\u0631\u062D\u0644\u0647\u0654 ${faNum5(r.index)} \u2014 ${esc2(r.title_fa)}</div>
-      <div class="stage-done__stars" role="img" aria-label="${faNum5(r.stars)} \u0633\u062A\u0627\u0631\u0647 \u0627\u0632 ${faNum5(3)}">
+      <div class="stage-done__badge">\u0645\u0631\u062D\u0644\u0647\u0654 ${faNum6(r.index)} \u2014 ${esc2(r.title_fa)}</div>
+      <div class="stage-done__stars" role="img" aria-label="${faNum6(r.stars)} \u0633\u062A\u0627\u0631\u0647 \u0627\u0632 ${faNum6(3)}">
         ${[1, 2, 3].map((i) => `<svg class="star${i <= r.stars ? " star--lit" : ""}" viewBox="0 0 120 124" aria-hidden="true"><path d="${STAR_PATH_D}"/></svg>`).join("")}
       </div>
       <p class="muted">${r.passed ? "\u0627\u06CC\u0646 \u0645\u0631\u062D\u0644\u0647 \u0631\u0627 \u06A9\u0627\u0645\u0644 \u06A9\u0631\u062F\u06CC!" : "\u062A\u0645\u0631\u06CC\u0646 \u062E\u0648\u0628\u06CC \u0628\u0648\u062F\u061B \u062F\u0648\u0628\u0627\u0631\u0647 \u0628\u0647\u0634 \u0645\u06CC\u200C\u0631\u0633\u06CC\u0645."}</p>
       ${r.passed && r.next_title_fa ? `<p class="muted">\u0645\u0631\u062D\u0644\u0647\u0654 \u0628\u0639\u062F\u06CC: ${esc2(r.next_title_fa)} \u2014 \u0641\u0631\u062F\u0627 \u0645\u0646\u062A\u0638\u0631\u062A \u0627\u0633\u062A.</p>` : ""}
-      ${r.stars_total > 0 ? `<p class="muted">\u0645\u062C\u0645\u0648\u0639 \u0633\u062A\u0627\u0631\u0647\u200C\u0647\u0627\u06CC \u062A\u0648: ${faNum5(r.stars_total)}</p>` : ""}
+      ${r.stars_total > 0 ? `<p class="muted">\u0645\u062C\u0645\u0648\u0639 \u0633\u062A\u0627\u0631\u0647\u200C\u0647\u0627\u06CC \u062A\u0648: ${faNum6(r.stars_total)}</p>` : ""}
     </div>` : "";
     return page(model, token, `<div class="card"><h1>\u0627\u0645\u0631\u0648\u0632 \u062A\u0645\u0627\u0645 \u0634\u062F!</h1>${stageCard}
       <p class="muted">\u06AF\u0648\u0634\u06CC \u0631\u0627 \u0628\u0647 \u0645\u0627\u0645\u0627\u0646 \u0628\u062F\u0647.</p>
@@ -44340,10 +47390,10 @@ function renderGamesPage(model, token) {
       <button id="btn-gate-solve" type="button">\u062A\u0623\u06CC\u06CC\u062F</button></div>`);
   }
   if (model.state === "parent_post") {
-    const conf = model.adherenceConfirmed ? faNum5(2) : faNum5(1);
+    const conf = model.adherenceConfirmed ? faNum6(2) : faNum6(1);
     const pp = model.parentPost;
-    const postHtml = pp ? `<p class="muted">\u0627\u06CC\u0646 \u0647\u0641\u062A\u0647 ${faNum5(pp.sessions_week)} \u062C\u0644\u0633\u0647 \u0628\u0627\u0632\u06CC \u0622\u063A\u0627\u0632 \u0634\u062F\u0647 \u0627\u0633\u062A.</p>
-         <p class="muted">\u0627\u0645\u0631\u0648\u0632 ${faNum5(pp.attempts_today)} \u067E\u0627\u0633\u062E \u062B\u0628\u062A \u0634\u062F\u061B \u0647\u0645\u0647\u0654 \u0642\u062F\u0645\u200C\u0647\u0627\u06CC \u06A9\u0648\u062F\u06A9 \u0628\u0627 \u0647\u0645\u06CC\u0646 \u0644\u06CC\u0646\u06A9 \u0627\u062F\u0627\u0645\u0647 \u067E\u06CC\u062F\u0627 \u0645\u06CC\u200C\u06A9\u0646\u062F.</p>
+    const postHtml = pp ? `<p class="muted">\u0627\u06CC\u0646 \u0647\u0641\u062A\u0647 ${faNum6(pp.sessions_week)} \u062C\u0644\u0633\u0647 \u0628\u0627\u0632\u06CC \u0622\u063A\u0627\u0632 \u0634\u062F\u0647 \u0627\u0633\u062A.</p>
+         <p class="muted">\u0627\u0645\u0631\u0648\u0632 ${faNum6(pp.attempts_today)} \u067E\u0627\u0633\u062E \u062B\u0628\u062A \u0634\u062F\u061B \u0647\u0645\u0647\u0654 \u0642\u062F\u0645\u200C\u0647\u0627\u06CC \u06A9\u0648\u062F\u06A9 \u0628\u0627 \u0647\u0645\u06CC\u0646 \u0644\u06CC\u0646\u06A9 \u0627\u062F\u0627\u0645\u0647 \u067E\u06CC\u062F\u0627 \u0645\u06CC\u200C\u06A9\u0646\u062F.</p>
          <p class="muted">${esc2(pp.tomorrow_fa)}</p>` : `<p class="muted">\u062C\u0644\u0633\u0647\u0654 \u0627\u0645\u0631\u0648\u0632 \u062B\u0628\u062A \u0634\u062F\u061B \u0633\u067E\u0627\u0633 \u0627\u0632 \u0647\u0645\u0631\u0627\u0647\u06CC \u0634\u0645\u0627.</p>`;
     return page(model, token, `<div class="card">${head}
       ${postHtml}
@@ -44354,7 +47404,7 @@ function renderGamesPage(model, token) {
     <p class="muted">\u067E\u0627\u06CC\u0628\u0646\u062F\u06CC \u0627\u0645\u0631\u0648\u0632 \u062B\u0628\u062A \u0634\u062F. \u0633\u067E\u0627\u0633 \u0627\u0632 \u0647\u0645\u0631\u0627\u0647\u06CC \u0634\u0645\u0627.</p></div>`);
 }
 __name(renderGamesPage, "renderGamesPage");
-function renderPreviewPage(state, token) {
+function renderPreviewPage2(state, token) {
   if (!state || !token) {
     return page(
       { state: "expired", missionRef: "", missionTitle: "\u067E\u06CC\u0634\u200C\u0646\u0645\u0627\u06CC\u0634 \u0628\u0627\u0632\u06CC", packageTitle: "", expiresAt: "" },
@@ -44391,7 +47441,7 @@ function renderPreviewPage(state, token) {
     body
   );
 }
-__name(renderPreviewPage, "renderPreviewPage");
+__name(renderPreviewPage2, "renderPreviewPage");
 
 // src/domain/games/routes.ts
 var MetricSchema = external_exports.object({
@@ -44473,20 +47523,20 @@ var PreviewFeedbackSchema = external_exports.object({
   rt_ms: external_exports.number().min(0).max(12e4).nullable().optional()
 });
 function renderReportHtml(report, childId) {
-  const esc3 = /* @__PURE__ */ __name((s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"), "esc");
+  const esc4 = /* @__PURE__ */ __name((s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"), "esc");
   const sessionRows = report.sessions.map((s) => {
     const sum = s.computed?.summary ?? {};
     const attemptCount = s.raw.attempt_count;
     const st = sum.stage;
-    const stageCell = st && typeof st.stars === "number" ? esc3(st.title_fa ?? "") + (st.passed ? " \xB7 " + "\u2605".repeat(st.stars) : " \xB7 \u0646\u0627\u062A\u0645\u0627\u0645") : "\u2014";
-    return `<tr><td>${esc3(s.session_id.slice(0, 8))}</td><td>${esc3(s.purpose)}</td><td>${esc3(s.computed?.validity)}</td><td>${esc3(s.computed?.quality_verdict)}</td><td>${esc3(sum.totals?.total ?? "\u2014")}</td><td>${esc3(sum.pct?.correct_go ?? "\u2014")}</td><td>${esc3(sum.pct?.correct_nogo ?? "\u2014")}</td><td>${esc3(sum.pct?.commission ?? "\u2014")}</td><td>${esc3(sum.pct?.omission ?? "\u2014")}</td><td>${stageCell}</td><td>${esc3(attemptCount)}</td></tr>`;
+    const stageCell = st && typeof st.stars === "number" ? esc4(st.title_fa ?? "") + (st.passed ? " \xB7 " + "\u2605".repeat(st.stars) : " \xB7 \u0646\u0627\u062A\u0645\u0627\u0645") : "\u2014";
+    return `<tr><td>${esc4(s.session_id.slice(0, 8))}</td><td>${esc4(s.purpose)}</td><td>${esc4(s.computed?.validity)}</td><td>${esc4(s.computed?.quality_verdict)}</td><td>${esc4(sum.totals?.total ?? "\u2014")}</td><td>${esc4(sum.pct?.correct_go ?? "\u2014")}</td><td>${esc4(sum.pct?.correct_nogo ?? "\u2014")}</td><td>${esc4(sum.pct?.commission ?? "\u2014")}</td><td>${esc4(sum.pct?.omission ?? "\u2014")}</td><td>${stageCell}</td><td>${esc4(attemptCount)}</td></tr>`;
   }).join("");
   const compareRows = report.comparison.by_metric.map(
-    (m) => `<tr><td>${esc3(m.metric_id)}</td><td>${esc3(m.unit)}</td><td>${m.points.map((p) => esc3(p.value)).join(" \u2192 ") || "\u2014"}</td></tr>`
+    (m) => `<tr><td>${esc4(m.metric_id)}</td><td>${esc4(m.unit)}</td><td>${m.points.map((p) => esc4(p.value)).join(" \u2192 ") || "\u2014"}</td></tr>`
   ).join("");
   return `<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" /><meta name="robots" content="noindex, nofollow" />
-<title>\u06AF\u0632\u0627\u0631\u0634 \u0628\u0627\u0632\u06CC \u2014 \u06A9\u0648\u062F\u06A9 ${esc3(childId.slice(0, 8))}</title>
+<title>\u06AF\u0632\u0627\u0631\u0634 \u0628\u0627\u0632\u06CC \u2014 \u06A9\u0648\u062F\u06A9 ${esc4(childId.slice(0, 8))}</title>
 <style>
   body { font-family: Tahoma, sans-serif; background: #F5F0E5; color: #153E50; margin: 0; padding: 24px; }
   h1 { font-size: 20px; } h2 { font-size: 16px; margin-top: 28px; }
@@ -44495,8 +47545,8 @@ function renderReportHtml(report, childId) {
   th { background: #153E50; color: #fff; }
   .muted { color: #6E7B76; font-size: 12px; }
 </style></head><body>
-<h1>\u06AF\u0632\u0627\u0631\u0634 \u062C\u0644\u0633\u0647\u200C\u0647\u0627\u06CC \u0628\u0627\u0632\u06CC \u2014 \u06A9\u0648\u062F\u06A9 ${esc3(childId.slice(0, 8))}</h1>
-<p class="muted">${esc3(report.session_count)} \u062C\u0644\u0633\u0647 \xB7 \u062A\u0648\u0644\u06CC\u062F ${esc3(report.generated_at)} \xB7 \u0627\u06CC\u0646 \u06AF\u0632\u0627\u0631\u0634 \u0647\u06CC\u0686 \u062A\u0641\u0633\u06CC\u0631 \u0628\u0627\u0644\u06CC\u0646\u06CC \u062A\u0648\u0644\u06CC\u062F \u0646\u0645\u06CC\u200C\u06A9\u0646\u062F \u2014 \u062A\u0641\u0633\u06CC\u0631 \u0628\u0627 \u062F\u0631\u0645\u0627\u0646\u06AF\u0631 \u0627\u0633\u062A.</p>
+<h1>\u06AF\u0632\u0627\u0631\u0634 \u062C\u0644\u0633\u0647\u200C\u0647\u0627\u06CC \u0628\u0627\u0632\u06CC \u2014 \u06A9\u0648\u062F\u06A9 ${esc4(childId.slice(0, 8))}</h1>
+<p class="muted">${esc4(report.session_count)} \u062C\u0644\u0633\u0647 \xB7 \u062A\u0648\u0644\u06CC\u062F ${esc4(report.generated_at)} \xB7 \u0627\u06CC\u0646 \u06AF\u0632\u0627\u0631\u0634 \u0647\u06CC\u0686 \u062A\u0641\u0633\u06CC\u0631 \u0628\u0627\u0644\u06CC\u0646\u06CC \u062A\u0648\u0644\u06CC\u062F \u0646\u0645\u06CC\u200C\u06A9\u0646\u062F \u2014 \u062A\u0641\u0633\u06CC\u0631 \u0628\u0627 \u062F\u0631\u0645\u0627\u0646\u06AF\u0631 \u0627\u0633\u062A.</p>
 <h2>\u062E\u0644\u0627\u0635\u0647\u0654 \u0645\u062D\u0627\u0633\u0628\u0647\u200C\u0634\u062F\u0647\u0654 \u062C\u0644\u0633\u0647\u200C\u0647\u0627</h2>
 <table><thead><tr><th>\u062C\u0644\u0633\u0647</th><th>\u062D\u0627\u0644\u062A</th><th>\u0627\u0639\u062A\u0628\u0627\u0631</th><th>\u06A9\u06CC\u0641\u06CC\u062A</th><th>\u0622\u0632\u0645\u0648\u0646</th><th>\u06AF\u0648 \u062F\u0631\u0633\u062A\u066A</th><th>\u0646\u0648\u06AF\u0648 \u062F\u0631\u0633\u062A\u066A</th><th>\u06A9\u0645\u06CC\u0633\u06CC\u0648\u0646\u066A</th><th>\u0627\u064F\u0645\u06CC\u0634\u0646\u066A</th><th>\u0645\u0631\u062D\u0644\u0647</th><th>\u067E\u0627\u0633\u062E \u062E\u0627\u0645</th></tr></thead>
 <tbody>${sessionRows || '<tr><td colspan="11">\u062C\u0644\u0633\u0647\u200C\u0627\u06CC \u062B\u0628\u062A \u0646\u0634\u062F\u0647</td></tr>'}</tbody></table>
@@ -44504,7 +47554,7 @@ function renderReportHtml(report, childId) {
 <table><thead><tr><th>\u0633\u0646\u062C\u0647</th><th>\u0648\u0627\u062D\u062F</th><th>\u0633\u0631\u06CC \u0632\u0645\u0627\u0646\u06CC</th></tr></thead>
 <tbody>${compareRows || '<tr><td colspan="3">\u0633\u0646\u062C\u0647\u200C\u0627\u06CC \u062B\u0628\u062A \u0646\u0634\u062F\u0647</td></tr>'}</tbody></table>
 <h2>\u0644\u0627\u06CC\u0647\u0654 \u062E\u0627\u0645</h2>
-<p class="muted">${esc3(report.sessions.reduce((a, s) => a + s.raw.attempts.length, 0))} \u067E\u0627\u0633\u062E \u062E\u0627\u0645 \u0628\u0627 \u0634\u0648\u0627\u0647\u062F \u0646\u0645\u0627\u06CC\u0634 (\u0645\u064F\u0647\u0631 \u0632\u0645\u0627\u0646/\u0627\u0641\u062A \u0641\u0631\u06CC\u0645/\u0644\u0645\u0633\u200C\u0647\u0627) \u062F\u0631 \u062E\u0631\u0648\u062C\u06CC JSON \u0647\u0645\u06CC\u0646 \u0645\u0633\u06CC\u0631 \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0627\u0633\u062A \u2014 \u062A\u0641\u06A9\u06CC\u06A9 \u062E\u0627\u0645/\u0645\u062D\u0627\u0633\u0628\u0647\u200C\u0634\u062F\u0647 \u062D\u0641\u0638 \u0634\u062F\u0647.</p>
+<p class="muted">${esc4(report.sessions.reduce((a, s) => a + s.raw.attempts.length, 0))} \u067E\u0627\u0633\u062E \u062E\u0627\u0645 \u0628\u0627 \u0634\u0648\u0627\u0647\u062F \u0646\u0645\u0627\u06CC\u0634 (\u0645\u064F\u0647\u0631 \u0632\u0645\u0627\u0646/\u0627\u0641\u062A \u0641\u0631\u06CC\u0645/\u0644\u0645\u0633\u200C\u0647\u0627) \u062F\u0631 \u062E\u0631\u0648\u062C\u06CC JSON \u0647\u0645\u06CC\u0646 \u0645\u0633\u06CC\u0631 \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0627\u0633\u062A \u2014 \u062A\u0641\u06A9\u06CC\u06A9 \u062E\u0627\u0645/\u0645\u062D\u0627\u0633\u0628\u0647\u200C\u0634\u062F\u0647 \u062D\u0641\u0638 \u0634\u062F\u0647.</p>
 </body></html>`;
 }
 __name(renderReportHtml, "renderReportHtml");
@@ -44678,7 +47728,7 @@ function registerGamesPublicRoutes(app, service) {
   const jsonHeaders = { "Cache-Control": "no-store" };
   app.get("/play/preview/:token", async (c) => {
     const state = await service.previewState(c.req.param("token")).catch(() => null);
-    const html = renderPreviewPage(state, state ? c.req.param("token") : "");
+    const html = renderPreviewPage2(state, state ? c.req.param("token") : "");
     return new Response(html, {
       status: 200,
       headers: {
@@ -50422,7 +53472,7 @@ var FSIQ_BAND_RANGES = [
   { band: "SUPERIOR", min: 120, max: 129, fa: "\u0639\u0627\u0644\u06CC (\u06F1\u06F2\u06F0\u2013\u06F1\u06F2\u06F9)" },
   { band: "GIFTED", min: 130, max: 200, fa: "\u0627\u0633\u062A\u0639\u062F\u0627\u062F (\u06F1\u06F3\u06F0+)" }
 ];
-function fsiqBandOf3(fsiq) {
+function fsiqBandOf2(fsiq) {
   const s = Number(fsiq);
   if (!Number.isFinite(s) || s < 0) return "ID";
   for (const b of FSIQ_BAND_RANGES) {
@@ -50430,7 +53480,7 @@ function fsiqBandOf3(fsiq) {
   }
   return "GIFTED";
 }
-__name(fsiqBandOf3, "fsiqBandOf");
+__name(fsiqBandOf2, "fsiqBandOf");
 function clamp01(v) {
   const n = Number(v);
   if (!Number.isFinite(n)) return 0;
@@ -50461,7 +53511,6 @@ var ASD_B_FULL_CRITERIA = 2;
 var SCARED_SCHOOL_CUTOFF = 3;
 var BIF_IQ_RANGE = { min: 70, max: 85 };
 var FSIQ_BAND_BIF = FSIQ_BAND_RANGES.find((b) => b.band === "BIF");
-var FSIQ_BAND_LOW_BORDER = FSIQ_BAND_RANGES.find((b) => b.band === "LOW_BORDER");
 var ID_PATH_MAX_FSIQ = FSIQ_BAND_BIF.min;
 var SCATTER_UNIFORM_MAX = 23;
 var RULES = [
@@ -50856,35 +53905,35 @@ function anamLabelOf(event, fieldKey) {
 __name(anamLabelOf, "anamLabelOf");
 function collectExclusions(ctx) {
   const hits = [];
-  const push = /* @__PURE__ */ __name((key, strength, evidenceFa) => {
+  const push2 = /* @__PURE__ */ __name((key, strength, evidenceFa) => {
     const def = EXCLUSION_FACTORS.find((f) => f.key === key);
     if (!def) return;
     hits.push({ key, titleFa: def.titleFa, strength, weight: strength === "danger" ? def.weight : def.weight * 0.5, evidenceFa });
   }, "push");
   if (ctx.fsiq !== null && ctx.fsiq <= 70) {
-    push("id_deficit", "danger", `\u0647\u0648\u0634\u200C\u0628\u0647\u0631 \u06A9\u0644 ${String(ctx.fsiq).replace(/[0-9]/g, (d) => "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9"[Number(d)])} (\u06F7\u06F0 \u06CC\u0627 \u06A9\u0645\u062A\u0631)`);
+    push2("id_deficit", "danger", `\u0647\u0648\u0634\u200C\u0628\u0647\u0631 \u06A9\u0644 ${String(ctx.fsiq).replace(/[0-9]/g, (d) => "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9"[Number(d)])} (\u06F7\u06F0 \u06CC\u0627 \u06A9\u0645\u062A\u0631)`);
   } else if (ctx.adaptLow) {
-    push("id_deficit", "warn", "\u0627\u0646\u0637\u0628\u0627\u0642 \u0631\u0648\u0632\u0645\u0631\u0647\u0654 \xAB\u067E\u0627\u06CC\u06CC\u0646\xBB \u062F\u0631 \u0633\u0646\u062C\u0647\u0654 \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u2014 \u0628\u062F\u0648\u0646 \u0647\u0648\u0634\u200C\u0628\u0647\u0631 \u062B\u0628\u062A\u200C\u0634\u062F\u0647");
+    push2("id_deficit", "warn", "\u0627\u0646\u0637\u0628\u0627\u0642 \u0631\u0648\u0632\u0645\u0631\u0647\u0654 \xAB\u067E\u0627\u06CC\u06CC\u0646\xBB \u062F\u0631 \u0633\u0646\u062C\u0647\u0654 \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u2014 \u0628\u062F\u0648\u0646 \u0647\u0648\u0634\u200C\u0628\u0647\u0631 \u062B\u0628\u062A\u200C\u0634\u062F\u0647");
   }
   const sensory = anamLabelOf(ctx.anamV3, "sensory_concern");
   if (sensory !== null && sensory >= 0.67) {
-    push("sensory", sensory >= 1 ? "danger" : "warn", "\u062D\u0633\u0627\u0633\u06CC\u062A \u062D\u0633\u06CC \u062F\u0631 \u0634\u0631\u062D\u200C\u062D\u0627\u0644 \u0628\u0627\u0644\u0627 \u2014 \u0634\u0646\u0648\u0627\u06CC\u06CC/\u0628\u06CC\u0646\u0627\u06CC\u06CC \u0631\u062F \u0646\u0634\u062F\u0647");
+    push2("sensory", sensory >= 1 ? "danger" : "warn", "\u062D\u0633\u0627\u0633\u06CC\u062A \u062D\u0633\u06CC \u062F\u0631 \u0634\u0631\u062D\u200C\u062D\u0627\u0644 \u0628\u0627\u0644\u0627 \u2014 \u0634\u0646\u0648\u0627\u06CC\u06CC/\u0628\u06CC\u0646\u0627\u06CC\u06CC \u0631\u062F \u0646\u0634\u062F\u0647");
   }
   const schoolChange = anamLabelOf(ctx.anamV3, "school_change");
   if (schoolChange !== null && schoolChange >= 0.67) {
-    push("insufficient_education", schoolChange >= 1 ? "danger" : "warn", "\u062A\u063A\u06CC\u06CC\u0631 \u0645\u06A9\u0631\u0631 \u0645\u062F\u0631\u0633\u0647 \u062F\u0631 \u0633\u0647 \u0633\u0627\u0644 \u0627\u062E\u06CC\u0631 \u2014 \u067E\u06CC\u0648\u0633\u062A\u06AF\u06CC \u0622\u0645\u0648\u0632\u0634 \u0645\u062E\u062A\u0644");
+    push2("insufficient_education", schoolChange >= 1 ? "danger" : "warn", "\u062A\u063A\u06CC\u06CC\u0631 \u0645\u06A9\u0631\u0631 \u0645\u062F\u0631\u0633\u0647 \u062F\u0631 \u0633\u0647 \u0633\u0627\u0644 \u0627\u062E\u06CC\u0631 \u2014 \u067E\u06CC\u0648\u0633\u062A\u06AF\u06CC \u0622\u0645\u0648\u0632\u0634 \u0645\u062E\u062A\u0644");
   }
   const absence = anamLabelOf(ctx.anamV3, "absence_level");
   if (absence !== null && absence >= 0.67) {
-    push("absenteeism", absence >= 1 ? "danger" : "warn", "\u063A\u06CC\u0628\u062A \u0637\u0648\u0644\u0627\u0646\u06CC \u0627\u0632 \u0645\u062F\u0631\u0633\u0647 \u062F\u0631 \u0634\u0631\u062D\u200C\u062D\u0627\u0644");
+    push2("absenteeism", absence >= 1 ? "danger" : "warn", "\u063A\u06CC\u0628\u062A \u0637\u0648\u0644\u0627\u0646\u06CC \u0627\u0632 \u0645\u062F\u0631\u0633\u0647 \u062F\u0631 \u0634\u0631\u062D\u200C\u062D\u0627\u0644");
   }
   const homeLang = anamLabelOf(ctx.anamV3, "home_language");
   if (homeLang !== null && homeLang >= 0.5) {
-    push("bilingualism", homeLang >= 1 ? "danger" : "warn", "\u0632\u0628\u0627\u0646 \u06AF\u0641\u062A\u200C\u0648\u06AF\u0648\u06CC \u062E\u0627\u0646\u0647 \u063A\u06CC\u0631\u0641\u0627\u0631\u0633\u06CC/\u062F\u0648\u0632\u0628\u0627\u0646\u0647");
+    push2("bilingualism", homeLang >= 1 ? "danger" : "warn", "\u0632\u0628\u0627\u0646 \u06AF\u0641\u062A\u200C\u0648\u06AF\u0648\u06CC \u062E\u0627\u0646\u0647 \u063A\u06CC\u0631\u0641\u0627\u0631\u0633\u06CC/\u062F\u0648\u0632\u0628\u0627\u0646\u0647");
   }
   const crisis = anamLabelOf(ctx.anamV3, "crisis_event");
   if (crisis !== null && crisis >= 0.5) {
-    push("psychosocial", crisis >= 1 ? "danger" : "warn", "\u0631\u0648\u06CC\u062F\u0627\u062F \u0628\u062D\u0631\u0627\u0646\u06CC \u0627\u062E\u06CC\u0631 \u062F\u0631 \u0634\u0631\u062D\u200C\u062D\u0627\u0644");
+    push2("psychosocial", crisis >= 1 ? "danger" : "warn", "\u0631\u0648\u06CC\u062F\u0627\u062F \u0628\u062D\u0631\u0627\u0646\u06CC \u0627\u062E\u06CC\u0631 \u062F\u0631 \u0634\u0631\u062D\u200C\u062D\u0627\u0644");
   }
   return hits;
 }
@@ -50984,16 +54033,16 @@ function completed(events) {
   return events.filter((e) => e.status === "completed");
 }
 __name(completed, "completed");
-function faNum6(n) {
+function faNum7(n) {
   return String(n).replace(/[0-9]/g, (d) => "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9"[Number(d)]);
 }
-__name(faNum6, "faNum");
+__name(faNum7, "faNum");
 function wechslerProfileFactsOf(event) {
   const profile = wechslerEngineOutputOf(event)?.profile ?? null;
   const idxNum = /* @__PURE__ */ __name((x) => typeof x?.scaled === "number" ? x.scaled : null, "idxNum");
   const fsiq = typeof profile?.fsiq === "number" ? profile.fsiq : null;
   const bandRaw = typeof profile?.fsiqBand === "string" ? profile.fsiqBand : null;
-  const band = bandRaw ?? (fsiq !== null ? fsiqBandOf3(fsiq) : null);
+  const band = bandRaw ?? (fsiq !== null ? fsiqBandOf2(fsiq) : null);
   const scatter = typeof profile?.indexScatter === "number" ? profile.indexScatter : null;
   const step5Weak = (profile?.step5?.weaknesses ?? []).filter((k) => typeof k === "string");
   return {
@@ -51311,7 +54360,7 @@ function runInference(events, options = {}) {
       if (!idPathActive && wFacts.fsiq !== null && wFacts.fsiq >= FSIQ_BAND_BIF.min && wFacts.fsiq <= FSIQ_BAND_BIF.max && (adapt === "normal" || adapt === "unknown")) {
         cands.push({
           weight: 1,
-          fa: `\u0647\u0648\u0634\u200C\u0628\u0647\u0631 \u06A9\u0644 ${faNum6(wFacts.fsiq)} \u062F\u0631 \u0628\u0627\u0632\u0647\u0654 \u0645\u0631\u0632\u06CC/\u062F\u06CC\u0631\u0622\u0645\u0648\u0632\u06CC (\u06F7\u06F0\u2013\u06F8\u06F4) \u0627\u0633\u062A \u0648 \u0627\u0646\u0637\u0628\u0627\u0642 \u0631\u0648\u0632\u0645\u0631\u0647 \u0639\u0627\u062F\u06CC \u06CC\u0627 \u062B\u0628\u062A\u200C\u0646\u0634\u062F\u0647 \u0627\u0633\u062A \u2014 \u0634\u0627\u0647\u062F \u062F\u06CC\u0631\u0622\u0645\u0648\u0632\u06CC (BIF).`
+          fa: `\u0647\u0648\u0634\u200C\u0628\u0647\u0631 \u06A9\u0644 ${faNum7(wFacts.fsiq)} \u062F\u0631 \u0628\u0627\u0632\u0647\u0654 \u0645\u0631\u0632\u06CC/\u062F\u06CC\u0631\u0622\u0645\u0648\u0632\u06CC (\u06F7\u06F0\u2013\u06F8\u06F4) \u0627\u0633\u062A \u0648 \u0627\u0646\u0637\u0628\u0627\u0642 \u0631\u0648\u0632\u0645\u0631\u0647 \u0639\u0627\u062F\u06CC \u06CC\u0627 \u062B\u0628\u062A\u200C\u0646\u0634\u062F\u0647 \u0627\u0633\u062A \u2014 \u0634\u0627\u0647\u062F \u062F\u06CC\u0631\u0622\u0645\u0648\u0632\u06CC (BIF).`
         });
       }
       if (!idPathActive) {
@@ -51461,10 +54510,10 @@ function runInference(events, options = {}) {
 __name(runInference, "runInference");
 
 // src/domain/clinical-engine/narrative.ts
-function faNum7(s) {
+function faNum8(s) {
   return String(s).replace(/[0-9]/g, (d) => "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9"[Number(d)]);
 }
-__name(faNum7, "faNum");
+__name(faNum8, "faNum");
 var CERTAINTY_WORDS = ["\u0642\u0637\u0639\u0627\u064B", "\u0628\u0644\u0627\u0634\u06A9", "\u062D\u062A\u0645\u0627\u064B \u062A\u0634\u062E\u06CC\u0635", "\u0635\u062F \u062F\u0631 \u0635\u062F", "\u06F1\u06F0\u06F0\u066A"];
 function assertPlainTone(text) {
   for (const w of CERTAINTY_WORDS) {
@@ -51486,7 +54535,7 @@ function sawOf(h) {
   const counts = h.criteriaSummary;
   if (counts.met > 0 || counts.partial > 0) {
     parts.push(
-      shortLine(`\u062F\u0631 \u062C\u062F\u0648\u0644 \u0645\u0644\u0627\u06A9\u200C\u0647\u0627: ${faNum7(counts.met)} \u0645\u0644\u0627\u06A9 \u0628\u0631\u0622\u0648\u0631\u062F\u0647\u060C ${faNum7(counts.partial)} \u0646\u0627\u0642\u0635 \u0627\u0632 \u0645\u062C\u0645\u0648\u0639 \u0645\u0644\u0627\u06A9\u200C\u0647\u0627\u06CC DSM.`)
+      shortLine(`\u062F\u0631 \u062C\u062F\u0648\u0644 \u0645\u0644\u0627\u06A9\u200C\u0647\u0627: ${faNum8(counts.met)} \u0645\u0644\u0627\u06A9 \u0628\u0631\u0622\u0648\u0631\u062F\u0647\u060C ${faNum8(counts.partial)} \u0646\u0627\u0642\u0635 \u0627\u0632 \u0645\u062C\u0645\u0648\u0639 \u0645\u0644\u0627\u06A9\u200C\u0647\u0627\u06CC DSM.`)
     );
   }
   if (parts.length === 0) parts.push("\u0634\u0648\u0627\u0647\u062F \u06A9\u0645\u06CC \u062B\u0628\u062A \u0634\u062F\u0647 \u0627\u0633\u062A \u2014 \u0628\u0631\u0627\u06CC \u0642\u0648\u06CC\u200C\u0634\u062F\u0646 \u0641\u0631\u0636\u06CC\u0647 \u062F\u0627\u062F\u0647\u0654 \u0628\u06CC\u0634\u062A\u0631\u06CC \u0644\u0627\u0632\u0645 \u0627\u0633\u062A.");
@@ -51767,6 +54816,172 @@ function schoolVariantOf(path, summary, monitoring, sessions) {
   return { headline: `\u06AF\u0632\u0627\u0631\u0634 \u0647\u0645\u06A9\u0627\u0631\u06CC \u0628\u0627 \u0645\u062F\u0631\u0633\u0647 \u2014 ${name}`, performance, actions };
 }
 __name(schoolVariantOf, "schoolVariantOf");
+
+// src/domain/clinical-engine/family-sheet.ts
+var FAMILY_SHEET_TTL_SECONDS = 15552e3;
+var SHEET_SCOPE = "family-sheet";
+function base64UrlEncode3(bytes) {
+  let bin = "";
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+__name(base64UrlEncode3, "base64UrlEncode");
+function base64UrlDecode4(text) {
+  const b64 = text.replace(/-/g, "+").replace(/_/g, "/");
+  const bin = atob(b64 + "=".repeat((4 - b64.length % 4) % 4));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+__name(base64UrlDecode4, "base64UrlDecode");
+async function hmacKey2(secret) {
+  return crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]);
+}
+__name(hmacKey2, "hmacKey");
+async function mintFamilySheetToken(studentId, secret) {
+  const nowSec = Math.floor(Date.now() / 1e3);
+  const payload = { scope: SHEET_SCOPE, sid: studentId, iat: nowSec, exp: nowSec + FAMILY_SHEET_TTL_SECONDS };
+  const header = { alg: "HS256", typ: "JWT" };
+  const data = `${base64UrlEncode3(new TextEncoder().encode(JSON.stringify(header)))}.${base64UrlEncode3(new TextEncoder().encode(JSON.stringify(payload)))}`;
+  const key = await hmacKey2(secret);
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(data));
+  return { token: `${data}.${base64UrlEncode3(new Uint8Array(sig))}`, expiresAt: new Date(payload.exp * 1e3).toISOString() };
+}
+__name(mintFamilySheetToken, "mintFamilySheetToken");
+async function verifyFamilySheetToken(token, secret) {
+  const parts = token.split(".");
+  if (parts.length !== 3) return null;
+  const [headerB64, payloadB64, signatureB64] = parts;
+  try {
+    const header = JSON.parse(new TextDecoder().decode(base64UrlDecode4(headerB64)));
+    if (header.alg !== "HS256") return null;
+    const key = await hmacKey2(secret);
+    const valid = await crypto.subtle.verify("HMAC", key, base64UrlDecode4(signatureB64), new TextEncoder().encode(`${headerB64}.${payloadB64}`));
+    if (!valid) return null;
+    const payload = JSON.parse(new TextDecoder().decode(base64UrlDecode4(payloadB64)));
+    if (payload.scope !== SHEET_SCOPE) return null;
+    if (!payload.sid || typeof payload.sid !== "string") return null;
+    if (payload.exp * 1e3 < Date.now()) return null;
+    return payload.sid;
+  } catch {
+    return null;
+  }
+}
+__name(verifyFamilySheetToken, "verifyFamilySheetToken");
+var FA_DIGITS4 = "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9";
+function faNum9(s) {
+  return String(s).replace(/\d/g, (d) => FA_DIGITS4[Number(d)]);
+}
+__name(faNum9, "faNum");
+function esc3(s) {
+  return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+__name(esc3, "esc");
+function fmtNum(v) {
+  if (v == null) return "\u2014";
+  return faNum9(Math.round(v * 10) / 10);
+}
+__name(fmtNum, "fmtNum");
+function jalaliDay(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!m) return "";
+  const { jy, jm, jd } = toJalaliParts(Number(m[1]), Number(m[2]), Number(m[3]));
+  return faNum9(`${jy}/${String(jm).padStart(2, "0")}/${String(jd).padStart(2, "0")}`);
+}
+__name(jalaliDay, "jalaliDay");
+function probeSvg(points) {
+  if (points.length < 2) return "";
+  const w = 640, h = 170, padL = 46, padR = 14, padT = 14, padB = 26;
+  const vals = points.map((p) => p.value);
+  const min = Math.min(...vals), max = Math.max(...vals);
+  const span = max - min || Math.max(Math.abs(max), 1) * 0.1;
+  const lo = min - span * 0.15, hi = max + span * 0.15;
+  const x = /* @__PURE__ */ __name((i) => padL + i * (w - padL - padR) / (points.length - 1), "x");
+  const y = /* @__PURE__ */ __name((v) => padT + (1 - (v - lo) / (hi - lo)) * (h - padT - padB), "y");
+  const pts = points.map((p, i) => `${x(i).toFixed(1)},${y(p.value).toFixed(1)}`).join(" ");
+  const dots = points.map((p, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(p.value).toFixed(1)}" r="3" fill="#2b6cb0"/>`).join("");
+  return `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="\u0631\u0648\u0646\u062F \u0633\u0646\u062C\u0647\u0654 \u067E\u0631\u0627\u067E" style="width:100%;height:auto;max-width:${w}px;display:block">
+    <line x1="${padL}" y1="${h - padB}" x2="${w - padR}" y2="${h - padB}" stroke="#d8dee9"/>
+    ${dots}
+    <polyline points="${pts}" fill="none" stroke="#2b6cb0" stroke-width="2"/>
+    <text x="${padL - 6}" y="${(y(max) + 4).toFixed(1)}" font-size="11" fill="#64748b" text-anchor="end">${esc3(fmtNum(max))}</text>
+    <text x="${padL - 6}" y="${y(min).toFixed(1)}" font-size="11" fill="#64748b" text-anchor="end">${esc3(fmtNum(min))}</text>
+    <text x="${padL}" y="${h - 8}" font-size="11" fill="#64748b">${esc3(jalaliDay(points[0].takenAt))}</text>
+    <text x="${w - padR}" y="${h - 8}" font-size="11" fill="#64748b" text-anchor="end">${esc3(jalaliDay(points[points.length - 1].takenAt))}</text>
+  </svg>`;
+}
+__name(probeSvg, "probeSvg");
+var STATUS_BADGE_CLS = {
+  suggested: "b-info",
+  reviewed: "b-warn",
+  active: "b-ok",
+  closed: "b-neutral"
+};
+function pathSection(p) {
+  const dir = p.improved === true ? "\u0631\u0648\u0646\u062F \u0628\u0647\u0628\u0648\u062F" : p.improved === false ? "\u0628\u062F\u0648\u0646 \u0628\u0647\u0628\u0648\u062F \u062F\u0631 \u0627\u06CC\u0646 \u0628\u0627\u0632\u0647" : "\u2014";
+  const trend = p.metric ? `<p class="muted">\u0633\u0646\u062C\u0647\u0654 \xAB${esc3(p.metric)}\xBB \u2014 \u0622\u062E\u0631\u06CC\u0646: ${esc3(fmtNum(p.last))}${p.unit ? " " + esc3(p.unit) : ""} \xB7 ${dir}${p.first != null ? ` (\u0627\u0648\u0644\u06CC\u0646 \u0633\u0646\u062C\u0634: ${esc3(fmtNum(p.first))})` : ""}</p>` : '<p class="muted">\u0647\u0646\u0648\u0632 \u0633\u0646\u062C\u0647\u200C\u0627\u06CC \u0628\u0631\u0627\u06CC \u0627\u06CC\u0646 \u0645\u0633\u06CC\u0631 \u062B\u0628\u062A \u0646\u0634\u062F\u0647 \u0627\u0633\u062A.</p>';
+  const mastery = p.mastered ? '<span class="badge b-ok">\u0645\u0644\u0627\u06A9 \u062A\u0633\u0644\u0637</span>' : "";
+  const reassess = p.reassessAt ? `<p class="muted small">\u0645\u0648\u0639\u062F \u0628\u0627\u0632\u0646\u06AF\u0631\u06CC: ${esc3(jalaliDay(p.reassessAt))}</p>` : "";
+  return `<section class="card">
+    <h2>${esc3(p.targetTitle)}</h2>
+    <p class="row"><span class="badge ${STATUS_BADGE_CLS[p.status] ?? "b-neutral"}">${esc3(INTERVENTION_PATH_STATUS_LABELS[p.status] ?? p.status)}</span> ${mastery}<span class="muted">\u062C\u0644\u0633\u0627\u062A: ${esc3(faNum9(p.sessionsDone))} \u0627\u0632 ${esc3(faNum9(p.sessionsPlanned))} \u0628\u0631\u06AF\u0632\u0627\u0631\u0634\u062F\u0647</span></p>
+    ${trend}
+    ${probeSvg(p.points)}
+    ${reassess}
+  </section>`;
+}
+__name(pathSection, "pathSection");
+function renderFamilySheetPage(model) {
+  const body = model.paths.length > 0 ? model.paths.map(pathSection).join("") : '<section class="card"><p class="muted">\u0647\u0646\u0648\u0632 \u0645\u0633\u06CC\u0631 \u0645\u062F\u0627\u062E\u0644\u0647\u200C\u0627\u06CC \u0628\u0631\u0627\u06CC \u0627\u06CC\u0646 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u062B\u0628\u062A \u0646\u0634\u062F\u0647 \u0627\u0633\u062A \u2014 \u0627\u06CC\u0646 \u0628\u0631\u06AF\u0647 \u0628\u0639\u062F \u0627\u0632 \u0633\u0627\u062E\u062A\u0646 \u0627\u0648\u0644\u06CC\u0646 \u0645\u0633\u06CC\u0631 \u062F\u0631 \u0633\u0627\u0645\u0627\u0646\u0647 \u067E\u0631 \u0645\u06CC\u200C\u0634\u0648\u062F.</p></section>';
+  const grade = model.grade ? ` \xB7 \u067E\u0627\u06CC\u0647\u0654 ${esc3(model.grade)}` : "";
+  return `<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>\u0628\u0631\u06AF\u0647\u0654 \u067E\u06CC\u0634\u0631\u0641\u062A \u2014 ${esc3(model.studentName)}</title>
+<style>
+  :root { color-scheme: light; }
+  body { font-family: Vazirmatn, Tahoma, "Segoe UI", sans-serif; background: #f5f7fa; color: #1f2937; margin: 0; }
+  .wrap { max-width: 720px; margin: 0 auto; padding: clamp(12px, 3vw, 24px); }
+  .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: clamp(14px, 3vw, 20px); margin-bottom: 12px; }
+  h1 { font-size: clamp(1.25rem, 4vw, 1.6rem); margin: 0 0 6px; }
+  h2 { font-size: clamp(1.05rem, 3.5vw, 1.2rem); margin: 0 0 8px; }
+  .muted { color: #64748b; font-size: .92rem; margin: 6px 0; }
+  .small { font-size: .8rem; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: .78rem; border: 1px solid transparent; }
+  .b-ok { background: #e6f4ea; color: #1e7b34; border-color: #bfe3c9; }
+  .b-warn { background: #fdf3e3; color: #9a6700; border-color: #f3dfb6; }
+  .b-info { background: #e8f1fd; color: #2b6cb0; border-color: #c5dbfa; }
+  .b-neutral { background: #f1f5f9; color: #475569; border-color: #e2e8f0; }
+  footer { text-align: center; padding: 10px 0 20px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="card">
+    <h1>\u0628\u0631\u06AF\u0647\u0654 \u067E\u06CC\u0634\u0631\u0641\u062A</h1>
+    <p style="margin:0">${esc3(model.studentName)}${grade}</p>
+    <p class="muted small">\u0633\u0627\u062E\u062A: ${esc3(jalaliDay(model.generatedAt))} \xB7 \u0627\u06CC\u0646 \u0628\u0631\u06AF\u0647 \u0641\u0642\u0637\u200C\u062E\u0648\u0627\u0646\u062F\u0646\u06CC \u0627\u0633\u062A \u0648 \u0631\u0648\u0646\u062F \u0645\u0633\u06CC\u0631\u0647\u0627\u06CC \u0645\u062F\u0627\u062E\u0644\u0647 \u0648 \u0646\u062A\u06CC\u062C\u0647\u0654 \u0633\u0646\u062C\u0634\u200C\u0647\u0627 \u0631\u0627 \u0628\u0631\u0627\u06CC \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u0646\u0634\u0627\u0646 \u0645\u06CC\u200C\u062F\u0647\u062F\u061B \u062C\u0632\u0626\u06CC\u0627\u062A \u0639\u0644\u0645\u06CC \u0648 \u0645\u0635\u0648\u0628\u0647\u200C\u0647\u0627 \u062F\u0631 \u062C\u0644\u0633\u0627\u062A \u0645\u0631\u06A9\u0632 \u0628\u0631\u0631\u0633\u06CC \u0645\u06CC\u200C\u0634\u0648\u0646\u062F.</p>
+  </header>
+  ${body}
+  <footer class="muted small">\u0627\u06CC\u0646 \u0628\u0631\u06AF\u0647 \u0628\u0627 \u067E\u06CC\u0648\u0646\u062F \u0627\u0645\u0636\u0627\u0634\u062F\u0647\u0654 \u0645\u062D\u062F\u0648\u062F \u0628\u0627\u0632 \u0645\u06CC\u200C\u0634\u0648\u062F \u2014 \u067E\u06CC\u0648\u0646\u062F \u0631\u0627 \u0641\u0642\u0637 \u0628\u0627 \u062E\u0627\u0646\u0648\u0627\u062F\u0647\u0654 \u0647\u0645\u06CC\u0646 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u062F\u0631 \u0645\u06CC\u0627\u0646 \u0628\u06AF\u0630\u0627\u0631\u06CC\u062F.</footer>
+</div>
+</body>
+</html>`;
+}
+__name(renderFamilySheetPage, "renderFamilySheetPage");
+function sheetErrorPage(title) {
+  return `<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>\u0628\u0631\u06AF\u0647\u0654 \u067E\u06CC\u0634\u0631\u0641\u062A</title>
+<style>body{font-family:Vazirmatn,Tahoma,sans-serif;background:#f5f7fa;color:#1f2937;margin:0}.wrap{max-width:560px;margin:0 auto;padding:24px}.card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;text-align:center}</style>
+</head>
+<body><div class="wrap"><div class="card"><h1>\u0628\u0631\u06AF\u0647\u0654 \u067E\u06CC\u0634\u0631\u0641\u062A</h1><p>${esc3(title)}</p></div></div></body>
+</html>`;
+}
+__name(sheetErrorPage, "sheetErrorPage");
 
 // src/domain/clinical-engine/progress.ts
 var PATH_PROBE_DEFAULT_THRESHOLD = 80;
@@ -53284,13 +56499,13 @@ __name3(maxIndexValueOf, "maxIndexValueOf");
 __name23(maxIndexValueOf, "maxIndexValueOf");
 function evaluatePatterns(norm, wInj, levels, otStatuses) {
   const out = [];
-  const push = /* @__PURE__ */ __name23((p) => out.push(p), "push");
+  const push2 = /* @__PURE__ */ __name23((p) => out.push(p), "push");
   const allRows = [...norm.rows, ...wInj.rows];
   const p12Iq = wInj.iqValue !== null && wInj.iqValue <= IQ_ID_MAX;
   const p12Ot = otStatuses.filter((s) => s.delayed).length >= 4;
   const p12Active = p12Iq || p12Ot;
   const p12Ruled = wInj.iqValue !== null && wInj.iqValue > IQ_BIF_MAX && !p12Ot;
-  push({
+  push2({
     key: "P12_GLOBAL_WEAK",
     titleFa: "\u0627\u0641\u062A \u0647\u0645\u0647\u200C\u06AF\u06CC\u0631 \u0634\u0646\u0627\u062E\u062A\u06CC-\u0631\u0634\u062F\u06CC",
     baseRateFa: "\u062D\u062F\u0648\u062F \u06F1 \u062A\u0627 \u06F3 \u062F\u0631\u0635\u062F \u0627\u0632 \u06A9\u0648\u062F\u06A9\u0627\u0646",
@@ -53305,7 +56520,7 @@ function evaluatePatterns(norm, wInj, levels, otStatuses) {
   const visualSupport = otStatuses.some((s) => s.domain === "visual" && s.delayed) || norm.ctx.probeDanger.calc;
   const p8Active = gap2 !== null && gap2 >= NVLD_INDEX_GAP && visualSupport;
   const p8Ruled = gap2 !== null && gap2 < NVLD_INDEX_GAP;
-  push({
+  push2({
     key: "P8_NVLD",
     titleFa: "\u0646\u0627\u0628\u0631\u0627\u0628\u0631\u06CC \u06A9\u0644\u0627\u0645\u06CC/\u063A\u06CC\u0631\u06A9\u0644\u0627\u0645\u06CC",
     baseRateFa: "\u06A9\u0645\u200C\u0634\u0627\u06CC\u0639\u061B \u0622\u0645\u0627\u0631 \u062F\u0642\u06CC\u0642\u06CC \u0645\u0646\u062A\u0634\u0631 \u0646\u0634\u062F\u0647",
@@ -53319,7 +56534,7 @@ function evaluatePatterns(norm, wInj, levels, otStatuses) {
   const learningOrAttention = atLeastLevel(levels, "academic_learning", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647") || atLeastLevel(levels, "attention_exec", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647");
   const p7Active = (gifted || giftedIndex) && learningOrAttention;
   const p7Ruled = !gifted && !giftedIndex;
-  push({
+  push2({
     key: "P7_TWO_E",
     titleFa: "\u0627\u0633\u062A\u0639\u062F\u0627\u062F \u062F\u0648\u06AF\u0627\u0646\u0647",
     baseRateFa: "\u062D\u062F\u0648\u062F \u06F2 \u062A\u0627 \u06F5 \u062F\u0631\u0635\u062F \u0627\u0632 \u06A9\u0648\u062F\u06A9\u0627\u0646",
@@ -53330,7 +56545,7 @@ function evaluatePatterns(norm, wInj, levels, otStatuses) {
   });
   const asdDanger = allRows.some((r) => r.toolId === "ce-asd-criteria-v1" && r.danger);
   const p3Active = asdDanger && atLeastLevel(levels, "attention_exec", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647");
-  push({
+  push2({
     key: "P3_ASD_x_ADHD",
     titleFa: "\u0647\u0645\u0631\u0627\u0647\u06CC \u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u0627\u062C\u062A\u0645\u0627\u0639\u06CC-\u0627\u0631\u062A\u0628\u0627\u0637\u06CC \u0648 \u062A\u0648\u062C\u0647",
     baseRateFa: "\u062D\u062F\u0648\u062F \u06F5\u06F0 \u062A\u0627 \u06F7\u06F0 \u062F\u0631\u0635\u062F \u0627\u0632 \u06A9\u0648\u062F\u06A9\u0627\u0646",
@@ -53340,7 +56555,7 @@ function evaluatePatterns(norm, wInj, levels, otStatuses) {
     actionFa: p3Active ? "\u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u0647\u0631 \u062F\u0648 \u0645\u062D\u0648\u0631 \u0628\u0627 \u0627\u062D\u062A\u06CC\u0627\u0637 \u062F\u0631 \u062A\u0641\u06A9\u06CC\u06A9\u061B \u0628\u0631\u0646\u0627\u0645\u0647\u0654 \u0627\u062C\u062A\u0645\u0627\u0639\u06CC-\u0627\u0631\u062A\u0628\u0627\u0637\u06CC \u0648 \u062A\u0648\u062C\u0647 \u0647\u0645\u200C\u0632\u0645\u0627\u0646 \u062F\u06CC\u062F\u0647 \u0634\u0648\u062F." : "\u2014"
   });
   const p1Active = atLeastLevel(levels, "academic_learning", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647") && atLeastLevel(levels, "attention_exec", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647");
-  push({
+  push2({
     key: "P1_SLD_x_ADHD",
     titleFa: "\u0647\u0645\u0631\u0627\u0647\u06CC \u0645\u0634\u06A9\u0644 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u0648 \u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u062A\u0648\u062C\u0647",
     baseRateFa: "\u062D\u062F\u0648\u062F \u06F3\u06F1 \u062A\u0627 \u06F4\u06F5 \u062F\u0631\u0635\u062F \u0627\u0632 \u06A9\u0648\u062F\u06A9\u0627\u0646",
@@ -53351,7 +56566,7 @@ function evaluatePatterns(norm, wInj, levels, otStatuses) {
   });
   const motorSig = allRows.some((r) => r.construct === "motor_coord" && (r.toolId === "ce-dcdq-v1" || r.toolId === OT_PROFILE_TOOL) && r.danger);
   const p2Active = motorSig && atLeastLevel(levels, "attention_exec", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647");
-  push({
+  push2({
     key: "P2_DCD_x_ADHD",
     titleFa: "\u0647\u0645\u0631\u0627\u0647\u06CC \u062F\u0634\u0648\u0627\u0631\u06CC \u0647\u0645\u0627\u0647\u0646\u06AF\u06CC \u062D\u0631\u06A9\u062A\u06CC \u0648 \u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u062A\u0648\u062C\u0647",
     baseRateFa: "\u062D\u062F\u0648\u062F \u06F5\u06F0 \u062F\u0631\u0635\u062F \u0627\u0632 \u06A9\u0648\u062F\u06A9\u0627\u0646",
@@ -53362,7 +56577,7 @@ function evaluatePatterns(norm, wInj, levels, otStatuses) {
   });
   const langSig = allRows.some((r) => r.construct === "language_comm" && r.danger && (r.toolId === "ce-speech-criteria-v1" || r.toolId === WECHSLER_TOOL || r.toolId === OT_PROFILE_TOOL));
   const p5Active = langSig && atLeastLevel(levels, "academic_learning", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647");
-  push({
+  push2({
     key: "P5_LANG_x_SLD",
     titleFa: "\u0647\u0645\u0631\u0627\u0647\u06CC \u0636\u0639\u0641 \u0632\u0628\u0627\u0646\u06CC \u0648 \u0627\u0641\u062A \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC",
     baseRateFa: "\u062D\u062F\u0648\u062F \u06F3\u06F5 \u062A\u0627 \u06F5\u06F5 \u062F\u0631\u0635\u062F \u0627\u0632 \u06A9\u0648\u062F\u06A9\u0627\u0646",
@@ -53375,7 +56590,7 @@ function evaluatePatterns(norm, wInj, levels, otStatuses) {
   const anyAchievementDanger = norm.ctx.probeDanger.read || norm.ctx.probeDanger.write || norm.ctx.probeDanger.calc || norm.ctx.sldDanger.read || norm.ctx.sldDanger.write || norm.ctx.sldDanger.calc;
   const p6Active = bif && anyAchievementDanger;
   const p6Ruled = wInj.iqValue !== null && !bif && !anyAchievementDanger;
-  push({
+  push2({
     key: "P6_BIF_x_SLD",
     titleFa: "\u0645\u0631\u0632 \u062F\u06CC\u0631\u0622\u0645\u0648\u0632\u06CC \u0647\u0645\u0631\u0627\u0647 \u0627\u0641\u062A \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC",
     baseRateFa: "\u062D\u062F\u0648\u062F \u06F2\u06F5 \u062A\u0627 \u06F4\u06F0 \u062F\u0631\u0635\u062F \u0627\u0632 \u06A9\u0648\u062F\u06A9\u0627\u0646 (\u0628\u0631\u0622\u0648\u0631\u062F \u0645\u0631\u06A9\u0632)",
@@ -53386,7 +56601,7 @@ function evaluatePatterns(norm, wInj, levels, otStatuses) {
   });
   const psiWmiWeak = allRows.some((r) => r.toolId === WECHSLER_TOOL && r.danger && (r.signal.startsWith("wisc_psi") || r.signal.startsWith("wisc_wmi")));
   const p9Active = atLeastLevel(levels, "attention_exec", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647") && psiWmiWeak;
-  push({
+  push2({
     key: "P9_PSI_WMI",
     titleFa: "\u0627\u0641\u062A \u0633\u0631\u0639\u062A \u067E\u0631\u062F\u0627\u0632\u0634/\u062D\u0627\u0641\u0638\u0647\u0654 \u06A9\u0627\u0631\u06CC \u0647\u0645\u0631\u0627\u0647 \u0646\u0634\u0627\u0646\u0647\u200C\u0647\u0627\u06CC \u062A\u0648\u062C\u0647",
     baseRateFa: "\u062D\u062F\u0648\u062F \u06F3\u06F0 \u062A\u0627 \u06F5\u06F0 \u062F\u0631\u0635\u062F \u0627\u0632 \u06A9\u0648\u062F\u06A9\u0627\u0646 (\u0628\u0631\u0622\u0648\u0631\u062F \u0645\u0631\u06A9\u0632)",
@@ -53397,7 +56612,7 @@ function evaluatePatterns(norm, wInj, levels, otStatuses) {
   });
   const gaiFsGap = wInj.link && wInj.link.fsiq !== null && wInj.link.gai !== null ? wInj.link.gai - wInj.link.fsiq : null;
   const p10Active = gaiFsGap !== null && gaiFsGap >= GAI_FSIQ_GAP;
-  push({
+  push2({
     key: "P10_GAI_GAP",
     titleFa: "\u0634\u06A9\u0627\u0641 \u0638\u0631\u0641\u06CC\u062A \u0627\u0633\u062A\u062F\u0644\u0627\u0644\u06CC \u0648 \u0647\u0648\u0634\u0628\u0647\u0631 \u06A9\u0644\u06CC",
     baseRateFa: "\u062D\u062F\u0648\u062F \u06F1\u06F0 \u062A\u0627 \u06F2\u06F0 \u062F\u0631\u0635\u062F \u0627\u0632 \u06A9\u0648\u062F\u06A9\u0627\u0646 (\u0628\u0631\u0622\u0648\u0631\u062F \u0645\u0631\u06A9\u0632)",
@@ -53407,7 +56622,7 @@ function evaluatePatterns(norm, wInj, levels, otStatuses) {
     actionFa: p10Active ? "\u062F\u0631 \u0647\u062F\u0641\u200C\u06AF\u0630\u0627\u0631\u06CC \u062A\u062D\u0635\u06CC\u0644\u06CC\u060C \u0638\u0631\u0641\u06CC\u062A \u0627\u0633\u062A\u062F\u0644\u0627\u0644\u06CC \u0645\u0644\u0627\u06A9 \u0628\u0627\u0634\u062F \u0646\u0647 \u0647\u0648\u0634\u0628\u0647\u0631 \u06A9\u0644\u06CC." : "\u2014"
   });
   const p4Active = atLeastLevel(levels, "academic_learning", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647") && atLeastLevel(levels, "internalizing", "\u0645\u0631\u0632\u06CC") && (norm.ctx.schPositive || norm.ctx.schoolChanges);
-  push({
+  push2({
     key: "P4_ANXIETY_SECONDARY",
     titleFa: "\u0627\u062D\u062A\u0645\u0627\u0644 \u0646\u06AF\u0631\u0627\u0646\u06CC \u0646\u0627\u0634\u06CC \u0627\u0632 \u062A\u062C\u0631\u0628\u0647\u200C\u0647\u0627\u06CC \u0646\u0627\u0645\u0648\u0641\u0642 \u062A\u062D\u0635\u06CC\u0644\u06CC",
     baseRateFa: "\u062D\u062F\u0648\u062F \u06F2\u06F0 \u062A\u0627 \u06F4\u06F0 \u062F\u0631\u0635\u062F \u0627\u0632 \u06A9\u0648\u062F\u06A9\u0627\u0646 (\u0628\u0631\u0622\u0648\u0631\u062F \u0645\u0631\u06A9\u0632)",
@@ -53418,7 +56633,7 @@ function evaluatePatterns(norm, wInj, levels, otStatuses) {
   });
   const attentionDanger = allRows.some((r) => r.construct === "attention_exec" && r.danger);
   const p11Active = atLeastLevel(levels, "internalizing", "\u0642\u0627\u0628\u0644\u200C\u062A\u0648\u062C\u0647") && !attentionDanger && norm.ctx.familyStress;
-  push({
+  push2({
     key: "P11_MOOD",
     titleFa: "\u0627\u062D\u062A\u0645\u0627\u0644 \u062A\u0623\u062B\u06CC\u0631 \u0646\u06AF\u0631\u0627\u0646\u06CC/\u063A\u0645 \u0628\u0631 \u062A\u0648\u062C\u0647",
     baseRateFa: "\u062D\u062F\u0648\u062F \u06F1\u06F5 \u062A\u0627 \u06F2\u06F5 \u062F\u0631\u0635\u062F \u0627\u0632 \u06A9\u0648\u062F\u06A9\u0627\u0646 (\u0628\u0631\u0622\u0648\u0631\u062F \u0645\u0631\u06A9\u0632)",
@@ -54314,10 +57529,10 @@ function numOf(value) {
   return Number.isFinite(n) ? n : null;
 }
 __name(numOf, "numOf");
-function faNum8(n) {
+function faNum10(n) {
   return String(n).replace(/[0-9]/g, (d) => "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9"[Number(d)]);
 }
-__name(faNum8, "faNum");
+__name(faNum10, "faNum");
 function subtestsOf(engine) {
   const map2 = /* @__PURE__ */ new Map();
   const snap = engine?.["snapshot"];
@@ -54363,7 +57578,7 @@ function extractWechslerFacts(event) {
     return v !== null && v <= RECOMMENDER_THRESHOLDS.SUBTEST_WEAK;
   }), "patternActive");
   const fsiq = profile?.fsiq ?? snap?.fsiq ?? manual("fsiq");
-  const fsiqBand = profile?.fsiqBand ?? (fsiq !== null ? fsiqBandOf3(fsiq) : null);
+  const fsiqBand = profile?.fsiqBand ?? (fsiq !== null ? fsiqBandOf2(fsiq) : null);
   const scatter = profile?.indexScatter ?? snap?.indexScatter ?? null;
   const step5Weak = (profile?.step5?.weaknesses ?? []).map((w) => typeof w === "string" ? w : w?.key ?? "").filter((k) => ["VCI", "PRI", "WMI", "PSI"].includes(k));
   const cd = sub("CD");
@@ -54476,7 +57691,7 @@ function recommendChecklistPlan(ctx) {
   const existing = existingToolsOf(ctx.events);
   const builder = new PlanBuilder();
   const fsiq = facts.fsiq;
-  const band = facts.fsiqBand ?? (fsiq !== null ? fsiqBandOf3(fsiq) : null);
+  const band = facts.fsiqBand ?? (fsiq !== null ? fsiqBandOf2(fsiq) : null);
   const maxAbility = [facts.vci, facts.pri].filter((v) => v !== null);
   const abilityMax = maxAbility.length ? Math.max(...maxAbility) : null;
   const gapOf = /* @__PURE__ */ __name((v) => abilityMax !== null && v !== null ? abilityMax - v : null, "gapOf");
@@ -54486,14 +57701,14 @@ function recommendChecklistPlan(ctx) {
     return {
       planType: "\u062C\u0627\u0645\u0639",
       items: [],
-      basis: `\u0647\u0648\u0634\u200C\u0628\u0647\u0631 \u06A9\u0644 ${faNum8(fsiq ?? 0)} \u062F\u0631 \u0628\u0627\u0632\u0647\u0654 \u0646\u0627\u062A\u0648\u0627\u0646\u06CC \u0647\u0648\u0634\u06CC \u0627\u0633\u062A \u0648 \u0627\u0646\u0637\u0628\u0627\u0642 \u0631\u0648\u0632\u0645\u0631\u0647 \xAB\u067E\u0627\u06CC\u06CC\u0646\xBB \u06AF\u0632\u0627\u0631\u0634 \u0634\u062F\u0647 \u2014 \u0637\u0628\u0642 \u0645\u0644\u0627\u06A9 \u062A\u0641\u06A9\u06CC\u06A9 \u0627\u0646\u0637\u0628\u0627\u0642\u06CC\u060C \u0645\u0633\u06CC\u0631 \u0627\u0631\u062C\u0627\u0639 \u0646\u0627\u062A\u0648\u0627\u0646\u06CC \u0647\u0648\u0634\u06CC (ID) \u0641\u0639\u0627\u0644 \u0645\u06CC\u200C\u0634\u0648\u062F \u0648 \u0633\u0627\u0645\u0627\u0646\u0647 \u067E\u0644\u0646 \u0627\u0628\u0632\u0627\u0631\u06CC \u067E\u06CC\u0634\u0646\u0647\u0627\u062F \u0646\u0645\u06CC\u200C\u06A9\u0646\u062F\u061B \u062A\u0635\u0645\u06CC\u0645 \u0648 \u0627\u0631\u062C\u0627\u0639 \u0628\u0627 \u0645\u062A\u062E\u0635\u0635 \u0627\u0633\u062A.`,
+      basis: `\u0647\u0648\u0634\u200C\u0628\u0647\u0631 \u06A9\u0644 ${faNum10(fsiq ?? 0)} \u062F\u0631 \u0628\u0627\u0632\u0647\u0654 \u0646\u0627\u062A\u0648\u0627\u0646\u06CC \u0647\u0648\u0634\u06CC \u0627\u0633\u062A \u0648 \u0627\u0646\u0637\u0628\u0627\u0642 \u0631\u0648\u0632\u0645\u0631\u0647 \xAB\u067E\u0627\u06CC\u06CC\u0646\xBB \u06AF\u0632\u0627\u0631\u0634 \u0634\u062F\u0647 \u2014 \u0637\u0628\u0642 \u0645\u0644\u0627\u06A9 \u062A\u0641\u06A9\u06CC\u06A9 \u0627\u0646\u0637\u0628\u0627\u0642\u06CC\u060C \u0645\u0633\u06CC\u0631 \u0627\u0631\u062C\u0627\u0639 \u0646\u0627\u062A\u0648\u0627\u0646\u06CC \u0647\u0648\u0634\u06CC (ID) \u0641\u0639\u0627\u0644 \u0645\u06CC\u200C\u0634\u0648\u062F \u0648 \u0633\u0627\u0645\u0627\u0646\u0647 \u067E\u0644\u0646 \u0627\u0628\u0632\u0627\u0631\u06CC \u067E\u06CC\u0634\u0646\u0647\u0627\u062F \u0646\u0645\u06CC\u200C\u06A9\u0646\u062F\u061B \u062A\u0635\u0645\u06CC\u0645 \u0648 \u0627\u0631\u062C\u0627\u0639 \u0628\u0627 \u0645\u062A\u062E\u0635\u0635 \u0627\u0633\u062A.`,
       referralFa: "\u062E\u0637 \u0642\u0631\u0645\u0632 \u2014 \u0645\u0633\u06CC\u0631 \u0646\u0627\u062A\u0648\u0627\u0646\u06CC \u0647\u0648\u0634\u06CC (FSIQ \u2264 \u06F7\u06F0 \u0647\u0645\u0631\u0627\u0647 \u0627\u0646\u0637\u0628\u0627\u0642 \u067E\u0627\u06CC\u06CC\u0646): \u067E\u0644\u0646 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0631\u0641\u062A\u0627\u0631\u06CC \u067E\u06CC\u0634\u0646\u0647\u0627\u062F \u0646\u0645\u06CC\u200C\u0634\u0648\u062F\u061B \u067E\u0631\u0648\u0646\u062F\u0647 \u0628\u0631\u0627\u06CC \u0627\u0631\u062C\u0627\u0639 \u062A\u062E\u0635\u0635\u06CC (\u0631\u0648\u0627\u0646\u200C\u067E\u0632\u0634\u06A9/\u0645\u062F\u06CC\u0631 \u067E\u0631\u0648\u0646\u062F\u0647) \u0639\u0644\u0627\u0645\u062A \u062E\u0648\u0631\u062F."
     };
   }
   const bifCondition = band === "BIF" || band === "ID" && (adapt.level === "normal" || adapt.level === "border");
   if (bifCondition) {
     const bandFa = band === "BIF" ? "\u0628\u0627\u0632\u0647\u0654 \u0645\u0631\u0632\u06CC/\u062F\u06CC\u0631\u0622\u0645\u0648\u0632\u06CC (\u06F7\u06F0\u2013\u06F8\u06F4)" : "\u067E\u0627\u06CC\u06CC\u0646\u200C\u062A\u0631 \u0627\u0632 \u0645\u0631\u0632 \u06F7\u06F0 \u0628\u0627 \u0627\u0646\u0637\u0628\u0627\u0642 \u062D\u0641\u0638\u200C\u0634\u062F\u0647";
-    const probeReason = `\u067E\u0644\u0646 \u062F\u06CC\u0631\u0622\u0645\u0648\u0632 (FSIQ ${faNum8(fsiq ?? 0)} \u2014 ${bandFa}): \u0633\u0646\u062C\u0634 \u0639\u0645\u0644\u06A9\u0631\u062F \u0648\u0627\u0642\u0639\u06CC \u062F\u0631 \u0633\u0647 \u062D\u0648\u0632\u0647\u0654 \u067E\u0627\u06CC\u0647 \u0628\u0631\u0627\u06CC \u0647\u062F\u0641\u200C\u06AF\u0630\u0627\u0631\u06CC \u0622\u0645\u0648\u0632\u0634\u06CC \u0648\u0627\u0642\u0639\u200C\u0628\u06CC\u0646\u0627\u0646\u0647 (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F5).`;
+    const probeReason = `\u067E\u0644\u0646 \u062F\u06CC\u0631\u0622\u0645\u0648\u0632 (FSIQ ${faNum10(fsiq ?? 0)} \u2014 ${bandFa}): \u0633\u0646\u062C\u0634 \u0639\u0645\u0644\u06A9\u0631\u062F \u0648\u0627\u0642\u0639\u06CC \u062F\u0631 \u0633\u0647 \u062D\u0648\u0632\u0647\u0654 \u067E\u0627\u06CC\u0647 \u0628\u0631\u0627\u06CC \u0647\u062F\u0641\u200C\u06AF\u0630\u0627\u0631\u06CC \u0622\u0645\u0648\u0632\u0634\u06CC \u0648\u0627\u0642\u0639\u200C\u0628\u06CC\u0646\u0627\u0646\u0647 (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F5).`;
     for (const key of [PLAN_TOOL_KEYS.probeRead, PLAN_TOOL_KEYS.probeWrite, PLAN_TOOL_KEYS.probeCalc]) {
       builder.add(key, "core", probeReason, "r5");
     }
@@ -54544,7 +57759,7 @@ function recommendChecklistPlan(ctx) {
       builder.add(
         PLAN_TOOL_KEYS.idAdapt,
         "core",
-        `\u0647\u0648\u0634\u200C\u0628\u0647\u0631 \u06A9\u0644 ${faNum8(fsiq ?? 0)} \u067E\u0627\u06CC\u06CC\u0646\u200C\u062A\u0631 \u0627\u0632 \u0645\u0631\u0632 \u06F7\u06F0 \u0627\u0633\u062A \u0648\u0644\u06CC \u0627\u0646\u0637\u0628\u0627\u0642 \u0631\u0648\u0632\u0645\u0631\u0647 \u062B\u0628\u062A \u0646\u0634\u062F\u0647 \u2014 \u0633\u0646\u062C\u0647\u0654 \u0627\u0646\u0637\u0628\u0627\u0642 \u0631\u0648\u0632\u0645\u0631\u0647 (\u0641\u0631\u0645 \u062E\u0627\u0646\u0648\u0627\u062F\u0647) \u0628\u0631\u0627\u06CC \u062A\u0641\u06A9\u06CC\u06A9 \u0645\u0633\u06CC\u0631 \u0646\u0627\u062A\u0648\u0627\u0646\u06CC \u0647\u0648\u0634\u06CC \u0627\u0632 \u062F\u06CC\u0631\u0622\u0645\u0648\u0632\u06CC \u0644\u0627\u0632\u0645 \u0627\u0633\u062A (\xA7\u06F3.\u06F1).`,
+        `\u0647\u0648\u0634\u200C\u0628\u0647\u0631 \u06A9\u0644 ${faNum10(fsiq ?? 0)} \u067E\u0627\u06CC\u06CC\u0646\u200C\u062A\u0631 \u0627\u0632 \u0645\u0631\u0632 \u06F7\u06F0 \u0627\u0633\u062A \u0648\u0644\u06CC \u0627\u0646\u0637\u0628\u0627\u0642 \u0631\u0648\u0632\u0645\u0631\u0647 \u062B\u0628\u062A \u0646\u0634\u062F\u0647 \u2014 \u0633\u0646\u062C\u0647\u0654 \u0627\u0646\u0637\u0628\u0627\u0642 \u0631\u0648\u0632\u0645\u0631\u0647 (\u0641\u0631\u0645 \u062E\u0627\u0646\u0648\u0627\u062F\u0647) \u0628\u0631\u0627\u06CC \u062A\u0641\u06A9\u06CC\u06A9 \u0645\u0633\u06CC\u0631 \u0646\u0627\u062A\u0648\u0627\u0646\u06CC \u0647\u0648\u0634\u06CC \u0627\u0632 \u062F\u06CC\u0631\u0622\u0645\u0648\u0632\u06CC \u0644\u0627\u0632\u0645 \u0627\u0633\u062A (\xA7\u06F3.\u06F1).`,
         "r6"
       );
       builder.notes.push("\u062A\u0627 \u062A\u06A9\u0645\u06CC\u0644 \u0633\u0646\u062C\u0647\u0654 \u0627\u0646\u0637\u0628\u0627\u0642\u060C \u0645\u0633\u06CC\u0631 ID \u0645\u0647\u0631 \u0646\u0645\u06CC\u200C\u0634\u0648\u062F \u2014 \u0645\u0644\u0627\u06A9 \u062A\u0641\u06A9\u06CC\u06A9 \u0627\u0646\u0637\u0628\u0627\u0642\u06CC \u062F\u0648 \u0645\u0633\u06CC\u0631 \u0631\u0627 \u062C\u062F\u0627\u06CC \u0647\u0645 \u0646\u06AF\u0647 \u0645\u06CC\u200C\u062F\u0627\u0631\u062F.");
@@ -54624,12 +57839,12 @@ function applyProfileRules(args) {
     builder.domains.add("attention");
   }
   if (facts.vci !== null && facts.vci <= T.LOW_INDEX && facts.vocabLow) {
-    builder.add(PLAN_TOOL_KEYS.speech, "core", `\u0634\u0627\u062E\u0635 \u06A9\u0644\u0627\u0645\u06CC ${faNum8(facts.vci)} \u0628\u0627 \u0648\u0627\u0698\u06AF\u0627\u0646/\u062A\u0634\u0627\u0628\u0647\u0627\u062A \u0636\u0639\u06CC\u0641 \u2014 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0632\u0628\u0627\u0646 \u0648 \u06AF\u0641\u062A\u0627\u0631 (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F3).`, "r3");
+    builder.add(PLAN_TOOL_KEYS.speech, "core", `\u0634\u0627\u062E\u0635 \u06A9\u0644\u0627\u0645\u06CC ${faNum10(facts.vci)} \u0628\u0627 \u0648\u0627\u0698\u06AF\u0627\u0646/\u062A\u0634\u0627\u0628\u0647\u0627\u062A \u0636\u0639\u06CC\u0641 \u2014 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0632\u0628\u0627\u0646 \u0648 \u06AF\u0641\u062A\u0627\u0631 (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F3).`, "r3");
     builder.add(PLAN_TOOL_KEYS.probeRead, "recommended", "\u067E\u0631\u0648\u0628 \u0631\u0648\u0627\u0646\u06CC\u200C\u062E\u0648\u0627\u0646\u062F\u0646 \u062F\u0631 \u0633\u0646 \u0645\u062F\u0631\u0633\u0647 \u2014 \u062A\u0641\u06A9\u06CC\u06A9 \u0632\u0628\u0627\u0646 \u0627\u0632 \u062E\u0648\u0627\u0646\u062F\u0646 (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F3).", "r3");
     builder.domains.add("language");
   }
   if (facts.wmi !== null && facts.wmi <= T.LOW_INDEX && (facts.digitsSpanLow || facts.letterNumberLow)) {
-    builder.add(PLAN_TOOL_KEYS.speech, "core", `\u062D\u0627\u0641\u0638\u0647\u0654 \u06A9\u0627\u0631\u06CC ${faNum8(facts.wmi)} \u0628\u0627 \u0641\u0631\u0627\u062E\u0646\u0627\u06CC \u0627\u0631\u0642\u0627\u0645/\u062A\u0648\u0627\u0644\u06CC \u062D\u0631\u0641-\u0639\u062F\u062F \u0636\u0639\u06CC\u0641 \u2014 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0632\u0628\u0627\u0646 + \u0628\u0631\u0631\u0633\u06CC \u067E\u0631\u062F\u0627\u0632\u0634 \u0634\u0646\u06CC\u062F\u0627\u0631\u06CC (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F4).`, "r4");
+    builder.add(PLAN_TOOL_KEYS.speech, "core", `\u062D\u0627\u0641\u0638\u0647\u0654 \u06A9\u0627\u0631\u06CC ${faNum10(facts.wmi)} \u0628\u0627 \u0641\u0631\u0627\u062E\u0646\u0627\u06CC \u0627\u0631\u0642\u0627\u0645/\u062A\u0648\u0627\u0644\u06CC \u062D\u0631\u0641-\u0639\u062F\u062F \u0636\u0639\u06CC\u0641 \u2014 \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u0632\u0628\u0627\u0646 + \u0628\u0631\u0631\u0633\u06CC \u067E\u0631\u062F\u0627\u0632\u0634 \u0634\u0646\u06CC\u062F\u0627\u0631\u06CC (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F4).`, "r4");
     builder.notes.push("\u0627\u0644\u06AF\u0648\u06CC \u067E\u0631\u062F\u0627\u0632\u0634 \u0634\u0646\u06CC\u062F\u0627\u0631\u06CC \u2014 \u0627\u0631\u062C\u0627\u0639 \u0634\u0646\u0648\u0627\u06CC\u06CC\u200C\u0634\u0646\u0627\u0633\u06CC (APD) \u062F\u0631 \u0646\u0648\u0628\u062A\u200C\u06AF\u06CC\u0631\u06CC \u062F\u0631 \u0646\u0638\u0631 \u06AF\u0631\u0641\u062A\u0647 \u0634\u0648\u062F.");
     builder.domains.add("language");
   }
@@ -54665,7 +57880,7 @@ function applyProfileRules(args) {
   const execWeak = facts.wmi !== null && facts.wmi <= T.EXEC_WEAK || facts.psi !== null && facts.psi <= T.EXEC_WEAK;
   if (strongIdx.length > 0 && execWeak && facts.indexScatter !== null && facts.indexScatter >= T.SCATTER_TWO_E) {
     const weakDomain = anam.sldDomains.write ? [PLAN_TOOL_KEYS.sldWri, "\u0646\u0648\u0634\u062A\u0646"] : anam.sldDomains.calc ? [PLAN_TOOL_KEYS.sldCalc, "\u062D\u0633\u0627\u0628"] : [PLAN_TOOL_KEYS.sldRead, "\u062E\u0648\u0627\u0646\u062F\u0646"];
-    builder.add(weakDomain[0], "core", `\u0634\u0627\u062E\u0635 \u0642\u0648\u06CC ${faNum8(Math.max(...strongIdx))} \u0628\u0627 \u0636\u0639\u0641 \u0627\u062C\u0631\u0627\u06CC\u06CC \u0648 \u067E\u0631\u0627\u06A9\u0646\u062F\u06AF\u06CC ${faNum8(facts.indexScatter)} \u2014 \u0628\u0633\u062A\u0647\u0654 SLD \u062D\u0648\u0632\u0647\u0654 \u0636\u0639\u0641 (${weakDomain[1]}) + \u062A\u06AF \u0627\u0633\u062A\u0639\u062F\u0627\u062F (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F1\u06F1).`, "r11");
+    builder.add(weakDomain[0], "core", `\u0634\u0627\u062E\u0635 \u0642\u0648\u06CC ${faNum10(Math.max(...strongIdx))} \u0628\u0627 \u0636\u0639\u0641 \u0627\u062C\u0631\u0627\u06CC\u06CC \u0648 \u067E\u0631\u0627\u06A9\u0646\u062F\u06AF\u06CC ${faNum10(facts.indexScatter)} \u2014 \u0628\u0633\u062A\u0647\u0654 SLD \u062D\u0648\u0632\u0647\u0654 \u0636\u0639\u0641 (${weakDomain[1]}) + \u062A\u06AF \u0627\u0633\u062A\u0639\u062F\u0627\u062F (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F1\u06F1).`, "r11");
     builder.domains.add("academic");
   }
   if (facts.fsiq !== null && facts.fsiq >= 90 && facts.step5Weak.length > 0) {
@@ -54692,7 +57907,7 @@ function applyProfileRules(args) {
     builder.notes.push("\u0646\u06CC\u0645\u200C\u0631\u062E \u0647\u0645\u200C\u0646\u0648\u0627\u0632 \u062F\u0631 \u0628\u0627\u0632\u0647\u0654 \u0645\u062A\u0648\u0633\u0637 \u2014 \u0628\u0627\u062A\u0631\u06CC \u067E\u0627\u06CC\u0647\u0654 \u0633\u0628\u06A9 \u0648 \u067E\u0627\u06CC\u0627\u0646 \u0632\u0648\u062F\u0647\u0646\u06AF\u0627\u0645 \u0645\u0633\u06CC\u0631 \u0634\u0646\u0627\u0633\u0627\u06CC\u06CC (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F1\u06F3).");
   }
   if ((facts.indexScatter ?? 0) >= T.SCATTER_SEVERE && !facts.acid && !facts.cad && builder.items.size === 0) {
-    builder.notes.push(`\u067E\u0631\u0627\u06A9\u0646\u062F\u06AF\u06CC \u0628\u06CC\u0646\u200C\u0634\u0627\u062E\u0635\u06CC ${faNum8(facts.indexScatter ?? 0)} (\u2265\u06F2\u06F3) \u0628\u062F\u0648\u0646 \u0627\u0644\u06AF\u0648\u06CC \u0645\u0639\u0646\u0627\u062F\u0627\u0631 \u2014 \u0627\u0628\u062A\u062F\u0627 \u0627\u0639\u062A\u0628\u0627\u0631 \u0627\u062C\u0631\u0627\u06CC \u0622\u0632\u0645\u0648\u0646 \u0628\u0627\u0632\u0628\u06CC\u0646\u06CC \u0634\u0648\u062F\u061B \u062A\u0641\u0633\u06CC\u0631 \u0628\u0647 \u0633\u0637\u062D \u0634\u0627\u062E\u0635\u200C\u0647\u0627 \u0645\u0646\u062A\u0642\u0644 \u0645\u06CC\u200C\u0634\u0648\u062F (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F1\u06F4).`);
+    builder.notes.push(`\u067E\u0631\u0627\u06A9\u0646\u062F\u06AF\u06CC \u0628\u06CC\u0646\u200C\u0634\u0627\u062E\u0635\u06CC ${faNum10(facts.indexScatter ?? 0)} (\u2265\u06F2\u06F3) \u0628\u062F\u0648\u0646 \u0627\u0644\u06AF\u0648\u06CC \u0645\u0639\u0646\u0627\u062F\u0627\u0631 \u2014 \u0627\u0628\u062A\u062F\u0627 \u0627\u0639\u062A\u0628\u0627\u0631 \u0627\u062C\u0631\u0627\u06CC \u0622\u0632\u0645\u0648\u0646 \u0628\u0627\u0632\u0628\u06CC\u0646\u06CC \u0634\u0648\u062F\u061B \u062A\u0641\u0633\u06CC\u0631 \u0628\u0647 \u0633\u0637\u062D \u0634\u0627\u062E\u0635\u200C\u0647\u0627 \u0645\u0646\u062A\u0642\u0644 \u0645\u06CC\u200C\u0634\u0648\u062F (\u0642\u0627\u0639\u062F\u0647\u0654 \u06F1\u06F4).`);
   }
   void band;
 }
@@ -54714,8 +57929,8 @@ var ADAPT_FA = {
 function buildBasis(args) {
   const { facts, anam, adapt, domains, notes, planType } = args;
   const parts = [];
-  parts.push(facts.available && facts.fsiq !== null ? `\u0646\u06CC\u0645\u200C\u0631\u062E \u0648\u06A9\u0633\u0644\u0631: FSIQ ${faNum8(facts.fsiq)}${args.band ? ` \u2014 ${bandLabelFa(args.band)}` : ""}` : "\u0646\u06CC\u0645\u200C\u0631\u062E \u0648\u06A9\u0633\u0644\u0631: \u062B\u0628\u062A\u200C\u0646\u0634\u062F\u0647");
-  parts.push(anam.signals.size > 0 ? `\u0634\u0631\u062D\u200C\u062D\u0627\u0644 \u0633\u0627\u062E\u062A\u200C\u06CC\u0627\u0641\u062A\u0647: ${faNum8(anam.signals.size)} \u0646\u0634\u0627\u0646\u0647\u0654 \u062B\u0628\u062A\u200C\u0634\u062F\u0647` : anam.text.length > 0 ? "\u0634\u0631\u062D\u200C\u062D\u0627\u0644: \u0646\u0633\u062E\u0647\u0654 \u0642\u062F\u06CC\u0645\u06CC (\u0628\u062F\u0648\u0646 \u0633\u06CC\u06AF\u0646\u0627\u0644 \u0633\u0627\u062E\u062A\u200C\u06CC\u0627\u0641\u062A\u0647)" : "\u0634\u0631\u062D\u200C\u062D\u0627\u0644 \u0646\u0633\u062E\u0647\u0654 \u06F3: \u062B\u0628\u062A\u200C\u0646\u0634\u062F\u0647");
+  parts.push(facts.available && facts.fsiq !== null ? `\u0646\u06CC\u0645\u200C\u0631\u062E \u0648\u06A9\u0633\u0644\u0631: FSIQ ${faNum10(facts.fsiq)}${args.band ? ` \u2014 ${bandLabelFa(args.band)}` : ""}` : "\u0646\u06CC\u0645\u200C\u0631\u062E \u0648\u06A9\u0633\u0644\u0631: \u062B\u0628\u062A\u200C\u0646\u0634\u062F\u0647");
+  parts.push(anam.signals.size > 0 ? `\u0634\u0631\u062D\u200C\u062D\u0627\u0644 \u0633\u0627\u062E\u062A\u200C\u06CC\u0627\u0641\u062A\u0647: ${faNum10(anam.signals.size)} \u0646\u0634\u0627\u0646\u0647\u0654 \u062B\u0628\u062A\u200C\u0634\u062F\u0647` : anam.text.length > 0 ? "\u0634\u0631\u062D\u200C\u062D\u0627\u0644: \u0646\u0633\u062E\u0647\u0654 \u0642\u062F\u06CC\u0645\u06CC (\u0628\u062F\u0648\u0646 \u0633\u06CC\u06AF\u0646\u0627\u0644 \u0633\u0627\u062E\u062A\u200C\u06CC\u0627\u0641\u062A\u0647)" : "\u0634\u0631\u062D\u200C\u062D\u0627\u0644 \u0646\u0633\u062E\u0647\u0654 \u06F3: \u062B\u0628\u062A\u200C\u0646\u0634\u062F\u0647");
   parts.push(`\u0627\u0646\u0637\u0628\u0627\u0642 \u0631\u0648\u0632\u0645\u0631\u0647: ${ADAPT_FA[adapt.level]}`);
   const domainFa = [...domains].map((d) => DOMAIN_FA[d] ?? d);
   parts.push(domainFa.length ? `\u062D\u0648\u0632\u0647\u200C\u0647\u0627\u06CC \u062F\u0631\u06AF\u06CC\u0631: ${domainFa.join("\u060C ")}` : "\u062D\u0648\u0632\u0647\u0654 \u062F\u0631\u06AF\u06CC\u0631 \u0645\u0634\u062E\u0635 \u0646\u0634\u062F\u0647");
@@ -55915,7 +59130,13 @@ function createClinicalEngineService(deps) {
       withProbes: kpis.interventionResponse.base,
       dueReassess: kpis.reassessOnTime.base
     });
-    return kpis;
+    const fuRow = await db.queryOne(
+      `SELECT COUNT(*) AS sent,
+              SUM(CASE WHEN e.status = 'completed' THEN 1 ELSE 0 END) AS filled
+         FROM case_events e JOIN case_event_types t ON t.id = e.event_type_id
+        WHERE t.key = 'ce-followup-3m-v1' AND e.deleted_at IS NULL`
+    );
+    return { ...kpis, followups: { sent: fuRow?.sent ?? 0, filled: fuRow?.filled ?? 0 } };
   }
   __name(getValidationKpis, "getValidationKpis");
   async function createCaseAudit(input2, actor) {
@@ -55943,8 +59164,22 @@ function createClinicalEngineService(deps) {
   }
   __name(createCaseAudit, "createCaseAudit");
   async function listCaseAudits(actor, studentId) {
-    if (actor.role !== "manager") {
-      throw new ForbiddenError("\u062D\u0633\u0627\u0628\u0631\u0633\u06CC \u0645\u0648\u0631\u062F\u06CC \u0641\u0642\u0637 \u0628\u0631\u0627\u06CC \u0645\u062F\u06CC\u0631 \u0642\u0627\u0628\u0644 \u0645\u0634\u0627\u0647\u062F\u0647 \u0627\u0633\u062A");
+    if (actor.role === "therapist") {
+      const rows2 = await db.query(
+        `SELECT a.*, s.first_name AS student_first, s.last_name AS student_last
+           FROM case_audits a JOIN students s ON s.id = a.student_id
+          WHERE (s.owner_staff_id = ? OR EXISTS (
+                  SELECT 1 FROM appointments ap
+                    JOIN appointment_students asn ON asn.appointment_id = ap.id
+                   WHERE ap.staff_id = ? AND asn.student_id = s.id
+                 ))
+          ORDER BY a.created_at DESC LIMIT 50`,
+        [actor.staffId, actor.staffId]
+      );
+      return rows2.map((r) => caseAuditRowToRecord(r));
+    }
+    if (actor.role !== "manager" && actor.role !== "secretary") {
+      throw new ForbiddenError("\u062D\u0633\u0627\u0628\u0631\u0633\u06CC \u0645\u0648\u0631\u062F\u06CC \u0641\u0642\u0637 \u0628\u0631\u0627\u06CC \u062F\u0641\u062A\u0631 \u0645\u0631\u06A9\u0632 \u0648 \u062F\u0631\u0645\u0627\u0646\u06AF\u0631\u0650 \u0647\u0645\u0627\u0646 \u067E\u0631\u0648\u0646\u062F\u0647 \u0642\u0627\u0628\u0644 \u0645\u0634\u0627\u0647\u062F\u0647 \u0627\u0633\u062A");
     }
     const rows = studentId ? await db.query(
       `SELECT a.*, s.first_name AS student_first, s.last_name AS student_last
@@ -55974,7 +59209,214 @@ function createClinicalEngineService(deps) {
     };
   }
   __name(caseAuditRowToRecord, "caseAuditRowToRecord");
-  return { getInsights, getCaseFormulation, homeMonitorFocusOf, getChecklistPlan, listPaths, createPath, decidePath, getPath: getPath2, listTargets, toggleStep, listPathTemplates, upsertPathTemplate, listPathSessions, addPathSession, updatePathSession, deletePathSession, reorderPathSessions, listRecentCards, getPathwayReport, addPathProbe, listPathProbes, updatePathProbe, updatePathGoal, getValidationKpis, createCaseAudit, listCaseAudits };
+  async function getClinicalNarrative(studentId, actor) {
+    const student = await loadStudent(studentId);
+    assertCanView(student, actor);
+    const paths = await listPaths(studentId, actor);
+    const committeeRows = await db.query(
+      `SELECT ci.id, ci.topic, ci.decision, ci.decision_status,
+              m.title AS meeting_title, m.meeting_date, m.status AS meeting_status
+         FROM committee_items ci
+         JOIN committee_meetings m ON m.id = ci.meeting_id AND m.deleted_at IS NULL
+        WHERE ci.student_id = ? AND ci.deleted_at IS NULL
+        ORDER BY m.meeting_date ASC, ci.created_at ASC`,
+      [studentId]
+    );
+    const pathIds = paths.map((p) => p.id);
+    const probeRows = [];
+    for (const chunk of inParamChunks(pathIds)) {
+      probeRows.push(...await db.query(
+        `SELECT pathway_id, metric, unit, value, taken_at FROM pathway_probes
+          WHERE pathway_id IN (${inPlaceholders(chunk.length)})
+          ORDER BY taken_at DESC
+          LIMIT 400`,
+        chunk
+      ));
+    }
+    const byPathMetric = /* @__PURE__ */ new Map();
+    for (const r of probeRows) {
+      let metrics = byPathMetric.get(r.pathway_id);
+      if (!metrics) {
+        metrics = /* @__PURE__ */ new Map();
+        byPathMetric.set(r.pathway_id, metrics);
+      }
+      const s = metrics.get(r.metric) ?? { unit: r.unit, points: [] };
+      s.points.push({ value: r.value, taken_at: r.taken_at });
+      metrics.set(r.metric, s);
+    }
+    const trends = /* @__PURE__ */ new Map();
+    for (const [pathId, metrics] of byPathMetric) {
+      let primaryMetric = null;
+      let primaryLastAt = "";
+      for (const [metric, s2] of metrics) {
+        const lastAt = s2.points[0]?.taken_at ?? "";
+        if (lastAt > primaryLastAt) {
+          primaryLastAt = lastAt;
+          primaryMetric = metric;
+        }
+      }
+      if (!primaryMetric) continue;
+      const s = metrics.get(primaryMetric);
+      const asc = [...s.points].reverse();
+      const first = asc.length > 0 ? asc[0].value : null;
+      const last = asc.length > 0 ? asc[asc.length - 1].value : null;
+      trends.set(pathId, {
+        count: asc.length,
+        metric: primaryMetric,
+        unit: s.unit,
+        first,
+        last,
+        firstAt: asc.length > 0 ? asc[0].taken_at : null,
+        lastAt: asc.length > 0 ? asc[asc.length - 1].taken_at : null,
+        improved: first !== null && last !== null ? last > first : null
+      });
+    }
+    const pathBlocks = paths.map((p) => {
+      const done = p.sessions.filter((s) => s.status === "done");
+      return {
+        id: p.id,
+        targetKey: p.targetKey,
+        targetTitle: p.targetTitle,
+        status: p.status,
+        createdAt: p.createdAt,
+        engineHypothesis: p.engineHypothesis,
+        decision: p.decision,
+        sessionsPlanned: p.sessions.length,
+        sessionsDone: done.length,
+        sessionsSkipped: p.sessions.filter((s) => s.status === "skipped").length,
+        lastSessionDoneAt: done.length > 0 ? done[done.length - 1].doneAt ?? null : null,
+        probeTrend: trends.get(p.id) ?? null,
+        probeSummary: p.probeSummary,
+        reassessAt: p.reassessAt
+      };
+    });
+    const committee = committeeRows.map((r) => ({
+      id: r.id,
+      topic: r.topic,
+      decision: r.decision,
+      decisionStatus: r.decision_status,
+      meetingTitle: r.meeting_title,
+      meetingDate: r.meeting_date,
+      meetingStatus: r.meeting_status
+    }));
+    const stamps = [
+      ...committee.map((c) => c.meetingDate),
+      ...pathBlocks.map((p) => p.createdAt.slice(0, 10)),
+      ...pathBlocks.map((p) => p.probeTrend?.lastAt?.slice(0, 10) ?? "")
+    ].filter(Boolean).sort();
+    return {
+      student: { id: student.id, firstName: student.first_name, lastName: student.last_name },
+      committee,
+      paths: pathBlocks,
+      storyFrom: stamps[0] ?? null,
+      storyTo: stamps[stamps.length - 1] ?? null
+    };
+  }
+  __name(getClinicalNarrative, "getClinicalNarrative");
+  async function getFamilyProgressSheet(studentId, actor) {
+    const student = await loadStudent(studentId);
+    if (actor) assertCanView(student, actor);
+    const rows = await db.query(
+      `SELECT p.* FROM intervention_paths p WHERE p.student_id = ? AND p.deleted_at IS NULL ORDER BY p.created_at DESC`,
+      [studentId]
+    );
+    const pathIds = rows.map((r) => r.id);
+    const sessMap = /* @__PURE__ */ new Map();
+    for (const chunk of inParamChunks(pathIds)) {
+      const srows = await db.query(
+        `SELECT pathway_id, COUNT(*) AS planned, SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) AS done
+           FROM pathway_sessions WHERE pathway_id IN (${inPlaceholders(chunk.length)}) GROUP BY pathway_id`,
+        chunk
+      );
+      for (const s of srows) sessMap.set(s.pathway_id, { planned: s.planned, done: s.done });
+    }
+    const probeRows = [];
+    for (const chunk of inParamChunks(pathIds)) {
+      probeRows.push(...await db.query(
+        `SELECT pathway_id, metric, unit, value, taken_at FROM pathway_probes
+          WHERE pathway_id IN (${inPlaceholders(chunk.length)})
+          ORDER BY taken_at DESC
+          LIMIT 400`,
+        chunk
+      ));
+    }
+    probeRows.sort((a, b) => a.taken_at < b.taken_at ? 1 : a.taken_at > b.taken_at ? -1 : 0);
+    probeRows.length = Math.min(probeRows.length, 400);
+    const byPath = /* @__PURE__ */ new Map();
+    for (const r of probeRows) {
+      let metrics = byPath.get(r.pathway_id);
+      if (!metrics) {
+        metrics = /* @__PURE__ */ new Map();
+        byPath.set(r.pathway_id, metrics);
+      }
+      const s = metrics.get(r.metric) ?? { unit: r.unit, points: [] };
+      s.points.push({ value: r.value, taken_at: r.taken_at });
+      metrics.set(r.metric, s);
+    }
+    const paths = rows.map((r) => {
+      const metrics = byPath.get(r.id);
+      const sess = sessMap.get(r.id) ?? { planned: 0, done: 0 };
+      let metric = null;
+      let unit = null;
+      let points = [];
+      let first = null;
+      let last = null;
+      let improved = null;
+      let mastered = false;
+      if (metrics) {
+        let primaryLastAt = "";
+        for (const [m, s] of metrics) {
+          const lastAt = s.points[0]?.taken_at ?? "";
+          if (lastAt > primaryLastAt) {
+            primaryLastAt = lastAt;
+            metric = m;
+          }
+        }
+        if (metric) {
+          const s = metrics.get(metric);
+          unit = s.unit;
+          points = [...s.points].reverse();
+          first = points[0]?.value ?? null;
+          last = points[points.length - 1]?.value ?? null;
+          improved = first !== null && last !== null ? last > first : null;
+          mastered = masteryOf(points.map((p) => ({ value: p.value, takenAt: p.taken_at }))).achieved;
+        }
+      }
+      const hypothesis = parseJson4(r.engine_hypothesis, null);
+      return {
+        id: r.id,
+        targetTitle: hypothesis?.targetTitle ?? targetOf(r.target_key)?.title ?? r.target_key,
+        status: r.status,
+        sessionsPlanned: sess.planned,
+        sessionsDone: sess.done,
+        metric,
+        unit,
+        points: points.map((p) => ({ value: p.value, takenAt: p.taken_at })),
+        first,
+        last,
+        improved,
+        mastered,
+        reassessAt: r.reassess_at ?? null
+      };
+    });
+    return {
+      studentName: `${student.first_name} ${student.last_name}`.trim(),
+      grade: student.grade ?? null,
+      generatedAt: iso(),
+      paths
+    };
+  }
+  __name(getFamilyProgressSheet, "getFamilyProgressSheet");
+  async function mintProgressSheetLink(studentId, actor, secret) {
+    const student = await loadStudent(studentId);
+    assertCanView(student, actor);
+    const base = deps.publicBaseUrl?.trim() || null;
+    if (!base) throw new ValidationError("\u0622\u062F\u0631\u0633 \u0639\u0645\u0648\u0645\u06CC \u0633\u0627\u0645\u0627\u0646\u0647 (PUBLIC_BASE_URL) \u062A\u0646\u0638\u06CC\u0645 \u0646\u0634\u062F\u0647 \u0627\u0633\u062A \u2014 \u0633\u0627\u062E\u062A \u067E\u06CC\u0648\u0646\u062F \u0628\u0631\u06AF\u0647\u0654 \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u0645\u0645\u06A9\u0646 \u0646\u06CC\u0633\u062A.");
+    const { token, expiresAt } = await mintFamilySheetToken(studentId, secret);
+    return { token, url: `${base.replace(/\/+$/, "")}/public/family/progress-sheet/${token}`, expiresAt };
+  }
+  __name(mintProgressSheetLink, "mintProgressSheetLink");
+  return { getInsights, getCaseFormulation, homeMonitorFocusOf, getChecklistPlan, listPaths, createPath, decidePath, getPath: getPath2, listTargets, toggleStep, listPathTemplates, upsertPathTemplate, listPathSessions, addPathSession, updatePathSession, deletePathSession, reorderPathSessions, listRecentCards, getPathwayReport, addPathProbe, listPathProbes, updatePathProbe, updatePathGoal, getValidationKpis, createCaseAudit, listCaseAudits, getClinicalNarrative, getFamilyProgressSheet, mintProgressSheetLink };
 }
 __name(createClinicalEngineService, "createClinicalEngineService");
 
@@ -56140,6 +59582,32 @@ function registerClinicalEngineRoutes(app, service) {
     const data = await service.getCaseFormulation(c.req.param("id"), actor);
     return c.json({ data }, 200);
   });
+  app.get("/api/students/:id/clinical-narrative", requireRole("manager", "secretary", "therapist"), async (c) => {
+    const actor = getAuthContext(c);
+    const data = await service.getClinicalNarrative(c.req.param("id"), actor);
+    return c.json({ data }, 200);
+  });
+  app.post("/api/students/:id/progress-sheet-link", requireRole("manager", "secretary", "therapist"), async (c) => {
+    const actor = getAuthContext(c);
+    const secret = await resolveSessionSecret(c.env);
+    const data = await service.mintProgressSheetLink(c.req.param("id"), actor, secret);
+    return c.json({ data }, 201);
+  });
+  app.get("/public/family/progress-sheet/:token", async (c) => {
+    const secret = await resolveSessionSecret(c.env);
+    const sid = await verifyFamilySheetToken(c.req.param("token"), secret);
+    if (!sid) return c.html(sheetErrorPage("\u0627\u06CC\u0646 \u0628\u0631\u06AF\u0647 \u0645\u0639\u062A\u0628\u0631 \u0646\u06CC\u0633\u062A \u06CC\u0627 \u0645\u0646\u0642\u0636\u06CC \u0634\u062F\u0647 \u0627\u0633\u062A \u2014 \u0627\u0632 \u0645\u0631\u06A9\u0632 \u0628\u062E\u0648\u0627\u0647\u06CC\u062F \u067E\u06CC\u0648\u0646\u062F \u062A\u0627\u0632\u0647 \u0628\u0633\u0627\u0632\u062F."), 403);
+    let model;
+    try {
+      model = await service.getFamilyProgressSheet(sid, null);
+    } catch {
+      return c.html(sheetErrorPage("\u067E\u0631\u0648\u0646\u062F\u0647\u0654 \u0627\u06CC\u0646 \u0628\u0631\u06AF\u0647 \u067E\u06CC\u062F\u0627 \u0646\u0634\u062F."), 404);
+    }
+    return new Response(renderFamilySheetPage(model), {
+      status: 200,
+      headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow" }
+    });
+  });
   app.get("/api/clinical-targets", requireRole("manager", "secretary", "therapist"), async (c) => {
     const data = await service.listTargets();
     return c.json({ data }, 200);
@@ -56170,13 +59638,13 @@ function registerClinicalEngineRoutes(app, service) {
     const data = await service.getValidationKpis(actor);
     return c.json({ data }, 200);
   });
-  app.get("/api/case-audits", requireRole("manager"), async (c) => {
+  app.get("/api/case-audits", requireRole("manager", "secretary", "therapist"), async (c) => {
     const actor = getAuthContext(c);
     const studentId = c.req.query("student_id")?.trim() || null;
     const data = await service.listCaseAudits(actor, studentId);
     return c.json({ data }, 200);
   });
-  app.post("/api/case-audits", requireRole("manager"), async (c) => {
+  app.post("/api/case-audits", requireRole("manager", "secretary"), async (c) => {
     const actor = getAuthContext(c);
     const body = CaseAuditCreateSchema.parse(await c.req.json());
     const data = await service.createCaseAudit(
@@ -56316,7 +59784,7 @@ function registerClinicalEngineRoutes(app, service) {
         note: body.note,
         items: itemInputsToDomain(body.items),
         fidelity: body.fidelity
-        // عیناً عبور: کلید غایب = undefined = دست‌نخوردن قبلی (قرارداد )
+        // عیناً عبور: کلید غایب = undefined = دست‌نخوردن قبلی (قرارداد)
       },
       actor
     );
@@ -56429,11 +59897,11 @@ function parseJsonSafe(raw2) {
   }
 }
 __name(parseJsonSafe, "parseJsonSafe");
-function faNum9(value) {
+function faNum11(value) {
   const fa2 = "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9";
   return String(value).replace(/\d/g, (d) => fa2[Number(d)]);
 }
-__name(faNum9, "faNum");
+__name(faNum11, "faNum");
 function numOf2(value) {
   if (value === null || value === void 0 || value === "") return null;
   const n = Number(String(value).replace(/[۰-۹]/g, (d) => String("\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9".indexOf(d))));
@@ -56482,15 +59950,15 @@ function computeSuspicion(behavioralEvents, decisionEvent, isFreshIso) {
       const iaDanger = iaNum !== null ? iaNum >= cut.ia.danger : subscaleColorOf(event, "ia") === "danger";
       const iaWarn = !iaDanger && iaNum !== null ? iaNum >= cut.ia.warn : !iaDanger && subscaleColorOf(event, "ia") === "warn";
       if (iaDanger) {
-        hits.push({ construct: "adhd", level: "high", source: sourceOf(toolKey), text: `\u0628\u06CC\u200C\u062A\u0648\u062C\u0647\u06CC \u062F\u0631 SNAP-IV ${src} \u067E\u0631\u062E\u0637\u0631 \u0627\u0633\u062A${iaNum !== null ? ` (\u0646\u0645\u0631\u0647\u0654 ${faNum9(iaNum)} \u0627\u0632 ${faNum9(27)})` : ""}` });
+        hits.push({ construct: "adhd", level: "high", source: sourceOf(toolKey), text: `\u0628\u06CC\u200C\u062A\u0648\u062C\u0647\u06CC \u062F\u0631 SNAP-IV ${src} \u067E\u0631\u062E\u0637\u0631 \u0627\u0633\u062A${iaNum !== null ? ` (\u0646\u0645\u0631\u0647\u0654 ${faNum11(iaNum)} \u0627\u0632 ${faNum11(27)})` : ""}` });
       } else if (iaWarn) {
-        hits.push({ construct: "adhd", level: "watch", source: sourceOf(toolKey), text: `\u0628\u06CC\u200C\u062A\u0648\u062C\u0647\u06CC \u062F\u0631 SNAP-IV ${src} \u06A9\u0645\u06CC \u0628\u0627\u0644\u0627\u062A\u0631 \u0627\u0632 \u0645\u0639\u0645\u0648\u0644 \u0627\u0633\u062A${iaNum !== null ? ` (\u0646\u0645\u0631\u0647\u0654 ${faNum9(iaNum)})` : ""}` });
+        hits.push({ construct: "adhd", level: "watch", source: sourceOf(toolKey), text: `\u0628\u06CC\u200C\u062A\u0648\u062C\u0647\u06CC \u062F\u0631 SNAP-IV ${src} \u06A9\u0645\u06CC \u0628\u0627\u0644\u0627\u062A\u0631 \u0627\u0632 \u0645\u0639\u0645\u0648\u0644 \u0627\u0633\u062A${iaNum !== null ? ` (\u0646\u0645\u0631\u0647\u0654 ${faNum11(iaNum)})` : ""}` });
       }
       const hi = subscaleScoreOf2(event, "hi");
       const hiNum = hi ? hi.score : numOf2(event.payload?.["hi_total"]?.value);
       const hiDanger = hiNum !== null ? hiNum >= cut.hi.danger : subscaleColorOf(event, "hi") === "danger";
       if (hiDanger) {
-        hits.push({ construct: "adhd", level: "high", source: sourceOf(toolKey), text: `\u0628\u06CC\u200C\u0642\u0631\u0627\u0631\u06CC/\u062A\u06A9\u0627\u0646\u0634 \u062F\u0631 SNAP-IV ${src} \u067E\u0631\u062E\u0637\u0631 \u0627\u0633\u062A${hiNum !== null ? ` (\u0646\u0645\u0631\u0647\u0654 ${faNum9(hiNum)})` : ""}` });
+        hits.push({ construct: "adhd", level: "high", source: sourceOf(toolKey), text: `\u0628\u06CC\u200C\u0642\u0631\u0627\u0631\u06CC/\u062A\u06A9\u0627\u0646\u0634 \u062F\u0631 SNAP-IV ${src} \u067E\u0631\u062E\u0637\u0631 \u0627\u0633\u062A${hiNum !== null ? ` (\u0646\u0645\u0631\u0647\u0654 ${faNum11(hiNum)})` : ""}` });
       }
       continue;
     }
@@ -56508,11 +59976,11 @@ function computeSuspicion(behavioralEvents, decisionEvent, isFreshIso) {
       const total = event.analysis?.score ?? numOf2(event.payload?.["total"]?.value);
       if (total !== null) {
         if (total >= SCARED_STRONG2) {
-          hits.push({ construct: "anxiety", level: "high", source: "parent", text: `\u0646\u0645\u0631\u0647\u0654 \u06A9\u0644 \u0627\u0636\u0637\u0631\u0627\u0628 (SCARED \u0648\u0627\u0644\u062F) \u062F\u0631 \u0628\u0627\u0646\u062F \u0627\u062E\u062A\u0635\u0627\u0635\u06CC \u0627\u0633\u062A (${faNum9(total)})` });
+          hits.push({ construct: "anxiety", level: "high", source: "parent", text: `\u0646\u0645\u0631\u0647\u0654 \u06A9\u0644 \u0627\u0636\u0637\u0631\u0627\u0628 (SCARED \u0648\u0627\u0644\u062F) \u062F\u0631 \u0628\u0627\u0646\u062F \u0627\u062E\u062A\u0635\u0627\u0635\u06CC \u0627\u0633\u062A (${faNum11(total)})` });
         } else if (total >= SCARED_DANGER2) {
-          hits.push({ construct: "anxiety", level: "high", source: "parent", text: `\u0646\u0645\u0631\u0647\u0654 \u06A9\u0644 \u0627\u0636\u0637\u0631\u0627\u0628 (SCARED \u0648\u0627\u0644\u062F) \u067E\u0631\u062E\u0637\u0631 \u0627\u0633\u062A (${faNum9(total)} \u0627\u0632 ${faNum9(82)})` });
+          hits.push({ construct: "anxiety", level: "high", source: "parent", text: `\u0646\u0645\u0631\u0647\u0654 \u06A9\u0644 \u0627\u0636\u0637\u0631\u0627\u0628 (SCARED \u0648\u0627\u0644\u062F) \u067E\u0631\u062E\u0637\u0631 \u0627\u0633\u062A (${faNum11(total)} \u0627\u0632 ${faNum11(82)})` });
         } else if (total >= SCARED_WARN_MIN2) {
-          hits.push({ construct: "anxiety", level: "watch", source: "parent", text: `\u0646\u0645\u0631\u0647\u0654 \u06A9\u0644 \u0627\u0636\u0637\u0631\u0627\u0628 (SCARED \u0648\u0627\u0644\u062F) \u06A9\u0645\u06CC \u0628\u0627\u0644\u0627\u062A\u0631 \u0627\u0632 \u0645\u0639\u0645\u0648\u0644 \u0627\u0633\u062A (${faNum9(total)})` });
+          hits.push({ construct: "anxiety", level: "watch", source: "parent", text: `\u0646\u0645\u0631\u0647\u0654 \u06A9\u0644 \u0627\u0636\u0637\u0631\u0627\u0628 (SCARED \u0648\u0627\u0644\u062F) \u06A9\u0645\u06CC \u0628\u0627\u0644\u0627\u062A\u0631 \u0627\u0632 \u0645\u0639\u0645\u0648\u0644 \u0627\u0633\u062A (${faNum11(total)})` });
         }
       }
       continue;
@@ -57811,6 +61279,24 @@ function parseTagsJson(raw2) {
   }
 }
 __name(parseTagsJson, "parseTagsJson");
+var IQ_EVAL_BY_ENTRY = `SELECT * FROM iq_evaluations WHERE screening_entry_id = ? AND deleted_at IS NULL`;
+function iqRowToEval(r) {
+  return {
+    id: r.id,
+    screeningEntryId: r.screening_entry_id,
+    resultOption: r.result_option,
+    autismReferral: r.autism_referral === 1,
+    leiterScore: r.leiter_score,
+    wechslerVerbalScore: r.wechsler_verbal_score,
+    goodenoughScore: r.goodenough_score,
+    clinicalObservations: r.clinical_observations,
+    academicYear: r.academic_year,
+    createdBy: r.created_by,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at
+  };
+}
+__name(iqRowToEval, "iqRowToEval");
 function rowToEntry2(r) {
   return {
     id: r.id,
@@ -57820,6 +61306,7 @@ function rowToEntry2(r) {
     birthDate: r.birth_date ?? null,
     readinessScore: r.readiness_score ?? null,
     note: r.note ?? null,
+    iqHandledAt: r.iq_referral_handled_at ?? null,
     createdBy: r.created_by,
     creatorName: r.creator_name,
     createdAt: r.created_at,
@@ -57829,7 +61316,7 @@ function rowToEntry2(r) {
 __name(rowToEntry2, "rowToEntry");
 var SELECT = `
   SELECT e.id, e.name, e.day, e.tags, e.birth_date, e.readiness_score, e.note,
-         e.created_by, e.created_at, e.updated_at,
+         e.iq_referral_handled_at, e.created_by, e.created_at, e.updated_at,
          st.full_name AS creator_name
     FROM screening_entries e
     LEFT JOIN staff st ON st.id = e.created_by
@@ -58009,6 +61496,83 @@ function createScreeningService(deps) {
         });
       });
       log.info("screening.deleted", { id });
+    },
+    /* ─── نتیجهٔ ارزیابی تخصصی «اظهارنظر و پیشنهاد» (v1.27.33 — خواست کارفرما) ───
+     * یک ردیف فعال به‌ازای هر سنجش — ثبت دوباره = ویرایش همان ردیف (upsert)؛ ثبت نتیجه،
+     * ردیف را از پیگیری فعال خارج می‌کند (iq_referral_handled_at) و سال تحصیلی از day سنجش می‌نشیند. */
+    async getIqEvaluation(entryId) {
+      const row = await db.queryOne(IQ_EVAL_BY_ENTRY, [entryId]);
+      return row ? iqRowToEval(row) : null;
+    },
+    async saveIqEvaluation(entryId, input2, actor) {
+      const entry = await getEntryRow(entryId);
+      const existing = await db.queryOne(IQ_EVAL_BY_ENTRY, [entryId]);
+      const score = /* @__PURE__ */ __name((v) => typeof v === "number" && Number.isFinite(v) ? v : null, "score");
+      const observations = typeof input2.clinical_observations === "string" && input2.clinical_observations.length > 0 ? input2.clinical_observations : null;
+      const autism = input2.autism_referral ? 1 : 0;
+      const academicYear = String(schoolYearOfYmd(entry.day));
+      const id = existing?.id ?? crypto.randomUUID();
+      const now = nowSql();
+      await db.transaction(async (tx) => {
+        if (existing) {
+          await tx.execute(
+            `UPDATE iq_evaluations
+               SET result_option = ?, autism_referral = ?, leiter_score = ?, wechsler_verbal_score = ?,
+                   goodenough_score = ?, clinical_observations = ?, academic_year = ?, updated_at = ?
+             WHERE id = ?`,
+            [
+              input2.result_option,
+              autism,
+              score(input2.leiter_score),
+              score(input2.wechsler_verbal_score),
+              score(input2.goodenough_score),
+              observations,
+              academicYear,
+              now,
+              id
+            ]
+          );
+        } else {
+          await tx.execute(
+            `INSERT INTO iq_evaluations
+               (id, screening_entry_id, result_option, autism_referral, leiter_score, wechsler_verbal_score,
+                goodenough_score, clinical_observations, academic_year, created_by, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              id,
+              entryId,
+              input2.result_option,
+              autism,
+              score(input2.leiter_score),
+              score(input2.wechsler_verbal_score),
+              score(input2.goodenough_score),
+              observations,
+              academicYear,
+              actor.staffId,
+              now,
+              now
+            ]
+          );
+        }
+        await tx.execute(
+          `UPDATE screening_entries SET iq_referral_handled_at = COALESCE(iq_referral_handled_at, ?) WHERE id = ?`,
+          [now, entryId]
+        );
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: "screening.iq_result",
+          resourceType: "screening_entry",
+          resourceId: entryId,
+          changes: {
+            result_option: { from: existing?.result_option ?? null, to: input2.result_option },
+            autism_referral: { from: existing?.autism_referral ?? null, to: autism }
+          }
+        });
+      });
+      log.info("screening.iq_result.saved", { entryId, edited: Boolean(existing) });
+      const saved = await db.queryOne(IQ_EVAL_BY_ENTRY, [entryId]);
+      if (!saved) throw new NotFoundError("\u0646\u062A\u06CC\u062C\u0647\u0654 \u0627\u0631\u0632\u06CC\u0627\u0628\u06CC");
+      return iqRowToEval(saved);
     }
   };
 }
@@ -58077,6 +61641,27 @@ function registerScreeningRoutes(app, service) {
     await service.remove(c.req.param("id"), actor);
     return c.json({ data: { ok: true } }, 200);
   });
+  app.get("/api/screening/:id/iq-evaluation", async (c) => {
+    const data = await service.getIqEvaluation(c.req.param("id"));
+    return c.json({ data }, 200);
+  });
+  app.post("/api/screening/:id/iq-evaluation", requireRole("manager", "secretary", "therapist"), async (c) => {
+    const actor = getAuthContext(c);
+    const body = IqEvaluationCreateSchema.parse(await c.req.json());
+    const saved = await service.saveIqEvaluation(
+      c.req.param("id"),
+      {
+        result_option: body.result_option,
+        autism_referral: body.autism_referral,
+        leiter_score: body.leiter_score ?? null,
+        wechsler_verbal_score: body.wechsler_verbal_score ?? null,
+        goodenough_score: body.goodenough_score ?? null,
+        clinical_observations: body.clinical_observations ?? null
+      },
+      actor
+    );
+    return c.json({ data: saved }, 200);
+  });
 }
 __name(registerScreeningRoutes, "registerScreeningRoutes");
 
@@ -58117,12 +61702,12 @@ function createAnnouncementService(deps) {
         throw new ValidationError("\u062D\u062F\u0627\u0642\u0644 \u06CC\u06A9\u06CC \u0627\u0632 \u0645\u062D\u0644\u200C\u0647\u0627\u06CC \u0646\u0645\u0627\u06CC\u0634 (\u0635\u0641\u062D\u0647 \u0648\u0631\u0648\u062F \u06CC\u0627 \u067E\u0646\u0644) \u0631\u0627 \u0627\u0646\u062A\u062E\u0627\u0628 \u06A9\u0646\u06CC\u062F");
       }
       const id = crypto.randomUUID();
-      const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+      const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
       await db.transaction(async (tx) => {
         await tx.execute(
           `INSERT INTO announcements (id, title, body, show_login, show_panel, active, created_by, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)`,
-          [id, input2.title, input2.body, input2.showLogin ? 1 : 0, input2.showPanel ? 1 : 0, actor.staffId, nowIso, nowIso]
+          [id, input2.title, input2.body, input2.showLogin ? 1 : 0, input2.showPanel ? 1 : 0, actor.staffId, nowIso2, nowIso2]
         );
         await audit.logInTransaction(tx, {
           actorId: actor.staffId,
@@ -58465,12 +62050,12 @@ function createKnowledgeService(deps) {
     },
     async create(input2, actor) {
       const id = crypto.randomUUID();
-      const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+      const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
       await db.transaction(async (tx) => {
         await tx.execute(
           `INSERT INTO knowledge_items (id, title, body, category, pinned, published, created_by, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [id, input2.title, input2.body, input2.category, input2.pinned ? 1 : 0, input2.published ? 1 : 0, actor.staffId, nowIso, nowIso]
+          [id, input2.title, input2.body, input2.category, input2.pinned ? 1 : 0, input2.published ? 1 : 0, actor.staffId, nowIso2, nowIso2]
         );
         await audit.logInTransaction(tx, {
           actorId: actor.staffId,
@@ -58857,12 +62442,12 @@ function escapeLike2(raw2) {
   return String(raw2 ?? "").replace(/[%_\\]/g, (ch) => `\\${ch}`);
 }
 __name(escapeLike2, "escapeLike");
-function schoolYearOfYmd(ymd) {
+function schoolYearOfYmd2(ymd) {
   const [gy, gm, gd] = ymd.split("-").map(Number);
   const j = toJalaliParts(gy, gm, gd);
   return j.jm >= 7 ? j.jy : j.jy - 1;
 }
-__name(schoolYearOfYmd, "schoolYearOfYmd");
+__name(schoolYearOfYmd2, "schoolYearOfYmd");
 function shiftYmdByJalaliYears(ymd, n) {
   const [gy, gm, gd] = ymd.split("-").map(Number);
   const j = toJalaliParts(gy, gm, gd);
@@ -59259,14 +62844,14 @@ function createClearbookService(deps) {
     async createEntry(input2, actor) {
       assertOffice(actor);
       const id = crypto.randomUUID();
-      const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+      const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
       const tags = dedupeTags(input2.tags ?? []);
       if (input2.planId) await assertPlanExists(input2.planId);
       await db.transaction(async (tx) => {
         await tx.execute(
           `INSERT INTO clearbook_entries (id, plan_id, title, body, event_date, created_by, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [id, input2.planId, input2.title, input2.body ?? "", input2.eventDate, actor.staffId, nowIso, nowIso]
+          [id, input2.planId, input2.title, input2.body ?? "", input2.eventDate, actor.staffId, nowIso2, nowIso2]
         );
         for (const tag of tags) {
           await tx.execute(`INSERT INTO clearbook_entry_tags (entry_id, tag) VALUES (?, ?)`, [id, tag]);
@@ -59642,9 +63227,9 @@ function createClearbookService(deps) {
     async copyYear(fromYear, toYear, actor) {
       assertOffice(actor);
       const all = await db.query(`SELECT id, from_date FROM clearbook_plans`);
-      const source = all.filter((r) => schoolYearOfYmd(r.from_date) === fromYear);
+      const source = all.filter((r) => schoolYearOfYmd2(r.from_date) === fromYear);
       if (source.length === 0) throw new ValidationError("\u0628\u0631\u0627\u06CC \u0633\u0627\u0644 \u062A\u062D\u0635\u06CC\u0644\u06CC \u0645\u0628\u062F\u0623 \u0641\u0627\u0632\u06CC \u062B\u0628\u062A \u0646\u0634\u062F\u0647 \u0627\u0633\u062A");
-      const targetExists = all.some((r) => schoolYearOfYmd(r.from_date) === toYear);
+      const targetExists = all.some((r) => schoolYearOfYmd2(r.from_date) === toYear);
       if (targetExists) throw new ConflictError("\u0633\u0627\u0644 \u0645\u0642\u0635\u062F \u0627\u0632 \u0642\u0628\u0644 \u062A\u0642\u0648\u06CC\u0645 \u062F\u0627\u0631\u062F \u2014 \u0627\u0628\u062A\u062F\u0627 \u0641\u0627\u0632\u0647\u0627\u06CC \u0622\u0646 \u0633\u0627\u0644 \u0631\u0627 \u062D\u0630\u0641 \u06A9\u0646\u06CC\u062F");
       const shift = toYear - fromYear;
       const sourceIds = source.map((r) => r.id);
@@ -59698,7 +63283,7 @@ function createClearbookService(deps) {
       );
       const years = /* @__PURE__ */ new Set();
       for (const r of rows) {
-        if (/^\d{4}-\d{2}-\d{2}$/.test(r.d)) years.add(schoolYearOfYmd(r.d));
+        if (/^\d{4}-\d{2}-\d{2}$/.test(r.d)) years.add(schoolYearOfYmd2(r.d));
       }
       return [...years].sort((a, b) => b - a);
     }
@@ -60176,7 +63761,7 @@ function createDocsService(deps) {
     async create(input2, actor) {
       assertOffice(actor);
       const id = crypto.randomUUID();
-      const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+      const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
       const title = validateTitle(input2.title);
       const category = validateCategory(input2.category);
       const description = validateDescription(input2.description);
@@ -60185,7 +63770,7 @@ function createDocsService(deps) {
         await tx.execute(
           `INSERT INTO docs (id, title, category, description, tags, created_by, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [id, title, category, description, JSON.stringify(tags), actor.staffId, nowIso, nowIso]
+          [id, title, category, description, JSON.stringify(tags), actor.staffId, nowIso2, nowIso2]
         );
         await audit.logInTransaction(tx, {
           actorId: actor.staffId,
@@ -60623,7 +64208,7 @@ function createCenterKpiService(deps) {
     const toRange = tehranDayRange(todayYmd);
     const fromIso = fromRange.start;
     const toIso = toRange.end;
-    const nowIso = now.toISOString();
+    const nowIso2 = now.toISOString();
     const window = {
       days,
       from_iso: fromIso,
@@ -60655,7 +64240,7 @@ function createCenterKpiService(deps) {
          FROM appointment_students aps
          JOIN appointments a ON a.id = aps.appointment_id
          WHERE aps.attendance = 'pending' AND a.end_at < ?`,
-        [nowIso]
+        [nowIso2]
       ),
       db.query(
         `SELECT start_at, end_at FROM appointments
@@ -60891,7 +64476,7 @@ function createCenterKpiService(deps) {
     };
     return {
       window,
-      generated_at: nowIso,
+      generated_at: nowIso2,
       appointments,
       intervention,
       documentation,
@@ -60978,7 +64563,12 @@ function parseScore(qualityRaw) {
 __name(parseScore, "parseScore");
 function mapRow(row) {
   let tags = [];
-  const parsed = row.tags ? JSON.parse(row.tags) : null;
+  let parsed = null;
+  try {
+    parsed = row.tags ? JSON.parse(row.tags) : null;
+  } catch {
+    parsed = null;
+  }
   if (Array.isArray(parsed)) tags = parsed.filter((t) => typeof t === "string");
   const kind = isContentKind(row.kind) ? row.kind : "exercise";
   const { quality, score } = parseScore(row.quality ?? null);
@@ -61046,7 +64636,7 @@ function createNetworkContentService(deps) {
     const rec = await getById(id);
     if (!rec) throw new NotFoundError("\u0645\u062D\u062A\u0648\u0627\u06CC \u0634\u0628\u06A9\u0647");
     if (rec.origin !== "local") {
-      throw new ConflictError("\u0627\u06CC\u0646 \u0622\u06CC\u062A\u0645 \u0627\u0632 \u06A9\u0646\u062A\u0631\u0644\u200C\u067E\u0644\u06CC\u0646 \u0622\u0645\u062F\u0647 \u0648 \u062F\u0631 \u0645\u0631\u06A9\u0632 \u0642\u0627\u0628\u0644 \u062A\u063A\u06CC\u06CC\u0631 \u0646\u06CC\u0633\u062A");
+      throw new ConflictError("\u0627\u06CC\u0646 \u0622\u06CC\u062A\u0645 \u0627\u0632 \u0634\u0628\u06A9\u0647\u0654 \u0645\u0631\u0627\u06A9\u0632 \u0622\u0645\u062F\u0647 \u0648 \u062F\u0631 \u0645\u0631\u06A9\u0632 \u0642\u0627\u0628\u0644 \u062A\u063A\u06CC\u06CC\u0631 \u0646\u06CC\u0633\u062A");
     }
     return rec;
   }
@@ -61924,7 +65514,7 @@ function createContentScoreService(db, audit) {
   return {
     async refresh() {
       const startMs = Date.now();
-      const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+      const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
       const exerciseRows = await db.query(
         `SELECT e.id,
                 (SELECT COUNT(*) FROM pathway_sessions ps JOIN intervention_paths ip ON ip.id = ps.pathway_id
@@ -61946,14 +65536,14 @@ function createContentScoreService(db, audit) {
         []
       );
       const upsert = /* @__PURE__ */ __name((table, id, refs, uses) => {
-        const s = computeItemScore(refs, uses, nowIso);
+        const s = computeItemScore(refs, uses, nowIso2);
         return db.prepare(
           `INSERT INTO content_score_report (source_table, source_id, refs, uses, score, formula_version, generated_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(source_table, source_id) DO UPDATE SET
              refs = excluded.refs, uses = excluded.uses, score = excluded.score,
              formula_version = excluded.formula_version, updated_at = excluded.updated_at`,
-          [table, id, s.refs, s.uses, s.score, SCORE_FORMULA_VERSION, s.generatedAt, nowIso]
+          [table, id, s.refs, s.uses, s.score, SCORE_FORMULA_VERSION, s.generatedAt, nowIso2]
         );
       }, "upsert");
       const statements = [
@@ -62100,12 +65690,12 @@ async function readSettingsIso2(db, key) {
   return null;
 }
 __name(readSettingsIso2, "readSettingsIso");
-async function writeSettings(db, key, iso, updatedBy, nowIso) {
+async function writeSettings(db, key, iso, updatedBy, nowIso2) {
   await db.execute(
     `INSERT INTO settings (key, value, updated_by, updated_at)
      VALUES (?, ?, ?, ?)
      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = excluded.updated_by, updated_at = excluded.updated_at`,
-    [key, JSON.stringify(iso), updatedBy, nowIso]
+    [key, JSON.stringify(iso), updatedBy, nowIso2]
   );
 }
 __name(writeSettings, "writeSettings");
@@ -62121,7 +65711,7 @@ async function stampCpContentAttempt(db, at = /* @__PURE__ */ new Date()) {
 }
 __name(stampCpContentAttempt, "stampCpContentAttempt");
 async function pushQueuedSubmissions(deps) {
-  const { db, log, config: config2, nowIso } = deps;
+  const { db, log, config: config2, nowIso: nowIso2 } = deps;
   const rows = await db.query(
     `SELECT id, kind, title, summary, body, tags, submitted_at, source_ref
      FROM network_content
@@ -62144,7 +65734,7 @@ async function pushQueuedSubmissions(deps) {
       summary: r.summary ?? "",
       body: r.body ?? "",
       tags,
-      submitted_at: r.submitted_at ?? nowIso,
+      submitted_at: r.submitted_at ?? nowIso2,
       source_ref: r.source_ref
     };
   });
@@ -62174,14 +65764,14 @@ async function pushQueuedSubmissions(deps) {
   await db.execute(
     `UPDATE network_content SET status = 'submitted', updated_at = ?
      WHERE origin = 'local' AND status = 'queued' AND id IN (${items.map(() => "?").join(", ")})`,
-    [nowIso, ...items.map((i) => i.id)]
+    [nowIso2, ...items.map((i) => i.id)]
   );
   log.info("cp_content.push", { n: items.length });
   return items.length;
 }
 __name(pushQueuedSubmissions, "pushQueuedSubmissions");
 async function pullCuratedItems(deps) {
-  const { db, log, config: config2, nowIso } = deps;
+  const { db, log, config: config2, nowIso: nowIso2 } = deps;
   const lastIso = await readSettingsIso2(db, CP_CONTENT_SYNC_KEY);
   let sinceIso = null;
   if (lastIso) {
@@ -62273,7 +65863,7 @@ async function pullCuratedItems(deps) {
           JSON.stringify(it.quality ?? {}),
           it.source_center_name ?? it.source_center_code,
           it.status === "retired" ? 0 : 1,
-          nowIso,
+          nowIso2,
           createdBy,
           it.created_at,
           it.updated_at
@@ -62282,7 +65872,7 @@ async function pullCuratedItems(deps) {
     );
     await db.batch(statements);
   }
-  await writeSettings(db, CP_CONTENT_SYNC_KEY, parsed.data.data.server_time, "cp-content", nowIso);
+  await writeSettings(db, CP_CONTENT_SYNC_KEY, parsed.data.data.server_time, "cp-content", nowIso2);
   log.info("cp_content.pull", { n: items.length, received: parsed.data.data.items.length });
   return items.length;
 }
@@ -62330,7 +65920,7 @@ async function runCpContentCycle(deps) {
     return { status: "disabled" };
   }
   const now = deps.now ?? (() => /* @__PURE__ */ new Date());
-  const nowIso = now().toISOString();
+  const nowIso2 = now().toISOString();
   let pushed = 0;
   let applied = 0;
   const errors = [];
@@ -62341,13 +65931,13 @@ async function runCpContentCycle(deps) {
     }
     await stampCpContentAttempt(db, now());
     try {
-      pushed = await pushQueuedSubmissions({ db, log, config: config2, binding: deps.binding, fetchFn: deps.fetchFn, nowIso });
-      await writeSettings(db, CP_CONTENT_PUSH_KEY, nowIso, "cp-content", nowIso);
+      pushed = await pushQueuedSubmissions({ db, log, config: config2, binding: deps.binding, fetchFn: deps.fetchFn, nowIso: nowIso2 });
+      await writeSettings(db, CP_CONTENT_PUSH_KEY, nowIso2, "cp-content", nowIso2);
     } catch (err) {
       errors.push(err instanceof Error ? err.message : String(err));
     }
     try {
-      applied = await pullCuratedItems({ db, log, config: config2, binding: deps.binding, fetchFn: deps.fetchFn, nowIso });
+      applied = await pullCuratedItems({ db, log, config: config2, binding: deps.binding, fetchFn: deps.fetchFn, nowIso: nowIso2 });
     } catch (err) {
       errors.push(err instanceof Error ? err.message : String(err));
     }
@@ -62433,12 +66023,12 @@ async function readSettingsInt(db, key) {
   return null;
 }
 __name(readSettingsInt, "readSettingsInt");
-async function writeSettings2(db, key, jsonValue, nowIso) {
+async function writeSettings2(db, key, jsonValue, nowIso2) {
   await db.execute(
     `INSERT INTO settings (key, value, updated_by, updated_at)
      VALUES (?, ?, 'cp-report', ?)
      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = 'cp-report', updated_at = excluded.updated_at`,
-    [key, jsonValue, nowIso]
+    [key, jsonValue, nowIso2]
   );
 }
 __name(writeSettings2, "writeSettings");
@@ -62498,7 +66088,7 @@ __name(percentile75, "percentile75");
 var RUM_SAMPLE_SQL = `SELECT metric, value FROM rum_events
   WHERE ts >= ? AND metric IN ('LCP','CLS','INP') ORDER BY metric, value LIMIT ${RUM_SAMPLE_CAP}`;
 async function collectKpiBucket(db, now = /* @__PURE__ */ new Date()) {
-  const nowIso = now.toISOString();
+  const nowIso2 = now.toISOString();
   const day = tehranDayRange(tehranTodayYmd(now));
   const [students, appts, overdue, errs, rum] = await Promise.all([
     db.queryOne(
@@ -62516,7 +66106,7 @@ async function collectKpiBucket(db, now = /* @__PURE__ */ new Date()) {
       `SELECT COUNT(*) AS c
        FROM appointment_students aps JOIN appointments a ON a.id = aps.appointment_id
        WHERE aps.attendance = 'pending' AND a.end_at < ?`,
-      [nowIso]
+      [nowIso2]
     ),
     db.queryOne(
       `SELECT COALESCE(SUM(CASE WHEN occurred_at >= datetime('now', '-1 hour') THEN 1 ELSE 0 END), 0) AS h1,
@@ -63169,9 +66759,9 @@ async function pendingPushCount(db, watermark) {
   } catch {
   }
   try {
-    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
-    const hourBucket = `${nowIso.slice(0, 13)}:00:00Z`;
-    const dayBucket = `${nowIso.slice(0, 10)}T00:00:00Z`;
+    const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
+    const hourBucket = `${nowIso2.slice(0, 13)}:00:00Z`;
+    const dayBucket = `${nowIso2.slice(0, 10)}T00:00:00Z`;
     const ahead = /* @__PURE__ */ __name((at) => !watermark || Date.parse(at) > Date.parse(watermark), "ahead");
     if (ahead(hourBucket)) count += 1;
     if (ahead(dayBucket)) count += 1;
@@ -63380,10 +66970,10 @@ async function pendingPushSoft(db, watermark) {
       const row = await db.queryOne("SELECT COUNT(*) AS n FROM client_errors");
       count += Number(row?.n ?? 0);
     }
-    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+    const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
     const ahead = /* @__PURE__ */ __name((at) => !watermark || Date.parse(at) > Date.parse(watermark), "ahead");
-    if (ahead(`${nowIso.slice(0, 13)}:00:00Z`)) count += 1;
-    if (ahead(`${nowIso.slice(0, 10)}T00:00:00Z`)) count += 1;
+    if (ahead(`${nowIso2.slice(0, 13)}:00:00Z`)) count += 1;
+    if (ahead(`${nowIso2.slice(0, 10)}T00:00:00Z`)) count += 1;
     return count;
   } catch {
     return null;
@@ -63478,6 +67068,35 @@ function isRestartScheduled() {
   return restartFlag;
 }
 __name(isRestartScheduled, "isRestartScheduled");
+function parseLanInfo(raw2) {
+  if (typeof raw2 !== "string" || !raw2) return null;
+  let p = null;
+  try {
+    p = JSON.parse(raw2);
+  } catch {
+    return null;
+  }
+  if (!p || typeof p !== "object") return null;
+  const o = p;
+  const port = Number(o.port);
+  const gamesPort = Number(o.games_port);
+  if (!Number.isFinite(port) || port <= 0) return null;
+  const ips = Array.isArray(o.lan_ips) ? o.lan_ips.filter((x) => typeof x === "string" && !!x) : [];
+  const urls = Array.isArray(o.main_urls) ? o.main_urls.filter((x) => typeof x === "string" && !!x) : [];
+  const gameUrls = Array.isArray(o.games_urls) ? o.games_urls.filter((x) => typeof x === "string" && !!x) : [];
+  return {
+    host: typeof o.host === "string" && o.host ? o.host : "0.0.0.0",
+    port,
+    games_port: Number.isFinite(gamesPort) && gamesPort > 0 ? gamesPort : 0,
+    lan_ips: ips,
+    main_urls: urls,
+    local_url: typeof o.local_url === "string" && o.local_url ? o.local_url : `http://127.0.0.1:${port}`,
+    games_urls: gameUrls,
+    games_local_url: typeof o.games_local_url === "string" && o.games_local_url ? o.games_local_url : "",
+    boot_at: typeof o.boot_at === "string" && o.boot_at ? o.boot_at : null
+  };
+}
+__name(parseLanInfo, "parseLanInfo");
 function registerSystemPublicRoutes(app, deps) {
   app.get("/api/system/restart-status", async (c) => {
     let scheduled = false;
@@ -63545,8 +67164,37 @@ function registerSystemRoutes(app, deps) {
       }
     });
   });
+  app.get("/api/system/lan", requireRole("manager"), async (c) => {
+    const lan = parseLanInfo(c.env?.LAN_INFO);
+    return c.json({ ok: true, lan }, 200, { "Cache-Control": "no-store" });
+  });
 }
 __name(registerSystemRoutes, "registerSystemRoutes");
+
+// src/application/engine-capabilities/routes.ts
+var ENGINE_PUBLIC_API_MAP = {
+  health: "/health",
+  restartStatus: "/api/system/restart-status",
+  instanceSync: "/api/instance-sync",
+  healthPanel: "/api/health/panel",
+  nodeSyncStatus: "/api/node-sync/status"
+};
+function registerEngineCapabilitiesRoutes(app) {
+  app.get(
+    "/api/engine/capabilities",
+    (c) => c.json(
+      {
+        ok: true,
+        version: APP_VERSION,
+        server_ts: (/* @__PURE__ */ new Date()).toISOString(),
+        api: ENGINE_PUBLIC_API_MAP
+      },
+      200,
+      { "Cache-Control": "no-store" }
+    )
+  );
+}
+__name(registerEngineCapabilitiesRoutes, "registerEngineCapabilitiesRoutes");
 
 // src/application/growth/service.ts
 var GROWTH_SNAPSHOT_SEAL_KEY = "growth.last_snapshot_at";
@@ -63659,8 +67307,8 @@ function createGrowthService(deps) {
       return { skipped: false, last_snapshot_at: capturedAt, tables: counts.length };
     },
     async report() {
-      const nowIso = (/* @__PURE__ */ new Date()).toISOString();
-      const today = nowIso.slice(0, 10);
+      const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
+      const today = nowIso2.slice(0, 10);
       const base7 = new Date(Date.parse(`${today}T00:00:00Z`) - 7 * 864e5).toISOString().slice(0, 10);
       const base30 = new Date(Date.parse(`${today}T00:00:00Z`) - 30 * 864e5).toISOString().slice(0, 10);
       const liveTables = await listUserTables(db);
@@ -63711,7 +67359,7 @@ function createGrowthService(deps) {
         return a.table_name.localeCompare(b.table_name);
       });
       return {
-        generated_at: nowIso,
+        generated_at: nowIso2,
         last_snapshot_at: lastSnapshotIso,
         snapshot_days: daysRow?.n ?? 0,
         tables: out
@@ -64928,14 +68576,14 @@ function matchEnum(raw2, options) {
   return null;
 }
 __name(matchEnum, "matchEnum");
-function normalizePhone(raw2) {
+function normalizePhone2(raw2) {
   const s = enDigits(raw2).trim();
   if (!s) return { ok: true, value: "" };
   const compact = s.replace(/[\s\u200c]/g, "");
   if (!/^[0-9+\-()]{3,20}$/.test(compact)) return { ok: false, value: compact };
   return { ok: true, value: compact };
 }
-__name(normalizePhone, "normalizePhone");
+__name(normalizePhone2, "normalizePhone");
 function normalizeCode(raw2) {
   return enDigits(raw2).trim().replace(/[\s\u200c]/g, "");
 }
@@ -65025,7 +68673,7 @@ function validateSchoolRow(raw2, colByKey) {
       display[key] = "";
       continue;
     }
-    const p = normalizePhone(rawVal);
+    const p = normalizePhone2(rawVal);
     if (!p.ok) errors.push(`\xAB${labelOf2(colByKey.get(key))}\xBB \u0645\u0639\u062A\u0628\u0631 \u0646\u06CC\u0633\u062A`);
     else if (p.value.length > 20) errors.push(`\xAB${labelOf2(colByKey.get(key))}\xBB \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F2\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A`);
     else {
@@ -65132,7 +68780,7 @@ function validateClassRow(raw2, colByKey) {
     normalized.teacher_phone = null;
     display.teacher_phone = "";
   } else {
-    const p = normalizePhone(phoneRaw);
+    const p = normalizePhone2(phoneRaw);
     if (!p.ok) errors.push("\xAB\u062A\u0644\u0641\u0646 \u0645\u0639\u0644\u0645\xBB \u0645\u0639\u062A\u0628\u0631 \u0646\u06CC\u0633\u062A");
     else if (p.value.length > 20) errors.push("\xAB\u062A\u0644\u0641\u0646 \u0645\u0639\u0644\u0645\xBB \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F2\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
     else {
@@ -66150,8 +69798,8 @@ function groupByDay(appointments) {
   return [...byDay.entries()].sort(([d1], [d2]) => d1 < d2 ? -1 : d1 > d2 ? 1 : 0).map(([date5, counts]) => ({ date: date5, ...counts }));
 }
 __name(groupByDay, "groupByDay");
-function findNextAppointment(appointments, nowIso) {
-  const now = Date.parse(nowIso);
+function findNextAppointment(appointments, nowIso2) {
+  const now = Date.parse(nowIso2);
   let best = null;
   for (const a of appointments) {
     if (a.status !== "scheduled") continue;
@@ -66258,7 +69906,7 @@ function createDashboardService(deps) {
     async getTodayCards(dateYmd) {
       const date5 = dateYmd || tehranTodayYmd();
       const range = tehranDayRange(date5);
-      const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+      const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
       const [dayAppointments, staffInfo, studentsSummary] = await Promise.all([
         appointments.list({ from: range.start, to: range.end }),
         staffInfoMap(),
@@ -66281,7 +69929,7 @@ function createDashboardService(deps) {
         absenceRate: attendanceStats.absenceRate,
         attendance: attendanceStats,
         activeConflicts,
-        nextAppointment: findNextAppointment(dayAppointments, nowIso),
+        nextAppointment: findNextAppointment(dayAppointments, nowIso2),
         studentsSummary
       };
     },
@@ -66806,7 +70454,7 @@ function b64uDecode(part) {
   return bytes;
 }
 __name(b64uDecode, "b64uDecode");
-async function hmacKey2(secret) {
+async function hmacKey3(secret) {
   return crypto.subtle.importKey(
     "raw",
     new TextEncoder().encode(secret),
@@ -66815,7 +70463,7 @@ async function hmacKey2(secret) {
     ["verify"]
   );
 }
-__name(hmacKey2, "hmacKey");
+__name(hmacKey3, "hmacKey");
 async function verifySessionJwt2(token, secret) {
   const parts = token.split(".");
   if (parts.length !== 3) return null;
@@ -66826,7 +70474,7 @@ async function verifySessionJwt2(token, secret) {
   } catch {
     return null;
   }
-  const key = await hmacKey2(secret);
+  const key = await hmacKey3(secret);
   const valid = await crypto.subtle.verify("HMAC", key, b64uDecode(sig), new TextEncoder().encode(`${h}.${p}`));
   if (!valid) return null;
   if (!payload.exp || payload.exp * 1e3 < Date.now()) return null;
@@ -67020,6 +70668,21 @@ async function handleScoring(request, env) {
 }
 __name(handleScoring, "handleScoring");
 
+// src/core/security/timing.ts
+async function timingSafeEqualStr(a, b) {
+  const enc2 = new TextEncoder();
+  const [da, db] = await Promise.all([
+    crypto.subtle.digest("SHA-256", enc2.encode(a ?? "")),
+    crypto.subtle.digest("SHA-256", enc2.encode(b ?? ""))
+  ]);
+  const ba = new Uint8Array(da);
+  const bb = new Uint8Array(db);
+  let diff = 0;
+  for (let i = 0; i < ba.length; i += 1) diff |= ba[i] ^ bb[i];
+  return diff === 0;
+}
+__name(timingSafeEqualStr, "timingSafeEqualStr");
+
 // src/application/notify/reminders.ts
 function reminderDedupKey(appointmentId, studentId) {
   return `reminder:${appointmentId}:${studentId}`;
@@ -67121,7 +70784,7 @@ var EXB_ACTOR = {
   role: "manager",
   displayName: "\u0628\u0627\u062A \u0628\u0644\u0647"
 };
-var FORMAT_LABELS = {
+var FORMAT_LABELS2 = {
   worksheet: "\u06A9\u0627\u0631\u0628\u0631\u06AF",
   game: "\u0628\u0627\u0632\u06CC",
   instruction: "\u062F\u0633\u062A\u0648\u0631\u0627\u0644\u0639\u0645\u0644 \u062E\u0627\u0646\u0647"
@@ -67326,7 +70989,7 @@ function createExerciseBankBot(deps) {
       };
     }
     const lines = [`\u{1F4DA} ${exercise.title}`];
-    lines.push(`\u0642\u0627\u0644\u0628: ${FORMAT_LABELS[exercise.format] ?? exercise.format}`);
+    lines.push(`\u0642\u0627\u0644\u0628: ${FORMAT_LABELS2[exercise.format] ?? exercise.format}`);
     if (exercise.description) lines.push("", exercise.description);
     if (exercise.tags.length > 0) lines.push("", `\u{1F3F7} ${exercise.tags.map((t) => t.name).join("\u060C ")}`);
     const fileRows = [];
@@ -68708,9 +72371,13 @@ function buildBotKeyboard(owner) {
   const unlinkRow = ["\u0642\u0637\u0639 \u0627\u062A\u0635\u0627\u0644"];
   if (!owner) {
     return [
+      ["\u0645\u0639\u0631\u0641\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632"],
+      // ۱.۲۷.۳۶ — دکمهٔ اول بات؛ ارجاع فقط از لینک فرم وب
       ["\u0645\u0639\u0631\u0641\u06CC \u0645\u0631\u06A9\u0632", "\u062E\u062F\u0645\u0627\u062A \u0645\u0631\u06A9\u0632"],
       ["\u0631\u0627\u0647\u200C\u0647\u0627\u06CC \u0627\u0631\u062A\u0628\u0627\u0637\u06CC", "\u0627\u062D\u0631\u0627\u0632 \u0647\u0648\u06CC\u062A"],
-      ["\u0641\u0627\u06CC\u0644\u200C\u0647\u0627\u06CC \u0622\u0645\u0648\u0632\u0634\u06CC"]
+      ["\u0641\u0627\u06CC\u0644\u200C\u0647\u0627\u06CC \u0622\u0645\u0648\u0632\u0634\u06CC"],
+      ["\u062A\u0645\u0631\u06CC\u0646\u200C\u0647\u0627 \u0648 \u06A9\u0627\u0631\u062A\u200C\u0647\u0627"]
+      // ۱.۲۷.۳۸ — لینک صفحهٔ عمومی استفاده از تمرین‌ها و کارت‌های آمادهٔ مرکز
     ];
   }
   if (owner.kind === "staff") {
@@ -68729,6 +72396,8 @@ function buildBotKeyboard(owner) {
   }
   if (owner.kind === "class") {
     return [
+      ["\u0645\u0639\u0631\u0641\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632"],
+      // ۱.۲۷.۳۶ — دکمهٔ اول؛ معلمِ کلاس معرفی‌کنندهٔ اصلی است
       ["\u0646\u0648\u0628\u062A\u200C\u0647\u0627\u06CC \u06A9\u0644\u0627\u0633 \u0645\u0646", "\u0641\u0639\u0627\u0644\u06CC\u062A \u06A9\u0644\u0627\u0633"],
       ["\u06A9\u0627\u0631\u062A\u200C\u0647\u0627\u06CC \u0622\u0645\u0627\u062F\u0647", "\u0622\u06AF\u0627\u0647\u06CC\u200C\u0647\u0627\u06CC \u0627\u062E\u062A\u0644\u0627\u0644\u0627\u062A"],
       aboutRow,
@@ -68736,6 +72405,8 @@ function buildBotKeyboard(owner) {
     ];
   }
   return [
+    ["\u0645\u0639\u0631\u0641\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632"],
+    // ۱.۲۷.۳۶ — دکمهٔ اول برای نقش پایه (خانواده)
     ["\u0646\u0648\u0628\u062A\u200C\u0647\u0627\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u0645\u0646", "\u062A\u0645\u0631\u06CC\u0646\u200C\u0647\u0627\u06CC \u0627\u0646\u062C\u0627\u0645\u200C\u0646\u0634\u062F\u0647"],
     ["\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A\u200C\u0647\u0627\u06CC \u0645\u0646", "\u062D\u0636\u0648\u0631 \u0641\u0631\u0632\u0646\u062F"],
     ["\u0641\u0627\u06CC\u0644\u200C\u0647\u0627\u06CC \u0622\u0645\u0648\u0632\u0634\u06CC"],
@@ -68754,6 +72425,9 @@ function extractMessageText(update) {
 __name(extractMessageText, "extractMessageText");
 function createBotCommandsSection(ctx) {
   const { deps, db, audit, log, now, appointments, students, followups, exbBot, subBot, clfBot, awBot, readPfState, writePfState, studentNamesMap, staffNamesMap } = ctx;
+  const refWebLink = (deps.publicBaseUrl ?? "").replace(/\/+$/, "") + "/public/referral";
+  const actWebLink = (deps.publicBaseUrl ?? "").replace(/\/+$/, "") + "/public/activities";
+  const REFERRAL_LINK_MESSAGE = "\u{1F9E9} \u0645\u0639\u0631\u0641\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u0628\u0647 \u0645\u0631\u06A9\u0632\n\n\u0627\u06AF\u0631 \u062F\u0631\u0628\u0627\u0631\u0647 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC\u060C \u06AF\u0641\u062A\u0627\u0631\u060C \u062A\u0648\u062C\u0647 \u06CC\u0627 \u0631\u0641\u062A\u0627\u0631 \u06CC\u06A9 \u06A9\u0648\u062F\u06A9 \u0646\u06AF\u0631\u0627\u0646\u06CC \u062F\u0627\u0631\u06CC\u062F\u060C \u0628\u0627 \u0641\u0631\u0645 \u06A9\u0648\u062A\u0627\u0647\u06CC \u06A9\u0647 \u067E\u0627\u06CC\u06CC\u0646 \u06AF\u0630\u0627\u0634\u062A\u06CC\u0645\u060C \u062A\u0648\u06CC \u0686\u0646\u062F \u062F\u0642\u06CC\u0642\u0647 \u0645\u0639\u0631\u0641\u06CC\u0634 \u06A9\u0646\u06CC\u062F \u2014 \u0622\u0645\u0648\u0632\u06AF\u0627\u0631\u0627\u0646 \u0645\u0627 \u0628\u0631\u0631\u0633\u06CC \u0645\u06CC\u200C\u06A9\u0646\u0646 \u0648 \u0628\u0627 \u0634\u0645\u0627 \u062A\u0645\u0627\u0633 \u0645\u06CC\u200C\u06AF\u06CC\u0631\u0646. \u0627\u0632 \u0647\u0645\u06A9\u0627\u0631\u06CC \u0648 \u0635\u0628\u0648\u0631\u06CC \u0634\u0645\u0627 \u0645\u062A\u0634\u06A9\u0631\u06CC\u0645\u061B \u0647\u0645\u0647\u0654 \u062E\u062F\u0645\u0627\u062A \u0645\u0631\u06A9\u0632 \u0631\u0627\u06CC\u06AF\u0627\u0646 \u0648 \u0632\u06CC\u0631 \u0646\u0638\u0631 \u0627\u062F\u0627\u0631\u0647 \u0622\u0645\u0648\u0632\u0634 \u0648 \u067E\u0631\u0648\u0631\u0634 \u0627\u0633\u062A\u062B\u0646\u0627\u06CC\u06CC \u0627\u0633\u062A.\n\n\u{1F310} \u0641\u0631\u0645 \u0645\u0639\u0631\u0641\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632:\n" + refWebLink;
   return {
     async handleBotUpdate(update) {
       const cmd = parseBotUpdate(update);
@@ -68864,6 +72538,10 @@ function createBotCommandsSection(ctx) {
           const out = await this.handlePublicFilesCommand(cmd.chatId);
           return { handled: true, reply: out.text, buttons: out.buttons, keyboard: buildBotKeyboard(await this.resolveOwner(cmd.chatId)) };
         }
+        case "activities": {
+          const out = await this.handleActivitiesCommand();
+          return { handled: true, reply: out.text, buttons: out.buttons, keyboard: buildBotKeyboard(await this.resolveOwner(cmd.chatId)) };
+        }
         case "pfile_get": {
           const out = await this.handleParentFileGet(cmd.chatId, cmd.idx);
           return { handled: true, reply: out.text, buttons: out.buttons };
@@ -68915,6 +72593,11 @@ function createBotCommandsSection(ctx) {
         case "clf_no": {
           const out = await clfBot.abortFill(cmd.chatId);
           return { handled: true, reply: out.text, buttons: out.buttons };
+        }
+        // ۱.۲۷.۳۶ — معرفی دانش‌آموز: دکمهٔ اول بات برای عموم و نقش پایه؛ فقط لینک فرم وب
+        // (خواست کارفرما — پر کردن فرم با دکمه‌های بات سنگین است و حذف شد)
+        case "referral_root": {
+          return { handled: true, reply: REFERRAL_LINK_MESSAGE, keyboard: buildBotKeyboard(await this.resolveOwner(cmd.chatId)) };
         }
         case "exb_root":
         case "exb_cats":
@@ -69282,17 +72965,17 @@ function createBotCommandsSection(ctx) {
         return { text: renderTemplate("bot_help_guest"), buttons: null };
       }
       const clinicName = await deps.settings.getClinicName();
-      const nowIso = now().toISOString();
+      const nowIso2 = now().toISOString();
       if (owner.kind === "class") {
         const text2 = await this.handleScheduleCommand(chatId, "week");
         return { text: text2, buttons: null };
       }
       if (owner.kind === "staff") {
-        const list = await appointments.list({ staffId: owner.ref_id, from: nowIso, to: addMinutes(nowIso, 7 * 24 * 60) });
+        const list = await appointments.list({ staffId: owner.ref_id, from: nowIso2, to: addMinutes(nowIso2, 7 * 24 * 60) });
         const studentIds2 = [...new Set(list.flatMap((a) => a.students.map((s) => s.studentId)))];
         const names = await studentNamesMap(studentIds2);
         const entries2 = buildScheduleEntries(list, { kind: "staff", names });
-        const title = `\u{1F5D3} \u0646\u0648\u0628\u062A\u200C\u0647\u0627\u06CC \u067E\u06CC\u0634\u200C\u0631\u0648\u06CC \u0634\u0645\u0627 \u2014 \u0627\u0632 ${jalaliFullLabel(tehranYmdOf(nowIso))}`;
+        const title = `\u{1F5D3} \u0646\u0648\u0628\u062A\u200C\u0647\u0627\u06CC \u067E\u06CC\u0634\u200C\u0631\u0648\u06CC \u0634\u0645\u0627 \u2014 \u0627\u0632 ${jalaliFullLabel(tehranYmdOf(nowIso2))}`;
         const text2 = renderScheduleMessage({ title, entries: entries2, clinicName });
         const sorted = [...list].sort((a, b) => a.startAt.localeCompare(b.startAt));
         const buttons = sorted.filter((a) => a.status === "scheduled").slice(0, 8).map((a) => [{ text: `\u0644\u063A\u0648 ${tehranTimeLabel(a.startAt)}`, callbackData: `ask:${a.id}` }]);
@@ -69305,7 +72988,7 @@ function createBotCommandsSection(ctx) {
       const merged = [];
       const seen = /* @__PURE__ */ new Set();
       for (const sid of studentIds) {
-        const list = await appointments.list({ studentId: sid, from: nowIso, to: addMinutes(nowIso, 14 * 24 * 60) });
+        const list = await appointments.list({ studentId: sid, from: nowIso2, to: addMinutes(nowIso2, 14 * 24 * 60) });
         for (const a of list) {
           if (!seen.has(a.id)) {
             seen.add(a.id);
@@ -69491,7 +73174,7 @@ function createBotCommandsSection(ctx) {
       if (!owner) {
         return { text: renderTemplate("bot_unlink_not_connected"), buttons: null };
       }
-      const nowIso = now().toISOString();
+      const nowIso2 = now().toISOString();
       const [familyRes, staffRes, classRes, prefsRes, stateRes] = await Promise.all([
         db.execute(...spreadStmt(unlinkBotLinksByChat(chatId))),
         db.execute(...spreadStmt(unlinkStaffLinksByChat(chatId))),
@@ -69648,7 +73331,13 @@ function createBotCommandsSection(ctx) {
         return { text: renderTemplate("bot_public_files", { clinicName, mode: "staff" }), buttons: null };
       }
       if (!owner) {
-        return { text: renderTemplate("bot_public_files", { clinicName, mode: "guest" }), buttons: null };
+        return {
+          text: renderTemplate("bot_public_files", { clinicName, mode: "guest" }) + `
+
+\u{1F517} \u0645\u0631\u0648\u0631 \u062A\u0645\u0631\u06CC\u0646\u200C\u0647\u0627 \u0648 \u06A9\u0627\u0631\u062A\u200C\u0647\u0627\u06CC \u0622\u0645\u0627\u062F\u0647\u0654 \u0645\u0631\u06A9\u0632:
+${actWebLink}`,
+          buttons: null
+        };
       }
       if (!deps.exerciseBank) {
         return { text: renderTemplate("bot_exercise_disabled"), buttons: null };
@@ -69699,6 +73388,15 @@ function createBotCommandsSection(ctx) {
       return {
         text: renderTemplate("bot_public_files", { clinicName, mode: "parent", list: items.map((it) => `\u2022 ${it.t}`).join("\n") }),
         buttons
+      };
+    },
+    /* ۱.۲۷.۳۸ — «تمرین‌ها و کارت‌ها»: لینک صفحهٔ عمومی بانک محتوای آمادهٔ مرکز؛
+       برای مهمان/خانواده/همکار همه یک پاسخ — فایل‌ها همان مسیرهای قبلی (اتصال/طرح درمان) می‌آیند */
+    async handleActivitiesCommand() {
+      const clinicName = await deps.settings.getClinicName();
+      return {
+        text: renderTemplate("bot_activities", { clinicName, actLink: actWebLink, refLink: refWebLink }),
+        buttons: null
       };
     },
     async handleParentFileGet(chatId, idx) {
@@ -70425,13 +74123,13 @@ function createNotifyAppService(deps) {
       return notify.dispatchPending(limit);
     },
     async enqueueUpcomingReminders(nowDate = now(), horizonHours = REMINDER_HORIZON_HOURS) {
-      const nowIso = nowDate.toISOString();
-      const horizonTo = addMinutes(nowIso, horizonHours * 60);
+      const nowIso2 = nowDate.toISOString();
+      const horizonTo = addMinutes(nowIso2, horizonHours * 60);
       const [settingsFlags, clinicName] = await Promise.all([
         deps.settings.getNotifyFlags(),
         deps.settings.getClinicName()
       ]);
-      const upcoming = await appointments.list({ from: nowIso, to: horizonTo });
+      const upcoming = await appointments.list({ from: nowIso2, to: horizonTo });
       const studentIds = [...new Set(upcoming.flatMap((a) => a.students.map((s) => s.studentId)))];
       const prefsRows = studentIds.length > 0 ? await db.query(...spreadStmt(selectPrefsMany(studentIds))) : [];
       const prefsByStudent = /* @__PURE__ */ new Map();
@@ -70448,7 +74146,7 @@ function createNotifyAppService(deps) {
         prefsByStudent,
         studentNames,
         staffNames,
-        nowIso,
+        nowIso: nowIso2,
         horizonHours,
         defaultHoursBefore: settingsFlags.defaultReminderHours,
         clinicName
@@ -70469,7 +74167,7 @@ function createNotifyAppService(deps) {
         if (outcome.duplicate) duplicates += 1;
         else enqueued += 1;
       }
-      const summary = buildEnqueueSummary(plan, enqueued, duplicates, nowIso, horizonTo);
+      const summary = buildEnqueueSummary(plan, enqueued, duplicates, nowIso2, horizonTo);
       log.info("reminders.enqueued", { ...summary });
       await audit.log({
         actorId: "system",
@@ -70511,9 +74209,9 @@ function createNotifyAppService(deps) {
     isWebhookEnabled() {
       return Boolean(deps.webhookSecret);
     },
-    isWebhookSecretValid(secret) {
+    async isWebhookSecretValid(secret) {
       if (!deps.webhookSecret || !secret) return false;
-      return secret === deps.webhookSecret;
+      return timingSafeEqualStr(secret, deps.webhookSecret);
     }
   };
 }
@@ -70659,7 +74357,8 @@ function registerRoutes9(app, service) {
     if (!service.isWebhookEnabled()) {
       return c.json({ error: { code: "NOT_FOUND", message: "webhook \u063A\u06CC\u0631\u0641\u0639\u0627\u0644 \u0627\u0633\u062A" } }, 404);
     }
-    if (!service.isWebhookSecretValid(c.req.param("secret"))) {
+    const presentedSecret = c.req.param("secret") || c.req.header("x-telegram-bot-api-secret-token") || void 0;
+    if (!await service.isWebhookSecretValid(presentedSecret)) {
       return c.json({ error: { code: "FORBIDDEN", message: "secret \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A" } }, 403);
     }
     let update;
@@ -71810,7 +75509,15 @@ function createBackupService(deps) {
           logger.warn("backup.archive.too_large", { bytes: bytes.byteLength });
           return { archived: false, bytes: bytes.byteLength, reason: "too_large" };
         }
-        const envelope = JSON.parse(new TextDecoder().decode(bytes));
+        let envelope = null;
+        try {
+          envelope = JSON.parse(new TextDecoder().decode(bytes));
+        } catch {
+          envelope = null;
+        }
+        if (envelope === null) {
+          return { archived: false, bytes: bytes.byteLength, reason: "invalid_envelope" };
+        }
         const summary = await service.inspect(envelope);
         if (!summary.schemaCompatible) {
           logger.warn("backup.archive.schema_incompatible", { problems: summary.problems });
@@ -71856,7 +75563,12 @@ function createBackupService(deps) {
           BACKUP_ARCHIVE_KEY
         ]);
         if (!row?.value) return null;
-        const parsed = JSON.parse(row.value);
+        let parsed = null;
+        try {
+          parsed = JSON.parse(row.value);
+        } catch {
+          parsed = null;
+        }
         if (!parsed || typeof parsed !== "object") return null;
         const meta3 = parsed;
         if (meta3.format !== BACKUP_FORMAT || !meta3.envelope) return null;
@@ -72701,9 +76413,9 @@ function createReportService(deps) {
       const fuRows = await db.query(
         `SELECT status, due_at, completed_at FROM followups`
       );
-      const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+      const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
       const openFu = fuRows.filter((f) => f.status === "open" || f.status === "in_progress");
-      const overdueFu = openFu.filter((f) => f.due_at !== null && f.due_at < nowIso);
+      const overdueFu = openFu.filter((f) => f.due_at !== null && f.due_at < nowIso2);
       const doneInPeriod = fuRows.filter((f) => f.status === "done" && f.completed_at !== null && f.completed_at >= range.start && f.completed_at <= range.end).length;
       const cancelledInPeriod = fuRows.filter((f) => f.status === "cancelled").length;
       const followups = {
@@ -73777,11 +77489,11 @@ function registerAuthRoutes(app, deps) {
       { id: staff.id, fullName: staff.full_name, role: staff.role, email: staff.email },
       await resolveSessionSecret(c.env)
     );
-    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+    const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
     await c.env.DB.prepare(
       "INSERT INTO auth_sessions (sid, staff_id, issued_at, expires_at) VALUES (?, ?, ?, ?)"
-    ).bind(sid, staff.id, nowIso, expiresAt).run();
-    await c.env.DB.prepare("DELETE FROM auth_sessions WHERE expires_at < ?").bind(nowIso).run();
+    ).bind(sid, staff.id, nowIso2, expiresAt).run();
+    await c.env.DB.prepare("DELETE FROM auth_sessions WHERE expires_at < ?").bind(nowIso2).run();
     await deps.audit.log({
       actorId: staff.id,
       action: "auth.login",
@@ -74029,10 +77741,10 @@ function createNodeSyncApp(deps) {
     return null;
   }
   __name(authNode, "authNode");
-  const authFailed = /* @__PURE__ */ __name((c) => c.json({ error: "NODE_AUTH_FAILED", message: "\u0627\u0639\u062A\u0628\u0627\u0631 \u0646\u0648\u062F \u067E\u0630\u06CC\u0631\u0641\u062A\u0647 \u0646\u0634\u062F" }, 401), "authFailed");
+  const authFailed2 = /* @__PURE__ */ __name((c) => c.json({ error: "NODE_AUTH_FAILED", message: "\u0627\u0639\u062A\u0628\u0627\u0631 \u0646\u0648\u062F \u067E\u0630\u06CC\u0631\u0641\u062A\u0647 \u0646\u0634\u062F" }, 401), "authFailed");
   app.get("/pull", async (c) => {
     const node2 = await authNode(c);
-    if (!node2) return authFailed(c);
+    if (!node2) return authFailed2(c);
     await bumpQuotaUsage(db, "pull", now());
     const rawDomains = (c.req.query("domains") ?? "").split(",").map((d) => d.trim().toLowerCase()).filter((d) => d.length > 0);
     const unknownDomains = [...new Set(rawDomains.filter((d) => !NODE_PULL_DOMAIN_SET.has(d)))];
@@ -74072,7 +77784,7 @@ function createNodeSyncApp(deps) {
   });
   app.get("/reconcile", async (c) => {
     const node2 = await authNode(c);
-    if (!node2) return authFailed(c);
+    if (!node2) return authFailed2(c);
     const rawDomains = (c.req.query("domains") ?? "").split(",").map((d) => d.trim().toLowerCase()).filter((d) => d.length > 0);
     const unknownDomains = [...new Set(rawDomains.filter((d) => !NODE_PULL_DOMAIN_SET.has(d)))];
     if (unknownDomains.length > 0) {
@@ -74091,7 +77803,7 @@ function createNodeSyncApp(deps) {
   });
   app.post("/push", async (c) => {
     const node2 = await authNode(c);
-    if (!node2) return authFailed(c);
+    if (!node2) return authFailed2(c);
     const catchUpDeclared = c.req.header(NODE_PUSH_CATCHUP_HEADER) === "1";
     const at = now();
     const handshake = {
@@ -74430,6 +78142,16 @@ async function syncedAnnouncementsCount(db) {
   return Number(row?.n ?? 0);
 }
 __name(syncedAnnouncementsCount, "syncedAnnouncementsCount");
+async function listSyncedAnnouncements(db, limit = 50) {
+  return db.query(
+    `SELECT id, title, body, published_at AS publishedAt, active, received_at AS receivedAt
+       FROM synced_announcements
+      ORDER BY (published_at IS NULL) ASC, published_at DESC, received_at DESC
+      LIMIT ?`,
+    [limit]
+  );
+}
+__name(listSyncedAnnouncements, "listSyncedAnnouncements");
 
 // src/internal-sync/outbox.ts
 var OUTBOX_MAX_ITEMS = 200;
@@ -74584,6 +78306,13 @@ function registerInternalSyncRoutes(app, deps) {
     const synced_announcements = await syncedAnnouncementsCount(deps.db);
     return c.json({ data: { ...status, synced_announcements } }, 200);
   });
+  app.get("/api/internal/sync/announcements", async (c) => {
+    requireDesktopEngine2(c);
+    const ctx = getAuthContext(c);
+    const items = await listSyncedAnnouncements(deps.db);
+    log.info("synced-ann.ok", { staffId: ctx.staffId, count: items.length });
+    return c.json({ data: items }, 200);
+  });
   app.get("/api/internal/sync/outbox", async (c) => {
     requireDesktopEngine2(c);
     const ctx = getAuthContext(c);
@@ -74594,6 +78323,2251 @@ function registerInternalSyncRoutes(app, deps) {
   });
 }
 __name(registerInternalSyncRoutes, "registerInternalSyncRoutes");
+
+// src/application/instance-sync/tables.ts
+var SYNC_TABLES = [
+  { table: "announcements", pk: ["id"], hasUpdatedAt: true },
+  { table: "appointment_students", pk: ["appointment_id", "student_id"], hasUpdatedAt: false },
+  { table: "appointments", pk: ["id"], hasUpdatedAt: true },
+  { table: "assessments", pk: ["id"], hasUpdatedAt: true },
+  { table: "bug_reports", pk: ["id"], hasUpdatedAt: false },
+  { table: "case_event_types", pk: ["id"], hasUpdatedAt: true },
+  { table: "case_events", pk: ["id"], hasUpdatedAt: true },
+  { table: "classes", pk: ["id"], hasUpdatedAt: false },
+  { table: "clearbook_entries", pk: ["id"], hasUpdatedAt: true },
+  { table: "clearbook_entry_tags", pk: ["entry_id", "tag"], hasUpdatedAt: false },
+  { table: "clearbook_plans", pk: ["id"], hasUpdatedAt: true },
+  { table: "committee_items", pk: ["id"], hasUpdatedAt: true },
+  { table: "committee_meetings", pk: ["id"], hasUpdatedAt: true },
+  { table: "content_score_report", pk: ["source_table", "source_id"], hasUpdatedAt: true },
+  { table: "day_notes", pk: ["id"], hasUpdatedAt: false },
+  { table: "docs", pk: ["id"], hasUpdatedAt: true },
+  { table: "document_requests", pk: ["id"], hasUpdatedAt: false },
+  { table: "exercise_assignments", pk: ["id"], hasUpdatedAt: false },
+  { table: "exercise_batches", pk: ["id"], hasUpdatedAt: false },
+  { table: "exercise_focus_links", pk: ["exercise_id", "focus_key"], hasUpdatedAt: false },
+  { table: "exercise_package_items", pk: ["package_id", "exercise_id"], hasUpdatedAt: false },
+  { table: "exercise_package_tags", pk: ["package_id", "tag_id"], hasUpdatedAt: false },
+  { table: "exercise_packages", pk: ["id"], hasUpdatedAt: true },
+  { table: "exercise_submissions", pk: ["id"], hasUpdatedAt: false },
+  { table: "exercise_tags", pk: ["exercise_id", "tag_id"], hasUpdatedAt: false },
+  { table: "exercises", pk: ["id"], hasUpdatedAt: true },
+  { table: "finance_budgets", pk: ["id"], hasUpdatedAt: true },
+  { table: "finance_donations", pk: ["id"], hasUpdatedAt: true },
+  { table: "finance_invoices", pk: ["id"], hasUpdatedAt: true },
+  { table: "followups", pk: ["id"], hasUpdatedAt: true },
+  { table: "game_adherence", pk: ["mission_id"], hasUpdatedAt: false },
+  { table: "game_attempts", pk: ["id"], hasUpdatedAt: false },
+  { table: "game_goals", pk: ["id"], hasUpdatedAt: false },
+  { table: "game_links", pk: ["jti"], hasUpdatedAt: false },
+  { table: "game_metrics", pk: ["id"], hasUpdatedAt: false },
+  { table: "game_missions", pk: ["id"], hasUpdatedAt: false },
+  { table: "game_packages", pk: ["id", "version"], hasUpdatedAt: true },
+  { table: "game_prescriptions", pk: ["id"], hasUpdatedAt: true },
+  { table: "intervention_paths", pk: ["id"], hasUpdatedAt: true },
+  { table: "knowledge_items", pk: ["id"], hasUpdatedAt: true },
+  { table: "network_content", pk: ["id"], hasUpdatedAt: true },
+  { table: "notification_prefs", pk: ["student_id"], hasUpdatedAt: true },
+  { table: "ot_progress", pk: ["id"], hasUpdatedAt: false },
+  { table: "ot_skills", pk: ["id"], hasUpdatedAt: false },
+  { table: "pathway_probes", pk: ["id"], hasUpdatedAt: true },
+  { table: "pathway_sessions", pk: ["id"], hasUpdatedAt: true },
+  { table: "pathway_templates", pk: ["id"], hasUpdatedAt: true },
+  { table: "schools", pk: ["id"], hasUpdatedAt: false },
+  { table: "screening_entries", pk: ["id"], hasUpdatedAt: true },
+  { table: "staff", pk: ["id"], hasUpdatedAt: false },
+  { table: "staff_attendance", pk: ["id"], hasUpdatedAt: true },
+  { table: "student_education_history", pk: ["id"], hasUpdatedAt: false },
+  { table: "student_focus_links", pk: ["student_id", "focus_key"], hasUpdatedAt: false },
+  { table: "student_tags", pk: ["student_id", "tag_id"], hasUpdatedAt: false },
+  { table: "student_teachers", pk: ["id"], hasUpdatedAt: false },
+  { table: "students", pk: ["id"], hasUpdatedAt: false },
+  { table: "tags", pk: ["id"], hasUpdatedAt: false },
+  { table: "todos", pk: ["id"], hasUpdatedAt: true },
+  { table: "waitlist", pk: ["id"], hasUpdatedAt: true },
+  { table: "working_hours", pk: ["id"], hasUpdatedAt: true }
+];
+var SYNC_TABLE_MAP = new Map(SYNC_TABLES.map((t) => [t.table, t]));
+function syncTableMeta(table) {
+  return SYNC_TABLE_MAP.get(table);
+}
+__name(syncTableMeta, "syncTableMeta");
+function syncPkValueOfRow(row, pk) {
+  return pk.map((k) => row[k] === null || row[k] === void 0 ? "" : String(row[k])).join("|");
+}
+__name(syncPkValueOfRow, "syncPkValueOfRow");
+var EPOCH_STAMP = "1970-01-01T00:00:00.000Z";
+
+// src/application/instance-sync/winner.ts
+function canonicalJson(value) {
+  if (value === null || typeof value !== "object") return JSON.stringify(value ?? null);
+  if (Array.isArray(value)) return `[${value.map((v) => canonicalJson(v)).join(",")}]`;
+  const keys = Object.keys(value).sort();
+  const body = keys.map((k) => {
+    const v = value[k];
+    return `${JSON.stringify(k)}:${canonicalJson(v)}`;
+  }).join(",");
+  return `{${body}}`;
+}
+__name(canonicalJson, "canonicalJson");
+async function syncHash(value) {
+  const data = new TextEncoder().encode(canonicalJson(value));
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+__name(syncHash, "syncHash");
+function formationStampOf(row) {
+  return row.created_at ?? row.updated_at ?? null;
+}
+__name(formationStampOf, "formationStampOf");
+function compareStamps(a, b) {
+  if (a === b) return 0;
+  if (a === null) return 1;
+  if (b === null) return -1;
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+__name(compareStamps, "compareStamps");
+async function rowWinner(a, b) {
+  const formation = compareStamps(formationStampOf(a), formationStampOf(b));
+  if (formation !== 0) return formation < 0 ? "a" : "b";
+  const updated = compareStamps(a.updated_at ?? null, b.updated_at ?? null);
+  if (updated !== 0) return updated < 0 ? "a" : "b";
+  const [hashA, hashB] = await Promise.all([syncHash(a), syncHash(b)]);
+  if (hashA === hashB) return "a";
+  return hashA > hashB ? "a" : "b";
+}
+__name(rowWinner, "rowWinner");
+function stampHashWinner(a, b) {
+  const cmp = compareStamps(a.stamp, b.stamp);
+  if (cmp !== 0) return cmp < 0 ? "a" : "b";
+  if (a.hash === b.hash) return "a";
+  return a.hash > b.hash ? "a" : "b";
+}
+__name(stampHashWinner, "stampHashWinner");
+function tombstoneCanonical(table, pk, deletedAt) {
+  return { deleted_at: deletedAt, pk, table_name: table };
+}
+__name(tombstoneCanonical, "tombstoneCanonical");
+function parseCursorPair(raw2) {
+  if (raw2) {
+    try {
+      const parsed = JSON.parse(raw2);
+      if (typeof parsed.rows === "string" && typeof parsed.deleted === "string") {
+        return { rows: parsed.rows, deleted: parsed.deleted };
+      }
+    } catch {
+    }
+  }
+  return { rows: EPOCH_STAMP, deleted: EPOCH_STAMP };
+}
+__name(parseCursorPair, "parseCursorPair");
+
+// src/application/instance-sync/service.ts
+var PULL_MAX_ROWS_PER_TABLE = 500;
+var CONFLICT_PAYLOAD_MAX_BYTES = 64 * 1024;
+var DEVICE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{2,63}$/;
+var nowIso = /* @__PURE__ */ __name(() => (/* @__PURE__ */ new Date()).toISOString(), "nowIso");
+function assertSafeIdent(name) {
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) throw new Error(`\u0634\u0646\u0627\u0633\u0647\u0654 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0628\u0631\u0627\u06CC SQL: ${name}`);
+  return name;
+}
+__name(assertSafeIdent, "assertSafeIdent");
+function bindValue(v) {
+  if (v === void 0) return null;
+  if (typeof v === "boolean") return v ? 1 : 0;
+  if (v === null || typeof v === "string" || typeof v === "number" || typeof v === "bigint") return v;
+  return String(v);
+}
+__name(bindValue, "bindValue");
+async function columnsOf(db, table) {
+  const rows = await db.query(
+    `PRAGMA table_info(${assertSafeIdent(table)})`
+  );
+  return rows.map((r) => ({ name: r.name, notnull: Number(r.notnull), dflt: r.dflt_value, pk: Number(r.pk) }));
+}
+__name(columnsOf, "columnsOf");
+function maxStamp(current, values) {
+  return values.reduce((m, v) => v > m ? v : m, current);
+}
+__name(maxStamp, "maxStamp");
+function truncateLoserPayload(json3) {
+  if (Buffer.byteLength(json3, "utf8") <= CONFLICT_PAYLOAD_MAX_BYTES) return json3;
+  const marker = JSON.stringify({ __truncated: true, full_bytes: Buffer.byteLength(json3, "utf8") });
+  const budget = CONFLICT_PAYLOAD_MAX_BYTES - Buffer.byteLength(marker, "utf8") - 64;
+  let head = json3.slice(0, Math.max(budget, 0));
+  while (Buffer.byteLength(head, "utf8") > budget) head = head.slice(0, Math.floor(head.length * 0.9));
+  return JSON.stringify({ __truncated: true, full_bytes: Buffer.byteLength(json3, "utf8"), head });
+}
+__name(truncateLoserPayload, "truncateLoserPayload");
+async function instanceState(db, deviceId) {
+  const rows = await db.query(
+    `SELECT table_name, pull_cursor, push_cursor FROM _sync_state`
+  );
+  const cursors = {};
+  for (const meta3 of SYNC_TABLES) {
+    const rec = rows.find((r) => r.table_name === meta3.table);
+    cursors[meta3.table] = {
+      pull: parseCursorPair(rec?.pull_cursor),
+      push: parseCursorPair(rec?.push_cursor)
+    };
+  }
+  let appliedMigrations = null;
+  try {
+    const rec = await db.queryOne(`SELECT COUNT(*) AS n FROM d1_migrations`);
+    appliedMigrations = rec ? Number(rec.n) : null;
+  } catch {
+    appliedMigrations = null;
+  }
+  return { device_id: deviceId, applied_migrations: appliedMigrations, cursors, table_count: SYNC_TABLES.length };
+}
+__name(instanceState, "instanceState");
+async function completeStampGroup(db, table, stampCol, pkOrder, rows) {
+  if (rows.length !== PULL_MAX_ROWS_PER_TABLE) return rows;
+  const lastStamp = rows[rows.length - 1][stampCol];
+  if (typeof lastStamp !== "string") return rows;
+  const group = await db.query(
+    `SELECT * FROM ${assertSafeIdent(table)} WHERE ${assertSafeIdent(stampCol)} = ? ORDER BY ${pkOrder} ASC`,
+    [lastStamp]
+  );
+  return [...rows.filter((r) => r[stampCol] !== lastStamp), ...group];
+}
+__name(completeStampGroup, "completeStampGroup");
+async function pull(db, since) {
+  const out = {};
+  for (const meta3 of SYNC_TABLES) {
+    const table = assertSafeIdent(meta3.table);
+    const pkOrder = meta3.pk.map(assertSafeIdent).join(", ");
+    const sincePair = since.tables?.[meta3.table];
+    const cursorRows = typeof sincePair?.rows === "string" ? sincePair.rows : EPOCH_STAMP;
+    const cursorDeleted = typeof sincePair?.deleted === "string" ? sincePair.deleted : EPOCH_STAMP;
+    const rows = await db.query(
+      `SELECT * FROM ${table} WHERE updated_at IS NOT NULL AND updated_at > ? ORDER BY updated_at ASC, ${pkOrder} ASC LIMIT ?`,
+      [cursorRows, PULL_MAX_ROWS_PER_TABLE]
+    );
+    const completed2 = await completeStampGroup(db, table, "updated_at", pkOrder, rows);
+    let deletedRows = await db.query(
+      `SELECT table_name, pk, deleted_at, device_id FROM _sync_deleted WHERE table_name = ? AND deleted_at > ? ORDER BY deleted_at ASC, pk ASC LIMIT ?`,
+      [meta3.table, cursorDeleted, PULL_MAX_ROWS_PER_TABLE]
+    );
+    if (deletedRows.length === PULL_MAX_ROWS_PER_TABLE) {
+      const lastStamp = deletedRows[deletedRows.length - 1].deleted_at;
+      const group = await db.query(
+        `SELECT table_name, pk, deleted_at, device_id FROM _sync_deleted WHERE table_name = ? AND deleted_at = ? ORDER BY pk ASC`,
+        [meta3.table, lastStamp]
+      );
+      deletedRows = [...deletedRows.filter((r) => r.deleted_at !== lastStamp), ...group];
+    }
+    out[meta3.table] = {
+      rows: completed2,
+      deleted: deletedRows,
+      next_cursors: {
+        rows: maxStamp(cursorRows, completed2.map((r) => String(r.updated_at ?? ""))),
+        deleted: maxStamp(cursorDeleted, deletedRows.map((r) => r.deleted_at))
+      }
+    };
+  }
+  return { tables: out };
+}
+__name(pull, "pull");
+function wherePk(pk) {
+  return pk.map((c) => `${assertSafeIdent(c)} = ?`).join(" AND ");
+}
+__name(wherePk, "wherePk");
+async function fetchRow(db, table, pk, pkValue) {
+  const parts = syncPkValueSplitSafe(pkValue, pk);
+  if (!parts) return null;
+  const rows = await db.query(
+    `SELECT * FROM ${assertSafeIdent(table)} WHERE ${wherePk(pk)}`,
+    parts.map(bindValue)
+  );
+  return rows[0] ?? null;
+}
+__name(fetchRow, "fetchRow");
+function syncPkValueSplitSafe(pkValue, pk) {
+  const parts = pkValue.split("|");
+  if (parts.length !== pk.length || parts.some((p) => p === "")) return null;
+  return parts;
+}
+__name(syncPkValueSplitSafe, "syncPkValueSplitSafe");
+async function localTombstone(db, table, pkValue) {
+  return db.queryOne(
+    `SELECT pk, deleted_at, device_id FROM _sync_deleted WHERE table_name = ? AND pk = ?`,
+    [table, pkValue]
+  );
+}
+__name(localTombstone, "localTombstone");
+function conflictWrite(input2) {
+  return {
+    sql: `INSERT INTO _sync_conflicts (table_name, pk, winner_side, winner_updated_at, loser_updated_at, resolved_at, detail, loser_payload, device_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    params: [
+      input2.table,
+      input2.pkValue,
+      input2.winnerSide,
+      input2.winnerStamp,
+      input2.loserStamp,
+      nowIso(),
+      JSON.stringify({ rule: input2.rule, table: input2.table, pk: input2.pkValue }),
+      truncateLoserPayload(input2.loserJson),
+      input2.deviceId
+    ]
+  };
+}
+__name(conflictWrite, "conflictWrite");
+function upsertRowWrite(table, columns, pk, row) {
+  const cols = columns.map((c) => assertSafeIdent(c.name));
+  const pkSet = new Set(pk);
+  const conflictTarget = pk.map(assertSafeIdent).join(", ");
+  const updateSet = columns.filter((c) => !pkSet.has(c.name)).map((c) => `${assertSafeIdent(c.name)} = excluded.${assertSafeIdent(c.name)}`).join(", ");
+  const placeholders = cols.map(() => "?").join(", ");
+  return {
+    sql: `INSERT INTO ${assertSafeIdent(table)} (${cols.join(", ")}) VALUES (${placeholders})
+          ON CONFLICT(${conflictTarget}) DO UPDATE SET ${updateSet}`,
+    params: cols.map((c) => bindValue(row[c]))
+  };
+}
+__name(upsertRowWrite, "upsertRowWrite");
+function replaceRowWrite(table, columns, row) {
+  const cols = columns.map((c) => assertSafeIdent(c.name));
+  const placeholders = cols.map(() => "?").join(", ");
+  return {
+    sql: `INSERT OR REPLACE INTO ${assertSafeIdent(table)} (${cols.join(", ")}) VALUES (${placeholders})`,
+    params: cols.map((c) => bindValue(row[c]))
+  };
+}
+__name(replaceRowWrite, "replaceRowWrite");
+function deleteRowWrite(table, pk, pkValue) {
+  return { sql: `DELETE FROM ${assertSafeIdent(table)} WHERE ${wherePk(pk)}`, params: syncPkValueSplitSafe(pkValue, pk).map(bindValue) };
+}
+__name(deleteRowWrite, "deleteRowWrite");
+function tombstoneUpsertWrite(item) {
+  return {
+    sql: `INSERT INTO _sync_deleted (table_name, pk, deleted_at, device_id) VALUES (?, ?, ?, ?)
+          ON CONFLICT(table_name, pk) DO UPDATE SET deleted_at = excluded.deleted_at, device_id = excluded.device_id`,
+    params: [item.table, item.pk, item.deleted_at, item.device_id]
+  };
+}
+__name(tombstoneUpsertWrite, "tombstoneUpsertWrite");
+function tombstoneDeleteWrite(table, pkValue) {
+  return { sql: `DELETE FROM _sync_deleted WHERE table_name = ? AND pk = ?`, params: [table, pkValue] };
+}
+__name(tombstoneDeleteWrite, "tombstoneDeleteWrite");
+async function push(db, deviceId, payload) {
+  const result = { device_id: deviceId, tables: {}, applied: 0 };
+  const writes = [];
+  for (const meta3 of SYNC_TABLES) {
+    const tablePayload = payload.tables?.[meta3.table];
+    const outcome = { echo: {}, conflicts: 0, upserts: 0, rejected: [] };
+    result.tables[meta3.table] = outcome;
+    if (!tablePayload || !tablePayload.rows?.length && !tablePayload.deleted?.length) continue;
+    const table = assertSafeIdent(meta3.table);
+    const columns = await columnsOf(db, table);
+    const colNames = new Set(columns.map((c) => c.name));
+    const requiredCols = columns.filter((c) => c.notnull === 1 && c.pk === 0 && c.dflt === null).map((c) => c.name);
+    for (const raw2 of tablePayload.rows ?? []) {
+      if (typeof raw2 !== "object" || raw2 === null) {
+        outcome.rejected.push({ pk: "?", reason: "ROW_INVALID" });
+        continue;
+      }
+      const row = raw2;
+      const pkValue = syncPkValueOfRow(row, meta3.pk);
+      if (pkValue.split("|").length !== meta3.pk.length || pkValue.split("|").some((p) => p === "")) {
+        outcome.rejected.push({ pk: pkValue || "?", reason: "PK_NAKAMEL" });
+        continue;
+      }
+      const unknownCol = Object.keys(row).find((k) => !colNames.has(k));
+      if (unknownCol) {
+        outcome.rejected.push({ pk: pkValue, reason: `COLUMN_NASHENAKHTE:${unknownCol}` });
+        continue;
+      }
+      const missingRequired = requiredCols.find((c) => row[c] === void 0 || row[c] === null);
+      if (missingRequired) {
+        outcome.rejected.push({ pk: pkValue, reason: `STOON_ELZAMI:${missingRequired}` });
+        continue;
+      }
+      const local = await fetchRow(db, meta3.table, meta3.pk, pkValue);
+      const localTomb = await localTombstone(db, meta3.table, pkValue);
+      if (local !== null) {
+        const side = await rowWinner(local, row);
+        const sameHash = await syncHash(local) === await syncHash(row);
+        if (side === "b") {
+          if (sameHash) {
+            outcome.echo[pkValue] = row;
+            continue;
+          }
+          writes.push(conflictWrite({
+            table: meta3.table,
+            pkValue,
+            winnerSide: "remote",
+            winnerStamp: row.updated_at ?? null,
+            loserStamp: local.updated_at ?? null,
+            rule: "rowWinner",
+            loserJson: JSON.stringify(local),
+            deviceId
+          }));
+          outcome.conflicts += 1;
+          const stampsEqual = typeof row.updated_at === "string" && typeof local.updated_at === "string" && row.updated_at === local.updated_at;
+          writes.push(stampsEqual ? replaceRowWrite(meta3.table, columns, row) : upsertRowWrite(meta3.table, columns, meta3.pk, row));
+          if (localTomb) writes.push(tombstoneDeleteWrite(meta3.table, pkValue));
+          outcome.echo[pkValue] = row;
+          outcome.upserts += 1;
+        } else {
+          if (!sameHash) {
+            writes.push(conflictWrite({
+              table: meta3.table,
+              pkValue,
+              winnerSide: "local",
+              winnerStamp: local.updated_at ?? null,
+              loserStamp: row.updated_at ?? null,
+              rule: "rowWinner",
+              loserJson: JSON.stringify(row),
+              deviceId
+            }));
+            outcome.conflicts += 1;
+          }
+          outcome.echo[pkValue] = local;
+        }
+      } else if (localTomb !== null) {
+        const tombEntity = { stamp: localTomb.deleted_at, hash: await syncHash(tombstoneCanonical(meta3.table, pkValue, localTomb.deleted_at)) };
+        const rowEntity = { stamp: row.updated_at ?? null, hash: await syncHash(row) };
+        if (stampHashWinner(tombEntity, rowEntity) === "a") {
+          outcome.echo[pkValue] = null;
+        } else {
+          writes.push(replaceRowWrite(meta3.table, columns, row));
+          writes.push(tombstoneDeleteWrite(meta3.table, pkValue));
+          outcome.echo[pkValue] = row;
+          outcome.upserts += 1;
+        }
+      } else {
+        writes.push(replaceRowWrite(meta3.table, columns, row));
+        outcome.echo[pkValue] = row;
+        outcome.upserts += 1;
+      }
+    }
+    for (const item of tablePayload.deleted ?? []) {
+      if (!item || typeof item.pk !== "string" || item.pk === "" || typeof item.deleted_at !== "string") {
+        outcome.rejected.push({ pk: item?.pk ?? "?", reason: "TOMB_INVALID" });
+        continue;
+      }
+      if (syncPkValueSplitSafe(item.pk, meta3.pk) === null) {
+        outcome.rejected.push({ pk: item.pk, reason: "PK_NAKHANI" });
+        continue;
+      }
+      const localTomb = await localTombstone(db, meta3.table, item.pk);
+      const local = await fetchRow(db, meta3.table, meta3.pk, item.pk);
+      const incomingTomb = { table_name: meta3.table, pk: item.pk, deleted_at: item.deleted_at };
+      const incomingEntity = { stamp: item.deleted_at, hash: await syncHash(incomingTomb) };
+      if (local !== null) {
+        const rowEntity = { stamp: local.updated_at ?? null, hash: await syncHash(local) };
+        if (stampHashWinner(incomingEntity, rowEntity) === "a") {
+          writes.push(conflictWrite({
+            table: meta3.table,
+            pkValue: item.pk,
+            winnerSide: "tombstone",
+            winnerStamp: item.deleted_at,
+            loserStamp: local.updated_at ?? null,
+            rule: "stampHashWinner",
+            loserJson: JSON.stringify(local),
+            deviceId
+          }));
+          outcome.conflicts += 1;
+          writes.push(deleteRowWrite(meta3.table, meta3.pk, item.pk));
+          writes.push(tombstoneUpsertWrite({ table: meta3.table, pk: item.pk, deleted_at: item.deleted_at, device_id: item.device_id ?? null }));
+          outcome.echo[item.pk] = null;
+          outcome.upserts += 1;
+        } else {
+          writes.push(conflictWrite({
+            table: meta3.table,
+            pkValue: item.pk,
+            winnerSide: "row",
+            winnerStamp: local.updated_at ?? null,
+            loserStamp: item.deleted_at,
+            rule: "stampHashWinner",
+            loserJson: JSON.stringify(incomingTomb),
+            deviceId
+          }));
+          outcome.conflicts += 1;
+          outcome.echo[item.pk] = local;
+        }
+      } else if (localTomb !== null) {
+        const localEntity = { stamp: localTomb.deleted_at, hash: await syncHash(tombstoneCanonical(meta3.table, item.pk, localTomb.deleted_at)) };
+        if (stampHashWinner(incomingEntity, localEntity) === "a") {
+          writes.push(tombstoneUpsertWrite({ table: meta3.table, pk: item.pk, deleted_at: item.deleted_at, device_id: item.device_id ?? null }));
+        }
+        outcome.echo[item.pk] = null;
+      } else {
+        writes.push(tombstoneUpsertWrite({ table: meta3.table, pk: item.pk, deleted_at: item.deleted_at, device_id: item.device_id ?? null }));
+        outcome.echo[item.pk] = null;
+        outcome.upserts += 1;
+      }
+    }
+    result.applied += outcome.upserts;
+  }
+  if (writes.length > 0) {
+    await db.transaction(async (tx) => {
+      for (const w of writes) await tx.execute(w.sql, w.params);
+    });
+  }
+  return result;
+}
+__name(push, "push");
+
+// src/application/instance-sync/routes.ts
+var SinceTableSchema = external_exports.object({
+  rows: external_exports.string().min(10).optional(),
+  deleted: external_exports.string().min(10).optional()
+});
+var PullSchema = external_exports.object({
+  since: external_exports.object({
+    tables: external_exports.record(external_exports.string().min(1).max(64), SinceTableSchema).optional()
+  }).optional()
+});
+var TombstoneSchema = external_exports.object({
+  pk: external_exports.string().min(1).max(512),
+  deleted_at: external_exports.string().min(10).max(40),
+  device_id: external_exports.string().max(64).nullish()
+});
+var PushSchema = external_exports.object({
+  device_id: external_exports.string().min(4).max(64).regex(DEVICE_ID_PATTERN, "\u0634\u0646\u0627\u0633\u0647\u0654 \u0646\u0645\u0648\u0646\u0647 (device_id) \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A"),
+  tables: external_exports.record(
+    external_exports.string().min(1).max(64),
+    external_exports.object({
+      rows: external_exports.array(external_exports.record(external_exports.string().min(1).max(64), external_exports.unknown())).max(1e3).optional(),
+      deleted: external_exports.array(TombstoneSchema).max(1e3).optional()
+    })
+  )
+});
+function bearerToken2(header) {
+  const value = header?.trim();
+  if (!value) return null;
+  return value.startsWith("Bearer ") ? value.slice(7).trim() || null : null;
+}
+__name(bearerToken2, "bearerToken");
+function timingSafeEqualStr2(a, b) {
+  const len = Math.max(a.length, b.length);
+  let diff = a.length ^ b.length;
+  for (let i = 0; i < len; i++) diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
+  return diff === 0;
+}
+__name(timingSafeEqualStr2, "timingSafeEqualStr");
+var authFailed = /* @__PURE__ */ __name((c) => c.json({ error: "INSTANCE_AUTH_FAILED", message: "\u0627\u0639\u062A\u0628\u0627\u0631 \u0647\u0645\u200C\u06AF\u0627\u0645\u06CC \u0646\u0645\u0648\u0646\u0647 \u067E\u0630\u06CC\u0631\u0641\u062A\u0647 \u0646\u0634\u062F" }, 401), "authFailed");
+function createInstanceSyncApp(deps) {
+  const { db, logger } = deps;
+  const log = logger.child("instance-sync");
+  const app = new Hono3();
+  app.use("*", async (c, next) => {
+    await next();
+    c.header("Cache-Control", "no-store");
+  });
+  async function authorize(c) {
+    const token = bearerToken2(c.req.header("Authorization"));
+    if (!token) return null;
+    const expected = await resolveSessionSecret(c.env);
+    if (!timingSafeEqualStr2(token, expected)) {
+      log.warn("instance_sync.auth_failed", {});
+      return null;
+    }
+    const deviceId = (c.req.header("X-Device-Id") ?? "").trim();
+    if (!DEVICE_ID_PATTERN.test(deviceId)) return null;
+    return deviceId;
+  }
+  __name(authorize, "authorize");
+  app.get("/state", async (c) => {
+    const deviceId = await authorize(c);
+    if (deviceId === null) return authFailed(c);
+    const state = await instanceState(db, deviceId);
+    return c.json({ data: state }, 200);
+  });
+  app.post("/pull", async (c) => {
+    const deviceId = await authorize(c);
+    if (deviceId === null) return authFailed(c);
+    const parsed = PullSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: "VALIDATION", message: "\u0628\u062F\u0646\u0647\u0654 pull \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A", issues: parsed.error.issues }, 400);
+    }
+    const since = parsed.data.since ?? {};
+    const result = await pull(db, since);
+    return c.json({ data: result }, 200);
+  });
+  app.post("/push", async (c) => {
+    const deviceId = await authorize(c);
+    if (deviceId === null) return authFailed(c);
+    const parsed = PushSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: "VALIDATION", message: "\u0628\u062F\u0646\u0647\u0654 push \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A", issues: parsed.error.issues }, 400);
+    }
+    const body = parsed.data;
+    if (body.device_id !== deviceId) {
+      return c.json({ error: "DEVICE_MISMATCH", message: "device_id \u0628\u062F\u0646\u0647 \u0628\u0627 \u0647\u062F\u0631 X-Device-Id \u0647\u0645\u200C\u062E\u0648\u0627\u0646 \u0646\u06CC\u0633\u062A" }, 400);
+    }
+    const result = await push(db, body.device_id, { tables: body.tables });
+    return c.json({ data: result }, 200);
+  });
+  return app;
+}
+__name(createInstanceSyncApp, "createInstanceSyncApp");
+
+// src/application/instance-sync/assets.ts
+var CF_API_BASE = "https://api.cloudflare.com/client/v4";
+var WEB_ASSETS_MAX_TOTAL_BYTES = 20 * 1024 * 1024;
+var WEB_ASSETS_MAX_FILE_BYTES = 8 * 1024 * 1024;
+function normalizeAssetPath(raw2) {
+  const p = String(raw2).replace(/\\/g, "/");
+  return p.startsWith("/") ? p : `/${p}`;
+}
+__name(normalizeAssetPath, "normalizeAssetPath");
+function base64Of(bytes) {
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 32768) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + 32768));
+  }
+  return btoa(bin);
+}
+__name(base64Of, "base64Of");
+async function sha256Prefix32(bytes) {
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  let hex3 = "";
+  for (const b of new Uint8Array(digest)) hex3 += b.toString(16).padStart(2, "0");
+  return hex3.slice(0, 32);
+}
+__name(sha256Prefix32, "sha256Prefix32");
+function mbOf(bytes) {
+  return (bytes / (1024 * 1024)).toFixed(1);
+}
+__name(mbOf, "mbOf");
+async function readJsonBody(res) {
+  try {
+    return await res.json();
+  } catch {
+    return {};
+  }
+}
+__name(readJsonBody, "readJsonBody");
+function cfFailMessage(prefix, status, errors) {
+  const detail = (Array.isArray(errors) ? errors : []).map((e) => e && typeof e.message === "string" && e.message ? e.message : e && e.code !== void 0 ? `\u06A9\u062F ${e.code}` : "").filter(Boolean).slice(0, 5).join("\u061B ");
+  return detail ? `${prefix} (HTTP ${status}) \u2014 ${detail}` : `${prefix} (HTTP ${status})`;
+}
+__name(cfFailMessage, "cfFailMessage");
+async function buildAssetManifest(files) {
+  const manifest = {};
+  for (const f of files) {
+    if (!f || typeof f.path !== "string" || !(f.bytes instanceof Uint8Array)) continue;
+    manifest[normalizeAssetPath(f.path)] = { hash: await sha256Prefix32(f.bytes), size: f.bytes.length };
+  }
+  return manifest;
+}
+__name(buildAssetManifest, "buildAssetManifest");
+async function uploadWebAssets(deps) {
+  const started = deps.now ?? Date.now;
+  const doFetch = deps.fetchImpl ?? ((input2, i) => fetch(input2, i));
+  const files = Array.isArray(deps.files) ? deps.files : [];
+  if (files.length === 0) {
+    return { ok: true, jwt: "", manifest: {}, fileCount: 0, uploadedCount: 0 };
+  }
+  let totalBytes = 0;
+  for (const f of files) {
+    const size = f?.bytes?.length ?? 0;
+    if (size > WEB_ASSETS_MAX_FILE_BYTES) {
+      return {
+        ok: false,
+        step: "assets-size",
+        kind: "assets_error",
+        message: `\u0641\u0627\u06CC\u0644 \u062F\u0627\u0631\u0627\u06CC\u06CC \xAB${f && typeof f.path === "string" ? normalizeAssetPath(f.path) : "?"}\xBB ${mbOf(size)} \u0645\u06AF\u0627\u0628\u0627\u06CC\u062A \u0627\u0633\u062A \u2014 \u0633\u0642\u0641 \u0647\u0631 \u0641\u0627\u06CC\u0644 8 \u0645\u06AF\u0627\u0628\u0627\u06CC\u062A \u0627\u0633\u062A\u061B \u0641\u0627\u06CC\u0644 \u0628\u0632\u0631\u06AF \u0631\u0627 \u0627\u0632 public \u062D\u0630\u0641 \u06A9\u0646\u06CC\u062F`
+      };
+    }
+    totalBytes += size;
+  }
+  if (totalBytes > WEB_ASSETS_MAX_TOTAL_BYTES) {
+    return {
+      ok: false,
+      step: "assets-size",
+      kind: "assets_error",
+      message: `\u0645\u062C\u0645\u0648\u0639 \u062F\u0627\u0631\u0627\u06CC\u06CC\u200C\u0647\u0627\u06CC \u0648\u0628 ${mbOf(totalBytes)} \u0645\u06AF\u0627\u0628\u0627\u06CC\u062A \u0627\u0633\u062A \u2014 \u0633\u0642\u0641 \u06A9\u0644 20 \u0645\u06AF\u0627\u0628\u0627\u06CC\u062A \u0627\u0633\u062A\u061B \u067E\u0648\u0634\u0647\u0654 public \u0631\u0627 \u0633\u0628\u06A9\u200C\u062A\u0631 \u06A9\u0646\u06CC\u062F`
+    };
+  }
+  const manifest = await buildAssetManifest(files);
+  const bytesByHash = /* @__PURE__ */ new Map();
+  for (const f of files) {
+    const entry = manifest[normalizeAssetPath(f.path)];
+    if (entry) bytesByHash.set(entry.hash, f.bytes);
+  }
+  let sessionRes;
+  try {
+    sessionRes = await doFetch(
+      `${CF_API_BASE}/accounts/${deps.accountId}/workers/scripts/${deps.scriptName}/assets-upload-session`,
+      {
+        method: "POST",
+        headers: { authorization: `Bearer ${deps.token}`, "content-type": "application/json" },
+        body: JSON.stringify({ manifest })
+      }
+    );
+  } catch {
+    return {
+      ok: false,
+      step: "assets-session",
+      kind: "network",
+      message: "\u0627\u062A\u0635\u0627\u0644 \u0628\u0647 api.cloudflare.com \u0628\u0631\u0627\u06CC \u0633\u0634\u0646 \u0622\u067E\u0644\u0648\u062F \u062F\u0627\u0631\u0627\u06CC\u06CC\u200C\u0647\u0627 \u0628\u0631\u0642\u0631\u0627\u0631 \u0646\u0634\u062F \u2014 \u0627\u06CC\u0646\u062A\u0631\u0646\u062A \u0631\u0627 \u0628\u0631\u0631\u0633\u06CC \u06A9\u0646\u06CC\u062F"
+    };
+  }
+  const sessionBody = await readJsonBody(sessionRes);
+  if (!sessionRes.ok || sessionBody.success === false) {
+    return {
+      ok: false,
+      step: "assets-session",
+      kind: "cf_api",
+      message: cfFailMessage("\u0633\u0634\u0646 \u0622\u067E\u0644\u0648\u062F \u062F\u0627\u0631\u0627\u06CC\u06CC\u200C\u0647\u0627\u06CC \u0648\u0628 \u0633\u0627\u062E\u062A\u0647 \u0646\u0634\u062F", sessionRes.status, sessionBody.errors),
+      ...sessionBody.errors && sessionBody.errors.length > 0 ? { errors: sessionBody.errors.slice(0, 5) } : {}
+    };
+  }
+  const sessionResult = sessionBody.result ?? {};
+  const sessionJwt = typeof sessionResult.jwt === "string" && sessionResult.jwt ? sessionResult.jwt : "";
+  const buckets = Array.isArray(sessionResult.buckets) ? sessionResult.buckets.filter((b) => Array.isArray(b) && b.every((h) => typeof h === "string" && h.length > 0)) : null;
+  if (!sessionJwt || !buckets || buckets.length !== sessionResult.buckets.length) {
+    return {
+      ok: false,
+      step: "assets-session",
+      kind: "cf_api",
+      message: "\u067E\u0627\u0633\u062E \u0633\u0634\u0646 \u0622\u067E\u0644\u0648\u062F \u062F\u0627\u0631\u0627\u06CC\u06CC\u200C\u0647\u0627\u06CC \u0648\u0628 \u0645\u0639\u062A\u0628\u0631 \u0646\u0628\u0648\u062F \u2014 jwt \u06CC\u0627 buckets \u063A\u0627\u06CC\u0628 \u0627\u0633\u062A"
+    };
+  }
+  const unknownHash = buckets.flat().filter((h) => !bytesByHash.has(h));
+  if (unknownHash.length > 0) {
+    return {
+      ok: false,
+      step: "assets-session",
+      kind: "cf_api",
+      message: "buckets \u0633\u0634\u0646 hash \u0646\u0627\u0634\u0646\u0627\u062E\u062A\u0647 \u062F\u0627\u0631\u062F \u2014 manifest \u0628\u0627 buckets \u06A9\u0644\u0627\u062F\u0641\u0644\u0631 \u0647\u0645\u200C\u062E\u0648\u0627\u0646 \u0646\u06CC\u0633\u062A"
+    };
+  }
+  deps.log?.(`\u0633\u0634\u0646 \u0622\u067E\u0644\u0648\u062F \u062F\u0627\u0631\u0627\u06CC\u06CC\u200C\u0647\u0627\u06CC \u0648\u0628 \u0633\u0627\u062E\u062A\u0647 \u0634\u062F \u2014 ${files.length} \u0641\u0627\u06CC\u0644 \u062F\u0631 manifest\u060C ${buckets.length} bucket`);
+  let finalJwt = sessionJwt;
+  let uploadedCount = 0;
+  for (let i = 0; i < buckets.length; i += 1) {
+    const form = new FormData();
+    for (const hash2 of buckets[i]) {
+      form.append(hash2, base64Of(bytesByHash.get(hash2)));
+    }
+    let uploadRes;
+    try {
+      uploadRes = await doFetch(`${CF_API_BASE}/accounts/${deps.accountId}/workers/assets/upload?base64=true`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${sessionJwt}` },
+        body: form
+      });
+    } catch {
+      return {
+        ok: false,
+        step: "assets-upload",
+        kind: "network",
+        message: `\u0627\u062A\u0635\u0627\u0644 \u0628\u0631\u0627\u06CC \u0622\u067E\u0644\u0648\u062F bucket ${i + 1} \u0627\u0632 ${buckets.length} \u0628\u0631\u0642\u0631\u0627\u0631 \u0646\u0634\u062F \u2014 \u0627\u06CC\u0646\u062A\u0631\u0646\u062A \u0631\u0627 \u0628\u0631\u0631\u0633\u06CC \u06A9\u0646\u06CC\u062F`
+      };
+    }
+    const uploadBody = await readJsonBody(uploadRes);
+    if (!uploadRes.ok || uploadBody.success === false) {
+      return {
+        ok: false,
+        step: "assets-upload",
+        kind: "cf_api",
+        message: cfFailMessage(
+          `\u0622\u067E\u0644\u0648\u062F \u062F\u0627\u0631\u0627\u06CC\u06CC\u200C\u0647\u0627\u06CC \u0648\u0628 \u062F\u0631 bucket ${i + 1} \u0627\u0632 ${buckets.length} \u0646\u0627\u0645\u0648\u0641\u0642 \u0628\u0648\u062F`,
+          uploadRes.status,
+          uploadBody.errors
+        ),
+        ...uploadBody.errors && uploadBody.errors.length > 0 ? { errors: uploadBody.errors.slice(0, 5) } : {}
+      };
+    }
+    const uploadJwt = uploadBody.result?.jwt;
+    if (typeof uploadJwt === "string" && uploadJwt) finalJwt = uploadJwt;
+    uploadedCount += buckets[i].length;
+  }
+  const ms = Math.max(0, started());
+  deps.log?.(`\u062F\u0627\u0631\u0627\u06CC\u06CC\u200C\u0647\u0627\u06CC \u0648\u0628 \u0622\u067E\u0644\u0648\u062F \u0634\u062F \u2014 ${uploadedCount} \u0627\u0632 ${files.length} \u0641\u0627\u06CC\u0644 \u062F\u0631 ${buckets.length} bucket (${ms}ms)`);
+  return { ok: true, jwt: finalJwt, manifest, fileCount: files.length, uploadedCount };
+}
+__name(uploadWebAssets, "uploadWebAssets");
+
+// src/application/instance-sync/provision.ts
+var CF_API_BASE2 = "https://api.cloudflare.com/client/v4";
+var SCHEMA_CHUNK_BYTES = 64 * 1024;
+var MIGRATION_MARKER = "-- ===== migration: ";
+var HEALTH_TIMEOUT_MS = 3e4;
+var HEALTH_RETRY_MS = 1e3;
+var PROVISION_DEVICE_ID = "provision-check";
+var CENTRAL_MODULE_NAME = "central-worker.js";
+var COMPATIBILITY_DATE = "2025-01-01";
+var WORKER_NAME_PATTERN = /^[a-z][a-z0-9-]{1,61}$/;
+var WORKER_NAME_PREFIX = "markaz-";
+function normalizeWorkerName(raw2) {
+  const input2 = typeof raw2 === "string" ? raw2.trim() : "";
+  if (!input2 || input2 === WORKER_NAME_PREFIX) {
+    return {
+      ok: false,
+      kind: "invalid_name",
+      message: "\u0646\u0627\u0645 \u0648\u0631\u06A9\u0631 \u062E\u0627\u0644\u06CC \u0627\u0633\u062A \u2014 \u06CC\u06A9 \u0646\u0627\u0645 \u0627\u0646\u06AF\u0644\u06CC\u0633\u06CC \u0628\u062F\u0647\u06CC\u062F (\u0645\u062B\u0644\u0627\u064B clinic)\u061B \u067E\u06CC\u0634\u0648\u0646\u062F \xABmarkaz-\xBB \u062E\u0648\u062F\u06A9\u0627\u0631 \u0627\u0636\u0627\u0641\u0647 \u0645\u06CC\u200C\u0634\u0648\u062F"
+    };
+  }
+  const candidate = input2.startsWith(WORKER_NAME_PREFIX) ? input2 : `${WORKER_NAME_PREFIX}${input2}`;
+  if (!WORKER_NAME_PATTERN.test(candidate)) {
+    return {
+      ok: false,
+      kind: "invalid_name",
+      message: "\u0646\u0627\u0645 \u0648\u0631\u06A9\u0631 \u0641\u0642\u0637 \u062D\u0631\u0648\u0641 \u0627\u0646\u06AF\u0644\u06CC\u0633\u06CC \u06A9\u0648\u0686\u06A9\u060C \u0631\u0642\u0645 \u0648 \u062E\u0637 \u062A\u06CC\u0631\u0647 \u0627\u0633\u062A (\u062F\u0633\u062A\u200C\u06A9\u0645 \u06F3 \u0648 \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F6\u06F2 \u06A9\u0627\u0631\u0627\u06A9\u062A\u0631\u060C \u0622\u063A\u0627\u0632 \u0628\u0627 \u062D\u0631\u0641 \u0627\u0646\u06AF\u0644\u06CC\u0633\u06CC) \u2014 \u0646\u0627\u0645 \u0641\u0627\u0631\u0633\u06CC \u06CC\u0627 \u0646\u0645\u0627\u062F\u0647\u0627\u06CC \u062F\u06CC\u06AF\u0631 \u067E\u0630\u06CC\u0631\u0641\u062A\u0647 \u0646\u06CC\u0633\u062A"
+    };
+  }
+  return { ok: true, workerName: candidate, d1Name: `${candidate}-db` };
+}
+__name(normalizeWorkerName, "normalizeWorkerName");
+function base64urlOf(bytes) {
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 1) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+__name(base64urlOf, "base64urlOf");
+function randomSecret2(random) {
+  const bytes = random ? random(32) : crypto.getRandomValues(new Uint8Array(32));
+  return base64urlOf(bytes);
+}
+__name(randomSecret2, "randomSecret");
+function authHeaders(token) {
+  return { authorization: `Bearer ${token}`, "content-type": "application/json" };
+}
+__name(authHeaders, "authHeaders");
+async function callCf(doFetch, path, init) {
+  let res;
+  try {
+    res = await doFetch(`${CF_API_BASE2}${path}`, init);
+  } catch {
+    return { kind: "network", message: "\u0627\u062A\u0635\u0627\u0644 \u0628\u0647 api.cloudflare.com \u0628\u0631\u0642\u0631\u0627\u0631 \u0646\u0634\u062F \u2014 \u0627\u06CC\u0646\u062A\u0631\u0646\u062A \u0631\u0627 \u0628\u0631\u0631\u0633\u06CC \u06A9\u0646\u06CC\u062F" };
+  }
+  let body = {};
+  try {
+    body = await res.json();
+  } catch {
+    body = {};
+  }
+  if (!res.ok || body.success === false) {
+    return { kind: "cf", status: res.status, body };
+  }
+  return { kind: "ok", body };
+}
+__name(callCf, "callCf");
+function cfErrorList(body) {
+  return Array.isArray(body.errors) ? body.errors.slice(0, 5) : [];
+}
+__name(cfErrorList, "cfErrorList");
+function cfFailMessage2(prefix, outcome) {
+  if (outcome.kind === "network") return outcome.message;
+  const detail = cfErrorList(outcome.body).map((e) => e.message ? String(e.message) : `\u06A9\u062F ${e.code ?? "?"}`).filter(Boolean).join("\u061B ");
+  return detail ? `${prefix} (HTTP ${outcome.status}) \u2014 ${detail}` : `${prefix} (HTTP ${outcome.status})`;
+}
+__name(cfFailMessage2, "cfFailMessage");
+function splitStatements(sql) {
+  const out = [];
+  let cur = "";
+  let inSingle = false;
+  let inLineComment = false;
+  let inBlock = false;
+  const chars = [...sql];
+  let i = 0;
+  const peek = /* @__PURE__ */ __name(() => chars[i + 1], "peek");
+  while (i < chars.length) {
+    const ch = chars[i];
+    if (inLineComment) {
+      cur += ch;
+      if (ch === "\n") inLineComment = false;
+      i += 1;
+      continue;
+    }
+    if (inBlock) {
+      cur += ch;
+      if (ch === "*" && peek() === "/") {
+        cur += chars[i + 1];
+        i += 1;
+        inBlock = false;
+      }
+      i += 1;
+      continue;
+    }
+    if (inSingle) {
+      cur += ch;
+      if (ch === "'") {
+        if (peek() === "'") {
+          cur += chars[i + 1];
+          i += 1;
+        } else {
+          inSingle = false;
+        }
+      }
+      i += 1;
+      continue;
+    }
+    if (ch === "-" && peek() === "-") {
+      cur += ch;
+      cur += chars[i + 1];
+      i += 1;
+      inLineComment = true;
+      i += 1;
+      continue;
+    }
+    if (ch === "/" && peek() === "*") {
+      cur += ch;
+      cur += chars[i + 1];
+      i += 1;
+      inBlock = true;
+      i += 1;
+      continue;
+    }
+    if (ch === "'") {
+      inSingle = true;
+      cur += ch;
+      i += 1;
+      continue;
+    }
+    if (ch === ";") {
+      const t2 = cur.trim();
+      if (t2.length > 0) out.push(t2);
+      cur = "";
+      i += 1;
+      continue;
+    }
+    cur += ch;
+    i += 1;
+  }
+  const t = cur.trim();
+  if (t.length > 0) out.push(t);
+  return out;
+}
+__name(splitStatements, "splitStatements");
+function chunkSchemaSql(sql, limitBytes = SCHEMA_CHUNK_BYTES) {
+  const statements = splitStatements(sql);
+  const encoder2 = new TextEncoder();
+  const chunks = [];
+  let cur = "";
+  let curBytes = 0;
+  for (const st of statements) {
+    const stBytes = encoder2.encode(st).length + 2;
+    if (cur.length > 0 && curBytes + stBytes > limitBytes) {
+      chunks.push(cur);
+      cur = "";
+      curBytes = 0;
+    }
+    cur += `${st};
+`;
+    curBytes += stBytes;
+  }
+  if (cur.trim().length > 0) chunks.push(cur);
+  return chunks;
+}
+__name(chunkSchemaSql, "chunkSchemaSql");
+function schemaMigrationCount(schemaSql) {
+  let n = 0;
+  let idx = schemaSql.indexOf(MIGRATION_MARKER);
+  while (idx !== -1) {
+    n += 1;
+    idx = schemaSql.indexOf(MIGRATION_MARKER, idx + MIGRATION_MARKER.length);
+  }
+  return n;
+}
+__name(schemaMigrationCount, "schemaMigrationCount");
+var sleep = /* @__PURE__ */ __name((ms) => new Promise((r) => setTimeout(r, ms)), "sleep");
+async function provisionCloudWorker(deps) {
+  const now = deps.now ?? Date.now;
+  const doFetch = deps.fetchImpl ?? ((input2, i) => fetch(input2, i));
+  const steps = [];
+  const record2 = /* @__PURE__ */ __name((step, startedMs, ok2, detail) => {
+    const entry = { step, ok: ok2, ms: Math.max(0, now() - startedMs) };
+    if (detail !== void 0) entry.detail = detail;
+    steps.push(entry);
+    deps.log?.(`\u06AF\u0627\u0645 ${step}: ${ok2 ? "\u0633\u0628\u0632" : "\u0642\u0631\u0645\u0632"}${detail ? ` \u2014 ${detail}` : ""}`);
+  }, "record");
+  const fail = /* @__PURE__ */ __name((step, kind, message, errors) => {
+    const out = { ok: false, step, kind, message, steps };
+    if (errors && errors.length > 0) out.errors = errors;
+    deps.log?.(`\u0633\u0627\u062E\u062A \u0648\u0631\u06A9\u0631 \u062F\u0631 \u06AF\u0627\u0645 ${step} \u0645\u062A\u0648\u0642\u0641 \u0634\u062F: ${message}`);
+    return out;
+  }, "fail");
+  const failFromOutcome = /* @__PURE__ */ __name((step, t02, prefix, outcome2) => {
+    record2(step, t02, false, outcome2.kind === "cf" ? `HTTP ${outcome2.status}` : void 0);
+    return fail(
+      step,
+      outcome2.kind === "network" ? "network" : "cf_api",
+      cfFailMessage2(prefix, outcome2),
+      outcome2.kind === "cf" ? cfErrorList(outcome2.body) : void 0
+    );
+  }, "failFromOutcome");
+  const nameCheck = normalizeWorkerName(deps.name);
+  if (!nameCheck.ok) {
+    return fail("name", "invalid_name", nameCheck.message);
+  }
+  const workerName = nameCheck.workerName;
+  const d1Name = nameCheck.d1Name;
+  let t0 = now();
+  let outcome = await callCf(doFetch, "/user/tokens/verify", {
+    method: "POST",
+    headers: authHeaders(deps.token)
+  });
+  if (outcome.kind !== "ok") return failFromOutcome("verify", t0, "\u062A\u0648\u06A9\u0646 \u06A9\u0644\u0627\u062F\u0641\u0644\u0631 \u067E\u0630\u06CC\u0631\u0641\u062A\u0647 \u0646\u0634\u062F", outcome);
+  record2("verify", t0, true);
+  t0 = now();
+  outcome = await callCf(doFetch, "/accounts", { headers: authHeaders(deps.token) });
+  if (outcome.kind !== "ok") return failFromOutcome("accounts", t0, "\u0641\u0647\u0631\u0633\u062A \u062D\u0633\u0627\u0628\u200C\u0647\u0627\u06CC \u06A9\u0644\u0627\u062F\u0641\u0644\u0631 \u06AF\u0631\u0641\u062A\u0647 \u0646\u0634\u062F", outcome);
+  const accounts = [];
+  if (Array.isArray(outcome.body.result)) {
+    for (const a of outcome.body.result) {
+      if (a && typeof a === "object" && typeof a.id === "string") {
+        accounts.push({ id: a.id, name: typeof a.name === "string" ? a.name : "" });
+      }
+    }
+  }
+  let accountId = deps.accountId;
+  if (accountId && !accounts.some((a) => a.id === accountId)) {
+    record2("accounts", t0, false, `${accounts.length} \u062D\u0633\u0627\u0628`);
+    return fail(
+      "accounts",
+      "account_mismatch",
+      "\u062D\u0633\u0627\u0628 \u0627\u0646\u062A\u062E\u0627\u0628\u200C\u0634\u062F\u0647 \u062F\u0631 \u0641\u0647\u0631\u0633\u062A \u062D\u0633\u0627\u0628\u200C\u0647\u0627\u06CC\u06CC \u06A9\u0647 \u0627\u06CC\u0646 \u062A\u0648\u06A9\u0646 \u0628\u0647 \u0622\u0646\u200C\u0647\u0627 \u062F\u0633\u062A\u0631\u0633\u06CC \u062F\u0627\u0631\u062F \u0646\u06CC\u0633\u062A \u2014 \u0634\u0646\u0627\u0633\u0647\u0654 \u062D\u0633\u0627\u0628 \u0631\u0627 \u0627\u0632 \u06AF\u0627\u0645 \u0648\u0627\u0631\u0633\u06CC \u062F\u0648\u0628\u0627\u0631\u0647 \u0628\u06AF\u06CC\u0631\u06CC\u062F"
+    );
+  }
+  if (!accountId) {
+    if (accounts.length === 0) {
+      record2("accounts", t0, false, "\u06F0 \u062D\u0633\u0627\u0628");
+      return fail(
+        "accounts",
+        "no_account",
+        "\u0647\u06CC\u0686 \u062D\u0633\u0627\u0628 \u06A9\u0644\u0627\u062F\u0641\u0644\u0631\u06CC \u0628\u0627 \u0627\u06CC\u0646 \u062A\u0648\u06A9\u0646 \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0646\u06CC\u0633\u062A \u2014 \u0645\u062C\u0648\u0632 \xABAccount Settings:Read\xBB \u0631\u0627 \u0628\u0647 \u062A\u0648\u06A9\u0646 \u0627\u0636\u0627\u0641\u0647 \u06A9\u0646\u06CC\u062F"
+      );
+    }
+    if (accounts.length > 1) {
+      record2("accounts", t0, false, `${accounts.length} \u062D\u0633\u0627\u0628`);
+      return fail(
+        "accounts",
+        "multi_account",
+        "\u0627\u06CC\u0646 \u062A\u0648\u06A9\u0646 \u0628\u0647 \u0628\u06CC\u0634 \u0627\u0632 \u06CC\u06A9 \u062D\u0633\u0627\u0628 \u06A9\u0644\u0627\u062F\u0641\u0644\u0631 \u062F\u0633\u062A\u0631\u0633\u06CC \u062F\u0627\u0631\u062F \u2014 \u0646\u062E\u0633\u062A \u06AF\u0627\u0645 \u0648\u0627\u0631\u0633\u06CC \u0631\u0627 \u0628\u0632\u0646\u06CC\u062F \u0648 \u0634\u0646\u0627\u0633\u0647\u0654 \u062D\u0633\u0627\u0628 (accountId) \u0631\u0627 \u0627\u0646\u062A\u062E\u0627\u0628 \u06A9\u0646\u06CC\u062F"
+      );
+    }
+    accountId = accounts[0].id;
+  }
+  record2("accounts", t0, true, `${accounts.length} \u062D\u0633\u0627\u0628`);
+  t0 = now();
+  outcome = await callCf(doFetch, `/accounts/${accountId}/d1/database?name=${encodeURIComponent(d1Name)}`, {
+    headers: authHeaders(deps.token)
+  });
+  if (outcome.kind !== "ok") return failFromOutcome("d1", t0, `\u0628\u0631\u0631\u0633\u06CC \u067E\u0627\u06CC\u06AF\u0627\u0647 D1 \xAB${d1Name}\xBB \u0646\u0627\u0645\u0648\u0641\u0642 \u0628\u0648\u062F`, outcome);
+  let d1Id = null;
+  let d1Existed = false;
+  if (Array.isArray(outcome.body.result)) {
+    for (const db of outcome.body.result) {
+      if (db && typeof db === "object" && db.name === d1Name && typeof db.uuid === "string") {
+        d1Id = db.uuid;
+        d1Existed = true;
+        break;
+      }
+    }
+  }
+  if (!d1Id) {
+    outcome = await callCf(doFetch, `/accounts/${accountId}/d1/database`, {
+      method: "POST",
+      headers: authHeaders(deps.token),
+      body: JSON.stringify({ name: d1Name })
+    });
+    if (outcome.kind !== "ok") return failFromOutcome("d1", t0, `\u0633\u0627\u062E\u062A \u067E\u0627\u06CC\u06AF\u0627\u0647 D1 \xAB${d1Name}\xBB \u0646\u0627\u0645\u0648\u0641\u0642 \u0628\u0648\u062F`, outcome);
+    const created = outcome.body.result;
+    if (!created || typeof created.uuid !== "string") {
+      record2("d1", t0, false);
+      return fail("d1", "cf_api", `\u067E\u0627\u0633\u062E \u0633\u0627\u062E\u062A \u067E\u0627\u06CC\u06AF\u0627\u0647 D1 \xAB${d1Name}\xBB \u0634\u0646\u0627\u0633\u0647\u0654 \u062F\u06CC\u062A\u0627\u0628\u06CC\u0633 \u0646\u062F\u0627\u0634\u062A`);
+    }
+    d1Id = created.uuid;
+  }
+  record2("d1", t0, true, d1Existed ? "\u0645\u0648\u062C\u0648\u062F \u0628\u0648\u062F \u2014 \u0627\u0633\u062A\u0641\u0627\u062F\u0647 \u0634\u062F" : "\u0633\u0627\u062E\u062A\u0647 \u0634\u062F");
+  t0 = now();
+  const chunks = chunkSchemaSql(deps.schemaSql);
+  if (chunks.length === 0) {
+    record2("schema", t0, false);
+    return fail("schema", "cf_api", "\u0627\u0633\u06A9\u06CC\u0645\u0627\u06CC \u0645\u0631\u06A9\u0632\u06CC \u062E\u0627\u0644\u06CC \u0627\u0633\u062A \u2014 \u062F\u0627\u0631\u0627\u06CC\u06CC\u200C\u0647\u0627\u06CC \u0646\u0635\u0628 \u0646\u0627\u0642\u0635\u200C\u0627\u0646\u062F");
+  }
+  for (let i = 0; i < chunks.length; i += 1) {
+    outcome = await callCf(doFetch, `/accounts/${accountId}/d1/database/${d1Id}/query`, {
+      method: "POST",
+      headers: authHeaders(deps.token),
+      body: JSON.stringify({ sql: chunks[i] })
+    });
+    if (outcome.kind !== "ok") {
+      const prefix = `\u0627\u0639\u0645\u0627\u0644 \u0627\u0633\u06A9\u06CC\u0645\u0627 \u062F\u0631 \u0642\u0637\u0639\u0647\u0654 ${i + 1} \u0627\u0632 ${chunks.length} \u0646\u0627\u0645\u0648\u0641\u0642 \u0628\u0648\u062F`;
+      record2("schema", t0, false, `\u0642\u0637\u0639\u0647\u0654 ${i + 1}/${chunks.length}`);
+      return fail(
+        "schema",
+        outcome.kind === "network" ? "network" : "cf_api",
+        outcome.kind === "network" ? `${prefix} \u2014 \u0627\u062A\u0635\u0627\u0644 \u0628\u0647 api.cloudflare.com \u0628\u0631\u0642\u0631\u0627\u0631 \u0646\u0634\u062F` : cfFailMessage2(prefix, outcome),
+        outcome.kind === "cf" ? cfErrorList(outcome.body) : void 0
+      );
+    }
+  }
+  record2("schema", t0, true, `${chunks.length} \u0642\u0637\u0639\u0647`);
+  const webFiles = Array.isArray(deps.webAssets) ? deps.webAssets : [];
+  let assetsJwt = "";
+  if (webFiles.length > 0) {
+    t0 = now();
+    const uploaded = await uploadWebAssets({
+      fetchImpl: doFetch,
+      token: deps.token,
+      accountId,
+      scriptName: workerName,
+      files: webFiles,
+      log: deps.log,
+      now
+    });
+    if (!uploaded.ok) {
+      record2(uploaded.step, t0, false);
+      return fail(uploaded.step, uploaded.kind, uploaded.message, uploaded.errors);
+    }
+    assetsJwt = uploaded.jwt;
+    record2(
+      "assets-upload",
+      t0,
+      true,
+      `${uploaded.uploadedCount} \u0627\u0632 ${uploaded.fileCount} \u0641\u0627\u06CC\u0644 \u0648\u0628 \u0622\u067E\u0644\u0648\u062F \u0634\u062F \u2014 \u062A\u0648\u06A9\u0646 \u062F\u0627\u0631\u0627\u06CC\u06CC \u0628\u0647 \u0645\u062A\u0627\u062F\u06CC\u062A\u0627\u06CC \u06AF\u0627\u0645 \u0628\u0639\u062F \u0645\u06CC\u200C\u0631\u0648\u062F (jwt: ***)`
+    );
+  }
+  t0 = now();
+  const authSecret = randomSecret2(deps.random);
+  const nodeSetupToken = randomSecret2(deps.random);
+  const metadata = {
+    main_module: CENTRAL_MODULE_NAME,
+    compatibility_date: COMPATIBILITY_DATE,
+    bindings: [
+      { type: "d1", name: "DB", id: d1Id },
+      { type: "secret_text", name: "AUTH_SECRET", text: authSecret },
+      { type: "secret_text", name: "NODE_SETUP_TOKEN", text: nodeSetupToken }
+    ],
+    // فاز D1 — دارایی‌های وب فقط وقتی آپلود شدند الصاق می‌شود (SPA؛ بدون binding ASSETS —
+    // workers.dev خودش دارایی‌ها را سرو می‌کند و مسیرهای غیراستاتیک به اسکریپت می‌روند)
+    ...assetsJwt ? {
+      assets: {
+        jwt: assetsJwt,
+        config: { html_handling: "auto-trailing-slash", not_found_handling: "single-page-application" }
+      }
+    } : {}
+  };
+  const form = new FormData();
+  form.append("metadata", new Blob([JSON.stringify(metadata)], { type: "application/json" }));
+  form.append(CENTRAL_MODULE_NAME, new Blob([deps.centralWorker], { type: "application/javascript+module" }), CENTRAL_MODULE_NAME);
+  outcome = await callCf(doFetch, `/accounts/${accountId}/workers/scripts/${workerName}`, {
+    method: "PUT",
+    headers: { authorization: `Bearer ${deps.token}` },
+    // content-type نمی‌آید — مرز multipart خودکار ست می‌شود
+    body: form
+  });
+  if (outcome.kind !== "ok") return failFromOutcome("worker", t0, "\u0622\u067E\u0644\u0648\u062F \u0648\u0631\u06A9\u0631 \u0645\u0631\u06A9\u0632\u06CC \u0646\u0627\u0645\u0648\u0641\u0642 \u0628\u0648\u062F", outcome);
+  record2(
+    "worker",
+    t0,
+    true,
+    assetsJwt ? "\u0628\u0627\u0646\u062F\u0644 \u0645\u0631\u06A9\u0632\u06CC + \u062F\u0627\u0631\u0627\u06CC\u06CC\u200C\u0647\u0627\u06CC \u0648\u0628 \u0622\u067E\u0644\u0648\u062F \u0634\u062F \u2014 binding\u0647\u0627\u06CC DB/AUTH_SECRET/NODE_SETUP_TOKEN \u0633\u062A \u0634\u062F\u0646\u062F (\u0631\u0627\u0632\u0647\u0627: ***)" : "\u0628\u0627\u0646\u062F\u0644 \u0645\u0631\u06A9\u0632\u06CC \u0622\u067E\u0644\u0648\u062F \u0634\u062F \u2014 binding\u0647\u0627\u06CC DB/AUTH_SECRET/NODE_SETUP_TOKEN \u0633\u062A \u0634\u062F\u0646\u062F (\u0631\u0627\u0632\u0647\u0627: ***)"
+  );
+  t0 = now();
+  outcome = await callCf(doFetch, `/accounts/${accountId}/workers/subdomain`, { headers: authHeaders(deps.token) });
+  if (outcome.kind !== "ok") return failFromOutcome("subdomain", t0, "\u0632\u06CC\u0631\u062F\u0627\u0645\u0646\u0647\u0654 workers.dev \u062D\u0633\u0627\u0628 \u06AF\u0631\u0641\u062A\u0647 \u0646\u0634\u062F", outcome);
+  const subdomain = outcome.body.result?.subdomain;
+  if (typeof subdomain !== "string" || !subdomain) {
+    record2("subdomain", t0, false);
+    return fail("subdomain", "cf_api", "\u067E\u0627\u0633\u062E \u0632\u06CC\u0631\u062F\u0627\u0645\u0646\u0647\u0654 workers.dev \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0628\u0648\u062F \u2014 \u0641\u0639\u0627\u0644\u200C\u0633\u0627\u0632\u06CC workers.dev \u062F\u0631 \u062D\u0633\u0627\u0628 \u06A9\u0644\u0627\u062F\u0641\u0644\u0631 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A");
+  }
+  outcome = await callCf(doFetch, `/accounts/${accountId}/workers/scripts/${workerName}/subdomain`, {
+    method: "POST",
+    headers: authHeaders(deps.token),
+    body: JSON.stringify({ enabled: true, previews_disabled: true })
+  });
+  if (outcome.kind !== "ok") return failFromOutcome("subdomain", t0, "\u0641\u0639\u0627\u0644\u200C\u0633\u0627\u0632\u06CC \u062F\u0627\u0645\u0646\u0647\u0654 \u0648\u0631\u06A9\u0631 \u0646\u0627\u0645\u0648\u0641\u0642 \u0628\u0648\u062F", outcome);
+  const workerUrl = `https://${workerName}.${subdomain}.workers.dev`;
+  record2("subdomain", t0, true, workerUrl);
+  t0 = now();
+  const healthStarted = now();
+  let healthy = false;
+  for (; ; ) {
+    try {
+      const res = await doFetch(`${workerUrl}/healthz`, { signal: AbortSignal.timeout(2e3) });
+      if (res.ok) {
+        healthy = true;
+        break;
+      }
+    } catch {
+    }
+    if (now() - healthStarted >= HEALTH_TIMEOUT_MS) break;
+    await sleep(HEALTH_RETRY_MS);
+  }
+  if (!healthy) {
+    record2("health", t0, false);
+    return fail(
+      "health",
+      "health_timeout",
+      `\u0648\u0631\u06A9\u0631 \u0622\u067E\u0644\u0648\u062F \u0634\u062F \u0627\u0645\u0627 /healthz \u067E\u0633 \u0627\u0632 \u06F3\u06F0 \u062B\u0627\u0646\u06CC\u0647 \u0633\u0627\u0644\u0645 \u0646\u0634\u062F \u2014 \u0686\u0646\u062F \u0644\u062D\u0638\u0647 \u0628\u0639\u062F \u062F\u0631 \u067E\u0646\u0644 \u0633\u0644\u0627\u0645\u062A \u067E\u06CC\u06AF\u06CC\u0631\u06CC \u06A9\u0646\u06CC\u062F (${workerUrl})`
+    );
+  }
+  record2("health", t0, true);
+  t0 = now();
+  let stateRes;
+  try {
+    stateRes = await doFetch(`${workerUrl}/api/instance-sync/state`, {
+      headers: { authorization: `Bearer ${authSecret}`, "x-device-id": PROVISION_DEVICE_ID }
+    });
+  } catch {
+    record2("state", t0, false);
+    return fail("state", "network", "\u0648\u0631\u06A9\u0631 \u067E\u0627\u0633\u062E state \u0646\u062F\u0627\u062F \u2014 \u0646\u0634\u0627\u0646\u06CC \u0648\u0631\u06A9\u0631 \u0631\u0627 \u0628\u0631\u0631\u0633\u06CC \u06A9\u0646\u06CC\u062F");
+  }
+  if (!stateRes.ok) {
+    record2("state", t0, false, `HTTP ${stateRes.status}`);
+    return fail(
+      "state",
+      "worker_error",
+      `\u0648\u0627\u0631\u0633\u06CC \u0648\u0636\u0639\u06CC\u062A \u0647\u0645\u200C\u06AF\u0627\u0645\u06CC \u0631\u0648\u06CC \u0648\u0631\u06A9\u0631 \u0646\u0627\u0645\u0648\u0641\u0642 \u0628\u0648\u062F (HTTP ${stateRes.status}) \u2014 \u0631\u0627\u0632 \u0633\u0634\u0646 \u0628\u0647\u200C\u062A\u0627\u0632\u06AF\u06CC \u0633\u062A \u0634\u062F\u0647\u061B \u0686\u0646\u062F \u0644\u062D\u0638\u0647 \u0628\u0639\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u0648\u0627\u0631\u0633\u06CC \u06A9\u0646\u06CC\u062F`
+    );
+  }
+  const stateBody = await stateRes.json().catch(() => null);
+  const applied = typeof stateBody?.data?.applied_migrations === "number" ? stateBody.data.applied_migrations : null;
+  const expected = schemaMigrationCount(deps.schemaSql);
+  if (applied !== null && expected > 0 && applied !== expected) {
+    record2("state", t0, false, `\u0627\u0628\u0631 ${applied} / \u0628\u0627\u0646\u062F\u0644 ${expected}`);
+    return fail(
+      "state",
+      "schema_mismatch",
+      `\u0646\u0633\u062E\u0647\u0654 \u0627\u0633\u06A9\u06CC\u0645\u0627 \u0631\u0648\u06CC \u0627\u0628\u0631 (${applied} \u0645\u0627\u06CC\u06AF\u0631\u06CC\u0634\u0646) \u0628\u0627 \u0628\u0627\u0646\u062F\u0644 \u0646\u0635\u0628 (${expected} \u0645\u0627\u06CC\u06AF\u0631\u06CC\u0634\u0646) \u0647\u0645\u200C\u062E\u0648\u0627\u0646 \u0646\u06CC\u0633\u062A \u2014 \u0646\u0635\u0628 \u062F\u0633\u06A9\u062A\u0627\u067E \u0631\u0627 \u0628\u0647\u200C\u0631\u0648\u0632\u0631\u0633\u0627\u0646\u06CC \u06A9\u0646\u06CC\u062F`
+    );
+  }
+  record2("state", t0, true, applied === null ? "\u0634\u0645\u0627\u0631\u0634 \u0645\u0627\u06CC\u06AF\u0631\u06CC\u0634\u0646 \u0627\u0628\u0631 \u0646\u0627\u0645\u0639\u0644\u0648\u0645 \u2014 \u067E\u0627\u0633\u062E \u0633\u0628\u0632" : `${applied} \u0645\u0627\u06CC\u06AF\u0631\u06CC\u0634\u0646`);
+  let webEnabled = false;
+  if (assetsJwt) {
+    t0 = now();
+    let webRes;
+    try {
+      webRes = await doFetch(`${workerUrl}/`, {
+        headers: { accept: "text/html" },
+        signal: AbortSignal.timeout(2e3)
+      });
+    } catch {
+      record2("web", t0, false);
+      return fail("web", "network", "\u0648\u0631\u06A9\u0631 \u062A\u0627\u0632\u0647 \u067E\u0627\u0633\u062E \u0635\u0641\u062D\u0647\u0654 \u0648\u0628 \u0646\u062F\u0627\u062F \u2014 \u0646\u0634\u0627\u0646\u06CC \u0648\u0631\u06A9\u0631 \u0631\u0627 \u0628\u0631\u0631\u0633\u06CC \u06A9\u0646\u06CC\u062F");
+    }
+    const html = (await webRes.text().catch(() => "")).toLowerCase();
+    if (!webRes.ok || !(html.includes("<!doctype html") || html.includes("<html"))) {
+      record2("web", t0, false, `HTTP ${webRes.status}`);
+      return fail(
+        "web",
+        "worker_error",
+        `\u0635\u0641\u062D\u0647\u0654 \u0648\u0628 \u0631\u0648\u06CC \u0648\u0631\u06A9\u0631 \u0628\u0627\u0644\u0627 \u0646\u06CC\u0627\u0645\u062F (HTTP ${webRes.status}) \u2014 \u062F\u0627\u0631\u0627\u06CC\u06CC\u200C\u0647\u0627\u06CC \u0648\u0628 \u0622\u067E\u0644\u0648\u062F \u0634\u062F\u0647 \u0627\u0645\u0627 GET / \u067E\u0627\u0633\u062E HTML \u0646\u062F\u0627\u062F\u061B \u0686\u0646\u062F \u0644\u062D\u0638\u0647 \u0628\u0639\u062F \u062F\u0631 \u0645\u0631\u0648\u0631\u06AF\u0631 \u0628\u0631\u0631\u0633\u06CC \u06A9\u0646\u06CC\u062F (${workerUrl})`
+      );
+    }
+    record2("web", t0, true, "\u0648\u0628 \u0641\u0639\u0627\u0644 \u2014 index.html \u0633\u0631\u0648 \u0634\u062F");
+    webEnabled = true;
+  } else {
+    deps.log?.("\u0686\u06A9 \u0648\u0628 \u0631\u062F \u0634\u062F \u2014 \u062F\u0627\u0631\u0627\u06CC\u06CC \u0648\u0628\u06CC \u0628\u0631\u0627\u06CC \u0627\u06CC\u0646 \u0633\u0627\u062E\u062A \u0622\u067E\u0644\u0648\u062F \u0646\u0634\u062F");
+  }
+  return { ok: true, workerUrl, authSecret, nodeSetupToken, workerName, d1Name, steps, webEnabled };
+}
+__name(provisionCloudWorker, "provisionCloudWorker");
+async function verifyCloudToken(deps) {
+  const doFetch = deps.fetchImpl ?? ((input2, i) => fetch(input2, i));
+  const outcome = await callCf(doFetch, "/user/tokens/verify", {
+    method: "POST",
+    headers: authHeaders(deps.token)
+  });
+  if (outcome.kind !== "ok") {
+    return {
+      ok: false,
+      step: "verify",
+      kind: outcome.kind === "network" ? "network" : "cf_api",
+      message: cfFailMessage2("\u062A\u0648\u06A9\u0646 \u06A9\u0644\u0627\u062F\u0641\u0644\u0631 \u067E\u0630\u06CC\u0631\u0641\u062A\u0647 \u0646\u0634\u062F", outcome),
+      ...outcome.kind === "cf" && cfErrorList(outcome.body).length > 0 ? { errors: cfErrorList(outcome.body) } : {}
+    };
+  }
+  const accountsOutcome = await callCf(doFetch, "/accounts", { headers: authHeaders(deps.token) });
+  if (accountsOutcome.kind !== "ok") {
+    return {
+      ok: false,
+      step: "accounts",
+      kind: accountsOutcome.kind === "network" ? "network" : "cf_api",
+      message: cfFailMessage2("\u0641\u0647\u0631\u0633\u062A \u062D\u0633\u0627\u0628\u200C\u0647\u0627\u06CC \u06A9\u0644\u0627\u062F\u0641\u0644\u0631 \u06AF\u0631\u0641\u062A\u0647 \u0646\u0634\u062F", accountsOutcome),
+      ...accountsOutcome.kind === "cf" && cfErrorList(accountsOutcome.body).length > 0 ? { errors: cfErrorList(accountsOutcome.body) } : {}
+    };
+  }
+  const accounts = [];
+  if (Array.isArray(accountsOutcome.body.result)) {
+    for (const a of accountsOutcome.body.result) {
+      if (a && typeof a === "object" && typeof a.id === "string") {
+        accounts.push({ id: a.id, name: typeof a.name === "string" ? a.name : "" });
+      }
+    }
+  }
+  if (accounts.length === 0) {
+    return {
+      ok: false,
+      step: "accounts",
+      kind: "no_account",
+      message: "\u0647\u06CC\u0686 \u062D\u0633\u0627\u0628 \u06A9\u0644\u0627\u062F\u0641\u0644\u0631\u06CC \u0628\u0627 \u0627\u06CC\u0646 \u062A\u0648\u06A9\u0646 \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0646\u06CC\u0633\u062A \u2014 \u0645\u062C\u0648\u0632 \xABAccount Settings:Read\xBB \u0631\u0627 \u0628\u0647 \u062A\u0648\u06A9\u0646 \u0627\u0636\u0627\u0641\u0647 \u06A9\u0646\u06CC\u062F"
+    };
+  }
+  deps.log?.(`\u0648\u0627\u0631\u0633\u06CC \u062A\u0648\u06A9\u0646 \u0633\u0628\u0632 \u2014 ${accounts.length} \u062D\u0633\u0627\u0628 \u062F\u0631 \u062F\u0633\u062A\u0631\u0633`);
+  return { ok: true, accounts };
+}
+__name(verifyCloudToken, "verifyCloudToken");
+async function discoverCloudDeployment(deps) {
+  const doFetch = deps.fetchImpl ?? ((input2, i) => fetch(input2, i));
+  const verify = await verifyCloudToken({ token: deps.token, fetchImpl: doFetch, log: deps.log });
+  if (!verify.ok) {
+    return {
+      ok: false,
+      step: verify.step === "verify" ? "verify" : "accounts",
+      kind: verify.kind === "no_account" ? "no_account" : verify.kind,
+      message: verify.message,
+      ...verify.errors ? { errors: verify.errors } : {}
+    };
+  }
+  const workers = [];
+  const databases = [];
+  for (const account of verify.accounts) {
+    const headers = authHeaders(deps.token);
+    const domainsOutcome = await callCf(doFetch, `/accounts/${account.id}/workers/domains`, { headers });
+    if (domainsOutcome.kind === "ok" && Array.isArray(domainsOutcome.body.result)) {
+      const byService = /* @__PURE__ */ new Map();
+      for (const row of domainsOutcome.body.result) {
+        const service = typeof row.service === "string" ? row.service : "";
+        const hostname3 = typeof row.hostname === "string" ? row.hostname : "";
+        if (!service || !hostname3) continue;
+        const urls = byService.get(service) ?? [];
+        urls.push(`https://${hostname3}`);
+        byService.set(service, urls);
+      }
+      for (const [name, urls] of byService) workers.push({ name, account_id: account.id, urls: urls.sort() });
+      deps.log?.(`\u062D\u0633\u0627\u0628 \xAB${account.name || account.id}\xBB: ${byService.size} \u0648\u0631\u06A9\u0631 \u0628\u0627 \u062F\u0627\u0645\u0646\u0647\u0654 \u0639\u0645\u0648\u0645\u06CC`);
+    } else {
+      deps.log?.(`\u062F\u0627\u0645\u0646\u0647\u200C\u0647\u0627\u06CC \u062D\u0633\u0627\u0628 \xAB${account.name || account.id}\xBB \u062E\u0648\u0627\u0646\u062F\u0647 \u0646\u0634\u062F \u2014 \u0628\u062E\u0634 \u0648\u0631\u06A9\u0631\u0647\u0627 \u062E\u0627\u0644\u06CC \u0645\u06CC\u200C\u0645\u0627\u0646\u062F`);
+    }
+    const d1Outcome = await callCf(doFetch, `/accounts/${account.id}/d1/database`, { headers });
+    if (d1Outcome.kind === "ok" && Array.isArray(d1Outcome.body.result)) {
+      for (const row of d1Outcome.body.result) {
+        const id = typeof row.uuid === "string" ? row.uuid : typeof row.id === "string" ? row.id : "";
+        const name = typeof row.name === "string" ? row.name : "";
+        if (!id || !name) continue;
+        databases.push({ name, id, account_id: account.id });
+      }
+      deps.log?.(`\u062D\u0633\u0627\u0628 \xAB${account.name || account.id}\xBB: ${databases.length} \u067E\u0627\u06CC\u06AF\u0627\u0647 D1`);
+    } else {
+      deps.log?.(`\u0641\u0647\u0631\u0633\u062A D1 \u062D\u0633\u0627\u0628 \xAB${account.name || account.id}\xBB \u062E\u0648\u0627\u0646\u062F\u0647 \u0646\u0634\u062F \u2014 \u0628\u062E\u0634 \u067E\u0627\u06CC\u06AF\u0627\u0647\u200C\u0647\u0627 \u062E\u0627\u0644\u06CC \u0645\u06CC\u200C\u0645\u0627\u0646\u062F`);
+    }
+  }
+  return { ok: true, accounts: verify.accounts, workers, databases };
+}
+__name(discoverCloudDeployment, "discoverCloudDeployment");
+
+// src/core/logger/logger.ts
+var LEVEL_WEIGHT = { debug: 10, info: 20, warn: 30, error: 40 };
+function minLevel() {
+  const env = globalThis.ENV ?? "development";
+  return env === "production" ? "info" : "debug";
+}
+__name(minLevel, "minLevel");
+function emit(scope, level, msg, meta3) {
+  if (LEVEL_WEIGHT[level] < LEVEL_WEIGHT[minLevel()]) return;
+  const entry = {
+    ts: (/* @__PURE__ */ new Date()).toISOString(),
+    level,
+    scope,
+    msg,
+    ...meta3 ? { meta: meta3 } : {}
+  };
+  console.log(JSON.stringify(entry));
+}
+__name(emit, "emit");
+function createLogger(scope) {
+  return {
+    debug: /* @__PURE__ */ __name((msg, meta3) => emit(scope, "debug", msg, meta3), "debug"),
+    info: /* @__PURE__ */ __name((msg, meta3) => emit(scope, "info", msg, meta3), "info"),
+    warn: /* @__PURE__ */ __name((msg, meta3) => emit(scope, "warn", msg, meta3), "warn"),
+    error: /* @__PURE__ */ __name((msg, meta3) => emit(scope, "error", msg, meta3), "error"),
+    child: /* @__PURE__ */ __name((subScope) => createLogger(`${scope}.${subScope}`), "child")
+  };
+}
+__name(createLogger, "createLogger");
+
+// src/application/instance-sync/runner.ts
+var SYNC_EPOCH_CURSOR = "1970-01-01T00:00:00.000Z";
+var CLOUD_SYNC_DEFAULT_INTERVAL_MS = 6e5;
+var CLOUD_SYNC_MIN_INTERVAL_MS = 6e4;
+var CLOUD_SYNC_MAX_CLOCK_DRIFT_MS = 12e4;
+var CLOUD_SYNC_BACKUP_KEEP = 3;
+var CLOUD_CONFIG_FILE = "cloud-config.json";
+var CLOUD_SYNC_STATE_FILE = "sync-state.json";
+var CLOUD_SYNC_AUDIT_ACTION = "cloud.sync";
+var CLOUD_CLONE_AUDIT_ACTION = "cloud.clone";
+var CLOUD_UNLINK_AUDIT_ACTION = "cloud.unlink";
+var CLOUD_SYNC_LAST_KEY = "cloudsync:last-sync-v1";
+var EPOCH_PAIR = { rows: SYNC_EPOCH_CURSOR, deleted: SYNC_EPOCH_CURSOR };
+function parseCloudConfigPayload(raw2) {
+  if (!raw2 || typeof raw2 !== "object" || Array.isArray(raw2)) return null;
+  const obj = raw2;
+  const rawUrl = typeof obj.url === "string" ? obj.url.trim() : "";
+  let parsed;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== "https:" || !parsed.hostname) return null;
+  const intervalRaw = typeof obj.interval_ms === "number" ? obj.interval_ms : Number(obj.interval_ms);
+  const interval = Number.isFinite(intervalRaw) && intervalRaw > 0 ? Math.max(CLOUD_SYNC_MIN_INTERVAL_MS, Math.trunc(intervalRaw)) : CLOUD_SYNC_DEFAULT_INTERVAL_MS;
+  const device = typeof obj.device_id === "string" && obj.device_id.trim() ? obj.device_id.trim() : null;
+  return {
+    url: `${parsed.protocol}//${parsed.host}${parsed.pathname.replace(/\/+$/, "")}`,
+    interval_ms: interval,
+    device_id: device
+  };
+}
+__name(parseCloudConfigPayload, "parseCloudConfigPayload");
+async function readCloudConfig(fs) {
+  if (!fs) return null;
+  const text = await fs.readText(CLOUD_CONFIG_FILE).catch(() => null);
+  if (!text) return null;
+  let raw2 = null;
+  try {
+    raw2 = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  const parsed = parseCloudConfigPayload(raw2);
+  if (!parsed) return null;
+  let device_id = parsed.device_id;
+  if (!device_id) {
+    device_id = crypto.randomUUID();
+    try {
+      await fs.writeText(
+        CLOUD_CONFIG_FILE,
+        JSON.stringify({ url: parsed.url, device_id, interval_ms: parsed.interval_ms }, null, 2) + "\n"
+      );
+    } catch {
+    }
+  }
+  return { url: parsed.url, device_id, interval_ms: parsed.interval_ms };
+}
+__name(readCloudConfig, "readCloudConfig");
+var CloudSyncError = class extends Error {
+  constructor(kind, message) {
+    super(message);
+    this.kind = kind;
+    this.name = "CloudSyncError";
+  }
+  kind;
+  static {
+    __name(this, "CloudSyncError");
+  }
+};
+async function readSyncCursors(fs) {
+  const empty = { pull: {}, push: {} };
+  if (!fs) return empty;
+  const text = await fs.readText(CLOUD_SYNC_STATE_FILE).catch(() => null);
+  if (!text) return empty;
+  try {
+    const raw2 = JSON.parse(text);
+    if (!raw2 || typeof raw2 !== "object") return empty;
+    const pick2 = /* @__PURE__ */ __name((v) => v && typeof v === "object" ? v : {}, "pick");
+    return { pull: pick2(raw2.pull), push: pick2(raw2.push) };
+  } catch {
+    return empty;
+  }
+}
+__name(readSyncCursors, "readSyncCursors");
+async function writeSyncCursors(fs, cursors) {
+  if (!fs) return;
+  try {
+    await fs.writeText(CLOUD_SYNC_STATE_FILE, JSON.stringify(cursors, null, 2) + "\n");
+  } catch {
+  }
+}
+__name(writeSyncCursors, "writeSyncCursors");
+function pullCursorOf(cursors, table) {
+  const c = cursors.pull[table];
+  return c && typeof c.rows === "string" && typeof c.deleted === "string" ? c : { ...EPOCH_PAIR };
+}
+__name(pullCursorOf, "pullCursorOf");
+function pushCursorOf(cursors, table) {
+  const c = cursors.push[table];
+  return c && typeof c.rows === "string" && typeof c.deleted === "string" ? c : { ...EPOCH_PAIR };
+}
+__name(pushCursorOf, "pushCursorOf");
+async function applyEcho(db, table, echo, columnsCache) {
+  const meta3 = syncTableMeta(table);
+  if (!meta3 || Object.keys(echo).length === 0) return 0;
+  let cols = columnsCache?.get(table);
+  if (!cols) {
+    const info = await db.query(`PRAGMA table_info("${table}")`);
+    cols = info.map((r) => r.name);
+    columnsCache?.set(table, cols);
+  }
+  const statements = [db.prepare("PRAGMA defer_foreign_keys = ON")];
+  let applied = 0;
+  for (const [pkValue, winner] of Object.entries(echo)) {
+    const parts = pkValue.split("|");
+    if (parts.length !== meta3.pk.length || parts.some((p) => p === "")) continue;
+    if (winner === null || winner === void 0) {
+      statements.push(
+        db.prepare(
+          `DELETE FROM "${table}" WHERE ${meta3.pk.map((c) => `"${c}" = ?`).join(" AND ")}`,
+          parts
+        )
+      );
+      applied += 1;
+      continue;
+    }
+    if (typeof winner !== "object" || Array.isArray(winner)) continue;
+    const row = winner;
+    const colList = cols.map((c) => `"${c}"`).join(", ");
+    const placeholders = cols.map(() => "?").join(", ");
+    statements.push(
+      db.prepare(`INSERT OR REPLACE INTO "${table}" (${colList}) VALUES (${placeholders})`, cols.map((c) => row[c] === void 0 ? null : row[c]))
+    );
+    applied += 1;
+  }
+  if (statements.length > 1) {
+    try {
+      await db.batch(statements);
+    } catch (err) {
+      throw new ValidationError(`\u0627\u0639\u0645\u0627\u0644 echo \u0627\u0628\u0631 \u0631\u0648\u06CC \u062C\u062F\u0648\u0644 \xAB${table}\xBB \u0646\u0627\u0645\u0648\u0641\u0642 \u0628\u0648\u062F: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+  return applied;
+}
+__name(applyEcho, "applyEcho");
+function cloudSecretOf(env) {
+  const raw2 = env?.ENGINE_CLOUD_SECRET;
+  return typeof raw2 === "string" && raw2.trim() ? raw2.trim() : null;
+}
+__name(cloudSecretOf, "cloudSecretOf");
+async function readLastSyncMirror(db) {
+  try {
+    const row = await db.queryOne("SELECT value FROM settings WHERE key = ?", [CLOUD_SYNC_LAST_KEY]);
+    if (!row?.value) return null;
+    const parsed = JSON.parse(row.value);
+    if (!parsed || typeof parsed !== "object" || typeof parsed.result !== "string") return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+__name(readLastSyncMirror, "readLastSyncMirror");
+async function writeLastSyncMirror(db, mirror) {
+  try {
+    await db.execute(
+      `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')`,
+      [CLOUD_SYNC_LAST_KEY, JSON.stringify(mirror)]
+    );
+  } catch {
+  }
+}
+__name(writeLastSyncMirror, "writeLastSyncMirror");
+var cloudSyncInFlight = false;
+function cloudHeaders(call, jsonBody) {
+  const headers = {
+    authorization: `Bearer ${call.secret}`,
+    // راز فقط در سرایند — هرگز در بدنه/لاگ
+    "x-device-id": call.config.device_id
+  };
+  if (jsonBody) headers["content-type"] = "application/json";
+  return headers;
+}
+__name(cloudHeaders, "cloudHeaders");
+async function cloudFetch(call, path, init) {
+  const doFetch = call.deps.fetchCloud ?? ((input2, i) => fetch(input2, i));
+  let res;
+  try {
+    res = await doFetch(`${call.config.url}${path}`, init);
+  } catch {
+    throw new CloudSyncError("offline", "\u0627\u062A\u0635\u0627\u0644 \u0628\u0647 \u0627\u0628\u0631 \u0628\u0631\u0642\u0631\u0627\u0631 \u0646\u0634\u062F \u2014 \u0627\u06CC\u0646\u062A\u0631\u0646\u062A \u06CC\u0627 \u0646\u0634\u0627\u0646\u06CC \u0648\u0631\u06A9\u0631 \u0631\u0627 \u0628\u0631\u0631\u0633\u06CC \u06A9\u0646\u06CC\u062F");
+  }
+  if (res.status === 401 || res.status === 403) {
+    throw new CloudSyncError("auth", "\u0627\u062D\u0631\u0627\u0632 \u0646\u0632\u062F \u0627\u0628\u0631 \u0646\u0627\u0645\u0648\u0641\u0642 \u0628\u0648\u062F \u2014 \u0631\u0627\u0632 \u0627\u062A\u0635\u0627\u0644 \u0627\u0628\u0631\u06CC \u0631\u0627 \u0628\u0647\u200C\u0631\u0648\u0632\u0631\u0633\u0627\u0646\u06CC \u06A9\u0646\u06CC\u062F");
+  }
+  if (!res.ok) {
+    throw new CloudSyncError("offline", `\u0627\u0628\u0631 \u067E\u0627\u0633\u062E \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u062F\u0627\u062F (${res.status})`);
+  }
+  return res;
+}
+__name(cloudFetch, "cloudFetch");
+async function fetchCloudState(call) {
+  const res = await cloudFetch(call, "/api/instance-sync/state", { method: "GET", headers: cloudHeaders(call, false) });
+  const body = unwrapData(await res.json().catch(() => null));
+  const applied = typeof body.applied_migrations === "number" ? body.applied_migrations : null;
+  const dateHeader = res.headers.get("date");
+  const serverMs = dateHeader ? Date.parse(dateHeader) : NaN;
+  return { appliedMigrations: applied, serverTimeMs: Number.isNaN(serverMs) ? null : serverMs };
+}
+__name(fetchCloudState, "fetchCloudState");
+async function pullFromCloud(call, since) {
+  const res = await cloudFetch(call, "/api/instance-sync/pull", {
+    method: "POST",
+    headers: cloudHeaders(call, true),
+    body: JSON.stringify({ since })
+  });
+  const body = unwrapData(await res.json().catch(() => null));
+  if (!body || typeof body.tables !== "object" || body.tables === null) {
+    throw new CloudSyncError("offline", "\u067E\u0627\u0633\u062E pull \u0627\u0628\u0631 \u0634\u06A9\u0644 \u0642\u0631\u0627\u0631\u062F\u0627\u062F\u06CC \u0646\u062F\u0627\u0631\u062F");
+  }
+  return { tables: body.tables };
+}
+__name(pullFromCloud, "pullFromCloud");
+async function pushToCloud(call, payload) {
+  const res = await cloudFetch(call, "/api/instance-sync/push", {
+    method: "POST",
+    headers: cloudHeaders(call, true),
+    body: JSON.stringify({ device_id: call.config.device_id, tables: payload.tables ?? {} })
+  });
+  const body = unwrapData(await res.json().catch(() => null));
+  if (!body || typeof body.tables !== "object" || body.tables === null) {
+    throw new CloudSyncError("offline", "\u067E\u0627\u0633\u062E push \u0627\u0628\u0631 \u0634\u06A9\u0644 \u0642\u0631\u0627\u0631\u062F\u0627\u062F\u06CC \u0646\u062F\u0627\u0631\u062F");
+  }
+  return body;
+}
+__name(pushToCloud, "pushToCloud");
+function unwrapData(body) {
+  if (body && typeof body === "object" && !Array.isArray(body)) {
+    const obj = body;
+    if (obj.data && typeof obj.data === "object" && !Array.isArray(obj.data)) {
+      return obj.data;
+    }
+    return obj;
+  }
+  return {};
+}
+__name(unwrapData, "unwrapData");
+async function readLocalMigrationCount(db) {
+  for (const table of ["_migrations", "d1_migrations", "schema_migrations"]) {
+    try {
+      const row = await db.queryOne(`SELECT COUNT(*) AS n FROM "${table}"`);
+      if (row && Number(row.n) > 0) return Number(row.n);
+    } catch {
+    }
+  }
+  return null;
+}
+__name(readLocalMigrationCount, "readLocalMigrationCount");
+async function writeCloudBackupFile(deps, opts) {
+  if (!deps.fs) throw new ValidationError("\u067E\u0644 \u0641\u0627\u06CC\u0644\u200C\u0647\u0627\u06CC \u0627\u0628\u0631\u06CC (CLOUD_FS) \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0646\u06CC\u0633\u062A \u2014 \u0647\u0645\u200C\u06AF\u0627\u0645\u06CC \u0641\u0642\u0637 \u062F\u0631 \u0645\u0648\u062A\u0648\u0631 \u0645\u062D\u0644\u06CC \u0645\u0639\u0646\u0627 \u062F\u0627\u0631\u062F");
+  if (!deps.backup) throw new ValidationError("\u0633\u0631\u0648\u06CC\u0633 \u067E\u0634\u062A\u06CC\u0628\u0627\u0646 \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0646\u06CC\u0633\u062A \u2014 \u0628\u06A9\u0627\u067E \u067E\u06CC\u0634 \u0627\u0632 \u0627\u0639\u0645\u0627\u0644 \u0645\u0645\u06A9\u0646 \u0646\u0634\u062F");
+  const text = await new Response(deps.backup.buildExportStream(opts.includeFiles)).text();
+  const name = `cloud-sync-${opts.kind}-${opts.now()}-${crypto.randomUUID().slice(0, 8)}.json`;
+  await deps.fs.writeText(name, text);
+  let tables = 0;
+  try {
+    tables = Object.keys(JSON.parse(text).tables ?? {}).length;
+  } catch {
+    tables = 0;
+  }
+  return { name, path: `${deps.fs.dir()}/${name}`, bytes: text.length, tables };
+}
+__name(writeCloudBackupFile, "writeCloudBackupFile");
+async function rotateCloudBackups(deps, keep) {
+  if (!deps.fs) return 0;
+  const names = await deps.fs.list("cloud-sync-pre-").catch(() => []);
+  let removed = 0;
+  for (const name of names.slice(keep)) {
+    await deps.fs.remove(name).catch(() => void 0);
+    removed += 1;
+  }
+  return removed;
+}
+__name(rotateCloudBackups, "rotateCloudBackups");
+async function runCloudSync(deps, trigger) {
+  const started = deps.now?.() ?? Date.now();
+  const base = { kind: "error", pulled: 0, pushed: 0, conflicts_new: 0, duration_ms: 0, error: null };
+  if (cloudSyncInFlight) return { ...base, kind: "in_flight", error: "\u0647\u0645\u200C\u06AF\u0627\u0645\u200C\u0633\u0627\u0632\u06CC \u062F\u0631 \u062C\u0631\u06CC\u0627\u0646 \u0627\u0633\u062A" };
+  cloudSyncInFlight = true;
+  const finish = /* @__PURE__ */ __name((result) => {
+    cloudSyncInFlight = false;
+    return { ...result, duration_ms: result.duration_ms > 0 ? result.duration_ms : (deps.now?.() ?? Date.now()) - started };
+  }, "finish");
+  try {
+    const config2 = await readCloudConfig(deps.fs);
+    if (!config2) return finish({ ...base, kind: "unconfigured", error: "\u0627\u062A\u0635\u0627\u0644 \u0627\u0628\u0631\u06CC \u062A\u0646\u0638\u06CC\u0645 \u0646\u0634\u062F\u0647 \u0627\u0633\u062A" });
+    const secret = cloudSecretOf(deps.env);
+    if (!secret) return finish({ ...base, kind: "no_secret", error: "\u0631\u0627\u0632 \u0627\u062A\u0635\u0627\u0644 \u0627\u0628\u0631\u06CC \u062F\u0631 \u067E\u0648\u0633\u062A\u0647 \u0630\u062E\u06CC\u0631\u0647 \u0646\u0634\u062F\u0647 \u0627\u0633\u062A" });
+    const call = { deps, config: config2, secret };
+    deps.logger.info("cloud.sync.start", { trigger, url: config2.url, device_id: config2.device_id });
+    const columnsCache = /* @__PURE__ */ new Map();
+    const state = await fetchCloudState(call);
+    const nowMs = deps.now?.() ?? Date.now();
+    const clockWarning = state.serverTimeMs !== null && Math.abs(nowMs - state.serverTimeMs) > CLOUD_SYNC_MAX_CLOCK_DRIFT_MS;
+    const localMigrations = await readLocalMigrationCount(deps.db);
+    const schemaMatch = localMigrations !== null && state.appliedMigrations !== null ? localMigrations === state.appliedMigrations : null;
+    if (schemaMatch === false) {
+      return finish(
+        await finishWithMirror(
+          deps,
+          {
+            kind: "error",
+            error: "\u0646\u0633\u062E\u0647\u0654 \u0627\u0633\u06A9\u06CC\u0645\u0627 \u0628\u0627 \u0627\u0628\u0631 \u0647\u0645\u200C\u062E\u0648\u0627\u0646 \u0646\u06CC\u0633\u062A \u2014 \u06CC\u06A9 \u0633\u0648 \u0631\u0627 \u0628\u0647\u200C\u0631\u0648\u0632\u0631\u0633\u0627\u0646\u06CC \u06A9\u0646\u06CC\u062F",
+            pulled: 0,
+            pushed: 0,
+            conflicts_new: 0,
+            clockWarning,
+            schemaMatch
+          },
+          started
+        )
+      );
+    }
+    const cursors = await readSyncCursors(deps.fs);
+    let pulled = 0;
+    let pushed = 0;
+    let conflictsNew = 0;
+    for (let guard = 0; guard < 2e3; guard += 1) {
+      const since = { tables: {} };
+      for (const meta3 of syncTableList()) {
+        since.tables[meta3] = pullCursorOf(cursors, meta3);
+      }
+      const cloud = await pullFromCloud(call, since);
+      const tables = {};
+      const payload = { tables };
+      let items = 0;
+      for (const [table, result2] of Object.entries(cloud.tables)) {
+        const rows = Array.isArray(result2.rows) ? result2.rows : [];
+        const deleted = Array.isArray(result2.deleted) ? result2.deleted : [];
+        items += rows.length + deleted.length;
+        if (rows.length + deleted.length > 0) {
+          tables[table] = { rows, deleted: deleted.map((d) => ({ pk: d.pk, deleted_at: d.deleted_at, device_id: d.device_id })) };
+        }
+      }
+      if (items === 0) break;
+      if (pulled === 0) {
+        await writeCloudBackupFile(deps, { kind: "pre", includeFiles: false, now: deps.now ?? Date.now });
+        await rotateCloudBackups(deps, CLOUD_SYNC_BACKUP_KEEP);
+      }
+      const applied = await push(deps.db, config2.device_id, payload);
+      for (const [table, outcome] of Object.entries(applied.tables)) {
+        conflictsNew += outcome.conflicts;
+        if (outcome.rejected.length > 0) {
+          deps.logger.warn("cloud.sync.pull_rejected", { table, rejected: outcome.rejected.length });
+        }
+      }
+      pulled += items;
+      for (const [table, result2] of Object.entries(cloud.tables)) {
+        const next = result2.next_cursors;
+        if (next && typeof next.rows === "string" && typeof next.deleted === "string") {
+          cursors.pull[table] = next;
+        }
+      }
+      await writeSyncCursors(deps.fs, cursors);
+    }
+    for (let guard = 0; guard < 2e3; guard += 1) {
+      const localSince = { tables: {} };
+      for (const meta3 of syncTableList()) {
+        localSince.tables[meta3] = pushCursorOf(cursors, meta3);
+      }
+      const local = await pull(deps.db, localSince);
+      const tables = {};
+      const payload = { tables };
+      let items = 0;
+      for (const [table, result2] of Object.entries(local.tables)) {
+        const rows = Array.isArray(result2.rows) ? result2.rows : [];
+        const deleted = Array.isArray(result2.deleted) ? result2.deleted : [];
+        items += rows.length + deleted.length;
+        if (rows.length + deleted.length > 0) {
+          tables[table] = { rows, deleted: deleted.map((d) => ({ pk: d.pk, deleted_at: d.deleted_at, device_id: config2.device_id })) };
+        }
+      }
+      if (items === 0) break;
+      const cloudResult = await pushToCloud(call, payload);
+      for (const [table, outcome] of Object.entries(cloudResult.tables)) {
+        const appliedEcho = await applyEcho(deps.db, table, outcome.echo, columnsCache);
+        conflictsNew += outcome.conflicts;
+        if (outcome.rejected.length > 0) {
+          deps.logger.warn("cloud.sync.push_rejected", { table, rejected: outcome.rejected.length });
+        }
+        void appliedEcho;
+      }
+      pushed += items;
+      for (const [table, result2] of Object.entries(local.tables)) {
+        const next = result2.next_cursors;
+        if (next && typeof next.rows === "string" && typeof next.deleted === "string") {
+          cursors.push[table] = next;
+        }
+      }
+      await writeSyncCursors(deps.fs, cursors);
+    }
+    const result = finish(
+      await finishWithMirror(
+        deps,
+        { kind: "synced", error: null, pulled, pushed, conflicts_new: conflictsNew, clockWarning, schemaMatch },
+        started
+      )
+    );
+    deps.logger.info("cloud.sync.done", { trigger, pulled, pushed, conflicts_new: conflictsNew });
+    return result;
+  } catch (err) {
+    if (err instanceof CloudSyncError && err.kind === "offline") {
+      const offline = finish(
+        await finishWithMirror(
+          deps,
+          { kind: "offline", error: err.message, pulled: 0, pushed: 0, conflicts_new: 0, clockWarning: void 0, schemaMatch: void 0 },
+          started
+        )
+      );
+      deps.logger.info("cloud.sync.offline", { trigger, reason: err.message });
+      return offline;
+    }
+    const message = err instanceof Error ? err.message : String(err);
+    deps.logger.warn("cloud.sync.failed", { trigger, error: message });
+    return finish(
+      await finishWithMirror(
+        deps,
+        { kind: "error", error: message, pulled: 0, pushed: 0, conflicts_new: 0, clockWarning: void 0, schemaMatch: void 0 },
+        started
+      )
+    );
+  }
+}
+__name(runCloudSync, "runCloudSync");
+var SYNC_TABLE_NAMES = SYNC_TABLES.map((m) => m.table);
+function syncTableList() {
+  return SYNC_TABLE_NAMES;
+}
+__name(syncTableList, "syncTableList");
+async function finishWithMirror(deps, input2, startedMs) {
+  const duration_ms = (deps.now?.() ?? Date.now()) - startedMs;
+  const previous = await readLastSyncMirror(deps.db).catch(() => null);
+  const mirror = {
+    at: new Date(deps.now?.() ?? Date.now()).toISOString(),
+    result: input2.kind,
+    pulled: input2.pulled,
+    pushed: input2.pushed,
+    conflicts_new: input2.conflicts_new,
+    duration_ms,
+    error: input2.error,
+    // نامعلوم (آفلاین/خطای زودرس) → مقدار پیشین حفظ می‌شود تا پنل آخرین دانش معتبر را بدهد
+    clock_warning: input2.clockWarning ?? previous?.clock_warning ?? false,
+    schema_match: input2.schemaMatch !== void 0 ? input2.schemaMatch : previous?.schema_match ?? null
+  };
+  await writeLastSyncMirror(deps.db, mirror);
+  if (input2.kind !== "offline") {
+    try {
+      await deps.audit.log({
+        actorId: "system",
+        action: CLOUD_SYNC_AUDIT_ACTION,
+        resourceType: "cloud-sync",
+        resourceId: input2.kind,
+        changes: {
+          result: { from: null, to: input2.kind },
+          pulled: { from: null, to: input2.pulled },
+          pushed: { from: null, to: input2.pushed },
+          conflicts_new: { from: null, to: input2.conflicts_new }
+        }
+      });
+    } catch {
+    }
+  }
+  return {
+    kind: input2.kind,
+    pulled: input2.pulled,
+    pushed: input2.pushed,
+    conflicts_new: input2.conflicts_new,
+    duration_ms,
+    error: input2.error
+  };
+}
+__name(finishWithMirror, "finishWithMirror");
+async function cloneFromCloud(deps, opts) {
+  const config2 = await readCloudConfig(deps.fs);
+  if (!config2) throw new ValidationError("\u0627\u062A\u0635\u0627\u0644 \u0627\u0628\u0631\u06CC \u062A\u0646\u0638\u06CC\u0645 \u0646\u0634\u062F\u0647 \u0627\u0633\u062A");
+  const secret = cloudSecretOf(deps.env);
+  if (!secret) throw new ValidationError("\u0631\u0627\u0632 \u0627\u062A\u0635\u0627\u0644 \u0627\u0628\u0631\u06CC \u062F\u0631 \u067E\u0648\u0633\u062A\u0647 \u0630\u062E\u06CC\u0631\u0647 \u0646\u0634\u062F\u0647 \u0627\u0633\u062A");
+  const call = { deps, config: config2, secret };
+  const state = await fetchCloudState(call);
+  const serverTime = state.serverTimeMs !== null ? new Date(state.serverTimeMs).toISOString() : new Date(deps.now?.() ?? Date.now()).toISOString();
+  let localRows = 0;
+  for (const t of ["students", "staff", "appointments"]) {
+    try {
+      const row = await deps.db.queryOne(`SELECT COUNT(*) AS c FROM "${t}"`);
+      localRows += Number(row?.c ?? 0);
+    } catch {
+    }
+  }
+  if (localRows > 0 && opts.confirm !== true) {
+    throw new ConflictError(
+      "\u0631\u0648\u06CC \u062F\u06CC\u062A\u0627\u06CC \u0645\u062D\u0644\u06CC \u063A\u06CC\u0631-\u062E\u0627\u0644\u06CC \u06A9\u0644\u0648\u0646 \u0641\u0642\u0637 \u0628\u0627 \u062A\u0623\u06CC\u06CC\u062F \u0635\u0631\u06CC\u062D \u0627\u0646\u062C\u0627\u0645 \u0645\u06CC\u200C\u0634\u0648\u062F \u2014 \u062F\u06CC\u062A\u0627\u06CC \u0641\u0639\u0644\u06CC \u0628\u0627 \u0628\u06A9\u0627\u067E \u062C\u0627\u06CC\u06AF\u0632\u06CC\u0646 \u062E\u0648\u0627\u0647\u062F \u0634\u062F"
+    );
+  }
+  const res = await cloudFetch(call, "/api/backup/export", { method: "GET", headers: cloudHeaders(call, false) });
+  const text = await res.text();
+  let envelope;
+  try {
+    envelope = JSON.parse(text);
+  } catch {
+    throw new ValidationError("\u062E\u0631\u0648\u062C\u06CC \u0627\u0628\u0631 JSON \u0645\u0639\u062A\u0628\u0631 \u0646\u06CC\u0633\u062A \u2014 \u06A9\u0644\u0648\u0646 \u0645\u062A\u0648\u0642\u0641 \u0634\u062F");
+  }
+  if (!deps.backup) throw new ValidationError("\u0633\u0631\u0648\u06CC\u0633 \u067E\u0634\u062A\u06CC\u0628\u0627\u0646 \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0646\u06CC\u0633\u062A \u2014 \u06A9\u0644\u0648\u0646 \u0645\u0645\u06A9\u0646 \u0646\u0634\u062F");
+  const summary = await deps.backup.inspect(envelope);
+  if (!summary.schemaCompatible) {
+    throw new ValidationError("\u062E\u0631\u0648\u062C\u06CC \u0627\u0628\u0631 \u0628\u0627 \u0627\u0633\u06A9\u06CC\u0645\u0627\u06CC \u0645\u062D\u0644\u06CC \u0647\u0645\u200C\u062E\u0648\u0627\u0646 \u0646\u06CC\u0633\u062A \u2014 \u06A9\u0644\u0648\u0646 \u0645\u062A\u0648\u0642\u0641 \u0634\u062F", { problems: summary.problems });
+  }
+  const backup = await writeCloudBackupFile(deps, { kind: "clone", includeFiles: true, now: deps.now ?? Date.now });
+  const report = await deps.backup.restore({ staffId: "system" }, envelope, { confirmed: true });
+  const cursors = { pull: {}, push: {} };
+  for (const meta3 of syncTableList()) {
+    cursors.pull[meta3] = { rows: serverTime, deleted: serverTime };
+    cursors.push[meta3] = { rows: serverTime, deleted: serverTime };
+  }
+  await writeSyncCursors(deps.fs, cursors);
+  try {
+    await deps.audit.log({
+      actorId: "system",
+      action: CLOUD_CLONE_AUDIT_ACTION,
+      resourceType: "cloud-sync",
+      resourceId: backup.name,
+      changes: {
+        tables: { from: null, to: report.tables.length },
+        rows: { from: null, to: report.totalRows }
+      }
+    });
+  } catch {
+  }
+  deps.logger.info("cloud.clone.done", { tables: report.tables.length, rows: report.totalRows, backup: backup.name });
+  return { ok: true, tables: report.tables.length, rows: report.totalRows, backup_path: backup.path };
+}
+__name(cloneFromCloud, "cloneFromCloud");
+async function unlinkCloudConfig(deps, actorId) {
+  if (!deps.fs) throw new ValidationError("\u067E\u0644 \u0641\u0627\u06CC\u0644\u200C\u0647\u0627\u06CC \u0627\u0628\u0631\u06CC \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0646\u06CC\u0633\u062A");
+  await deps.fs.remove(CLOUD_CONFIG_FILE);
+  try {
+    await deps.audit.log({
+      actorId,
+      action: CLOUD_UNLINK_AUDIT_ACTION,
+      resourceType: "cloud-sync",
+      resourceId: CLOUD_CONFIG_FILE,
+      changes: { unlinked: { from: null, to: true } }
+    });
+  } catch {
+  }
+  deps.logger.info("cloud.unlink.done", { actorId });
+}
+__name(unlinkCloudConfig, "unlinkCloudConfig");
+async function buildCloudSyncStatus(deps) {
+  const config2 = await readCloudConfig(deps.fs).catch(() => null);
+  const mirror = await readLastSyncMirror(deps.db).catch(() => null);
+  let conflictsTotal = 0;
+  try {
+    const row = await deps.db.queryOne("SELECT COUNT(*) AS c FROM _sync_conflicts");
+    conflictsTotal = Number(row?.c ?? 0);
+  } catch {
+    conflictsTotal = 0;
+  }
+  return {
+    configured: Boolean(config2),
+    url: config2?.url ?? null,
+    device_id: config2?.device_id ?? null,
+    secret_present: cloudSecretOf(deps.env) !== null,
+    running: cloudSyncInFlight,
+    interval_ms: config2?.interval_ms ?? null,
+    last_sync: mirror ? {
+      at: mirror.at,
+      result: mirror.result,
+      pulled: mirror.pulled,
+      pushed: mirror.pushed,
+      conflicts_new: mirror.conflicts_new,
+      duration_ms: mirror.duration_ms,
+      error: mirror.error
+    } : null,
+    conflicts_total: conflictsTotal,
+    clock_warning: mirror?.clock_warning === true,
+    schema_match: mirror?.schema_match ?? null
+  };
+}
+__name(buildCloudSyncStatus, "buildCloudSyncStatus");
+async function listCloudBackups(deps) {
+  if (!deps.fs) return { dir: "", backups: [] };
+  const [pres, clones] = await Promise.all([
+    deps.fs.list("cloud-sync-pre-").catch(() => []),
+    deps.fs.list("cloud-sync-clone-").catch(() => [])
+  ]);
+  return {
+    dir: deps.fs.dir(),
+    backups: [...pres.map((name) => ({ name, kind: "pre" })), ...clones.map((name) => ({ name, kind: "clone" }))]
+  };
+}
+__name(listCloudBackups, "listCloudBackups");
+var capturedEnvHolder = { env: null };
+function captureCloudEnv(env) {
+  if (env && typeof env === "object") capturedEnvHolder.env = env;
+}
+__name(captureCloudEnv, "captureCloudEnv");
+var schedulerArmed = false;
+function startCloudSyncScheduler(makeDeps, logger) {
+  if (schedulerArmed) return;
+  schedulerArmed = true;
+  if (process.env.VITEST || process.env.NODE_ENV === "test") {
+    logger.info("cloud.sync.scheduler.disabled", { reason: "\u0645\u062D\u06CC\u0637 \u062A\u0633\u062A \u2014 \u0628\u062F\u0648\u0646 \u062A\u0627\u06CC\u0645\u0631" });
+    return;
+  }
+  const schedule = /* @__PURE__ */ __name((ms) => {
+    const t = setTimeout(() => {
+      void tick().catch(() => void 0);
+    }, Math.max(CLOUD_SYNC_MIN_INTERVAL_MS, ms));
+    if (typeof t.unref === "function") t.unref();
+  }, "schedule");
+  const tick = /* @__PURE__ */ __name(async () => {
+    const env = capturedEnvHolder.env;
+    if (!env) {
+      schedule(CLOUD_SYNC_DEFAULT_INTERVAL_MS);
+      return;
+    }
+    const deps = makeDeps(env);
+    try {
+      const config2 = await readCloudConfig(deps.fs);
+      if (!config2 || !cloudSecretOf(env)) {
+        schedule(CLOUD_SYNC_DEFAULT_INTERVAL_MS);
+        return;
+      }
+      await runCloudSync(deps, "auto");
+      const fresh = await readCloudConfig(deps.fs);
+      schedule(fresh?.interval_ms ?? CLOUD_SYNC_DEFAULT_INTERVAL_MS);
+    } catch (err) {
+      logger.warn("cloud.sync.tick_failed", { error: err instanceof Error ? err.message : String(err) });
+      schedule(CLOUD_SYNC_DEFAULT_INTERVAL_MS);
+    }
+  }, "tick");
+  schedule(CLOUD_SYNC_DEFAULT_INTERVAL_MS);
+  logger.info("cloud.sync.scheduler.armed", {});
+}
+__name(startCloudSyncScheduler, "startCloudSyncScheduler");
+
+// src/application/instance-sync/desktop-routes.ts
+function requireDesktopEngine3(c) {
+  if (c.env?.CENTER_DESKTOP_ENGINE !== "1") {
+    throw new NotFoundError("\u0645\u0633\u06CC\u0631 \u06CC\u0627\u0641\u062A \u0646\u0634\u062F");
+  }
+}
+__name(requireDesktopEngine3, "requireDesktopEngine");
+function envOf(c) {
+  return c.env ?? {};
+}
+__name(envOf, "envOf");
+function cloudFsOf(env) {
+  const fs = env.CLOUD_FS;
+  return fs && typeof fs === "object" ? fs : null;
+}
+__name(cloudFsOf, "cloudFsOf");
+function cloudProvisionOf(env) {
+  const p = env.CLOUD_PROVISION;
+  if (!p || typeof p !== "object") return null;
+  const io = p;
+  return typeof io.readCentralWorker === "function" && typeof io.readSchemaSql === "function" ? p : null;
+}
+__name(cloudProvisionOf, "cloudProvisionOf");
+function fetchImplOf(env) {
+  const f = env.CLOUD_FETCH;
+  return typeof f === "function" ? f : void 0;
+}
+__name(fetchImplOf, "fetchImplOf");
+function requestDeps(c, deps) {
+  const env = envOf(c);
+  captureCloudEnv(env);
+  return {
+    db: deps.db,
+    audit: deps.audit,
+    logger: deps.logger.child("instance-sync"),
+    fs: cloudFsOf(env),
+    env,
+    backup: deps.backup ?? null,
+    // CLOUD_FETCH فقط در آزمون ست می‌شود (ابر فیک) — در تولید غایب است و fetch سراسری مصرف می‌شود
+    fetchCloud: typeof env.CLOUD_FETCH === "function" ? env.CLOUD_FETCH : void 0
+  };
+}
+__name(requestDeps, "requestDeps");
+function schedulerDepsFromEnv(env) {
+  const db = createDb(env.DB);
+  const audit = createAuditWriter(db);
+  const logger = createLogger("cloud-sync");
+  const backup = createBackupService({ db, audit, logger, baleToken: null, sender: null });
+  return { db, audit, logger, fs: cloudFsOf(env), env, backup };
+}
+__name(schedulerDepsFromEnv, "schedulerDepsFromEnv");
+var CloudConfigSchema = external_exports.object({
+  url: external_exports.string().min(1, "\u0646\u0634\u0627\u0646\u06CC \u0627\u0628\u0631 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A"),
+  interval_ms: external_exports.number().int().positive().optional()
+});
+var CloneSchema = external_exports.object({
+  confirm: external_exports.boolean().optional()
+});
+var ProvisionVerifySchema = external_exports.object({
+  token: external_exports.string().min(1, "\u062A\u0648\u06A9\u0646 \u06A9\u0644\u0627\u062F\u0641\u0644\u0631 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A")
+});
+var DiscoverSchema = external_exports.object({
+  token: external_exports.string().min(1, "\u062A\u0648\u06A9\u0646 \u06A9\u0644\u0627\u062F\u0641\u0644\u0631 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A")
+});
+var ProvisionSchema = external_exports.object({
+  token: external_exports.string().min(1, "\u062A\u0648\u06A9\u0646 \u06A9\u0644\u0627\u062F\u0641\u0644\u0631 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A"),
+  accountId: external_exports.string().min(1).optional(),
+  name: external_exports.string().min(1, "\u0646\u0627\u0645 \u0648\u0631\u06A9\u0631 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A")
+});
+function cloudError(c, err) {
+  const kind = err instanceof Error && "kind" in err ? String(err.kind) : "offline";
+  const message = err instanceof Error ? err.message : "\u062E\u0637\u0627\u06CC \u0646\u0627\u0634\u0646\u0627\u062E\u062A\u0647\u0654 \u0627\u062A\u0635\u0627\u0644 \u0627\u0628\u0631\u06CC";
+  return c.json({ error: kind === "auth" ? "CLOUD_AUTH" : "CLOUD_OFFLINE", message }, 502);
+}
+__name(cloudError, "cloudError");
+function registerDesktopRoutes(app, deps) {
+  startCloudSyncScheduler(schedulerDepsFromEnv, deps.logger);
+  app.get("/api/instance-sync/status", async (c) => {
+    requireDesktopEngine3(c);
+    getAuthContext(c);
+    const status = await buildCloudSyncStatus(requestDeps(c, deps));
+    return c.json({ data: status }, 200);
+  });
+  app.post("/api/instance-sync/run-now", requireRole("manager"), async (c) => {
+    requireDesktopEngine3(c);
+    getAuthContext(c);
+    const result = await runCloudSync(requestDeps(c, deps), "manual");
+    if (result.kind === "in_flight") {
+      return c.json({ error: "CLOUD_SYNC_IN_FLIGHT", message: "\u0647\u0645\u200C\u06AF\u0627\u0645\u200C\u0633\u0627\u0632\u06CC \u0627\u0628\u0631\u06CC \u062F\u0631 \u062C\u0631\u06CC\u0627\u0646 \u0627\u0633\u062A \u2014 \u0686\u0646\u062F \u0644\u062D\u0638\u0647 \u0628\u0639\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F" }, 409);
+    }
+    if (result.kind === "unconfigured" || result.kind === "no_secret") {
+      return c.json(
+        { error: result.kind === "no_secret" ? "CLOUD_NO_SECRET" : "CLOUD_UNCONFIGURED", message: result.error ?? "\u0627\u062A\u0635\u0627\u0644 \u0627\u0628\u0631\u06CC \u0622\u0645\u0627\u062F\u0647 \u0646\u06CC\u0633\u062A" },
+        400
+      );
+    }
+    return c.json(
+      { data: { result: result.kind, pulled: result.pulled, pushed: result.pushed, conflicts_new: result.conflicts_new, duration_ms: result.duration_ms, error: result.error } },
+      200
+    );
+  });
+  app.post("/api/instance-sync/config", requireRole("manager"), async (c) => {
+    requireDesktopEngine3(c);
+    const actor = getAuthContext(c);
+    const parsed = CloudConfigSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: "VALIDATION_ERROR", message: "\u067E\u06CC\u06A9\u0631\u0628\u0646\u062F\u06CC \u0627\u062A\u0635\u0627\u0644 \u0627\u0628\u0631\u06CC \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A" }, 400);
+    }
+    const cloudDeps = requestDeps(c, deps);
+    if (!cloudDeps.fs) {
+      return c.json({ error: "CLOUD_FS_UNAVAILABLE", message: "\u067E\u0644 \u0641\u0627\u06CC\u0644\u200C\u0647\u0627\u06CC \u0627\u0628\u0631\u06CC \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0646\u06CC\u0633\u062A \u2014 \u0647\u0645\u200C\u06AF\u0627\u0645\u06CC \u0627\u0628\u0631\u06CC \u0641\u0642\u0637 \u062F\u0631 \u0645\u0648\u062A\u0648\u0631 \u0645\u062D\u0644\u06CC \u0645\u0639\u0646\u0627 \u062F\u0627\u0631\u062F" }, 400);
+    }
+    const normalized = parseCloudConfigPayload({ url: parsed.data.url, interval_ms: parsed.data.interval_ms });
+    if (!normalized) {
+      return c.json({ error: "CLOUD_URL_INVALID", message: "\u0646\u0634\u0627\u0646\u06CC \u0627\u0628\u0631 \u0628\u0627\u06CC\u062F \u06CC\u06A9 \u0646\u0634\u0627\u0646\u06CC https \u0645\u0639\u062A\u0628\u0631 \u0628\u0627\u0634\u062F" }, 400);
+    }
+    const existing = await readCloudConfig(cloudDeps.fs).catch(() => null);
+    const config2 = {
+      url: normalized.url,
+      device_id: existing?.device_id ?? crypto.randomUUID(),
+      interval_ms: normalized.interval_ms
+    };
+    await cloudDeps.fs.writeText("cloud-config.json", JSON.stringify(config2, null, 2) + "\n");
+    cloudDeps.logger.info("cloud.config.saved", { staffId: actor.staffId, url: config2.url, interval_ms: config2.interval_ms });
+    return c.json({ data: { ok: true, url: config2.url, device_id: config2.device_id, interval_ms: config2.interval_ms } }, 200);
+  });
+  app.delete("/api/instance-sync/config", requireRole("manager"), async (c) => {
+    requireDesktopEngine3(c);
+    const actor = getAuthContext(c);
+    const cloudDeps = requestDeps(c, deps);
+    await unlinkCloudConfig(cloudDeps, actor.staffId);
+    return c.json({ data: { ok: true, cursors_kept: true } }, 200);
+  });
+  app.post("/api/instance-sync/clone", requireRole("manager"), async (c) => {
+    requireDesktopEngine3(c);
+    getAuthContext(c);
+    const parsed = CloneSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: "VALIDATION_ERROR", message: "\u0628\u062F\u0646\u0647\u0654 \u06A9\u0644\u0648\u0646 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A" }, 400);
+    }
+    const cloudDeps = requestDeps(c, deps);
+    try {
+      const outcome = await cloneFromCloud(cloudDeps, { confirm: parsed.data.confirm === true });
+      return c.json({ data: outcome }, 200);
+    } catch (err) {
+      if (err instanceof Error && err.name === "CloudSyncError") return cloudError(c, err);
+      throw err;
+    }
+  });
+  app.get("/api/instance-sync/backups", async (c) => {
+    requireDesktopEngine3(c);
+    getAuthContext(c);
+    const listing = await listCloudBackups(requestDeps(c, deps));
+    return c.json({ data: listing }, 200);
+  });
+  app.post("/api/instance-sync/provision/verify", requireRole("manager"), async (c) => {
+    getAuthContext(c);
+    const parsed = ProvisionVerifySchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: "VALIDATION_ERROR", message: "\u0628\u062F\u0646\u0647\u0654 \u0648\u0627\u0631\u0633\u06CC \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A \u2014 token \u0644\u0627\u0632\u0645 \u0627\u0633\u062A" }, 400);
+    }
+    const result = await verifyCloudToken({
+      fetchImpl: fetchImplOf(envOf(c)),
+      token: parsed.data.token
+    });
+    if (!result.ok) {
+      return c.json(
+        { error: "CLOUD_PROVISION_FAILED", message: result.message, data: { step: result.step, errors: result.errors ?? [] } },
+        400
+      );
+    }
+    return c.json({ data: { accounts: result.accounts } }, 200);
+  });
+  app.post("/api/instance-sync/provision/discover", requireRole("manager"), async (c) => {
+    getAuthContext(c);
+    const parsed = DiscoverSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: "VALIDATION_ERROR", message: "\u0628\u062F\u0646\u0647\u0654 \u06A9\u0634\u0641 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A \u2014 token \u0644\u0627\u0632\u0645 \u0627\u0633\u062A" }, 400);
+    }
+    const result = await discoverCloudDeployment({
+      fetchImpl: fetchImplOf(envOf(c)),
+      token: parsed.data.token
+    });
+    if (!result.ok) {
+      return c.json(
+        { error: "CLOUD_DISCOVER_FAILED", message: result.message, data: { step: result.step, errors: result.errors ?? [] } },
+        400
+      );
+    }
+    return c.json(
+      { data: { accounts: result.accounts, workers: result.workers, databases: result.databases } },
+      200
+    );
+  });
+  app.post("/api/instance-sync/provision", requireRole("manager"), async (c) => {
+    const actor = getAuthContext(c);
+    const parsed = ProvisionSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: "VALIDATION_ERROR", message: "\u0628\u062F\u0646\u0647\u0654 \u0633\u0627\u062E\u062A \u0648\u0631\u06A9\u0631 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A \u2014 token \u0648 name \u0644\u0627\u0632\u0645 \u0627\u0633\u062A" }, 400);
+    }
+    const provision = cloudProvisionOf(envOf(c));
+    if (!provision) {
+      return c.json({ error: "CLOUD_PROVISION_UNAVAILABLE", message: "\u0633\u0627\u062E\u062A \u0648\u0631\u06A9\u0631 \u0641\u0642\u0637 \u062F\u0631 \u0646\u0633\u062E\u0647\u0654 \u062F\u0633\u06A9\u062A\u0627\u067E \u0645\u0645\u06A9\u0646 \u0627\u0633\u062A" }, 501);
+    }
+    const [centralWorker, schemaSql] = await Promise.all([provision.readCentralWorker(), provision.readSchemaSql()]);
+    if (!centralWorker || !schemaSql) {
+      return c.json(
+        { error: "CLOUD_PROVISION_UNAVAILABLE", message: "\u0628\u0627\u0646\u062F\u0644 \u0645\u0631\u06A9\u0632\u06CC \u06CC\u0627 \u0627\u0633\u06A9\u06CC\u0645\u0627\u06CC \u0646\u0635\u0628 \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0646\u06CC\u0633\u062A \u2014 \u0633\u0627\u062E\u062A \u0648\u0631\u06A9\u0631 \u0645\u0645\u06A9\u0646 \u0646\u0634\u062F" },
+        501
+      );
+    }
+    const webAssets = provision.readWebAssets ? await provision.readWebAssets() : null;
+    const result = await provisionCloudWorker({
+      fetchImpl: fetchImplOf(envOf(c)),
+      centralWorker,
+      schemaSql,
+      webAssets,
+      name: parsed.data.name,
+      token: parsed.data.token,
+      accountId: parsed.data.accountId,
+      log: /* @__PURE__ */ __name((message) => deps.logger.info("cloud.provision.step", { staffId: actor.staffId, detail: message }), "log")
+    });
+    if (!result.ok) {
+      return c.json(
+        { error: "CLOUD_PROVISION_FAILED", message: result.message, data: { step: result.step, steps: result.steps } },
+        400
+      );
+    }
+    return c.json({ data: result }, 200);
+  });
+}
+__name(registerDesktopRoutes, "registerDesktopRoutes");
 
 // src/application/api-routing/index.ts
 function createServices(deps) {
@@ -74627,7 +80601,9 @@ function createServices(deps) {
     audit,
     logger,
     storage: exerciseStorage,
-    downloadSecret: deps.downloadSecret ?? deps.webhookSecret ?? "insecure-dev-secret",
+    /* ۱.۲۷.۴۳ — راز دانلود هرگز رشتهٔ ثابت نیست: اگر AUTH/WEBHOOK تنظیم نشده باشد،
+       تصادفیِ هر بوت می‌شود (توکن‌های دانلود TTL کوتاه دارند؛ تاثیر ری‌استارت پذیرفته است) */
+    downloadSecret: deps.downloadSecret ?? deps.webhookSecret ?? crypto.randomUUID() + crypto.randomUUID(),
     publicBaseUrl: deps.publicBaseUrl ?? null,
     fileSender: exerciseFileSender
   });
@@ -74812,6 +80788,8 @@ function createServices(deps) {
     db,
     audit,
     logger,
+    publicBaseUrl: deps.publicBaseUrl ?? null,
+    // ۱.۲۷.۲۷ — M4: پیوند برگهٔ پیشرفت خانواده
     exerciseIdsExist: /* @__PURE__ */ __name((ids) => exerciseBank.idsExist(ids), "exerciseIdsExist"),
     formulationOt: {
       gatesOf: /* @__PURE__ */ __name((studentId, actor) => otEngine.getGates(studentId, actor), "gatesOf"),
@@ -74976,17 +80954,26 @@ function createApp(deps) {
   registerAuthRoutes(app, { audit: services.audit, logger: services.logger });
   registerSetupStatusRoutes(app, { logger: services.logger });
   registerSystemPublicRoutes(app, { db: services.db });
+  registerEngineCapabilitiesRoutes(app);
   app.route("/node", createNodeSyncApp({ db: services.db, audit: services.audit, logger: services.logger }));
+  app.route("/api/instance-sync", createInstanceSyncApp({ db: services.db, logger: services.logger }));
   app.use("/api/*", authMiddleware());
   app.use("/api/*", supervisorGate(services.audit));
   registerLogoutRoute(app, { audit: services.audit, logger: services.logger });
   registerSetupCompleteRoutes(app, { db: services.db, audit: services.audit, logger: services.logger });
   registerInternalSyncRoutes(app, { db: services.db, logger: services.logger });
   registerNodeSyncStatusRoute(app, { db: services.db, logger: services.logger });
+  registerDesktopRoutes(app, {
+    db: services.db,
+    audit: services.audit,
+    logger: services.logger,
+    backup: services.backup
+  });
   registerCentralQuotaRoutes(app, { db: services.db });
   registerCentralNodesMapRoutes(app, { db: services.db });
   app.get("/api/me", (c) => c.json({ data: c.get("authContext") }, 200));
   registerRoutes(app, services.appointments);
+  registerAssessmentBlockRoutes(app, createAssessmentBlockService({ db: services.db, audit: services.audit, logger: services.logger }));
   registerRoutes2(app, services.attendance);
   registerStaffAttendanceRoutes(app, services.staffAttendance);
   registerWorkingDayRoutes(app, services.workingDay);
@@ -74994,6 +80981,7 @@ function createApp(deps) {
   registerStudentTimelineRoutes(app, services.studentTimeline);
   registerSpecialNeedsRoutes(app, services.specialNeeds);
   registerWaitlistRoutes(app, services.waitlist);
+  registerFormBuilderRoutes(app, createFormBuilderService({ db: services.db, audit: services.audit, logger: services.logger }));
   registerFollowUpRoutes(app, services.followups);
   registerTodoRoutes(app, services.todos);
   registerExerciseBankRoutes(app, services.exerciseBank);
@@ -75103,6 +81091,9 @@ function createApp(deps) {
           part(services.clinicalEngine.getValidationKpis(actor)),
           part(services.clinicalEngine.listCaseAudits(actor, null))
         ]).then(([k, a]) => k ? { kpis: k, audits: a ?? [] } : null)
+      ) : actor.role === "therapist" ? (
+        /* M6 POLISH-3 (۱.۲۷.۲۹) — نمای فقط‌خواندنی درمانگر: حسابرسی پرونده‌های خودش (KPIهای دفتر نمی‌آید) */
+        part(services.clinicalEngine.listCaseAudits(actor, null).then((a) => ({ kpis: null, audits: a ?? [] })))
       ) : Promise.resolve(null)
     ]);
     return c.json({ data: { today, summary, goal, scoring, me, knowledge, announcements, waitlist, dayAppts, followups, validation } }, 200);
@@ -75113,36 +81104,6 @@ function createApp(deps) {
   return app;
 }
 __name(createApp, "createApp");
-
-// src/core/logger/logger.ts
-var LEVEL_WEIGHT = { debug: 10, info: 20, warn: 30, error: 40 };
-function minLevel() {
-  const env = globalThis.ENV ?? "development";
-  return env === "production" ? "info" : "debug";
-}
-__name(minLevel, "minLevel");
-function emit(scope, level, msg, meta3) {
-  if (LEVEL_WEIGHT[level] < LEVEL_WEIGHT[minLevel()]) return;
-  const entry = {
-    ts: (/* @__PURE__ */ new Date()).toISOString(),
-    level,
-    scope,
-    msg,
-    ...meta3 ? { meta: meta3 } : {}
-  };
-  console.log(JSON.stringify(entry));
-}
-__name(emit, "emit");
-function createLogger(scope) {
-  return {
-    debug: /* @__PURE__ */ __name((msg, meta3) => emit(scope, "debug", msg, meta3), "debug"),
-    info: /* @__PURE__ */ __name((msg, meta3) => emit(scope, "info", msg, meta3), "info"),
-    warn: /* @__PURE__ */ __name((msg, meta3) => emit(scope, "warn", msg, meta3), "warn"),
-    error: /* @__PURE__ */ __name((msg, meta3) => emit(scope, "error", msg, meta3), "error"),
-    child: /* @__PURE__ */ __name((subScope) => createLogger(`${scope}.${subScope}`), "child")
-  };
-}
-__name(createLogger, "createLogger");
 
 // src/index.ts
 var BALE_TOKEN_CACHE_TTL_MS = 6e4;

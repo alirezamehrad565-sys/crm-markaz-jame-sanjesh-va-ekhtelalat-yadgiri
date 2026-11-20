@@ -189,7 +189,8 @@ try {
     d1.includes(t) ? ok(`d1.mjs: ${t.replace("'node:sqlite'", 'node:sqlite')} سیم است`) : bad(`d1.mjs: ${t} غایب است`);
   }
   const srv = readFileSync(path.join(ROOT, 'scripts', 'engine', 'adapter', 'server.mjs'), 'utf8');
-  for (const t of ['startAdapterEngine', 'serveStatic', 'createServer', "listen(p, '127.0.0.1'", 'CLINIC_NAME', 'AUTH_SECRET']) {
+  // ۱.۲۷.۲۱ — پین بایند به‌روز شد: از ۱.۲۷.۱۸ بایند از پارامتر host می‌آید (engine.rs پاس می‌دهد 0.0.0.0)
+  for (const t of ['startAdapterEngine', 'serveStatic', 'createServer', 'srv.listen(p, host', 'CLINIC_NAME', 'AUTH_SECRET', 'LAN_INFO']) {
     srv.includes(t) ? ok(`server.mjs: ${t} سیم است`) : bad(`server.mjs: ${t} غایب است`);
   }
   const em = readFileSync(path.join(ROOT, 'scripts', 'engine', 'engine.mjs'), 'utf8');
@@ -216,9 +217,9 @@ try {
   smoke.includes('SMOKE_ENGINE') && smoke.includes('--engine')
     ? ok('engine-smoke: گیت دوهاته workerd/adapter سیم است')
     : bad('engine-smoke: حالت adapter سیم نیست');
-  // M4 — پروب مستقل gamesPort در smoke حالت adapter + گوش‌دادن بنر Degraded در پنل سلامت
+  // M4 — پروب مستقل gamesPort در smoke (هر دو حالت workerd/adapter) + گوش‌دادن بنر Degraded در پنل سلامت
   smoke.includes('سلامت مستقل gamesPort')
-    ? ok('engine-smoke: پروب مستقل gamesPort در حالت adapter سیم است (M4)')
+    ? ok('engine-smoke: پروب مستقل gamesPort در هر دو حالت سیم است (M4 — پاریتی ۲۸/۲۸)')
     : bad('engine-smoke: پروب مستقل gamesPort (M4) غایب است');
   const hpSrc = readFileSync(path.join(ROOT, 'public', 'assets', 'js', 'views', 'health-panel.js'), 'utf8');
   hpSrc.includes("listen('engine:degraded'") && hpSrc.includes("listen('engine:degraded_recovered'")
@@ -242,12 +243,21 @@ try {
   bir.includes('vc_redist') || bir.includes('aka.ms')
     ? bad('مونتاژ رانتایم هنوز redist دارد — باید حذف شده باشد')
     : ok('redist از مونتاژ رانتایم حذف شده است');
-  existsSync(path.join(T, 'installer-hooks.nsh'))
-    ? bad('installer-hooks.nsh باید حذف شده باشد (نصب VC++ دیگر معنا ندارد)')
-    : ok('هوک VC++ حذف شده است');
+  // ⑨-الف v1.27.۱۲ — قلاب نصاب فقط «بستن موتور جامانده» است؛ نصب VC++/redist در هوک همچنان ممنوع
+  // (نیت پین قدیمی حفظ شده: redist سیستم کارفرما تازه‌تر از بسته بود — هیچ نصب VC++ی نباید برگردد)
+  const hookPath = path.join(T, 'installer-hooks.nsh');
+  const hasHook = existsSync(hookPath);
+  const hookText = hasHook ? readFileSync(hookPath, 'utf8') : '';
+  hookText.includes('vc_redist') || hookText.includes('aka.ms') || hookText.includes('vcredist')
+    ? bad('installer-hooks.nsh هنوز نصب VC++/redist دارد — ممنوع (نیت پین v1.27.03)')
+    : ok('هوک نصاب بدون redist است');
   conf?.bundle?.windows?.nsis?.installerHooks
-    ? bad('tauri.conf هنوز installerHooks دارد')
-    : ok('tauri.conf فاقد installerHooks است');
+    ? hasHook && hookText.includes('NSIS_HOOK_PREINSTALL')
+      ? ok('قلاب نصاب وصل است — بستن موتور جامانده پیش از کپی (v1.27.12)')
+      : bad('installerHooks در conf هست ولی installer-hooks.nsh با NSIS_HOOK_PREINSTALL نیست')
+    : hasHook
+      ? bad('installer-hooks.nsh هست ولی conf به آن وصل نیست')
+      : ok('tauri.conf فاقد installerHooks است و هوکی وجود ندارد');
   conf?.bundle?.resources?.some((r) => r.includes('redist'))
     ? bad('tauri.conf هنوز resources/redist دارد')
     : ok('resources/redist از tauri.conf حذف شده است');
@@ -408,8 +418,121 @@ try {
   pinB(path.join(ROOT, 'public', 'assets', 'js', 'app.js'), ['/#/cloud-setup'], 'app.js (روت/بنر فاز C)');
   pinB(path.join(ROOT, 'desktop', 'src-tauri', 'boot-dist', 'index.html'), ['پیکربندی اتصال ابری'], 'boot-dist (لینک فاز C)');
   pinB(path.join(ROOT, 'src', '__tests__', 'front-cloud-setup.test.ts'), ['cloudSetupView'], 'آزمون front-cloud-setup.test.ts');
+
+  // فاز D — OTA (سند §۳): پین‌های سخت کانال دستی + قاعدهٔ سخت dataDir — هم‌الگوی پین‌های فاز B/C
+  pinB(path.join(T, 'src', 'lib.rs'), ['tauri_plugin_updater', 'check_updates', 'open_release_page'], 'lib.rs (فاز D — OTA)');
+  pinB(path.join(T, 'Cargo.toml'), ['tauri-plugin-updater'], 'Cargo.toml (فاز D — updater)');
+  pinB(path.join(ROOT, 'public', 'assets', 'js', 'views', 'health-panel.js'), ['updateCheckView', 'بررسی نسخهٔ تازه'], 'health-panel (فاز D — کانال دستی)');
+  pinB(path.join(ROOT, 'src', '__tests__', 'front-updater.test.ts'), ['updateCheckView'], 'آزمون front-updater.test.ts');
+  pinB(path.join(ROOT, 'scripts', 'make-latest-json.mjs'), ['latest.json', 'windows-x86_64'], 'make-latest-json.mjs');
+  // قاعدهٔ سخت D-۴ — پیکرهٔ فرمان‌های ارتقا هرگز به dataDir اشاره نمی‌کند
+  // (نصاب per-user NSIS فقط شاخهٔ برنامه را لمس می‌کند؛ dataDir بیرون شاخهٔ نصب است)
+  const updSrc = readFileSync(path.join(T, 'src', 'lib.rs'), 'utf8');
+  const updFn = updSrc.slice(updSrc.indexOf('async fn check_updates'), updSrc.indexOf('pub fn run()'));
+  if (/data_dir|dataDir|DATA_DIR/i.test(updFn)) bad('قاعدهٔ سخت فاز D: کد ارتقا به dataDir اشاره دارد');
 } catch (e) {
   bad(`گیت پین‌های P2 خطا داد: ${e instanceof Error ? e.message : String(e)}`);
+}
+
+// ⑫ v1.27.۱۳ — پایانهٔ قابلیت‌های موتور (P0-1 ممیزی §۱): مسیر عمومی /api/engine/capabilities —
+// نسخهٔ باندل + نقشهٔ api؛ مصرف پوسته/صفحهٔ بوت/پنل سلامت. پین‌ها سخت‌اند: رشتهٔ مسیر هم در
+// منبع TS هم در باندل worker (بازساخت الزامی) + آزمون e2e + مصرف فرانت + آزمون آن.
+try {
+  mustExist(path.join(ROOT, 'src', 'application', 'engine-capabilities', 'routes.ts'), 'engine-capabilities/routes.ts');
+  mustExist(path.join(ROOT, 'src', 'application', 'engine-capabilities', 'index.ts'), 'engine-capabilities/index.ts');
+  const capsSrc = readFileSync(path.join(ROOT, 'src', 'application', 'engine-capabilities', 'routes.ts'), 'utf8');
+  capsSrc.includes("'/api/engine/capabilities'") && capsSrc.includes('APP_VERSION')
+    ? ok('پایانهٔ قابلیت‌ها: مسیر عمومی با APP_VERSION منبع یکتا سیم است')
+    : bad('engine-capabilities/routes.ts: مسیر/APP_VERSION غایب است');
+  const routingSrc = readFileSync(path.join(ROOT, 'src', 'application', 'api-routing', 'index.ts'), 'utf8');
+  routingSrc.includes('registerEngineCapabilitiesRoutes')
+    ? ok('api-routing: ثبت پایانهٔ قابلیت‌ها سیم است (ناحیهٔ عمومی — پیش از گیت auth)')
+    : bad('api-routing: registerEngineCapabilitiesRoutes غایب است');
+  const workerBundle = readFileSync(path.join(ROOT, 'worker', 'bundle.js'), 'utf8');
+  workerBundle.includes('/api/engine/capabilities')
+    ? ok('باندل worker: مسیر قابلیت‌ها داخل باندل است (بازساخت شده)')
+    : bad('worker/bundle.js: مسیر قابلیت‌ها نیست — build:worker را اجرا و commit کنید');
+  mustExist(path.join(ROOT, 'src', 'application', '__tests__', 'e2e-engine-capabilities.test.ts'), 'آزمون e2e-engine-capabilities');
+  const hpCaps = readFileSync(path.join(ROOT, 'public', 'assets', 'js', 'views', 'health-panel.js'), 'utf8');
+  hpCaps.includes("api.get('/api/engine/capabilities')") && hpCaps.includes('engineCapabilitiesVersionView')
+    ? ok('health-panel: مصرف پایانهٔ قابلیت‌ها با اولویت نسخه سیم است')
+    : bad('health-panel: مصرف /api/engine/capabilities غایب است');
+  mustExist(path.join(ROOT, 'src', '__tests__', 'front-engine-capabilities.test.ts'), 'آزمون front-engine-capabilities');
+} catch (e) {
+  bad(`گیت پایانهٔ قابلیت‌ها خطا داد: ${e instanceof Error ? e.message : String(e)}`);
+}
+
+// ⑬ v1.27.۱۳ — خودآزمایی بوت (P0-2 ممیزی §۲): appVersion در manifest نصاب + وارسی در
+// PRECHECK پوسته + engineVersion در قرارداد وضعیت + یادداشت صفحهٔ بوت. ناسازگاری رو به جلو
+// (manifest کهنه بدون appVersion) با آزمون ⑩ engine.rs قفل شده است — پین‌ها سخت‌اند.
+try {
+  const bir13 = readFileSync(path.join(ROOT, 'scripts', 'desktop', 'build-installer-runtime.mjs'), 'utf8');
+  bir13.includes('appVersion')
+    ? ok('مونتاژ رانتایم: appVersion در manifest ثبت می‌شود (خودآزمایی بوت)')
+    : bad('build-installer-runtime: فیلد appVersion در manifest نوشته نمی‌شود');
+  const engineSrc13 = readFileSync(path.join(T, 'src', 'engine.rs'), 'utf8');
+  engineSrc13.includes('manifest.get("appVersion")') && engineSrc13.includes('نصب ارتقا ناقص')
+    ? ok('engine.rs: وارسی appVersion در PRECHECK سیم است (Repair + «دست‌نخورده»)')
+    : bad('engine.rs: وارسی appVersion در verify_runtime_integrity غایب است');
+  for (const t of ['test_verify_integrity_appversion_matching_is_ok', 'test_verify_integrity_appversion_mismatch_mentions_repair', 'test_verify_integrity_without_appversion_is_ok']) {
+    engineSrc13.includes(t)
+      ? ok(`engine.rs: آزمون ${t} حاضر است`)
+      : bad(`engine.rs: آزمون ${t} غایب است (خودآزمایی بوت — P0-2)`);
+  }
+  const libSrc13 = readFileSync(path.join(T, 'src', 'lib.rs'), 'utf8');
+  libSrc13.includes('engine_capabilities_version') && libSrc13.includes('engineVersion')
+    ? ok('lib.rs: خواندن نسخهٔ موتور از پایانهٔ قابلیت‌ها + فیلد engineVersion در قرارداد سیم است')
+    : bad('lib.rs: engine_capabilities_version/engineVersion در قرارداد وضعیت غایب است');
+  const boot13 = readFileSync(path.join(ROOT, 'desktop', 'src-tauri', 'boot-dist', 'index.html'), 'utf8');
+  boot13.includes('boot-gap') && boot13.includes('engineVersion')
+    ? ok('صفحهٔ بوت: یادداشت ناهم‌نسخه‌ای موتور/پوسته (boot-gap) سیم است')
+    : bad('boot-dist: بنر خودآزمایی ناهم‌نسخه‌ای غایب است');
+} catch (e) {
+  bad(`گیت خودآزمایی بوت خطا داد: ${e instanceof Error ? e.message : String(e)}`);
+}
+
+// ⑭ v1.27.۱۳ — Windows Job Object (P0-3 ممیزی §۳): پایان «موتور جامانده» — کودک در Job با
+// KILL_ON_JOB_CLOSE؛ FFI خالص بدون crate تازه (قاعدهٔ Cargo). کامپایل ویندوز در CI؛ جاب
+// لینوکسی CI این ماژول را نمی‌بیند (cfg(windows)) و بدون آن کامپایل می‌شود.
+try {
+  mustExist(path.join(T, 'src', 'job_object.rs'), 'job_object.rs');
+  const jobSrc = readFileSync(path.join(T, 'src', 'job_object.rs'), 'utf8');
+  jobSrc.includes('JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE') && jobSrc.includes('AssignProcessToJobObject')
+    ? ok('job_object.rs: FFI خالص Job Object با KILL_ON_JOB_CLOSE سیم است')
+    : bad('job_object.rs: FFI/ثابت KILL_ON_JOB_CLOSE غایب است');
+  jobSrc.includes('extern "system"') && !jobSrc.includes('windows-sys')
+    ? ok('job_object.rs: بدون crate تازه (قاعدهٔ Cargo — فقط FFI دستی kernel32)')
+    : bad('job_object.rs: وابستگی تازه (windows-sys) بدون توجیه وارد شده است');
+  const engineSrc14 = readFileSync(path.join(T, 'src', 'engine.rs'), 'utf8');
+  engineSrc14.includes('EngineChild') && engineSrc14.includes('close_job') && engineSrc14.includes('JobGuard::assign')
+    ? ok('engine.rs: کودک درون EngineChild — اتصال Job در spawn و بستن در kill/Drop سیم است')
+    : bad('engine.rs: اتصال Job Object در spawn_engine/kill_child غایب است');
+  const libSrc14 = readFileSync(path.join(T, 'src', 'lib.rs'), 'utf8');
+  libSrc14.includes('mod job_object')
+    ? ok('lib.rs: ماژول job_object ثبت شده است (cfg(windows))')
+    : bad('lib.rs: mod job_object غایب است');
+} catch (e) {
+  bad(`گیت Job Object خطا داد: ${e instanceof Error ? e.message : String(e)}`);
+}
+
+// ⑮ گیت زبان کاربر — اسکن رشته‌های رندرشوندهٔ UI (روایت بازآرایی / ژاژخان فنی / توکن ممنوعه)
+try {
+  const { spawnSync: ss15 } = await import('node:child_process');
+  const r15 = ss15(process.execPath, [path.join(ROOT, 'scripts', 'ui-voice-check.mjs')], { timeout: 60_000, encoding: 'utf8' });
+  (r15.stdout || '').split('\n').filter(Boolean).slice(-3).forEach((l) => lines.push('  ' + l));
+  r15.status === 0 ? ok('گیت زبان کاربر سبز است (صفر یافته)') : bad(`گیت زبان کاربر قرمز است (exit=${r15.status})`);
+} catch (e) {
+  bad(`اجرای گیت زبان کاربر خطا داد: ${e instanceof Error ? e.message : String(e)}`);
+}
+
+// ⑯ گیت کنتراست AA — جفت‌های توکن رنگی در هر دو تم (۴٫۵ متن عادی / ۳ مؤلفه و مرز)
+try {
+  const { spawnSync: ss16 } = await import('node:child_process');
+  const r16 = ss16('node', [path.join(ROOT, 'scripts', 'contrast-check.mjs')], { timeout: 60_000, encoding: 'utf8' });
+  (r16.stdout || '').split('\n').filter((l) => l.includes('✗') || l.includes('گیت')).slice(0, 8).forEach((l) => lines.push('  ' + l));
+  r16.status === 0 ? ok('گیت کنتراست AA سبز است (صفر تخلف)') : bad(`گیت کنتراست AA قرمز است (exit=${r16.status})`);
+} catch (e) {
+  bad(`اجرای گیت کنتراست خطا داد: ${e instanceof Error ? e.message : String(e)}`);
 }
 
 lines.push(failed ? '❌ گیت ساختار دسکتاپ قرمز است' : '✅ گیت ساختار دسکتاپ سبز است');

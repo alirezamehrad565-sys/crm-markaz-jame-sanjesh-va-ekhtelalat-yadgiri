@@ -298,6 +298,55 @@ export interface PathProbeSummaryBadge {
   masteredMetric: string | null;
 }
 
+// ─── ۱.۲۷.۲۶ — M3 POLISH-3: روایت بالینی پرونده (فقط‌خواندنی) ───
+// خط زمان پیوستهٔ «فرضیهٔ موتور ← مصوبهٔ کمیته ← مسیر مداخله ← نتیجهٔ پراپ» — همه از دادهٔ موجود،
+// بدون جدول تازه؛ مصرف‌کننده: تب «روایت بالینی» پروفایل دانش‌آموز.
+export interface NarrativeProbeTrend {
+  count: number;
+  metric: string; // سنجهٔ اصلی = سنجهٔ آخرین پراپِ مسیر
+  unit: string | null;
+  first: number | null;
+  last: number | null;
+  firstAt: string | null;
+  lastAt: string | null;
+  improved: boolean | null; // last > first — با کمتر از دو نقطه null
+}
+
+export interface NarrativePathBlock {
+  id: string;
+  targetKey: string;
+  targetTitle: string;
+  status: InterventionPathStatus;
+  createdAt: string;
+  engineHypothesis: RankedHypothesis | null; // null = هدف دستی درمانگر (بدون فرضیهٔ موتور)
+  decision: PathDecision | null;
+  sessionsPlanned: number;
+  sessionsDone: number;
+  sessionsSkipped: number;
+  lastSessionDoneAt: string | null;
+  probeTrend: NarrativeProbeTrend | null;
+  probeSummary: PathProbeSummaryBadge | null;
+  reassessAt: string | null;
+}
+
+export interface NarrativeCommitteeBlock {
+  id: string;
+  topic: string;
+  decision: string | null;
+  decisionStatus: string; // pending/approved/rejected/deferred — ماتریس کمیته در pure.ts
+  meetingTitle: string;
+  meetingDate: string; // YYYY-MM-DD
+  meetingStatus: string; // planned/held/cancelled
+}
+
+export interface ClinicalNarrative {
+  student: { id: string; firstName: string; lastName: string };
+  committee: NarrativeCommitteeBlock[];
+  paths: NarrativePathBlock[];
+  storyFrom: string | null; // قدیمی‌ترین مُهر روایت (تاریخ جلسهٔ کمیته/ساخت مسیر)
+  storyTo: string | null; // جدیدترین مُهر (آخرین پراپ/جلسهٔ برگزارشده)
+}
+
 export interface PathProbeRecord {
   id: string;
   pathwayId: string;

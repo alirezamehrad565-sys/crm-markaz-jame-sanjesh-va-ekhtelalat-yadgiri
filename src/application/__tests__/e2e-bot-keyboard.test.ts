@@ -45,8 +45,8 @@ describe('دکمه‌های ثابت ناوبری + دربارهٔ مرکز + ا
   it('مهمان: /start خوش‌آمد + کیبورد مهمان (معرفی/خدمات/ارتباطی/احراز هویت) می‌گیرد', async () => {
     const res = await bot(A, tx('/start', CHAT_NONE));
     expect(res.handled).toBe(true);
-    expect(res.reply).toContain('خوش آمدید');
-    expect(res.keyboard).toEqual([['معرفی مرکز', 'خدمات مرکز'], ['راه‌های ارتباطی', 'احراز هویت'], ['فایل‌های آموزشی']]);
+    expect(res.reply).toContain('خوش اومدید');
+    expect(res.keyboard).toEqual([['معرفی دانش‌آموز'], ['معرفی مرکز', 'خدمات مرکز'], ['راه‌های ارتباطی', 'احراز هویت'], ['فایل‌های آموزشی'], ['تمرین‌ها و کارت‌ها']]); // ۱.۲۷.۳۸
   });
 
   it('دکمهٔ متنی «معرفی مرکز» (مهمان) → متن کامل دربارهٔ مرکز', async () => {
@@ -56,20 +56,20 @@ describe('دکمه‌های ثابت ناوبری + دربارهٔ مرکز + ا
     expect(res.reply).toContain('سنجش و غربالگری');
     expect(res.reply).toContain('توان‌بخشی');
     expect(res.reply).toContain('مداخلهٔ بهنگام رشدی');
-    expect(res.keyboard).toEqual([['معرفی مرکز', 'خدمات مرکز'], ['راه‌های ارتباطی', 'احراز هویت'], ['فایل‌های آموزشی']]);
+    expect(res.keyboard).toEqual([['معرفی دانش‌آموز'], ['معرفی مرکز', 'خدمات مرکز'], ['راه‌های ارتباطی', 'احراز هویت'], ['فایل‌های آموزشی'], ['تمرین‌ها و کارت‌ها']]); // ۱.۲۷.۳۸
   });
 
   it('دکمهٔ «خدمات مرکز» (مهمان) → متن چهار خدمت + دکمهٔ «احراز هویت» → راهنمای ورود', async () => {
     const services = await bot(A, tx('خدمات مرکز', CHAT_NONE));
     expect(services.reply).toContain('سنجش و غربالگری');
     expect(services.reply).toContain('مداخلهٔ بهنگام رشدی');
-    expect(services.keyboard).toEqual([['معرفی مرکز', 'خدمات مرکز'], ['راه‌های ارتباطی', 'احراز هویت'], ['فایل‌های آموزشی']]);
+    expect(services.keyboard).toEqual([['معرفی دانش‌آموز'], ['معرفی مرکز', 'خدمات مرکز'], ['راه‌های ارتباطی', 'احراز هویت'], ['فایل‌های آموزشی'], ['تمرین‌ها و کارت‌ها']]); // ۱.۲۷.۳۸
     const contact = await bot(A, tx('راه‌های ارتباطی', CHAT_NONE));
     expect(contact.reply).toContain('تماس');
     const auth = await bot(A, tx('احراز هویت', CHAT_NONE));
     expect(auth.reply).toContain('کد اتصال');
     expect(auth.reply).toContain('/link CODE');
-    expect(auth.keyboard).toEqual([['معرفی مرکز', 'خدمات مرکز'], ['راه‌های ارتباطی', 'احراز هویت'], ['فایل‌های آموزشی']]);
+    expect(auth.keyboard).toEqual([['معرفی دانش‌آموز'], ['معرفی مرکز', 'خدمات مرکز'], ['راه‌های ارتباطی', 'احراز هویت'], ['فایل‌های آموزشی'], ['تمرین‌ها و کارت‌ها']]); // ۱.۲۷.۳۸
   });
 
   it('دکمهٔ متنی «درباره ما» و /about هم به همان متن می‌رسد', async () => {
@@ -119,6 +119,7 @@ describe('دکمه‌های ثابت ناوبری + دربارهٔ مرکز + ا
     const link = await bot(A, tx(s.nationalId, CHAT_PARENT));
     expect(link.reply).toContain('اتصال انجام شد');
     expect(link.keyboard).toEqual([
+      ['معرفی دانش‌آموز'], // ۱.۲۷.۳۶ — دکمهٔ اول برای نقش پایه
       ['نوبت‌های دانش‌آموز من', 'تمرین‌های انجام‌نشده'],
       ['چک‌لیست‌های من', 'حضور فرزند'],
       ['فایل‌های آموزشی'],

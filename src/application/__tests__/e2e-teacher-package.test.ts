@@ -107,7 +107,7 @@ describe(' — فرم‌های تکی معلم (SNAP-IV-T / SDQ-T / ملاک‌�
       expect(t, k).toBeTruthy();
       typeIds[k] = t!.id;
     }
-    // — فرم جامع معلم دیگر در کتابخانه نیست ()
+    // — فرم جامع معلم دیگر در کتابخانه نیست
     expect(types.find((x) => x.key === 'ce-comp-teacher-v2')).toBeUndefined();
   });
 

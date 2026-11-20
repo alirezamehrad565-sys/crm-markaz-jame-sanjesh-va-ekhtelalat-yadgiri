@@ -9,7 +9,7 @@
  * الگو: front-cloud-sync.test.ts — import از فایل js فرانت با @ts-ignore تک‌خطی.
  */
 // @ts-ignore — فایل .js فرانت، خارج از include تایپ‌اسکریپت است (import تک‌خطی تا @ts-ignore نشتی را بپوشاند)
-import { cloudSetupView, cloudWorkerNameView, cloudSecretDisplayView, cloudSetupStatusView, cloudSetupErrorView, saveExistingConnection, verifyProvisionToken, provisionNewWorker, connectProvisionedWorker, markCloudSetupSkipped, cloudSetupSkippedInSession } from '../../public/assets/js/views/cloud-setup.js';
+import { cloudSetupView, cloudWorkerNameView, cloudSecretDisplayView, cloudSetupStatusView, cloudSetupErrorView, saveExistingConnection, verifyProvisionToken, provisionNewWorker, connectProvisionedWorker, markCloudSetupSkipped, cloudSetupSkippedInSession, mountCloudSetup } from '../../public/assets/js/views/cloud-setup.js';
 
 /** پاکت سبز status — مرجع آزمون‌های کارت وضعیت (هم‌شکل FULL_SYNCED آزمون فاز B) */
 const FULL_STATUS = {
@@ -353,5 +353,201 @@ describe('skip «فقط محلی» — بی‌قفل (قانون سند §۲-۵)
   it('بی‌storage (node/حالت خصوصی) → بی‌کرش: همان پیام و flag=false', () => {
     expect(markCloudSetupSkipped()).toContain('پنل سلامت');
     expect(cloudSetupSkippedInSession()).toBe(false);
+  });
+});
+
+/* ── فاز D2 — mountCloudSetup: یک پیاده‌سازی، دو میزبان (مسیر روتر #/cloud-setup + کارت ابری
+   پنل سلامت با compact). محیط آزمون node است و jsdom ندارد؛ یک DOM مصنوعی کمینه (فقط همان سطحی
+   که سوارشدن لمس می‌کند: createElement/createElementNS/createTextNode/appendChild/replaceChildren/
+   setAttribute/classList/addEventListener) — بدون هیچ وابستگی تازه. گارد globals با try/finally
+   (الگوی آزمون skip بالای همین فایل). ── */
+
+class FakeNode {
+  tagName: string;
+  children: FakeNode[] = [];
+  parentNode: FakeNode | null = null;
+  attributes = new Map<string, string>();
+  listeners = new Map<string, Array<(ev?: unknown) => void>>();
+  dataset: Record<string, string> = {};
+  style: Record<string, string> = {};
+  className = '';
+  value = '';
+  innerHTML = '';
+  isRoot = false;
+
+  constructor(tag: string, ns: string | null = null) {
+    this.tagName = String(tag).toUpperCase();
+    void ns; // فضانام svg — برای آزمون همین سطح کافی است
+  }
+
+  get isConnected(): boolean {
+    let p: FakeNode | null = this;
+    while (p.parentNode !== null) p = p.parentNode;
+    return p.isRoot;
+  }
+  appendChild(child: FakeNode): FakeNode { child.parentNode = this; this.children.push(child); return child; }
+  replaceChildren(...kids: unknown[]): void {
+    for (const c of this.children) c.parentNode = null;
+    this.children = [];
+    for (const k of kids) {
+      if (k === null || k === undefined || k === false) continue;
+      this.appendChild(k instanceof FakeNode ? k : new FakeText(String(k)));
+    }
+  }
+  setAttribute(key: string, v: string): void { this.attributes.set(key, String(v)); }
+  getAttribute(key: string): string | null { return this.attributes.get(key) ?? null; }
+  removeAttribute(key: string): void { this.attributes.delete(key); }
+  addEventListener(type: string, fn: (ev?: unknown) => void): void {
+    const arr = this.listeners.get(type) ?? [];
+    arr.push(fn);
+    this.listeners.set(type, arr);
+  }
+  get classList(): { add(cls: string): void; remove(cls: string): void; toggle(cls: string, force?: boolean): void; contains(cls: string): boolean } {
+    const read = () => new Set(this.className.split(/\s+/).filter(Boolean));
+    const write = (set: Set<string>) => { this.className = [...set].join(' '); };
+    return {
+      add: (cls) => { const s = read(); s.add(cls); write(s); },
+      remove: (cls) => { const s = read(); s.delete(cls); write(s); },
+      toggle: (cls, force) => {
+        const s = read();
+        const on = force === undefined ? !s.has(cls) : force;
+        if (on) s.add(cls); else s.delete(cls);
+        write(s);
+      },
+      contains: (cls) => read().has(cls)
+    };
+  }
+  click(): void { for (const fn of [...(this.listeners.get('click') ?? [])]) fn({ currentTarget: this }); }
+  querySelector(): FakeNode | null { return null; } // فرم مصنوعی فرزند ندارد — گارد فیلد رمز وب رد می‌شود
+}
+
+class FakeText extends FakeNode {
+  text: string;
+  constructor(text: string) { super('#text'); this.text = text; }
+}
+
+/** نصب DOM مصنوعی روی globalThis (ui.js append به instanceof Node گارد می‌زند) — خروجی = بازگردانی */
+function installFakeDom(): () => void {
+  const g = globalThis as unknown as Record<string, unknown>;
+  const prevDocument = g['document'];
+  const prevNode = g['Node'];
+  g['document'] = {
+    createElement: (tag: string) => new FakeNode(tag),
+    createElementNS: (ns: string, tag: string) => new FakeNode(tag, ns),
+    createTextNode: (text: string) => new FakeText(text),
+    body: new FakeNode('body')
+  };
+  g['Node'] = FakeNode;
+  return () => {
+    if (prevDocument === undefined) delete g['document']; else g['document'] = prevDocument;
+    if (prevNode === undefined) delete g['Node']; else g['Node'] = prevNode;
+  };
+}
+
+/** همهٔ گره‌های زیرین (BFS عمقی) + متن یک گره (فقط گره‌های متنی) */
+function allNodes(root: FakeNode): FakeNode[] {
+  const out: FakeNode[] = [];
+  const walk = (n: FakeNode) => { out.push(n); for (const c of n.children) walk(c); };
+  walk(root);
+  return out;
+}
+function textOf(node: FakeNode): string {
+  const out: string[] = [];
+  for (const n of allNodes(node)) if (n instanceof FakeText) out.push(n.text);
+  return out.join('').trim();
+}
+function findButton(root: FakeNode, label: string): FakeNode | null {
+  return allNodes(root).find((n) => n.tagName === 'BUTTON' && textOf(n).includes(label)) ?? null;
+}
+
+describe('mountCloudSetup — سوارشدن در root دلخواه (فاز D2؛ یک پیاده‌سازی، دو میزبان)', () => {
+  it('compact: بدون عنوان صفحهٔ h2 رندر می‌شود؛ سه گزینه در root دلخواه می‌نشیند و گام choice هیچ fetch نمی‌زند', () => {
+    const restore = installFakeDom();
+    try {
+      const root = new FakeNode('div');
+      root.isRoot = true;
+      const { calls, deps } = makeDeps();
+      const unmount = mountCloudSetup(root, deps, { compact: true });
+      expect(typeof unmount).toBe('function');
+      expect(allNodes(root).filter((n) => n.tagName === 'H2')).toHaveLength(0); // compact — بدون h2 و پانویس صفحه
+      expect(allNodes(root).filter((n) => n.tagName === 'H3').map(textOf))
+        .toEqual(expect.arrayContaining(['اتصال به مرکز ابری موجود', 'ساخت مرکز ابری با کلید کلادفلر', 'فقط محلی']));
+      for (const label of ['اتصال به مرکز موجود…', 'ساخت مرکز ابری تازه…', 'فقط محلی می‌مانم']) {
+        expect(findButton(root, label)).not.toBeNull();
+      }
+      expect(calls.filter((c) => c.startsWith('GET')).length).toBe(0); // گام choice — هیچ درگاهی خوانده نمی‌شود
+    } finally { restore(); }
+  });
+
+  it('میزبان تمام‌صفحه (compact غایب): همان h2 صفحهٔ «پیکربندی اتصال ابری» رندر می‌شود — مسیر روتر دست‌نخورده', () => {
+    const restore = installFakeDom();
+    try {
+      const root = new FakeNode('div');
+      root.isRoot = true;
+      const { deps } = makeDeps();
+      mountCloudSetup(root, deps, {});
+      const h2s = allNodes(root).filter((n) => n.tagName === 'H2');
+      expect(h2s).toHaveLength(1);
+      expect(textOf(h2s[0])).toBe('پیکربندی اتصال ابری');
+    } finally { restore(); }
+  });
+
+  it('unmount تمیز: root خالی می‌شود؛ رندر درجای مانده (پاسخ refreshStatus پس از تخریب) بی‌اثر است؛ دوبار صدا زدن بی‌خطر', async () => {
+    const restore = installFakeDom();
+    try {
+      const root = new FakeNode('div');
+      root.isRoot = true;
+      const { deps } = makeDeps();
+      const unmount = mountCloudSetup(root, deps, { compact: true });
+      expect(root.children.length).toBeGreaterThan(0);
+      findButton(root, 'اتصال به مرکز موجود…')?.click(); // گام existing — refreshStatus در جریان می‌افتد
+      expect(root.children.length).toBeGreaterThan(0);
+      unmount(); // تخریب
+      expect(root.children.length).toBe(0);
+      await new Promise((r) => setTimeout(r, 0)); // پاسخ fetch درجای مانده می‌رسد
+      expect(root.children.length).toBe(0); // گارد disposed — هیچ رندر درجای مانده root را پر نمی‌کند
+      unmount(); // دوبار صدا زدن بی‌خطر است
+      expect(root.children.length).toBe(0);
+    } finally { restore(); }
+  });
+
+  it('سیم‌کشی onDone — جریان B1 داخل سوارشدن: submit فرم existing → config → secret → run-now → توست موفقیت → onDone یک‌بار', async () => {
+    const restore = installFakeDom();
+    const g = globalThis as unknown as Record<string, unknown>;
+    g['__TAURI__'] = { invoke: async () => '●●●●۱۲۳۴' }; // کانال میز حاضر — secretChannel فعال (الگوی آزمون راز)
+    try {
+      const root = new FakeNode('div');
+      root.isRoot = true;
+      const { calls, deps } = makeDeps();
+      const toasts: Array<[string, string]> = [];
+      const submits: Array<(values: Record<string, string>) => Promise<void>> = [];
+      const depsFull = {
+        ...deps,
+        toast: (msg: string, tone: string) => { toasts.push([msg, tone]); },
+        formModal: (opts: { onSubmit: (values: Record<string, string>) => Promise<void> }) => {
+          submits.push(opts.onSubmit);
+          return { form: new FakeNode('form') };
+        }
+      };
+      const onDone = vi.fn();
+      const unmount = mountCloudSetup(root, depsFull, { compact: true, onDone });
+      findButton(root, 'اتصال به مرکز موجود…')?.click(); // گام existing
+      await new Promise((r) => setTimeout(r, 0));
+      findButton(root, 'پیکربندی اتصال…')?.click(); // فرم مودال — onSubmit ثبت می‌شود
+      expect(submits).toHaveLength(1);
+      await submits[0]({ url: 'https://markaz-x.workers.dev', secret: 'sec-1', interval_minutes: '10' });
+      // ترتیب قراردادی B1 — بدون GETهای وضعیت (calls اول GET /api/instance-sync/status ورود به گام است)
+      const writes = calls.filter((c) => c.startsWith('POST') || c.startsWith('invoke'));
+      expect(writes[0]).toContain('POST /api/instance-sync/config');
+      expect(writes[1]).toContain('invoke cloud_secret_set');
+      expect(writes[2]).toContain('POST /api/instance-sync/run-now');
+      expect(toasts.some(([m, t]) => t === 'success' && m.includes('اتصال ابری ذخیره شد'))).toBe(true);
+      expect(allNodes(root).filter((n) => n.tagName === 'H3').map(textOf)).toContain('اتصال ابری ثبت شد'); // گام done
+      expect(onDone).toHaveBeenCalledTimes(1); // میزبان با این سیگنال ناحیه را می‌بندد و کارت را تازه می‌کند
+      unmount();
+    } finally {
+      delete g['__TAURI__'];
+      restore();
+    }
   });
 });

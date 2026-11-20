@@ -29,7 +29,6 @@ export type DayNoteKind = (typeof DAY_NOTE_KINDS)[number];
 export type NextAction = (typeof NEXT_ACTION_VALUES)[number];
 export type AttendanceStatus = (typeof ATTENDANCE_STATUS)[keyof typeof ATTENDANCE_STATUS];
 export type SchoolKind = (typeof SCHOOL_KINDS)[number];
-export type StudentGrade = (typeof STUDENT_GRADES)[number];
 
 export interface AuthContext {
   staffId: string;
@@ -41,11 +40,13 @@ export interface AuthContext {
 }
 
 export interface ConflictWarning {
-  type: 'overlap';
-  appointmentId: string;
+  /* ۱.۲۷.۱۵ — نوع سوم «assessment_block»: نوبت به بازهٔ رزرو سنجش برخورد (بلوک سنجش نوبتِ
+     موجودِ روی مبدأ ندارد — فیلدهای existing/appointmentId فقط برای overlap پر می‌شوند) */
+  type: 'overlap' | 'assessment_block';
+  appointmentId?: string;
   staffId: string;
-  existingStartAt: string;
-  existingEndAt: string;
+  existingStartAt?: string;
+  existingEndAt?: string;
   proposedStartAt: string;
   proposedEndAt: string;
 }
@@ -82,10 +83,6 @@ export interface NewAppointmentInput {
   students: { studentId: string; facetId?: string }[];
   note?: string | null;
   sessionType?: import('./constants').SessionTypeKey | null;
-}
-
-export interface AppointmentUpdateInput {
-  note?: string | null;
 }
 
 export interface CopyWeekInput {
@@ -160,6 +157,8 @@ export interface TemplateVars {
   phone?: string;         // شمارهٔ تماس مرکز (bot_contact)
   aboutText?: string;     // ۱.۲۵.۵۷ — متن «دربارهٔ مرکز» از تنظیمات (bot_about)
   list?: string;          // فهرست چندخطی آماده (bot_public_files/bot_class_activity)
+  actLink?: string;       // ۱.۲۷.۳۸ — لینک صفحهٔ عمومی تمرین‌ها و کارت‌های آماده (bot_activities)
+  refLink?: string;       // ۱.۲۷.۳۸ — لینک فرم عمومی معرفی (bot_activities)
   count?: string;         // شمارش فارسی (bot_pending_homework)
   title?: string;         // عنوان فایل/گزارش (bot_doc_received)
   senderName?: string;    // نام فرستنده (homework_graded)
@@ -236,11 +235,6 @@ export interface ClassBotLinkRecord {
   schoolName?: string | null;
   deepLink?: string | null;
 }
-
-export type ChatOwner =
-  | { kind: 'student'; studentId: string }
-  | { kind: 'staff'; staffId: string }
-  | { kind: 'class'; classId: string };
 
 export interface CenterHourRange {
   weekday: number;      // 0 = شنبه … 6 = جمعه
@@ -330,13 +324,6 @@ export interface GlobalSearchResult {
   groups: SearchGroup[];
 }
 
-export interface DispatchResult {
-  id: string;
-  ok: boolean;
-  skipped?: boolean;
-  error?: string;
-}
-
 export interface DispatchSummary {
   processed: number;
   sent: number;
@@ -366,6 +353,8 @@ export interface AppBindings {
   NODE_RATE_LIMIT_PER_MIN?: string;
   /** ENG-4 (۱.۲۶.۴) — نشانی /health ورکر بازی‌ها؛ فقط در موتور محلی بسته می‌شود (config.mjs) — تولید وب غایب */
   GAMES_HEALTH_URL?: string;
+  /** ۱.۲۷.۲۱ — نشانی LAN سرور محلی (رشتهٔ JSON: IPهای دستگاه + پورت‌های واقعی بوت از lan.mjs)؛ adapter دسکتاپ می‌سازد — تولید وب غایب */
+  LAN_INFO?: string;
 }
 
 export interface AppVariables {

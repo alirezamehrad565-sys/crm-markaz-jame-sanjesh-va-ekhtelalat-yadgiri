@@ -283,7 +283,6 @@ describe('حذف رویداد و قالب (فقط مدیر — دستور کار
       eventTypeId: sessionType.id,
       values
     });
-    if (ev.status !== 201) console.log('DEBUG-EV:', JSON.stringify(ev.body));
     expect(ev.status).toBe(201);
     sessionId = dataOf<{ id: string }>(ev).id;
 

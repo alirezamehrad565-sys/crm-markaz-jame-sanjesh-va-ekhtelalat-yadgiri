@@ -18,6 +18,10 @@ mod cf_deploy;
 mod deploy_plan;
 mod engine;
 mod engine_watchdog;
+// ۱.۲۷.۱۳ — چرخهٔ عمر موتور با Windows Job Object (P0-3 ممیزی §۳) — فقط ویندوز؛
+// جاب cargo-check/test لینوکسی CI این ماژول را نمی‌بیند و بدون آن کامپایل می‌شود.
+#[cfg(windows)]
+mod job_object;
 mod secure_store;
 
 use std::path::Path;
@@ -82,6 +86,9 @@ pub struct EngineStatusSnapshot {
     last_event_at_unix: u64,
     degraded_reason: Option<String>,
     app_version: String,
+    /// ۱.۲۷.۱۳ — خودآزمایی بوت (P0-2): نسخهٔ موتور از پایانهٔ قابلیت‌ها (P0-1) پس از سبزشدن —
+    /// None تا بوت موفق/پروب ناکام؛ صفحهٔ بوت و پنل سلامت ناهم‌خوانی را با همین می‌سازند
+    engine_version: Option<String>,
 }
 
 impl EngineStatusSnapshot {
@@ -96,6 +103,7 @@ impl EngineStatusSnapshot {
             last_event_at_unix: 0,
             degraded_reason: None,
             app_version: env!("CARGO_PKG_VERSION").to_string(),
+            engine_version: None,
         }
     }
 }
@@ -143,6 +151,7 @@ fn engine_status_json(s: &EngineStatusSnapshot) -> serde_json::Value {
         "lastEventAtUnix": s.last_event_at_unix,
         "degradedReason": s.degraded_reason.clone(),
         "appVersion": s.app_version.clone(),
+        "engineVersion": s.engine_version.clone(),
     })
 }
 
@@ -557,17 +566,27 @@ fn desktop_status(app: tauri::AppHandle) -> serde_json::Value {
     let state = app.state::<AppState>();
     let phase = state.phase.lock().map(|g| g.clone()).unwrap_or(EnginePhase::Booting);
     let version = env!("CARGO_PKG_VERSION").to_string();
+    // ۱.۲۷.۱۳ — خودآزمایی بوت (P0-2): نسخهٔ موتور از آینه — None تا بوت موفق؛ صفحهٔ بوت
+    // ناهم‌خوانی را فقط وقتی هر دو معلوم‌اند نشان می‌دهد (پروب نرم — هرگز بوت را نمی‌سد)
+    let engine_version = app
+        .state::<EngineStatusMirror>()
+        .0
+        .lock()
+        .ok()
+        .and_then(|g| g.engine_version.clone());
     match phase {
-        EnginePhase::Booting => serde_json::json!({ "phase": "booting", "version": version }),
+        EnginePhase::Booting => {
+            serde_json::json!({ "phase": "booting", "version": version, "engineVersion": engine_version })
+        }
         EnginePhase::Ready { port, base_url } => {
-            serde_json::json!({ "phase": "ready", "version": version, "port": port, "base_url": base_url })
+            serde_json::json!({ "phase": "ready", "version": version, "engineVersion": engine_version, "port": port, "base_url": base_url })
         }
         // M4 — Degraded همان شکل ready را دارد (اپ اصلی کار می‌کند)؛ فقط phase عوض است
         EnginePhase::Degraded { port, base_url } => {
-            serde_json::json!({ "phase": "degraded", "version": version, "port": port, "base_url": base_url })
+            serde_json::json!({ "phase": "degraded", "version": version, "engineVersion": engine_version, "port": port, "base_url": base_url })
         }
         EnginePhase::Failed { message, log_tail } => {
-            serde_json::json!({ "phase": "failed", "version": version, "message": message, "log_tail": log_tail })
+            serde_json::json!({ "phase": "failed", "version": version, "engineVersion": engine_version, "message": message, "log_tail": log_tail })
         }
     }
 }
@@ -867,6 +886,10 @@ fn spawn_engine_boot(app: tauri::AppHandle) {
                 if let Ok(mut slot) = app.state::<LocalEngineSlot>().0.lock() {
                     *slot = Some(motor);
                 }
+                // ۱.۲۷.۱۳ — خودآزمایی بوت (P0-2): پس از سبزشدن، نسخهٔ موتور از پایانهٔ قابلیت‌ها
+                // (P0-1) خوانده می‌شود و در آینهٔ وضعیت می‌نشیند؛ شکست پروب نرم است (None —
+                // بوت هرگز از این نسخه نمی‌شکند) و پنل سلامت/صفحهٔ بوت از همین خوراک می‌گیرند.
+                let engine_version = engine::engine_capabilities_version(port);
                 if finish_stale(&state) {
                     return;
                 }
@@ -879,6 +902,7 @@ fn spawn_engine_boot(app: tauri::AppHandle) {
                     st.games_port = games_port;
                     st.started_at_unix = unix_now();
                     st.degraded_reason = None;
+                    st.engine_version = engine_version;
                 });
                 // ناوبری صفحهٔ بوت به loopback — خودِ boot page با desktop_status این را می‌فهمد و
                 // location.replace می‌زند؛ اینجا هم برای سازگاری eval همان ناوبری را تزریق می‌کنیم.
@@ -911,6 +935,43 @@ fn spawn_engine_boot(app: tauri::AppHandle) {
     });
 }
 
+/// فاز D-۳ — کانال دستی «بررسی نسخهٔ تازه»: فقط وارسی؛ هیچ دانلود/نصبی از داخل اپ نیست
+/// (درس ریسک ۴ — AV ایران). آفلاین/بی‌کلید/خطا → پیام فارسی با state:'error'، هرگز کرش.
+#[tauri::command]
+async fn check_updates(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    use tauri_plugin_updater::UpdaterExt;
+    let current = app.package_info().version.to_string();
+    let updater = match app.updater() {
+        Ok(u) => u,
+        Err(e) => return Ok(serde_json::json!({ "state": "error", "message": format!("به‌روزرسان آماده نیست — {e}") })),
+    };
+    let found = match updater.check().await {
+        Ok(f) => f,
+        Err(e) => return Ok(serde_json::json!({ "state": "error", "message": format!("بررسی نشد — {e}") })),
+    };
+    Ok(match found {
+        None => serde_json::json!({ "state": "latest", "current": current }),
+        Some(u) => serde_json::json!({
+            "state": "available",
+            "current": current,
+            "version": u.version,
+            "notes": u.body.clone().unwrap_or_default()
+        }),
+    })
+}
+
+/// فاز D-۳ — بازکردن صفحهٔ ریلیز در مرورگر پیش‌فرض (دانلود دستی نصاب — همیشه موجود)
+#[tauri::command]
+fn open_release_page() -> Result<(), String> {
+    const RELEASE_URL: &str = "https://github.com/alirezamehrad565-sys/crm-markaz-jame-sanjesh-va-ekhtelalat-yadgiri/releases/latest";
+    let spawned = if cfg!(target_os = "windows") {
+        std::process::Command::new("cmd").args(["/C", "start", "", RELEASE_URL]).spawn()
+    } else {
+        std::process::Command::new("xdg-open").arg(RELEASE_URL).spawn()
+    };
+    spawned.map(|_| ()).map_err(|e| format!("بازکردن مرورگر ناموفق بود — {e}"))
+}
+
 pub fn run() {
     tauri::Builder::default()
         // F — تکی‌نمونه (بستن ریسک #۱۰) — باید اولین plugin زنجیره باشد (پلاگین‌ها به ترتیب
@@ -921,6 +982,12 @@ pub fn run() {
                 let _ = window.set_focus();
             }
         }))
+        // فاز D — OTA (بعد از تکی‌نمونه — ترتیب پلاگین‌ها: single_instance اولین می‌ماند).
+        // کلید عمومی از پیکربندی tauri.conf.json (plugins.updater.pubkey) خوانده می‌شود؛ ثبت باید
+        // inline باشد چون Builder پلاگین updater تایپ TauriPlugin<_, Config> می‌سازد (درس E0308 CI).
+        // تزریق کلید واقعی در CI هنگام بیلد انجام می‌شود؛ بی‌کلید = کانال خودکار بی‌اثر در runtime
+        // (خطا با پیام فارسی در check_updates گرفته می‌شود)، کانال دستی سالم.
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(LocalEngineSlot(Mutex::new(None)))
         .manage(AppState::new())
         // فاز A — آینهٔ وضعیت سرور محلی (قرارداد engine_status / engine:status)
@@ -941,7 +1008,10 @@ pub fn run() {
             // فاز B — راز اتصال ابری (keyring؛ فقط ماسک به فرانت می‌آید)
             cloud_secret_set,
             cloud_secret_get,
-            cloud_secret_delete
+            cloud_secret_delete,
+            // فاز D — OTA کانال دستی (فقط وارسی + بازکردن مرورگر)
+            check_updates,
+            open_release_page
         ])
         .run(tauri::generate_context!())
         .expect("خطای راه‌اندازی پوستهٔ دسکتاپ");

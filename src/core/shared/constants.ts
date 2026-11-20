@@ -32,18 +32,9 @@ export const SESSION_TYPES: readonly { key: SessionTypeKey; label: string; durat
   { key: 'mental_ot', label: 'کاردرمانی ذهنی', durationMin: 45, hint: 'توانبخشی شناختی با پروتکل کاردرمانی ذهنی' }
 ];
 
-export function sessionTypeOf(key: string | null | undefined): { key: SessionTypeKey; label: string; durationMin: number; hint: string } | undefined {
-  return SESSION_TYPES.find((t) => t.key === key);
-}
-
 export const STUDENT_PATHWAYS = ['learning', 'rehab'] as const;
 
 export type StudentPathway = (typeof STUDENT_PATHWAYS)[number];
-
-export const STUDENT_PATHWAY_LABELS: Record<StudentPathway, string> = {
-  learning: 'مسیر اختلال یادگیری',
-  rehab: 'مسیر توانبخشی ذهنی-جسمی'
-};
 
 export const STUDENT_PROTOCOLS = ['learning', 'slow_learner', 'mental_ot', 'rehab'] as const;
 
@@ -54,41 +45,6 @@ export const STUDENT_PROTOCOL_LABELS: Record<StudentProtocol, string> = {
   slow_learner: 'پروتکل دیرآموز',
   mental_ot: 'پروتکل کاردرمانی ذهنی',
   rehab: 'پروتکل توانبخشی ذهنی-جسمی'
-};
-
-export const PROTOCOL_DEFAULT_SESSION_TYPE: Record<StudentProtocol, SessionTypeKey> = {
-  learning: 'individual',
-  slow_learner: 'individual',
-  mental_ot: 'mental_ot',
-  rehab: 'individual'
-};
-
-export const PROTOCOL_STEPS: Record<StudentProtocol, { key: string; title: string; hint: string }[]> = {
-  learning: [
-    { key: 'observe', title: 'مشاهده و ثبت', hint: 'شرح‌حال، چک‌لیست‌های رفتاری و مشاهدهٔ کلاس' },
-    { key: 'assess', title: 'ارزیابی تخصصی', hint: 'پروب‌های خواندن/نوشتن/حساب + وکسلر + ملاک‌های DSM' },
-    { key: 'intervene', title: 'مداخله و جلسات', hint: 'مسیر هدف با تمرین‌های بانک + جلسات فردی/گروهی' },
-    { key: 'monitor', title: 'پایش و گزارش', hint: 'پروب دوره‌ای، بازسنجی ۴–۶ هفته و گزارش خانواده' }
-  ],
-  slow_learner: [
-    { key: 'baseline', title: 'ارزیابی پایه', hint: 'وکسلر + ارزیابی مهارتی ۷ حیطه‌ای — نقطهٔ شروع واقعی' },
-    { key: 'goals', title: 'اهداف کوچک و واقع‌بینانه', hint: 'هدف‌های قابل دستیابی دوره‌ای، نه مقایسه با هم‌سال' },
-    { key: 'repeat', title: 'تکرار ساخت‌یافته و چندحسی', hint: 'تمرین‌های کوتاه با تکرار بیشتر و ورودی چندحسی' },
-    { key: 'home', title: 'تمرین روزانهٔ خانگی', hint: 'تکلیف کوتاه روزانه از کارت‌های آماده + گزارش خانواده' }, // ریبرند
-    { key: 'review', title: 'بازبینی دوره‌ای و جلسهٔ مشترک', hint: 'جلسهٔ خانواده‌محور + آموزش آموزگاران' }
-  ],
-  mental_ot: [
-    { key: 'profile', title: 'پروفایل مهارتی', hint: 'ارزیابی مهارتی ۷ حیطه‌ای — حین ارزیابی، مداخله هم انجام می‌شود' },
-    { key: 'resume', title: 'پیشروی مهارت‌به‌مهارت', hint: 'از نقطهٔ فعلی هر حیطه ادامه — جلسهٔ بعد از همان‌جا' },
-    { key: 'family', title: 'خانواده و آموزگاران', hint: 'جلسهٔ خانواده‌محور + آموزش آموزگاران با گزارش پیشرفت حیطه‌ای' },
-    { key: 'reassess', title: 'بازسنجی حیطه‌ای', hint: 'مقایسهٔ پروفایل با جلسهٔ اول — ۸ تا ۱۲ جلسه' }
-  ],
-  rehab: [
-    { key: 'baseline', title: 'ارزیابی پایه', hint: 'ارزیابی شناختی/حرکتی/خودیاری + وکسلر ۴' },
-    { key: 'goals', title: 'هدف توانبخشی', hint: 'هدف شناختی/حرکتی/خودیاری/خانواده‌محور از دانش‌نامه' },
-    { key: 'intervene', title: 'جلسات و مداخله', hint: 'جلسات با نوع نوبت مناسب + تمرین خانگی' },
-    { key: 'monitor', title: 'پایش و بازسنجی', hint: 'بازسنجی ۴–۶ هفته و گزارش دوره‌ای' }
-  ]
 };
 
 export const NEED_PROTOCOL_SUGGESTIONS: Record<string, { protocol: StudentProtocol; secondary: StudentProtocol | null } | null> = {
@@ -107,8 +63,6 @@ export const NEED_PROTOCOL_SUGGESTIONS: Record<string, { protocol: StudentProtoc
   tic: { protocol: 'mental_ot', secondary: null },
   other: null
 };
-
-export const DISPLAY_TIMEZONE = 'Asia/Tehran';
 
 export const TEHRAN_OFFSET_MINUTES = 210;
 
@@ -195,6 +149,7 @@ export const NOTIFICATION_TEMPLATES = [
   'bot_about',
 
   'bot_contact',
+  'bot_activities',
   'bot_public_files',
   'bot_public_files_stale',
   'bot_file_sent',
@@ -237,7 +192,7 @@ export const BATCH_MIN_LEAD_HOURS = 12;
 
 export const DIGEST_CRON = '0 4 * * *' as const;
 
-/** سینک اعلان از کنترل‌پلین (قرارداد m1.5) — هر ۱۵ دقیقه؛ با env خالی خاموش است */
+/** سینک اعلان از شبکهٔ مراکز (قرارداد m1.5) — هر ۱۵ دقیقه؛ با env خالی خاموش است */
 export const CP_SYNC_CRON = '*/15 * * * *' as const;
 
 export const LINK_CODE_LENGTH = 6;
@@ -305,9 +260,6 @@ export const DEFAULT_CENTER_HOURS: { weekday: number; startMinute: number; endMi
   { weekday: 4, startMinute: 9 * 60, endMinute: 13 * 60 }
 ];
 
-export const CALENDAR_DAY_START_MINUTE = 6 * 60;  // ۶ صبح
-export const CALENDAR_DAY_END_MINUTE = 22 * 60;   // ۱۰ شب
-
 export const ANNOUNCEMENT_TITLE_MAX = 120;
 
 export const ANNOUNCEMENT_BODY_MAX = 2000;
@@ -320,17 +272,9 @@ export const KNOWLEDGE_CATEGORIES = ['tip', 'protocol', 'article', 'news'] as co
 
 export type KnowledgeCategory = (typeof KNOWLEDGE_CATEGORIES)[number];
 
-export const KNOWLEDGE_CATEGORY_LABELS: Record<KnowledgeCategory, string> = {
-  tip: 'نکتهٔ آموزشی',
-  protocol: 'پروتکل درمانی',
-  article: 'مقاله',
-  news: 'خبر مرکز'
-};
-
 export const STAFF_ATTENDANCE_STATUSES = ['present', 'absent', 'late', 'leave', 'sick'] as const;
 
 export const STAFF_ATTENDANCE_NOTE_MAX = 300;
-export const STAFF_ATTENDANCE_TODAY_ONLY = true;
 
 export const STAFF_ATTENDANCE_MAX_RANGE_DAYS = 366;
 
@@ -421,8 +365,6 @@ export const CLASS_NAME_MAX = 120;
 
 export const TEACHER_NAME_MAX = 120;
 
-export const MAX_CLASSES_PER_SCHOOL = 60;
-
 export const SEARCH_QUERY_MIN_LENGTH = 2;
 
 export const SEARCH_QUERY_MAX_LENGTH = 60;
@@ -487,6 +429,55 @@ export const WAITLIST_LIST_LIMIT = 500;
 
 export const WAITLIST_ALERT_DAYS = 7;
 
+/* ─── معرفی به مرکز (waitlist_referrals — v1.27.33 · REFERRAL-DESIGN.md) ───
+ * enumها الگوی D7: در SQL هیچ CHECKی نیست؛ اعمال رنج فقط از مسیر همین ثابت‌ها + zod. */
+export const REFERRAL_ROLES = ['family', 'teacher'] as const;
+export const REFERRAL_CHANNELS = ['web', 'bot', 'manual'] as const;
+export const REFERRAL_STATUSES = ['new', 'accepted', 'rejected'] as const;
+/* ۱.۲۷.۳۶ — سطح سه‌گانهٔ فرم تکمیلی خانواده (فرهنگی/مالی/همکاری) — «نمی‌دانم» سمت UI با null می‌آید */
+export const REFERRAL_FAMILY_LEVELS = [
+  'low',
+  'mid',
+  'high'
+] as const;
+
+export const REFERRAL_CATEGORIES = [
+  'delayed',
+  'learning_disorder',
+  'intellectual',
+  'behavioral',
+  'autism',
+  'speech',
+  'other'
+] as const;
+export const REFERRAL_CHILDREN_MAX = 50;      // سقف ثبت دسته‌ای معلم در هر بار
+export const REFERRAL_CONCERN_MAX = 1000;     // شرح دغدغهٔ اصلی
+export const REFERRAL_REJECT_REASON_MAX = 300;
+export const REFERRAL_LIST_LIMIT = 500;
+export const REFERRAL_RATE_PER_HOUR = 20;      // به‌ازای هر IP — بدنه‌های >۸KB اصلاً پارس نمی‌شوند
+export const REFERRAL_RATE_PER_CHAT = 5;       // به‌ازای هر توکن بات (سقف پنجرهٔ یک‌ساعته)
+
+/* ─── فرم‌ساز تعاملی عمومی (form-builder — v1.27.34 · REFERRAL-DESIGN §A) ─── */
+export const FORM_BLOCK_KINDS = [
+  'text',
+  'longtext',
+  'number',
+  'phone',
+  'select',
+  'multi',
+  'yes_no',
+  'note'
+] as const;
+export const FORM_TITLE_MAX = 120;
+export const FORM_DESCRIPTION_MAX = 500;
+export const FORM_BLOCKS_MAX = 60;
+export const FORM_BLOCK_LABEL_MAX = 200;
+export const FORM_BLOCK_OPTIONS_MAX = 12;
+export const FORM_OPTION_MAX = 100;
+export const FORM_NOTE_MAX = 2000;
+export const FORM_RESPONSE_LIMIT = 500;
+export const FORM_RATE_PER_HOUR = 30;          // به‌ازای هر IP برای ثبت پاسخ عمومی
+
 export const TODO_STATUSES = ['pending', 'done'] as const;
 
 export const TODO_PRIORITIES = ['normal', 'urgent'] as const;
@@ -495,7 +486,6 @@ export const TODO_BOXES = ['inbox', 'outbox'] as const;
 
 export const TODO_TITLE_MAX = 200;
 export const TODO_NOTE_MAX = 1000;
-export const TODO_LIST_LIMIT = 200;
 export const TODO_CHECKLIST_MAX = 20;
 export const TODO_CHECKLIST_ITEM_MAX = 200;
 
@@ -558,8 +548,6 @@ export const BUG_REPORT_AREAS_MAX = 24;
 export const BUG_REPORT_DESCRIPTION_MAX = 2000;
 export const BUG_REPORT_PAGE_MAX = 300;
 export const BUG_REPORT_VERSION_MAX = 40;
-export const BUG_REPORT_REPORTER_MAX = 120;
-export const BUG_REPORT_NODE_ID_MAX = 64;
 export const BUG_REPORT_SEVERITIES = ['minor', 'major', 'critical'] as const;
 
 export type BugReportSeverity = (typeof BUG_REPORT_SEVERITIES)[number];
@@ -580,15 +568,7 @@ export const BUG_REPORT_AREAS = [
   { id: 'other', label: 'بخش دیگر / کلی' }
 ] as const;
 
-export type BugReportAreaId = (typeof BUG_REPORT_AREAS)[number]['id'];
-
 export const BUG_REPORT_AREA_IDS: readonly string[] = BUG_REPORT_AREAS.map((a) => a.id);
-
-export const BUG_REPORT_SEVERITY_LABELS: Record<BugReportSeverity, string> = {
-  minor: 'کم‌اهمیت',
-  major: 'مهم',
-  critical: 'بحرانی'
-};
 
 // ─── ۱.۲۵.۵۹ — کلید فرم‌های سیستمی تازهٔ رجیستری (migration 0104) ───
 export const HOME_MONITOR_EVENT_KEY = 'ce-home-monitor-v2'; // پایش در خانه — هشت زیرمقیاس = هشت سازهٔ صورت‌بندی
@@ -606,4 +586,3 @@ export const SURVEY_KIND_EVENT_KEYS = {
   discharge: SURVEY_DISCHARGE_EVENT_KEY,
   progress: SURVEY_PROGRESS_EVENT_KEY
 } as const;
-export type SurveyKind = keyof typeof SURVEY_KIND_EVENT_KEYS;

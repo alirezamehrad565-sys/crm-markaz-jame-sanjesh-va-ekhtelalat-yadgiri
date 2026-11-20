@@ -64,7 +64,7 @@ describe('گیت ممیزی UI/UX Pro Max (uupm.cc) — 1.09.0', () => {
   });
 
   test('نسخه: سو 1.19.0 — قفل هم‌نسخه‌ای bump با انتشار (برچسب نسخهٔ سایدبار)', () => {
-    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1.27.9'/);
+    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1.27.43'/);
   });
 
   test('۱.۱۹.۰ — روز کاری: جریان پیوسته (هیچ اکشنی کل نما را re-render نمی‌کند)', () => {
@@ -259,7 +259,8 @@ describe('گیت ممیزی UI/UX Pro Max (uupm.cc) — 1.09.0', () => {
     // ریتم ثبت زنجیره‌ای: بعد از هر ثبت/ویرایش فوکوس باکس حفظ می‌شود
     expect(screening).toMatch(/input\.focus\(\)/);
     // گزارش/KPI: کارت فیلتر یک‌بار مونت، فقط ناحیهٔ نتایج عوض می‌شود؛ هک refocus حذف شد
-    expect(screening).toMatch(/resultsZone\.replaceChildren\(kpis, chartCard, breakdownCard, followCard, listCard\)/);
+    // ۱.۲۷.۳۳ — کارت «نتایج ثبت‌شده» هم به ناحیهٔ نتایج اضافه شد؛ null-پذیر با filter(Boolean)
+    expect(screening).toMatch(/resultsZone\.replaceChildren\(\.\.\.\[kpis, chartCard, breakdownCard, followCard, handledCard, listCard\]\.filter\(Boolean\)\)/);
     expect(screening).not.toMatch(/searchRefocus/);
 
     const students = readFileSync(join(__dirname, '../../public/assets/js/views/students.js'), 'utf8');

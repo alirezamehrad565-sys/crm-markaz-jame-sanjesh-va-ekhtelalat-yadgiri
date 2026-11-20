@@ -1,11 +1,32 @@
 import type { AuthContext, WaitlistBadge, WaitlistEntry } from '@core/shared';
-import { WAITLIST_ALERT_DAYS, WAITLIST_LIST_LIMIT, WAITLIST_QUEUE_STATUSES } from '@core/shared';
+import {
+  REFERRAL_LIST_LIMIT,
+  WAITLIST_ALERT_DAYS,
+  WAITLIST_LIST_LIMIT,
+  WAITLIST_QUEUE_STATUSES,
+  currentSchoolYear,
+  jalaliToGregorianYmd
+} from '@core/shared';
 import { ConflictError, NotFoundError, ValidationError } from '@core/errors';
 import type { AuditWriter } from '@core/audit';
 import type { Logger } from '@core/logger';
 import type { DbClient } from '@core/db';
 import { appendNote, canTransition, matchStudent, orderWaitlist } from './pure';
-import type { NewWaitlistInput, StudentWaitStatusInput, UpdateWaitlistInput, WaitlistDeps, WaitlistListFilters, WaitlistScheduleInput, WaitlistScheduleResult, WaitlistService } from './types';
+import type {
+  NewWaitlistInput,
+  PublicReferralSubmitInput,
+  ReferralListFilters,
+  ReferralMeta,
+  StudentWaitStatusInput,
+  UpdateWaitlistInput,
+  WaitlistDeps,
+  WaitlistListFilters,
+  WaitlistReferral,
+  WaitlistScheduleInput,
+  WaitlistScheduleResult,
+  WaitlistService
+} from './types';
+import { REFERRAL_CATEGORY_LABELS } from './types';
 
 interface WaitlistRow {
   id: string;
@@ -82,6 +103,106 @@ const SELECT_BASE = `
     LEFT JOIN schools s ON s.id = COALESCE(st.school_id, w.school_id)
     LEFT JOIN classes c ON c.id = COALESCE(st.class_id, w.class_id)`;
 
+/* ─── معرفی به مرکز (v1.27.33 — REFERRAL-DESIGN.md) ─── */
+interface ReferralRow {
+  id: string;
+  ref_role: string;
+  referrer_name: string;
+  referrer_phone: string;
+  first_name: string;
+  birth_date: string | null;
+  guardian_phone: string | null;
+  school_text: string | null;
+  grade_text: string | null;
+  class_text: string | null;
+  concern_category: string | null;
+  concern_tags: string;
+  concern_text: string | null;
+  prior_eval: number | null;
+  prior_eval_note: string | null;
+  family_context: string | null;
+  channel: string;
+  chat_id: string | null;
+  token: string | null;
+  submission_group: string | null;
+  status: string;
+  reject_reason: string | null;
+  waitlist_id: string | null;
+  academic_year: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+const REFERRAL_BY_ID = `SELECT * FROM waitlist_referrals WHERE id = ? AND deleted_at IS NULL`;
+
+function referralRowToDomain(row: ReferralRow): WaitlistReferral {
+  let tags: string[] = [];
+  try {
+    const parsed = JSON.parse(row.concern_tags);
+    if (Array.isArray(parsed)) tags = parsed.filter((t): t is string => typeof t === 'string');
+  } catch {
+    /* برچسب خراب = خالی — هرگز ثبت معرفی را نمی‌شکند */
+  }
+  /* ۱.۲۷.۳۶ — فرم تکمیلی خانواده (JSON) — خراب/خالی = null؛ هرگز ثبت را نمی‌شکند */
+  let familyContext: WaitlistReferral['familyContext'] = null;
+  if (row.family_context) {
+    try {
+      const fc = JSON.parse(row.family_context) as { culture?: string | null; finance?: string | null; cooperation?: string | null };
+      familyContext = {
+        culture: typeof fc.culture === 'string' ? fc.culture : null,
+        finance: typeof fc.finance === 'string' ? fc.finance : null,
+        cooperation: typeof fc.cooperation === 'string' ? fc.cooperation : null
+      };
+    } catch {
+      familyContext = null;
+    }
+  }
+  return {
+    id: row.id,
+    refRole: row.ref_role as WaitlistReferral['refRole'],
+    referrerName: row.referrer_name,
+    referrerPhone: row.referrer_phone,
+    firstName: row.first_name,
+    birthDate: row.birth_date,
+    guardianPhone: row.guardian_phone,
+    schoolText: row.school_text,
+    gradeText: row.grade_text,
+    classText: row.class_text,
+    concernCategory: row.concern_category,
+    concernTags: tags,
+    concernText: row.concern_text,
+    priorEval: row.prior_eval === null ? null : row.prior_eval === 1,
+    priorEvalNote: row.prior_eval_note,
+    familyContext,
+    channel: row.channel,
+    chatId: row.chat_id,
+    submissionGroup: row.submission_group,
+    status: row.status as WaitlistReferral['status'],
+    rejectReason: row.reject_reason,
+    waitlistId: row.waitlist_id,
+    academicYear: row.academic_year,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
+/* تاریخ تولد شمسیِ تایپیِ فرم عمومی → میلادی استاندارد سامانه؛ نامعتبر = null (بدون استثنا) */
+function parseJalaliBirthDate(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const norm = String(raw)
+    .replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
+    .replace(/[^\d/]/g, ' ')
+    .trim()
+    .split(/\s+/)[0] ?? '';
+  const m = /^(\d{4})\/(\d{1,2})\/(\d{1,2})$/.exec(norm);
+  if (!m) return null;
+  const jy = Number(m[1]);
+  const jm = Number(m[2]);
+  const jd = Number(m[3]);
+  if (jy < 1300 || jy > 1500 || jm < 1 || jm > 12 || jd < 1 || jd > 31) return null;
+  return jalaliToGregorianYmd(jy, jm, jd);
+}
+
 export function createWaitlistService(deps: WaitlistDeps): WaitlistService {
   const { db, audit, logger } = deps;
   const log = logger.child('waitlist');
@@ -89,6 +210,18 @@ export function createWaitlistService(deps: WaitlistDeps): WaitlistService {
   async function loadEntry(tx: Pick<DbClient, 'queryOne'>, id: string): Promise<WaitlistRow> {
     const row = await tx.queryOne<WaitlistRow>(`${SELECT_BASE} WHERE w.id = ? AND w.deleted_at IS NULL`, [id]);
     if (!row) throw new NotFoundError('ورودی لیست انتظار');
+    return row;
+  }
+
+  async function loadReferral(id: string): Promise<WaitlistReferral> {
+    const row = await db.queryOne<ReferralRow>(REFERRAL_BY_ID, [id]);
+    if (!row) throw new NotFoundError('معرفی');
+    return referralRowToDomain(row);
+  }
+
+  async function loadReferralRow(id: string): Promise<ReferralRow> {
+    const row = await db.queryOne<ReferralRow>(REFERRAL_BY_ID, [id]);
+    if (!row) throw new NotFoundError('معرفی');
     return row;
   }
 
@@ -647,6 +780,191 @@ export function createWaitlistService(deps: WaitlistDeps): WaitlistService {
           error: err instanceof Error ? err.message : String(err)
         });
       }
+    },
+
+    /* ─── معرفی به مرکز (v1.27.33 — REFERRAL-DESIGN.md) ───
+     * ثبت عمومی خانواده (دقیقاً یک کودک) یا معلم (ثبت دسته‌ای تا سقف) — هر کودک یک ردیف مستقل؛
+     * ضدتکرار: نام کودک + تلفن معرف در همان سال تحصیلی (به‌جز ردشده‌ها). */
+    async submitReferral(input: PublicReferralSubmitInput, meta: ReferralMeta): Promise<WaitlistReferral[]> {
+      if (input.role === 'family' && input.children.length !== 1) {
+        throw new ValidationError('فرم خانواده دقیقاً یک کودک ثبت می‌کند');
+      }
+      const academicYear = currentSchoolYear();
+      const channel = input.token ? 'bot' : 'web';
+      const group = input.children.length > 1 ? crypto.randomUUID() : null;
+      const created: WaitlistReferral[] = [];
+      for (const child of input.children) {
+        const dup = await db.queryOne<{ id: string }>(
+          `SELECT id FROM waitlist_referrals
+            WHERE first_name = ? AND referrer_phone = ? AND academic_year = ?
+              AND status != 'rejected' AND deleted_at IS NULL`,
+          [child.first_name, input.referrer_phone, academicYear]
+        );
+        if (dup) {
+          throw new ConflictError('این کودک قبلاً ثبت شده است — برای تغییر اطلاعات با مرکز تماس بگیرید');
+        }
+        const id = crypto.randomUUID();
+        const nowIso = new Date().toISOString();
+        await db.transaction(async (tx) => {
+          await tx.execute(
+            `INSERT INTO waitlist_referrals
+               (id, ref_role, referrer_name, referrer_phone, first_name, birth_date, guardian_phone, school_text, grade_text,
+                class_text, concern_category, concern_tags, concern_text, prior_eval, prior_eval_note, family_context,
+                channel, chat_id, token, submission_group, status, academic_year, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'new', ?, ?, ?)`,
+            [
+              id,
+              input.role,
+              input.referrer_name,
+              input.referrer_phone,
+              child.first_name,
+              parseJalaliBirthDate(child.birth_date_text) ?? child.birth_date ?? null,
+              child.guardian_phone ?? null,
+              child.school_text ?? input.school_text ?? null,
+              child.grade_text ?? input.grade_text ?? null,
+              child.class_text ?? input.class_text ?? null,
+              child.concern_category ?? null,
+              JSON.stringify(child.concern_tags ?? []),
+              child.concern_text ?? null,
+              child.prior_eval === true ? 1 : child.prior_eval === false ? 0 : null,
+              child.prior_eval_note ?? null,
+              /* ۱.۲۷.۳۶ — فرم تکمیلی خانواده (JSON) — هیچ‌کدام خالی؟ ستون NULL */
+              (child.family_culture || child.family_finance || child.family_cooperation)
+                ? JSON.stringify({
+                    culture: child.family_culture ?? null,
+                    finance: child.family_finance ?? null,
+                    cooperation: child.family_cooperation ?? null
+                  })
+                : null,
+              channel,
+              meta.chatId ?? null,
+              input.token ?? null,
+              group,
+              academicYear,
+              nowIso,
+              nowIso
+            ]
+          );
+          await audit.logInTransaction(tx, {
+            actorId: 'public',
+            action: 'waitlist.referral_submit',
+            resourceType: 'waitlist_referral',
+            resourceId: id,
+            changes: {
+              role: { from: null, to: input.role },
+              channel: { from: null, to: channel }
+            }
+          });
+        });
+        const row = await db.queryOne<ReferralRow>(REFERRAL_BY_ID, [id]);
+        if (row) created.push(referralRowToDomain(row));
+      }
+      log.info('waitlist.referral.submitted', { role: input.role, count: created.length, channel });
+      return created;
+    },
+
+    async listReferrals(filters: ReferralListFilters): Promise<WaitlistReferral[]> {
+      const where: string[] = ['deleted_at IS NULL'];
+      const params: string[] = [];
+      if (filters.status) {
+        where.push('status = ?');
+        params.push(filters.status);
+      }
+      if (filters.year) {
+        where.push('academic_year = ?');
+        params.push(filters.year);
+      }
+      const rows = await db.query<ReferralRow>(
+        `SELECT * FROM waitlist_referrals
+          WHERE ${where.join(' AND ')}
+          ORDER BY created_at DESC, id DESC
+          LIMIT ${REFERRAL_LIST_LIMIT}`,
+        params
+      );
+      return rows.map(referralRowToDomain);
+    },
+
+    /* پذیرش معرفی همیشه از مسیر create لیست انتظار می‌گذرد — تبدیل اتمیک به پرونده/نوبت دست‌نخورده؛
+     * پذیرش = خروج خودکار از لیست با اولین حضور، همان قرارداد قبلی. */
+    async acceptReferral(id: string, actor: AuthContext): Promise<WaitlistEntry> {
+      const referral = await loadReferral(id);
+      if (referral.status !== 'new') {
+        throw new ConflictError('این معرفی قبلاً بررسی شده است');
+      }
+      const entry = await service.create(
+        {
+          firstName: referral.firstName,
+          lastName: '',
+          phone: referral.guardianPhone || referral.referrerPhone,
+          source: referral.refRole === 'teacher' ? 'teacher' : 'self',
+          serviceType: referral.concernCategory
+            ? REFERRAL_CATEGORY_LABELS[referral.concernCategory] ?? undefined
+            : undefined,
+          priority: 'normal',
+          note: appendNote(
+            null,
+            'معرفی آنلاین',
+            [
+              referral.schoolText ? `مدرسه: ${referral.schoolText}` : null,
+              referral.gradeText ? `پایه: ${referral.gradeText}` : null,
+              referral.classText ? `کلاس: ${referral.classText}` : null,
+              referral.concernText ? `دغدغه: ${referral.concernText.slice(0, 200)}` : null,
+              `معرف: ${referral.referrerName} (${referral.refRole === 'teacher' ? 'معلم' : 'خانواده'})`
+            ]
+              .filter(Boolean)
+              .join(' · ')
+          ),
+          studentId: undefined
+        },
+        actor
+      );
+      try {
+        await db.transaction(async (tx) => {
+          await tx.execute(`UPDATE waitlist SET referral_id = ? WHERE id = ?`, [referral.id, entry.id]);
+          await tx.execute(
+            `UPDATE waitlist_referrals SET status = 'accepted', waitlist_id = ?, updated_at = ? WHERE id = ?`,
+            [entry.id, new Date().toISOString(), referral.id]
+          );
+          await audit.logInTransaction(tx, {
+            actorId: actor.staffId,
+            action: 'waitlist.referral_accept',
+            resourceType: 'waitlist_referral',
+            resourceId: referral.id,
+            changes: {
+              status: { from: 'new', to: 'accepted' },
+              waitlist_id: { from: null, to: entry.id }
+            }
+          });
+        });
+      } catch (err) {
+        /* پیوند نخورد؟ ردیف تازهٔ لیست انتظار جمع می‌شود تا معرفی دوباره قابل پذیرش بماند */
+        await service.softDelete(entry.id, actor).catch(() => undefined);
+        throw err;
+      }
+      log.info('waitlist.referral.accepted', { referralId: referral.id, waitlistId: entry.id });
+      return entry;
+    },
+
+    async rejectReferral(id: string, reason: string, actor: AuthContext): Promise<WaitlistReferral> {
+      const referral = await loadReferral(id);
+      if (referral.status !== 'new') {
+        throw new ConflictError('این معرفی قبلاً بررسی شده است');
+      }
+      await db.transaction(async (tx) => {
+        await tx.execute(
+          `UPDATE waitlist_referrals SET status = 'rejected', reject_reason = ?, updated_at = ? WHERE id = ?`,
+          [reason, new Date().toISOString(), referral.id]
+        );
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: 'waitlist.referral_reject',
+          resourceType: 'waitlist_referral',
+          resourceId: referral.id,
+          changes: { status: { from: 'new', to: 'rejected' } }
+        });
+      });
+      log.info('waitlist.referral.rejected', { referralId: referral.id });
+      return referralRowToDomain(await loadReferralRow(id));
     }
   };
 

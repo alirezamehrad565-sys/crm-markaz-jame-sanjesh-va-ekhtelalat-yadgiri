@@ -90,5 +90,90 @@ export interface WaitlistService {
   badge(): Promise<WaitlistBadge>;
   softDelete(id: string, actor: AuthContext): Promise<void>;
 
+  /* ─── معرفی به مرکز (v1.27.33 — REFERRAL-DESIGN.md) ─── */
+  submitReferral(input: PublicReferralSubmitInput, meta: ReferralMeta): Promise<WaitlistReferral[]>;
+  listReferrals(filters: ReferralListFilters): Promise<WaitlistReferral[]>;
+  acceptReferral(id: string, actor: AuthContext): Promise<WaitlistEntry>;
+  rejectReferral(id: string, reason: string, actor: AuthContext): Promise<WaitlistReferral>;
+
   onAttendanceMarked(appointmentId: string, studentId: string, status: string): Promise<void>;
 }
+
+/* ─── معرفی به مرکز — مدل داده (v1.27.33) ─── */
+export interface WaitlistReferral {
+  id: string;
+  refRole: 'family' | 'teacher';
+  referrerName: string;
+  referrerPhone: string;
+  firstName: string;
+  birthDate: string | null;
+  guardianPhone: string | null;
+  schoolText: string | null;
+  gradeText: string | null;
+  classText: string | null;
+  concernCategory: string | null;
+  concernTags: string[];
+  concernText: string | null;
+  priorEval: boolean | null;
+  priorEvalNote: string | null;
+  familyContext: { culture: string | null; finance: string | null; cooperation: string | null } | null;
+  channel: string;
+  chatId: string | null;
+  submissionGroup: string | null;
+  status: 'new' | 'accepted' | 'rejected';
+  rejectReason: string | null;
+  waitlistId: string | null;
+  academicYear: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ReferralChildInput {
+  first_name: string;
+  birth_date?: string | null;
+  birth_date_text?: string | null;
+  guardian_phone?: string | null;
+  school_text?: string;
+  grade_text?: string;
+  class_text?: string;
+  concern_category?: string | null;
+  concern_tags?: string[];
+  concern_text?: string;
+  prior_eval?: boolean | null;
+  prior_eval_note?: string;
+  family_culture?: string | null;
+  family_finance?: string | null;
+  family_cooperation?: string | null;
+}
+
+export interface PublicReferralSubmitInput {
+  role: 'family' | 'teacher';
+  referrer_name: string;
+  referrer_phone: string;
+  school_text?: string;
+  grade_text?: string;
+  class_text?: string;
+  token?: string;
+  children: ReferralChildInput[];
+}
+
+export interface ReferralMeta {
+  ip?: string;
+  chatId?: string | null;
+}
+
+export interface ReferralListFilters {
+  status?: string;
+  year?: string;
+}
+
+/* برچسب دستهٔ دغدغه — هم برای service_type ردیف لیست انتظار هنگام پذیرش و هم برای badge اینباکس */
+export const REFERRAL_CATEGORY_LABELS: Record<string, string> = {
+  delayed: 'دیرآموز',
+  learning_disorder: 'اختلال یادگیری',
+  intellectual: 'مشکوک به کم‌توانی',
+  behavioral: 'رفتاری هیجانی',
+  autism: 'ارجاع اتیسم',
+  speech: 'تأخیر گفتار و زبان',
+  other: 'سایر'
+};

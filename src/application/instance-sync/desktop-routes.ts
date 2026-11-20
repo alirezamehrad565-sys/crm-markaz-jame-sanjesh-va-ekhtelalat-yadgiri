@@ -16,6 +16,7 @@
  *   • POST /api/instance-sync/clone   — فقط-مدیر (بدون confirm روی DB غیر-خالی → ۴۰۹)
  *   • POST /api/instance-sync/provision/verify — فقط-مدیر (وارسی توکن CF + فهرست حساب‌ها؛ فاز C)
  *   • POST /api/instance-sync/provision — فقط-مدیر (ساخت خودکار ورکر ابری؛ binding غایب → ۵۰۱)
+ *   • POST /api/instance-sync/provision/discover — فقط-مدیر (کشف استقرار ابری موجود با توکن؛ فاز E)
  *
  * هیچ secretی در هیچ پاسخی نمی‌آید — status فقط secret_present بولین می‌دهد.
  * زمان‌بند دوره‌ای: یک‌بار در ثبت این مسیرها بر فرایند بیدار می‌شود (پرچم ماژول + گارد
@@ -47,9 +48,9 @@ import {
 } from './runner';
 import type { CloudFsIO, CloudSyncDeps } from './runner';
 // فاز C (A1) — کلاینت ساخت خودکار ورکر ابری (گام‌های CF API — سند first-run-and-cloud §۳)
-import { provisionCloudWorker, verifyCloudToken } from './provision';
+import { discoverCloudDeployment, provisionCloudWorker, verifyCloudToken } from './provision';
 import type { WebAssetFile } from './assets';
-import type { CloudProvisionIO, ProvisionResult, VerifyCloudResult } from './provision';
+import type { CloudProvisionIO, DiscoverResult, ProvisionResult, VerifyCloudResult } from './provision';
 
 type Env = { Bindings: AppBindings; Variables: AppVariables };
 
@@ -129,6 +130,11 @@ const CloneSchema = z.object({
 
 // فاز C (A1) — بدنهٔ ساخت ورکر ابری؛ توکن فقط به api.cloudflare.com می‌رود و هرگز ذخیره/لاگ نمی‌شود
 const ProvisionVerifySchema = z.object({
+  token: z.string().min(1, 'توکن کلادفلر لازم است')
+});
+
+// فاز E (۱.۲۷.۱۸) — کشف استقرار ابری موجود با توکن (ورودیِ همان verify)
+const DiscoverSchema = z.object({
   token: z.string().min(1, 'توکن کلادفلر لازم است')
 });
 
@@ -265,6 +271,32 @@ export function registerDesktopRoutes(app: AppHono, deps: DesktopRoutesDeps): vo
       );
     }
     return c.json({ data: { accounts: result.accounts } }, 200);
+  });
+
+  // POST کشف استقرار ابری موجود با توکن (فاز E — ۱.۲۷.۱۸ خواست کارفرما) — فقط-مدیر؛
+  // فقط-خواندنی: فهرست حساب‌ها + ورکرهای دارای دامنهٔ عمومی + پایگاه‌های D1. خروجی برای
+  // پرکردن خودکار «آدرس مرکز ابری» در اتصال (کلون از ابر بدون تایپ دستی URL). توکن فقط
+  // در بدنهٔ همین درخواست مصرف می‌شود — ذخیره/لاگ نمی‌شود.
+  app.post('/api/instance-sync/provision/discover', requireRole('manager'), async (c) => {
+    getAuthContext(c);
+    const parsed = DiscoverSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: 'VALIDATION_ERROR', message: 'بدنهٔ کشف نامعتبر است — token لازم است' }, 400);
+    }
+    const result: DiscoverResult = await discoverCloudDeployment({
+      fetchImpl: fetchImplOf(envOf(c)),
+      token: parsed.data.token
+    });
+    if (!result.ok) {
+      return c.json(
+        { error: 'CLOUD_DISCOVER_FAILED', message: result.message, data: { step: result.step, errors: result.errors ?? [] } },
+        400
+      );
+    }
+    return c.json(
+      { data: { accounts: result.accounts, workers: result.workers, databases: result.databases } },
+      200
+    );
   });
 
   // POST ساخت کامل ورکر ابری (D1 + اسکیما + دیپلوی + secret + دامنه + سلامت) — فقط-مدیر

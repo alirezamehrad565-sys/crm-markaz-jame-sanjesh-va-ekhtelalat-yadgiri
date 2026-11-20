@@ -59,7 +59,7 @@ describe('build-client (باندل کلاینت نام‌دار — )', () => {
       expect(out).not.toContain('/assets/js/app.js?v=');
       // modulepreload چانک‌های لحظهٔ بوت تزریق شده باشد
       expect((out.match(/<link rel="modulepreload" href="\/assets\/dist\//g) ?? []).length).toBeGreaterThan(0);
-      // theme-boot (گارد FOUC ) باید قبل از ورودی باندل بیاید
+      // theme-boot (گارد FOUC) باید قبل از ورودی باندل بیاید
       expect(out.indexOf('theme-boot.js')).toBeLessThan(out.indexOf(mfBoot![1]));
     } finally {
       cleanup();

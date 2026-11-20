@@ -119,7 +119,7 @@ function therapistDashboard(container, { myStats, scoring, knowledge, announceme
       parts.push(
         el(
           'div',
-          { class: 'alert alert--info', style: { marginBottom: 'var(--sp-4)' } },
+          { class: 'alert alert--info', style: { marginBottom: 'var(--sp-4)', cursor: 'pointer' }, title: 'مشاهده در تقویم نوبت‌ها', onclick: () => { location.hash = '#/appointments'; } } /* POLISH-3 M2 — حفر آلرت نوبت بعدی درمانگر */,
           icon('clock', 18),
           el(
             'span',
@@ -133,7 +133,7 @@ function therapistDashboard(container, { myStats, scoring, knowledge, announceme
     parts.push(scoreTiles(myStats));
   }
 
-  if (scoreRows.length) parts.push(leaderboardCard(scoreRows, 'تابلوی پیشرفت', session.user?.staffId, scoring?.since));
+  if (scoreRows.length) parts.push(leaderboardCard(scoreRows, 'تابلوی پیشرفت', session.user?.staffId, scoring?.since)); // درمانگر: بدون لینک (#/staff فقط مدیر است)
 
   return parts;
 }
@@ -167,7 +167,7 @@ function heroScore(scoreRow, rows, since = null) {
 
   return el(
     'div',
-    { class: 'hero-score' },
+    { class: 'hero-score', style: { cursor: 'pointer' }, title: 'جزئیات در گزارش دوره', onclick: () => { location.hash = '#/reports'; } } /* POLISH-3 M2 — حفر امتیاز کل به گزارش دوره */,
     el(
       'div',
       { class: 'hero-score__ring' },
@@ -233,7 +233,7 @@ function officeDashboard(container, { todayData, summaryData, goalData, scoring,
     parts.push(
       el(
         'div',
-        { class: 'alert alert--info', style: { marginBottom: 'var(--sp-4)' } },
+        { class: 'alert alert--info', style: { marginBottom: 'var(--sp-4)', cursor: 'pointer' }, title: 'مشاهده در تقویم نوبت‌ها', onclick: () => { location.hash = '#/appointments'; } } /* POLISH-3 M2 — حفر آلرت نوبت بعدی */,
         icon('clock', 18),
         el('span', {}, `نوبت بعدی امروز: ساعت ${fa(tehranTimeOfIso(next.startAt))} — ${staffName}`)
       )
@@ -268,20 +268,21 @@ function officeDashboard(container, { todayData, summaryData, goalData, scoring,
     el(
       'div',
       { class: `kpi-grid${document.body.dataset.kpiStaggered ? '' : ' stagger'}`, style: { marginBottom: 'var(--sp-5)' }, ...(document.body.dataset.kpiStaggered ? {} : { dataset: { staggerOnce: '1' } }) },
-      kpi('نوبت‌های امروز', fa(todayData.appointments.total), `برنامه‌ریزی‌شده ${fa(todayData.appointments.scheduled)} · لغوشده ${fa(todayData.appointments.cancelled)}`, 'primary'),
-      kpi('در انتظار حضور و غیاب', fa(todayData.pendingAttendance), 'نوبت‌های امروز بدون وضعیت', 'accent'),
-      kpi('نرخ غیبت', hasAttendanceData ? `${fa(absencePct)}٪` : '—', hasAttendanceData ? 'آمار حضور امروز' : 'هنوز حاضری امروز ثبت نشده', hasAttendanceData ? ((todayData.absenceRate ?? 0) >= KPI_ALERT_RATE ? 'error' : 'success') : 'neutral') /* ۱.۲۵.۰۵: مقایسه با نرخ خام و آستانهٔ مشترک — قبلاً 20 روی درصد گردشده بود */,
+      /* POLISH-3 M2 — حفر گرید KPI: هر شاخص به فهرست پشتِ عددش می‌رود */
+      kpi('نوبت‌های امروز', fa(todayData.appointments.total), `برنامه‌ریزی‌شده ${fa(todayData.appointments.scheduled)} · لغوشده ${fa(todayData.appointments.cancelled)}`, 'primary', null, '#/appointments'),
+      kpi('در انتظار حضور و غیاب', fa(todayData.pendingAttendance), 'نوبت‌های امروز بدون وضعیت', 'accent', null, '#/working-day'),
+      kpi('نرخ غیبت', hasAttendanceData ? `${fa(absencePct)}٪` : '—', hasAttendanceData ? 'آمار حضور امروز' : 'هنوز حاضری امروز ثبت نشده', hasAttendanceData ? ((todayData.absenceRate ?? 0) >= KPI_ALERT_RATE ? 'error' : 'success') : 'neutral', null, '#/working-day') /* ۱.۲۵.۰۵: مقایسه با نرخ خام و آستانهٔ مشترک — قبلاً 20 روی درصد گردشده بود */,
       waitingCount !== null
-        ? kpi('لیست انتظار', fa(waitingCount), 'متقاضیِ در صف (در انتظار/فراخوانده)', waitingCount > 0 ? 'accent' : 'neutral')
+        ? kpi('لیست انتظار', fa(waitingCount), 'متقاضیِ در صف (در انتظار/فراخوانده)', waitingCount > 0 ? 'accent' : 'neutral', null, '#/waitlist')
         : null,
-      kpi('دانش‌آموزان فعال', fa(todayData.studentsSummary.totalStudents), `در ${fa(todayData.studentsSummary.totalSchools)} مدرسه`, 'primary')
+      kpi('دانش‌آموزان فعال', fa(todayData.studentsSummary.totalStudents), `در ${fa(todayData.studentsSummary.totalSchools)} مدرسه`, 'primary', null, '#/students')
     )
   );
   if (!document.body.dataset.kpiStaggered) document.body.dataset.kpiStaggered = '1'; /* A19 */
 
   const scoreRows = scoring?.rows ?? [];
   if (scoreRows.length) {
-    parts.push(leaderboardCard(scoreRows, 'تابلوی پیشرفت درمانگران', session.user?.staffId, scoring?.since));
+    parts.push(leaderboardCard(scoreRows, 'تابلوی پیشرفت درمانگران', session.user?.staffId, scoring?.since, '#/staff'));
   }
 
   const fuCard = followupsDueCard(followups, today);
@@ -289,7 +290,7 @@ function officeDashboard(container, { todayData, summaryData, goalData, scoring,
   const agingCard = waitlistAgingCard(waitlist);
   if (agingCard) parts.push(agingCard);
 
-  // اعتبارسنجی بیرونی: داشبورد KPI از دادهٔ موجود + حسابرسی موردی (فقط مدیر)
+  // اعتبارسنجی بیرونی (M6 ۱.۲۷.۲۹): روایت + حفر KPI + فرم پیگیری ۳–۶ماهه + نمای درمانگرِ همان پرونده
   // fetch تنبل در renderDashboard انجام می‌شود و از پارامتر می‌آید (officeDashboard همگام است)
   if (validation) parts.push(validationCard(validation.kpis, validation.audits));
 
@@ -314,7 +315,9 @@ function weekTrendCard(summaryData, todayData) {
       'div',
       { class: 'card__head' },
       el('div', { class: 'card__title' }, 'روند ۷ روز اخیر'),
-      el('span', { class: 'badge badge--neutral' }, `${formatJalaliNumeric(addDaysYmd(todayData.date ?? tehranTodayYmd(), -6))} تا ${formatJalaliNumeric(todayData.date ?? tehranTodayYmd())}`)
+      el('span', { class: 'badge badge--neutral' }, `${formatJalaliNumeric(addDaysYmd(todayData.date ?? tehranTodayYmd(), -6))} تا ${formatJalaliNumeric(todayData.date ?? tehranTodayYmd())}`),
+      /* M7 POLISH-3 (۱.۲۷.۳۰) — برچسب داستان: برای کی؟ در چه لحظه‌ای؟ به کدام تصمیم؟ */
+      el('p', { class: 'hint-text', style: { flexBasis: '100%', margin: '0' } }, 'برای دفتر مرکز، صبح مرور هفته: کدام روزها پر و کدام خالی بوده‌اند تا تصمیم ساعت‌بندی و ظرفیت جلسات روی داده گرفته شود.'),
     ),
     el(
       'div',
@@ -334,12 +337,16 @@ function weekTrendCard(summaryData, todayData) {
             el('div', { class: 'spark__day' }, WEEKDAY_NAMES[iranianWeekdayOfYmd(d.date)])
           )
         )
+      ),
+      /* POLISH-3 M2 — حفر: گزارش دورهٔ کامل */
+      el('div', { style: { padding: 'var(--sp-2) 0 0' } },
+        el('button', { class: 'btn btn--ghost btn--sm', type: 'button', onclick: () => { location.hash = '#/reports'; } }, 'گزارش دوره', icon('chevL', 13))
       )
     )
   );
 }
 
-function leaderboardCard(rows, title, meStaffId, since = null) {
+function leaderboardCard(rows, title, meStaffId, since = null, linkTo = null) {
   const max = Math.max(1, ...rows.map((x) => x.total));
   const body =
     rows.length === 0
@@ -394,7 +401,9 @@ function leaderboardCard(rows, title, meStaffId, since = null) {
       'div',
       { class: 'card__head' },
       el('div', { class: 'card__title' }, icon('trophy', 16), title),
-      headBadge
+      el('div', { style: { display: 'flex', gap: 'var(--sp-2)', alignItems: 'center' } }, headBadge, linkTo
+        ? el('button', { class: 'btn btn--ghost btn--sm', type: 'button', onclick: () => { location.hash = linkTo; } }, 'مشاهدهٔ همکاران', icon('chevL', 13)) /* POLISH-3 M2 — حفر تابلو به کارکنان */
+        : null)
     ),
     el('div', { class: 'card__body' }, body)
   );
@@ -418,7 +427,9 @@ function followupsDueCard(rows, todayYmd) {
       'div',
       { class: 'card__head' },
       el('div', { class: 'card__title' }, icon('bell', 16), 'پیگیری‌های سررسیده'),
-      el('span', { class: 'badge badge--error' }, `${fa(dueAll.length)} مورد`)
+      el('span', { class: 'badge badge--error' }, `${fa(dueAll.length)} مورد`),
+      /* M7 POLISH-3 (۱.۲۷.۳۰) — برچسب داستان: برای کی؟ در چه لحظه‌ای؟ به کدام تصمیم؟ */
+      el('p', { class: 'hint-text', style: { flexBasis: '100%', margin: '0' } }, 'برای درمانگر و دفتر، در شروع روز: چه کسی منتظر تماس مانده تا تصمیم پیگیریِ امروز پیش از سرد شدن خانواده گرفته شود.'),
     ),
     el(
       'div',
@@ -436,7 +447,11 @@ function followupsDueCard(rows, todayYmd) {
           ),
           el('span', { class: `badge ${overdue ? 'badge--error' : 'badge--warning'}` }, overdue ? 'عقب‌افتاده' : 'امروز')
         );
-      })
+      }),
+      /* POLISH-3 M2 — حفر: لیست کامل پیگیری‌ها */
+      el('div', { style: { padding: 'var(--sp-2) 0 0' } },
+        el('button', { class: 'btn btn--ghost btn--sm', type: 'button', onclick: () => { location.hash = '#/special-needs'; } }, 'پیگیری‌های معوق در نیازهای ویژه', icon('chevL', 13))
+      )
     )
   );
 }
@@ -473,9 +488,15 @@ function waitlistAgingCard(waitlist) {
       'div',
       { class: 'card__head' },
       el('div', { class: 'card__title' }, icon('hourglass', 16), 'چه مدت در انتظارند؟'),
-      el('span', { class: 'badge badge--neutral' }, `${fa(total)} متقاضی`)
+      el('span', { class: 'badge badge--neutral' }, `${fa(total)} متقاضی`),
+      /* M7 POLISH-3 (۱.۲۷.۳۰) — برچسب داستان: برای کی؟ در چه لحظه‌ای؟ به کدام تصمیم؟ */
+      el('p', { class: 'hint-text', style: { flexBasis: '100%', margin: '0' } }, 'برای دفتر، هنگام فراخوانی لیست انتظار: چه کسی بیشترین انتظار را داشته تا تصمیم نوبت‌دهی عادلانه گرفته شود.'),
     ),
-    el('div', { class: 'card__body' }, row('۰ تا ۷ روز', buckets.ok, 'ok'), row('۸ تا ۱۴ روز', buckets.warn, 'warn'), row('۱۵ روز و بیشتر', buckets.late, 'late'))
+    el('div', { class: 'card__body' }, row('۰ تا ۷ روز', buckets.ok, 'ok'), row('۸ تا ۱۴ روز', buckets.warn, 'warn'), row('۱۵ روز و بیشتر', buckets.late, 'late')),
+    /* POLISH-3 M2 — حفر: مدیریت لیست انتظار */
+    el('div', { style: { padding: '0 var(--sp-5) var(--sp-4)' } },
+      el('button', { class: 'btn btn--ghost btn--sm', type: 'button', onclick: () => { location.hash = '#/waitlist'; } }, 'لیست انتظار', icon('chevL', 13))
+    )
   );
 }
 
@@ -489,7 +510,9 @@ function announcementsCard(announcements) {
   return el(
     'div',
     { class: 'card an-card' },
-    el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, icon('bell', 16), 'اطلاع‌رسانی مرکز')),
+    el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, icon('bell', 16), 'اطلاع‌رسانی مرکز'),
+      /* M7 POLISH-3 (۱.۲۷.۳۰) — برچسب داستان: برای کی؟ در چه لحظه‌ای؟ به کدام تصمیم؟ */
+      el('p', { class: 'hint-text', style: { flexBasis: '100%', margin: '0' } }, 'برای همهٔ کاربران، در لحظهٔ ورود: چه خبر تعطیلی یا تغییر برنامه اعلام شده تا تصمیم فردی دربارهٔ حضورشان درست باشد.')),
     el(
       'div',
       { class: 'card__body' },
@@ -512,7 +535,12 @@ function announcementsCard(announcements) {
               isOffice ? el('span', {}, ' — از تنظیمات ← تب «اعلان‌های مدیر» می‌توانید اعلان فعال ثبت کنید.') : null
             )
           )
-    )
+    ),
+    /* POLISH-3 M2 — حفر: مدیریت اعلان‌ها برای دفتر */
+    isOffice
+      ? el('div', { style: { padding: '0 var(--sp-5) var(--sp-4)' } },
+          el('button', { class: 'btn btn--ghost btn--sm', type: 'button', onclick: () => { location.hash = '#/settings?tab=announce'; } }, 'مدیریت اعلان‌ها', icon('chevL', 13)))
+      : null
   );
 }
 
@@ -523,7 +551,9 @@ function knowledgeCard(knowledge) {
   return el(
     'div',
     { class: 'card kn-card', style: { marginBottom: 'var(--sp-4)' } },
-    el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, icon('file', 16), 'دانش‌افزایی'), knItems.length ? el('span', { class: 'badge badge--neutral' }, `${fa(knowledge.length)} مقاله`) : null),
+    el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, icon('file', 16), 'دانش‌افزایی'), knItems.length ? el('span', { class: 'badge badge--neutral' }, `${fa(knowledge.length)} مقاله`) : null,
+      /* M7 POLISH-3 (۱.۲۷.۳۰) — برچسب داستان: برای کی؟ در چه لحظه‌ای؟ به کدام تصمیم؟ */
+      el('p', { class: 'hint-text', style: { flexBasis: '100%', margin: '0' } }, 'برای درمانگر، در وقفهٔ بین جلسات: چه مطلب تازه‌ای منتشر شده تا تصمیم به‌روزرسانی دانش بالینی گرفته شود.')),
     el(
       'div',
       { class: 'card__body' },
@@ -622,7 +652,9 @@ function drawScreeningGoalCard(goal) {
       'div',
       { class: 'card__head' },
       el('div', { class: 'card__title' }, icon('board', 16), 'سنجش روزانه — گزارش کوتاه'),
-      el('span', { class: 'badge badge--primary' }, `سال ${fa(goal.jalaliYear)}`)
+      el('span', { class: 'badge badge--primary' }, `سال ${fa(goal.jalaliYear)}`),
+      /* M7 POLISH-3 (۱.۲۷.۳۰) — برچسب داستان: برای کی؟ در چه لحظه‌ای؟ به کدام تصمیم؟ */
+      el('p', { class: 'hint-text', style: { flexBasis: '100%', margin: '0' } }, 'برای دفتر، در پایان روز غربال: چند غربال ثبت و چند مانده تا تصمیم ارجاع یا فراخوان بعدی گرفته شود.'),
     ),
     el(
       'div',
@@ -708,37 +740,111 @@ function drawScreeningGoalCard(goal) {
   );
 }
 
-// ─── اعتبارسنجی بیرونی: چهار KPI از دادهٔ موجود + حسابرسی موردی دو-ارزیاب ───
+// ─── اعتبارسنجی بیرونی — M6 POLISH-3 (۱.۲۷.۲۹): بازنویسی روایت‌دار ───
+// عنوان/زیرنویس روایت + حفر چهار KPI به فهرست پشت‌شان (الگوی M2) + بخش «شاهد پیامد واقعی»
+// (فرم پیگیری ۳–۶ماهه — وعدهٔ مایگریشن 0082) + نمای فقط‌خواندنی درمانگرِ همان پرونده.
+const FOLLOWUP_TYPE_ID = 'bbbbbbbb-8231-4000-8000-000000000001'; // کلید ثابت seed مایگریشن 0082 (ce-followup-3m-v1)
+
 function validationCard(kpis, audits) {
+  const isTherapistView = !kpis; // باندل برای درمانگر فقط حسابرسی پرونده‌های خودش را می‌آورد (M6)
   const share = (k) => k.pct == null ? '—' : `${fa(k.pct)}٪`;
-  const kpi = (numv, label, hint) => el('div', { class: 'pr-kpi', title: hint || '' },
-    el('div', { class: 'pr-kpi__num' }, numv),
-    el('div', { class: 'pr-kpi__label' }, label));
+  /* حفر KPI (M6/الگوی M2): هر شاخص به فهرستِ پشتِ عددش می‌رود — مسیرِ صادقانه در همین ناوبری */
+  const kpi = (numv, label, hint, route) => {
+    const node = el('div', { class: 'pr-kpi', title: hint || '' },
+      el('div', { class: 'pr-kpi__num' }, numv),
+      el('div', { class: 'pr-kpi__label' }, label));
+    if (route) {
+      node.style.cursor = 'pointer';
+      node.setAttribute('role', 'link');
+      node.setAttribute('tabindex', '0');
+      node.title = `${hint || label} — مشاهدهٔ فهرست پشتِ این عدد`;
+      const go = () => { location.hash = route; };
+      node.addEventListener('click', go);
+      node.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+    }
+    return node;
+  };
 
   /* ۱.۲۵.۰۱ — ناظر فقط-خواندن: ثبت حسابرسی (POST /api/case-audits) فقط دفتر مرکز — دکمه از اول پنهان شود */
   const canAudit = ['manager', 'secretary'].includes(session.user?.role);
 
   const card = el('div', { class: 'card', dataset: { validationCard: '1' } }, /* ۱.۲۱.۰: شناسه‌دار برای رفرش درجای فقط همین کارت */
     el('div', { class: 'card__head' },
-      el('div', { class: 'card__title' }, icon('compass', 16), 'اعتبارسنجی بیرونی — شاخص‌های اعتماد'),
-      canAudit
+      el('div', {},
+        el('div', { class: 'card__title' }, icon('compass', 16), 'آیا تشخیص‌های ما درست از آب درمی‌آیند؟'),
+        el('p', { class: 'hint-text', style: { margin: 'var(--sp-1) 0 0' } },
+          'اثبات اعتبار تصمیم‌های بالینی برای اعتماد خانواده و اداره — چهار شاخص از دادهٔ واقعی پرونده‌ها، حسابرسی دو-ارزیاب و پیگیری ۳–۶ماهه.')),
+      !isTherapistView && canAudit
         ? el('button', { class: 'btn btn--soft btn--sm', onclick: () => openCaseAuditModal() },
             icon('clipboard', 14), 'حسابرسی موردی')
         : null),
     el('div', { class: 'card__body' },
-      el('div', { class: 'pr-kpis' },
-        kpi(share(kpis.hypothesisConvergence), 'هم‌گرایی فرضیه با تصمیم', 'از مسیرهای تصمیم‌گرفته، سهمی که با اسنپ‌شات فرضیهٔ موتور تأیید شدند'),
-        kpi(share(kpis.interventionResponse), 'پاسخ به مداخله', 'از مسیرهای دارای پراپ، سهمی که روند بهبود یا تسلط دارند'),
-        kpi(share(kpis.reassessOnTime), 'بازنگری به‌موعود', 'از مسیرهای با موعد بازنگری سرآمده، سهمی که جلسهٔ بازنگری‌شان ثبت شده'),
-        kpi(kpis.startToIdentification.medianDays == null ? '—' : `${fa(Math.round(kpis.startToIdentification.medianDays))} روز`, 'شروع تا جمع‌بندی شناسایی', `میانهٔ فاصلهٔ ساخت پرونده تا اولین گزارش نتایج (${fa(kpis.startToIdentification.students)} پرونده)`)),
+      isTherapistView
+        ? el('div', { class: 'cell-sub', style: { marginBottom: 'var(--sp-2)' } },
+            'نمای فقط‌خواندنی — حسابرسی موردیِ پرونده‌های شما (صاحب پرونده یا منتسب در نوبت‌ها). شاخص‌های دفتر مرکز در این نما نمی‌آید.')
+        : null,
+      kpis
+        ? el('div', { class: 'pr-kpis' },
+            kpi(share(kpis.hypothesisConvergence), 'هم‌گرایی فرضیه با تصمیم', 'از مسیرهای تصمیم‌گرفته، سهمی که با اسنپ‌شات فرضیهٔ موتور تأیید شدند', '#/students'),
+            kpi(share(kpis.interventionResponse), 'پاسخ به مداخله', 'از مسیرهای دارای پراپ، سهمی که روند بهبود یا تسلط دارند', '#/reports'),
+            kpi(share(kpis.reassessOnTime), 'بازنگری به‌موعود', 'از مسیرهای با موعد بازنگری سرآمده، سهمی که جلسهٔ بازنگری‌شان ثبت شده', '#/appointments'),
+            kpi(kpis.startToIdentification.medianDays == null ? '—' : `${fa(Math.round(kpis.startToIdentification.medianDays))} روز`, 'شروع تا جمع‌بندی شناسایی', `میانهٔ فاصلهٔ ساخت پرونده تا اولین گزارش نتایج (${fa(kpis.startToIdentification.students)} پرونده)`, '#/students'))
+        : null,
+      kpis?.followups
+        ? el('div', { class: 'ob-row', style: { marginTop: 'var(--sp-3)' } },
+            el('div', { class: 'ob-row__main' },
+              el('div', { class: 'cell-main' }, 'شاهد پیامد واقعی — فرم پیگیری ۳–۶ماهه (خانواده)'),
+              el('div', { class: 'cell-sub' },
+                `${fa(kpis.followups.sent)} فرم ارسال‌شده · ${fa(kpis.followups.filled)} پرشدهٔ خانواده — وعدهٔ مایگریشن 0082: پس از هر مسیر، پیامد واقعی از زبان خانواده شنیده می‌شود.`)),
+            el('div', { class: 'ob-row__side' },
+              el('button', { class: 'btn btn--ghost btn--sm', onclick: () => openFollowupSendModal() },
+                icon('send', 14), 'ارسال به خانواده')))
+        : null,
       audits.length
         ? el('div', { class: 'clx-chips', style: { marginTop: 'var(--sp-3)' } },
-            ...audits.slice(0, 5).map((a) => el('span', { class: `badge ${a.agreed ? 'badge--success' : 'badge--warning'}`, title: a.note ?? '' },
+            /* ۱.۲۷.۲۶ — M3 POLISH-3: حفر چیپ حسابرسی به روایت بالینی همان پرونده (تب «روایت بالینی» پروفایل) */
+            ...audits.slice(0, 5).map((a) => el('span', { class: `badge ${a.agreed ? 'badge--success' : 'badge--warning'}`, title: a.note ? `${a.note} — مشاهدهٔ روایت بالینی پرونده` : 'مشاهدهٔ روایت بالینی پرونده', role: 'link', tabindex: 0, style: { cursor: 'pointer' }, onclick: () => { location.hash = `#/students/${a.studentId}?tab=narrative`; }, onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); location.hash = `#/students/${a.studentId}?tab=narrative`; } } },
               `${a.studentName} — ${a.reviewerA} / ${a.reviewerB} ${a.agreed ? '· توافق' : '· اختلاف'}`)))
         : el('div', { class: 'cell-sub', style: { marginTop: 'var(--sp-3)' } },
-            'حسابرسی موردی: مرور یک پرونده توسط دو ارزیاب و ثبت سادهٔ توافق — نتیجه‌ها همین‌جا آرشیو می‌شوند.'))
+            isTherapistView
+              ? 'برای پرونده‌های شما هنوز حسابرسی موردی ثبت نشده است.'
+              : 'حسابرسی موردی: مرور یک پرونده توسط دو ارزیاب و ثبت سادهٔ توافق — نتیجه‌ها همین‌جا آرشیو می‌شوند.')
+    )
   );
   return card;
+}
+
+/* M6 POLISH-3 (۱.۲۷.۲۹) — «ارسال به خانواده»: ساخت رویداد فرم پیگیری ۳–۶ماهه و ارسال با بات بله
+   (همان دو فراخوانیِ جریان ارسال چک‌لیست پروفایل: create → send با audience=family) */
+function openFollowupSendModal() {
+  const studentIn = el('input', { class: 'input', placeholder: 'شناسهٔ پرونده — از تب دانش‌آموزان کپی شود' });
+  const sendBtn = el('button', { class: 'btn btn--primary', type: 'button' }, 'ساخت و ارسال با بات');
+  let closeFn = null;
+  sendBtn.addEventListener('click', async () => {
+    const studentId = studentIn.value.trim();
+    if (studentId.length < 8) { toast('شناسهٔ پرونده را وارد کنید (از تب دانش‌آموزان کپی شود)', 'warning'); studentIn.focus(); return; }
+    sendBtn.disabled = true;
+    try {
+      const created = await api.post(`/api/students/${studentId}/case-events`, { eventTypeId: FOLLOWUP_TYPE_ID, values: {} });
+      await api.post(`/api/case-events/${created?.data?.id}/send`, { audience: 'family' });
+      toast('فرم پیگیری ۳–۶ماهه برای خانواده ارسال شد', 'success');
+      if (closeFn) closeFn();
+      const cardEl = document.querySelector('[data-validation-card]');
+      if (cardEl) refreshValidationCard(cardEl);
+    } catch (err) { toastError(err); }
+    finally { sendBtn.disabled = false; }
+  });
+  openModal({
+    title: 'شاهد پیامد واقعی — ارسال فرم پیگیری ۳–۶ماهه',
+    body: el('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' } },
+      el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'پرونده (شناسهٔ دانش‌آموز)'), studentIn),
+      el('p', { class: 'hint-text', style: { whiteSpace: 'normal' } },
+        'فرم ۹پرسشی پیگیری (تمرین‌ها، خواندن/نوشتن/حساب، انگیزه، مدرسه، غیبت، ادامهٔ خدمات) برای ولیّ همان پرونده با بات بله فرستاده می‌شود؛ پاسخ روی تایم‌لاین پرونده می‌نشیند.')),
+    actions: [
+      (c) => el('button', { class: 'btn btn--ghost', type: 'button', onclick: c }, 'انصراف'),
+      (c) => { closeFn = c; return sendBtn; }
+    ]
+  });
 }
 
 /* ۱.۲۱.۰ — پس از ثبت حسابرسی فقط همین کارت درجا تازه می‌شود (دو GET کوچک؛ بدون اسکلت،
@@ -768,7 +874,7 @@ function openCaseAuditModal() {
   saveBtn.addEventListener('click', async () => {
     const studentId = studentIn.value.trim();
     if (studentId.length < 8) { toast('شناسهٔ پرونده را وارد کنید (از تب دانش‌آموزان کپی شود)', 'warning'); studentIn.focus(); return; }
-    if (aIn.value.trim().length < 2 || bIn.value.trim().length < 2) { toast('نام هر دو ارزیاب لازم است', 'warning'); return; }
+    if (aIn.value.trim().length < 2 || bIn.value.trim().length < 2) { toast('نام هر دو ارزیاب را وارد کنید', 'warning'); return; }
     saveBtn.disabled = true;
     try {
       await api.post('/api/case-audits', {
@@ -787,11 +893,11 @@ function openCaseAuditModal() {
   });
   openModal({
     title: 'حسابرسی موردی — مرور دو-ارزیاب',
-    body: el('div', { style: { display: 'flex', flexDirection: 'column', gap: '10px' } },
+    body: el('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' } },
       el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'پرونده (شناسهٔ دانش‌آموز)'), studentIn),
       el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'ارزیاب اول'), aIn),
       el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'ارزیاب دوم'), bIn),
-      el('label', { class: 'fidelity-row', style: { gap: '8px' } }, agreedCb, ' دو ارزیاب به یک جمع‌بندی رسیدند'),
+      el('label', { class: 'fidelity-row', style: { gap: 'var(--sp-2)' } }, agreedCb, ' دو ارزیاب به یک جمع‌بندی رسیدند'),
       el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'یادداشت'), noteTa)),
     actions: [
       (c) => el('button', { class: 'btn btn--ghost', type: 'button', onclick: c }, 'انصراف'),

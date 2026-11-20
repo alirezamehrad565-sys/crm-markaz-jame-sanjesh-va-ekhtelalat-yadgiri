@@ -61,6 +61,8 @@ export async function renderStudents(container, ctx) {
   }
 
   if (ctx?.query && 'tag_id' in ctx.query) local.tagId = ctx.query.tag_id || '';
+  /* POLISH-3 M2 — حفر «مدارس مبدأ» گزارش دوره: فیلتر مدرسه از لینک عمیق می‌آید */
+  if (ctx?.query && 'school_id' in ctx.query) local.schoolId = ctx.query.school_id || '';
 
   container.replaceChildren(skeletonState('table', 6));
 
@@ -588,12 +590,12 @@ export async function renderStudents(container, ctx) {
   container.replaceChildren(
     el('div', { class: 'page-head' },
       el('div', { class: 'page-head__title' }, 'دانش‌آموزان'),
-      countBadge
+      countBadge,
+      el('p', { class: 'page-head__desc' },
+        session.user?.role === 'therapist'
+          ? 'لیست دانش‌آموزهای شما — پرونده‌هایی که مسئولشان هستید یا سابقهٔ جلسه با شما دارند.'
+          : 'دانش‌آموزان فعال مرکز؛ پشت‌نوبتی‌ها در ماژول «لیست انتظار» و خروجی‌ها در «آرشیو» نگه داشته می‌شوند.')
     ),
-    el('div', { class: 'muted', style: { fontSize: 'var(--fs-xs)', margin: '0 2px var(--sp-3)' } }, /* 13px خام (S5-06) */
-      session.user?.role === 'therapist'
-        ? 'لیست دانش‌آموزهای شما — پرونده‌هایی که مسئولشان هستید یا سابقهٔ جلسه با شما دارند.'
-        : 'دانش‌آموزان فعال مرکز؛ پشت‌نوبتی‌ها در ماژول «لیست انتظار» و خروجی‌ها در «آرشیو» نگه داشته می‌شوند.'),
     toolbar,
     tableZone
   );

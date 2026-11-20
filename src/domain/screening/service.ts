@@ -1,10 +1,12 @@
 import type { AuthContext } from '@core/shared';
-import { tehranTodayYmd } from '@core/shared';
+import { schoolYearOfYmd, tehranTodayYmd } from '@core/shared';
 import { NotFoundError, ValidationError } from '@core/errors';
 import type { DbClient } from '@core/db';
 import type { AuditWriter } from '@core/audit';
 import type { Logger } from '@core/logger';
 import type {
+  IqEvaluation,
+  IqEvaluationInput,
   ScreeningDayCount,
   ScreeningEntry,
   ScreeningEntryInput,
@@ -41,6 +43,41 @@ function parseTagsJson(raw: string): string[] {
   }
 }
 
+/* ─── نتیجهٔ ارزیابی تخصصی (v1.27.33) ─── */
+interface IqEvalRow {
+  id: string;
+  screening_entry_id: string;
+  result_option: number;
+  autism_referral: number;
+  leiter_score: number | null;
+  wechsler_verbal_score: number | null;
+  goodenough_score: number | null;
+  clinical_observations: string | null;
+  academic_year: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+const IQ_EVAL_BY_ENTRY = `SELECT * FROM iq_evaluations WHERE screening_entry_id = ? AND deleted_at IS NULL`;
+
+function iqRowToEval(r: IqEvalRow): IqEvaluation {
+  return {
+    id: r.id,
+    screeningEntryId: r.screening_entry_id,
+    resultOption: r.result_option,
+    autismReferral: r.autism_referral === 1,
+    leiterScore: r.leiter_score,
+    wechslerVerbalScore: r.wechsler_verbal_score,
+    goodenoughScore: r.goodenough_score,
+    clinicalObservations: r.clinical_observations,
+    academicYear: r.academic_year,
+    createdBy: r.created_by,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at
+  };
+}
+
 export interface ScreeningDeps {
   db: DbClient;
   audit: AuditWriter;
@@ -55,6 +92,7 @@ interface Row {
   birth_date: string | null;      /* ۱.۲۵.۵۰ */
   readiness_score: number | null; /* ۱.۲۵.۵۰ */
   note: string | null;            /* ۱.۲۵.۵۷ */
+  iq_referral_handled_at: string | null; /* ۱.۲۷.۳۳ */
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -70,6 +108,7 @@ function rowToEntry(r: Row): ScreeningEntry {
     birthDate: r.birth_date ?? null,
     readinessScore: r.readiness_score ?? null,
     note: r.note ?? null,
+    iqHandledAt: r.iq_referral_handled_at ?? null,
     createdBy: r.created_by,
     creatorName: r.creator_name,
     createdAt: r.created_at,
@@ -79,7 +118,7 @@ function rowToEntry(r: Row): ScreeningEntry {
 
 const SELECT = `
   SELECT e.id, e.name, e.day, e.tags, e.birth_date, e.readiness_score, e.note,
-         e.created_by, e.created_at, e.updated_at,
+         e.iq_referral_handled_at, e.created_by, e.created_at, e.updated_at,
          st.full_name AS creator_name
     FROM screening_entries e
     LEFT JOIN staff st ON st.id = e.created_by
@@ -309,6 +348,91 @@ export function createScreeningService(deps: ScreeningDeps) {
         });
       });
       log.info('screening.deleted', { id });
+    },
+
+    /* ─── نتیجهٔ ارزیابی تخصصی «اظهارنظر و پیشنهاد» (v1.27.33 — خواست کارفرما) ───
+     * یک ردیف فعال به‌ازای هر سنجش — ثبت دوباره = ویرایش همان ردیف (upsert)؛ ثبت نتیجه،
+     * ردیف را از پیگیری فعال خارج می‌کند (iq_referral_handled_at) و سال تحصیلی از day سنجش می‌نشیند. */
+    async getIqEvaluation(entryId: string): Promise<IqEvaluation | null> {
+      const row = await db.queryOne<IqEvalRow>(IQ_EVAL_BY_ENTRY, [entryId]);
+      return row ? iqRowToEval(row) : null;
+    },
+
+    async saveIqEvaluation(entryId: string, input: IqEvaluationInput, actor: AuthContext): Promise<IqEvaluation> {
+      const entry = await getEntryRow(entryId);
+      const existing = await db.queryOne<IqEvalRow>(IQ_EVAL_BY_ENTRY, [entryId]);
+      /* نمرات: فقط عدد متناهی می‌نشیند — هیچ محاسبه یا تفسیری انجام نمی‌شود؛ متن مشاهدات عیناً ذخیره می‌شود */
+      const score = (v: number | null | undefined): number | null =>
+        typeof v === 'number' && Number.isFinite(v) ? v : null;
+      const observations =
+        typeof input.clinical_observations === 'string' && input.clinical_observations.length > 0
+          ? input.clinical_observations
+          : null;
+      const autism = input.autism_referral ? 1 : 0;
+      const academicYear = String(schoolYearOfYmd(entry.day));
+      const id = existing?.id ?? crypto.randomUUID();
+      const now = nowSql();
+
+      await db.transaction(async (tx) => {
+        if (existing) {
+          await tx.execute(
+            `UPDATE iq_evaluations
+               SET result_option = ?, autism_referral = ?, leiter_score = ?, wechsler_verbal_score = ?,
+                   goodenough_score = ?, clinical_observations = ?, academic_year = ?, updated_at = ?
+             WHERE id = ?`,
+            [
+              input.result_option,
+              autism,
+              score(input.leiter_score),
+              score(input.wechsler_verbal_score),
+              score(input.goodenough_score),
+              observations,
+              academicYear,
+              now,
+              id
+            ]
+          );
+        } else {
+          await tx.execute(
+            `INSERT INTO iq_evaluations
+               (id, screening_entry_id, result_option, autism_referral, leiter_score, wechsler_verbal_score,
+                goodenough_score, clinical_observations, academic_year, created_by, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              id,
+              entryId,
+              input.result_option,
+              autism,
+              score(input.leiter_score),
+              score(input.wechsler_verbal_score),
+              score(input.goodenough_score),
+              observations,
+              academicYear,
+              actor.staffId,
+              now,
+              now
+            ]
+          );
+        }
+        await tx.execute(
+          `UPDATE screening_entries SET iq_referral_handled_at = COALESCE(iq_referral_handled_at, ?) WHERE id = ?`,
+          [now, entryId]
+        );
+        await audit.logInTransaction(tx, {
+          actorId: actor.staffId,
+          action: 'screening.iq_result',
+          resourceType: 'screening_entry',
+          resourceId: entryId,
+          changes: {
+            result_option: { from: existing?.result_option ?? null, to: input.result_option },
+            autism_referral: { from: existing?.autism_referral ?? null, to: autism }
+          }
+        });
+      });
+      log.info('screening.iq_result.saved', { entryId, edited: Boolean(existing) });
+      const saved = await db.queryOne<IqEvalRow>(IQ_EVAL_BY_ENTRY, [entryId]);
+      if (!saved) throw new NotFoundError('نتیجهٔ ارزیابی');
+      return iqRowToEval(saved);
     }
   };
 }

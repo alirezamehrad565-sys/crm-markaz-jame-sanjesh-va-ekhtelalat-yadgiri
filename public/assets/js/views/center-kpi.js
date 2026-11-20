@@ -30,9 +30,11 @@ function rateKpi(label, value, sub) {
   return kpi(label, pct(value), sub, tone);
 }
 
-function sectionTitle(iconName, text) {
-  return el('div', { class: 'card__head', style: { marginTop: 'var(--sp-5)' } },
-    el('div', { class: 'card__title' }, icon(iconName, 16), text));
+/* POLISH-3 M2 — هر بخش شاخص یک پیوند حفر به نمای مرجع خودش می‌گیرد (فقط‌خواندنیِ بی‌حفر ممنوع) */
+function sectionTitle(iconName, text, linkTo = null) {
+  return el('div', { class: 'card__head', style: { marginTop: 'var(--sp-5)', alignItems: 'center' } },
+    el('div', { class: 'card__title' }, icon(iconName, 16), text),
+    linkTo ? el('button', { class: 'btn btn--ghost btn--sm', type: 'button', onclick: () => { location.hash = linkTo; } }, 'مشاهدهٔ جزئیات', icon('chevL', 13)) : null);
 }
 
 /* ۱.۲۵.۶۰ — نشان تفکیک نوع فرم نظرسنجی: «ارسالی ۴ · پاسخ ۲» */
@@ -98,7 +100,7 @@ export async function renderCenterKpi(container, opts = {}) {
       ),
 
       // ─── نوبت‌ها و حضور: خالی نبودن نوبت‌ها و جا نیفتادن‌ها ───
-      sectionTitle('calendar', 'نوبت‌ها و حضور'),
+      sectionTitle('calendar', 'نوبت‌ها و حضور', '#/working-day'),
       el('div', { class: 'kpi-grid' },
         kpi('نوبت‌های پنجره', num(a.total), `برنامه‌ریزی‌شده ${num(a.scheduled)} · لغوشده ${num(a.cancelled)}`, 'primary'),
         rateKpi('نرخ لغو', a.cancel_rate, 'لغوشده از کل نوبت‌های پنجره'),
@@ -109,7 +111,7 @@ export async function renderCenterKpi(container, opts = {}) {
       ),
 
       // ─── کیفیت مداخله ───
-      sectionTitle('clipboard', 'کیفیت مداخله'),
+      sectionTitle('clipboard', 'کیفیت مداخله', '#/treatment-plans'),
       el('div', { class: 'kpi-grid' },
         kpi('جلسات انجام‌شدهٔ طرح درمان', num(iv.pathway_sessions_done), `رهاشده ${num(iv.pathway_sessions_skipped)}`, 'primary'),
         rateKpi('نرخ تکمیل جلسات', iv.session_completion_rate, 'انجام‌شده از انجام‌شده + رهاشده'),
@@ -120,18 +122,18 @@ export async function renderCenterKpi(container, opts = {}) {
       ),
 
       // ─── ثبت پرونده و بازخورد خانواده ───
-      sectionTitle('file', 'ثبت پرونده و بازخورد خانواده'),
+      sectionTitle('file', 'ثبت پرونده و بازخورد خانواده', '#/case-event-types'),
       el('div', { class: 'kpi-grid' },
         kpi('رویدادهای پرونده', num(dc.case_events_total), `گزارش جلسهٔ مداخله ${num(dc.session_notes)}`, 'primary'),
         rateKpi('پوشش ثبت پرونده', dc.documentation_coverage, `دانش‌آموز مستند از ${num(dc.students_active)} فعال`),
-        kpi('ارزیابی‌های ثبت‌شده', num(dc.assessments_recorded), 'غیرحذف‌شده در پنجره', 'accent'),
+        kpi('ارزیابی‌های ثبت‌شده', num(dc.assessments_recorded), 'فعال در پنجره', 'accent'),
         kpi('فرم‌های خانواده', num(dc.family_filled) + '/' + num(dc.family_requests), 'پاسخ‌داده‌شده از ارسالی', 'primary'),
         rateKpi('پاسخ‌دهی خانواده', dc.family_response_rate, 'دربارهٔ نتایج و طرح درمان'),
         kpi('میانگین نمرهٔ خانواده', dc.family_avg_score === null || dc.family_avg_score === undefined ? '—' : fa(Math.round(dc.family_avg_score * 10) / 10), 'از چک‌لیست‌های پرشدهٔ پنجره', dc.family_avg_score === null || dc.family_avg_score === undefined ? 'neutral' : 'accent')
       ),
 
       // ─── رضایت خانواده‌ها (نظرسنجی — ۱.۲۵.۵۹ / تفکیک دو فرم ساخت‌یافته — ۱.۲۵.۶۰) ───
-      sectionTitle('heart', 'رضایت خانواده‌ها (نظرسنجی)'),
+      sectionTitle('heart', 'رضایت خانواده‌ها (نظرسنجی)', '#/family-surveys'),
       el('div', { class: 'kpi-grid' },
         kpi('نظرسنجی‌های ارسالی', num(fs.surveys_sent), `پاسخ‌گرفته ${num(fs.surveys_filled)}`, 'primary'),
         rateKpi('نرخ پاسخ‌دهی نظرسنجی', fs.response_rate, 'پاسخ‌گرفته از ارسالی پنجره'),
@@ -140,7 +142,7 @@ export async function renderCenterKpi(container, opts = {}) {
         kpi('پیشرفت از نگاه خانواده', fs.progress_avg === null || fs.progress_avg === undefined ? '—' : `${fa(fs.progress_avg)}٪`, 'زیرمقیاس «پیشرفت مشاهده‌شده»', fs.progress_avg === null || fs.progress_avg === undefined ? 'neutral' : fs.progress_avg >= 70 ? 'success' : 'warning'),
         kpi('احتمال توصیه به آشنایان', fs.nps_avg === null || fs.nps_avg === undefined ? '—' : `${fa(Math.round(fs.nps_avg * 10) / 10)} از ۱۰`, 'میانگین پرسش توصیه (۰-۱۰)', fs.nps_avg === null || fs.nps_avg === undefined ? 'neutral' : fs.nps_avg >= 8 ? 'success' : 'warning')
       ),
-      el('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap', margin: '0 0 var(--sp-4)' } },
+      el('div', { style: { display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap', margin: '0 0 var(--sp-4)' } },
         kindBadge('پایان دوره (ترخیص/اتمام جلسه‌ها)', fs.by_kind?.discharge),
         kindBadge('حین درمان', fs.by_kind?.progress),
         kindBadge('تاریخی (نظرسنجی عمومی)', fs.by_kind?.general)

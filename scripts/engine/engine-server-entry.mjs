@@ -7,7 +7,7 @@ import { parseArgs, runEngine } from './engine.mjs';
 
 const opts = parseArgs(process.argv.slice(2));
 if (opts.help) {
-  console.log('استفاده: node engine-server.js --engine adapter --data-dir <مسیر> [--port 8787] [--games-port 8788] --main-bundle <bundle.js> --games-bundle <games.js> --public-dir <public>');
+  console.log('استفاده: node engine-server.js --engine adapter --data-dir <مسیر> [--port 8787] [--games-port 8788] [--bind 0.0.0.0] --main-bundle <bundle.js> --games-bundle <games.js> --public-dir <public>');
   console.log('موتور دسکتاپ مرکز جامع — v1.27.۰۳ (adapter درون‌پروسه‌ای، بدون workerd)');
 } else {
   await runEngine(opts);

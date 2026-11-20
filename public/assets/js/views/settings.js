@@ -95,13 +95,16 @@ export async function renderSettings(container, ctx = {}) {
   };
 
   draw();
+  // ستون فرم ۷۲۰px وسط‌چین RTL — هم‌قانون نماهای فرم‌محور
   container.replaceChildren(
-    el('div', { class: 'page-head' },
-      el('div', { class: 'page-head__title' }, 'تنظیمات'),
-      descEl
-    ),
-    tabBar.root,
-    body
+    el('div', { style: { maxWidth: '720px', marginInline: 'auto' } },
+      el('div', { class: 'page-head' },
+        el('div', { class: 'page-head__title' }, 'تنظیمات'),
+        descEl
+      ),
+      tabBar.root,
+      body
+    )
   );
 
   /* rust-f3 — «اجرای دوبارهٔ راهنمای شروع» فقط در پوستهٔ دسکتاپ؛ در وب ماژول تور کاملاً بی‌اثر است
@@ -138,7 +141,7 @@ function drawCenter(body, settings) {
     disabled: true,
     onclick: async () => {
       if (editor.hasOverlap()) {
-        toast('هم‌پوشانی بازه‌ها در یک روز مجاز نیست', 'error');
+        toast('هم‌پوشانی بازه‌ها در یک روز مجاز نیست — بازه‌ها را جدا کنید و دوباره ذخیره کنید', 'error');
         return;
       }
       saveBtn.disabled = true;
@@ -450,7 +453,7 @@ function drawNotify(body, settings) {
      پس فقط وضعیت «تنظیم‌شده» نشان داده می‌شود. */
   const tokenRow = el('div', { class: 'info-list__row' },
     el('span', { class: 'info-list__key' }, 'توکن بات (BotFather بله)'),
-    el('span', { class: 'info-list__val', style: { display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' } },
+    el('span', { class: 'info-list__val', style: { display: 'flex', gap: 'var(--sp-2)', alignItems: 'center', flexWrap: 'wrap' } },
       settings.meta.baleConfigured
         ? el('span', { class: 'badge badge--success' }, 'ثبت‌شده')
         : el('span', { class: 'badge badge--neutral' }, 'ثبت‌نشده'),
@@ -484,7 +487,7 @@ function drawNotify(body, settings) {
   const aboutPreview = (settings.botAbout ?? '').trim();
   const aboutRow = el('div', { class: 'info-list__row' },
     el('span', { class: 'info-list__key' }, 'دربارهٔ مرکز (متن بات)'),
-    el('span', { class: 'info-list__val', style: { display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' } },
+    el('span', { class: 'info-list__val', style: { display: 'flex', gap: 'var(--sp-2)', alignItems: 'center', flexWrap: 'wrap' } },
       aboutPreview
         ? el('span', { style: { color: 'var(--text-2)' } }, aboutPreview.length > 60 ? `${aboutPreview.slice(0, 60)}…` : aboutPreview)
         : el('span', { class: 'badge badge--neutral' }, 'متن پیش‌فرض سامانه'),
@@ -497,7 +500,7 @@ function drawNotify(body, settings) {
 
   const botUserRow = el('div', { class: 'info-list__row' },
     el('span', { class: 'info-list__key' }, 'نام کاربری بات (لینک احراز خودکار)'),
-    el('span', { class: 'info-list__val', style: { display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' } },
+    el('span', { class: 'info-list__val', style: { display: 'flex', gap: 'var(--sp-2)', alignItems: 'center', flexWrap: 'wrap' } },
       settings.botUsername
         ? el('span', { dir: 'ltr', style: { fontFamily: 'monospace' } }, `@${settings.botUsername}`)
         : el('span', { class: 'badge badge--neutral' }, 'ثبت‌نشده — با دکمهٔ روبه‌رو تشخیص داده می‌شود'),

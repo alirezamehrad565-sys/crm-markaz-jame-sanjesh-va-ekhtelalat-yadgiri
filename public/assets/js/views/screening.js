@@ -1,4 +1,5 @@
 import { api, qs } from '../api.js';
+import { csvTable, downloadCsv } from '../csv-rtl.js'; // ۱.۲۷.۱۴/۷۷ — خروجی CSV راست‌چین جدولی + هم‌عرضی ستون‌ها (خواست کارفرما)
 import {
   fa,
   tehranTodayYmd,
@@ -19,6 +20,7 @@ import {
   confirmModal,
   dataTable,
   emptyState,
+  openModal,
   skeletonState,
   errorState,
   tabs,
@@ -57,7 +59,8 @@ let state = {
   customTo: '',
   search: '',
   tagFilter: [],
-  editingId: null
+  editingId: null,
+  dailyDay: '' /* ۱.۲۷.۱۶ — روزِ انتخابی تب ثبت: '' = امروز؛ «روز قبل» با هر کلیک عقب‌تر می‌رود (خواست کارفرما: ویرایش سوابق) */
 };
 
 let tabGen = 0; // — گارد نسل تب (الگوی router.js): پاسخِ دیرِ تب کهنه اجازه ندارد بدنهٔ تب تازه را بازنویسی کند
@@ -98,14 +101,14 @@ function tagBadge(label, onRemove) {
   const isPre = KIND_BY_LABEL.has(label);
   return el(
     'span',
-    { class: `badge ${tagBadgeClass(label)}`, style: { display: 'inline-flex', alignItems: 'center', gap: '4px' } },
+    { class: `badge ${tagBadgeClass(label)}`, style: { display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-1)' } },
     isPre ? null : el('span', { style: { opacity: 0.6, fontWeight: 700 } }, '#'),
     label,
     onRemove
       ? el('button', {
           type: 'button',
           'aria-label': `حذف برچسب ${label}`,
-          style: { border: 'none', background: 'transparent', padding: '0 2px', cursor: 'pointer', color: 'inherit', display: 'inline-flex' },
+          style: { border: 'none', background: 'transparent', padding: '0 var(--sp-1)', cursor: 'pointer', color: 'inherit', display: 'inline-flex' },
           onclick: onRemove
         }, icon('x', 12))
       : null
@@ -123,11 +126,16 @@ function normalBadge() {
 async function renderDailyTab(box, container, myGen) {
   box.replaceChildren(skeletonState('table', 5));
   const today = tehranTodayYmd();
+  /* ۱.۲۷.۱۶ — فلوی ویرایش سوابق (خواست کارفرما): «روز قبل» با هر کلیک یک روز عقب می‌رود و
+     ثبت/ویرایش/حذف روی همان روز کار می‌کند — سرور از همیشه dayِ گذشته را می‌پذیرد (قالب معتبر کافی است).
+     «روز بعد» فقط تا امروز جلو می‌رود؛ ثبت سنجش برای آینده معنا ندارد. */
+  const selected = state.dailyDay && /^\d{4}-\d{2}-\d{2}$/.test(state.dailyDay) ? state.dailyDay : today;
+  const isToday = selected === today;
 
   let result, tagSummary;
   try {
     const [r, t] = await Promise.all([
-      api.get(`/api/screening${qs({ from: today, to: today })}`),
+      api.get(`/api/screening${qs({ from: selected, to: selected })}`),
       api.get('/api/screening/tags')
     ]);
     result = r.data;
@@ -268,7 +276,7 @@ async function renderDailyTab(box, container, myGen) {
 
   const recentCustom = tagSummary.filter((t) => !KIND_BY_LABEL.has(t.label)).slice(0, 8);
   const recentChips = recentCustom.length === 0 ? null : el('div', {},
-    el('div', { class: 'sanj-hint', style: { marginBottom: '6px' } }, '# برچسب‌های اخیر (کارمند، مهدکودک و…)'),
+    el('div', { class: 'sanj-hint', style: { marginBottom: 'var(--sp-2)' } }, '# برچسب‌های اخیر (کارمند، مهدکودک و…)'),
     el('div', { class: 'sanj-chips' },
       ...recentCustom.map((t) =>
         el('button', {
@@ -314,7 +322,9 @@ async function renderDailyTab(box, container, myGen) {
   const syncComposerMode = () => {
     const editing = Boolean(state.editingId);
     const cur = editing ? entries.find((e) => e.id === state.editingId) : null;
-    headTitle.textContent = editing ? `ویرایش: ${cur?.name ?? ''}` : 'ثبت سریع روز سنجش';
+    headTitle.textContent = editing
+      ? `ویرایش: ${cur?.name ?? ''}`
+      : isToday ? 'ثبت سریع روز سنجش' : `ثبت در روز انتخابی — ${WEEKDAY_NAMES[iranianWeekdayOfYmd(selected)]} ${formatJalaliShort(selected)}`; /* ۱.۲۷.۱۶ */
     submitBtn.replaceChildren(icon(editing ? 'check' : 'plus', 16), editing ? 'ذخیرهٔ تغییرات' : 'ثبت در روز سنجش');
     cancelBtn.style.display = editing ? '' : 'none';
     input.placeholder = editing ? 'نام و فامیل…' : 'نام و فامیل دانش‌آموز… مثلاً: آوا محمدی'; /* H5 */
@@ -393,8 +403,10 @@ async function renderDailyTab(box, container, myGen) {
         ? [emptyState({
             illo: illoScreening, /* ۱.۲۵.۰۵ */
             iconName: 'student',
-            title: 'امروز هنوز کسی ثبت نشده است',
-            hint: 'نام و فامیل را در باکس بالا بنویسید و برچسب بزنید — تمام.'
+            title: isToday ? 'امروز هنوز کسی ثبت نشده است' : 'این روز سنجشی ثبت نشده است', /* ۱.۲۷.۱۶ — روزِ انتخابی */
+            hint: isToday
+              ? 'نام و فامیل را در باکس بالا بنویسید و برچسب بزنید — تمام.'
+              : 'ثبتِ جاافتادهٔ همین روز از فرم بالا ممکن است — فرم روی همین روز کار می‌کند.'
           })]
         : [el('div', { class: 'sanj-rows' }, ...entries.map((e) => rowEl(e)))])
     );
@@ -482,13 +494,13 @@ async function renderDailyTab(box, container, myGen) {
         return;
       }
       if (entries.some((e) => e.name === parsed.name)) {
-        toast(`«${parsed.name}» امروز قبلاً ثبت شده — برای تغییر برچسب‌ها از ویرایش استفاده کنید`, 'warning');
+        toast(`«${parsed.name}» در این روز قبلاً ثبت شده — برای تغییر برچسب‌ها از ویرایش استفاده کنید`, 'warning'); /* ۱.۲۷.۱۶ — روزِ انتخابی */
         return;
       }
       const res = await api.post('/api/screening', {
         name: parsed.name,
         tags,
-        day: today,
+        day: selected, /* ۱.۲۷.۱۶ — ثبت در روزِ انتخابی؛ سوابق روزهای گذشته هم قابل ثبت است */
         birth_date: extra.birthDate,
         readiness_score: extra.readinessScore,
         note: extra.note
@@ -520,9 +532,9 @@ async function renderDailyTab(box, container, myGen) {
     }
   };
 
-  const listCard = el('div', { class: 'card', style: { marginTop: 'var(--sp-4)' } },
+  const listCard = el('div', { class: 'card' },
     el('div', { class: 'card__head' },
-      el('div', { class: 'card__title' }, 'لیست روز سنجش امروز'),
+      el('div', { class: 'card__title' }, isToday ? 'لیست روز سنجش امروز' : `لیست روز سنجش — ${formatJalaliFull(selected)}`), /* ۱.۲۷.۱۶ */
       listCount
     ),
     rowsZone
@@ -535,7 +547,7 @@ async function renderDailyTab(box, container, myGen) {
       preview,
       extraFields, /* ۱.۲۵.۵۰ — زیر ثبت سریع */
       el('div', {},
-        el('div', { class: 'sanj-hint', style: { marginBottom: '6px' } }, 'برچسب وضعیت (لمس کنید تا روشن شود)'),
+        el('div', { class: 'sanj-hint', style: { marginBottom: 'var(--sp-2)' } }, 'برچسب وضعیت (لمس کنید تا روشن شود)'),
         preChips
       ),
       recentChips,
@@ -547,10 +559,29 @@ async function renderDailyTab(box, container, myGen) {
     )
   );
 
+  /* ۱.۲۷.۱۶ — ناوبری روز ثبت: «روز قبل» (کلیک دوباره = روزِ قبل‌تر) + «روز بعد» تا امروز؛
+     در روزهای گذشته راهنمای ویرایش سوابق زیر نوار می‌آید (اشتباه/جاافتاده همین‌جا اصلاح می‌شود) */
+  const rerenderDay = () => { void renderDailyTab(box, container, ++tabGen); };
+  const dayNav = el('div', { class: 'toolbar', style: { justifyContent: 'center', gap: 'var(--sp-3)', marginBottom: 'var(--sp-3)' } },
+    el('button', { class: 'btn btn--ghost btn--sm', 'aria-label': 'رفتن به روز قبل', onclick: () => { state.dailyDay = addDaysYmd(selected, -1); rerenderDay(); } },
+      icon('chevR', 15), 'روز قبل'),
+    el('span', { class: 'cell-main', style: { fontWeight: 700 } },
+      isToday ? 'امروز' : `${WEEKDAY_NAMES[iranianWeekdayOfYmd(selected)]} — ${formatJalaliFull(selected)}`),
+    el('button', {
+      class: 'btn btn--ghost btn--sm',
+      'aria-label': 'رفتن به روز بعد',
+      disabled: isToday ? true : null,
+      onclick: () => { state.dailyDay = addDaysYmd(selected, 1); rerenderDay(); }
+    }, 'روز بعد', icon('chevL', 15)),
+    isToday ? null : el('button', { class: 'btn btn--soft btn--sm', onclick: () => { state.dailyDay = ''; rerenderDay(); } }, 'بازگشت به امروز')
+  );
+  const dayHint = isToday ? null : el('p', { class: 'sanj-hint', style: { textAlign: 'center', margin: '0 0 var(--sp-3)' } },
+    'شما سوابقِ گذشته را مرور می‌کنید — ثبتِ جاافتاده یا اصلاحِ اشتباهِ همین روز از فرم پایین ممکن است.');
+
   composerCard.classList.add('sanj-daily__composer');
   paintCounts();
   paintRows();
-  box.replaceChildren(el('div', { class: 'sanj-daily' }, composerCard, listCard));
+  box.replaceChildren(el('div', {}, dayNav, dayHint, el('div', { class: 'sanj-daily' }, composerCard, listCard)));
   if (state.editingId) input.focus();
 }
 
@@ -644,7 +675,7 @@ async function renderManagerTab(box, container, myGen) {
       syncTagUI();
       void refreshResults();
     }
-  }, el('span', { style: { display: 'inline-flex', alignItems: 'center', gap: '5px' } }, icon('alert', 13), 'نیازمند پیگیری (همهٔ ارجاع‌ها)')),
+  }, el('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-1)' } }, icon('alert', 13), 'نیازمند پیگیری (همهٔ ارجاع‌ها)')),
   ...PREDEFINED.map((t) =>
     el('button', {
       type: 'button',
@@ -681,7 +712,7 @@ async function renderManagerTab(box, container, myGen) {
     class: 'chip',
     style: { display: state.tagFilter.length > 0 ? '' : 'none' },
     onclick: () => { state.tagFilter = []; syncTagUI(); void refreshResults(); }
-  }, el('span', { style: { display: 'inline-flex', alignItems: 'center', gap: '5px' } }, icon('x', 12), 'پاک‌کردن فیلتر برچسب‌ها'));
+  }, el('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-1)' } }, icon('x', 12), 'پاک‌کردن فیلتر برچسب‌ها'));
 
   const syncTagUI = () => {
     for (const b of [...filterChips, clearChip]) {
@@ -707,7 +738,7 @@ async function renderManagerTab(box, container, myGen) {
       customDates,
       searchInput,
       el('div', {},
-        el('div', { class: 'sanj-hint', style: { marginBottom: '6px' } }, 'فیلتر برچسب (پیش‌فرض: بدون فیلتر)'),
+        el('div', { class: 'sanj-hint', style: { marginBottom: 'var(--sp-2)' } }, 'فیلتر برچسب (پیش‌فرض: بدون فیلتر)'),
         tagFilterChips
       )
     )
@@ -746,7 +777,7 @@ async function renderManagerTab(box, container, myGen) {
       sanjKpi('ارجاع تخصصی', fa(stats.referrals), stats.total ? `نرخ ارجاع ٪${fa(stats.referralRate)}` : '—', stats.referrals > 0 ? 'error' : 'neutral'),
       sanjKpi('موارد خاص', fa(stats.noCoop + stats.noReg), `عدم همکاری ${fa(stats.noCoop)} • بی‌ثبت‌نام ${fa(stats.noReg)}`, 'accent')
       ),
-      el('p', { class: 'sanj-hint', style: { margin: '8px 4px 0', lineHeight: 'var(--lh-relaxed)' } },
+      el('p', { class: 'sanj-hint', style: { margin: 'var(--sp-2) var(--sp-1) 0', lineHeight: 'var(--lh-relaxed)' } },
         'تعریف «عادی»: بدون برچسب ارجاع تخصصی (بینایی، شنوایی، هوش، جسمی‌حرکتی) و بدون موارد خاص (عدم همکاری، نداشتن ثبت‌نام) — برچسب کارمند سنجش‌گر و مهدکودک مبدأ «عادی» را تغییر نمی‌دهد.'
       )
     );
@@ -758,11 +789,11 @@ async function renderManagerTab(box, container, myGen) {
         el('div', { class: 'card__title' }, 'تفکیک برچسب‌ها'),
         el('span', { class: 'cell-sub' }, 'کارمند سنجش‌گر، مهدکودک مبدأ و وضعیت‌ها')
       ),
-      el('div', { class: 'card__body', style: { display: 'grid', gap: '8px' } },
+      el('div', { class: 'card__body', style: { display: 'grid', gap: 'var(--sp-2)' } },
         ...stats.perTag.slice(0, 12).map((t) => {
           const max = Math.max(...stats.perTag.map((x) => x.count));
           const color = t.kind === 'referral' ? 'var(--error)' : t.kind === 'status' ? 'var(--accent)' : 'var(--primary)';
-          return el('div', { style: { display: 'flex', alignItems: 'center', gap: '10px' } },
+          return el('div', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-3)' } },
             el('span', { class: 'cell-main', style: { width: '150px', flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } },
               t.kind === 'custom' ? '# ' : '', t.label
             ),
@@ -775,15 +806,21 @@ async function renderManagerTab(box, container, myGen) {
       )
     );
 
-    const followUps = entries.filter((e) => e.tags.some((t) => REFERRALS.includes(t)));
+    /* ۱.۲۷.۱۶ — خواست کارفرما: کارت پیگیری فقط «ارجاع هوش» را نشان می‌دهد؛
+       ارجاع بینایی/شنوایی (و جسمی‌حرکتی) به متخصصِ خودشان می‌رود و در این کارت فهرست نمی‌شود */
+    /* ۱.۲۷.۳۳ — قاعدهٔ کارفرما: برای ارجاع هوش فقط «یک» دکمهٔ «ثبت تست تخصصی» وجود دارد؛
+       با ثبت نتیجه ردیف از کارت فعال خارج و در «نتایج ثبت‌شده» (فقط‌خواندنی + ویرایش) می‌نشیند */
+    const IQ_REFERRAL = 'ارجاع هوش';
+    const followUps = entries.filter((e) => e.tags.includes(IQ_REFERRAL) && !e.iqHandledAt);
+    const followHandled = entries.filter((e) => e.tags.includes(IQ_REFERRAL) && e.iqHandledAt);
     const followCard = el('div', { class: 'card', style: { marginTop: 'var(--sp-4)' } },
       el('div', { class: 'card__head' },
-        el('div', { class: 'card__title' }, 'نیازمند پیگیری (ارجاع تخصصی)'),
+        el('div', { class: 'card__title' }, 'نیازمند پیگیری (ارجاع هوش)'),
         el('span', { class: `badge ${followUps.length > 0 ? 'badge--error' : 'badge--success'}` }, fa(followUps.length))
       ),
       el('div', { class: 'card__body' },
         followUps.length === 0
-          ? emptyState({ iconName: 'check', title: 'در این بازه مورد ارجاعی وجود ندارد', hint: 'موارد ارجاع‌شده به متخصص برای تماس با خانواده اینجا فهرست می‌شوند.' })
+          ? emptyState({ iconName: 'check', title: 'در این بازه مورد ارجاع هوش وجود ندارد', hint: 'نوآموزانِ ارجاع‌شده به آزمون هوش اینجا فهرست می‌شوند؛ با ثبت نتیجه از همین کارت به «نتایج ثبت‌شده» می‌روند.' })
           : el('div', { class: 'sanj-rows' },
               ...followUps.map((e) =>
                 el('div', { class: 'sanj-row' },
@@ -792,14 +829,14 @@ async function renderManagerTab(box, container, myGen) {
                     el('span', { class: 'cell-sub' }, formatJalaliShort(e.day))
                   ),
                   el('div', { class: 'sanj-row__tags' },
-                    e.tags.filter((t) => REFERRALS.includes(t)).map((t) => tagBadge(t))
+                    e.tags.filter((t) => t === IQ_REFERRAL).map((t) => tagBadge(t))
                   ),
                   el('div', { class: 'sanj-row__actions' },
                     el('button', {
                       class: 'btn btn--soft btn--sm',
-                      title: 'ثبت این نوآموز در لیست انتظار مرکز (نام خودکار پر می‌شود)',
-                      onclick: () => { location.hash = `#/waitlist?prefill=${encodeURIComponent(e.name)}`; } // — ماژول مستقل
-                    }, icon('plus', 13), 'ثبت در لیست انتظار')
+                      title: 'مودال ثبت اظهارنظر و پیشنهاد ارزیابی — نتیجهٔ ارزیابی تخصصی',
+                      onclick: () => openIqResultModal(e, false, refreshResults)
+                    }, icon('clipboard', 13), 'ثبت تست تخصصی')
                   )
                 )
               )
@@ -807,10 +844,40 @@ async function renderManagerTab(box, container, myGen) {
       )
     );
 
+    /* نتایج ثبت‌شده — بایگانی پیگیری هوش؛ فقط همین‌جا ویرایش نتیجه ممکن است */
+    const handledCard = followHandled.length === 0 ? null : el('div', { class: 'card', style: { marginTop: 'var(--sp-4)' } },
+      el('div', { class: 'card__head' },
+        el('div', { class: 'card__title' }, 'نتایج ثبت‌شده (ارجاع هوش)'),
+        el('span', { class: 'badge badge--success' }, fa(followHandled.length))
+      ),
+      el('div', { class: 'card__body' },
+        el('div', { class: 'sanj-rows' },
+          ...followHandled.map((e) =>
+            el('div', { class: 'sanj-row' },
+              el('div', { class: 'sanj-row__main' },
+                el('span', { class: 'cell-main' }, e.name),
+                el('span', { class: 'cell-sub' }, `نتیجه ثبت شد — ${formatJalaliShort(e.day)}`)
+              ),
+              el('div', { class: 'sanj-row__tags' },
+                el('span', { class: 'badge badge--success' }, 'ثبت‌شده')
+              ),
+              el('div', { class: 'sanj-row__actions' },
+                el('button', {
+                  class: 'btn btn--ghost btn--sm',
+                  title: 'ویرایش نتیجهٔ ثبت‌شده — همهٔ مقادیر قبلی در فرم بارگذاری می‌شود',
+                  onclick: () => openIqResultModal(e, true, refreshResults)
+                }, icon('edit', 13), 'ویرایش نتیجهٔ تست تخصصی')
+              )
+            )
+          )
+        )
+      )
+    );
+
     const listCard = el('div', { class: 'card', style: { marginTop: 'var(--sp-4)' } },
       el('div', { class: 'card__head' },
         el('div', { class: 'card__title' }, 'سنجش‌های بازه'),
-        el('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } },
+        el('div', { style: { display: 'flex', gap: 'var(--sp-2)', alignItems: 'center' } },
           el('span', { class: 'badge badge--neutral' }, `${fa(entries.length)} ردیف`),
           el('button', {
             class: 'btn btn--soft btn--sm',
@@ -821,12 +888,12 @@ async function renderManagerTab(box, container, myGen) {
       ),
       el('div', { class: 'card__body card__body--flush', style: { overflowX: 'auto' } },
         entries.length === 0
-          ? el('div', { style: { padding: 'var(--sp-4)' } }, emptyState({ iconName: 'clip', title: 'برای این فیلترها موردی نیست' }))
+          ? el('div', { style: { padding: 'var(--sp-4)' } }, emptyState({ iconName: 'clip', title: 'برای این فیلترها موردی نیست', hint: 'بازهٔ زمانی یا فیلتر برچسب را عوض کنید — ثبت تازه هم از تب «ثبت روزانه» انجام می‌شود.' }))
           : buildEntriesTable(entries)
       )
     );
 
-    resultsZone.replaceChildren(kpis, chartCard, breakdownCard, followCard, listCard);
+    resultsZone.replaceChildren(...[kpis, chartCard, breakdownCard, followCard, handledCard, listCard].filter(Boolean));
   }
 
   box.replaceChildren(filterCard, resultsZone);
@@ -839,6 +906,179 @@ function sanjKpi(label, value, hint, tone) {
     el('div', { class: 'kpi__label' }, label),
     el('div', { class: 'kpi__hint' }, hint)
   );
+}
+
+/* ═══════════ مودال «ثبت اظهارنظر و پیشنهاد ارزیابی» (۱.۲۷.۳۳ — INTAKE-DESIGN §۳.۵) ═══════════
+ * مشخصات کارفرما: هفت گزینهٔ انحصاری با متن کامل (کارت رادیویی، بدون انتخاب پیش‌فرض) + سوییچ
+ * مستقل «بررسی اختلال رفتاری (طیف اتیسم)» + سه نمرهٔ اختیاری (لی‌تر/وکسلر ۲ کلامی/گودیناف —
+ * فقط عدد اعشاری، بدون هیچ محاسبه/تفسیر) + مشاهدات بالینی اختیاری (رشد خودکار از ۱۲۰px).
+ * دکمهٔ «ثبت نتایج» فقط با انتخاب یکی از گزینه‌های ۱ تا ۷ فعال می‌شود؛ ثبت دوباره = ویرایش
+ * و همهٔ مقادیر قبلی در فرم بارگذاری می‌شوند. چهار داده مستقل‌اند و منطق ثبت یکی به دیگری وابسته نیست. */
+
+const IQ_RESULT_OPTIONS = [
+  { option: 1, title: 'گروه عادی (همسن)', text: 'آزمودنی در گروه عادی (همسن) قرار دارد و به مدرسه عادی معرفی می‌گردد.' },
+  { option: 2, title: 'گروه دیرآموز (مرزی)', text: 'آزمودنی در گروه دیرآموز (مرزی) قرار دارد و ثبت‌نام نامبرده در سال تحصیلی جاری در مدرسه عادی بلامانع است.' },
+  { option: 3, title: 'نارسایی هوشی خفیف (آموزش‌پذیر)', text: 'آزمودنی دارای نارسایی هوشی خفیف (آموزش‌پذیر) بوده و به مدرسه استثنایی معرفی می‌گردد.' },
+  { option: 4, title: 'نارسایی هوشی متوسط (آزمایشی)', text: 'آزمودنی دارای نارسایی هوشی متوسط (آزمایشی) بوده و به مدت یک سال به مدرسه استثنایی معرفی می‌گردد؛ در صورت عدم ارتقاء در پایان سال تحصیلی جهت ارزیابی مجدد مراجعه نماید.' },
+  { option: 5, title: 'نارسایی هوشی با معرفی به کلاس گروه سنی ۴ تا ۵/۹ سال', text: 'آزمودنی نارسایی هوشی دارد و جهت ثبت‌نام در کلاس گروه سنی (۴-۵/۹) سال مدارس استثنایی معرفی می‌گردد؛ ضروری است در پایان سال تحصیلی ارزیابی مجدد گردد.' },
+  { option: 6, title: 'عدم آمادگی برای ورود به مدرسه استثنایی', text: 'آزمودنی در حال حاضر آمادگی لازم برای ورود به مدرسه استثنایی را ندارد؛ لذا به مراکز توانبخشی بهزیستی معرفی می‌گردد، ضروری است در پایان سال تحصیلی ارزیابی مجدد گردد.' },
+  { option: 7, title: 'نارسایی هوشی شدید تا عمیق', text: 'آزمودنی دارای نارسایی هوشی شدید تا عمیق است و جهت استفاده از خدمات آموزشی و توانبخشی به سازمان بهزیستی معرفی می‌گردد.' }
+];
+
+const IQ_MODAL_CSS = `
+.iq-opt{display:block;width:100%;text-align:start;background:var(--surface);border:1.5px solid var(--border);
+border-radius:var(--radius-md);padding:var(--sp-2) var(--sp-3);margin-bottom:var(--sp-2);cursor:pointer;
+font-family:inherit;font-size:var(--fs-sm);line-height:var(--lh-relaxed);color:var(--text)}
+.iq-opt:hover{border-color:var(--border-strong)}
+.iq-opt--sel{border-color:var(--primary);background:var(--primary-soft)}
+.iq-opt__head{display:flex;align-items:center;gap:var(--sp-2);font-weight:700;margin-bottom:2px}
+.iq-opt__no{display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:24px;
+border-radius:var(--radius-full);background:var(--primary-soft);color:var(--primary);
+font-size:var(--fs-2xs);font-weight:800;flex-shrink:0}
+.iq-opt--sel .iq-opt__no{background:var(--primary);color:var(--on-primary)}
+.iq-opt__text{color:var(--text);opacity:.85}
+.iq-sep{border:none;border-top:1px solid var(--border);margin:var(--sp-4) 0}
+.iq-tests{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--sp-2)}
+@media (max-width:640px){.iq-tests{grid-template-columns:1fr}}
+.iq-autism{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-3);
+border:1px solid var(--border);border-radius:var(--radius-md);padding:var(--sp-3)}
+.iq-foot-hint{color:var(--warn);font-size:var(--fs-xs);margin-top:var(--sp-2);display:none}
+.iq-foot-hint.show{display:block}
+`;
+
+let iqCssDone = false;
+function ensureIqCss() {
+  if (iqCssDone) return;
+  iqCssDone = true;
+  const style = document.createElement('style');
+  style.textContent = IQ_MODAL_CSS;
+  document.head.appendChild(style);
+}
+
+/* عدد اعشاری از ورودی — ارقام فارسی/عربی هم پذیرفته می‌شود؛ خالی/نامعتبر = null و هیچ تفسیری نمی‌شود */
+function iqScoreVal(inputEl) {
+  const raw = String(inputEl.value ?? '').replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).trim();
+  if (!raw) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
+function openIqResultModal(entry, isEdit, onSaved) {
+  ensureIqCss();
+  let selected = 0; // — پیش‌فرض هیچ گزینه‌ای انتخاب نشده (مشخصات کارفرما)
+  const body = el('div', {});
+  const cards = IQ_RESULT_OPTIONS.map((o) =>
+    el('button', {
+      type: 'button',
+      class: 'iq-opt',
+      dataset: { option: String(o.option) },
+      onclick: () => {
+        selected = o.option;
+        cards.forEach((c) => c.classList.toggle('iq-opt--sel', c.dataset.option === String(o.option)));
+        saveBtn.disabled = false;
+        footHint.classList.remove('show');
+      }
+    },
+      el('span', { class: 'iq-opt__head' },
+        el('span', { class: 'iq-opt__no' }, fa(o.option)),
+        el('span', {}, o.title)
+      ),
+      el('span', { class: 'iq-opt__text' }, o.text)
+    )
+  );
+
+  const autismInput = el('input', { type: 'checkbox' });
+  const autismSwitch = el('label', { class: 'switch' }, autismInput, el('span', { class: 'switch__track' }));
+  const autismRow = el('div', { class: 'iq-autism' },
+    el('div', {},
+      el('div', { style: { fontWeight: '700', fontSize: 'var(--fs-sm)' } }, 'بررسی اختلال رفتاری (طیف اتیسم)'),
+      el('div', { class: 'muted', style: { fontSize: 'var(--fs-xs)' } }, 'مستقل از نتیجهٔ ارزیابی — روشن: آزمودنی نیاز به بررسی دارد')
+    ),
+    autismSwitch
+  );
+
+  const scoreInput = (label, key) =>
+    el('div', {},
+      el('label', { class: 'f', style: { fontSize: 'var(--fs-xs)' } }, label),
+      el('input', { class: 'input', type: 'number', step: '0.1', inputmode: 'decimal', dir: 'ltr', dataset: { iqscore: key } })
+    );
+  const leiterIn = scoreInput('لی‌تر', 'leiter');
+  const wIn = scoreInput('وکسلر ۲ کلامی', 'wechsler');
+  const gIn = scoreInput('گودیناف', 'goodenough');
+  const testsGrid = el('div', { class: 'iq-tests' }, leiterIn, wIn, gIn);
+  const obs = el('textarea', {
+    class: 'input',
+    placeholder: 'مشاهدات بالینی، وضعیت عملکردی، رفتار، میزان دقت و توجه و سایر نکات مهم ارزیابی را وارد کنید...',
+    style: { minHeight: '120px', resize: 'vertical', lineHeight: 'var(--lh-relaxed)' },
+    oninput: (e) => { e.target.style.height = 'auto'; e.target.style.height = Math.max(120, e.target.scrollHeight) + 'px'; }
+  });
+
+  body.append(
+    el('p', { class: 'muted', style: { fontSize: 'var(--fs-sm)', margin: '0 0 var(--sp-3)' } }, 'نتیجه نهایی ارزیابی را انتخاب کنید. فقط یک گزینه قابل انتخاب است.'),
+    ...cards,
+    el('hr', { class: 'iq-sep' }),
+    autismRow,
+    el('hr', { class: 'iq-sep' }),
+    el('div', { style: { fontWeight: '700', fontSize: 'var(--fs-sm)', marginBottom: 'var(--sp-2)' } }, 'نتایج آزمون‌های تخصصی'),
+    el('p', { class: 'muted', style: { fontSize: 'var(--fs-xs)', margin: '0 0 var(--sp-2)' } }, 'در صورت انجام آزمون‌های تخصصی، نمرات مربوطه را وارد کنید — اختیاری و بدون محاسبهٔ خودکار.'),
+    testsGrid,
+    el('hr', { class: 'iq-sep' }),
+    el('div', { style: { fontWeight: '700', fontSize: 'var(--fs-sm)', marginBottom: 'var(--sp-2)' } }, 'مشاهدات بالینی'),
+    obs
+  );
+
+  const saveBtn = el('button', { class: 'btn btn--primary', disabled: true, type: 'button' }, 'ثبت نتایج');
+  const footHint = el('div', { class: 'iq-foot-hint' }, 'برای ثبت، یکی از گزینه‌های ۱ تا ۷ را انتخاب کنید');
+
+  const shell = openModal({
+    title: `ثبت اظهارنظر و پیشنهاد ارزیابی — ${entry.name}`,
+    wide: true,
+    body,
+    actions: [
+      (close) => el('button', { class: 'btn btn--ghost', type: 'button', onclick: close }, 'انصراف'),
+      () => saveBtn,
+      () => footHint
+    ]
+  });
+
+  /* نمرات و مقادیر قبلی — در ویرایش، تمام اطلاعات ذخیره‌شده در فرم بارگذاری می‌شود */
+  if (isEdit) {
+    api.get(`/api/screening/${entry.id}/iq-evaluation`).then((res) => {
+      const d = res.data;
+      if (!d) return;
+      selected = d.resultOption;
+      cards.forEach((c) => c.classList.toggle('iq-opt--sel', Number(c.dataset.option) === selected));
+      saveBtn.disabled = false;
+      autismInput.checked = Boolean(d.autismReferral);
+      const byKey = { leiter: d.leiterScore, wechsler: d.wechslerVerbalScore, goodenough: d.goodenoughScore };
+      body.querySelectorAll('input[iqscore]').forEach((inp) => {
+        const v = byKey[inp.dataset.iqscore];
+        if (v !== null && v !== undefined) inp.value = String(v);
+      });
+      obs.value = d.clinicalObservations ?? '';
+    }).catch(() => undefined); // — ویرایش بدون دادهٔ قبلی هم مجاز است؛ فرم خالی می‌ماند
+  }
+
+  saveBtn.addEventListener('click', async () => {
+    if (!selected) { footHint.classList.add('show'); return; }
+    saveBtn.disabled = true;
+    try {
+      await api.post(`/api/screening/${entry.id}/iq-evaluation`, {
+        result_option: selected,
+        autism_referral: autismInput.checked,
+        leiter_score: iqScoreVal(leiterIn.querySelector('input')),
+        wechsler_verbal_score: iqScoreVal(wIn.querySelector('input')),
+        goodenough_score: iqScoreVal(gIn.querySelector('input')),
+        clinical_observations: obs.value
+      });
+      toast('نتیجهٔ ارزیابی تخصصی ثبت شد', 'success');
+      shell.close();
+      if (onSaved) onSaved();
+    } catch (err) {
+      saveBtn.disabled = false;
+      toastError(err);
+    }
+  });
 }
 
 function buildChartCard(byDay) {
@@ -898,7 +1138,7 @@ function buildEntriesTable(entries) {
         render: (e) =>
           el(
             'div',
-            { style: { display: 'flex', flexWrap: 'wrap', gap: '4px' } },
+            { style: { display: 'flex', flexWrap: 'wrap', gap: 'var(--sp-1)' } },
             hasPreTag(e.tags)
               ? e.tags.map((t) => tagBadge(t))
               : [normalBadge(), ...e.tags.filter((t) => !KIND_BY_LABEL.has(t)).map((t) => tagBadge(t))]
@@ -908,17 +1148,24 @@ function buildEntriesTable(entries) {
         key: 'creator',
         label: 'ثبت‌کننده',
         render: (e) => el('span', { class: 'cell-sub' }, e.creatorName ?? '—')
+      },
+      {
+        key: 'note',
+        label: 'جزئیات', /* ۱.۲۷.۱۴ — خواست کارفرما: جزئیاتِ ثبت‌شده آخرِ جدول می‌نشیند */
+        render: (e) => el('span', { class: 'cell-sub', style: { whiteSpace: 'pre-wrap' }, title: e.note ?? '' }, e.note ?? '—')
       }
     ],
     rows: entries,
-    empty: { iconName: 'clip', title: 'برای این فیلترها موردی نیست' }
+    empty: { iconName: 'clip', title: 'برای این فیلترها موردی نیست', hint: 'بازهٔ زمانی یا فیلتر برچسب را عوض کنید — ثبت تازه هم از تب «ثبت روزانه» انجام می‌شود.' }
   });
 }
 
 /* —— ۱.۲۵.۵۰ — خروجی CSV گزارش مدیر: هر برچسب یک ستون مستقل (جدول محوری).
    ترتیب ستون‌های برچسب: شش برچسب ثابت به ترتیب canonical (فقط آن‌هایی که در بازه حضور دارند)،
    سپس برچسب‌های آزاد به ترتیب بیشترین تکرار. خانهٔ هر ستون برچسب: «✓» اگر ردیف آن برچسب را دارد، وگرنه خالی.
-   ستون‌های تاریخ تولد و نمرهٔ آمادگی تحصیلی هم (در صورت ثبت) کنار ردیف می‌نشینند. —— */
+   ستون‌های تاریخ تولد و نمرهٔ آمادگی تحصیلی هم (در صورت ثبت) کنار ردیف می‌نشینند.
+   ۱.۲۷.۱۴ — خواست کارفرما: خروجی راست‌چین جدولی (csv-rtl: BOM + RLM روی سلول متنی؛ سلول
+   عددی عدد می‌ماند) و ستون «جزئیات» — همان note فرم ثبت سنجش — به‌عنوان آخرین ستون. —— */
 function exportCsv(entries, range) {
   const present = new Set();
   const counts = new Map();
@@ -942,7 +1189,8 @@ function exportCsv(entries, range) {
     'ثبت‌کننده',
     'تاریخ تولد',
     'نمره آمادگی تحصیلی',
-    ...tagColumns
+    ...tagColumns,
+    'جزئیات' /* ۱.۲۷.۱۴ — آخرین ستون جدول */
   ];
   const rows = entries.map((e) => [
     e.name,
@@ -951,26 +1199,31 @@ function exportCsv(entries, range) {
     e.creatorName ?? '',
     e.birthDate ? formatJalaliNumeric(e.birthDate) : '',
     e.readinessScore === null || e.readinessScore === undefined ? '' : e.readinessScore,
-    ...tagColumns.map((t) => (e.tags.includes(t) ? '✓' : ''))
+    ...tagColumns.map((t) => (e.tags.includes(t) ? '✓' : '')),
+    e.note ?? ''
   ]);
-  const csv = '\uFEFF' + [header, ...rows]
-    .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','))
-    .join('\r\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `sanjesh-${range.from || 'all'}-${range.to || tehranTodayYmd()}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadCsv(`sanjesh-${range.from || 'all'}-${range.to || tehranTodayYmd()}`, csvTable([
+    header,
+    ...rows
+  ]));
   toast('فایل CSV دانلود شد', 'success');
 }
 
-export async function renderScreening(container) {
+export async function renderScreening(container, ctx = {}) {
+  /* ۱.۲۷.۱۶ — لینک عمیق از ویجت روز کاری: #/screening?day=YYYY-MM-DD → تب ثبت روی همان روز
+     (فلوی ویرایش سوابق کارفرما: از «روز قبل»ِ روز کاری مستقیم به ویرایش آن روز می‌رسد) */
+  const linkDay = ctx?.query?.day;
+  if (linkDay && /^\d{4}-\d{2}-\d{2}$/.test(linkDay)) {
+    state.dailyDay = linkDay;
+    state.tab = 'daily';
+  }
   const head = el('div', { class: 'page-head' },
-    el('div', { class: 'page-head__title' }, 'سنجش روزانه'),
-    el('span', { class: 'badge badge--neutral', title: 'غربال نوآموزان بدو ورود به دبستان' },
-      'بینایی • شنوایی • هوش • جسمی‌حرکتی — ', WEEKDAY_NAMES[iranianWeekdayOfYmd(tehranTodayYmd())]
+    el('div', {},
+      el('div', { class: 'page-head__title' }, 'سنجش روزانه'),
+      el('div', { class: 'page-head__desc' },
+        'غربال نوآموزان بدو ورود به دبستان — بینایی • شنوایی • هوش • جسمی‌حرکتی. امروز: ',
+        WEEKDAY_NAMES[iranianWeekdayOfYmd(tehranTodayYmd())]
+      )
     )
   );
 
@@ -1011,7 +1264,7 @@ export async function renderScreeningDayWidget(box, ymd) {
   try {
     entries = (await api.get(`/api/screening${qs({ from: ymd, to: ymd })}`)).data.entries;
   } catch {
-    body.replaceChildren(el('div', { class: 'cell-sub' }, 'بارگذاری فهرست سنجش ناموفق بود'));
+    body.replaceChildren(el('div', { class: 'cell-sub' }, 'بارگذاری فهرست سنجش ناموفق بود — اتصال را بررسی کنید و ویجت را دوباره باز کنید.'));
     return;
   }
 
@@ -1054,9 +1307,9 @@ export async function renderScreeningDayWidget(box, ymd) {
       canWrite
         ? el('button', {
             class: 'btn btn--soft btn--sm',
-            title: 'رفتن به ماژول سنجش روزانه',
-            onclick: () => { location.hash = '#/screening'; }
-          }, icon('plus', 14), 'ثبت / مدیریت')
+            title: 'ثبت / ویرایش سوابق همین روز در ماژول سنجش روزانه — روزهای عقب‌تر با «روز قبل»', /* ۱.۲۷.۱۶ */
+            onclick: () => { location.hash = `#/screening?day=${ymd}`; } /* ۱.۲۷.۱۶ — لینک عمیق: تب ثبت روی همین روز باز می‌شود */
+          }, icon('edit', 14), 'ثبت / ویرایش')
         : null
     )
   );

@@ -48,10 +48,6 @@ export function fsiqBandOf(fsiq: number): WechslerFsiqBand {
   return 'GIFTED';
 }
 
-export function fsiqBandFaOf(band: WechslerFsiqBand): string {
-  return FSIQ_BAND_RANGES.find((b) => b.band === band)?.fa ?? band;
-}
-
 export function clamp01(v: number): number {
   const n = Number(v);
   if (!Number.isFinite(n)) return 0;

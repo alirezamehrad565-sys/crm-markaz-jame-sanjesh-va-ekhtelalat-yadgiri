@@ -45,6 +45,11 @@ use crate::engine_watchdog::{next_action, now_ms, RestartRecord, WatchdogAction,
 /// پورت پیش‌فرض موتور محلی — همان devUrl پوسته (tauri.conf.json)
 const DEFAULT_PORT: u16 = 8787;
 
+/// بایند پیش‌فرض موتور — v1.27.20: شبکهٔ محلی (خواست کارفرما: موبایل‌های هم‌شبکه استفاده کنند).
+/// پرچم `--bind` به adapter پاس می‌شود؛ محدودسازی لوکال = تغییر همین ثابت به 127.0.0.1.
+/// adapter روی 0.0.0.0 در بوت، نشانی هر کارت LAN را لاگ می‌کند و PUBLIC_BASE_URL از کارت LAN اول می‌آید.
+const DEFAULT_BIND: &str = "0.0.0.0";
+
 /// پورت پیش‌فرض سرویس بازی‌ها — به موتور «درخواست» می‌شود؛ اگر اشغال بود موتور پورت دیگری
 /// می‌گیرد و نهایی را در engine-config.json می‌نویسد (Rust همان را می‌خواند).
 const DEFAULT_GAMES_PORT: u16 = 8788;
@@ -97,7 +102,8 @@ pub struct LocalEngine {
     /// پرچم خاموشی عمدی — Drop و خروج اپ آن را می‌گذارند؛ روی true نگهبان هیچ ری‌استارتی نمی‌کند
     stop: Arc<AtomicBool>,
     /// کودک جاری — بین thread نگهبان و Drop مشترک؛ قفل فقط برای try_wait/kill کوتاه نگه داشته می‌شود
-    child_slot: Arc<Mutex<Option<Child>>>,
+    /// (۱.۲۷.۱۳ — کودک درون EngineChild با هندل Job ویندوزی خودش — P0-3)
+    child_slot: Arc<Mutex<Option<EngineChild>>>,
 }
 
 /// پیدا کردن باینری node: متغیر محیطی ← کنار برنامه (سایدکار نصاب: ریشه و binaries/).
@@ -181,6 +187,44 @@ fn restart_scheduled_once(port: u16) -> bool {
     text.contains("\"scheduled\":true")
 }
 
+/// ۱.۲۷.۱۳ — نسخهٔ موتور از پایانهٔ قابلیت‌ها (P0-1/P0-2 ممیزی §۱-§۲): GET
+/// /api/engine/capabilities روی loopback (عمومی و بی‌احراز — هم‌الگوی restart-status).
+/// پاسخ JSON با serde_json پارس می‌شود و فقط فیلد version برمی‌گردد؛ شکست شبکه/پارس →
+/// None (بی‌صدا — این نسخه «انتخابی» است و هرگز بوت را نمی‌سد؛ سنت پروب نرم).
+pub fn engine_capabilities_version(port: u16) -> Option<String> {
+    let Ok(mut stream) = TcpStream::connect(("127.0.0.1", port)) else {
+        return None;
+    };
+    stream.set_read_timeout(Some(Duration::from_secs(2))).ok().unwrap_or(());
+    let req = format!("GET /api/engine/capabilities HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n");
+    if stream.write_all(req.as_bytes()).is_err() {
+        return None;
+    }
+    // خواندن کامل پاسخ تا بسته‌شدن اتصال (Connection: close) — هدر و بدنه جدا؛
+    // اگر بدنه chunked بود (سرویس استاتیک node ممکن است Content-Length نگذارد) سطرهای
+    // طول hex کنار گذاشته می‌شوند؛ بدنهٔ JSON با «{» شروع می‌شود و هرگز سطرِ hex نیست.
+    let mut raw = Vec::new();
+    let _ = stream.read_to_end(&mut raw);
+    let text = String::from_utf8_lossy(&raw);
+    let mut parts = text.splitn(2, "\r\n\r\n");
+    let head = parts.next().unwrap_or("");
+    let body_raw = parts.next().unwrap_or("");
+    let body = if head.to_ascii_lowercase().contains("transfer-encoding: chunked") {
+        let mut data = String::new();
+        for line in body_raw.split("\r\n") {
+            if u32::from_str_radix(line.trim(), 16).is_ok() {
+                continue; // سطر طول chunk — نه داده
+            }
+            data.push_str(line);
+        }
+        data
+    } else {
+        body_raw.to_string()
+    };
+    let v: serde_json::Value = serde_json::from_str(body.trim()).ok()?;
+    v.get("version").and_then(|x| x.as_str()).map(|s| s.to_string())
+}
+
 /// v1.27.۰۳ — انتظار engine-config.json (قرارداد engine.mjs): موتور بعد از قطعی پورت‌ها
 /// (resolve اشغال ۸۷۸۷/۸۷۸۸) و پیش از سبزشدن /health این فایل را می‌نویسد. Rust پورت‌های
 /// نهایی را از همین‌جا می‌خواند — ریسک «پورت اشغال» از ریشه بسته شد (دیگر پورت پیش‌فرضِ
@@ -236,6 +280,59 @@ fn rotate_engine_log(data_dir: &Path, max_bytes: u64) -> Result<(), String> {
     Ok(())
 }
 
+/// ۱.۲۷.۱۳ — کودک موتور + (روی ویندوز) هندل Job Object آن (P0-3 ممیزی §۳):
+/// هر کودک در یک Job با JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE گذاشته می‌شود؛ بستن هندل
+/// (در kill_child/Drop) هر عضوِ جامانده را هم می‌کشد. با panic="abort" در پروفایل ریلیز،
+/// پانیک پوسته Drop را رد می‌کند و پیش‌تر node یتیم می‌ماند (کلاس «موتور جاماندهٔ»
+/// installer-hooks.nsh که فقط در نصبِ بعدی جارو می‌شد) — با Job حتی مرگ سختِ پوسته
+/// (پانیک/TerminateProcess/برق) پروسهٔ کودک را می‌بندد. روی غیر-ویندوز فیلد Job نیست
+/// (هدف انتشار نصاب فقط ویندوز است؛ جاب لینوکسی CI هم این ماژول را کامپایل نمی‌کند).
+struct EngineChild {
+    child: Child,
+    /// هندل Job ویندوزی — بستن آن = کشتن همهٔ اعضا (KILL_ON_JOB_CLOSE)
+    #[cfg(windows)]
+    _job: Option<crate::job_object::JobGuard>,
+}
+
+impl EngineChild {
+    /// پولینگ خروج کودک — واگذاری به Child درونی (نگهبان جزئیات Job را نمی‌بیند)
+    fn try_wait(&mut self) -> std::io::Result<Option<std::process::ExitStatus>> {
+        self.child.try_wait()
+    }
+    /// spawn واقعی + انتساب به Job تازه (شکست انتساب غیرمهلک است — kill عادی می‌ماند)
+    #[cfg(windows)]
+    fn spawn(child: Child) -> Self {
+        let _job = job_guard_for(&child);
+        Self { child, _job }
+    }
+    #[cfg(not(windows))]
+    fn spawn(child: Child) -> Self {
+        Self { child }
+    }
+    /// بستن هندل Job (اگر بود) — پس از kill/wait عادی؛ هر عضو جامانده هم کشته می‌شود
+    #[cfg(windows)]
+    fn close_job(&mut self) {
+        self._job = None; // Drop نگه‌دارنده → CloseHandle → KILL_ON_JOB_CLOSE
+    }
+    #[cfg(not(windows))]
+    fn close_job(&mut self) {}
+}
+
+/// انتساب کودک به Job تازه — شکست غیرمهلک است و فقط ثبت می‌شود (kill عادی کافی می‌ماند)
+#[cfg(windows)]
+fn job_guard_for(child: &Child) -> Option<crate::job_object::JobGuard> {
+    use std::os::windows::io::AsRawHandle;
+    // Child روی ویندوز AsRawHandle دارد — hProcess خام برای AssignProcessToJobObject
+    let handle = Ok(child.as_raw_handle());
+    match crate::job_object::JobGuard::assign(handle) {
+        Ok(g) => Some(g),
+        Err(e) => {
+            eprintln!("[desktop] انتساب موتور به Job Object ناموفق بود ({e}) — پاک‌سازی یتیم فقط با kill عادی می‌ماند");
+            None
+        }
+    }
+}
+
 /// spawn یک نمونهٔ موتور adapter — node + engine-server.js با پرچم‌های مسیرها.
 /// v1.27.۰۴ — ریشه‌یابی گزارش واقعی EISDIR (lstat 'C:'): نود ورودی main را که بعد از
 /// path.resolve به «ریشهٔ درایو» برسد، در realpathSync می‌میرد (lstat ریشهٔ درایو بدون
@@ -246,7 +343,7 @@ fn rotate_engine_log(data_dir: &Path, max_bytes: u64) -> Result<(), String> {
 /// و مستقیماً با fs خوانده می‌شوند، نه با resolver نود.
 /// stderr/stdout به data/engine.log می‌رود؛ پیش از spawn هم خط فرمان کامل در لاگ می‌نشیند
 /// تا هر گزارش بعدی خودش را توضیح دهد.
-fn spawn_engine(plan: &EngineLaunch) -> Result<Child, String> {
+fn spawn_engine(plan: &EngineLaunch) -> Result<EngineChild, String> {
     // ریسک #۹ — چرخش لاگ پیش از باز شدن فایل لاگ: اگر engine.log از آستانه گذشته باشد به
     // engine.log.1 می‌رود تا رشد بی‌کران لاگ روی ماشین کارفرما مهار شود. شکست چرخش با پیام
     // فارسی صریح spawn را رد می‌کند — عین فلسفهٔ ۱.۲۷.۰۴: شکست نام‌وبنام بهتر از اجرای کور.
@@ -270,6 +367,8 @@ fn spawn_engine(plan: &EngineLaunch) -> Result<Child, String> {
         .arg(&plan.data_dir)
         .arg("--port")
         .arg(DEFAULT_PORT.to_string())
+        .arg("--bind")
+        .arg(DEFAULT_BIND)
         .arg("--games-port")
         .arg(DEFAULT_GAMES_PORT.to_string())
         .arg("--main-bundle")
@@ -319,6 +418,7 @@ fn spawn_engine(plan: &EngineLaunch) -> Result<Child, String> {
         );
     }
     cmd.spawn()
+        .map(EngineChild::spawn) // ۱.۲۷.۱۳ — انتساب به Job Object (P0-3) بلافاصله پس از spawn
         .map_err(|e| format!("spawn موتور محلی ناموفق: {e}"))
 }
 
@@ -389,6 +489,19 @@ fn verify_runtime_integrity(launch: &EngineLaunch) -> Result<(), String> {
         if got != want_ver {
             return Err(format!(
                 "نسخهٔ سایدکار node ({got}) با نسخهٔ ثبت‌شده در manifest نصاب ({want_ver}) هم‌خوان نیست — نصاب را دوباره اجرا کنید (Repair)."
+            ));
+        }
+    }
+    // ۱.۲۷.۱۳ — خودآزمایی بوت (P0-2 ممیزی §۲): نسخهٔ برنامهٔ ثبت‌شده در manifest نصاب در برابر
+    // نسخهٔ همین پوسته (Cargo) — کلاس «موتور کهنه با SPA تازه» (روایت installer-hooks.nsh و
+    // گزارش کارفرمای ۱.۲۷.۱۲) را در لحظهٔ بوت می‌بندد: پوستهٔ تازه + رانتایم جاماندهٔ کهنه =
+    // نصب ارتقای ناقص → پیام صریح Repair پیش از هر spawn. فیلد اختیاری است — manifestهای
+    // کهنه (بدون appVersion) بی‌خطا رد می‌شوند (عین الگوی nodeVersion بالا).
+    if let Some(want_app) = manifest.get("appVersion").and_then(|v| v.as_str()) {
+        let this_app = env!("CARGO_PKG_VERSION");
+        if want_app != this_app {
+            return Err(format!(
+                "نسخهٔ رانتایم موتور ({want_app}) با نسخهٔ برنامهٔ نمایش ({this_app}) هم‌خوان نیست — نصب ارتقا ناقص مانده است؛ نصاب را دوباره اجرا کنید (Repair). دیتای شما دست‌نخورده است."
             ));
         }
     }
@@ -469,7 +582,7 @@ fn supervise(
     mut port: u16,
     mut games_port: u16,
     stop: Arc<AtomicBool>,
-    child_slot: Arc<Mutex<Option<Child>>>,
+    child_slot: Arc<Mutex<Option<EngineChild>>>,
     on_event: EngineEventSink,
 ) {
     std::thread::spawn(move || {
@@ -606,7 +719,7 @@ fn handle_unexpected_exit(
     plan: &EngineLaunch,
     port: u16,
     stop: &AtomicBool,
-    child_slot: &Mutex<Option<Child>>,
+    child_slot: &Mutex<Option<EngineChild>>,
     on_event: &EngineEventSink,
     history: &mut Vec<RestartRecord>,
 ) {
@@ -696,12 +809,15 @@ fn wait_healthy_while(port: u16, stop: &AtomicBool, timeout: Duration) -> bool {
     false
 }
 
-/// kill + wait کودک جاری — هم در Drop هم برای پاک‌سازی تلاش ناکام نگهبان
-fn kill_child(child_slot: &Mutex<Option<Child>>) {
+/// kill + wait کودک جاری — هم در Drop هم برای پاک‌سازی تلاش ناکام نگهبان.
+/// ۱.۲۷.۱۳ (P0-3): پس از kill/wait عادی، هندل Job هم بسته می‌شود — KILL_ON_JOB_CLOSE
+/// هر عضو جاماندهٔ Job (فرزندِ فرزند و هر پروسهٔ نجات‌یافته از TerminateProcess) را می‌کشد.
+fn kill_child(child_slot: &Mutex<Option<EngineChild>>) {
     if let Ok(mut guard) = child_slot.lock() {
         if let Some(c) = guard.as_mut() {
-            let _ = c.kill();
-            let _ = c.wait();
+            let _ = c.child.kill();
+            let _ = c.child.wait();
+            c.close_job();
         }
     }
 }
@@ -897,6 +1013,76 @@ mod tests {
             err.contains("bundles.gamesSha256"),
             "خطا باید نام بخش/فیلد غایب را داشته باشد: {err}"
         );
+        cleanup_test_dir(&dir);
+    }
+
+    /// آزمون ⑧ (۱.۲۷.۱۳ — خودآزمایی بوت P0-2) — appVersion هم‌خوان با نسخهٔ پوسته → Ok
+    #[test]
+    fn test_verify_integrity_appversion_matching_is_ok() {
+        let dir = temp_test_dir();
+        let launch = launch_with_dummy_runtime(&dir);
+        let manifest = serde_json::json!({
+            "appVersion": env!("CARGO_PKG_VERSION"),
+            "engineServer": { "sha256": sha256_hex(&std::fs::read(&launch.server_js).unwrap()) },
+            "bundles": {
+                "mainSha256": sha256_hex(&std::fs::read(&launch.main_bundle).unwrap()),
+                "gamesSha256": sha256_hex(&std::fs::read(&launch.games_bundle).unwrap()),
+            }
+        })
+        .to_string();
+        std::fs::write(dir.join("engine-runtime-manifest.json"), manifest)
+            .expect("نوشتن manifest آزمون ناموفق بود");
+        let res = verify_runtime_integrity(&launch);
+        assert!(res.is_ok(), "appVersion هم‌خوان باید بی‌خطا رد شود: {res:?}");
+        cleanup_test_dir(&dir);
+    }
+
+    /// آزمون ⑨ (۱.۲۷.۱۳ — خودآزمایی بوت P0-2) — appVersion ناهم‌خوان (موتور جاماندهٔ کهنه)
+    /// → Err با هدایت به Repair و اطمینان «دیتا دست‌نخورده» — کلاس گزارش کارفرمای ۱.۲۷.۱۲
+    #[test]
+    fn test_verify_integrity_appversion_mismatch_mentions_repair() {
+        let dir = temp_test_dir();
+        let launch = launch_with_dummy_runtime(&dir);
+        // هش‌ها همه درست‌اند تا خطا دقیقاً از وارسی appVersion بگذرد
+        let manifest = serde_json::json!({
+            "appVersion": "0.0.1-old-engine",
+            "engineServer": { "sha256": sha256_hex(&std::fs::read(&launch.server_js).unwrap()) },
+            "bundles": {
+                "mainSha256": sha256_hex(&std::fs::read(&launch.main_bundle).unwrap()),
+                "gamesSha256": sha256_hex(&std::fs::read(&launch.games_bundle).unwrap()),
+            }
+        })
+        .to_string();
+        std::fs::write(dir.join("engine-runtime-manifest.json"), manifest)
+            .expect("نوشتن manifest آزمون ناموفق بود");
+        let err = verify_runtime_integrity(&launch).expect_err("appVersion ناهم‌خوان باید خطا بدهد");
+        assert!(err.contains("Repair"), "پیام خطا باید به Repair هدایت کند: {err}");
+        assert!(
+            err.contains("دست‌نخورده"),
+            "پیام باید آرامش «دیتای شما دست‌نخورده است» را داشته باشد: {err}"
+        );
+        cleanup_test_dir(&dir);
+    }
+
+    /// آزمون ⑩ (۱.۲۷.۱۳ — خودآزمایی بوت P0-2) — manifest کهنه بدون appVersion → Ok
+    /// (ناسازگاری رو به جلو: نصبِ فعلی کارفرما پس از آپدیت پوسته نباید قفل شود — الگوی nodeVersion)
+    #[test]
+    fn test_verify_integrity_without_appversion_is_ok() {
+        let dir = temp_test_dir();
+        let launch = launch_with_dummy_runtime(&dir);
+        // manifest کهنه = فقط سه هش؛ نه nodeVersion نه appVersion — هیچ وارسی نسخه‌ای اجرا نمی‌شود
+        let manifest = serde_json::json!({
+            "engineServer": { "sha256": sha256_hex(&std::fs::read(&launch.server_js).unwrap()) },
+            "bundles": {
+                "mainSha256": sha256_hex(&std::fs::read(&launch.main_bundle).unwrap()),
+                "gamesSha256": sha256_hex(&std::fs::read(&launch.games_bundle).unwrap()),
+            }
+        })
+        .to_string();
+        std::fs::write(dir.join("engine-runtime-manifest.json"), manifest)
+            .expect("نوشتن manifest آزمون ناموفق بود");
+        let res = verify_runtime_integrity(&launch);
+        assert!(res.is_ok(), "manifest کهنه (بدون appVersion) باید بی‌خطا رد شود: {res:?}");
         cleanup_test_dir(&dir);
     }
 }

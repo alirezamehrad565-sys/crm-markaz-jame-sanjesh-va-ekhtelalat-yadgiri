@@ -105,6 +105,10 @@
       <div class="bar"><i></i></div>
       <div class="hint">اجرای اول کمی بیشتر طول می‌کشد (ساخت پایگاه‌داده و کلید رمزنگاری مخصوص این نصب). اگر بیش از یک دقیقه طول کشید، این صفحه خودش وضعیت را عوض می‌کند.</div>
       <div class="elapsed" id="elapsed"></div>
+      <!-- ۱.۲۷.۱۳ — خودآزمایی بوت (P0-2 ممیزی §۲): یادداشت کهربایی ناهم‌نسخه‌ای موتور/پوسته —
+           فقط وقتی هر دو نسخه معلوم‌اند و متفاوت؛ غیرمسدودکننده (سدِ سخت همان PRECHECK Rust
+           روی manifest نصاب است) و ناوبری بوت دست‌نخورده می‌ماند -->
+      <div class="hint" id="boot-gap" hidden style="color:var(--amber);font-weight:700;"></div>
     </div>
 
     <div class="card failcard" id="failed">
@@ -188,6 +192,20 @@
     try { st = await inv('desktop_status'); } catch { setTimeout(poll, 700); return; }
     if (st.phase === 'ready') {
       el('phase').textContent = 'موتور آماده است — باز کردن برنامه…';
+      // ۱.۲۷.۱۳ — خودآزمایی بوت (P0-2): نسخهٔ موتور (engineVersion از desktop_status — خوراک
+      // پایانهٔ قابلیت‌های موتور P0-1) در برابر نسخهٔ پوسته؛ ناهم‌خوانی = یادداشت کهربایی کوتاه.
+      // مقایسهٔ رشته‌ای نرمال‌شده (بدون v/فاصله) — هشدار واکنشی کامل در پنل سلامت می‌ماند.
+      try {
+        const engV = typeof st.engineVersion === 'string' ? st.engineVersion.trim().replace(/^v/i, '') : '';
+        const shellV = typeof st.version === 'string' ? st.version.trim().replace(/^v/i, '') : '';
+        if (engV && shellV && engV !== shellV) {
+          const gap = el('boot-gap');
+          if (gap) {
+            gap.textContent = 'موتور محلی (' + engV + ') با برنامهٔ نمایش (' + shellV + ') هم‌خوان نیست — نصاب را دوباره اجرا کنید (Repair).';
+            gap.hidden = false;
+          }
+        }
+      } catch { /* نرم — بوت هرگز از این یادداشت نمی‌شکند */ }
       globalThis.__DESKTOP_SHELL__ = true;
       globalThis.__DESKTOP_FEATURES__ = { tutorial: true, setup: true };
       // فاز C — لینک کم‌رنگ «پیکربندی اتصال ابری» در حالت «موتور آماده» (نصب تازه هنوز ابر ندارد):

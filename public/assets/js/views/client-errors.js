@@ -30,18 +30,20 @@ function versionChip(v, active, onclick) {
 }
 
 function occurrenceRow(e) {
-  const meta = [ageLabel(e.occurred_at), formatJalaliDateTime(e.occurred_at)];
+  // گارد ②: مُهر غایب/خراب هرگز به‌شکل متن خام رندر نمی‌شود — فقط بج ساعت حذف می‌شود
+  const at = typeof e.occurred_at === 'string' && e.occurred_at ? e.occurred_at : null;
+  const meta = [at ? ageLabel(at) : '', at ? formatJalaliDateTime(at) : ''];
   if (e.app_version) meta.push(`نسخهٔ ${e.app_version}`);
   const loc = e.source ? `${String(e.source).split('/').pop()}${e.line != null ? `:${e.line}${e.col != null ? ':' + e.col : ''}` : ''}` : null;
   if (loc) meta.push(loc);
   return el('div', { class: 'bug-row' },
     el('div', { class: 'bug-row__head' },
-      el('span', { class: 'badge badge--neutral' }, fa(String(e.occurred_at).slice(11, 19))),
-      el('span', { class: 'hint-text' }, meta.filter(Boolean).join(' · '))
+      at ? el('span', { class: 'badge badge--neutral' }, fa(at.slice(11, 19))) : null,
+      el('span', { class: 'hint-text' }, meta.filter(Boolean).join(' · ') || 'زمان نامشخص')
     ),
     e.url ? el('div', { class: 'hint-text', style: { direction: 'ltr', textAlign: 'left' } }, String(e.url).slice(0, 120)) : null,
     e.stack
-      ? el('pre', { class: 'hint-text', style: { direction: 'ltr', textAlign: 'left', whiteSpace: 'pre-wrap', margin: '4px 0 0', maxHeight: '120px', overflow: 'auto' } }, String(e.stack).slice(0, 600))
+      ? el('pre', { class: 'hint-text', style: { direction: 'ltr', textAlign: 'left', whiteSpace: 'pre-wrap', margin: 'var(--sp-1) 0 0', maxHeight: '120px', overflow: 'auto' } }, String(e.stack).slice(0, 600))
       : null
   );
 }
@@ -61,7 +63,9 @@ export async function renderClientErrors(outlet) {
       root.replaceChildren(emptyState({
         iconName: 'alert',
         title: 'بارگذاری خطاهای مرورگر ناموفق بود',
-        hint: err?.message ?? 'خطای نامشخص'
+        hint: err?.message ?? 'ارتباط با سرور برقرار نشد — دوباره تلاش کنید.',
+        actionLabel: 'تلاش مجدد',
+        onAction: () => { void reload(); } // رندر درجای root متصل — همان الگوی errorState نماها
       }));
       return;
     }
@@ -102,20 +106,20 @@ export async function renderClientErrors(outlet) {
       el('div', { class: 'card', style: { marginBottom: 'var(--sp-3)' } },
         el('div', { class: 'card__head' },
           el('div', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', flexWrap: 'wrap' } },
-            el('h3', { style: { margin: 0, wordBreak: 'break-word', direction: 'ltr', textAlign: 'left', flex: '1 1 auto', fontSize: '0.92rem' } }, message),
+            el('h3', { style: { margin: 0, wordBreak: 'break-word', direction: 'ltr', textAlign: 'left', flex: '1 1 auto' } }, message),
             el('span', { class: 'badge badge--warning' }, `${fa(occurrences.length)} بار`)
           )
         ),
         el('div', { class: 'card__body' }, occurrences.slice(0, 5).map(occurrenceRow),
           occurrences.length > 5
-            ? el('p', { class: 'hint-text', style: { margin: '8px 0 0' } }, `… و ${fa(occurrences.length - 5)} رخداد دیگر همین پیام`)
+            ? el('p', { class: 'hint-text', style: { margin: 'var(--sp-2) 0 0' } }, `… و ${fa(occurrences.length - 5)} رخداد دیگر همین پیام`)
             : null)
       ));
 
     root.replaceChildren(
       el('div', { class: 'page-head' },
-        el('h2', {}, 'خطاهای مرورگر'),
-        el('p', { class: 'hint-text' }, 'خطاهای گزارش‌شده از مرورگر کاربران — لولهٔ بی‌نام POST /public/client-errors؛ نگه‌داری ۹۰ روزه در کرون شبانه.')
+        el('h2', { class: 'page-head__title' }, 'خطاهای مرورگر'),
+        el('p', { class: 'page-head__desc' }, 'خطاهایی که مرورگر کاربران بی‌نام گزارش می‌کند — تا ۹۰ روز نگه داشته می‌شود.')
       ),
       el('div', { class: 'card' },
         el('div', { class: 'card__body' },
@@ -132,7 +136,15 @@ export async function renderClientErrors(outlet) {
         )
       ),
       sortedGroups.length === 0
-        ? emptyState({ iconName: 'check', title: 'خطای گزارش‌شده‌ای در این بازه نیست', hint: 'سامانهٔ مرورگر کاربران پاکیزه است — یا بازه را بزرگ‌تر کنید.' })
+        ? emptyState({
+          iconName: 'check',
+          title: 'خطای گزارش‌شده‌ای در این بازه نیست',
+          hint: 'اگر بازهٔ کوتاهی را می‌بینید، بازهٔ بزرگ‌تر ممکن است رخدادهای قدیمی‌تر را نشان دهد.',
+          ...(state.days < 90 ? {
+            actionLabel: 'نمایش بازهٔ ۹۰ روزه',
+            onAction: () => { state.days = 90; state.version = ''; reload(); }
+          } : {})
+        })
         : el('div', {}, groupCards)
     );
   }

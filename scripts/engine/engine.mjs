@@ -10,11 +10,12 @@
 // چرخش لاگ شبانهٔ هر ۲۴ ساعت. ناظر زمان اجرا (داخل همین فرایند): ری‌استارت درخواستی از پنل
 // (مهر «خروج عمدی» — واچ‌داگ حساب نمی‌کند)، پایش ورکر بازی‌ها با بک‌آف/کاپ هم‌فلسفهٔ نگهبان
 // Rust (ENG-4)، چرخش لاگ ۵ مگابایتی و ریختن رویدادهای انسانی فارسی در events-fa.log (۴-۳).
-// هر دو بایند فقط روی 127.0.0.1 هستند (design.md §۸).
+// v1.27.۱۸ — بایند پیش‌فرض 0.0.0.0 (خواست کارفرما: دسترسی از شبکهٔ مودم/LAN)؛
+// محدودسازی به لوکال فقط با --bind 127.0.0.1 (design.md §۸ به‌روز شد). URLهای داخلی (سلامت بازی‌ها) لوکال می‌مانند.
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, openSync, promises as fsPromises, readFileSync, readdirSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { networkInterfaces, tmpdir } from 'node:os';
 import { createServer } from 'node:net';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -107,12 +108,13 @@ function resolveCentralPaths(opts) {
 export function parseArgs(argv) {
   // v1.27.۰۳ — --engine adapter: اجرای ورکرها در همین فرایند Node (بدون workerd — رفع کرش
   // init ویندوزی workerd#4668/#7581). پیش‌فرض workerd (حالت توسعه، رفتار قبلی دست‌نخورده).
-  const out = { port: 8787, gamesPort: 8788, dataDir: path.join(REPO_ROOT, 'engine-data'), seed: false, engine: 'workerd' };
+  const out = { port: 8787, gamesPort: 8788, dataDir: path.join(REPO_ROOT, 'engine-data'), seed: false, engine: 'workerd', bind: '0.0.0.0' };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--port') out.port = Number(argv[++i]);
     else if (a === '--games-port') out.gamesPort = Number(argv[++i]);
     else if (a === '--data-dir') out.dataDir = path.resolve(argv[++i]);
+    else if (a === '--bind') out.bind = String(argv[++i] ?? '').trim();
     else if (a === '--seed') out.seed = true;
     else if (a === '--engine') out.engine = argv[++i];
     else if (a === '--main-bundle') out.mainBundle = path.resolve(argv[++i]);
@@ -120,6 +122,8 @@ export function parseArgs(argv) {
     else if (a === '--public-dir') out.publicDir = path.resolve(argv[++i]);
     else if (a === '--help') out.help = true;
   }
+  // سد ورودی بایند — فقط شکل نشانی/نام‌میز مجاز؛ بدنما → پیش‌فرض
+  if (!/^[\w.:-]+$/.test(out.bind)) out.bind = '0.0.0.0';
   return out;
 }
 
@@ -128,6 +132,18 @@ export function parseArgs(argv) {
 // ارقام فارسی برای پیام‌های کاربر-رو
 const FA_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
 const faNum = (n) => String(n).replace(/\d/g, (d) => FA_DIGITS[Number(d)]);
+
+/** v1.27.۱۸ — نشانی‌های LAN دستگاه برای پیام بوت و مبنی لینک‌های عمومی در بایند شبکه‌ای */
+function lanUrls(port) {
+  try {
+    return Object.values(networkInterfaces())
+      .flat()
+      .filter((n) => n && !n.internal && n.family === 'IPv4' && n.address)
+      .map((n) => `http://${n.address}:${port}`);
+  } catch {
+    return [];
+  }
+}
 
 /** حداقل فضای آزاد مجاز روی دیسک داده — زیر این مرز بوت نمی‌کنیم */
 const MIN_FREE_BYTES = 200 * 1024 * 1024;
@@ -143,10 +159,10 @@ const SYNC_MIRROR_KEY = 'nodesync:status-mirror-v1';
 const RUNTIME_POLL_MS = 5_000;
 
 /** یک پورت آزاد از هستهٔ سیستم بگیر (هم‌الگوی engine-smoke.mjs::freePort) */
-function freePort() {
+function freePort(host = '127.0.0.1') {
   return new Promise((resolve, reject) => {
     const srv = createServer();
-    srv.listen(0, '127.0.0.1', () => {
+    srv.listen(0, host, () => {
       const { port } = srv.address();
       srv.close(() => resolve(port));
     });
@@ -154,12 +170,12 @@ function freePort() {
   });
 }
 
-/** آیا این پورت روی 127.0.0.1 آزاد است؟ (پروب واقعی bind) */
-function isPortFree(port) {
+/** آیا این پورت روی میزبانِ بایند آزاد است؟ (پروب واقعی bind — عین آدرس گوش‌دادن) */
+function isPortFree(port, host = '127.0.0.1') {
   return new Promise((resolve) => {
     const srv = createServer();
     srv.once('error', () => resolve(false));
-    srv.listen(port, '127.0.0.1', () => srv.close(() => resolve(true)));
+    srv.listen(port, host, () => srv.close(() => resolve(true)));
   });
 }
 
@@ -167,9 +183,9 @@ function isPortFree(port) {
  * پورت نهایی سرویس: اگر پورت خواسته‌شده آزاد بود همان را بده؛ وگرنه یک پورت آزاد بگیر و
  * فقط در لاگ خبر بده (پیش‌فرض‌های CLI عوض نمی‌شوند — «دوباره‌تلاش» اپ موتور است نه پورت).
  */
-async function resolvePort(requested, service = '') {
-  if (await isPortFree(requested)) return requested;
-  const alt = await freePort();
+async function resolvePort(requested, service = '', host = '127.0.0.1') {
+  if (await isPortFree(requested, host)) return requested;
+  const alt = await freePort(host);
   const serviceName = service ? `سرویس ${service}` : 'سرویس';
   console.log(`[engine] پورت ${faNum(requested)} اشغال بود — ${serviceName} روی پورت ${faNum(alt)} راه افتاد`);
   return alt;
@@ -347,8 +363,13 @@ export async function runEngine(opts) {
   // اشغال بود، خودکار پورت آزاد می‌گیریم و فقط در لاگ خبر می‌دهیم (پیش‌فرض‌های CLI ثابت می‌مانند).
   // حالت adapter: به‌جای capnp، قرارداد JSON با پوستهٔ Rust نوشته می‌شود (engine-config.json
   // با پورت‌های نهایی — Rust منتظر همین فایل است و از آن پورت واقعی را می‌خواند).
-  const port = await resolvePort(opts.port);
-  const gamesPort = await resolvePort(opts.gamesPort, 'بازی‌ها');
+  const port = await resolvePort(opts.port, '', opts.bind);
+  const gamesPort = await resolvePort(opts.gamesPort, 'بازی‌ها', opts.bind);
+  // v1.27.۱۸ — لینک‌های عمومی (/m/:token) در بایند شبکه‌ای باید از LAN باز شوند
+  // وصلهٔ ۱.۲۷.۴۲ — base باید قبل از استفاده تعریف شود (با --bind 127.0.0.1 خطای TDZ می‌داد)
+  const base = `http://127.0.0.1:${port}`;
+  const lanList = opts.bind === '127.0.0.1' ? [] : lanUrls(port);
+  const publicBase = lanList[0] ?? base;
   const authSecret = resolveAuthSecret(dbPath);
   const isAdapter = opts.engine === 'adapter';
   if (isAdapter) {
@@ -366,13 +387,12 @@ export async function runEngine(opts) {
       written_at: new Date().toISOString(),
     }, null, 2) + '\n');
   } else {
-    const configText = await buildEngineConfig({ port, gamesPort, dataDir: opts.dataDir, authSecret });
+    const configText = await buildEngineConfig({ port, gamesPort, dataDir: opts.dataDir, authSecret, bind: opts.bind, publicBase });
     writeFileSync(path.join(opts.dataDir, 'workerd.capnp'), configText);
   }
 
   // ۴) موتور — حالت workerd: سایدکار کرانفایل؛ حالت adapter: سرورهای HTTP در همین فرایند
   // (بدون هیچ باینری بومی خارجی — ریشهٔ کرش ویندوزی حذف شد)
-  const base = `http://127.0.0.1:${port}`;
   const gamesBase = `http://127.0.0.1:${gamesPort}`;
 
   // کودک جاری بین بوت/ری‌استارت‌های ناظر جابه‌جا می‌شود؛ هندل‌های خروج هر بار دوباره بسته می‌شوند
@@ -403,6 +423,7 @@ export async function runEngine(opts) {
     handle = await startAdapterEngine({
       port,
       gamesPort,
+      bind: opts.bind,
       dbPath,
       mainBundle: opts.mainBundle ?? path.join(REPO_ROOT, 'worker/bundle.js'),
       gamesBundle: opts.gamesBundle ?? path.join(REPO_ROOT, 'worker/games-bundle.js'),
@@ -416,7 +437,7 @@ export async function runEngine(opts) {
       // publicDir حل‌نشده → null → binding بدون readWebAssets → ساخت بدون وب (سازگار عقب).
       bindings: {
         authSecret,
-        publicBaseUrl: base,
+        publicBaseUrl: publicBase,
         gamesHealthUrl: `${gamesBase}/health`,
         engineCloudSecret: process.env.ENGINE_CLOUD_SECRET ?? '',
         dataDir: opts.dataDir,
@@ -437,12 +458,14 @@ export async function runEngine(opts) {
   if (isAdapter) {
     await startAdapter();
     console.log(`[engine] موتور درون‌پروسه‌ای بالا آمد — اپ: ${base} | بازی‌ها: ${gamesBase} | داده: ${opts.dataDir}`);
+    if (lanList.length) console.log(`[engine] دسترسی از شبکهٔ مودم/LAN: ${lanList.join(' | ')} — همان پورت اپ؛ ورود با حساب لازم است`);
   } else {
     bin = findWorkerdBinary();
     logFd = openSync(workerdLogPath, 'a');
     child = spawnChild();
     attachChildHandlers();
     console.log(`[engine] workerd بالا آمد — اپ: ${base} | بازی‌ها: ${gamesBase} | داده: ${opts.dataDir}`);
+    if (lanList.length) console.log(`[engine] دسترسی از شبکهٔ مودم/LAN: ${lanList.join(' | ')} — همان پورت اپ؛ ورود با حساب لازم است`);
   }
 
   // ۵) خاموشی تمیز — هندل‌های SIGTERM/SIGINT و خروج ناگهانی همین‌جا و «قبل از انتظار سلامت»
@@ -717,7 +740,7 @@ export async function runEngine(opts) {
 if (typeof IS_ENGINE_BUNDLE === 'undefined' && import.meta.url === `file://${process.argv[1]}`) {
   const opts = parseArgs(process.argv.slice(2));
   if (opts.help) {
-    console.log('استفاده: node scripts/engine/engine.mjs --port 8787 --data-dir <مسیر> [--games-port 8788] [--seed]');
+    console.log('استفاده: node scripts/engine/engine.mjs --port 8787 --data-dir <مسیر> [--games-port 8788] [--bind 0.0.0.0] [--seed]');
   } else {
     await runEngine(opts);
   }

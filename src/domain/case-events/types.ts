@@ -19,12 +19,6 @@ export type CaseEventCategory = (typeof CASE_EVENT_CATEGORIES)[number];
 export const CASE_EVENT_AUDIENCES = ['family', 'teacher', 'both'] as const;
 export type CaseEventAudience = (typeof CASE_EVENT_AUDIENCES)[number];
 
-export const CASE_EVENT_AUDIENCE_LABELS: Record<CaseEventAudience, string> = {
-  family: 'خانواده',
-  teacher: 'معلم کلاس',
-  both: 'خانواده و معلم'
-};
-
 export const CASE_EVENT_FIELD_TYPES = ['text', 'longtext', 'number', 'select', 'scale', 'single', 'heading'] as const;
 export type CaseEventFieldType = (typeof CASE_EVENT_FIELD_TYPES)[number];
 
@@ -45,13 +39,6 @@ export type CaseEventBandColor = (typeof CASE_EVENT_BAND_COLORS)[number];
 
 export const CASE_EVENT_STATUSES = ['draft', 'completed', 'pending_family', 'cancelled'] as const;
 export type CaseEventStatus = (typeof CASE_EVENT_STATUSES)[number];
-
-export const CASE_EVENT_STATUS_LABELS: Record<CaseEventStatus, string> = {
-  draft: 'پیش‌نویس',
-  completed: 'ثبت‌شده',
-  pending_family: 'در انتظار خانواده',
-  cancelled: 'لغوشده'
-};
 
 export interface CaseEventField {
   key: string;
@@ -117,6 +104,8 @@ export interface CaseEventTypeRecord {
   subscales: CaseEventSubscale[] | null;
   tags: string[];
   audience: CaseEventAudience;
+  toolSource: string | null; // ۱.۲۷.۲۸ — M5: شناسنامهٔ ابزار — منبع/مرجع قالب
+  toolNorm: string | null; // ۱.۲۷.۲۸ — M5: شناسنامهٔ ابزار — هنجار سنی/روایی
   active: boolean;
   isSystem: boolean;
   createdAt: string;
@@ -155,7 +144,7 @@ export interface CaseEventRecord {
   fillExpiresAt: string | null;
   sentAt: string | null;
   sentCount: number;
-  filledByChatId: string | null; // — «web:…» یا chatId یعنی فرم توسط خانواده/معلم پر شده ()
+  filledByChatId: string | null; // — «web:…» یا chatId یعنی فرم توسط خانواده/معلم پر شده
   createdAt: string;
   files?: CaseEventFileMeta[];
 }
@@ -171,6 +160,8 @@ export interface CaseEventTypeInput {
   subscales?: CaseEventSubscale[] | null;
   tags?: string[] | null;
   audience?: CaseEventAudience | null;
+  toolSource?: string | null; // ۱.۲۷.۲۸ — M5: شناسنامهٔ ابزار
+  toolNorm?: string | null;
 }
 
 export interface CaseEventInput {

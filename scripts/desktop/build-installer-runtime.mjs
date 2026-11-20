@@ -80,7 +80,13 @@ async function downloadNodeSidecar(target) {
   writeFileSync(archive, Buffer.from(await res.arrayBuffer()));
 
   const extractDir = mkdtempSync(path.join(os.tmpdir(), 'node-extract-'));
-  execFileSync('tar', ['-xf', archive, '-C', extractDir]);
+  /* ۱.۲۷.۲۵ — tar گنو روی لینوکس zip را باز نمی‌کند (tar.exe ویندوز همان bsdtar است و zip را باز می‌کند)؛
+     در میزبان posix برای بستهٔ zip از unzip استفاده می‌شود تا mount رانتایم در سندباکس/CI هم سبز شود */
+  if (isWin && process.platform !== 'win32') {
+    execFileSync('unzip', ['-q', '-o', archive, '-d', extractDir]);
+  } else {
+    execFileSync('tar', ['-xf', archive, '-C', extractDir]);
+  }
   const binPath = isWin
     ? path.join(extractDir, `node-v${version}-win-x64`, 'node.exe')
     : path.join(extractDir, `node-v${version}-linux-x64`, 'bin', 'node');
@@ -131,6 +137,11 @@ async function main() {
   const centralDir = path.join(P.resourcesEngineDir, 'central'); // v1.26.0 — ورکر مرکزی + اسکیما
   const bundlesDir = path.join(P.resourcesEngineDir, 'bundles'); // v1.27.۰۳ — باندل‌های ورکر (فایل)
   const engineServer = path.join(P.resourcesEngineDir, 'engine-server.js');
+  // ۱.۲۷.۱۳ — خودآزمایی بوت (P0-2 ممیزی §۲): نسخهٔ برنامه در manifest نصاب ثبت می‌شود تا
+  // PRECHECK پوسته (verify_runtime_integrity در engine.rs) ناهم‌نسخه‌ای موتور/پوسته را در
+  // لحظهٔ بوت ببندد (کلاس «موتور کهنه با SPA تازه» — گزارش کارفرمای ۱.۲۷.۱۲). منبع یکتا: src/core/version.ts
+  const appVersion = readFileSync(path.join(ROOT, 'src', 'core', 'version.ts'), 'utf8').match(/APP_VERSION = '([^']+)'/)?.[1];
+  if (!appVersion) throw new Error('APP_VERSION از src/core/version.ts خوانده نشد — بامپ شش‌نقطه‌ای را بررسی کنید');
 
   if (checkOnly) {
     if (!existsSync(P.manifest)) throw new Error(`manifest نیست — ابتدا مونتاژ را اجرا کنید: ${P.manifest}`);
@@ -138,6 +149,11 @@ async function main() {
     // v1.27.۰۵ — pin نسخهٔ سایدکار هم باید در manifest ثبت و هم‌گام باشد (PRECHECK پوسته)
     if (m.nodeVersion !== PINNED_NODE_VERSION) {
       throw new Error(`nodeVersion manifest (${m.nodeVersion}) با pin (${PINNED_NODE_VERSION}) هم‌گام نیست`);
+    }
+    // ۱.۲۷.۱۳ — خودآزمایی بوت: appVersion manifest باید با منبع یکتا یکی باشد —
+    // اگر نسخه پس از مونتاژ بامپ شده باشد، مونتاژ کهنه است و باید دوباره اجرا شود
+    if (m.appVersion !== appVersion) {
+      throw new Error(`appVersion manifest (${m.appVersion}) با src/core/version.ts (${appVersion}) هم‌گام نیست — مونتاژ کهنه است؛ دوباره اجرا کنید`);
     }
     const files = [
       [m.node.sidecar, m.node.sha256],
@@ -231,6 +247,9 @@ async function main() {
     // v1.27.۰۵ — نسخهٔ pinned سایدکار در سطح بالا؛ PRECHECK پوسته (engine.rs) خروجی
     // «node --version» سایدکار نصب‌شده را با همین فیلد تطبیق می‌دهد (هم‌مقدار node.version)
     nodeVersion: PINNED_NODE_VERSION,
+    // ۱.۲۷.۱۳ — خودآزمایی بوت: PRECHECK پوسته این فیلد را با CARGO_PKG_VERSION می‌سنجد؛
+    // manifestهای کهنه بدون این فیلد بی‌خطا رد می‌شوند (الگوی nodeVersion — ناسازگاری رو به جلو)
+    appVersion,
     node: {
       version: PINNED_NODE_VERSION,
       sidecar: path.relative(ROOT, sidecar),

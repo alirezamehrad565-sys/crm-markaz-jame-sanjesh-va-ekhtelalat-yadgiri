@@ -104,7 +104,8 @@ async function openPreview(pkg) {
   }
   const win = window.open(data.url, '_blank', 'noopener');
   if (!win) {
-    toast('مرورگر تب جدید را بست — نشانی پیش‌نمایش در اعلان بعدی است؛ آن را باز کنید.');
+    toast('مرورگر باز شدن تب پیش‌نمایش را بست — اجازهٔ پاپ‌آپ را به سامانه بدهید و دوباره «پیش‌نمایش» را بزنید.', 'warning');
+    return;
   }
   toast('پیش‌نمایش باز شد — هیچ داده‌ای ثبت نمی‌شود و ۳۰ دقیقه اعتبار دارد.', 'success');
 }
@@ -142,8 +143,11 @@ async function retirePkg(pkg, onDone) {
 }
 
 function doseText(dose) {
-  if (!dose || !dose.days_per_week) return null;
-  return `${fa(dose.days_per_week)} روز/هفته · ${fa(dose.minutes)} دقیقه · سقف ${fa(dose.max_missions_per_day)}/روز`;
+  if (!dose?.days_per_week) return null;
+  const parts = [`${fa(dose.days_per_week)} روز/هفته`];
+  if (dose.minutes != null) parts.push(`${fa(dose.minutes)} دقیقه`);
+  if (dose.max_missions_per_day != null) parts.push(`سقف ${fa(dose.max_missions_per_day)}/روز`);
+  return parts.join(' · ');
 }
 
 // ─── مودال جزئیات و تنظیمات بازی ───
@@ -190,7 +194,7 @@ function openPkgDetails(pkg, goals, goalNames, onDone) {
         : el('span', { class: 'gmk-fact' }, 'مأموریتی تعریف نشده')
     ),
     pkg.reviewedAt
-      ? el('p', { class: 'cell-sub', style: { marginTop: '10px' } }, `آخرین بازبینی: ${formatJalaliDateTime(pkg.reviewedAt)}`)
+      ? el('p', { class: 'cell-sub', style: { marginTop: 'var(--sp-3)' } }, `آخرین بازبینی: ${formatJalaliDateTime(pkg.reviewedAt)}`)
       : null
   );
 
@@ -412,8 +416,8 @@ async function renderPackagesTab(container) {
     if (!packages.length) {
       listWrap.replaceChildren(emptyState({
         iconName: 'gamepad',
-        title: 'هنوز بسته‌ای ساخته نشده است',
-        hint: 'بسته‌های بازی از مسیر رجیستری (API بسته‌ها) ثبت و منتشر می‌شوند.'
+        title: 'هنوز بسته‌ای در بانک بازی‌ها ثبت نشده است',
+        hint: 'بسته‌های بازی با نصب یا به‌روزرسانی سامانه در این بانک ثبت می‌شوند — پس از انتشارِ نسخه، برای ارسال به دانش‌آموز آماده می‌شوند.'
       }));
       return;
     }
@@ -461,9 +465,15 @@ export async function renderGames(container) {
   ], initialTab);
 
   const wrap = el('div', {},
-    el('h3', {}, icon('gamepad', 18), ' بازی‌ها — میز درمانگر'),
+    el('div', { class: 'page-head' },
+      el('div', {},
+        el('div', { class: 'page-head__title' }, 'بازی‌ها — میز درمانگر'),
+        el('div', { class: 'page-head__desc' },
+          'بانک بازی‌ها، ارسال به دانش‌آموز و گزارش اجرا — پیش‌نمایش هر بازی بدون ثبت داده باز می‌شود.')
+      )
+    ),
     tabBar.root,
-    el('div', { style: { marginTop: 'var(--sp-4, 14px)' } }, body)
+    el('div', { style: { marginTop: 'var(--sp-4)' } }, body)
   );
   container.replaceChildren(wrap);
 

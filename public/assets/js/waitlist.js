@@ -4,6 +4,7 @@ import { el, icon, formModal, confirmModal, openModal, toast, toastError, emptyS
 import { illoWaitlist } from './illustrations.js'; /* ۱.۲۵.۰۵ — نگارهٔ حالت خالی */
 import { fa, addDaysYmd, relativeDayLabel, tehranTodayYmd, tehranYmdMinuteToIso, tehranYmdOfIso, timeToMinute, gridTimes, toUtcIso } from './format.js';
 import { session } from './state.js'; // — دسترسی نقش‌محور (درمانگر: فقط افزودن)
+import { renderReferralInbox } from './views/referral-inbox.js'; // ۱.۲۷.۳۸ — تب «صندوق ورودی» داخل همین نما (خواست کارفرما: ادغام در لیست انتظار)
 
 export const WL_STATUS_LABELS = {
   waiting: 'در انتظار',
@@ -516,7 +517,10 @@ export async function renderWaitlist(container, initialQuery = '', prefillName =
       label: 'نام متقاضی',
       render: (r) => el('div', {},
         el('strong', {}, `${r.firstName} ${r.lastName}`),
-        r.serviceType ? el('div', { class: 'muted', style: { fontSize: '12px' } }, r.serviceType) : null,
+        el('span', { style: { display: 'flex', gap: 'var(--sp-1)', flexWrap: 'wrap', marginTop: '2px' } },
+          r.serviceType ? el('div', { class: 'muted', style: { fontSize: '12px' } }, r.serviceType) : null,
+          r.serviceType === 'ارجاع اتیسم' ? el('span', { class: 'badge badge--info' }, 'اتیسم') : null
+        ),
         r.studentId
           ? el('button', {
               class: 'linklike', style: { fontSize: '12px', cursor: 'pointer', background: 'none', border: 'none', color: 'var(--primary)', padding: '0' },
@@ -659,6 +663,7 @@ export async function renderWaitlist(container, initialQuery = '', prefillName =
     el('strong', {}, 'نوبت داده شد'),
     ' · پذیرش = خروج خودکار از لیست'
   );
+
   const toolbar = el('div', { class: 'week-bar' },
     statusSel, prioritySel, searchInput,
     el('div', { class: 'spacer' }),
@@ -671,6 +676,8 @@ export async function renderWaitlist(container, initialQuery = '', prefillName =
         icon('info', 17),
         el('span', {}, isSupervisor ? 'دسترسی شما: فقط مشاهدهٔ لیست انتظار.' : 'دسترسی شما: فقط ثبت متقاضی جدید.')); /* ۱.۲۵.۰۱ — ناظر */
 
+  /* v1.27.38 — تب «صندوق ورودی» دوباره داخل لیست انتظار است (خواست کارفرما: ادغام؛ برخلاف v1.27.35)
+     با طراحی تازهٔ views/referral-inbox.js — مونت تنبل، شمار «جدید» روی خود تب، فقط برای مدیر/منشی */
   container.replaceChildren(...[roleNote, toolbar, legend, table].filter(Boolean));
   tbody.replaceChildren(stateRow(loadingState('بارگذاری لیست انتظار…')));
   await refreshRows();
@@ -724,11 +731,36 @@ export async function renderWaitlist(container, initialQuery = '', prefillName =
 
 export async function renderWaitlistModule(container, ctx = {}) {
   const body = el('div', {});
+  const inboxZone = el('div', { style: { display: 'none' } });
+  let inboxMounted = false;
+
+  /* ۱.۲۷.۳۸ — تب‌های لیست انتظار / صندوق ورودی؛ فقط مدیر و منشی (API صندوق دفترمحور است) */
+  const tabList = el('button', { class: 'btn btn--primary btn--sm', onclick: () => switchTab('list') }, icon('clock', 15), 'لیست انتظار');
+  const tabInbox = el('button', { class: 'btn btn--ghost btn--sm', onclick: () => switchTab('inbox') }, icon('clipboard', 15), 'صندوق ورودی');
+  function switchTab(tab) {
+    const inbox = tab === 'inbox';
+    inboxZone.style.display = inbox ? '' : 'none';
+    body.style.display = inbox ? 'none' : '';
+    tabInbox.className = `btn btn--sm ${inbox ? 'btn--primary' : 'btn--ghost'}`;
+    tabList.className = `btn btn--sm ${inbox ? 'btn--ghost' : 'btn--primary'}`;
+    if (inbox && !inboxMounted) {
+      inboxMounted = true;
+      renderReferralInbox(inboxZone, { embedded: true, onCount: (n) => {
+        tabInbox.replaceChildren(icon('clipboard', 15), `صندوق ورودی${n ? ` (${fa(n)})` : ''}`);
+      } }).catch(toastError);
+    }
+  }
+  const tabbar = (session.user?.role === 'manager' || session.user?.role === 'secretary')
+    ? el('div', { class: 'week-bar', style: { marginBottom: 'var(--sp-3)' } }, tabList, tabInbox)
+    : null;
+
   container.replaceChildren(
     el('div', { class: 'page-head' },
       el('div', { class: 'page-head__title' }, 'لیست انتظار')
     ),
-    body
+    ...(tabbar ? [tabbar] : []),
+    body,
+    inboxZone
   );
   await renderWaitlist(body, ctx.query?.q ?? '', ctx.query?.prefill ?? '');
 }

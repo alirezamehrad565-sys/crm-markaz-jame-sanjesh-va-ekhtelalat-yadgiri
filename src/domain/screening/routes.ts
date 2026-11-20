@@ -1,5 +1,5 @@
 import type { AppHono } from '@core/shared';
-import { ScreeningCreateSchema, ScreeningQuerySchema, ScreeningUpdateSchema } from '@core/shared';
+import { IqEvaluationCreateSchema, ScreeningCreateSchema, ScreeningQuerySchema, ScreeningUpdateSchema } from '@core/shared';
 import { getAuthContext, requireRole } from '@core/auth';
 import type { ScreeningService } from './service';
 
@@ -68,5 +68,31 @@ export function registerScreeningRoutes(app: AppHono, service: ScreeningService)
     const actor = getAuthContext(c);
     await service.remove(c.req.param('id'), actor);
     return c.json({ data: { ok: true } }, 200);
+  });
+
+  /* ─── نتیجهٔ ارزیابی تخصصی «اظهارنظر و پیشنهاد» (v1.27.33) ───
+   * GET برای بارگذاری مقادیر قبلی در ویرایش (ناظر هم می‌بیند)؛ POST مدیر/منشی/درمانگر —
+   * ثبت بدون انتخاب گزینهٔ ۱..۷ سمت کلاینت غیرفعال است و اینجا zod رد می‌کند. */
+  app.get('/api/screening/:id/iq-evaluation', async (c) => {
+    const data = await service.getIqEvaluation(c.req.param('id'));
+    return c.json({ data }, 200);
+  });
+
+  app.post('/api/screening/:id/iq-evaluation', requireRole('manager', 'secretary', 'therapist'), async (c) => {
+    const actor = getAuthContext(c);
+    const body = IqEvaluationCreateSchema.parse(await c.req.json<unknown>());
+    const saved = await service.saveIqEvaluation(
+      c.req.param('id'),
+      {
+        result_option: body.result_option,
+        autism_referral: body.autism_referral,
+        leiter_score: body.leiter_score ?? null,
+        wechsler_verbal_score: body.wechsler_verbal_score ?? null,
+        goodenough_score: body.goodenough_score ?? null,
+        clinical_observations: body.clinical_observations ?? null
+      },
+      actor
+    );
+    return c.json({ data: saved }, 200);
   });
 }

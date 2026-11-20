@@ -166,8 +166,8 @@ export async function renderStudentProfile(container, ctx) {
         el('div', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', flexWrap: 'wrap' } },
           el('div', { class: 'avatar-lg' }, student.firstName.charAt(0)),
           el('div', { style: { flex: 1, minWidth: 0 } },
-            el('h2', { style: { marginBottom: '6px' } }, `${student.firstName} ${student.lastName}`),
-            el('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' } },
+            el('h2', { style: { marginBottom: 'var(--sp-2)' } }, `${student.firstName} ${student.lastName}`),
+            el('div', { style: { display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap', alignItems: 'center' } },
               statusBadge(student.active ? 'active' : 'inactive'),
               student.gender ? statusBadge(student.gender) : null,
               student.grade ? el('span', { class: 'badge badge--neutral' }, gradeLabel(student.grade)) : null,
@@ -175,7 +175,7 @@ export async function renderStudentProfile(container, ctx) {
               canEditPathway(student)
                 ? el('button', {
                     class: 'btn btn--ghost btn--sm',
-                    style: { padding: '2px 8px' },
+                    style: { padding: 'var(--sp-1) var(--sp-2)' },
                     title: 'تغییر مسیر پرونده — تب تفسیر بالینی بر همین اساس شاخه می‌خورد',
                     onclick: () => openPathwayModal(student, onPathwaySaved)
                   }, icon('edit', 13), 'مسیر')
@@ -228,7 +228,8 @@ export async function renderStudentProfile(container, ctx) {
       sessions: renderSessionsTab,
       comms: renderCommsTab,
       exercises: renderExercisesTabContent,
-      games: renderGamesTabContent // ۱.۲۵.۲۴ — میز تجویز بازی در خود پرونده
+      games: renderGamesTabContent, // ۱.۲۵.۲۴ — میز تجویز بازی در خود پرونده
+      narrative: renderNarrativeTabContent // ۱.۲۷.۲۶ — M3 POLISH-3: روایت بالینی
     }[key];
     (renderer ?? renderInfoTab)(content);
   }
@@ -266,6 +267,7 @@ export async function renderStudentProfile(container, ctx) {
     return [
       { key: 'info', label: 'اطلاعات پایه', icon: 'user', onSelect: selectTab },
       ...(canSeeClinical ? [{ key: 'clinical', label: 'تفسیر بالینی', icon: 'brain', onSelect: selectTab }] : []),
+      ...(canSeeClinical ? [{ key: 'narrative', label: 'روایت بالینی', icon: 'book', onSelect: selectTab }] : []), // ۱.۲۷.۲۶ — M3 POLISH-3: خط زمان «از فرضیه تا نتیجه»
       { key: 'timeline', label: 'تاریخچه', icon: 'clock', onSelect: selectTab },
       { key: 'sessions', label: auxDone ? `جلسات (${fa(appointments.length)})` : 'جلسات', icon: 'calendar', onSelect: selectTab },
       { key: 'exercises', label: 'تمرین‌ها', icon: 'file', onSelect: selectTab },
@@ -294,7 +296,7 @@ export async function renderStudentProfile(container, ctx) {
   const requestedTab = ctx.query?.tab;
   const timelineDeepFilter = ctx.query?.filter ?? (requestedTab === 'followups' ? 'followups' : null);
   const knownTabs = ['info', 'timeline', 'sessions', 'comms', 'exercises'];
-  if (canSeeClinical) knownTabs.splice(1, 0, 'clinical');
+  if (canSeeClinical) knownTabs.splice(1, 0, 'clinical', 'narrative');
   selectTab(requestedTab === 'followups' ? 'timeline' : (knownTabs.includes(requestedTab) ? requestedTab : 'info'));
 
   /* رسیدن دادهٔ پس‌زمینه: کارت وضعیت و نوار تب‌ها درجا تازه می‌شوند و تب در انتظار (یا تب فعال)
@@ -389,6 +391,14 @@ export async function renderStudentProfile(container, ctx) {
       });
   }
 
+  /* ۱.۲۷.۲۶ — M3 POLISH-3: تب روایت بالینی — chunk فقط با ورود به تب fetch می‌شود (الگوی games-console) */
+  function renderNarrativeTabContent(box) {
+    box.replaceChildren(skeletonState('list', 3));
+    import('../student-narrative.js')
+      .then((m) => m.renderNarrativeTab(box, { student }))
+      .catch((err) => box.replaceChildren(errorState(err, () => renderNarrativeTabContent(box))));
+  }
+
   function renderClinicalTabContent(box) {
     renderClinicalTab(box, { student });
   }
@@ -463,8 +473,8 @@ export async function renderStudentProfile(container, ctx) {
             style: { marginTop: 'var(--sp-4)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: 'var(--sp-3)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--sp-3)', flexWrap: 'wrap' }
           },
             el('div', {},
-              el('div', { class: 'card__title', style: { fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px' } }, icon('school', 16), 'تاریخچهٔ تحصیلی'),
-              el('div', { class: 'cell-sub', style: { marginTop: '2px' } }, 'سابقهٔ سال‌به‌سال: کجا درس خوانده، سطح هر سال و توضیحات')
+              el('div', { class: 'card__title', style: { fontSize: '14px', display: 'flex', alignItems: 'center', gap: 'var(--sp-2)' } }, icon('school', 16), 'تاریخچهٔ تحصیلی'),
+              el('div', { class: 'cell-sub', style: { marginTop: 'var(--sp-1)' } }, 'سابقهٔ سال‌به‌سال: کجا درس خوانده، سطح هر سال و توضیحات')
             ),
             el('button', {
               class: 'btn btn--soft btn--sm',
@@ -618,7 +628,7 @@ export async function renderStudentProfile(container, ctx) {
         const ev = caseEvents.find((x) => x.id === e.ref?.id);
         if (!ev) return null;
         const t = fillTargetOf({ category: ev.typeCategory, familyFillable: ev.typeFamilyFillable, audience: ev.typeAudience });
-        return el('div', { style: { marginTop: '6px' } }, el('span', { class: `badge ${t.badgeClass}` }, t.badge));
+        return el('div', { style: { marginTop: 'var(--sp-2)' } }, el('span', { class: `badge ${t.badgeClass}` }, t.badge));
       })() : null,
       link ? el('div', { class: 'tl-item__actor', style: { color: 'var(--primary)' } }, `↖ ${link.label}` /* S4-06 */) : null
     );
@@ -672,7 +682,7 @@ export async function renderStudentProfile(container, ctx) {
             }, icon('plus', 13), 'ثبت گزارش')
           : el('span', { class: 'cell-sub' }, '—');
       }
-      return el('div', { style: { display: 'flex', gap: '4px', flexWrap: 'wrap', justifyContent: 'flex-end' } }, parts);
+      return el('div', { style: { display: 'flex', gap: 'var(--sp-1)', flexWrap: 'wrap', justifyContent: 'flex-end' } }, parts);
     };
 
     box.replaceChildren(
@@ -837,7 +847,7 @@ function buildSpecialNeedBlock(student, canManage, container, ctx) {
   const info = el('div', { class: 'sn-profile' },
     hasNeed
       ? [
-          el('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' } },
+          el('div', { style: { display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap', alignItems: 'center' } },
             el('span', { class: 'badge badge--primary' }, SPECIAL_NEED_TYPE_LABELS[student.specialNeedType] ?? student.specialNeedType),
             student.specialNeedSeverity
               ? el('span', { class: `badge badge--${SPECIAL_NEED_SEVERITY_TONES[student.specialNeedSeverity] ?? 'neutral'}` },
@@ -857,7 +867,7 @@ function buildSpecialNeedBlock(student, canManage, container, ctx) {
     : null;
 
   return el('div', { class: 'sn-profile-card', style: { marginTop: 'var(--sp-4)' } },
-    el('div', { class: 'card__title', style: { marginBottom: 'var(--sp-2)', display: 'flex', alignItems: 'center', gap: '6px' } },
+    el('div', { class: 'card__title', style: { marginBottom: 'var(--sp-2)', display: 'flex', alignItems: 'center', gap: 'var(--sp-2)' } },
       icon('clip', 16), 'نیاز ویژه'
     ),
     info,
@@ -939,7 +949,7 @@ function renderTeachersCard(student, container, ctx) {
           )))
       );
     } catch {
-      listWrap.replaceChildren(el('div', { class: 'cell-sub' }, 'فهرست معلم‌ها بارگذاری نشد.'));
+      listWrap.replaceChildren(el('div', { class: 'cell-sub' }, 'فهرست معلم‌ها بارگذاری نشد — صفحه را دوباره باز کنید.'));
     }
   }
 
@@ -950,8 +960,8 @@ function renderTeachersCard(student, container, ctx) {
   },
     el('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--sp-2)', flexWrap: 'wrap', marginBottom: 'var(--sp-2)' } },
       el('div', {},
-        el('div', { class: 'card__title', style: { fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px' } }, icon('users', 16), 'معلم'),
-        el('div', { class: 'cell-sub', style: { marginTop: '2px' } }, 'پاسخ فرم جامع معلم با نام او روی پرونده می‌نشیند — دورهٔ ابتدایی یک معلمِ کلاس دارد')
+        el('div', { class: 'card__title', style: { fontSize: '14px', display: 'flex', alignItems: 'center', gap: 'var(--sp-2)' } }, icon('users', 16), 'معلم'),
+        el('div', { class: 'cell-sub', style: { marginTop: 'var(--sp-1)' } }, 'پاسخ فرم جامع معلم با نام او روی پرونده می‌نشیند — دورهٔ ابتدایی یک معلمِ کلاس دارد')
       )
     ),
     listWrap
@@ -1253,7 +1263,7 @@ function buildSmsInviteSection({ heading, storedPhone, phonePlaceholder, getInvi
 
   return {
     root: el('div', { style: { borderTop: '1px dashed var(--border)', paddingTop: 'var(--sp-3)', display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)', marginTop: 'var(--sp-2)' } },
-      el('div', { class: 'card__title', style: { fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px' } }, icon('message', 15), heading),
+      el('div', { class: 'card__title', style: { fontSize: '14px', display: 'flex', alignItems: 'center', gap: 'var(--sp-2)' } }, icon('message', 15), heading),
       previewBox,
       phoneRow,
       actionsRow
@@ -1269,7 +1279,7 @@ function paintLinkChips(box, links, { emptyText }) {
       ? [el('span', { class: 'cell-sub' }, emptyText)]
       : [
           ...shown.map((l) =>
-            el('div', { class: 'chip', style: { gap: '8px' } },
+            el('div', { class: 'chip', style: { gap: 'var(--sp-2)' } },
               el('b', { dir: 'ltr' }, l.code),
               statusBadge(l.status),
               el('button', {
@@ -1300,7 +1310,7 @@ async function buildFamilyInviteCard(student, { canManage }) {
     };
   };
 
-  const listBox = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } });
+  const listBox = el('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-2)' } });
   const paintLinks = () => paintLinkChips(listBox, links, {
     emptyText: canManage ? 'هنوز لینکی ساخته نشده — با «ساخت لینک اتصال» یکی بسازید.' : 'هنوز لینکی ساخته نشده است.'
   });
@@ -1345,9 +1355,48 @@ async function buildFamilyInviteCard(student, { canManage }) {
       el('p', { class: 'cell-sub', style: { margin: 0 } },
         'لینک احراز خودکار بات بله — ولیّ با کلیک روی لینک به بات متصل می‌شود و اعلان نوبت‌ها و گزارش‌ها را می‌گیرد. لینک چندبارمصرف است و منقضی نمی‌شود.'),
       el('div', { class: 'field' }, el('label', { class: 'field__label' }, 'لینک‌های اتصال خانواده'), listBox),
+      /* ۱.۲۷.۲۷ — M4 POLISH-3: برگهٔ پیشرفت خانواده — صفحهٔ فقط‌خواندنی توکن‌محور (بدون لاگین، ۱۸۰ روز) */
+      el('div', { class: 'field' },
+        el('label', { class: 'field__label' }, 'برگهٔ پیشرفت خانواده'),
+        el('div', { style: { display: 'flex', gap: 'var(--sp-2)', alignItems: 'center', flexWrap: 'wrap' } },
+          el('span', { class: 'cell-sub', style: { flex: '1', minWidth: '200px', margin: 0 } }, 'صفحهٔ «از فرضیه تا نتیجه»: مسیرهای مداخله، جلسات و روند پراپ — با پیوند امضاشده بدون لاگین باز می‌شود و فقط همین دانش‌آموز را نشان می‌دهد.'),
+          canManage ? el('button', { class: 'btn btn--soft btn--sm', onclick: () => openProgressSheetModal(student, { familyCode: pickActiveLinkCode(links), botUsername }) }, icon('file', 14), 'ساخت پیوند برگه') : null)),
       smsSection.root
     )
   );
+}
+
+/* ۱.۲۷.۲۷ — M4 POLISH-3: برگهٔ پیشرفت خانواده — پیوند توکن‌محور (کپی) + ارسال با بات بله */
+async function openProgressSheetModal(student, { familyCode = null, botUsername = null } = {}) {
+  let res;
+  try {
+    res = await api.post(`/api/students/${student.id}/progress-sheet-link`);
+  } catch (err) {
+    toastError(err);
+    return;
+  }
+  const url = res.data?.url ?? '';
+  const expires = res.data?.expiresAt ? formatJalaliNumeric(res.data.expiresAt.slice(0, 10)) : null;
+  const input = el('input', { class: 'input', dir: 'ltr', readonly: '', value: url, onclick: () => input.select() });
+  const copyBtn = el('button', {
+    class: 'btn btn--soft btn--sm', type: 'button',
+    onclick: async () => {
+      try { await navigator.clipboard.writeText(url); } catch { input.select(); document.execCommand('copy'); }
+      toast('پیوند برگه کپی شد', 'success');
+    }
+  }, icon('copy', 14), 'کپی');
+  const botRow = familyCode && botUsername
+    ? el('div', { style: { display: 'flex', gap: 'var(--sp-2)', alignItems: 'center', flexWrap: 'wrap' } },
+        el('span', { class: 'cell-sub', style: { margin: 0 } }, 'ارسال با بات بله — گفتگوی متصل خانواده:'),
+        el('a', { class: 'btn btn--soft btn--sm', href: buildBotLink(botUsername, familyCode), target: '_blank', rel: 'noopener' }, icon('bot', 14), 'باز کردن بله'))
+    : null;
+  openModal({
+    title: 'برگهٔ پیشرفت خانواده',
+    body: el('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' } },
+      el('p', { class: 'cell-sub', style: { margin: 0 } }, `این پیوند برگهٔ پیشرفت ${student.firstName} را بدون لاگین باز می‌کند${expires ? ` — تا ${expires} معتبر است` : ''}؛ فقط برای خانوادهٔ همین دانش‌آموز بفرستید.`),
+      el('div', { style: { display: 'flex', gap: 'var(--sp-2)' } }, input, copyBtn),
+      botRow)
+  });
 }
 
 async function buildTeacherInviteCard(student, { canManage }) {
@@ -1380,7 +1429,7 @@ async function buildTeacherInviteCard(student, { canManage }) {
     };
   };
 
-  const listBox = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } });
+  const listBox = el('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-2)' } });
   const paintLinks = () => paintLinkChips(listBox, links, {
     emptyText: canManage ? 'هنوز کد اتصالی برای این کلاس ساخته نشده — با «تولید کد جدید» یکی بسازید.' : 'هنوز کد اتصالی برای این کلاس ساخته نشده است.'
   });

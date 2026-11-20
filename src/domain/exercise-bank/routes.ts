@@ -4,6 +4,7 @@ import { getAuthContext, requireRole } from '@core/auth';
 import { NotFoundError, ValidationError } from '@core/errors';
 import type { ExerciseBankService, ListExercisesFilters } from './types';
 import { buildTaxonomyTree } from './focus'; // درخت واحد طبقه‌بندی
+import { renderActivitiesPage } from './activities-page'; // ۱.۲۷.۳۸ — صفحهٔ عمومی تمرین‌ها و کارت‌های آماده
 import { parseMultipartStream } from './multipart';
 import type { SendResult } from '@core/notify/types';
 import type { BaleApiResponse, SendDocumentOptions } from '@core/notify/bale/documents';
@@ -51,6 +52,23 @@ function downloadHeaders(filename: string, mimeType: string, inline: boolean): R
 }
 
 export function registerExerciseBankRoutes(app: AppHono, service: ExerciseBankService): void {
+  /* ─── صفحهٔ عمومی «تمرین‌ها و کارت‌های آمادهٔ مرکز» (۱.۲۷.۳۸) — لینک اشتراکی از بات ───
+   * فقط متادیتای امنِ منتشرشده (listPublicActivities)؛ بدون کلید فایل، بدون دادهٔ دانش‌آموز؛
+   * قرارداد سرو عین /public/referral: no-store + noindex + همان CSP؛ بدون اسکریپت. */
+  app.get('/public/activities', async (c) => {
+    const items = await service.listPublicActivities();
+    const html = renderActivitiesPage({ clinicName: 'مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام', items });
+    return new Response(html, {
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'no-store',
+        'X-Robots-Tag': 'noindex, nofollow',
+        'Content-Security-Policy':
+          "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src 'self'"
+      }
+    });
+  });
+
   app.get('/api/exercises/meta', async (c) => {
     const categories = await service.categories();
     const facets = await service.facets();
