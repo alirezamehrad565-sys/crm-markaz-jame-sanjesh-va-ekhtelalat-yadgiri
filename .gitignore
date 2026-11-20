@@ -81,3 +81,6 @@ desktop/src-tauri/engine-runtime-manifest.json
 /core
 /core.*
 /*.core
+
+# خروجی بیلد سلف‌هاست (۱.۲۷.۴۵ — به‌اشتباه کامیت شده بود؛ بیلد محلی تولیدش می‌کند)
+dist/
