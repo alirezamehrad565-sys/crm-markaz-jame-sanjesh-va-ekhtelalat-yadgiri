@@ -56,6 +56,9 @@ function rl() {
 
 function fail(msg) {
   console.error(`\n✋ ${msg}`);
+  /* ۱.۲۷.۳۶ — پیام دقیق شکست در حاشیه‌نویسی گیت‌هاب هم بیاید (::error) تا بدون لاگِ لاگین‌محور دیباگ شود */
+  const flat = String(msg).split('\n').map((l) => l.trim()).filter(Boolean).join(' | ');
+  console.error(`::error::update-remote توقف: ${flat}`);
   process.exit(1);
 }
 

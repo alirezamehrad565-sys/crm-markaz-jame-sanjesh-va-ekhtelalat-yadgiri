@@ -74,3 +74,8 @@ desktop/src-tauri/binaries/
 desktop/src-tauri/resources/
 desktop/src-tauri/engine-runtime-manifest.json
 
+
+# کور-دامپ کرش پروسه‌ها (هیچ‌وقت کامیت نشود)
+core
+core.*
+*.core
