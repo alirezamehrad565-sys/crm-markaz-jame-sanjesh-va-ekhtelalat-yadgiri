@@ -87,14 +87,9 @@ export type BotCommand =
   | { kind: 'clf_a'; chatId: string; value: number }
   | { kind: 'clf_do'; chatId: string }
   | { kind: 'clf_no'; chatId: string }
-  // ۱.۲۷.۳۵ — فلو «معرفی دانش‌آموز»: نقش پایه (خانواده/معلم) و عموم مردم بدون احراز
-  // (متن آزاد پارس نمی‌شود — گارد فلو در bot-commands پیش از early-return می‌گیرد)
+  // ۱.۲۷.۳۶ — معرفی دانش‌آموز: دکمهٔ اول بات برای عموم و نقش پایه — فقط لینک فرم وب
+  // (فلو مکالمه‌ای دکمه‌ای حذف شد؛ دیگر kind کال‌بک rf:* وجود ندارد)
   | { kind: 'referral_root'; chatId: string }
-  | { kind: 'ref_role'; chatId: string; role: 'family' | 'teacher' }
-  | { kind: 'ref_count'; chatId: string; n: number }
-  | { kind: 'ref_cat'; chatId: string; idx: number; value: string }
-  | { kind: 'ref_do'; chatId: string }
-  | { kind: 'ref_no'; chatId: string }
   | { kind: 'unknown'; chatId: string; text: string };
 
 export type ExbCat = 'a' | 'd' | 'g' | 'o';
@@ -287,31 +282,6 @@ export function parseClfCallback(data: string, chatId: string): BotCommand | nul
   return null;
 }
 
-/* ۱.۲۷.۳۵ — کال‌بک‌های فلو «معرفی دانش‌آموز»: rf:role:<family|teacher> · rf:count:<n> ·
- * rf:cat:<idx>:<category> · rf:do · rf:no — مقادیر دسته در REFERRAL_CATEGORIES (core/shared) */
-export function parseRefCallback(data: string, chatId: string): BotCommand | null {
-  const parts = data.split(':');
-  if (parts[1] === 'role') {
-    const role = parts[2] === 'teacher' ? 'teacher' : parts[2] === 'family' ? 'family' : null;
-    return role ? { kind: 'ref_role', chatId, role } : null;
-  }
-  if (parts[1] === 'count') {
-    const n = toIndex(parts[2]);
-    if (Number.isNaN(n) || n < 1 || n > 5) return null;
-    return { kind: 'ref_count', chatId, n };
-  }
-  if (parts[1] === 'cat') {
-    const idx = toIndex(parts[2]);
-    const value = (parts[3] ?? '').trim();
-    const valid = ['delayed', 'learning_disorder', 'intellectual', 'autism', 'speech', 'other'];
-    if (Number.isNaN(idx) || idx < 0 || !valid.includes(value)) return null;
-    return { kind: 'ref_cat', chatId, idx, value };
-  }
-  if (parts[1] === 'do') return { kind: 'ref_do', chatId };
-  if (parts[1] === 'no') return { kind: 'ref_no', chatId };
-  return null;
-}
-
 export function parseExbCallback(data: string, chatId: string): BotCommand | null {
   const parts = data.split(':');
   switch (parts[1]) {
@@ -385,7 +355,6 @@ export function parseBotUpdate(update: unknown): BotCommand | null {
     if (data === 'unlink:no') return { kind: 'unlink_no', chatId: String(cbChatId) };
     if (data.startsWith('dis:')) return parseAwarenessCallback(data, String(cbChatId));
     if (data.startsWith('clf:')) return parseClfCallback(data, String(cbChatId));
-    if (data.startsWith('rf:')) return parseRefCallback(data, String(cbChatId)); // ۱.۲۷.۳۵ — فلو معرفی
     const parsed = parseCallbackData(data);
     if (!parsed) return null;
     if (parsed.action === 'ask') return { kind: 'cancel_ask', chatId: String(cbChatId), appointmentId: parsed.targetId };
@@ -480,7 +449,7 @@ export function parseBotUpdate(update: unknown): BotCommand | null {
       return { kind: 'class_activity', chatId: chatIdStr };
     case '/awareness':
       return { kind: 'awareness_root', chatId: chatIdStr };
-    case '/referral': // ۱.۲۷.۳۵ — معرفی دانش‌آموز برای عموم و نقش پایه
+    case '/referral': // ۱.۲۷.۳۶ — معرفی دانش‌آموز برای عموم و نقش پایه (فقط لینک)
       return { kind: 'referral_root', chatId: chatIdStr };
     case '/checklist':
       return { kind: 'clf_list', chatId: chatIdStr };

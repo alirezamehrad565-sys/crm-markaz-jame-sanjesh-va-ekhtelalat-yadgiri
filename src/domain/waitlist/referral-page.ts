@@ -1,14 +1,14 @@
-/* referral-page.ts — صفحهٔ تعاملی «معرفی به مرکز» (v1.27.33 — REFERRAL-DESIGN.md)
+/* referral-page.ts — صفحهٔ تعاملی «معرفی به مرکز» (v1.27.33 — REFERRAL-DESIGN.md؛ بازطراحی ۱.۲۷.۳۶)
  *
  * صفحهٔ عمومی بدون لاگین، سمت سرور رندر می‌شود (الگوی family-sheet: no-store + noindex) —
  * یک فایل خودکفا: HTML + CSS + JS همه inline است تا به هیچ باندل/کش وابسته نباشد و روی
  * هر مرورگری حتی موبایل خانواده باز شود. CSP این مسیر فقط inline خودش را اجازه می‌دهد.
  *
- * جریان (خواست کارفرما): خوش‌آمد با افکت تایپ (لحن گرم و محاوره‌ای) → نقش معرف
- * (پدر/مادر یا معلم همکار) → مشخصات تماس → کشویی مدارس همکار/پایه/کلاس →
- * شاخهٔ خانواده: پرسش‌های کودک → مودال «این اطلاعات به لیست انتظار اضافه میشه» → ثبت؛
- * شاخهٔ معلم: سه صفحهٔ آگاهی → ثبت دسته‌ای (دسته + نام دانش‌آموز + شمارهٔ والد) → مودال خلاصه → ثبت.
- * رعایت prefers-reduced-motion در افکت تایپ؛ هیچ تشخیصی در فرم انجام نمی‌شود — فرم فقط معرفی است.
+ * جریان (بازطراحی ۱.۲۷.۳۶ — خواست کارفرما): خوش‌آمد با افکت تایپ → نقش معرف → مشخصات تماس →
+ * مدرسه/پایه/کلاس → شاخهٔ خانواده: نام کودک → تولد → دغدغه (بدون اتیسم) → **فرم تکمیلی خانواده
+ * (فرهنگی/مالی/همکاری)** → ارزیابی قبلی → نکات → مرور → ثبت؛ شاخهٔ معلم: سه صفحهٔ آگاهی → ثبت دسته‌ای → مرور → ثبت.
+ * UI/UX: دکمه‌های هم‌اندازه (flex-basis صفر + ارتفاع یکسان)، انتخاب‌گرها با تیک، متن‌های انسانی و گرم.
+ * رعایت prefers-reduced-motion؛ هیچ تشخیصی در فرم انجام نمی‌شود — فرم فقط معرفی است.
  */
 
 export interface ReferralPageOpts {
@@ -40,22 +40,31 @@ p.lead{color:var(--muted);margin:0 0 18px;font-size:14.5px}
 .caret{display:inline-block;width:2px;height:1.15em;background:var(--brand);vertical-align:-0.2em;
 animation:blink 1s steps(1) infinite;margin-inline-start:2px}
 @keyframes blink{50%{opacity:0}}
+/* ۱.۲۷.۳۶ — دکمه‌های هم‌اندازه: flex-basis صفر یعنی «ادامه» و «بازگشت» همیشه هم‌پهنا؛
+   min-height مشترک یعنی هم‌قد — فارغ از طول متن */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:none;cursor:pointer;
-border-radius:12px;padding:12px 22px;font-family:inherit;font-size:15.5px;font-weight:700;width:100%}
+border-radius:12px;padding:12px 22px;font-family:inherit;font-size:15.5px;font-weight:700;width:100%;
+min-height:52px}
 .btn--primary{background:var(--brand);color:#fff}
 .btn--primary:disabled{opacity:.45;cursor:not-allowed}
 .btn--ghost{background:transparent;color:var(--brand);border:1.5px solid var(--brand)}
-.btn--sm{width:auto;padding:9px 16px;font-size:14px}
+.btn--sm{width:auto;min-height:44px;padding:9px 16px;font-size:14px}
 .btnrow{display:flex;gap:10px;margin-top:20px}
-.btnrow .btn{flex:1}
-.choice{display:block;background:var(--card);border:2px solid var(--line);border-radius:var(--r);
-padding:16px 18px;margin-bottom:12px;cursor:pointer;transition:border-color .15s,background .15s}
+.btnrow .btn{flex:1 1 0}
+.choice{display:flex;align-items:flex-start;gap:12px;background:var(--card);border:2px solid var(--line);
+border-radius:var(--r);padding:16px 18px;cursor:pointer;transition:border-color .15s,background .15s,box-shadow .15s;
+text-align:start;width:100%;font-family:inherit;position:relative}
 .choice:hover{border-color:var(--brand)}
-.choice.sel{border-color:var(--brand);background:var(--brand-soft)}
+.choice.sel{border-color:var(--brand);background:var(--brand-soft);box-shadow:0 2px 10px rgba(37,99,235,.12)}
+.choice.sel .no{background:var(--brand);color:#fff}
+.choice.sel::after{content:'✓';position:absolute;top:10px;left:14px;color:var(--brand);
+font-weight:800;font-size:16px}
 .choice b{display:block;font-size:16px;margin-bottom:2px}
-.choice span{color:var(--muted);font-size:13.5px}
-.choice .no{display:inline-block;width:26px;height:26px;border-radius:50%;background:var(--brand-soft);
-color:var(--brand);text-align:center;line-height:26px;font-weight:800;margin-inline-end:8px;font-size:13px}
+.choice span.d{color:var(--muted);font-size:13.5px}
+.choice .no{flex:none;width:28px;height:28px;border-radius:50%;background:var(--brand-soft);
+color:var(--brand);text-align:center;line-height:28px;font-weight:800;font-size:13px}
+/* ۱.۲۷.۳۶ — ردیف کارت‌ها با ارتفاع یکسان (بلندترین محتوا معیار همه است) */
+.choices{display:grid;gap:12px;grid-auto-rows:1fr}
 label.f{display:block;font-weight:700;margin:0 0 6px}
 input.i,select.i,textarea.i{width:100%;border:1.5px solid var(--line);border-radius:12px;padding:11px 14px;
 font-family:inherit;font-size:15.5px;background:#fff;color:var(--ink)}
@@ -84,10 +93,12 @@ color:#1e40af;margin-top:14px}
 .rowcard{border:1.5px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px;position:relative}
 .rowcard .rm{position:absolute;top:10px;left:10px;background:none;border:none;color:var(--err);
 cursor:pointer;font-family:inherit;font-size:13px;font-weight:700}
-.pills{display:flex;flex-wrap:wrap;gap:8px}
-.pill{border:1.5px solid var(--line);background:#fff;border-radius:999px;padding:7px 14px;
-cursor:pointer;font-family:inherit;font-size:14px}
-.pill.sel{border-color:var(--brand);background:var(--brand-soft);color:var(--brand);font-weight:700}
+/* ۱.۲۷.۳۶ — پیل‌های هم‌اندازه و لمس‌پذیر (حداقل ۴۴px) */
+.pills{display:flex;flex-wrap:wrap;gap:10px}
+.pill{border:1.5px solid var(--line);background:#fff;border-radius:999px;padding:9px 18px;
+cursor:pointer;font-family:inherit;font-size:14px;min-height:44px;display:inline-flex;align-items:center}
+.pill.sel{border-color:var(--brand);background:var(--brand-soft);color:var(--brand);font-weight:700;
+box-shadow:0 1px 6px rgba(37,99,235,.15)}
 .done{text-align:center}
 .done .big{font-size:46px;margin-bottom:6px}
 .switch-row{display:flex;align-items:center;justify-content:space-between;gap:10px;
@@ -95,10 +106,10 @@ border:1.5px solid var(--line);border-radius:12px;padding:12px 14px}
 /* ۱.۲۷.۳۵ — افکت فید و جریان پیوسته؛ کاهش-حرکت رعایت می‌شود */
 .app>.card{animation:fadein .3s ease}
 @keyframes fadein{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-.choice,.btn{transition:transform .12s ease,border-color .15s,background .15s}
-.choice:active{transform:scale(.98)}
+.choice,.btn,.pill{transition:transform .12s ease,border-color .15s,background .15s,box-shadow .15s}
+.choice:active,.pill:active{transform:scale(.98)}
 input.i:focus-visible,select.i:focus-visible,textarea.i:focus-visible,button:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
-@media (prefers-reduced-motion: reduce){.caret{animation:none}.bar__fill{transition:none}.app>.card{animation:none}.choice,.btn{transition:none}}
+@media (prefers-reduced-motion: reduce){.caret{animation:none}.bar__fill{transition:none}.app>.card{animation:none}.choice,.btn,.pill{transition:none}}
 `;
 
 const PAGE_SCRIPT = `
@@ -109,17 +120,26 @@ var app = document.getElementById('app');
 var bar = document.getElementById('bar');
 var REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 var GRADES = ['پیش‌دبستانی','اول دبستان','دوم دبستان','سوم دبستان','چهارم دبستان','پنجم دبستان','ششم دبستان'];
+/* ۱.۲۷.۳۶ — گزینهٔ «مشکوک به اتیسم» حذف شد (خواست کارفرما)؛ مقدار autism در داده‌های قبلی باقی است */
 var CONCERNS = [
   {v:'delayed', t:'دیرآموزی', d:'یادگیری کندتر از هم‌سن‌وسال‌ها — ولی یاد می‌گیرد'},
   {v:'learning_disorder', t:'اختلال یادگیری', d:'سختی در خواندن، نوشتن یا حساب'},
   {v:'intellectual', t:'مشکوک به کم‌توانی ذهنی', d:'تأخیر جدی در یادگیری و مهارت‌های روزمره'},
   {v:'speech', t:'تأخیر گفتار و زبان', d:'دیر یا کم حرف زدن نسبت به هم‌سن‌ها'},
-  {v:'autism', t:'مشکوک به طیف اتیسم', d:'دشواری در تعامل و رفتار'},
   {v:'other', t:'سایر', d:'دغدغه‌ی دیگری دارید'}
 ];
-var TEACH_CATS = ['delayed','learning_disorder','intellectual','autism'];
-var TEACH_CAT_LABELS = {delayed:'دیرآموز', learning_disorder:'اختلال یادگیری', intellectual:'مشکوک به کم‌توانی', autism:'مشکوک به اتیسم'};
+var TEACH_CATS = ['delayed','learning_disorder','intellectual'];
+var TEACH_CAT_LABELS = {delayed:'دیرآموز', learning_disorder:'اختلال یادگیری', intellectual:'مشکوک به کم‌توانی'};
 var CAT_LABELS = {delayed:'دیرآموزی', learning_disorder:'اختلال یادگیری', intellectual:'مشکوک به کم‌توانی ذهنی', speech:'تأخیر گفتار و زبان', autism:'مشکوک به طیف اتیسم', other:'سایر'};
+/* ۱.۲۷.۳۶ — فرم تکمیلی خانواده: سه پرسش با سطح سه‌گانه + «نمی‌دانم» (null ارسال می‌شود) */
+var FAM_QUESTIONS = [
+  {key:'culture', label:'وضع فرهنگی خانواده', hint:'کتاب، گفت‌وگو و فعالیت یادگیری در خانه چقدر هست؟',
+   opts:[['low','کم'],['mid','متوسط'],['high','غنی']]},
+  {key:'finance', label:'سطح مالی خانواده', hint:'فقط برای اولویت‌بندی خدمات رایگان و کمک‌ها است — روی پذیرش اثری ندارد.',
+   opts:[['low','کم‌برخوردار'],['mid','متوسط'],['high','برخوردار']]},
+  {key:'cooperation', label:'میزان همکاری خانواده', hint:'تماس، پیگیری تمرین‌ها و حضور در جلسات.',
+   opts:[['low','کم'],['mid','متوسط'],['high','زیاد']]}
+];
 var AWARE = [
   {t:'دیرآموز کیه؟', b:'بچه‌ای که نسبت به هم‌سن‌وسال‌هاش کندتر یاد می‌گیره — ولی یاد می‌گیره. با آموزش مناسب و صبر، راه پیشرفتش بازه. اگر توی کلاستون چنین دانش‌آموزی دارید، معرفی‌ش اولین قدم کمک‌ه.'},
   {t:'اختلال یادگیری چیه؟', b:'بچه‌ای که از نظر هوشی کاملاً عادیه، ولی توی خواندن (دیسلکسی)، نوشتن (دیس‌گرافی) یا حساب (دیس‌کالکولی) سختی داره. تشخیصش کارِ ماست؛ کارِ شما فقط مشاهده و معرفی‌ست.'},
@@ -129,6 +149,7 @@ var state = {
   step: 0, role: null, refName: '', refPhone: '',
   school: '', schoolName: '', grade: '', klass: '',
   childName: '', childBirth: '', concern: null, concernText: '',
+  famCulture: null, famFinance: null, famCoop: null, /* ۱.۲۷.۳۶ — پیش‌فرض «نمی‌دانم»؛ مقدار low/mid/high پس از انتخاب */
   priorEval: null, priorEvalNote: '',
   rows: [], awareIdx: 0, meta: null, submitting: false
 };
@@ -136,7 +157,7 @@ function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'
 function normDigits(s){return String(s==null?'':s).replace(/[۰-۹]/g,function(d){return String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d));}).replace(/[٠-٩]/g,function(d){return String('٠١٢٣٤٥٦٧٨٩'.indexOf(d));});}
 function normPhone(s){var v = normDigits(s).replace(/[\\s\\-().]/g,'');if(v.indexOf('+98')===0){v='0'+v.slice(3);}else if(v.indexOf('98')===0&&v.length===12){v='0'+v.slice(2);}return v;}
 function validPhone(s){return /^09\\d{9}$/.test(normPhone(s));}
-function familyTotal(){return 11;}
+function familyTotal(){return 12;}
 function teachTotal(){return 10;}
 function total(){return state.role==='teacher'?teachTotal():familyTotal();}
 function setBar(){var t=total();var pct=Math.round(Math.min(state.step,t-1)/(t-1)*100);bar.style.width=pct+'%';}
@@ -193,10 +214,11 @@ function renderRole(){
   setBar();
   app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
     '<h2>شما کدام‌یک هستید؟</h2>'+
-    '<p class="lead">چند سؤال بعدی بر اساس همین انتخاب فرق می‌کنه.</p>'+
-    '<button class="choice" id="rFamily"><span class="no">۱</span><b>پدر یا مادر دانش‌آموز</b><span>می‌خوام فرزندم رو به مرکز معرفی کنم</span></button>'+
-    '<button class="choice" id="rTeacher"><span class="no">۲</span><b>معلم همکار ما</b><span>می‌خوام دانش‌آموزهای کلاسم رو معرفی کنم</span></button>'+
-    '</div>';
+    '<p class="lead">بر اساس همین انتخاب، فرم برای شما کوتاه یا بلند می‌شود.</p>'+
+    '<div class="choices">'+
+    '<button class="choice" id="rFamily"><span class="no">۱</span><b>پدر یا مادر دانش‌آموز</b><span class="d">می‌خوام فرزندم رو به مرکز معرفی کنم</span></button>'+
+    '<button class="choice" id="rTeacher"><span class="no">۲</span><b>معلم همکار ما</b><span class="d">می‌خوام دانش‌آموزهای کلاسم رو معرفی کنم</span></button>'+
+    '</div></div>';
   var pick=function(role){
     state.role=role;state.step=2;render();
   };
@@ -207,13 +229,13 @@ function renderRole(){
 function renderContact(){
   setBar();
   app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
-    '<h2>اسم و راه تماس</h2><p class="lead">قبل از هر چیز، اسم و شماره‌ای که بتونیم باهاتون تماس بگیریم رو بگید.</p>'+
+    '<h2>خودتان را معرفی کنید</h2><p class="lead">اسم و شماره‌ای که راحت بشود با شما حرف زد.</p>'+
     '<div class="field"><label class="f" for="rn">نام و نام خانوادگی شما</label>'+
     '<input class="i" id="rn" autocomplete="name">'+
-    '<div class="err-msg" id="rnErr">نام حداقل ۲ نویسه است</div></div>'+
+    '<div class="err-msg" id="rnErr">نام را کامل بنویسید — دست‌کم دو حرف</div></div>'+
     '<div class="field"><label class="f" for="rp">شماره موبایل</label>'+
     '<input class="i" id="rp" inputmode="tel" dir="ltr" placeholder="09xxxxxxxxx">'+
-    '<div class="err-msg" id="rpErr">شماره باید ۱۱ رقم و با ۰۹ شروع شود</div></div>'+
+    '<div class="err-msg" id="rpErr">شماره موبایل ۱۱ رقم است و با ۰۹ شروع می‌شود</div></div>'+
     btnRow('ادامه','',null,1)+
     '</div>';
   document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=1;render();});
@@ -237,7 +259,7 @@ function renderSchool(){
   setBar();
   app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
     '<h2>'+(state.role==='teacher'?'مدرسه‌ی خودتان':'کودک شما در کدوم مدرسه‌ی همکار ما درس می‌خونه؟')+'</h2>'+
-    '<p class="lead">فقط مدارس همکار ما در فهرست هستن — اگر نبود، اسمش رو دستی بنویسید.</p>'+
+    '<p class="lead">فقط مدارس همکار ما در فهرست هستن — اگر نبود، اسمش را دستی بنویسید؛ مشکلی نیست.</p>'+
     '<div class="field"><label class="f" for="sc">مدرسه</label>'+
     '<select class="i" id="sc"><option value="">در حال بارگذاری…</option></select>'+
     '<input class="i" id="scT" style="display:none;margin-top:8px" placeholder="اسم مدرسه را بنویسید" value="'+esc(state.schoolName)+'">'+
@@ -288,10 +310,11 @@ function renderSchool(){
 function renderChildName(){
   setBar();
   app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
-    '<h2>اسم و فامیل کودک چیه؟</h2>'+
+    '<h2>اسم کودک چیست؟</h2>'+
+    '<p class="lead">همان‌طور که صدايش می‌کنید بنویسید.</p>'+
     '<div class="field"><label class="f" for="cn">نام و نام خانوادگی کودک</label>'+
     '<input class="i" id="cn" value="'+esc(state.childName)+'">'+
-    '<div class="err-msg" id="cnErr">نام کودک حداقل ۲ نویسه است</div></div>'+
+    '<div class="err-msg" id="cnErr">اسم کودک را کامل بنویسید — دست‌کم دو حرف</div></div>'+
     btnRow('ادامه','',null,3)+
     '</div>';
   document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=3;render();});
@@ -305,7 +328,7 @@ function renderChildName(){
 function renderChildBirth(){
   setBar();
   app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
-    '<h2>تاریخ تولد کودک</h2><p class="lead">اگه بلدید بنویسید — اگه نه، خالی بذارید و بذارید ارزیابی خودش بفهمه.</p>'+
+    '<h2>تاریخ تولد کودک</h2><p class="lead">اگر بلدید بنویسید — اگر نه، خالی بگذارید و بگذارید ارزیابی خودش بفهمد.</p>'+
     '<div class="field"><label class="f" for="cb">تاریخ تولد (شمسی — مثل ۱۳۹۸/۰۵/۱۲)</label>'+
     '<input class="i" id="cb" inputmode="numeric" value="'+esc(state.childBirth)+'">'+
     '<div class="hint">اختیاری است</div></div>'+
@@ -323,11 +346,11 @@ function renderConcern(){
   setBar();
   var cards=CONCERNS.map(function(c,i){
     return '<button class="choice'+(state.concern===c.v?' sel':'')+'" data-c="'+c.v+'">'+
-      '<span class="no">'+(i+1)+'</span><b>'+c.t+'</b><span>'+c.d+'</span></button>';
+      '<span class="no">'+(i+1)+'</span><b>'+c.t+'</b><span class="d">'+c.d+'</span></button>';
   }).join('');
   app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
-    '<h2>دغدغه‌ی اصلی شما چیه؟</h2><p class="lead">دقیق بودن لازم نیست — نگرانی‌تون رو بگید، بقیه‌ش کار ماست.</p>'+
-    cards+
+    '<h2>دغدغه‌ی اصلی شما چیه؟</h2><p class="lead">لازم نیست دقیق باشد — نگرانی‌تان را بگویید، تشخیص کار ماست.</p>'+
+    '<div class="choices">'+cards+'</div>'+
     '<div class="err-msg" id="ccErr">یکی از گزینه‌ها را انتخاب کنید</div>'+
     btnRow('ادامه','',null,5)+
     '</div>';
@@ -346,6 +369,50 @@ function renderConcern(){
   });
 }
 
+/* ─── ۱.۲۷.۳۶ — فرم تکمیلی خانواده: وضع فرهنگی، سطح مالی، میزان همکاری ─── */
+function famPills(q){
+  return q.opts.map(function(o){
+    return '<button class="pill'+(state[q.key]===o[0]?' sel':'')+'" data-f="'+q.key+'" data-v="'+o[0]+'">'+o[1]+'</button>';
+  }).join('');
+}
+function renderFamily(){
+  setBar();
+  var groups=FAM_QUESTIONS.map(function(q,i){
+    return '<div class="field"><label class="f">'+(i+1)+'. '+q.label+'</label>'+
+      '<div class="pills" id="fq-'+q.key+'">'+famPills(q)+'</div>'+
+      '<div class="hint">'+q.hint+'</div></div>';
+  }).join('');
+  app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
+    '<h2>وضعیت خانواده</h2>'+
+    '<p class="lead">سه پرسش کوتاه درباره‌ی «'+esc(state.childName)+'» — همین‌ها به ما کمک می‌کند خدمات رایگان را درست اولویت‌بندی کنیم و جلسه‌ی اول آماده‌تر باشد.</p>'+
+    groups+
+    btnRow('ادامه','',null,6)+
+    '</div>';
+  document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=6;render();});
+  /* هر گروه یک پیل «نمی‌دانم» هم دارد (مقدار null — پیش‌فرض) */
+  FAM_QUESTIONS.forEach(function(q){
+    var box=document.getElementById('fq-'+q.key);
+    var unk=document.createElement('button');
+    unk.className='pill'+(state[q.key]===null?' sel':'');
+    unk.setAttribute('data-f',q.key);unk.setAttribute('data-v','unknown');
+    unk.textContent='نمی‌دانم';
+    box.appendChild(unk);
+  });
+  app.querySelectorAll('[data-f]').forEach(function(p){
+    p.addEventListener('click',function(){
+      var key=p.getAttribute('data-f');
+      var v=p.getAttribute('data-v');
+      state[key==='culture'?'famCulture':key==='finance'?'famFinance':'famCoop'] = v==='unknown'?null:v;
+      document.getElementById('fq-'+key).querySelectorAll('.pill').forEach(function(x){x.classList.remove('sel');});
+      p.classList.add('sel');
+    });
+  });
+  var nx=app.querySelector('.btnrow .btn--primary');nx.textContent='ادامه';
+  nx.addEventListener('click',function(){
+    state.step=8;render();
+  });
+}
+
 function renderPrior(){
   setBar();
   app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
@@ -357,9 +424,9 @@ function renderPrior(){
     '<div class="field" id="pen" style="display:'+(state.priorEval===true?'block':'none')+';margin-top:12px">'+
     '<label class="f" for="penote">کجا و چه نتیجه‌ای؟ (اختیاری)</label>'+
     '<input class="i" id="penote" value="'+esc(state.priorEvalNote)+'"></div>'+
-    btnRow('ادامه','',null,6)+
+    btnRow('ادامه','',null,7)+
     '</div>';
-  document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=6;render();});
+  document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=7;render();});
   app.querySelectorAll('#pe .pill').forEach(function(p){
     p.addEventListener('click',function(){
       state.priorEval=p.getAttribute('data-v')==='1';
@@ -371,7 +438,7 @@ function renderPrior(){
   var nx=app.querySelector('.btnrow .btn--primary');nx.textContent='ادامه';
   nx.addEventListener('click',function(){
     state.priorEvalNote=document.getElementById('penote').value.trim();
-    state.step=8;render();
+    state.step=9;render();
   });
 }
 
@@ -380,13 +447,13 @@ function renderNotes(){
   app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
     '<h2>نکته‌ای هست که به ارزیابی کمک کند؟</h2><p class="lead">اختیاری است — هر چیزی که فکر می‌کنید باید بدونیم.</p>'+
     '<div class="field"><textarea class="i" id="ct">'+esc(state.concernText)+'</textarea></div>'+
-    btnRow('ادامه به مرور نهایی','',null,7)+
+    btnRow('ادامه به مرور نهایی','',null,8)+
     '</div>';
-  document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=7;render();});
+  document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=8;render();});
   var nx=app.querySelector('.btnrow .btn--primary');nx.textContent='ادامه به مرور نهایی';
   nx.addEventListener('click',function(){
     state.concernText=document.getElementById('ct').value.trim();
-    state.step=9;render();
+    state.step=10;render();
   });
 }
 
@@ -401,11 +468,18 @@ function familyChildren(){
     concern_tags: [],
     concern_text: state.concernText || null,
     prior_eval: state.priorEval===true?true:state.priorEval===false?false:null,
-    prior_eval_note: state.priorEvalNote || null
+    prior_eval_note: state.priorEvalNote || null,
+    /* ۱.۲۷.۳۶ — فرم تکمیلی خانواده؛ «نمی‌دانم» = null */
+    family_culture: state.famCulture || null,
+    family_finance: state.famFinance || null,
+    family_cooperation: state.famCoop || null
   }];
 }
 
 /* ─── مودال مرور نهایی (Typeform-style) — خانواده ─── */
+function famLabel(v, map){
+  return v?(map[v]||v):null;
+}
 function renderReview(){
   setBar();
   var rows=[
@@ -415,8 +489,11 @@ function renderReview(){
     {k:'پایه', v:esc2(state.grade), s:3},
     {k:'کلاس', v:esc2(state.klass), s:3},
     {k:'دغدغه اصلی', v:CAT_LABELS[state.concern]||'', s:6},
-    {k:'ارزیابی قبلی', v:state.priorEval===true?'بله'+(state.priorEvalNote?' — '+esc(state.priorEvalNote):''):'خیر', s:7},
-    {k:'نکات', v:esc2(state.concernText), s:8},
+    {k:'وضع فرهنگی', v:esc2(famLabel(state.famCulture,{low:'کم',mid:'متوسط',high:'غنی'})), s:7},
+    {k:'سطح مالی', v:esc2(famLabel(state.famFinance,{low:'کم‌برخوردار',mid:'متوسط',high:'برخوردار'})), s:7},
+    {k:'همکاری خانواده', v:esc2(famLabel(state.famCoop,{low:'کم',mid:'متوسط',high:'زیاد'})), s:7},
+    {k:'ارزیابی قبلی', v:state.priorEval===true?'بله'+(state.priorEvalNote?' — '+esc(state.priorEvalNote):''):'خیر', s:8},
+    {k:'نکات', v:esc2(state.concernText), s:9},
     {k:'معرف', v:esc(state.refName)+' — '+esc(state.refPhone), s:2}
   ].map(function(r){
     return '<div class="review__row"><span class="k">'+r.k+'</span><span class="v">'+r.v+'</span>'+
@@ -424,12 +501,12 @@ function renderReview(){
   }).join('');
   app.innerHTML='<div class="card">'+
     '<h2>این اطلاعات به لیست انتظار اضافه میشه</h2>'+
-    '<p class="lead">چک کنید؛ هر سطر رو می‌تونید همین حالا ویرایش کنید.</p>'+
+    '<p class="lead">یک نگاه بیندازید؛ هر سطر را همین‌جا می‌شود اصلاح کرد.</p>'+
     '<div class="review">'+rows+'</div>'+
     '<div class="err-msg" id="subErr"></div>'+
     '<div class="btnrow"><button class="btn btn--ghost" data-act="back">بازگشت و ویرایش</button>'+
     '<button class="btn btn--primary" id="confirmBtn">تأیید و افزودن به لیست انتظار</button></div></div>';
-  document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=8;render();});
+  document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=9;render();});
   app.querySelectorAll('.e').forEach(function(b){
     b.addEventListener('click',function(){state.step=Number(b.getAttribute('data-s'));render();});
   });
@@ -494,7 +571,7 @@ function rowCardHtml(r, i){
     '<input class="i rn" value="'+esc(r.name)+'"></div>'+
     '<div class="field"><label class="f">شماره موبایل والد</label>'+
     '<input class="i rp" inputmode="tel" dir="ltr" placeholder="09xxxxxxxxx" value="'+esc(r.phone)+'">'+
-    '<div class="err-msg">شماره باید ۱۱ رقم و با ۰۹ شروع شود</div></div></div>';
+    '<div class="err-msg">شماره موبایل ۱۱ رقم است و با ۰۹ شروع می‌شود</div></div></div>';
 }
 
 function renderBatch(){
@@ -502,7 +579,7 @@ function renderBatch(){
   if(state.rows.length===0)state.rows=[{cat:null,name:'',phone:''}];
   app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
     '<h2>ثبت ارجاع‌های کلاس شما</h2>'+
-    '<p class="lead">برای هر دانش‌آموز دسته رو انتخاب کنید، اسمش و شماره‌ی والدش رو بنویسید.</p>'+
+    '<p class="lead">برای هر دانش‌آموز دسته را انتخاب کنید، اسمش و شماره‌ی والدش را بنویسید.</p>'+
     '<div id="rows">'+state.rows.map(rowCardHtml).join('')+'</div>'+
     '<button class="btn btn--ghost btn--sm" id="addRow">+ افزودن دانش‌آموز دیگر</button>'+
     '<div class="err-msg" id="bErr" style="margin-top:10px"></div>'+
@@ -562,7 +639,7 @@ function renderTeachReview(){
       '<span class="v">'+esc(r.name)+' — '+esc(r.phone)+'</span></div>';
   }).join('');
   app.innerHTML='<div class="card"><h2>همه چیز آماده ثبت است</h2>'+
-    '<p class="lead">'+fa(state.rows.length)+' دانش‌آموز به لیست انتظار اضافه میشه. چک کنید:</p>'+
+    '<p class="lead">'+fa(state.rows.length)+' دانش‌آموز به لیست انتظار اضافه میشه. یک نگاه بیندازید:</p>'+
     '<div class="review">'+rows+'</div>'+
     '<div class="err-msg" id="subErr"></div>'+
     '<div class="btnrow"><button class="btn btn--ghost" data-act="back">بازگشت و ویرایش</button>'+
@@ -605,10 +682,11 @@ function render(){
     if(s===4)return renderChildName();
     if(s===5)return renderChildBirth();
     if(s===6)return renderConcern();
-    if(s===7)return renderPrior();
-    if(s===8)return renderNotes();
-    if(s===9)return renderReview();
-    if(s===10)return renderDone();
+    if(s===7)return renderFamily();
+    if(s===8)return renderPrior();
+    if(s===9)return renderNotes();
+    if(s===10)return renderReview();
+    if(s===11)return renderDone();
   }else{
     if(s===4||s===5||s===6)return renderAware();
     if(s===7)return renderBatch();
@@ -631,7 +709,7 @@ export function renderReferralPage(opts: ReferralPageOpts = {}): string {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>معرفی به مرکز — جامع سنجش و اختلالات یادگیری</title>
 <meta name="robots" content="noindex, nofollow">
-<!-- ۱.۲۷.۳۵ — وزیرمتن از CDN (CSP فقط jsdelivr را اجازه می‌دهد) -->
+<!-- وزیرمتن از CDN (CSP فقط jsdelivr را اجازه می‌دهد) -->
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css">
 <style>${PAGE_STYLES}</style>

@@ -433,6 +433,13 @@ export const WAITLIST_ALERT_DAYS = 7;
 export const REFERRAL_ROLES = ['family', 'teacher'] as const;
 export const REFERRAL_CHANNELS = ['web', 'bot', 'manual'] as const;
 export const REFERRAL_STATUSES = ['new', 'accepted', 'rejected'] as const;
+/* ۱.۲۷.۳۶ — سطح سه‌گانهٔ فرم تکمیلی خانواده (فرهنگی/مالی/همکاری) — «نمی‌دانم» سمت UI با null می‌آید */
+export const REFERRAL_FAMILY_LEVELS = [
+  'low',
+  'mid',
+  'high'
+] as const;
+
 export const REFERRAL_CATEGORIES = [
   'delayed',
   'learning_disorder',

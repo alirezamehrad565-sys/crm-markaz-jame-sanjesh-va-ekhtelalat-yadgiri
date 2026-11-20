@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.27.35";
+var APP_VERSION = "1.27.36";
 var NODE_MIN_VERSION = "1.26.0";
 
 // node_modules/zod/v4/classic/external.js
@@ -22419,6 +22419,11 @@ var WAITLIST_SERVICE_TYPE_MAX = 120;
 var WAITLIST_NOTE_MAX = 1e3;
 var WAITLIST_LIST_LIMIT = 500;
 var WAITLIST_ALERT_DAYS = 7;
+var REFERRAL_FAMILY_LEVELS = [
+  "low",
+  "mid",
+  "high"
+];
 var REFERRAL_CATEGORIES = [
   "delayed",
   "learning_disorder",
@@ -23510,7 +23515,11 @@ var ReferralChildSchema = external_exports.object({
   concern_tags: external_exports.array(external_exports.string().trim().min(2).max(40)).max(8, "\u062D\u062F\u0627\u06A9\u062B\u0631 \u06F8 \u0628\u0631\u0686\u0633\u0628 \u062F\u063A\u062F\u063A\u0647").optional().default([]),
   concern_text: external_exports.string().trim().max(REFERRAL_CONCERN_MAX).optional(),
   prior_eval: external_exports.boolean().nullish(),
-  prior_eval_note: external_exports.string().trim().max(300).optional()
+  prior_eval_note: external_exports.string().trim().max(300).optional(),
+  /* ۱.۲۷.۳۶ — فرم تکمیلی وضعیت خانواده زیر هر دانش‌آموز (اختیاری؛ «نمی‌دانم» ارسال نمی‌شود) */
+  family_culture: external_exports.enum(REFERRAL_FAMILY_LEVELS).nullish(),
+  family_finance: external_exports.enum(REFERRAL_FAMILY_LEVELS).nullish(),
+  family_cooperation: external_exports.enum(REFERRAL_FAMILY_LEVELS).nullish()
 });
 var PublicReferralSubmissionSchema = external_exports.object({
   role: external_exports.enum(["family", "teacher"], { message: "\u0646\u0642\u0634 \u0645\u0639\u0631\u0641 \u0628\u0627\u06CC\u062F \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u06CC\u0627 \u0645\u0639\u0644\u0645 \u0628\u0627\u0634\u062F" }),
@@ -25979,29 +25988,6 @@ function parseClfCallback(data, chatId) {
   return null;
 }
 __name(parseClfCallback, "parseClfCallback");
-function parseRefCallback(data, chatId) {
-  const parts = data.split(":");
-  if (parts[1] === "role") {
-    const role = parts[2] === "teacher" ? "teacher" : parts[2] === "family" ? "family" : null;
-    return role ? { kind: "ref_role", chatId, role } : null;
-  }
-  if (parts[1] === "count") {
-    const n = toIndex(parts[2]);
-    if (Number.isNaN(n) || n < 1 || n > 5) return null;
-    return { kind: "ref_count", chatId, n };
-  }
-  if (parts[1] === "cat") {
-    const idx = toIndex(parts[2]);
-    const value = (parts[3] ?? "").trim();
-    const valid = ["delayed", "learning_disorder", "intellectual", "autism", "speech", "other"];
-    if (Number.isNaN(idx) || idx < 0 || !valid.includes(value)) return null;
-    return { kind: "ref_cat", chatId, idx, value };
-  }
-  if (parts[1] === "do") return { kind: "ref_do", chatId };
-  if (parts[1] === "no") return { kind: "ref_no", chatId };
-  return null;
-}
-__name(parseRefCallback, "parseRefCallback");
 function parseExbCallback(data, chatId) {
   const parts = data.split(":");
   switch (parts[1]) {
@@ -26072,7 +26058,6 @@ function parseBotUpdate(update) {
     if (data === "unlink:no") return { kind: "unlink_no", chatId: String(cbChatId) };
     if (data.startsWith("dis:")) return parseAwarenessCallback(data, String(cbChatId));
     if (data.startsWith("clf:")) return parseClfCallback(data, String(cbChatId));
-    if (data.startsWith("rf:")) return parseRefCallback(data, String(cbChatId));
     const parsed = parseCallbackData(data);
     if (!parsed) return null;
     if (parsed.action === "ask") return { kind: "cancel_ask", chatId: String(cbChatId), appointmentId: parsed.targetId };
@@ -30976,6 +30961,19 @@ function referralRowToDomain(row) {
     if (Array.isArray(parsed)) tags = parsed.filter((t) => typeof t === "string");
   } catch {
   }
+  let familyContext = null;
+  if (row.family_context) {
+    try {
+      const fc = JSON.parse(row.family_context);
+      familyContext = {
+        culture: typeof fc.culture === "string" ? fc.culture : null,
+        finance: typeof fc.finance === "string" ? fc.finance : null,
+        cooperation: typeof fc.cooperation === "string" ? fc.cooperation : null
+      };
+    } catch {
+      familyContext = null;
+    }
+  }
   return {
     id: row.id,
     refRole: row.ref_role,
@@ -30992,6 +30990,7 @@ function referralRowToDomain(row) {
     concernText: row.concern_text,
     priorEval: row.prior_eval === null ? null : row.prior_eval === 1,
     priorEvalNote: row.prior_eval_note,
+    familyContext,
     channel: row.channel,
     chatId: row.chat_id,
     submissionGroup: row.submission_group,
@@ -31591,9 +31590,9 @@ function createWaitlistService(deps) {
           await tx.execute(
             `INSERT INTO waitlist_referrals
                (id, ref_role, referrer_name, referrer_phone, first_name, birth_date, guardian_phone, school_text, grade_text,
-                class_text, concern_category, concern_tags, concern_text, prior_eval, prior_eval_note,
+                class_text, concern_category, concern_tags, concern_text, prior_eval, prior_eval_note, family_context,
                 channel, chat_id, token, submission_group, status, academic_year, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'new', ?, ?, ?)`,
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'new', ?, ?, ?)`,
             [
               id,
               input2.role,
@@ -31610,6 +31609,12 @@ function createWaitlistService(deps) {
               child.concern_text ?? null,
               child.prior_eval === true ? 1 : child.prior_eval === false ? 0 : null,
               child.prior_eval_note ?? null,
+              /* ۱.۲۷.۳۶ — فرم تکمیلی خانواده (JSON) — هیچ‌کدام خالی؟ ستون NULL */
+              child.family_culture || child.family_finance || child.family_cooperation ? JSON.stringify({
+                culture: child.family_culture ?? null,
+                finance: child.family_finance ?? null,
+                cooperation: child.family_cooperation ?? null
+              }) : null,
               channel,
               meta3.chatId ?? null,
               input2.token ?? null,
@@ -31762,22 +31767,31 @@ p.lead{color:var(--muted);margin:0 0 18px;font-size:14.5px}
 .caret{display:inline-block;width:2px;height:1.15em;background:var(--brand);vertical-align:-0.2em;
 animation:blink 1s steps(1) infinite;margin-inline-start:2px}
 @keyframes blink{50%{opacity:0}}
+/* \u06F1.\u06F2\u06F7.\u06F3\u06F6 \u2014 \u062F\u06A9\u0645\u0647\u200C\u0647\u0627\u06CC \u0647\u0645\u200C\u0627\u0646\u062F\u0627\u0632\u0647: flex-basis \u0635\u0641\u0631 \u06CC\u0639\u0646\u06CC \xAB\u0627\u062F\u0627\u0645\u0647\xBB \u0648 \xAB\u0628\u0627\u0632\u06AF\u0634\u062A\xBB \u0647\u0645\u06CC\u0634\u0647 \u0647\u0645\u200C\u067E\u0647\u0646\u0627\u061B
+   min-height \u0645\u0634\u062A\u0631\u06A9 \u06CC\u0639\u0646\u06CC \u0647\u0645\u200C\u0642\u062F \u2014 \u0641\u0627\u0631\u063A \u0627\u0632 \u0637\u0648\u0644 \u0645\u062A\u0646 */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:none;cursor:pointer;
-border-radius:12px;padding:12px 22px;font-family:inherit;font-size:15.5px;font-weight:700;width:100%}
+border-radius:12px;padding:12px 22px;font-family:inherit;font-size:15.5px;font-weight:700;width:100%;
+min-height:52px}
 .btn--primary{background:var(--brand);color:#fff}
 .btn--primary:disabled{opacity:.45;cursor:not-allowed}
 .btn--ghost{background:transparent;color:var(--brand);border:1.5px solid var(--brand)}
-.btn--sm{width:auto;padding:9px 16px;font-size:14px}
+.btn--sm{width:auto;min-height:44px;padding:9px 16px;font-size:14px}
 .btnrow{display:flex;gap:10px;margin-top:20px}
-.btnrow .btn{flex:1}
-.choice{display:block;background:var(--card);border:2px solid var(--line);border-radius:var(--r);
-padding:16px 18px;margin-bottom:12px;cursor:pointer;transition:border-color .15s,background .15s}
+.btnrow .btn{flex:1 1 0}
+.choice{display:flex;align-items:flex-start;gap:12px;background:var(--card);border:2px solid var(--line);
+border-radius:var(--r);padding:16px 18px;cursor:pointer;transition:border-color .15s,background .15s,box-shadow .15s;
+text-align:start;width:100%;font-family:inherit;position:relative}
 .choice:hover{border-color:var(--brand)}
-.choice.sel{border-color:var(--brand);background:var(--brand-soft)}
+.choice.sel{border-color:var(--brand);background:var(--brand-soft);box-shadow:0 2px 10px rgba(37,99,235,.12)}
+.choice.sel .no{background:var(--brand);color:#fff}
+.choice.sel::after{content:'\u2713';position:absolute;top:10px;left:14px;color:var(--brand);
+font-weight:800;font-size:16px}
 .choice b{display:block;font-size:16px;margin-bottom:2px}
-.choice span{color:var(--muted);font-size:13.5px}
-.choice .no{display:inline-block;width:26px;height:26px;border-radius:50%;background:var(--brand-soft);
-color:var(--brand);text-align:center;line-height:26px;font-weight:800;margin-inline-end:8px;font-size:13px}
+.choice span.d{color:var(--muted);font-size:13.5px}
+.choice .no{flex:none;width:28px;height:28px;border-radius:50%;background:var(--brand-soft);
+color:var(--brand);text-align:center;line-height:28px;font-weight:800;font-size:13px}
+/* \u06F1.\u06F2\u06F7.\u06F3\u06F6 \u2014 \u0631\u062F\u06CC\u0641 \u06A9\u0627\u0631\u062A\u200C\u0647\u0627 \u0628\u0627 \u0627\u0631\u062A\u0641\u0627\u0639 \u06CC\u06A9\u0633\u0627\u0646 (\u0628\u0644\u0646\u062F\u062A\u0631\u06CC\u0646 \u0645\u062D\u062A\u0648\u0627 \u0645\u0639\u06CC\u0627\u0631 \u0647\u0645\u0647 \u0627\u0633\u062A) */
+.choices{display:grid;gap:12px;grid-auto-rows:1fr}
 label.f{display:block;font-weight:700;margin:0 0 6px}
 input.i,select.i,textarea.i{width:100%;border:1.5px solid var(--line);border-radius:12px;padding:11px 14px;
 font-family:inherit;font-size:15.5px;background:#fff;color:var(--ink)}
@@ -31806,10 +31820,12 @@ color:#1e40af;margin-top:14px}
 .rowcard{border:1.5px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px;position:relative}
 .rowcard .rm{position:absolute;top:10px;left:10px;background:none;border:none;color:var(--err);
 cursor:pointer;font-family:inherit;font-size:13px;font-weight:700}
-.pills{display:flex;flex-wrap:wrap;gap:8px}
-.pill{border:1.5px solid var(--line);background:#fff;border-radius:999px;padding:7px 14px;
-cursor:pointer;font-family:inherit;font-size:14px}
-.pill.sel{border-color:var(--brand);background:var(--brand-soft);color:var(--brand);font-weight:700}
+/* \u06F1.\u06F2\u06F7.\u06F3\u06F6 \u2014 \u067E\u06CC\u0644\u200C\u0647\u0627\u06CC \u0647\u0645\u200C\u0627\u0646\u062F\u0627\u0632\u0647 \u0648 \u0644\u0645\u0633\u200C\u067E\u0630\u06CC\u0631 (\u062D\u062F\u0627\u0642\u0644 \u06F4\u06F4px) */
+.pills{display:flex;flex-wrap:wrap;gap:10px}
+.pill{border:1.5px solid var(--line);background:#fff;border-radius:999px;padding:9px 18px;
+cursor:pointer;font-family:inherit;font-size:14px;min-height:44px;display:inline-flex;align-items:center}
+.pill.sel{border-color:var(--brand);background:var(--brand-soft);color:var(--brand);font-weight:700;
+box-shadow:0 1px 6px rgba(37,99,235,.15)}
 .done{text-align:center}
 .done .big{font-size:46px;margin-bottom:6px}
 .switch-row{display:flex;align-items:center;justify-content:space-between;gap:10px;
@@ -31817,10 +31833,10 @@ border:1.5px solid var(--line);border-radius:12px;padding:12px 14px}
 /* \u06F1.\u06F2\u06F7.\u06F3\u06F5 \u2014 \u0627\u0641\u06A9\u062A \u0641\u06CC\u062F \u0648 \u062C\u0631\u06CC\u0627\u0646 \u067E\u06CC\u0648\u0633\u062A\u0647\u061B \u06A9\u0627\u0647\u0634-\u062D\u0631\u06A9\u062A \u0631\u0639\u0627\u06CC\u062A \u0645\u06CC\u200C\u0634\u0648\u062F */
 .app>.card{animation:fadein .3s ease}
 @keyframes fadein{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-.choice,.btn{transition:transform .12s ease,border-color .15s,background .15s}
-.choice:active{transform:scale(.98)}
+.choice,.btn,.pill{transition:transform .12s ease,border-color .15s,background .15s,box-shadow .15s}
+.choice:active,.pill:active{transform:scale(.98)}
 input.i:focus-visible,select.i:focus-visible,textarea.i:focus-visible,button:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
-@media (prefers-reduced-motion: reduce){.caret{animation:none}.bar__fill{transition:none}.app>.card{animation:none}.choice,.btn{transition:none}}
+@media (prefers-reduced-motion: reduce){.caret{animation:none}.bar__fill{transition:none}.app>.card{animation:none}.choice,.btn,.pill{transition:none}}
 `;
 var PAGE_SCRIPT = `
 (function(){
@@ -31830,17 +31846,26 @@ var app = document.getElementById('app');
 var bar = document.getElementById('bar');
 var REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 var GRADES = ['\u067E\u06CC\u0634\u200C\u062F\u0628\u0633\u062A\u0627\u0646\u06CC','\u0627\u0648\u0644 \u062F\u0628\u0633\u062A\u0627\u0646','\u062F\u0648\u0645 \u062F\u0628\u0633\u062A\u0627\u0646','\u0633\u0648\u0645 \u062F\u0628\u0633\u062A\u0627\u0646','\u0686\u0647\u0627\u0631\u0645 \u062F\u0628\u0633\u062A\u0627\u0646','\u067E\u0646\u062C\u0645 \u062F\u0628\u0633\u062A\u0627\u0646','\u0634\u0634\u0645 \u062F\u0628\u0633\u062A\u0627\u0646'];
+/* \u06F1.\u06F2\u06F7.\u06F3\u06F6 \u2014 \u06AF\u0632\u06CC\u0646\u0647\u0654 \xAB\u0645\u0634\u06A9\u0648\u06A9 \u0628\u0647 \u0627\u062A\u06CC\u0633\u0645\xBB \u062D\u0630\u0641 \u0634\u062F (\u062E\u0648\u0627\u0633\u062A \u06A9\u0627\u0631\u0641\u0631\u0645\u0627)\u061B \u0645\u0642\u062F\u0627\u0631 autism \u062F\u0631 \u062F\u0627\u062F\u0647\u200C\u0647\u0627\u06CC \u0642\u0628\u0644\u06CC \u0628\u0627\u0642\u06CC \u0627\u0633\u062A */
 var CONCERNS = [
   {v:'delayed', t:'\u062F\u06CC\u0631\u0622\u0645\u0648\u0632\u06CC', d:'\u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u06A9\u0646\u062F\u062A\u0631 \u0627\u0632 \u0647\u0645\u200C\u0633\u0646\u200C\u0648\u0633\u0627\u0644\u200C\u0647\u0627 \u2014 \u0648\u0644\u06CC \u06CC\u0627\u062F \u0645\u06CC\u200C\u06AF\u06CC\u0631\u062F'},
   {v:'learning_disorder', t:'\u0627\u062E\u062A\u0644\u0627\u0644 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC', d:'\u0633\u062E\u062A\u06CC \u062F\u0631 \u062E\u0648\u0627\u0646\u062F\u0646\u060C \u0646\u0648\u0634\u062A\u0646 \u06CC\u0627 \u062D\u0633\u0627\u0628'},
   {v:'intellectual', t:'\u0645\u0634\u06A9\u0648\u06A9 \u0628\u0647 \u06A9\u0645\u200C\u062A\u0648\u0627\u0646\u06CC \u0630\u0647\u0646\u06CC', d:'\u062A\u0623\u062E\u06CC\u0631 \u062C\u062F\u06CC \u062F\u0631 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u0648 \u0645\u0647\u0627\u0631\u062A\u200C\u0647\u0627\u06CC \u0631\u0648\u0632\u0645\u0631\u0647'},
   {v:'speech', t:'\u062A\u0623\u062E\u06CC\u0631 \u06AF\u0641\u062A\u0627\u0631 \u0648 \u0632\u0628\u0627\u0646', d:'\u062F\u06CC\u0631 \u06CC\u0627 \u06A9\u0645 \u062D\u0631\u0641 \u0632\u062F\u0646 \u0646\u0633\u0628\u062A \u0628\u0647 \u0647\u0645\u200C\u0633\u0646\u200C\u0647\u0627'},
-  {v:'autism', t:'\u0645\u0634\u06A9\u0648\u06A9 \u0628\u0647 \u0637\u06CC\u0641 \u0627\u062A\u06CC\u0633\u0645', d:'\u062F\u0634\u0648\u0627\u0631\u06CC \u062F\u0631 \u062A\u0639\u0627\u0645\u0644 \u0648 \u0631\u0641\u062A\u0627\u0631'},
   {v:'other', t:'\u0633\u0627\u06CC\u0631', d:'\u062F\u063A\u062F\u063A\u0647\u200C\u06CC \u062F\u06CC\u06AF\u0631\u06CC \u062F\u0627\u0631\u06CC\u062F'}
 ];
-var TEACH_CATS = ['delayed','learning_disorder','intellectual','autism'];
-var TEACH_CAT_LABELS = {delayed:'\u062F\u06CC\u0631\u0622\u0645\u0648\u0632', learning_disorder:'\u0627\u062E\u062A\u0644\u0627\u0644 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC', intellectual:'\u0645\u0634\u06A9\u0648\u06A9 \u0628\u0647 \u06A9\u0645\u200C\u062A\u0648\u0627\u0646\u06CC', autism:'\u0645\u0634\u06A9\u0648\u06A9 \u0628\u0647 \u0627\u062A\u06CC\u0633\u0645'};
+var TEACH_CATS = ['delayed','learning_disorder','intellectual'];
+var TEACH_CAT_LABELS = {delayed:'\u062F\u06CC\u0631\u0622\u0645\u0648\u0632', learning_disorder:'\u0627\u062E\u062A\u0644\u0627\u0644 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC', intellectual:'\u0645\u0634\u06A9\u0648\u06A9 \u0628\u0647 \u06A9\u0645\u200C\u062A\u0648\u0627\u0646\u06CC'};
 var CAT_LABELS = {delayed:'\u062F\u06CC\u0631\u0622\u0645\u0648\u0632\u06CC', learning_disorder:'\u0627\u062E\u062A\u0644\u0627\u0644 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC', intellectual:'\u0645\u0634\u06A9\u0648\u06A9 \u0628\u0647 \u06A9\u0645\u200C\u062A\u0648\u0627\u0646\u06CC \u0630\u0647\u0646\u06CC', speech:'\u062A\u0623\u062E\u06CC\u0631 \u06AF\u0641\u062A\u0627\u0631 \u0648 \u0632\u0628\u0627\u0646', autism:'\u0645\u0634\u06A9\u0648\u06A9 \u0628\u0647 \u0637\u06CC\u0641 \u0627\u062A\u06CC\u0633\u0645', other:'\u0633\u0627\u06CC\u0631'};
+/* \u06F1.\u06F2\u06F7.\u06F3\u06F6 \u2014 \u0641\u0631\u0645 \u062A\u06A9\u0645\u06CC\u0644\u06CC \u062E\u0627\u0646\u0648\u0627\u062F\u0647: \u0633\u0647 \u067E\u0631\u0633\u0634 \u0628\u0627 \u0633\u0637\u062D \u0633\u0647\u200C\u06AF\u0627\u0646\u0647 + \xAB\u0646\u0645\u06CC\u200C\u062F\u0627\u0646\u0645\xBB (null \u0627\u0631\u0633\u0627\u0644 \u0645\u06CC\u200C\u0634\u0648\u062F) */
+var FAM_QUESTIONS = [
+  {key:'culture', label:'\u0648\u0636\u0639 \u0641\u0631\u0647\u0646\u06AF\u06CC \u062E\u0627\u0646\u0648\u0627\u062F\u0647', hint:'\u06A9\u062A\u0627\u0628\u060C \u06AF\u0641\u062A\u200C\u0648\u06AF\u0648 \u0648 \u0641\u0639\u0627\u0644\u06CC\u062A \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u062F\u0631 \u062E\u0627\u0646\u0647 \u0686\u0642\u062F\u0631 \u0647\u0633\u062A\u061F',
+   opts:[['low','\u06A9\u0645'],['mid','\u0645\u062A\u0648\u0633\u0637'],['high','\u063A\u0646\u06CC']]},
+  {key:'finance', label:'\u0633\u0637\u062D \u0645\u0627\u0644\u06CC \u062E\u0627\u0646\u0648\u0627\u062F\u0647', hint:'\u0641\u0642\u0637 \u0628\u0631\u0627\u06CC \u0627\u0648\u0644\u0648\u06CC\u062A\u200C\u0628\u0646\u062F\u06CC \u062E\u062F\u0645\u0627\u062A \u0631\u0627\u06CC\u06AF\u0627\u0646 \u0648 \u06A9\u0645\u06A9\u200C\u0647\u0627 \u0627\u0633\u062A \u2014 \u0631\u0648\u06CC \u067E\u0630\u06CC\u0631\u0634 \u0627\u062B\u0631\u06CC \u0646\u062F\u0627\u0631\u062F.',
+   opts:[['low','\u06A9\u0645\u200C\u0628\u0631\u062E\u0648\u0631\u062F\u0627\u0631'],['mid','\u0645\u062A\u0648\u0633\u0637'],['high','\u0628\u0631\u062E\u0648\u0631\u062F\u0627\u0631']]},
+  {key:'cooperation', label:'\u0645\u06CC\u0632\u0627\u0646 \u0647\u0645\u06A9\u0627\u0631\u06CC \u062E\u0627\u0646\u0648\u0627\u062F\u0647', hint:'\u062A\u0645\u0627\u0633\u060C \u067E\u06CC\u06AF\u06CC\u0631\u06CC \u062A\u0645\u0631\u06CC\u0646\u200C\u0647\u0627 \u0648 \u062D\u0636\u0648\u0631 \u062F\u0631 \u062C\u0644\u0633\u0627\u062A.',
+   opts:[['low','\u06A9\u0645'],['mid','\u0645\u062A\u0648\u0633\u0637'],['high','\u0632\u06CC\u0627\u062F']]}
+];
 var AWARE = [
   {t:'\u062F\u06CC\u0631\u0622\u0645\u0648\u0632 \u06A9\u06CC\u0647\u061F', b:'\u0628\u0686\u0647\u200C\u0627\u06CC \u06A9\u0647 \u0646\u0633\u0628\u062A \u0628\u0647 \u0647\u0645\u200C\u0633\u0646\u200C\u0648\u0633\u0627\u0644\u200C\u0647\u0627\u0634 \u06A9\u0646\u062F\u062A\u0631 \u06CC\u0627\u062F \u0645\u06CC\u200C\u06AF\u06CC\u0631\u0647 \u2014 \u0648\u0644\u06CC \u06CC\u0627\u062F \u0645\u06CC\u200C\u06AF\u06CC\u0631\u0647. \u0628\u0627 \u0622\u0645\u0648\u0632\u0634 \u0645\u0646\u0627\u0633\u0628 \u0648 \u0635\u0628\u0631\u060C \u0631\u0627\u0647 \u067E\u06CC\u0634\u0631\u0641\u062A\u0634 \u0628\u0627\u0632\u0647. \u0627\u06AF\u0631 \u062A\u0648\u06CC \u06A9\u0644\u0627\u0633\u062A\u0648\u0646 \u0686\u0646\u06CC\u0646 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\u06CC \u062F\u0627\u0631\u06CC\u062F\u060C \u0645\u0639\u0631\u0641\u06CC\u200C\u0634 \u0627\u0648\u0644\u06CC\u0646 \u0642\u062F\u0645 \u06A9\u0645\u06A9\u200C\u0647.'},
   {t:'\u0627\u062E\u062A\u0644\u0627\u0644 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC \u0686\u06CC\u0647\u061F', b:'\u0628\u0686\u0647\u200C\u0627\u06CC \u06A9\u0647 \u0627\u0632 \u0646\u0638\u0631 \u0647\u0648\u0634\u06CC \u06A9\u0627\u0645\u0644\u0627\u064B \u0639\u0627\u062F\u06CC\u0647\u060C \u0648\u0644\u06CC \u062A\u0648\u06CC \u062E\u0648\u0627\u0646\u062F\u0646 (\u062F\u06CC\u0633\u0644\u06A9\u0633\u06CC)\u060C \u0646\u0648\u0634\u062A\u0646 (\u062F\u06CC\u0633\u200C\u06AF\u0631\u0627\u0641\u06CC) \u06CC\u0627 \u062D\u0633\u0627\u0628 (\u062F\u06CC\u0633\u200C\u06A9\u0627\u0644\u06A9\u0648\u0644\u06CC) \u0633\u062E\u062A\u06CC \u062F\u0627\u0631\u0647. \u062A\u0634\u062E\u06CC\u0635\u0634 \u06A9\u0627\u0631\u0650 \u0645\u0627\u0633\u062A\u061B \u06A9\u0627\u0631\u0650 \u0634\u0645\u0627 \u0641\u0642\u0637 \u0645\u0634\u0627\u0647\u062F\u0647 \u0648 \u0645\u0639\u0631\u0641\u06CC\u200C\u0633\u062A.'},
@@ -31850,6 +31875,7 @@ var state = {
   step: 0, role: null, refName: '', refPhone: '',
   school: '', schoolName: '', grade: '', klass: '',
   childName: '', childBirth: '', concern: null, concernText: '',
+  famCulture: null, famFinance: null, famCoop: null, /* \u06F1.\u06F2\u06F7.\u06F3\u06F6 \u2014 \u067E\u06CC\u0634\u200C\u0641\u0631\u0636 \xAB\u0646\u0645\u06CC\u200C\u062F\u0627\u0646\u0645\xBB\u061B \u0645\u0642\u062F\u0627\u0631 low/mid/high \u067E\u0633 \u0627\u0632 \u0627\u0646\u062A\u062E\u0627\u0628 */
   priorEval: null, priorEvalNote: '',
   rows: [], awareIdx: 0, meta: null, submitting: false
 };
@@ -31857,7 +31883,7 @@ function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'
 function normDigits(s){return String(s==null?'':s).replace(/[\u06F0-\u06F9]/g,function(d){return String('\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9'.indexOf(d));}).replace(/[\u0660-\u0669]/g,function(d){return String('\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669'.indexOf(d));});}
 function normPhone(s){var v = normDigits(s).replace(/[\\s\\-().]/g,'');if(v.indexOf('+98')===0){v='0'+v.slice(3);}else if(v.indexOf('98')===0&&v.length===12){v='0'+v.slice(2);}return v;}
 function validPhone(s){return /^09\\d{9}$/.test(normPhone(s));}
-function familyTotal(){return 11;}
+function familyTotal(){return 12;}
 function teachTotal(){return 10;}
 function total(){return state.role==='teacher'?teachTotal():familyTotal();}
 function setBar(){var t=total();var pct=Math.round(Math.min(state.step,t-1)/(t-1)*100);bar.style.width=pct+'%';}
@@ -31914,10 +31940,11 @@ function renderRole(){
   setBar();
   app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
     '<h2>\u0634\u0645\u0627 \u06A9\u062F\u0627\u0645\u200C\u06CC\u06A9 \u0647\u0633\u062A\u06CC\u062F\u061F</h2>'+
-    '<p class="lead">\u0686\u0646\u062F \u0633\u0624\u0627\u0644 \u0628\u0639\u062F\u06CC \u0628\u0631 \u0627\u0633\u0627\u0633 \u0647\u0645\u06CC\u0646 \u0627\u0646\u062A\u062E\u0627\u0628 \u0641\u0631\u0642 \u0645\u06CC\u200C\u06A9\u0646\u0647.</p>'+
-    '<button class="choice" id="rFamily"><span class="no">\u06F1</span><b>\u067E\u062F\u0631 \u06CC\u0627 \u0645\u0627\u062F\u0631 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632</b><span>\u0645\u06CC\u200C\u062E\u0648\u0627\u0645 \u0641\u0631\u0632\u0646\u062F\u0645 \u0631\u0648 \u0628\u0647 \u0645\u0631\u06A9\u0632 \u0645\u0639\u0631\u0641\u06CC \u06A9\u0646\u0645</span></button>'+
-    '<button class="choice" id="rTeacher"><span class="no">\u06F2</span><b>\u0645\u0639\u0644\u0645 \u0647\u0645\u06A9\u0627\u0631 \u0645\u0627</b><span>\u0645\u06CC\u200C\u062E\u0648\u0627\u0645 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\u0647\u0627\u06CC \u06A9\u0644\u0627\u0633\u0645 \u0631\u0648 \u0645\u0639\u0631\u0641\u06CC \u06A9\u0646\u0645</span></button>'+
-    '</div>';
+    '<p class="lead">\u0628\u0631 \u0627\u0633\u0627\u0633 \u0647\u0645\u06CC\u0646 \u0627\u0646\u062A\u062E\u0627\u0628\u060C \u0641\u0631\u0645 \u0628\u0631\u0627\u06CC \u0634\u0645\u0627 \u06A9\u0648\u062A\u0627\u0647 \u06CC\u0627 \u0628\u0644\u0646\u062F \u0645\u06CC\u200C\u0634\u0648\u062F.</p>'+
+    '<div class="choices">'+
+    '<button class="choice" id="rFamily"><span class="no">\u06F1</span><b>\u067E\u062F\u0631 \u06CC\u0627 \u0645\u0627\u062F\u0631 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632</b><span class="d">\u0645\u06CC\u200C\u062E\u0648\u0627\u0645 \u0641\u0631\u0632\u0646\u062F\u0645 \u0631\u0648 \u0628\u0647 \u0645\u0631\u06A9\u0632 \u0645\u0639\u0631\u0641\u06CC \u06A9\u0646\u0645</span></button>'+
+    '<button class="choice" id="rTeacher"><span class="no">\u06F2</span><b>\u0645\u0639\u0644\u0645 \u0647\u0645\u06A9\u0627\u0631 \u0645\u0627</b><span class="d">\u0645\u06CC\u200C\u062E\u0648\u0627\u0645 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\u0647\u0627\u06CC \u06A9\u0644\u0627\u0633\u0645 \u0631\u0648 \u0645\u0639\u0631\u0641\u06CC \u06A9\u0646\u0645</span></button>'+
+    '</div></div>';
   var pick=function(role){
     state.role=role;state.step=2;render();
   };
@@ -31928,13 +31955,13 @@ function renderRole(){
 function renderContact(){
   setBar();
   app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
-    '<h2>\u0627\u0633\u0645 \u0648 \u0631\u0627\u0647 \u062A\u0645\u0627\u0633</h2><p class="lead">\u0642\u0628\u0644 \u0627\u0632 \u0647\u0631 \u0686\u06CC\u0632\u060C \u0627\u0633\u0645 \u0648 \u0634\u0645\u0627\u0631\u0647\u200C\u0627\u06CC \u06A9\u0647 \u0628\u062A\u0648\u0646\u06CC\u0645 \u0628\u0627\u0647\u0627\u062A\u0648\u0646 \u062A\u0645\u0627\u0633 \u0628\u06AF\u06CC\u0631\u06CC\u0645 \u0631\u0648 \u0628\u06AF\u06CC\u062F.</p>'+
+    '<h2>\u062E\u0648\u062F\u062A\u0627\u0646 \u0631\u0627 \u0645\u0639\u0631\u0641\u06CC \u06A9\u0646\u06CC\u062F</h2><p class="lead">\u0627\u0633\u0645 \u0648 \u0634\u0645\u0627\u0631\u0647\u200C\u0627\u06CC \u06A9\u0647 \u0631\u0627\u062D\u062A \u0628\u0634\u0648\u062F \u0628\u0627 \u0634\u0645\u0627 \u062D\u0631\u0641 \u0632\u062F.</p>'+
     '<div class="field"><label class="f" for="rn">\u0646\u0627\u0645 \u0648 \u0646\u0627\u0645 \u062E\u0627\u0646\u0648\u0627\u062F\u06AF\u06CC \u0634\u0645\u0627</label>'+
     '<input class="i" id="rn" autocomplete="name">'+
-    '<div class="err-msg" id="rnErr">\u0646\u0627\u0645 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A</div></div>'+
+    '<div class="err-msg" id="rnErr">\u0646\u0627\u0645 \u0631\u0627 \u06A9\u0627\u0645\u0644 \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F \u2014 \u062F\u0633\u062A\u200C\u06A9\u0645 \u062F\u0648 \u062D\u0631\u0641</div></div>'+
     '<div class="field"><label class="f" for="rp">\u0634\u0645\u0627\u0631\u0647 \u0645\u0648\u0628\u0627\u06CC\u0644</label>'+
     '<input class="i" id="rp" inputmode="tel" dir="ltr" placeholder="09xxxxxxxxx">'+
-    '<div class="err-msg" id="rpErr">\u0634\u0645\u0627\u0631\u0647 \u0628\u0627\u06CC\u062F \u06F1\u06F1 \u0631\u0642\u0645 \u0648 \u0628\u0627 \u06F0\u06F9 \u0634\u0631\u0648\u0639 \u0634\u0648\u062F</div></div>'+
+    '<div class="err-msg" id="rpErr">\u0634\u0645\u0627\u0631\u0647 \u0645\u0648\u0628\u0627\u06CC\u0644 \u06F1\u06F1 \u0631\u0642\u0645 \u0627\u0633\u062A \u0648 \u0628\u0627 \u06F0\u06F9 \u0634\u0631\u0648\u0639 \u0645\u06CC\u200C\u0634\u0648\u062F</div></div>'+
     btnRow('\u0627\u062F\u0627\u0645\u0647','',null,1)+
     '</div>';
   document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=1;render();});
@@ -31958,7 +31985,7 @@ function renderSchool(){
   setBar();
   app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
     '<h2>'+(state.role==='teacher'?'\u0645\u062F\u0631\u0633\u0647\u200C\u06CC \u062E\u0648\u062F\u062A\u0627\u0646':'\u06A9\u0648\u062F\u06A9 \u0634\u0645\u0627 \u062F\u0631 \u06A9\u062F\u0648\u0645 \u0645\u062F\u0631\u0633\u0647\u200C\u06CC \u0647\u0645\u06A9\u0627\u0631 \u0645\u0627 \u062F\u0631\u0633 \u0645\u06CC\u200C\u062E\u0648\u0646\u0647\u061F')+'</h2>'+
-    '<p class="lead">\u0641\u0642\u0637 \u0645\u062F\u0627\u0631\u0633 \u0647\u0645\u06A9\u0627\u0631 \u0645\u0627 \u062F\u0631 \u0641\u0647\u0631\u0633\u062A \u0647\u0633\u062A\u0646 \u2014 \u0627\u06AF\u0631 \u0646\u0628\u0648\u062F\u060C \u0627\u0633\u0645\u0634 \u0631\u0648 \u062F\u0633\u062A\u06CC \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F.</p>'+
+    '<p class="lead">\u0641\u0642\u0637 \u0645\u062F\u0627\u0631\u0633 \u0647\u0645\u06A9\u0627\u0631 \u0645\u0627 \u062F\u0631 \u0641\u0647\u0631\u0633\u062A \u0647\u0633\u062A\u0646 \u2014 \u0627\u06AF\u0631 \u0646\u0628\u0648\u062F\u060C \u0627\u0633\u0645\u0634 \u0631\u0627 \u062F\u0633\u062A\u06CC \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F\u061B \u0645\u0634\u06A9\u0644\u06CC \u0646\u06CC\u0633\u062A.</p>'+
     '<div class="field"><label class="f" for="sc">\u0645\u062F\u0631\u0633\u0647</label>'+
     '<select class="i" id="sc"><option value="">\u062F\u0631 \u062D\u0627\u0644 \u0628\u0627\u0631\u06AF\u0630\u0627\u0631\u06CC\u2026</option></select>'+
     '<input class="i" id="scT" style="display:none;margin-top:8px" placeholder="\u0627\u0633\u0645 \u0645\u062F\u0631\u0633\u0647 \u0631\u0627 \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F" value="'+esc(state.schoolName)+'">'+
@@ -32009,10 +32036,11 @@ function renderSchool(){
 function renderChildName(){
   setBar();
   app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
-    '<h2>\u0627\u0633\u0645 \u0648 \u0641\u0627\u0645\u06CC\u0644 \u06A9\u0648\u062F\u06A9 \u0686\u06CC\u0647\u061F</h2>'+
+    '<h2>\u0627\u0633\u0645 \u06A9\u0648\u062F\u06A9 \u0686\u06CC\u0633\u062A\u061F</h2>'+
+    '<p class="lead">\u0647\u0645\u0627\u0646\u200C\u0637\u0648\u0631 \u06A9\u0647 \u0635\u062F\u0627\u064A\u0634 \u0645\u06CC\u200C\u06A9\u0646\u06CC\u062F \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F.</p>'+
     '<div class="field"><label class="f" for="cn">\u0646\u0627\u0645 \u0648 \u0646\u0627\u0645 \u062E\u0627\u0646\u0648\u0627\u062F\u06AF\u06CC \u06A9\u0648\u062F\u06A9</label>'+
     '<input class="i" id="cn" value="'+esc(state.childName)+'">'+
-    '<div class="err-msg" id="cnErr">\u0646\u0627\u0645 \u06A9\u0648\u062F\u06A9 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A</div></div>'+
+    '<div class="err-msg" id="cnErr">\u0627\u0633\u0645 \u06A9\u0648\u062F\u06A9 \u0631\u0627 \u06A9\u0627\u0645\u0644 \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F \u2014 \u062F\u0633\u062A\u200C\u06A9\u0645 \u062F\u0648 \u062D\u0631\u0641</div></div>'+
     btnRow('\u0627\u062F\u0627\u0645\u0647','',null,3)+
     '</div>';
   document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=3;render();});
@@ -32026,7 +32054,7 @@ function renderChildName(){
 function renderChildBirth(){
   setBar();
   app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
-    '<h2>\u062A\u0627\u0631\u06CC\u062E \u062A\u0648\u0644\u062F \u06A9\u0648\u062F\u06A9</h2><p class="lead">\u0627\u06AF\u0647 \u0628\u0644\u062F\u06CC\u062F \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F \u2014 \u0627\u06AF\u0647 \u0646\u0647\u060C \u062E\u0627\u0644\u06CC \u0628\u0630\u0627\u0631\u06CC\u062F \u0648 \u0628\u0630\u0627\u0631\u06CC\u062F \u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u062E\u0648\u062F\u0634 \u0628\u0641\u0647\u0645\u0647.</p>'+
+    '<h2>\u062A\u0627\u0631\u06CC\u062E \u062A\u0648\u0644\u062F \u06A9\u0648\u062F\u06A9</h2><p class="lead">\u0627\u06AF\u0631 \u0628\u0644\u062F\u06CC\u062F \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F \u2014 \u0627\u06AF\u0631 \u0646\u0647\u060C \u062E\u0627\u0644\u06CC \u0628\u06AF\u0630\u0627\u0631\u06CC\u062F \u0648 \u0628\u06AF\u0630\u0627\u0631\u06CC\u062F \u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u062E\u0648\u062F\u0634 \u0628\u0641\u0647\u0645\u062F.</p>'+
     '<div class="field"><label class="f" for="cb">\u062A\u0627\u0631\u06CC\u062E \u062A\u0648\u0644\u062F (\u0634\u0645\u0633\u06CC \u2014 \u0645\u062B\u0644 \u06F1\u06F3\u06F9\u06F8/\u06F0\u06F5/\u06F1\u06F2)</label>'+
     '<input class="i" id="cb" inputmode="numeric" value="'+esc(state.childBirth)+'">'+
     '<div class="hint">\u0627\u062E\u062A\u06CC\u0627\u0631\u06CC \u0627\u0633\u062A</div></div>'+
@@ -32044,11 +32072,11 @@ function renderConcern(){
   setBar();
   var cards=CONCERNS.map(function(c,i){
     return '<button class="choice'+(state.concern===c.v?' sel':'')+'" data-c="'+c.v+'">'+
-      '<span class="no">'+(i+1)+'</span><b>'+c.t+'</b><span>'+c.d+'</span></button>';
+      '<span class="no">'+(i+1)+'</span><b>'+c.t+'</b><span class="d">'+c.d+'</span></button>';
   }).join('');
   app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
-    '<h2>\u062F\u063A\u062F\u063A\u0647\u200C\u06CC \u0627\u0635\u0644\u06CC \u0634\u0645\u0627 \u0686\u06CC\u0647\u061F</h2><p class="lead">\u062F\u0642\u06CC\u0642 \u0628\u0648\u062F\u0646 \u0644\u0627\u0632\u0645 \u0646\u06CC\u0633\u062A \u2014 \u0646\u06AF\u0631\u0627\u0646\u06CC\u200C\u062A\u0648\u0646 \u0631\u0648 \u0628\u06AF\u06CC\u062F\u060C \u0628\u0642\u06CC\u0647\u200C\u0634 \u06A9\u0627\u0631 \u0645\u0627\u0633\u062A.</p>'+
-    cards+
+    '<h2>\u062F\u063A\u062F\u063A\u0647\u200C\u06CC \u0627\u0635\u0644\u06CC \u0634\u0645\u0627 \u0686\u06CC\u0647\u061F</h2><p class="lead">\u0644\u0627\u0632\u0645 \u0646\u06CC\u0633\u062A \u062F\u0642\u06CC\u0642 \u0628\u0627\u0634\u062F \u2014 \u0646\u06AF\u0631\u0627\u0646\u06CC\u200C\u062A\u0627\u0646 \u0631\u0627 \u0628\u06AF\u0648\u06CC\u06CC\u062F\u060C \u062A\u0634\u062E\u06CC\u0635 \u06A9\u0627\u0631 \u0645\u0627\u0633\u062A.</p>'+
+    '<div class="choices">'+cards+'</div>'+
     '<div class="err-msg" id="ccErr">\u06CC\u06A9\u06CC \u0627\u0632 \u06AF\u0632\u06CC\u0646\u0647\u200C\u0647\u0627 \u0631\u0627 \u0627\u0646\u062A\u062E\u0627\u0628 \u06A9\u0646\u06CC\u062F</div>'+
     btnRow('\u0627\u062F\u0627\u0645\u0647','',null,5)+
     '</div>';
@@ -32067,6 +32095,50 @@ function renderConcern(){
   });
 }
 
+/* \u2500\u2500\u2500 \u06F1.\u06F2\u06F7.\u06F3\u06F6 \u2014 \u0641\u0631\u0645 \u062A\u06A9\u0645\u06CC\u0644\u06CC \u062E\u0627\u0646\u0648\u0627\u062F\u0647: \u0648\u0636\u0639 \u0641\u0631\u0647\u0646\u06AF\u06CC\u060C \u0633\u0637\u062D \u0645\u0627\u0644\u06CC\u060C \u0645\u06CC\u0632\u0627\u0646 \u0647\u0645\u06A9\u0627\u0631\u06CC \u2500\u2500\u2500 */
+function famPills(q){
+  return q.opts.map(function(o){
+    return '<button class="pill'+(state[q.key]===o[0]?' sel':'')+'" data-f="'+q.key+'" data-v="'+o[0]+'">'+o[1]+'</button>';
+  }).join('');
+}
+function renderFamily(){
+  setBar();
+  var groups=FAM_QUESTIONS.map(function(q,i){
+    return '<div class="field"><label class="f">'+(i+1)+'. '+q.label+'</label>'+
+      '<div class="pills" id="fq-'+q.key+'">'+famPills(q)+'</div>'+
+      '<div class="hint">'+q.hint+'</div></div>';
+  }).join('');
+  app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
+    '<h2>\u0648\u0636\u0639\u06CC\u062A \u062E\u0627\u0646\u0648\u0627\u062F\u0647</h2>'+
+    '<p class="lead">\u0633\u0647 \u067E\u0631\u0633\u0634 \u06A9\u0648\u062A\u0627\u0647 \u062F\u0631\u0628\u0627\u0631\u0647\u200C\u06CC \xAB'+esc(state.childName)+'\xBB \u2014 \u0647\u0645\u06CC\u0646\u200C\u0647\u0627 \u0628\u0647 \u0645\u0627 \u06A9\u0645\u06A9 \u0645\u06CC\u200C\u06A9\u0646\u062F \u062E\u062F\u0645\u0627\u062A \u0631\u0627\u06CC\u06AF\u0627\u0646 \u0631\u0627 \u062F\u0631\u0633\u062A \u0627\u0648\u0644\u0648\u06CC\u062A\u200C\u0628\u0646\u062F\u06CC \u06A9\u0646\u06CC\u0645 \u0648 \u062C\u0644\u0633\u0647\u200C\u06CC \u0627\u0648\u0644 \u0622\u0645\u0627\u062F\u0647\u200C\u062A\u0631 \u0628\u0627\u0634\u062F.</p>'+
+    groups+
+    btnRow('\u0627\u062F\u0627\u0645\u0647','',null,6)+
+    '</div>';
+  document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=6;render();});
+  /* \u0647\u0631 \u06AF\u0631\u0648\u0647 \u06CC\u06A9 \u067E\u06CC\u0644 \xAB\u0646\u0645\u06CC\u200C\u062F\u0627\u0646\u0645\xBB \u0647\u0645 \u062F\u0627\u0631\u062F (\u0645\u0642\u062F\u0627\u0631 null \u2014 \u067E\u06CC\u0634\u200C\u0641\u0631\u0636) */
+  FAM_QUESTIONS.forEach(function(q){
+    var box=document.getElementById('fq-'+q.key);
+    var unk=document.createElement('button');
+    unk.className='pill'+(state[q.key]===null?' sel':'');
+    unk.setAttribute('data-f',q.key);unk.setAttribute('data-v','unknown');
+    unk.textContent='\u0646\u0645\u06CC\u200C\u062F\u0627\u0646\u0645';
+    box.appendChild(unk);
+  });
+  app.querySelectorAll('[data-f]').forEach(function(p){
+    p.addEventListener('click',function(){
+      var key=p.getAttribute('data-f');
+      var v=p.getAttribute('data-v');
+      state[key==='culture'?'famCulture':key==='finance'?'famFinance':'famCoop'] = v==='unknown'?null:v;
+      document.getElementById('fq-'+key).querySelectorAll('.pill').forEach(function(x){x.classList.remove('sel');});
+      p.classList.add('sel');
+    });
+  });
+  var nx=app.querySelector('.btnrow .btn--primary');nx.textContent='\u0627\u062F\u0627\u0645\u0647';
+  nx.addEventListener('click',function(){
+    state.step=8;render();
+  });
+}
+
 function renderPrior(){
   setBar();
   app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
@@ -32078,9 +32150,9 @@ function renderPrior(){
     '<div class="field" id="pen" style="display:'+(state.priorEval===true?'block':'none')+';margin-top:12px">'+
     '<label class="f" for="penote">\u06A9\u062C\u0627 \u0648 \u0686\u0647 \u0646\u062A\u06CC\u062C\u0647\u200C\u0627\u06CC\u061F (\u0627\u062E\u062A\u06CC\u0627\u0631\u06CC)</label>'+
     '<input class="i" id="penote" value="'+esc(state.priorEvalNote)+'"></div>'+
-    btnRow('\u0627\u062F\u0627\u0645\u0647','',null,6)+
+    btnRow('\u0627\u062F\u0627\u0645\u0647','',null,7)+
     '</div>';
-  document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=6;render();});
+  document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=7;render();});
   app.querySelectorAll('#pe .pill').forEach(function(p){
     p.addEventListener('click',function(){
       state.priorEval=p.getAttribute('data-v')==='1';
@@ -32092,7 +32164,7 @@ function renderPrior(){
   var nx=app.querySelector('.btnrow .btn--primary');nx.textContent='\u0627\u062F\u0627\u0645\u0647';
   nx.addEventListener('click',function(){
     state.priorEvalNote=document.getElementById('penote').value.trim();
-    state.step=8;render();
+    state.step=9;render();
   });
 }
 
@@ -32101,13 +32173,13 @@ function renderNotes(){
   app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
     '<h2>\u0646\u06A9\u062A\u0647\u200C\u0627\u06CC \u0647\u0633\u062A \u06A9\u0647 \u0628\u0647 \u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u06A9\u0645\u06A9 \u06A9\u0646\u062F\u061F</h2><p class="lead">\u0627\u062E\u062A\u06CC\u0627\u0631\u06CC \u0627\u0633\u062A \u2014 \u0647\u0631 \u0686\u06CC\u0632\u06CC \u06A9\u0647 \u0641\u06A9\u0631 \u0645\u06CC\u200C\u06A9\u0646\u06CC\u062F \u0628\u0627\u06CC\u062F \u0628\u062F\u0648\u0646\u06CC\u0645.</p>'+
     '<div class="field"><textarea class="i" id="ct">'+esc(state.concernText)+'</textarea></div>'+
-    btnRow('\u0627\u062F\u0627\u0645\u0647 \u0628\u0647 \u0645\u0631\u0648\u0631 \u0646\u0647\u0627\u06CC\u06CC','',null,7)+
+    btnRow('\u0627\u062F\u0627\u0645\u0647 \u0628\u0647 \u0645\u0631\u0648\u0631 \u0646\u0647\u0627\u06CC\u06CC','',null,8)+
     '</div>';
-  document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=7;render();});
+  document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=8;render();});
   var nx=app.querySelector('.btnrow .btn--primary');nx.textContent='\u0627\u062F\u0627\u0645\u0647 \u0628\u0647 \u0645\u0631\u0648\u0631 \u0646\u0647\u0627\u06CC\u06CC';
   nx.addEventListener('click',function(){
     state.concernText=document.getElementById('ct').value.trim();
-    state.step=9;render();
+    state.step=10;render();
   });
 }
 
@@ -32122,11 +32194,18 @@ function familyChildren(){
     concern_tags: [],
     concern_text: state.concernText || null,
     prior_eval: state.priorEval===true?true:state.priorEval===false?false:null,
-    prior_eval_note: state.priorEvalNote || null
+    prior_eval_note: state.priorEvalNote || null,
+    /* \u06F1.\u06F2\u06F7.\u06F3\u06F6 \u2014 \u0641\u0631\u0645 \u062A\u06A9\u0645\u06CC\u0644\u06CC \u062E\u0627\u0646\u0648\u0627\u062F\u0647\u061B \xAB\u0646\u0645\u06CC\u200C\u062F\u0627\u0646\u0645\xBB = null */
+    family_culture: state.famCulture || null,
+    family_finance: state.famFinance || null,
+    family_cooperation: state.famCoop || null
   }];
 }
 
 /* \u2500\u2500\u2500 \u0645\u0648\u062F\u0627\u0644 \u0645\u0631\u0648\u0631 \u0646\u0647\u0627\u06CC\u06CC (Typeform-style) \u2014 \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u2500\u2500\u2500 */
+function famLabel(v, map){
+  return v?(map[v]||v):null;
+}
 function renderReview(){
   setBar();
   var rows=[
@@ -32136,8 +32215,11 @@ function renderReview(){
     {k:'\u067E\u0627\u06CC\u0647', v:esc2(state.grade), s:3},
     {k:'\u06A9\u0644\u0627\u0633', v:esc2(state.klass), s:3},
     {k:'\u062F\u063A\u062F\u063A\u0647 \u0627\u0635\u0644\u06CC', v:CAT_LABELS[state.concern]||'', s:6},
-    {k:'\u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u0642\u0628\u0644\u06CC', v:state.priorEval===true?'\u0628\u0644\u0647'+(state.priorEvalNote?' \u2014 '+esc(state.priorEvalNote):''):'\u062E\u06CC\u0631', s:7},
-    {k:'\u0646\u06A9\u0627\u062A', v:esc2(state.concernText), s:8},
+    {k:'\u0648\u0636\u0639 \u0641\u0631\u0647\u0646\u06AF\u06CC', v:esc2(famLabel(state.famCulture,{low:'\u06A9\u0645',mid:'\u0645\u062A\u0648\u0633\u0637',high:'\u063A\u0646\u06CC'})), s:7},
+    {k:'\u0633\u0637\u062D \u0645\u0627\u0644\u06CC', v:esc2(famLabel(state.famFinance,{low:'\u06A9\u0645\u200C\u0628\u0631\u062E\u0648\u0631\u062F\u0627\u0631',mid:'\u0645\u062A\u0648\u0633\u0637',high:'\u0628\u0631\u062E\u0648\u0631\u062F\u0627\u0631'})), s:7},
+    {k:'\u0647\u0645\u06A9\u0627\u0631\u06CC \u062E\u0627\u0646\u0648\u0627\u062F\u0647', v:esc2(famLabel(state.famCoop,{low:'\u06A9\u0645',mid:'\u0645\u062A\u0648\u0633\u0637',high:'\u0632\u06CC\u0627\u062F'})), s:7},
+    {k:'\u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u0642\u0628\u0644\u06CC', v:state.priorEval===true?'\u0628\u0644\u0647'+(state.priorEvalNote?' \u2014 '+esc(state.priorEvalNote):''):'\u062E\u06CC\u0631', s:8},
+    {k:'\u0646\u06A9\u0627\u062A', v:esc2(state.concernText), s:9},
     {k:'\u0645\u0639\u0631\u0641', v:esc(state.refName)+' \u2014 '+esc(state.refPhone), s:2}
   ].map(function(r){
     return '<div class="review__row"><span class="k">'+r.k+'</span><span class="v">'+r.v+'</span>'+
@@ -32145,12 +32227,12 @@ function renderReview(){
   }).join('');
   app.innerHTML='<div class="card">'+
     '<h2>\u0627\u06CC\u0646 \u0627\u0637\u0644\u0627\u0639\u0627\u062A \u0628\u0647 \u0644\u06CC\u0633\u062A \u0627\u0646\u062A\u0638\u0627\u0631 \u0627\u0636\u0627\u0641\u0647 \u0645\u06CC\u0634\u0647</h2>'+
-    '<p class="lead">\u0686\u06A9 \u06A9\u0646\u06CC\u062F\u061B \u0647\u0631 \u0633\u0637\u0631 \u0631\u0648 \u0645\u06CC\u200C\u062A\u0648\u0646\u06CC\u062F \u0647\u0645\u06CC\u0646 \u062D\u0627\u0644\u0627 \u0648\u06CC\u0631\u0627\u06CC\u0634 \u06A9\u0646\u06CC\u062F.</p>'+
+    '<p class="lead">\u06CC\u06A9 \u0646\u06AF\u0627\u0647 \u0628\u06CC\u0646\u062F\u0627\u0632\u06CC\u062F\u061B \u0647\u0631 \u0633\u0637\u0631 \u0631\u0627 \u0647\u0645\u06CC\u0646\u200C\u062C\u0627 \u0645\u06CC\u200C\u0634\u0648\u062F \u0627\u0635\u0644\u0627\u062D \u06A9\u0631\u062F.</p>'+
     '<div class="review">'+rows+'</div>'+
     '<div class="err-msg" id="subErr"></div>'+
     '<div class="btnrow"><button class="btn btn--ghost" data-act="back">\u0628\u0627\u0632\u06AF\u0634\u062A \u0648 \u0648\u06CC\u0631\u0627\u06CC\u0634</button>'+
     '<button class="btn btn--primary" id="confirmBtn">\u062A\u0623\u06CC\u06CC\u062F \u0648 \u0627\u0641\u0632\u0648\u062F\u0646 \u0628\u0647 \u0644\u06CC\u0633\u062A \u0627\u0646\u062A\u0638\u0627\u0631</button></div></div>';
-  document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=8;render();});
+  document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=9;render();});
   app.querySelectorAll('.e').forEach(function(b){
     b.addEventListener('click',function(){state.step=Number(b.getAttribute('data-s'));render();});
   });
@@ -32215,7 +32297,7 @@ function rowCardHtml(r, i){
     '<input class="i rn" value="'+esc(r.name)+'"></div>'+
     '<div class="field"><label class="f">\u0634\u0645\u0627\u0631\u0647 \u0645\u0648\u0628\u0627\u06CC\u0644 \u0648\u0627\u0644\u062F</label>'+
     '<input class="i rp" inputmode="tel" dir="ltr" placeholder="09xxxxxxxxx" value="'+esc(r.phone)+'">'+
-    '<div class="err-msg">\u0634\u0645\u0627\u0631\u0647 \u0628\u0627\u06CC\u062F \u06F1\u06F1 \u0631\u0642\u0645 \u0648 \u0628\u0627 \u06F0\u06F9 \u0634\u0631\u0648\u0639 \u0634\u0648\u062F</div></div></div>';
+    '<div class="err-msg">\u0634\u0645\u0627\u0631\u0647 \u0645\u0648\u0628\u0627\u06CC\u0644 \u06F1\u06F1 \u0631\u0642\u0645 \u0627\u0633\u062A \u0648 \u0628\u0627 \u06F0\u06F9 \u0634\u0631\u0648\u0639 \u0645\u06CC\u200C\u0634\u0648\u062F</div></div></div>';
 }
 
 function renderBatch(){
@@ -32223,7 +32305,7 @@ function renderBatch(){
   if(state.rows.length===0)state.rows=[{cat:null,name:'',phone:''}];
   app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
     '<h2>\u062B\u0628\u062A \u0627\u0631\u062C\u0627\u0639\u200C\u0647\u0627\u06CC \u06A9\u0644\u0627\u0633 \u0634\u0645\u0627</h2>'+
-    '<p class="lead">\u0628\u0631\u0627\u06CC \u0647\u0631 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u062F\u0633\u062A\u0647 \u0631\u0648 \u0627\u0646\u062A\u062E\u0627\u0628 \u06A9\u0646\u06CC\u062F\u060C \u0627\u0633\u0645\u0634 \u0648 \u0634\u0645\u0627\u0631\u0647\u200C\u06CC \u0648\u0627\u0644\u062F\u0634 \u0631\u0648 \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F.</p>'+
+    '<p class="lead">\u0628\u0631\u0627\u06CC \u0647\u0631 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u062F\u0633\u062A\u0647 \u0631\u0627 \u0627\u0646\u062A\u062E\u0627\u0628 \u06A9\u0646\u06CC\u062F\u060C \u0627\u0633\u0645\u0634 \u0648 \u0634\u0645\u0627\u0631\u0647\u200C\u06CC \u0648\u0627\u0644\u062F\u0634 \u0631\u0627 \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F.</p>'+
     '<div id="rows">'+state.rows.map(rowCardHtml).join('')+'</div>'+
     '<button class="btn btn--ghost btn--sm" id="addRow">+ \u0627\u0641\u0632\u0648\u062F\u0646 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u062F\u06CC\u06AF\u0631</button>'+
     '<div class="err-msg" id="bErr" style="margin-top:10px"></div>'+
@@ -32283,7 +32365,7 @@ function renderTeachReview(){
       '<span class="v">'+esc(r.name)+' \u2014 '+esc(r.phone)+'</span></div>';
   }).join('');
   app.innerHTML='<div class="card"><h2>\u0647\u0645\u0647 \u0686\u06CC\u0632 \u0622\u0645\u0627\u062F\u0647 \u062B\u0628\u062A \u0627\u0633\u062A</h2>'+
-    '<p class="lead">'+fa(state.rows.length)+' \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u0628\u0647 \u0644\u06CC\u0633\u062A \u0627\u0646\u062A\u0638\u0627\u0631 \u0627\u0636\u0627\u0641\u0647 \u0645\u06CC\u0634\u0647. \u0686\u06A9 \u06A9\u0646\u06CC\u062F:</p>'+
+    '<p class="lead">'+fa(state.rows.length)+' \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u0628\u0647 \u0644\u06CC\u0633\u062A \u0627\u0646\u062A\u0638\u0627\u0631 \u0627\u0636\u0627\u0641\u0647 \u0645\u06CC\u0634\u0647. \u06CC\u06A9 \u0646\u06AF\u0627\u0647 \u0628\u06CC\u0646\u062F\u0627\u0632\u06CC\u062F:</p>'+
     '<div class="review">'+rows+'</div>'+
     '<div class="err-msg" id="subErr"></div>'+
     '<div class="btnrow"><button class="btn btn--ghost" data-act="back">\u0628\u0627\u0632\u06AF\u0634\u062A \u0648 \u0648\u06CC\u0631\u0627\u06CC\u0634</button>'+
@@ -32326,10 +32408,11 @@ function render(){
     if(s===4)return renderChildName();
     if(s===5)return renderChildBirth();
     if(s===6)return renderConcern();
-    if(s===7)return renderPrior();
-    if(s===8)return renderNotes();
-    if(s===9)return renderReview();
-    if(s===10)return renderDone();
+    if(s===7)return renderFamily();
+    if(s===8)return renderPrior();
+    if(s===9)return renderNotes();
+    if(s===10)return renderReview();
+    if(s===11)return renderDone();
   }else{
     if(s===4||s===5||s===6)return renderAware();
     if(s===7)return renderBatch();
@@ -32351,7 +32434,7 @@ function renderReferralPage(opts = {}) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>\u0645\u0639\u0631\u0641\u06CC \u0628\u0647 \u0645\u0631\u06A9\u0632 \u2014 \u062C\u0627\u0645\u0639 \u0633\u0646\u062C\u0634 \u0648 \u0627\u062E\u062A\u0644\u0627\u0644\u0627\u062A \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC</title>
 <meta name="robots" content="noindex, nofollow">
-<!-- \u06F1.\u06F2\u06F7.\u06F3\u06F5 \u2014 \u0648\u0632\u06CC\u0631\u0645\u062A\u0646 \u0627\u0632 CDN (CSP \u0641\u0642\u0637 jsdelivr \u0631\u0627 \u0627\u062C\u0627\u0632\u0647 \u0645\u06CC\u200C\u062F\u0647\u062F) -->
+<!-- \u0648\u0632\u06CC\u0631\u0645\u062A\u0646 \u0627\u0632 CDN (CSP \u0641\u0642\u0637 jsdelivr \u0631\u0627 \u0627\u062C\u0627\u0632\u0647 \u0645\u06CC\u200C\u062F\u0647\u062F) -->
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css">
 <style>${PAGE_STYLES}</style>
@@ -32959,18 +33042,21 @@ h1{font-size:20px;margin:0 0 6px}h2{font-size:19px;margin:0 0 10px}
 p.lead{color:var(--muted);margin:0 0 18px;font-size:14.5px}
 .badge-free{display:inline-block;background:#e7f7ee;color:var(--ok);border-radius:999px;
 padding:4px 14px;font-size:13.5px;font-weight:700;margin-bottom:14px}
+/* \u06F1.\u06F2\u06F7.\u06F3\u06F6 \u2014 \u062F\u06A9\u0645\u0647\u200C\u0647\u0627\u06CC \u0647\u0645\u200C\u0627\u0646\u062F\u0627\u0632\u0647: basis \u0635\u0641\u0631 \u06CC\u0639\u0646\u06CC \xAB\u0627\u062F\u0627\u0645\u0647\xBB \u0648 \xAB\u0628\u0627\u0632\u06AF\u0634\u062A\xBB \u0647\u0645\u06CC\u0634\u0647 \u0647\u0645\u200C\u067E\u0647\u0646\u0627\u061B min-height \u0647\u0645\u200C\u0642\u062F */
 .btn{display:inline-flex;align-items:center;justify-content:center;border:none;cursor:pointer;
-border-radius:12px;padding:12px 22px;font-family:inherit;font-size:15.5px;font-weight:700;width:100%}
+border-radius:12px;padding:12px 22px;font-family:inherit;font-size:15.5px;font-weight:700;width:100%;
+min-height:52px}
 .btn--primary{background:var(--brand);color:#fff}
 .btn--primary:disabled{opacity:.45;cursor:not-allowed}
 .btn--ghost{background:transparent;color:var(--brand);border:1.5px solid var(--brand)}
-.btn--sm{width:auto;padding:9px 16px;font-size:14px}
-.btnrow{display:flex;gap:10px;margin-top:20px}.btnrow .btn{flex:1}
+.btn--sm{width:auto;min-height:44px;padding:9px 16px;font-size:14px}
+.btnrow{display:flex;gap:10px;margin-top:20px}.btnrow .btn{flex:1 1 0}
 .choice{display:block;background:var(--card);border:2px solid var(--line);border-radius:var(--r);
-padding:14px 18px;margin-bottom:12px;cursor:pointer;transition:border-color .15s,background .15s;
-font-family:inherit;font-size:15px;text-align:start;width:100%}
+padding:14px 18px;margin-bottom:12px;cursor:pointer;transition:border-color .15s,background .15s,box-shadow .15s;
+font-family:inherit;font-size:15px;text-align:start;width:100%;position:relative}
 .choice:hover{border-color:var(--brand)}
-.choice.sel{border-color:var(--brand);background:var(--brand-soft)}
+.choice.sel{border-color:var(--brand);background:var(--brand-soft);box-shadow:0 2px 10px rgba(37,99,235,.12)}
+.choice.sel::after{content:'\u2713';position:absolute;top:10px;left:14px;color:var(--brand);font-weight:800;font-size:15px}
 label.f{display:block;font-weight:700;margin:0 0 6px}
 input.i,select.i,textarea.i{width:100%;border:1.5px solid var(--line);border-radius:12px;padding:11px 14px;
 font-family:inherit;font-size:15.5px;background:#fff;color:var(--ink)}
@@ -33125,8 +33211,8 @@ function bindBlock(i,b){
 function checkBlock(i,b){
   var v=state.answers[i];
   var empty=v===undefined||v===null||v===''||(Array.isArray(v)&&!v.length);
-  if(b.required&&empty){err('be',true,'\u0627\u06CC\u0646 \u067E\u0631\u0633\u0634 \u0627\u062C\u0628\u0627\u0631\u06CC \u0627\u0633\u062A \u2014 \u067E\u0627\u0633\u062E \u062F\u0647\u06CC\u062F \u062A\u0627 \u0627\u062F\u0627\u0645\u0647 \u062F\u0647\u06CC\u062F');return false;}
-  if(b.kind==='phone'&&!empty&&!validPhone(String(v))){err('be',true,'\u0634\u0645\u0627\u0631\u0647 \u0628\u0627\u06CC\u062F \u06F1\u06F1 \u0631\u0642\u0645 \u0648 \u0628\u0627 \u06F0\u06F9 \u0634\u0631\u0648\u0639 \u0634\u0648\u062F');return false;}
+  if(b.required&&empty){err('be',true,'\u0628\u0631\u0627\u06CC \u0627\u062F\u0627\u0645\u0647 \u0628\u0647 \u0627\u06CC\u0646 \u067E\u0631\u0633\u0634 \u067E\u0627\u0633\u062E \u0628\u062F\u0647\u06CC\u062F');return false;}
+  if(b.kind==='phone'&&!empty&&!validPhone(String(v))){err('be',true,'\u0634\u0645\u0627\u0631\u0647 \u0645\u0648\u0628\u0627\u06CC\u0644 \u06F1\u06F1 \u0631\u0642\u0645 \u0627\u0633\u062A \u0648 \u0628\u0627 \u06F0\u06F9 \u0634\u0631\u0648\u0639 \u0645\u06CC\u200C\u0634\u0648\u062F');return false;}
   err('be',false);return true;
 }
 function renderContact(){
@@ -33134,9 +33220,9 @@ function renderContact(){
   app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
     '<h2>\u0627\u0633\u0645 \u0648 \u0631\u0627\u0647 \u062A\u0645\u0627\u0633 \u0634\u0645\u0627</h2><p class="lead">\u0628\u0631\u0627\u06CC \u0627\u06CC\u0646\u06A9\u0647 \u0628\u062A\u0648\u0627\u0646\u06CC\u0645 \u067E\u06CC\u06AF\u06CC\u0631\u06CC \u06CC\u0627 \u067E\u0627\u0633\u062E \u0628\u062F\u0647\u06CC\u0645.</p>'+
     '<div class="field"><label class="f">\u0646\u0627\u0645 \u0648 \u0646\u0627\u0645 \u062E\u0627\u0646\u0648\u0627\u062F\u06AF\u06CC</label><input class="i" id="rn" value="'+esc(state.name)+'">'+
-    '<div class="err-msg" id="rnErr">\u0646\u0627\u0645 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A</div></div>'+
+    '<div class="err-msg" id="rnErr">\u0646\u0627\u0645 \u0631\u0627 \u06A9\u0627\u0645\u0644 \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F \u2014 \u062F\u0633\u062A\u200C\u06A9\u0645 \u062F\u0648 \u062D\u0631\u0641</div></div>'+
     '<div class="field"><label class="f">\u0634\u0645\u0627\u0631\u0647 \u0645\u0648\u0628\u0627\u06CC\u0644 (\u0627\u062E\u062A\u06CC\u0627\u0631\u06CC)</label><input class="i" id="rp" dir="ltr" inputmode="tel" placeholder="09xxxxxxxxx" value="'+esc(state.phone)+'">'+
-    '<div class="err-msg" id="rpErr">\u0634\u0645\u0627\u0631\u0647 \u0628\u0627\u06CC\u062F \u06F1\u06F1 \u0631\u0642\u0645 \u0648 \u0628\u0627 \u06F0\u06F9 \u0634\u0631\u0648\u0639 \u0634\u0648\u062F</div></div>'+
+    '<div class="err-msg" id="rpErr">\u0634\u0645\u0627\u0631\u0647 \u0645\u0648\u0628\u0627\u06CC\u0644 \u06F1\u06F1 \u0631\u0642\u0645 \u0627\u0633\u062A \u0648 \u0628\u0627 \u06F0\u06F9 \u0634\u0631\u0648\u0639 \u0645\u06CC\u200C\u0634\u0648\u062F</div></div>'+
     btnRow('\u0627\u062F\u0627\u0645\u0647 \u0628\u0647 \u0645\u0631\u0648\u0631 \u0646\u0647\u0627\u06CC\u06CC', state.step-1)+
     '</div>';
   document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=Number(this.getAttribute('data-to'))||0;render();});
@@ -71309,326 +71395,6 @@ function createAwarenessBot(deps) {
 }
 __name(createAwarenessBot, "createAwarenessBot");
 
-// src/application/notify/referral-bot.ts
-var REF_CAT_LABELS = {
-  delayed: "\u062F\u06CC\u0631\u0622\u0645\u0648\u0632\u06CC / \u062A\u0623\u062E\u06CC\u0631 \u0631\u0634\u062F",
-  learning_disorder: "\u0627\u062E\u062A\u0644\u0627\u0644 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC (\u062E\u0648\u0627\u0646\u062F\u0646/\u0646\u0648\u0634\u062A\u0646/\u0631\u06CC\u0627\u0636\u06CC)",
-  intellectual: "\u0645\u0634\u06A9\u0648\u06A9 \u0628\u0647 \u06A9\u0645\u200C\u062A\u0648\u0627\u0646\u06CC \u0630\u0647\u0646\u06CC",
-  autism: "\u0645\u0634\u06A9\u0648\u06A9 \u0628\u0647 \u0637\u06CC\u0641 \u0627\u062A\u06CC\u0633\u0645",
-  speech: "\u062A\u0623\u062E\u06CC\u0631 \u06AF\u0641\u062A\u0627\u0631 \u0648 \u0632\u0628\u0627\u0646",
-  other: "\u0633\u0627\u06CC\u0631 / \u0646\u0645\u06CC\u200C\u062F\u0627\u0646\u0645"
-};
-var CAT_BUTTONS = [
-  [
-    { text: "\u06F1. \u062F\u06CC\u0631\u0622\u0645\u0648\u0632\u06CC", callbackData: "rf:cat:X:delayed" },
-    { text: "\u06F2. \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC", callbackData: "rf:cat:X:learning_disorder" }
-  ],
-  [
-    { text: "\u06F3. \u06A9\u0645\u200C\u062A\u0648\u0627\u0646\u06CC \u0630\u0647\u0646\u06CC", callbackData: "rf:cat:X:intellectual" },
-    { text: "\u06F4. \u0627\u062A\u06CC\u0633\u0645", callbackData: "rf:cat:X:autism" }
-  ],
-  [
-    { text: "\u06F5. \u06AF\u0641\u062A\u0627\u0631 \u0648 \u0632\u0628\u0627\u0646", callbackData: "rf:cat:X:speech" },
-    { text: "\u06F6. \u0633\u0627\u06CC\u0631", callbackData: "rf:cat:X:other" }
-  ]
-];
-function catButtons(idx) {
-  return CAT_BUTTONS.map(
-    (row) => row.map((b) => ({ text: b.text, callbackData: b.callbackData.replace("X", String(idx)) }))
-  );
-}
-__name(catButtons, "catButtons");
-function normalizePhone3(raw2) {
-  let s = String(raw2 ?? "").replace(/[۰-۹]/g, (d) => String("\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9".indexOf(d))).replace(/[٠-٩]/g, (d) => String("\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669".indexOf(d))).replace(/[\s+\-().]/g, "");
-  if (s.startsWith("+98")) s = "0" + s.slice(3);
-  else if (s.startsWith("98") && s.length === 12) s = "0" + s.slice(2);
-  return s;
-}
-__name(normalizePhone3, "normalizePhone");
-function createReferralBot(deps) {
-  const { db, audit, logger } = deps;
-  const log = logger.child("referral-bot");
-  const now = deps.now ?? (() => /* @__PURE__ */ new Date());
-  const base = (deps.publicBaseUrl ?? "").replace(/\/+$/, "");
-  const chatHits = /* @__PURE__ */ new Map();
-  async function readState(chatId) {
-    const row = await db.queryOne(`SELECT payload FROM bot_menu_state WHERE chat_id = ?`, [chatId]);
-    if (!row) return null;
-    try {
-      const parsed = JSON.parse(row.payload);
-      return parsed && parsed.v === 1 && parsed.flow === "referral" ? parsed : null;
-    } catch {
-      return null;
-    }
-  }
-  __name(readState, "readState");
-  async function writeState(chatId, state) {
-    await db.execute(
-      `INSERT INTO bot_menu_state (chat_id, payload, updated_at)
-       VALUES (?, ?, ?)
-       ON CONFLICT(chat_id) DO UPDATE SET payload = excluded.payload, updated_at = excluded.updated_at`,
-      [chatId, JSON.stringify(state), now().toISOString()]
-    );
-  }
-  __name(writeState, "writeState");
-  async function clearState(chatId) {
-    await db.execute(`DELETE FROM bot_menu_state WHERE chat_id = ?`, [chatId]);
-  }
-  __name(clearState, "clearState");
-  const webFormLine = base ? `
-\u{1F310} \u0641\u0631\u0645 \u06A9\u0627\u0645\u0644 \u0648\u0628 (\u062A\u0627\u0631\u06CC\u062E \u062A\u0648\u0644\u062F \u0648 \u062C\u0632\u0626\u06CC\u0627\u062A \u0628\u06CC\u0634\u062A\u0631):
-${base}/public/referral` : "";
-  function rateBlocked(chatId) {
-    const nowMs = Date.now();
-    const cur = chatHits.get(chatId);
-    if (!cur || cur.resetAt < nowMs) {
-      chatHits.set(chatId, { count: 1, resetAt: nowMs + 36e5 });
-      return false;
-    }
-    if (cur.count >= REFERRAL_RATE_PER_CHAT) return true;
-    cur.count += 1;
-    return false;
-  }
-  __name(rateBlocked, "rateBlocked");
-  function childPrompt(state, i) {
-    return {
-      text: `\u{1F476} \u06A9\u0648\u062F\u06A9 ${faDigits(String(i + 1))} \u0627\u0632 ${faDigits(String(state.count))} \u2014 \u0646\u0627\u0645 \u06A9\u0648\u062F\u06A9 \u0631\u0627 \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F (\u0646\u0627\u0645 \u0648 \u0646\u0627\u0645 \u062E\u0627\u0646\u0648\u0627\u062F\u06AF\u06CC \u06CC\u0627 \u0641\u0642\u0637 \u0646\u0627\u0645):`,
-      buttons: null
-    };
-  }
-  __name(childPrompt, "childPrompt");
-  function summaryText(state) {
-    const head = [
-      "\u{1F4CB} \u0645\u0631\u0648\u0631 \u0646\u0647\u0627\u06CC\u06CC \u0645\u0639\u0631\u0641\u06CC:",
-      `\u0646\u0642\u0634: ${state.role === "teacher" ? "\u0645\u0639\u0644\u0645" : "\u062E\u0627\u0646\u0648\u0627\u062F\u0647 / \u0633\u0631\u067E\u0631\u0633\u062A"}`,
-      `\u0645\u0639\u0631\u0641: ${state.name} \u2014 ${faDigits(state.phone)}`,
-      state.role === "teacher" && (state.school || state.grade || state.cls) ? `\u0645\u062F\u0631\u0633\u0647: ${[state.school, state.grade, state.cls].filter(Boolean).join(" \u2014 ")}` : null,
-      "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"
-    ].filter(Boolean);
-    const rows = state.children.map(
-      (c, i) => `${faDigits(String(i + 1))}) ${c.firstName} \u2014 ${c.category ? REF_CAT_LABELS[c.category] : "\u062F\u0633\u062A\u0647\u0654 \u062F\u063A\u062F\u063A\u0647 \u0646\u0627\u0645\u0634\u062E\u0635"}${c.text ? `
-    \u0634\u0631\u062D: ${c.text}` : ""}`
-    );
-    return [...head, ...rows, "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500", "\u062B\u0628\u062A \u06A9\u0646\u0645\u061F"].join("\n");
-  }
-  __name(summaryText, "summaryText");
-  return {
-    readActive(chatId) {
-      return readState(chatId).then((s) => s !== null);
-    },
-    /* ورود از منوی «معرفی دانش‌آموز» — عموم مردم و نقش پایه، بدون احراز هویت */
-    async root(chatId) {
-      await clearState(chatId);
-      return {
-        text: "\u{1F9E9} \u0645\u0639\u0631\u0641\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u0628\u0647 \u0645\u0631\u06A9\u0632 \u062C\u0627\u0645\u0639 \u0633\u0646\u062C\u0634 \u0648 \u0627\u062E\u062A\u0644\u0627\u0644\u0627\u062A \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC\n\n\u0627\u06AF\u0631 \u062F\u0631\u0628\u0627\u0631\u0647\u0654 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC\u060C \u06AF\u0641\u062A\u0627\u0631\u060C \u062A\u0648\u062C\u0647 \u06CC\u0627 \u0631\u0641\u062A\u0627\u0631 \u06CC\u06A9 \u06A9\u0648\u062F\u06A9 \u0646\u06AF\u0631\u0627\u0646\u06CC \u062F\u0627\u0631\u06CC\u062F\u060C \u0647\u0645\u06CC\u0646\u200C\u062C\u0627 \u0686\u0646\u062F \u067E\u0631\u0633\u0634 \u06A9\u0648\u062A\u0627\u0647 \u067E\u0627\u0633\u062E \u062F\u0647\u06CC\u062F \u062A\u0627 \u06A9\u0627\u0631\u0634\u0646\u0627\u0633\u0627\u0646 \u0645\u0631\u06A9\u0632 \u0628\u0631\u0631\u0633\u06CC \u0648 \u0628\u0627 \u0634\u0645\u0627 \u062A\u0645\u0627\u0633 \u0628\u06AF\u06CC\u0631\u0646\u062F.\n\n\u0647\u0645\u0647\u0654 \u062E\u062F\u0645\u0627\u062A \u0645\u0631\u06A9\u0632 \u0631\u0627\u06CC\u06AF\u0627\u0646 \u0627\u0633\u062A." + webFormLine,
-        buttons: [
-          [
-            { text: "\u{1F468}\u200D\u{1F469}\u200D\u{1F467} \u062E\u0627\u0646\u0648\u0627\u062F\u0647 / \u0633\u0631\u067E\u0631\u0633\u062A \u0647\u0633\u062A\u0645", callbackData: "rf:role:family" },
-            { text: "\u{1F3EB} \u0645\u0639\u0644\u0645 \u0647\u0633\u062A\u0645", callbackData: "rf:role:teacher" }
-          ]
-        ]
-      };
-    },
-    async start(chatId, role) {
-      const state = {
-        v: 1,
-        flow: "referral",
-        step: role === "teacher" ? "school" : "name",
-        role,
-        name: "",
-        phone: "",
-        school: null,
-        grade: null,
-        cls: null,
-        count: role === "teacher" ? 0 : 1,
-        idx: 0,
-        children: []
-      };
-      await writeState(chatId, state);
-      if (role === "teacher") {
-        return {
-          text: "\u{1F3EB} \u0646\u0627\u0645 \u0645\u062F\u0631\u0633\u0647\u200C\u062A\u0627\u0646 \u0631\u0627 \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F (\u0627\u06AF\u0631 \u0645\u0627\u06CC\u0644 \u0646\u06CC\u0633\u062A\u06CC\u062F\u060C \xAB\u0631\u062F\xBB \u0628\u0641\u0631\u0633\u062A\u06CC\u062F):",
-          buttons: null
-        };
-      }
-      return {
-        text: "\u{1F464} \u0646\u0627\u0645 \u0648 \u0646\u0627\u0645 \u062E\u0627\u0646\u0648\u0627\u062F\u06AF\u06CC \u062E\u0648\u062F\u062A\u0627\u0646 \u0631\u0627 \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F:",
-        buttons: null
-      };
-    },
-    async setCount(chatId, n) {
-      const state = await readState(chatId);
-      if (!state) return { text: "\u23F3 \u0627\u06CC\u0646 \u0645\u0646\u0648 \u0642\u062F\u06CC\u0645\u06CC \u0627\u0633\u062A \u2014 \u062F\u0648\u0628\u0627\u0631\u0647 \xAB\u0645\u0639\u0631\u0641\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\xBB \u0631\u0627 \u0628\u0632\u0646\u06CC\u062F.", buttons: null };
-      state.count = Math.min(Math.max(n, 1), 5);
-      state.idx = 0;
-      state.children = [];
-      state.step = "child_name";
-      await writeState(chatId, state);
-      return childPrompt(state, 0);
-    },
-    /* پاسخ‌های متنی هر گام — خروج «رد» گام اختیاری را رد می‌کند */
-    async answer(chatId, rawText) {
-      const state = await readState(chatId);
-      if (!state) return { text: "\u23F3 \u0627\u06CC\u0646 \u06AF\u0641\u062A\u06AF\u0648 \u0628\u0633\u062A\u0647 \u0634\u062F\u0647 \u2014 \u062F\u0648\u0628\u0627\u0631\u0647 \xAB\u0645\u0639\u0631\u0641\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\xBB \u0631\u0627 \u0628\u0632\u0646\u06CC\u062F.", buttons: null };
-      const text = rawText.trim().slice(0, 300);
-      const skipped = text === "\u0631\u062F" || text === "\u0631\u062F\u06A9\u0631\u062F\u0646" || text === "\u0631\u062F \u06A9\u0631\u062F\u0646" || text === "-";
-      switch (state.step) {
-        case "school": {
-          state.school = skipped ? null : text.slice(0, 120);
-          state.step = "grade";
-          await writeState(chatId, state);
-          return { text: "\u270F\uFE0F \u067E\u0627\u06CC\u0647 \u062A\u062D\u0635\u06CC\u0644\u06CC \u06A9\u0648\u062F\u06A9\u0627\u0646 \u0631\u0627 \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F (\u0645\u062B\u0644\u0627\u064B \u062F\u0648\u0645 \u2014 \u06CC\u0627 \xAB\u0631\u062F\xBB):", buttons: null };
-        }
-        case "grade": {
-          state.grade = skipped ? null : text.slice(0, 40);
-          state.step = "cls";
-          await writeState(chatId, state);
-          return { text: "\u270F\uFE0F \u06A9\u0644\u0627\u0633 \u0631\u0627 \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F (\u0645\u062B\u0644\u0627\u064B \u06F2\u06F1 \u2014 \u06CC\u0627 \xAB\u0631\u062F\xBB):", buttons: null };
-        }
-        case "cls": {
-          state.cls = skipped ? null : text.slice(0, 40);
-          state.step = "name";
-          await writeState(chatId, state);
-          const countRow = [
-            [1, 2, 3].map((n) => ({ text: faDigits(String(n)), callbackData: `rf:count:${n}` })),
-            [
-              { text: "\u06F4", callbackData: "rf:count:4" },
-              { text: "\u06F5", callbackData: "rf:count:5" }
-            ]
-          ];
-          return { text: `\u{1F469}\u200D\u{1F3EB} \u0686\u0646\u062F \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u0631\u0627 \u0645\u0639\u0631\u0641\u06CC \u0645\u06CC\u200C\u06A9\u0646\u06CC\u062F\u061F (\u062A\u0627 ${faDigits("5")} \u0646\u0641\u0631 \u062F\u0631 \u06CC\u06A9 \u062B\u0628\u062A)`, buttons: countRow };
-        }
-        case "name": {
-          if (text.length < 2) return { text: "\u26A0\uFE0F \u0646\u0627\u0645 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A \u2014 \u062F\u0648\u0628\u0627\u0631\u0647 \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F:", buttons: null };
-          state.name = text.slice(0, 80);
-          state.step = "phone";
-          await writeState(chatId, state);
-          return { text: "\u{1F4F1} \u0634\u0645\u0627\u0631\u0647\u0654 \u0645\u0648\u0628\u0627\u06CC\u0644 \u062E\u0648\u062F\u062A\u0627\u0646 \u0631\u0627 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F (\u0645\u062B\u0644\u0627\u064B \u06F0\u06F9\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9):", buttons: null };
-        }
-        case "phone": {
-          const phone = normalizePhone3(text);
-          if (!/^09\d{9}$/.test(phone)) {
-            return { text: "\u26A0\uFE0F \u0634\u0645\u0627\u0631\u0647 \u0645\u0639\u062A\u0628\u0631 \u0646\u06CC\u0633\u062A \u2014 \u0628\u0627\u06CC\u062F \u06F1\u06F1 \u0631\u0642\u0645 \u0648 \u0628\u0627 \u06F0\u06F9 \u0634\u0631\u0648\u0639 \u0634\u0648\u062F. \u062F\u0648\u0628\u0627\u0631\u0647 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F:", buttons: null };
-          }
-          state.phone = phone;
-          state.step = "child_name";
-          state.idx = 0;
-          state.children = [];
-          await writeState(chatId, state);
-          return childPrompt(state, 0);
-        }
-        case "child_name": {
-          if (text.length < 2) return { text: "\u26A0\uFE0F \u0646\u0627\u0645 \u06A9\u0648\u062F\u06A9 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A \u2014 \u062F\u0648\u0628\u0627\u0631\u0647 \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F:", buttons: null };
-          state.children[state.idx] = { firstName: text.slice(0, 80), category: null, text: null };
-          state.step = "child_text";
-          await writeState(chatId, state);
-          return {
-            text: `\u{1F50E} \xAB${state.children[state.idx].firstName}\xBB \u2014 \u06A9\u062F\u0627\u0645 \u062F\u0633\u062A\u0647\u0654 \u062F\u063A\u062F\u063A\u0647 \u0646\u0632\u062F\u06CC\u06A9\u200C\u062A\u0631 \u0627\u0633\u062A\u061F`,
-            buttons: catButtons(state.idx)
-          };
-        }
-        case "child_text": {
-          const child = state.children[state.idx];
-          if (!child) return { text: "\u23F3 \u0627\u06CC\u0646 \u06AF\u0641\u062A\u06AF\u0648 \u0628\u0647\u200C\u0647\u0645 \u0631\u06CC\u062E\u062A\u0647 \u2014 \u062F\u0648\u0628\u0627\u0631\u0647 \xAB\u0645\u0639\u0631\u0641\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\xBB \u0631\u0627 \u0628\u0632\u0646\u06CC\u062F.", buttons: null };
-          child.text = skipped ? null : text.slice(0, 1e3);
-          state.idx += 1;
-          if (state.idx < state.count) {
-            state.step = "child_name";
-            await writeState(chatId, state);
-            return childPrompt(state, state.idx);
-          }
-          state.step = "confirm";
-          await writeState(chatId, state);
-          return { text: summaryText(state), buttons: [[{ text: "\u2705 \u062B\u0628\u062A \u0646\u0647\u0627\u06CC\u06CC", callbackData: "rf:do" }, { text: "\u2716\uFE0F \u0627\u0646\u0635\u0631\u0627\u0641", callbackData: "rf:no" }]] };
-        }
-        case "confirm": {
-          return {
-            text: "\u0628\u0631\u0627\u06CC \u062B\u0628\u062A \u0627\u0632 \u062F\u06A9\u0645\u0647\u200C\u0647\u0627\u06CC \xAB\u2705 \u062B\u0628\u062A \u0646\u0647\u0627\u06CC\u06CC\xBB \u0632\u06CC\u0631 \u067E\u06CC\u0627\u0645 \u0645\u0631\u0648\u0631 \u0627\u0633\u062A\u0641\u0627\u062F\u0647 \u06A9\u0646\u06CC\u062F \u2014 \u06CC\u0627 \xAB\u2716\uFE0F \u0627\u0646\u0635\u0631\u0627\u0641\xBB.",
-            buttons: [[{ text: "\u2705 \u062B\u0628\u062A \u0646\u0647\u0627\u06CC\u06CC", callbackData: "rf:do" }, { text: "\u2716\uFE0F \u0627\u0646\u0635\u0631\u0627\u0641", callbackData: "rf:no" }]]
-          };
-        }
-        default:
-          return { text: "\u23F3 \u0627\u06CC\u0646 \u06AF\u0641\u062A\u06AF\u0648 \u0628\u0633\u062A\u0647 \u0634\u062F\u0647 \u2014 \u062F\u0648\u0628\u0627\u0631\u0647 \xAB\u0645\u0639\u0631\u0641\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\xBB \u0631\u0627 \u0628\u0632\u0646\u06CC\u062F.", buttons: null };
-      }
-    },
-    async setCategory(chatId, idx, value) {
-      const state = await readState(chatId);
-      if (!state || !state.children[idx]) {
-        return { text: "\u23F3 \u0627\u06CC\u0646 \u0645\u0646\u0648 \u0642\u062F\u06CC\u0645\u06CC \u0627\u0633\u062A \u2014 \u062F\u0648\u0628\u0627\u0631\u0647 \xAB\u0645\u0639\u0631\u0641\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\xBB \u0631\u0627 \u0628\u0632\u0646\u06CC\u062F.", buttons: null };
-      }
-      state.children[idx].category = value;
-      await writeState(chatId, state);
-      return {
-        text: `\u270D\uFE0F \u0634\u0631\u062D \u062F\u063A\u062F\u063A\u0647\u0654 \xAB${state.children[idx].firstName}\xBB \u0631\u0627 \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F (\u0686\u06CC\u0632\u06CC \u06A9\u0647 \u062F\u06CC\u062F\u0647\u200C\u0627\u06CC\u062F \u2014 \u06CC\u0627 \xAB\u0631\u062F\xBB):`,
-        buttons: null
-      };
-    },
-    /* ثبت نهایی — از مسیر رسمی waitlist.submitReferral با token بات */
-    async confirm(chatId) {
-      const state = await readState(chatId);
-      if (!state || state.children.length === 0) {
-        return { text: "\u23F3 \u0627\u06CC\u0646 \u06AF\u0641\u062A\u06AF\u0648 \u0628\u0633\u062A\u0647 \u0634\u062F\u0647 \u2014 \u062F\u0648\u0628\u0627\u0631\u0647 \xAB\u0645\u0639\u0631\u0641\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\xBB \u0631\u0627 \u0628\u0632\u0646\u06CC\u062F.", buttons: null };
-      }
-      if (!deps.submitReferral) {
-        return { text: "\u26A0\uFE0F \u062B\u0628\u062A \u0645\u0639\u0631\u0641\u06CC \u0641\u0639\u0644\u0627\u064B \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0646\u06CC\u0633\u062A \u2014 \u0627\u0632 \u0641\u0631\u0645 \u0648\u0628 \u0627\u0633\u062A\u0641\u0627\u062F\u0647 \u06A9\u0646\u06CC\u062F." + webFormLine, buttons: null };
-      }
-      if (rateBlocked(chatId)) {
-        return { text: "\u23F3 \u062A\u0639\u062F\u0627\u062F \u062B\u0628\u062A\u200C\u0647\u0627\u06CC \u0627\u06CC\u0646 \u06AF\u0641\u062A\u06AF\u0648 \u062F\u0631 \u06CC\u06A9 \u0633\u0627\u0639\u062A \u0632\u06CC\u0627\u062F \u0627\u0633\u062A \u2014 \u06A9\u0645\u06CC \u0628\u0639\u062F \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F \u06CC\u0627 \u0627\u0632 \u0641\u0631\u0645 \u0648\u0628 \u0627\u0633\u062A\u0641\u0627\u062F\u0647 \u06A9\u0646\u06CC\u062F." + webFormLine, buttons: null };
-      }
-      try {
-        const created = await deps.submitReferral(
-          {
-            role: state.role,
-            referrer_name: state.name,
-            referrer_phone: state.phone,
-            school_text: state.school ?? void 0,
-            grade_text: state.grade ?? void 0,
-            class_text: state.cls ?? void 0,
-            token: `bot:${chatId}`,
-            children: state.children.map((c) => ({
-              first_name: c.firstName,
-              concern_category: c.category,
-              concern_text: c.text ?? void 0
-            }))
-          },
-          { ip: void 0 }
-        );
-        const count = Array.isArray(created) ? created.length : state.children.length;
-        await audit.log({
-          actorId: "bale-bot",
-          action: "bot.referral_submit",
-          resourceType: "waitlist_referral",
-          resourceId: chatId,
-          changes: { count: { from: null, to: count }, role: { from: null, to: state.role } }
-        });
-        await clearState(chatId);
-        log.info("referral.bot.submitted", { chatId, count, role: state.role });
-        return {
-          text: `\u2705 \u062B\u0628\u062A \u0634\u062F \u2014 ${faDigits(String(count))} \u0645\u0639\u0631\u0641\u06CC \u0628\u0631\u0627\u06CC \u06A9\u0627\u0631\u0634\u0646\u0627\u0633\u0627\u0646 \u0645\u0631\u06A9\u0632 \u0627\u0631\u0633\u0627\u0644 \u0634\u062F.
-
-\u06A9\u0627\u0631\u0634\u0646\u0627\u0633\u0627\u0646 \u0628\u0631\u0631\u0633\u06CC \u0645\u06CC\u200C\u06A9\u0646\u0646\u062F \u0648 \u0628\u0627 \u0634\u0645\u0627 \u062A\u0645\u0627\u0633 \u0645\u06CC\u200C\u06AF\u06CC\u0631\u0646\u062F. \u0647\u0645\u0647\u0654 \u062E\u062F\u0645\u0627\u062A \u0631\u0627\u06CC\u06AF\u0627\u0646 \u0627\u0633\u062A.` + webFormLine,
-          buttons: null
-        };
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : "\u062E\u0637\u0627\u06CC \u0646\u0627\u0645\u0634\u062E\u0635";
-        log.warn("referral.bot.submit_failed", { chatId, error: msg });
-        return {
-          text: `\u26A0\uFE0F \u062B\u0628\u062A \u0627\u0646\u062C\u0627\u0645 \u0646\u0634\u062F: ${msg}
-\u0645\u06CC\u200C\u062A\u0648\u0627\u0646\u06CC\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \xAB\u2705 \u062B\u0628\u062A \u0646\u0647\u0627\u06CC\u06CC\xBB \u0631\u0627 \u0628\u0632\u0646\u06CC\u062F \u06CC\u0627 \u0627\u0632 \u0641\u0631\u0645 \u0648\u0628 \u0627\u0633\u062A\u0641\u0627\u062F\u0647 \u06A9\u0646\u06CC\u062F.` + webFormLine,
-          buttons: [[{ text: "\u2705 \u062B\u0628\u062A \u0646\u0647\u0627\u06CC\u06CC", callbackData: "rf:do" }, { text: "\u2716\uFE0F \u0627\u0646\u0635\u0631\u0627\u0641", callbackData: "rf:no" }]]
-        };
-      }
-    },
-    async abort(chatId) {
-      const had = await readState(chatId);
-      await clearState(chatId);
-      if (!had) return { text: "\u06AF\u0641\u062A\u06AF\u0648\u06CC \u0641\u0639\u0627\u0644\u06CC \u0646\u06CC\u0633\u062A.", buttons: null };
-      return { text: "\u2716\uFE0F \u0645\u0639\u0631\u0641\u06CC \u0644\u063A\u0648 \u0634\u062F \u2014 \u0647\u0631 \u0648\u0642\u062A \u062E\u0648\u0627\u0633\u062A\u06CC\u062F \u0627\u0632 \u0645\u0646\u0648\u06CC \xAB\u0645\u0639\u0631\u0641\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\xBB \u0634\u0631\u0648\u0639 \u06A9\u0646\u06CC\u062F.", buttons: null };
-    }
-  };
-}
-__name(createReferralBot, "createReferralBot");
-
 // src/application/notify/context.ts
 var BOT_ACTOR = {
   staffId: "bale-bot",
@@ -72200,10 +71966,11 @@ function buildBotKeyboard(owner) {
   const unlinkRow = ["\u0642\u0637\u0639 \u0627\u062A\u0635\u0627\u0644"];
   if (!owner) {
     return [
+      ["\u0645\u0639\u0631\u0641\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632"],
+      // ۱.۲۷.۳۶ — دکمهٔ اول بات؛ ارجاع فقط از لینک فرم وب
       ["\u0645\u0639\u0631\u0641\u06CC \u0645\u0631\u06A9\u0632", "\u062E\u062F\u0645\u0627\u062A \u0645\u0631\u06A9\u0632"],
       ["\u0631\u0627\u0647\u200C\u0647\u0627\u06CC \u0627\u0631\u062A\u0628\u0627\u0637\u06CC", "\u0627\u062D\u0631\u0627\u0632 \u0647\u0648\u06CC\u062A"],
-      ["\u0645\u0639\u0631\u0641\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632", "\u0641\u0627\u06CC\u0644\u200C\u0647\u0627\u06CC \u0622\u0645\u0648\u0632\u0634\u06CC"]
-      // ۱.۲۷.۳۵ — عموم مردم بدون احراز
+      ["\u0641\u0627\u06CC\u0644\u200C\u0647\u0627\u06CC \u0622\u0645\u0648\u0632\u0634\u06CC"]
     ];
   }
   if (owner.kind === "staff") {
@@ -72222,19 +71989,20 @@ function buildBotKeyboard(owner) {
   }
   if (owner.kind === "class") {
     return [
+      ["\u0645\u0639\u0631\u0641\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632"],
+      // ۱.۲۷.۳۶ — دکمهٔ اول؛ معلمِ کلاس معرفی‌کنندهٔ اصلی است
       ["\u0646\u0648\u0628\u062A\u200C\u0647\u0627\u06CC \u06A9\u0644\u0627\u0633 \u0645\u0646", "\u0641\u0639\u0627\u0644\u06CC\u062A \u06A9\u0644\u0627\u0633"],
       ["\u06A9\u0627\u0631\u062A\u200C\u0647\u0627\u06CC \u0622\u0645\u0627\u062F\u0647", "\u0622\u06AF\u0627\u0647\u06CC\u200C\u0647\u0627\u06CC \u0627\u062E\u062A\u0644\u0627\u0644\u0627\u062A"],
-      ["\u0645\u0639\u0631\u0641\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632"],
-      // ۱.۲۷.۳۵ — معلمِ کلاس معرفی‌کنندهٔ اصلی است
       aboutRow,
       unlinkRow
     ];
   }
   return [
+    ["\u0645\u0639\u0631\u0641\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632"],
+    // ۱.۲۷.۳۶ — دکمهٔ اول برای نقش پایه (خانواده)
     ["\u0646\u0648\u0628\u062A\u200C\u0647\u0627\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u0645\u0646", "\u062A\u0645\u0631\u06CC\u0646\u200C\u0647\u0627\u06CC \u0627\u0646\u062C\u0627\u0645\u200C\u0646\u0634\u062F\u0647"],
     ["\u0686\u06A9\u200C\u0644\u06CC\u0633\u062A\u200C\u0647\u0627\u06CC \u0645\u0646", "\u062D\u0636\u0648\u0631 \u0641\u0631\u0632\u0646\u062F"],
-    ["\u0645\u0639\u0631\u0641\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632", "\u0641\u0627\u06CC\u0644\u200C\u0647\u0627\u06CC \u0622\u0645\u0648\u0632\u0634\u06CC"],
-    // ۱.۲۷.۳۵ — نقش پایه (خانواده)
+    ["\u0641\u0627\u06CC\u0644\u200C\u0647\u0627\u06CC \u0622\u0645\u0648\u0632\u0634\u06CC"],
     aboutRow,
     unlinkRow
   ];
@@ -72249,34 +72017,13 @@ function extractMessageText(update) {
 }
 __name(extractMessageText, "extractMessageText");
 function createBotCommandsSection(ctx) {
-  const { deps, db, audit, log, now, appointments, students, followups, exbBot, subBot, clfBot, awBot, rfBot, readPfState, writePfState, studentNamesMap, staffNamesMap } = ctx;
+  const { deps, db, audit, log, now, appointments, students, followups, exbBot, subBot, clfBot, awBot, readPfState, writePfState, studentNamesMap, staffNamesMap } = ctx;
+  const refWebLink = (deps.publicBaseUrl ?? "").replace(/\/+$/, "") + "/public/referral";
+  const REFERRAL_LINK_MESSAGE = "\u{1F9E9} \u0645\u0639\u0631\u0641\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u0628\u0647 \u0645\u0631\u06A9\u0632\n\n\u0627\u06AF\u0631 \u062F\u0631\u0628\u0627\u0631\u0647 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC\u060C \u06AF\u0641\u062A\u0627\u0631\u060C \u062A\u0648\u062C\u0647 \u06CC\u0627 \u0631\u0641\u062A\u0627\u0631 \u06CC\u06A9 \u06A9\u0648\u062F\u06A9 \u0646\u06AF\u0631\u0627\u0646\u06CC \u062F\u0627\u0631\u06CC\u062F\u060C \u0628\u0627 \u0641\u0631\u0645 \u06A9\u0648\u062A\u0627\u0647\u0650 \u0632\u06CC\u0631 \u0686\u0646\u062F \u062F\u0642\u06CC\u0642\u0647\u200C\u0627\u06CC \u062B\u0628\u062A\u0634 \u06A9\u0646\u06CC\u062F \u2014 \u06A9\u0627\u0631\u0634\u0646\u0627\u0633\u0627\u0646 \u0645\u0627 \u0628\u0631\u0631\u0633\u06CC \u0645\u06CC\u200C\u06A9\u0646\u0646\u062F \u0648 \u0628\u0627 \u0634\u0645\u0627 \u062A\u0645\u0627\u0633 \u0645\u06CC\u200C\u06AF\u06CC\u0631\u0646\u062F. \u0647\u0645\u0647\u0654 \u062E\u062F\u0645\u0627\u062A \u0645\u0631\u06A9\u0632 \u0631\u0627\u06CC\u06AF\u0627\u0646 \u0627\u0633\u062A.\n\n\u{1F310} \u0641\u0631\u0645 \u0645\u0639\u0631\u0641\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632:\n" + refWebLink;
   return {
     async handleBotUpdate(update) {
       const cmd = parseBotUpdate(update);
       const rawText = extractMessageText(update);
-      const refChat = (() => {
-        if (typeof update !== "object" || update === null) return null;
-        const u = update;
-        const id = u.callback_query?.message?.chat?.id ?? u.message?.chat?.id;
-        return id === void 0 || id === null ? null : String(id);
-      })();
-      if (refChat) {
-        const refActive = await rfBot.readActive(refChat);
-        if (refActive) {
-          const textual = cmd === null || cmd.kind === "identify" || cmd.kind === "unknown";
-          if (cmd && cmd.kind === "flow_cancel") {
-            const out = await rfBot.abort(refChat);
-            return { handled: true, reply: out.text, keyboard: buildBotKeyboard(await this.resolveOwner(refChat)) };
-          }
-          if (textual) {
-            const out = await rfBot.answer(refChat, (rawText ?? "").trim());
-            return { handled: true, reply: out.text, buttons: out.buttons };
-          }
-          if (cmd.kind !== "ref_role" && cmd.kind !== "ref_count" && cmd.kind !== "ref_cat" && cmd.kind !== "ref_do" && cmd.kind !== "ref_no" && cmd.kind !== "media_received" && cmd.kind !== "sub_pick") {
-            await rfBot.abort(refChat);
-          }
-        }
-      }
       if (!cmd) {
         return { handled: false, reply: null };
       }
@@ -72285,10 +72032,6 @@ function createBotCommandsSection(ctx) {
         if (clfActive) {
           const out = await clfBot.abortFill(cmd.chatId);
           return { handled: true, reply: out.text, buttons: out.buttons };
-        }
-        if (await rfBot.readActive(cmd.chatId)) {
-          const out = await rfBot.abort(cmd.chatId);
-          return { handled: true, reply: out.text, keyboard: buildBotKeyboard(await this.resolveOwner(cmd.chatId)) };
         }
         return { handled: false, reply: null };
       }
@@ -72439,30 +72182,10 @@ function createBotCommandsSection(ctx) {
           const out = await clfBot.abortFill(cmd.chatId);
           return { handled: true, reply: out.text, buttons: out.buttons };
         }
-        // ۱.۲۷.۳۵ — فلو «معرفی دانش‌آموز»: عموم مردم و نقش پایه (خانواده/معلم)، بدون احراز
+        // ۱.۲۷.۳۶ — معرفی دانش‌آموز: دکمهٔ اول بات برای عموم و نقش پایه؛ فقط لینک فرم وب
+        // (خواست کارفرما — پر کردن فرم با دکمه‌های بات سنگین است و حذف شد)
         case "referral_root": {
-          const out = await rfBot.root(cmd.chatId);
-          return { handled: true, reply: out.text, buttons: out.buttons };
-        }
-        case "ref_role": {
-          const out = await rfBot.start(cmd.chatId, cmd.role);
-          return { handled: true, reply: out.text, buttons: out.buttons };
-        }
-        case "ref_count": {
-          const out = await rfBot.setCount(cmd.chatId, cmd.n);
-          return { handled: true, reply: out.text, buttons: out.buttons };
-        }
-        case "ref_cat": {
-          const out = await rfBot.setCategory(cmd.chatId, cmd.idx, cmd.value);
-          return { handled: true, reply: out.text, buttons: out.buttons };
-        }
-        case "ref_do": {
-          const out = await rfBot.confirm(cmd.chatId);
-          return { handled: true, reply: out.text, buttons: out.buttons, keyboard: out.buttons ? void 0 : buildBotKeyboard(await this.resolveOwner(cmd.chatId)) };
-        }
-        case "ref_no": {
-          const out = await rfBot.abort(cmd.chatId);
-          return { handled: true, reply: out.text, keyboard: buildBotKeyboard(await this.resolveOwner(cmd.chatId)) };
+          return { handled: true, reply: REFERRAL_LINK_MESSAGE, keyboard: buildBotKeyboard(await this.resolveOwner(cmd.chatId)) };
         }
         case "exb_root":
         case "exb_cats":
@@ -73862,14 +73585,6 @@ function createNotifyAppService(deps) {
     now
   });
   const awBot = createAwarenessBot({ publicBaseUrl: deps.publicBaseUrl ?? null });
-  const rfBot = createReferralBot({
-    db,
-    audit,
-    logger,
-    publicBaseUrl: deps.publicBaseUrl ?? null,
-    submitReferral: deps.referralSubmit ?? null,
-    now
-  });
   async function readPfState(chatId) {
     const row = await db.queryOne(
       `SELECT payload FROM bot_menu_state WHERE chat_id = ?`,
@@ -73926,7 +73641,7 @@ function createNotifyAppService(deps) {
     return base ? `${base}?start=${code}` : null;
   }
   __name(botDeepLink, "botDeepLink");
-  const ctx = { deps, db, audit, log, notify, now, appointments, students, followups, exbBot, subBot, clfBot, awBot, rfBot, readPfState, writePfState, studentNamesMap, staffNamesMap, botDeepLink, botDeepLinkCache };
+  const ctx = { deps, db, audit, log, notify, now, appointments, students, followups, exbBot, subBot, clfBot, awBot, readPfState, writePfState, studentNamesMap, staffNamesMap, botDeepLink, botDeepLinkCache };
   return {
     ...createBotLinksSection(ctx),
     ...createBotCommandsSection(ctx),
@@ -80499,11 +80214,6 @@ function createServices(deps) {
     publicBaseUrl: deps.publicBaseUrl ?? null,
     fileSender: exerciseFileSender,
     caseEvents,
-    // ۱.۲۷.۳۵ — فلو بات معرفی: ثبت از مسیر رسمی waitlist.submitReferral (کانال ردیف = bot)
-    referralSubmit: /* @__PURE__ */ __name((input2, meta3) => waitlist.submitReferral(
-      input2,
-      meta3
-    ), "referralSubmit"),
     mediaFetcher: deps.mediaFetcher !== void 0 ? deps.mediaFetcher : deps.baleToken ? createBaleMediaFetcher({ token: deps.baleToken }) : null
   });
   appointments.setLifecycleObserver({

@@ -79,6 +79,7 @@ import {
   REFERRAL_CHILDREN_MAX,
   REFERRAL_CONCERN_MAX,
   REFERRAL_REJECT_REASON_MAX,
+  REFERRAL_FAMILY_LEVELS,
 } from './constants';
 import { isValidIranianNationalId, normalizeNationalId } from './national-id';
 import { isOnGrid, tehranTodayYmd } from './time';
@@ -1245,7 +1246,11 @@ export const ReferralChildSchema = z.object({
     .default([]),
   concern_text: z.string().trim().max(REFERRAL_CONCERN_MAX).optional(),
   prior_eval: z.boolean().nullish(),
-  prior_eval_note: z.string().trim().max(300).optional()
+  prior_eval_note: z.string().trim().max(300).optional(),
+  /* ۱.۲۷.۳۶ — فرم تکمیلی وضعیت خانواده زیر هر دانش‌آموز (اختیاری؛ «نمی‌دانم» ارسال نمی‌شود) */
+  family_culture: z.enum(REFERRAL_FAMILY_LEVELS).nullish(),
+  family_finance: z.enum(REFERRAL_FAMILY_LEVELS).nullish(),
+  family_cooperation: z.enum(REFERRAL_FAMILY_LEVELS).nullish()
 });
 
 export const PublicReferralSubmissionSchema = z.object({
