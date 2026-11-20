@@ -240,7 +240,9 @@ export function createServices(deps: AppDeps): Services {
     audit,
     logger,
     storage: exerciseStorage,
-    downloadSecret: deps.downloadSecret ?? deps.webhookSecret ?? 'insecure-dev-secret',
+    /* ۱.۲۷.۴۳ — راز دانلود هرگز رشتهٔ ثابت نیست: اگر AUTH/WEBHOOK تنظیم نشده باشد،
+       تصادفیِ هر بوت می‌شود (توکن‌های دانلود TTL کوتاه دارند؛ تاثیر ری‌استارت پذیرفته است) */
+    downloadSecret: deps.downloadSecret ?? deps.webhookSecret ?? (crypto.randomUUID() + crypto.randomUUID()),
     publicBaseUrl: deps.publicBaseUrl ?? null,
     fileSender: exerciseFileSender
   });

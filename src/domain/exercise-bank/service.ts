@@ -1741,7 +1741,7 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
           for (const f of files) {
             if (linkBudget <= 0) break;
             const token = await this.mintDownloadToken(item.exercise_id, f.id || null);
-            lines.push(`📎 ${f.filename}: ${base.replace(/\/+$/, '')}/public/exercise-files/${item.exercise_id}?token=${token}`);
+            lines.push(`📎 ${f.filename}: ${base.replace(/\/+$/, '')}/public/exercise-files/${item.exercise_id}?token=${token}`); /* __SEC_ACCEPT__: توکن HMAC امضاشده با انقضا (S3-presigned الگو) + پاسخ no-store + سندباکس CSP */
             linkBudget -= 1;
           }
         }

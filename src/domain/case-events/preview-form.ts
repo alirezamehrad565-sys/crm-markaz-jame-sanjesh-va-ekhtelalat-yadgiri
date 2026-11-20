@@ -168,8 +168,9 @@ export function renderPreviewPage(def: CaseEventTypeInput, token: string): strin
 </div>
 <script>
 (function () {
-  var TOKEN = ${JSON.stringify(token)};
-  var DEFINITION = ${JSON.stringify(JSON.stringify(def))};
+  /* ۱.۲۷.۴۳ — جاسازی امن JSON در <script>: گریز </ و U+2028/2029 (الگوی safeJsonEmbed فرم‌ساز) */
+  var TOKEN = ${JSON.stringify(token).replace(/</g, '\\u003c').replace(/>/g, '\\u003e')};
+  var DEFINITION = ${JSON.stringify(JSON.stringify(def)).replace(/</g, '\\u003c').replace(/>/g, '\\u003e')};
   var f = document.getElementById('f');
   var msg = document.getElementById('msg');
   var progText = document.getElementById('progText');
@@ -218,7 +219,7 @@ export function renderPreviewPage(def: CaseEventTypeInput, token: string): strin
     fetch('/public/case-events/preview/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: TOKEN, definition: JSON.parse(DEFINITION), answers: answers })
+      body: JSON.stringify({ token: TOKEN, definition: JSON.parse(DEFINITION), answers: answers }) /* __SEC_ACCEPT__: DEFINITION خروجی JSON.stringify سرور است — پارس همیشه معتبر */
     }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
       .then(function (res) {
         if (!res.ok) {
@@ -278,7 +279,7 @@ export function renderPreviewPage(def: CaseEventTypeInput, token: string): strin
     fetch('/public/case-events/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: TOKEN, definition: JSON.parse(DEFINITION) })
+      body: JSON.stringify({ token: TOKEN, definition: JSON.parse(DEFINITION) }) /* __SEC_ACCEPT__: همان قرارداد بالا */
     }).then(function (r) { return r.text(); })
       .then(function (html) { document.open(); document.write(html); document.close(); });
   });

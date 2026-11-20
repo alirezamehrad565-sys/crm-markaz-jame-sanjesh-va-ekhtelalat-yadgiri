@@ -95,7 +95,9 @@ function parseScore(qualityRaw: string | null): { quality: Record<string, unknow
 
 function mapRow(row: ContentRow): NetworkContentRecord {
   let tags: string[] = [];
-  const parsed = row.tags ? (JSON.parse(row.tags) as unknown) : null;
+  /* ۱.۲۷.۴۳ — ممیزی: ستون tags خراب = آرایهٔ خالی، نه پرتاب در رندر */
+  let parsed: unknown = null;
+  try { parsed = row.tags ? (JSON.parse(row.tags) as unknown) : null; } catch { parsed = null; }
   if (Array.isArray(parsed)) tags = parsed.filter((t): t is string => typeof t === 'string');
   const kind = isContentKind(row.kind) ? row.kind : 'exercise';
   const { quality, score } = parseScore(row.quality ?? null);

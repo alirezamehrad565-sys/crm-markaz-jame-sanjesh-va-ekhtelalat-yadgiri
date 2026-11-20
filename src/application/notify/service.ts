@@ -4,6 +4,7 @@ import type { Logger } from '@core/logger';
 import type { AuthContext, BotLinkRecord, ClassBotLinkRecord, DispatchSummary, NotificationPrefs, NotificationRecord, NotificationStatus, ReminderEnqueueSummary, StaffBotLinkRecord, Appointment, Todo } from '@core/shared';
 import { REMINDER_HORIZON_HOURS, addMinutes } from '@core/shared';
 import { listStaff } from '@core/auth';
+import { timingSafeEqualStr } from '@core/security/timing'; /* ۱.۲۷.۴۳ */
 import type { AppointmentService } from '@domain/appointment-core';
 import type { StudentProfileService } from '@domain/student-profile';
 import { createBaleChannel, rowToPrefs, selectPrefsMany, upsertPrefs } from '@core/notify';
@@ -144,7 +145,7 @@ export interface NotifyAppService {
   notifyLifecycle(event: LifecycleEvent, appointment: Appointment, previous?: { startAt: string; endAt: string }): Promise<void>;
   sendTest(input: { channel: NotificationRecord['channel']; recipient: string; text?: string }, actor: AuthContext): Promise<SendResult>;
   isWebhookEnabled(): boolean;
-  isWebhookSecretValid(secret: string | undefined): boolean;
+  isWebhookSecretValid(secret: string | undefined): Promise<boolean>; /* ۱.۲۷.۴۳ — هم‌زمان‌ایمن */
   notifyAttendanceMarked(appointmentId: string, studentId: string, status: string): Promise<void>;
   enqueuePendingAttendanceNudges(): Promise<number>;
   notifyHomeworkGraded(input: { studentId: string; studentName: string; exerciseTitle: string; feedback: string; gradedByName: string | null }): Promise<void>;
@@ -418,9 +419,9 @@ export function createNotifyAppService(deps: NotifyAppDeps): NotifyAppService {
       return Boolean(deps.webhookSecret);
     },
 
-    isWebhookSecretValid(secret: string | undefined): boolean {
+    async isWebhookSecretValid(secret: string | undefined): Promise<boolean> { /* ۱.۲۷.۴۳ — هم‌زمان‌ایمن */
       if (!deps.webhookSecret || !secret) return false;
-      return secret === deps.webhookSecret;
+      return timingSafeEqualStr(secret, deps.webhookSecret);
     }
 
   };

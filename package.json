@@ -1,6 +1,6 @@
 {
   "name": "center-system",
-  "version": "1.27.42",
+  "version": "1.27.43",
   "private": true,
   "type": "module",
   "author": {
@@ -44,7 +44,8 @@
     "check:d1": "node scripts/check-d1-compat.mjs",
     "build:engine-server": "node scripts/build-engine-server.mjs",
     "smoke:engine": "node scripts/engine/engine-smoke.mjs",
-    "smoke:engine:adapter": "SMOKE_ENGINE=adapter node scripts/engine/engine-smoke.mjs"
+    "smoke:engine:adapter": "SMOKE_ENGINE=adapter node scripts/engine/engine-smoke.mjs",
+    "audit:sec": "node scripts/sec-audit.mjs"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.5",
