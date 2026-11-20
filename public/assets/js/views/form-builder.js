@@ -1,36 +1,75 @@
 /* views/form-builder.js — ویرایشگر بلوکی فرم‌ساز تعاملی (۱.۲۷.۳۴ — REFERRAL-DESIGN §A-1)
  *
- * فهرست فرم‌ها + ویرایش درجا: پالت بلوک‌ها (متن کوتاه/بلند، عدد، موبایل، انتخاب تکی/چندگانه،
- * بله/خیر، صفحهٔ آگاهی)، ویرایش هر بلوک در مودال، جابه‌جایی بالا/پایین، پیش‌نمایش زنده،
- * انتشار/توقف انتشار + کپی لینک عمومی، صندوق پاسخ‌ها با «خوانده شد».
- * منطق پرش و QR نسخه‌های بعدی‌اند (§A-1) — جریان فعلی خطی با صفحات آگاهی است.
+ * بازطراحی ۱.۲۷.۴۱ (خواست کارفرما: UI/UX در سطح پرس‌لاین/Typeform/Tally):
+ * ① پالت بلوک‌ها از دکمه‌های فشرده به «کتابخانهٔ نوع‌ها» کارتی — هر نوع با جعبهٔ آیکون رنگی
+ *    (هشت‌گانهٔ hue توکن‌ها)، برچسب و راهنمای یک‌خطی.
+ * ② بلوک‌ها کارت کامل‌اند: شمارهٔ گرادینتی، چیپ نوع، برچسب، متا، سوییچ «الزامی» درجا،
+ *    تکرار بلوک، جابه‌جایی با درگ‌ودراپ (HTML5) + دکمه‌های بالا/پایین برای لمس.
+ * ③ پیش‌نمایش زندهٔ واقعی در پنل کناری چسبان — کنترل‌های واقعی فرم (input/radio/checkbox/
+ *    textarea/صفحهٔ آگاهی)، هم‌گام با هر تغییر؛ در صفحهٔ باریک زیر ویرایشگر می‌آید و
+ *    مودال «پیش‌نمایش» همان ردیف‌ها را نشان می‌دهد.
+ * ④ نوار ذخیرهٔ شناور (sticky) — ذخیره/انتشار/پیش‌نمایش همیشه در دسترس.
+ * ⑤ صندوق پاسخ‌ها: فیلتر «فقط جدید» + شمارنده + پاسخ‌ها با جداسازی خط.
+ * فونت و سایز فقط با توکن‌های مقیاس (--fs-*) — کف ۱۲px فارسی رعایت است.
  */
 import { api } from '../api.js';
 import { el, icon, openModal, formModal, confirmModal, toast, toastError, emptyState, loadingState, flashNode } from '../ui.js';
 
 const KINDS = [
-  { kind: 'text', label: 'متن کوتاه', icon: 'edit' },
-  { kind: 'longtext', label: 'متن بلند', icon: 'clip' },
-  { kind: 'number', label: 'عدد', icon: 'hash' },
-  { kind: 'phone', label: 'موبایل', icon: 'phone' },
-  { kind: 'select', label: 'انتخاب تکی', icon: 'check' },
-  { kind: 'multi', label: 'انتخاب چندگانه', icon: 'plus' },
-  { kind: 'yes_no', label: 'بله / خیر', icon: 'refresh' },
-  { kind: 'note', label: 'صفحهٔ آگاهی', icon: 'info' }
+  { kind: 'text', label: 'متن کوتاه', icon: 'edit', hue: 1, hint: 'پاسخ کوتاه یک‌خطی' },
+  { kind: 'longtext', label: 'متن بلند', icon: 'clip', hue: 2, hint: 'پاسخ چندخطی آزاد' },
+  { kind: 'number', label: 'عدد', icon: 'hash', hue: 3, hint: 'فقط رقم' },
+  { kind: 'phone', label: 'موبایل', icon: 'phone', hue: 4, hint: 'قالب ۰۹xx' },
+  { kind: 'select', label: 'انتخاب تکی', icon: 'check', hue: 5, hint: 'یک گزینه از فهرست' },
+  { kind: 'multi', label: 'انتخاب چندگانه', icon: 'grid', hue: 6, hint: 'چند گزینه هم‌زمان' },
+  { kind: 'yes_no', label: 'بله / خیر', icon: 'refresh', hue: 7, hint: 'دوگانهٔ سریع' },
+  { kind: 'note', label: 'صفحهٔ آگاهی', icon: 'info', hue: 8, hint: 'فقط اطلاعات — بدون پاسخ' }
 ];
 
 const KIND_LABEL = Object.fromEntries(KINDS.map((k) => [k.kind, k.label]));
+const KIND_HUE = Object.fromEntries(KINDS.map((k) => [k.kind, k.hue]));
 
 const FB_CSS = `
-.fb-pal{display:flex;flex-wrap:wrap;gap:8px;margin:var(--sp-3) 0}
-.fb-blk{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);
-padding:var(--sp-2) var(--sp-3);margin-bottom:var(--sp-2)}
-.fb-blk__head{display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap}
-.fb-actions{display:flex;gap:6px;margin-inline-start:auto}
-.fb-meta{display:grid;gap:var(--sp-2);grid-template-columns:1fr 200px}
-@media (max-width:640px){.fb-meta{grid-template-columns:1fr}}
-.fb-preview-row{padding:var(--sp-2) var(--sp-3);border-bottom:1px solid var(--border)}
-.fb-preview-row:last-child{border-bottom:none}
+.fb-wrap{display:grid;grid-template-columns:minmax(0,1fr) 370px;gap:var(--sp-4);align-items:start}
+@media (max-width:1080px){.fb-wrap{grid-template-columns:1fr}}
+.fb-side{position:sticky;top:78px}
+@media (max-width:1080px){.fb-side{position:static}}
+.fb-pal{display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:8px}
+.fb-kind{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);cursor:pointer;text-align:start;width:100%;font-family:inherit;transition:border-color var(--fast),box-shadow var(--fast),transform var(--fast)}
+.fb-kind:hover{border-color:var(--primary);box-shadow:var(--shadow-1);transform:translateY(-1px)}
+.fb-kind:focus-visible{box-shadow:var(--focus-ring)}
+.fb-kind__ico{width:32px;height:32px;border-radius:var(--radius-sm);display:grid;place-items:center;flex-shrink:0}
+.fb-kind__txt b{display:block;font-size:var(--fs-sm);font-weight:600;line-height:var(--lh-ui)}
+.fb-kind__txt span{display:block;font-size:var(--fs-2xs);color:var(--text-3);margin-top:1px}
+.fb-blk{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:var(--sp-3);margin-bottom:var(--sp-2);display:flex;gap:var(--sp-3);cursor:grab;transition:border-color var(--fast),box-shadow var(--fast)}
+.fb-blk:hover{border-color:color-mix(in srgb,var(--primary) 45%,var(--border))}
+.fb-blk.is-drag{opacity:.4;border-style:dashed}
+.fb-blk.is-over{border-color:var(--primary);box-shadow:var(--focus-ring)}
+.fb-blk__main{flex:1;min-width:0}
+.fb-num{width:26px;height:26px;border-radius:var(--radius-full);background:var(--grad-primary);color:var(--on-primary);font-size:var(--fs-2xs);font-weight:700;display:grid;place-items:center;flex-shrink:0;margin-top:1px}
+.fb-blk__title{display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap}
+.fb-blk__meta{font-size:var(--fs-2xs);color:var(--text-3);margin-top:5px;line-height:var(--lh-snug);white-space:pre-wrap}
+.fb-blk__side{display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex-shrink:0}
+.fb-blk__acts{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
+@media (hover:hover){.fb-blk__acts .btn{opacity:.55}.fb-blk:hover .fb-blk__acts .btn,.fb-blk:focus-within .fb-blk__acts .btn{opacity:1}}
+.fb-zone-empty{border:1.5px dashed var(--border-strong);border-radius:var(--radius-md);padding:var(--sp-6) var(--sp-4);text-align:center;color:var(--text-3);font-size:var(--fs-sm);display:grid;gap:8px;justify-items:center}
+.fb-chip{display:inline-flex;align-items:center;gap:5px;padding:2px 9px;border-radius:var(--radius-full);font-size:var(--fs-2xs);font-weight:600;line-height:var(--lh-ui)}
+${KINDS.map((k) => `.fb-chip--h${k.hue}{background:var(--hue-${k.hue}-soft);color:var(--hue-${k.hue}-on)}\n.fb-ico--h${k.hue}{background:var(--hue-${k.hue}-soft);color:var(--hue-${k.hue}-strong)}`).join('\n')}
+.fb-prev__body{max-height:calc(100vh - 290px);min-height:200px;overflow:auto;padding:var(--sp-4)}
+@media (max-width:1080px){.fb-prev__body{max-height:60vh}}
+.fb-prev-row{padding:var(--sp-3);border:1px solid var(--border);border-radius:var(--radius-md);margin-bottom:var(--sp-2);background:var(--surface)}
+.fb-prev-row:last-child{margin-bottom:0}
+.fb-prev-label{font-weight:600;font-size:var(--fs-sm);display:block;margin-bottom:7px;line-height:var(--lh-snug)}
+.fb-prev-req{color:var(--error);font-weight:700;margin-inline-start:3px}
+.fb-opt{display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:6px;font-size:var(--fs-sm);cursor:pointer;transition:border-color var(--fast),background var(--fast)}
+.fb-opt:last-child{margin-bottom:0}
+.fb-opt:hover{border-color:var(--primary);background:var(--primary-soft)}
+.fb-note{display:flex;gap:10px;align-items:flex-start;background:var(--info-soft);border:1px solid color-mix(in srgb,var(--info) 28%,transparent);border-radius:var(--radius-sm);padding:var(--sp-3);font-size:var(--fs-sm);line-height:var(--lh-body);color:var(--text)}
+.fb-savebar{position:sticky;bottom:12px;display:flex;flex-wrap:wrap;gap:var(--sp-2);align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-2);padding:var(--sp-3) var(--sp-4);margin-top:var(--sp-4);z-index:20}
+.fb-res{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:var(--sp-3);margin-bottom:var(--sp-2)}
+.fb-res:last-child{margin-bottom:0}
+.fb-res__ans{font-size:var(--fs-sm);line-height:var(--lh-body);margin-top:8px;padding-top:8px;border-top:1px dashed var(--border)}
+.fb-head-hint{font-size:var(--fs-2xs);color:var(--text-3);margin-top:3px}
 `;
 
 let cssDone = false;
@@ -42,8 +81,16 @@ function ensureCss() {
   document.head.appendChild(style);
 }
 
-function kindBadge(kind) {
-  return el('span', { class: 'badge badge--neutral' }, KIND_LABEL[kind] ?? kind);
+function kindChip(kind, withIcon = true) {
+  const hue = KIND_HUE[kind] ?? 1;
+  return el('span', { class: `fb-chip fb-chip--h${hue}` },
+    withIcon ? icon((KINDS.find((k) => k.kind === kind) ?? {}).icon ?? 'note', 12) : null,
+    KIND_LABEL[kind] ?? kind);
+}
+
+function kindIco(kind, size = 16) {
+  const hue = KIND_HUE[kind] ?? 1;
+  return el('span', { class: `fb-kind__ico fb-ico--h${hue}` }, icon((KINDS.find((k) => k.kind === kind) ?? {}).icon ?? 'note', size));
 }
 
 function copyPublicLink(slug) {
@@ -58,7 +105,7 @@ function copyPublicLink(slug) {
   }
 }
 
-function openBlockEditor(block, index, onSave) {
+function openBlockEditor(block, onSave) {
   const isNote = block.kind === 'note';
   const needsOptions = block.kind === 'select' || block.kind === 'multi';
   formModal({
@@ -114,28 +161,53 @@ function openBlockEditor(block, index, onSave) {
   });
 }
 
-function openPreview(form) {
-  const body = el('div', { style: { maxHeight: '55vh', overflow: 'auto' } },
-    ...form.blocks.map((b, i) =>
-      el('div', { class: 'fb-preview-row' },
-        el('div', { style: { display: 'flex', gap: 'var(--sp-2)', alignItems: 'center' } },
-          el('span', { class: 'badge badge--neutral' }, `${fa(i + 1)}`),
-          kindBadge(b.kind),
-          el('b', {}, b.label),
-          b.required ? el('span', { class: 'badge badge--error' }, 'الزامی') : null
-        ),
-        b.kind === 'note'
-          ? el('div', { class: 'muted', style: { fontSize: '13px', marginTop: '4px', whiteSpace: 'pre-wrap' } }, b.note ?? '')
-          : (b.options?.length
-              ? el('div', { class: 'muted', style: { fontSize: '13px', marginTop: '4px' } }, `گزینه‌ها: ${b.options.map((o) => o.label).join(' · ')}`)
-              : null)
-      )
-    )
-  );
+/* ردیف پیش‌نمایش — کنترل واقعی فرم، هم‌شکلِ آنچه پاسخ‌دهنده می‌بیند (بدون ثبت) */
+function previewRow(b, i) {
+  const num = fa(i + 1);
+  const label = el('span', { class: 'fb-prev-label' },
+    `${num}. `, b.label,
+    b.required && b.kind !== 'note' ? el('span', { class: 'fb-prev-req', title: 'الزامی' }, '*') : null);
+  let control;
+  if (b.kind === 'note') {
+    control = el('div', { class: 'fb-note' }, icon('info', 16), el('div', {}, b.note ?? ''));
+  } else if (b.kind === 'longtext') {
+    control = el('textarea', { class: 'input', rows: 3, placeholder: 'پاسخ بلند…', tabindex: -1 });
+  } else if (b.kind === 'select') {
+    control = el('div', {}, ...(b.options ?? []).map((o) =>
+      el('label', { class: 'fb-opt' }, el('input', { type: 'radio', name: `prev-${i}`, tabindex: -1 }), o.label)));
+  } else if (b.kind === 'multi') {
+    control = el('div', {}, ...(b.options ?? []).map((o) =>
+      el('label', { class: 'fb-opt' }, el('input', { type: 'checkbox', tabindex: -1 }), o.label)));
+  } else if (b.kind === 'yes_no') {
+    control = el('div', {},
+      el('label', { class: 'fb-opt' }, el('input', { type: 'radio', name: `prev-yn-${i}`, tabindex: -1 }), 'بله'),
+      el('label', { class: 'fb-opt' }, el('input', { type: 'radio', name: `prev-yn-${i}`, tabindex: -1 }), 'خیر'));
+  } else if (b.kind === 'phone') {
+    control = el('input', { class: 'input', dir: 'ltr', inputmode: 'tel', placeholder: '09xxxxxxxxx', tabindex: -1 });
+  } else if (b.kind === 'number') {
+    control = el('input', { class: 'input', inputmode: 'numeric', placeholder: 'یک عدد وارد کنید…', tabindex: -1 });
+  } else {
+    control = el('input', { class: 'input', placeholder: 'پاسخ کوتاه…', tabindex: -1 });
+  }
+  return el('div', { class: 'fb-prev-row' }, label, control);
+}
+
+function renderPreviewBody(form) {
+  return el('div', { class: 'fb-prev__body', 'aria-hidden': 'true' },
+    el('div', { class: 'fb-prev-row', style: { background: 'var(--surface-2)', marginBottom: 'var(--sp-3)' } },
+      el('b', { style: { fontSize: 'var(--fs-md)', display: 'block' } }, form.title || 'فرم تازه'),
+      form.description ? el('div', { class: 'fb-blk__meta' }, form.description) : null),
+    ...(form.blocks ?? []).map((b, i) => previewRow(b, i)),
+    (form.blocks ?? []).length === 0
+      ? el('div', { class: 'fb-zone-empty' }, icon('layers', 22), 'با افزودن بلوک از پالت، پیش‌نمایش همین‌جا زنده می‌شود')
+      : null);
+}
+
+function openPreviewModal(form) {
   openModal({
-    title: `پیش‌نمایش بلوک‌ها — ${form.title || 'فرم تازه'}`,
+    title: `پیش‌نمایش — ${form.title || 'فرم تازه'}`,
     wide: true,
-    body,
+    body: renderPreviewBody(form),
     actions: [(close) => el('button', { class: 'btn btn--ghost btn--sm', onclick: close }, 'بستن')]
   });
 }
@@ -154,49 +226,67 @@ function openResponses(form) {
   });
   api.get(`/api/forms/${form.id}/responses`).then((res) => {
     const rows = res.data ?? [];
-    if (rows.length === 0) {
-      shell.root.querySelector('.modal__body')?.replaceChildren(
-        emptyState({ iconName: 'check', title: 'هنوز پاسخی ثبت نشده', hint: `لینک عمومی: /public/form/${form.slug}` })
-      );
-      return;
-    }
-    const renderRow = (r) => el('div', { class: 'fb-blk' },
-      el('div', { class: 'fb-blk__head' },
-        el('b', {}, r.respondentName),
-        r.respondentPhone ? el('span', { class: 'muted', style: { fontSize: '12px' } }, fa(r.respondentPhone)) : null,
-        el('span', { class: `badge ${r.status === 'new' ? 'badge--error' : 'badge--success'}` }, r.status === 'new' ? 'جدید' : 'خوانده‌شده'),
-        el('span', { class: 'muted', style: { fontSize: '12px' } }, r.createdAt?.slice(0, 10) ?? ''),
-        el('div', { class: 'fb-actions' },
-          r.status === 'new'
-            ? el('button', {
-                class: 'btn btn--soft btn--sm',
-                onclick: async () => {
-                  try {
-                    await api.post(`/api/forms/${form.id}/responses/${r.id}/seen`, {});
-                    toast('خوانده شد', 'success');
-                    openResponses(form); shell.close();
-                  } catch (err) { toastError(err); }
-                }
-              }, 'خوانده شد')
-            : null
-        )
-      ),
-      el('div', { style: { fontSize: '13.5px', marginTop: '6px', lineHeight: 1.9 } },
-        ...(r.answers ?? []).map((a) => {
-          const b = (form.blocks ?? [])[a.index];
-          let val = a.value;
-          if (b && (b.kind === 'select' || b.kind === 'multi')) {
-            const arr = Array.isArray(val) ? val : [val];
-            val = arr.map((x) => (b.options ?? []).find((o) => o.value === x)?.label ?? x).join('، ');
-          } else if (b && b.kind === 'yes_no') {
-            val = val === 'yes' ? 'بله' : val === 'no' ? 'خیر' : val;
-          }
-          return el('div', {}, el('b', {}, (b?.label ?? `سؤال ${a.index + 1}`) + ': '), String(val ?? '—'));
-        })
-      )
-    );
     const bodyZone = shell.root.querySelector('.modal__body');
-    if (bodyZone) bodyZone.replaceChildren(el('div', { style: { maxHeight: '60vh', overflow: 'auto' } }, ...rows.map(renderRow)));
+    let onlyNew = false;
+
+    const paint = () => {
+      if (rows.length === 0) {
+        bodyZone?.replaceChildren(
+          emptyState({ iconName: 'check', title: 'هنوز پاسخی ثبت نشده', hint: `لینک عمومی: /public/form/${form.slug}` })
+        );
+        return;
+      }
+      const newCount = rows.filter((r) => r.status === 'new').length;
+      const visible = onlyNew ? rows.filter((r) => r.status === 'new') : rows;
+      const renderRow = (r) => el('div', { class: 'fb-res' },
+        el('div', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', flexWrap: 'wrap' } },
+          el('b', {}, r.respondentName),
+          r.respondentPhone ? el('span', { class: 'muted', style: { fontSize: 'var(--fs-2xs)' } }, fa(r.respondentPhone)) : null,
+          el('span', { class: `badge ${r.status === 'new' ? 'badge--error' : 'badge--success'}` }, r.status === 'new' ? 'جدید' : 'خوانده‌شده'),
+          el('span', { class: 'muted', style: { fontSize: 'var(--fs-2xs)' } }, r.createdAt?.slice(0, 10) ?? ''),
+          el('div', { style: { marginInlineStart: 'auto' } },
+            r.status === 'new'
+              ? el('button', {
+                  class: 'btn btn--soft btn--sm',
+                  onclick: async () => {
+                    try {
+                      await api.post(`/api/forms/${form.id}/responses/${r.id}/seen`, {});
+                      toast('خوانده شد', 'success');
+                      r.status = 'read';
+                      paint();
+                    } catch (err) { toastError(err); }
+                  }
+                }, 'خوانده شد')
+              : null)
+        ),
+        el('div', { class: 'fb-res__ans' },
+          ...(r.answers ?? []).map((a) => {
+            const b = (form.blocks ?? [])[a.index];
+            let val = a.value;
+            if (b && (b.kind === 'select' || b.kind === 'multi')) {
+              const arr = Array.isArray(val) ? val : [val];
+              val = arr.map((x) => (b.options ?? []).find((o) => o.value === x)?.label ?? x).join('، ');
+            } else if (b && b.kind === 'yes_no') {
+              val = val === 'yes' ? 'بله' : val === 'no' ? 'خیر' : val;
+            }
+            return el('div', {}, el('b', {}, (b?.label ?? `سؤال ${a.index + 1}`) + ': '), String(val ?? '—'));
+          }))
+      );
+      bodyZone?.replaceChildren(
+        el('div', { class: 'week-bar', style: { marginBottom: 'var(--sp-3)' } },
+          el('span', { class: 'badge badge--neutral' }, `${fa(newCount)} جدید از ${fa(rows.length)}`),
+          el('div', { class: 'spacer' }),
+          newCount > 0
+            ? el('button', { class: 'btn btn--ghost btn--sm', onclick: () => { onlyNew = !onlyNew; paint(); } },
+                onlyNew ? 'نمایش همه' : 'فقط جدید')
+            : null),
+        ...visible.map(renderRow),
+        visible.length === 0
+          ? el('div', { class: 'fb-zone-empty' }, 'همهٔ پاسخ‌های جدید خوانده شدند ✓')
+          : null
+      );
+    };
+    paint();
   }).catch((err) => { toastError(err); shell.close(); });
 }
 
@@ -252,84 +342,166 @@ function openEditor(container, existing, backToList) {
   if (existing?.description) descIn.value = existing.description;
 
   const blocksZone = el('div', {});
+  const liveTitle = el('span', {}, existing ? existing.title : 'فرم تازه');
+  const liveDesc = el('div', {});
+  titleIn.addEventListener('input', () => { liveTitle.textContent = titleIn.value.trim() || 'فرم تازه'; });
+  descIn.addEventListener('input', () => { liveDesc.textContent = descIn.value.trim() ? descIn.value : ''; });
 
   function paintBlocks() {
-    const emptyHint = el('div', { class: 'muted', style: { padding: 'var(--sp-3)', fontSize: '13px' } },
-      'هنوز بلوکی نیست — از پالت پایین بلوک اضافه کنید؛ هر بلوک یک صفحهٔ مستقل در حالت تعاملی می‌شود.');
-    const rows = blocks.map((b, i) =>
-      el('div', { class: 'fb-blk' },
-        el('div', { class: 'fb-blk__head' },
-          el('span', { class: 'badge badge--neutral' }, fa(i + 1)),
-          kindBadge(b.kind),
-          el('b', {}, b.label),
-          b.required ? el('span', { class: 'badge badge--error' }, 'الزامی') : null,
-          el('div', { class: 'fb-actions' },
+    if (blocks.length === 0) {
+      blocksZone.replaceChildren(
+        el('div', { class: 'fb-zone-empty' },
+          icon('layers', 24),
+          'هنوز بلوکی نیست — از پالت بالا نوع بلوک را انتخاب کنید؛ هر بلوک یک صفحهٔ مستقل در حالت تعاملی می‌شود.',
+          el('span', { style: { fontSize: 'var(--fs-2xs)' } }, 'بلوک‌ها را می‌توانید با درگ جابه‌جا کنید')
+        ));
+      return;
+    }
+    let dragIdx = null;
+    const clearMarks = (root) => root.querySelectorAll('.fb-blk').forEach((n) => n.classList.remove('is-over', 'is-drag'));
+    const rows = blocks.map((b, i) => {
+      const meta = b.kind === 'note' && b.note
+        ? b.note.slice(0, 140)
+        : (b.options?.length ? `گزینه‌ها: ${b.options.map((o) => o.label).join(' · ')}` : null);
+      return el('div', {
+        class: 'fb-blk', draggable: 'true', dataset: { i: String(i) },
+        onclick: () => openBlockEditor(b, (next) => { blocks[i] = next; paintBlocks(); }),
+        ondragstart: (e) => {
+          dragIdx = i;
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', String(i));
+          e.currentTarget.classList.add('is-drag');
+        },
+        ondragover: (e) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          if (dragIdx !== null && dragIdx !== i) e.currentTarget.classList.add('is-over');
+        },
+        ondragleave: (e) => e.currentTarget.classList.remove('is-over'),
+        ondrop: (e) => {
+          e.preventDefault();
+          if (dragIdx !== null && dragIdx !== i) {
+            const [moved] = blocks.splice(dragIdx, 1);
+            blocks.splice(i, 0, moved);
+            paintBlocks();
+          }
+        },
+        ondragend: (e) => { dragIdx = null; clearMarks(e.currentTarget.parentNode ?? blocksZone); }
+      },
+        el('div', { class: 'fb-num' }, fa(i + 1)),
+        el('div', { class: 'fb-blk__main' },
+          el('div', { class: 'fb-blk__title' },
+            kindChip(b.kind),
+            el('b', {}, b.label)),
+          meta ? el('div', { class: 'fb-blk__meta' }, meta) : null),
+        el('div', { class: 'fb-blk__side' },
+          b.kind !== 'note'
+            ? el('label', { class: 'switch', title: 'الزامی؟', onclick: (e) => e.stopPropagation() },
+                el('input', { type: 'checkbox', checked: Boolean(b.required), onchange: (e) => { b.required = e.target.checked; paintBlocks(); } }),
+                el('span', { class: 'switch__track' }))
+            : null,
+          el('div', { class: 'fb-blk__acts', onclick: (e) => e.stopPropagation() },
             el('button', { class: 'btn btn--ghost btn--sm', title: 'بالا', disabled: i === 0 ? true : null, onclick: () => { [blocks[i - 1], blocks[i]] = [blocks[i], blocks[i - 1]]; paintBlocks(); } }, icon('chevR', 13)),
             el('button', { class: 'btn btn--ghost btn--sm', title: 'پایین', disabled: i === blocks.length - 1 ? true : null, onclick: () => { [blocks[i + 1], blocks[i]] = [blocks[i], blocks[i + 1]]; paintBlocks(); } }, icon('chevL', 13)),
-            el('button', { class: 'btn btn--soft btn--sm', onclick: () => openBlockEditor(b, i, (next) => { blocks[i] = next; paintBlocks(); }) }, 'ویرایش'),
-            el('button', { class: 'btn btn--soft btn--sm', onclick: () => { blocks.splice(i, 1); paintBlocks(); } }, 'حذف')
-          )
-        ),
-        b.kind === 'note' && b.note
-          ? el('div', { class: 'muted', style: { fontSize: '12.5px', marginTop: '4px', whiteSpace: 'pre-wrap' } }, b.note.slice(0, 140))
-          : (b.options?.length ? el('div', { class: 'muted', style: { fontSize: '12.5px', marginTop: '4px' } }, `گزینه‌ها: ${b.options.map((o) => o.label).join(' · ')}`) : null)
-      )
-    );
-    blocksZone.replaceChildren(...(rows.length ? rows : [emptyHint]));
+            el('button', { class: 'btn btn--ghost btn--sm', title: 'ویرایش', onclick: () => openBlockEditor(b, (next) => { blocks[i] = next; paintBlocks(); }) }, icon('edit', 13)),
+            el('button', {
+              class: 'btn btn--ghost btn--sm', title: 'تکرار بلوک',
+              onclick: () => {
+                if (blocks.length >= 60) { toastError(new Error('حداکثر ۶۰ بلوک در هر فرم')); return; }
+                const copy = { ...b, options: b.options?.map((o) => ({ ...o })) };
+                blocks.splice(i + 1, 0, copy);
+                paintBlocks();
+              }
+            }, icon('copy', 13)),
+            el('button', { class: 'btn btn--ghost btn--sm', title: 'حذف', onclick: () => { blocks.splice(i, 1); paintBlocks(); } }, icon('trash', 13))
+          ))
+      );
+    });
+    blocksZone.replaceChildren(...rows);
   }
 
   const palette = el('div', { class: 'fb-pal' },
     ...KINDS.map((k) =>
       el('button', {
-        class: 'btn btn--soft btn--sm',
+        class: 'fb-kind',
         onclick: () => {
           if (blocks.length >= 60) { toastError(new Error('حداکثر ۶۰ بلوک در هر فرم')); return; }
           const fresh = k.kind === 'note'
             ? { kind: 'note', label: 'صفحهٔ آگاهی', required: false, note: 'متن توضیحی این صفحه…' }
             : { kind: k.kind, label: k.label, required: false };
-          openBlockEditor(fresh, blocks.length, (next) => { blocks.push(next); paintBlocks(); });
+          openBlockEditor(fresh, (next) => { blocks.push(next); paintBlocks(); });
         }
-      }, icon(k.icon, 14), k.label)
+      },
+        kindIco(k.kind),
+        el('span', { class: 'fb-kind__txt' }, el('b', {}, k.label), el('span', {}, k.hint)))
     )
   );
 
   const editor = el('div', {},
-    el('div', { class: 'card' },
-      el('div', { class: 'card__head' },
-        el('div', { class: 'card__title' }, existing ? `ویرایش فرم — ${existing.title}` : 'فرم تازه'),
-        el('span', { class: `badge ${published ? 'badge--success' : 'badge--warning'}` }, published ? 'منتشرشده' : 'پیش‌نویس')
-      ),
-      el('div', { class: 'card__body' },
-        el('div', { class: 'fb-meta' },
-          el('div', {}, el('label', { class: 'f' }, 'عنوان فرم'), titleIn),
-          el('div', {}, el('label', { class: 'f' }, 'اسلاگ لینک عمومی'), slugIn,
-            el('div', { class: 'muted', style: { fontSize: '12px', marginTop: '4px' } }, 'لینک عمومی: /public/form/اسلاگ — تغییر اسلاگِ منتشرشده لینک قبلی را می‌شکند'))
+    el('div', { class: 'fb-wrap' },
+      el('div', { class: 'fb-main' },
+        el('div', { class: 'card' },
+          el('div', { class: 'card__head' },
+            el('div', { class: 'card__title' }, existing ? `ویرایش فرم — ${existing.title}` : 'فرم تازه'),
+            el('span', { class: `badge ${published ? 'badge--success' : 'badge--warning'}` }, published ? 'منتشرشده' : 'پیش‌نویس')
+          ),
+          el('div', { class: 'card__body' },
+            el('div', { class: 'fb-meta' },
+              el('div', {}, el('label', { class: 'f' }, 'عنوان فرم'), titleIn),
+              el('div', {}, el('label', { class: 'f' }, 'اسلاگ لینک عمومی'), slugIn,
+                el('div', { class: 'fb-head-hint' }, 'لینک عمومی: /public/form/اسلاگ — تغییر اسلاگِ منتشرشده لینک قبلی را می‌شکند'))
+            ),
+            el('div', { style: { marginTop: 'var(--sp-2)' } }, el('label', { class: 'f' }, 'توضیح (اختیاری)'), descIn)
+          )
         ),
-        el('div', { style: { marginTop: 'var(--sp-2)' } }, el('label', { class: 'f' }, 'توضیح (اختیاری)'), descIn),
-        el('hr', { style: { border: 'none', borderTop: '1px solid var(--border)', margin: 'var(--sp-3) 0' } }),
-        el('div', { style: { fontWeight: '700' } }, 'بلوک‌ها — هر بلوک یک صفحه'),
-        palette,
-        blocksZone,
-        el('div', { class: 'btnrow' },
-          el('button', { class: 'btn btn--ghost', onclick: () => openPreview({ title: titleIn.value, blocks }) }, icon('search', 15), 'پیش‌نمایش'),
-          el('button', {
-            class: 'btn btn--primary',
-            onclick: async () => {
-              const title = titleIn.value.trim();
-              const slug = slugIn.value.trim().toLowerCase();
-              if (title.length < 2) { toastError(new Error('عنوان فرم حداقل ۲ نویسه است')); return; }
-              if (!/^[a-z0-9][a-z0-9-]{2,59}$/.test(slug)) { toastError(new Error('اسلاگ فقط لاتین کوچک، رقم و خط‌تیره (۳ تا ۶۰)')); return; }
-              await saveForm(existing, { title, slug, description: descIn.value.trim() || undefined, blocks, published }, () => backToList(true));
-            }
-          }, icon('check', 15), 'ذخیرهٔ فرم'),
-          existing
-            ? el('button', { class: 'btn btn--soft', onclick: () => togglePublish({ ...existing, title: titleIn.value.trim(), slug: slugIn.value.trim().toLowerCase(), description: descIn.value.trim() || undefined, blocks, published }, () => backToList(true)) }, published ? 'توقف انتشار' : 'انتشار فرم')
-            : null,
-          el('button', { class: 'btn btn--ghost', onclick: () => backToList(false) }, 'بازگشت به فهرست')
+        el('div', { class: 'card', style: { marginTop: 'var(--sp-4)' } },
+          el('div', { class: 'card__head' },
+            el('div', { class: 'card__title' }, 'پالت بلوک‌ها'),
+            el('span', { class: 'badge badge--neutral' }, 'کلیک = افزودن به انتها')
+          ),
+          el('div', { class: 'card__body' }, palette)
+        ),
+        el('div', { class: 'card', style: { marginTop: 'var(--sp-4)' } },
+          el('div', { class: 'card__head' },
+            el('div', { class: 'card__title' }, 'بلوک‌ها — هر بلوک یک صفحه'),
+            el('span', { class: 'badge badge--neutral' }, `${fa(blocks.length)} از ۶۰ بلوک`)
+          ),
+          el('div', { class: 'card__body' }, blocksZone)
         )
-      )
+      ),
+      el('aside', { class: 'fb-side', 'aria-hidden': 'true' },
+        el('div', { class: 'card' },
+          el('div', { class: 'card__head' },
+            el('div', { class: 'card__title' }, icon('eye', 16), ' پیش‌نمایش زنده'),
+            el('span', { class: 'badge badge--neutral' }, 'نمای پاسخ‌دهنده')
+          ),
+          renderPreviewBody({
+            get title() { return titleIn.value; },
+            get description() { return descIn.value; },
+            get blocks() { return blocks; }
+          })
+        ))
+    ),
+    el('div', { class: 'fb-savebar' },
+      el('button', { class: 'btn btn--ghost', onclick: () => backToList(false) }, 'بازگشت به فهرست'),
+      el('div', { class: 'spacer' }),
+      el('button', { class: 'btn btn--ghost', onclick: () => openPreviewModal({ title: titleIn.value, description: descIn.value, blocks }) }, icon('search', 15), 'پیش‌نمایش'),
+      existing
+        ? el('button', { class: 'btn btn--soft', onclick: () => togglePublish({ ...existing, title: titleIn.value.trim(), slug: slugIn.value.trim().toLowerCase(), description: descIn.value.trim() || undefined, blocks, published }, () => backToList(true)) }, published ? 'توقف انتشار' : 'انتشار فرم')
+        : null,
+      el('button', {
+        class: 'btn btn--primary',
+        onclick: async () => {
+          const title = titleIn.value.trim();
+          const slug = slugIn.value.trim().toLowerCase();
+          if (title.length < 2) { toastError(new Error('عنوان فرم حداقل ۲ نویسه است')); return; }
+          if (!/^[a-z0-9][a-z0-9-]{2,59}$/.test(slug)) { toastError(new Error('اسلاگ فقط لاتین کوچک، رقم و خط‌تیره (۳ تا ۶۰)')); return; }
+          await saveForm(existing, { title, slug, description: descIn.value.trim() || undefined, blocks, published }, () => backToList(true));
+        }
+      }, icon('check', 15), 'ذخیرهٔ فرم')
     )
   );
+
   paintBlocks();
   container.replaceChildren(editor);
 }
@@ -359,21 +531,21 @@ export async function renderFormBuilder(container) {
       el('div', { class: 'card', style: { marginBottom: 'var(--sp-3)' } },
         el('div', { class: 'card__body' },
           el('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 'var(--sp-2)', alignItems: 'center' } },
-            el('strong', { style: { fontSize: '15.5px' } }, f.title),
-            el('code', { style: { fontSize: '12px', color: 'var(--muted)', direction: 'ltr' } }, `/public/form/${f.slug}`),
+            el('strong', { style: { fontSize: 'var(--fs-md)' } }, f.title),
+            el('code', { style: { fontSize: 'var(--fs-2xs)', color: 'var(--muted)', direction: 'ltr' } }, `/public/form/${f.slug}`),
             el('span', { class: `badge ${f.published ? 'badge--success' : 'badge--warning'}` }, f.published ? 'منتشرشده' : 'پیش‌نویس'),
             el('span', { class: 'badge badge--neutral' }, `${fa(f.blocks?.length ?? 0)} بلوک`)
           ),
-          f.description ? el('div', { class: 'muted', style: { fontSize: '13px', marginTop: '4px' } }, f.description) : null,
+          f.description ? el('div', { class: 'muted', style: { fontSize: 'var(--fs-xs)', marginTop: '4px' } }, f.description) : null,
           el('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 'var(--sp-2)', marginTop: 'var(--sp-3)' } },
             el('button', { class: 'btn btn--primary btn--sm', onclick: () => openEditor(container, f, backToList) }, icon('edit', 14), 'ویرایش'),
             el('button', { class: 'btn btn--soft btn--sm', onclick: () => openResponses(f) }, icon('clip', 14), 'پاسخ‌ها'),
-            f.published ? el('button', { class: 'btn btn--soft btn--sm', onclick: () => copyPublicLink(f.slug) }, icon('plus', 14), 'کپی لینک عمومی') : null,
+            f.published ? el('button', { class: 'btn btn--soft btn--sm', onclick: () => copyPublicLink(f.slug) }, icon('link', 14), 'کپی لینک عمومی') : null,
             el('button', { class: 'btn btn--ghost btn--sm', onclick: () => togglePublish(f, () => paintList(true)) }, f.published ? 'توقف انتشار' : 'انتشار'),
             el('button', { class: 'btn btn--ghost btn--sm', onclick: () => removeForm(f, () => paintList(false)) }, 'حذف')
           ),
           f.published
-            ? el('div', { class: 'muted', style: { fontSize: '12px', marginTop: 'var(--sp-2)' } },
+            ? el('div', { class: 'muted', style: { fontSize: 'var(--fs-2xs)', marginTop: 'var(--sp-2)' } },
                 `لینک عمومی برای خانواده و معلم‌ها: ${location.origin}/public/form/${f.slug} — می‌توانید در بات و تابلوی پذیرش بگذارید.`)
             : null
         )

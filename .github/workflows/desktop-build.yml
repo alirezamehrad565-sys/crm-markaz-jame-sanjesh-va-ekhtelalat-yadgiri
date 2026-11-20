@@ -3,7 +3,7 @@
 # ═══ سیاست (بازنویسی کامل سیاستِ پیشین) ═══
 # ۱) پوش به main → فقط گِیت کامپایل لینوکس (cargo check/test) و فقط وقتی مسیرهای دسکتاپ/رانتایم
 #    تغییر کرده‌اند (paths زیر). هر پوش بیلد ویندوز ندارد — بیلد ۳۰ تا ۶۰ دقیقه‌ای فقط هنگام تحویل.
-# ۲) تگ v* → گیت + بیلد کامل ویندوز (نصاب NSIS فارسی + پک USB) + ریلیز draft با latest.json + امضای updater.
+# ۲) تگ v* → گیت + بیلد کامل ویندوز (نصاب NSIS فارسی — Setup.exe) + ریلیز draft با latest.json + امضای updater.
 # ۳) workflow_dispatch → همیشه بیلد کامل ویندوز و انتشار آرتیفکت (تحویل بدون تگ)؛ ریلیز draft
 #    فقط وقتی ورودی release=true باشد. تحویل «نسخهٔ دسکتاپ» از همین مسیر انجام می‌شود.
 # ۴) یکتایی و صرفه: concurrency بر اساس ref با لغو اجرای درجریان؛ هر دو job با گیت هم‌مِهری
@@ -83,7 +83,7 @@ jobs:
         run: cargo test --all-targets
 
   windows-build:
-    name: بیلد ویندوز — نصاب NSIS + پک USB + ریلیز
+    name: بیلد ویندوز — نصاب NSIS + ریلیز
     # سیاست ۲ و ۳ — تگ یا درخواست دستی؛ پوش‌های عادی به این job نمی‌رسند
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
@@ -138,15 +138,11 @@ jobs:
       - name: بیلد Tauri → نصاب NSIS فارسی (Setup.exe) — فقط پس از شکست تلاش نخست
         if: steps.build1.outcome == 'failure'
         run: npx $env:TAURI_CLI build
-      - name: مونتاژ پک USB — کپی خودکار Setup.exe از خروجی NSIS
-        run: npm run usb:pack
-      # سیاست ۷ — نام با شمارهٔ اجرا + نگهداری ۳۰ روزه
+      # سیاست ۷ — آرتیفکت فقط نصاب Setup.exe (خواست کارفرمای ۱.۲۷.۴۱: پک USB حذف شد)؛ نام با شمارهٔ اجرا + نگهداری ۳۰ روزه
       - uses: actions/upload-artifact@v4
         with:
-          name: usb-pack-run-${{ github.run_number }}
-          path: |
-            dist/usb-pack/
-            desktop/src-tauri/target/release/bundle/nsis/*.exe
+          name: setup-run-${{ github.run_number }}
+          path: desktop/src-tauri/target/release/bundle/nsis/*.exe
           retention-days: 30
           if-no-files-found: error
 

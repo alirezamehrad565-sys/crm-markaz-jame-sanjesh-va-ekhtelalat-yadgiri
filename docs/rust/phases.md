@@ -53,7 +53,7 @@
 
 ## فاز ۵ — اتوران نصب و توزیع
 
-**وضعیت (۱۴۰۵/۰۸/۲۱): ✅ تحویل‌شده تا حد سندباکس — rust-f5 (f1043b0).** `usb:pack` سبز و idempotent (autorun.inf UTF-16LE، VERSION.txt شمسی، README-نصب ۹بخشی؛ Setup.exe پس از اولین بیلد CI خودکار کپی و اعتبارسنجی می‌شود) + `docs/rust/installer.md` (NSIS/WebView2/امضا/چرخهٔ نصب). نصب تمیز ویندوز و autorun واقعی: در CI/VM.
+**وضعیت (۱۴۰۵/۰۸/۲۱): ✅ تحویل‌شده تا حد سندباکس — rust-f5 (f1043b0).** (سابقهٔ rust-f5) پک USB در ۱.۲۷.۴۱ به خواست کارفرما حذف شد — تحویل فقط نصاب `Setup.exe` است؛ autorun.inf/VERSION.txt دیگر ساخته نمی‌شوند + `docs/rust/installer.md` (NSIS/WebView2/امضا/چرخهٔ نصب). نصب تمیز ویندوز و autorun واقعی: در CI/VM.
 
 اقدامات: فعال‌سازی Tauri bundler NSIS (فارسی، per-user، حذف تمیز با نگه‌داشتن data)؛ پک USB: autorun.inf + Setup.exe + README فارسی؛ evergreen WebView2 bootstrapper؛ placeholder امضای کد؛ سند عملیات نصب/بروزرسانی/پشتیبان.
 **گیت خروجی**: نصب تمیز روی ویندوز ۱۰/۱۱ (VM) + اجرای آفلاین کامل + حذف/نصب مجدد بدون از دست رفتن data.
