@@ -177,8 +177,17 @@ try {
     // — بخش ۶ب: نجات و پایش (۱.۲۶.۴ — ENG-4 + ۴-۲ + ۴-۳) —
     const gamesHealth2 = await getJson(`${gamesBase}/health`);
     check('سلامت بازی‌ها: worker:"games" + server_ts (قرارداد ENG-4)', gamesHealth2.status === 200 && gamesHealth2.json?.worker === 'games' && typeof gamesHealth2.json?.server_ts === 'string' && typeof gamesHealth2.json?.boot_ts === 'string', JSON.stringify(gamesHealth2.json));
-    const panel = await getJson(`${base}/api/health/panel`, { token: manager.token });
-    check('پنل سلامت: ردیف تازهٔ games با پورت واقعی (فقط-افزودنی)', panel.status === 200 && panel.json?.data?.games?.ok === true && panel.json?.data?.games?.port === gamesPort, JSON.stringify(panel.json?.data?.games));
+    /* ۱.۲۷.۴۵ — پروب ۲۰ ریس محیطی داشت: ردیف games از حلقهٔ پایش سلامت می‌آید که هر N ثانیه
+       تیک می‌خورد؛ روی CI گرم‌شدن سرویس بازی‌ها کندتر است و تک‌خوانی ok:false می‌گرفت.
+       حالا تا ۲۰ ثانیه polling می‌کنیم — سخت‌گیری حفظ شده (باید ok:true با پورت واقعی شود). */
+    let panel = await getJson(`${base}/api/health/panel`, { token: manager.token });
+    let gamesRow = panel.json?.data?.games ?? null;
+    for (let i = 0; i < 20 && !(gamesRow?.ok === true && gamesRow?.port === gamesPort); i += 1) {
+      await delay(1000);
+      panel = await getJson(`${base}/api/health/panel`, { token: manager.token });
+      gamesRow = panel.json?.data?.games ?? null;
+    }
+    check('پنل سلامت: ردیف تازهٔ games با پورت واقعی (فقط-افزودنی)', panel.status === 200 && gamesRow?.ok === true && gamesRow?.port === gamesPort, JSON.stringify(gamesRow));
     const download = await fetch(`${base}/api/backup/download`, { headers: { Authorization: `Bearer ${manager.token}` }, signal: AbortSignal.timeout(30_000) });
     const dlDisp = download.headers.get('content-disposition') ?? '';
     check('دریافت پشتیبان فوری: octet-stream + نام backup-<UTCts>.db', download.status === 200 && (download.headers.get('content-type') ?? '').includes('application/octet-stream') && /^attachment; filename="backup-\d{14}\.db"$/.test(dlDisp), `${download.status} ${dlDisp}`);
