@@ -21,23 +21,24 @@ interface WeekCopyCtx {
 export async function copyWeek(ctx: WeekCopyCtx & { input: CopyWeekInput }): Promise<CopyWeekResult> {
   const { db, audit, logger, actor, input } = ctx;
 
-  for (const [label, ymd] of [['source_monday', input.sourceMonday], ['target_monday', input.targetMonday]] as const) {
+  /* ۱.۲۷.۴۸ — مرز هفته = شنبه (تقویم UI شنبه‌محور است؛ شرط قدیمی دوشنبه دکمهٔ کپی را همیشه می‌شکست) */
+  for (const [label, ymd] of [['source_week_start', input.sourceWeekStart], ['target_week_start', input.targetWeekStart]] as const) {
     const day = new Date(`${ymd}T00:00:00.000Z`).getUTCDay();
-    if (day !== 1) {
-      throw new ValidationError(`${label} باید دوشنبه باشد (${ymd})`);
+    if (day !== 6) {
+      throw new ValidationError(`${label} باید شنبه باشد (${ymd})`);
     }
   }
-  if (Date.parse(input.targetMonday) <= Date.parse(input.sourceMonday)) {
-    throw new ValidationError('target_monday باید بعد از source_monday باشد');
+  if (Date.parse(input.targetWeekStart) <= Date.parse(input.sourceWeekStart)) {
+    throw new ValidationError('target_week_start باید بعد از source_week_start باشد');
   }
 
   if (actor.role === 'therapist' && input.staffId !== actor.staffId) {
     throw new ForbiddenError('کپی هفته فقط برای برنامهٔ خودِ شما مجاز است');
   }
 
-  const sourceRange = tehranDayRange(input.sourceMonday);
+  const sourceRange = tehranDayRange(input.sourceWeekStart);
   const sourceEnd = new Date(Date.parse(sourceRange.end) + 7 * DAY_MS).toISOString();
-  const shiftMs = Date.parse(`${input.targetMonday}T00:00:00.000Z`) - Date.parse(`${input.sourceMonday}T00:00:00.000Z`);
+  const shiftMs = Date.parse(`${input.targetWeekStart}T00:00:00.000Z`) - Date.parse(`${input.sourceWeekStart}T00:00:00.000Z`);
 
   const conditions = [`start_at >= ?`, `start_at < ?`, `status = 'scheduled'`];
   const params: unknown[] = [sourceRange.start, sourceEnd];
@@ -141,8 +142,8 @@ export async function copyWeek(ctx: WeekCopyCtx & { input: CopyWeekInput }): Pro
       resourceType: 'appointment_batch',
       resourceId: batchId,
       changes: {
-        source_monday: { from: null, to: input.sourceMonday },
-        target_monday: { from: null, to: input.targetMonday },
+        source_week_start: { from: null, to: input.sourceWeekStart },
+        target_week_start: { from: null, to: input.targetWeekStart },
         copied: { from: null, to: toCopy.length },
         skipped_conflicts: { from: null, to: conflicts.length }
       }

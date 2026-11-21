@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.27.47";
+var APP_VERSION = "1.27.48";
 var NODE_MIN_VERSION = "1.26.0";
 
 // node_modules/zod/v4/classic/external.js
@@ -22850,8 +22850,9 @@ var CancelAppointmentSchema = external_exports.object({
   version: external_exports.number().int().positive()
 });
 var CopyWeekSchema = external_exports.object({
-  source_monday: TehranYmdSchema,
-  target_monday: TehranYmdSchema,
+  /* ۱.۲۷.۴۸ — کپی هفته بر پایهٔ شنبه (مرز هفتهٔ تقویم) */
+  source_week_start: TehranYmdSchema,
+  target_week_start: TehranYmdSchema,
   staff_id: UuidSchema.optional(),
   dry_run: external_exports.boolean().optional().default(false)
 });
@@ -26671,21 +26672,21 @@ __name(selectStudentsOfAppointments, "selectStudentsOfAppointments");
 var DAY_MS = 24 * 60 * 60 * 1e3;
 async function copyWeek(ctx) {
   const { db, audit, logger, actor, input: input2 } = ctx;
-  for (const [label, ymd] of [["source_monday", input2.sourceMonday], ["target_monday", input2.targetMonday]]) {
+  for (const [label, ymd] of [["source_week_start", input2.sourceWeekStart], ["target_week_start", input2.targetWeekStart]]) {
     const day = (/* @__PURE__ */ new Date(`${ymd}T00:00:00.000Z`)).getUTCDay();
-    if (day !== 1) {
-      throw new ValidationError(`${label} \u0628\u0627\u06CC\u062F \u062F\u0648\u0634\u0646\u0628\u0647 \u0628\u0627\u0634\u062F (${ymd})`);
+    if (day !== 6) {
+      throw new ValidationError(`${label} \u0628\u0627\u06CC\u062F \u0634\u0646\u0628\u0647 \u0628\u0627\u0634\u062F (${ymd})`);
     }
   }
-  if (Date.parse(input2.targetMonday) <= Date.parse(input2.sourceMonday)) {
-    throw new ValidationError("target_monday \u0628\u0627\u06CC\u062F \u0628\u0639\u062F \u0627\u0632 source_monday \u0628\u0627\u0634\u062F");
+  if (Date.parse(input2.targetWeekStart) <= Date.parse(input2.sourceWeekStart)) {
+    throw new ValidationError("target_week_start \u0628\u0627\u06CC\u062F \u0628\u0639\u062F \u0627\u0632 source_week_start \u0628\u0627\u0634\u062F");
   }
   if (actor.role === "therapist" && input2.staffId !== actor.staffId) {
     throw new ForbiddenError("\u06A9\u067E\u06CC \u0647\u0641\u062A\u0647 \u0641\u0642\u0637 \u0628\u0631\u0627\u06CC \u0628\u0631\u0646\u0627\u0645\u0647\u0654 \u062E\u0648\u062F\u0650 \u0634\u0645\u0627 \u0645\u062C\u0627\u0632 \u0627\u0633\u062A");
   }
-  const sourceRange = tehranDayRange(input2.sourceMonday);
+  const sourceRange = tehranDayRange(input2.sourceWeekStart);
   const sourceEnd = new Date(Date.parse(sourceRange.end) + 7 * DAY_MS).toISOString();
-  const shiftMs = Date.parse(`${input2.targetMonday}T00:00:00.000Z`) - Date.parse(`${input2.sourceMonday}T00:00:00.000Z`);
+  const shiftMs = Date.parse(`${input2.targetWeekStart}T00:00:00.000Z`) - Date.parse(`${input2.sourceWeekStart}T00:00:00.000Z`);
   const conditions = [`start_at >= ?`, `start_at < ?`, `status = 'scheduled'`];
   const params = [sourceRange.start, sourceEnd];
   if (input2.staffId) {
@@ -26776,8 +26777,8 @@ async function copyWeek(ctx) {
       resourceType: "appointment_batch",
       resourceId: batchId,
       changes: {
-        source_monday: { from: null, to: input2.sourceMonday },
-        target_monday: { from: null, to: input2.targetMonday },
+        source_week_start: { from: null, to: input2.sourceWeekStart },
+        target_week_start: { from: null, to: input2.targetWeekStart },
         copied: { from: null, to: toCopy.length },
         skipped_conflicts: { from: null, to: conflicts.length }
       }
@@ -27362,8 +27363,8 @@ function registerRoutes(app, service) {
     const actor = getAuthContext(c);
     const body = CopyWeekSchema.parse(await c.req.json());
     const input2 = {
-      sourceMonday: body.source_monday,
-      targetMonday: body.target_monday,
+      sourceWeekStart: body.source_week_start,
+      targetWeekStart: body.target_week_start,
       staffId: body.staff_id,
       dryRun: body.dry_run
     };

@@ -1643,9 +1643,10 @@ async function copyPrevWeek() {
     confirmLabel: 'کپی کن'
   }))) return;
   try {
+    /* ۱.۲۷.۴۸ — قرارداد شنبه‌محور: قبلاً source_monday می‌فرستادیم و بک‌اندِ دوشنبه‌خواه 400 می‌داد (باگ دکمهٔ کپی) */
     const res = await api.post('/api/appointments/copy-week', {
-      source_monday: source,
-      target_monday: state.weekStart,
+      source_week_start: source,
+      target_week_start: state.weekStart,
       staff_id: state.staffFilter || undefined,
       dry_run: false
     });

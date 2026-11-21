@@ -86,8 +86,9 @@ export interface NewAppointmentInput {
 }
 
 export interface CopyWeekInput {
-  sourceMonday: string; // تاریخ به شکل YYYY-MM-DD
-  targetMonday: string; // تاریخ به شکل YYYY-MM-DD
+  /* ۱.۲۷.۴۸ — قرارداد صادقانه: هفتهٔ برنامه از شنبه است (تقویم UI)؛ نام قدیمی sourceMonday دروغ می‌گفت */
+  sourceWeekStart: string; // شنبهٔ هفتهٔ مبدأ — YYYY-MM-DD
+  targetWeekStart: string; // شنبهٔ هفتهٔ مقصد — YYYY-MM-DD
   staffId?: string;
   dryRun?: boolean;
 }

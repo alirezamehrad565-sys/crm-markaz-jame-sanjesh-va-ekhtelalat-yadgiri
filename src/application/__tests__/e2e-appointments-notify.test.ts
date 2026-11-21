@@ -16,8 +16,9 @@ import {
   SCHOOL1_ID
 } from '../../test/harness';
 
-const MONDAY_SRC = '2030-01-07';
-const MONDAY_DST = '2030-01-14';
+/* ۱.۲۷.۴۸ — مرز هفتهٔ تقویم شنبه است؛ ۲۰۳۰-۰۱-۰۵ شنبه */
+const SAT_SRC = '2030-01-05';
+const SAT_DST = '2030-01-12';
 
 async function botUpdate(A: ReturnType<typeof createTestApp>, text: string, chatId = 90125) {
   return A.app.request(
@@ -156,23 +157,23 @@ describe('چرخهٔ حیات نوبت + موتور تعارض', () => {
     expect(rm.status).toBe(204);
   });
 
-  it('copy-week از دوشنبه به دوشنبهٔ بعد + undo آن', async () => {
+  it('copy-week از شنبه به شنبهٔ بعد + undo آن (قرارداد ۱.۲۷.۴۸)', async () => {
     const c1 = await manager.post('/api/appointments', apptBody(ALI_ID, '2030-01-07T06:00:00.000Z', 30, [s1]));
     const c2 = await manager.post('/api/appointments', apptBody(MARYAM_ID, '2030-01-08T06:00:00.000Z', 30, [s2]));
     expect(c1.status).toBe(201);
     expect(c2.status).toBe(201);
 
     const dry = await manager.post('/api/appointments/copy-week', {
-      source_monday: MONDAY_SRC,
-      target_monday: MONDAY_DST,
+      source_week_start: SAT_SRC,
+      target_week_start: SAT_DST,
       staff_id: ALI_ID, // کپی را فقط هفتهٔ ALI می‌گیریم تا با نمای خوددرمانگر راستی‌آزمایی شود
       dry_run: true
     });
     expect(dry.status).toBe(200);
 
     const copy = await manager.post('/api/appointments/copy-week', {
-      source_monday: MONDAY_SRC,
-      target_monday: MONDAY_DST,
+      source_week_start: SAT_SRC,
+      target_week_start: SAT_DST,
       staff_id: ALI_ID
     });
     expect(copy.status).toBe(200);

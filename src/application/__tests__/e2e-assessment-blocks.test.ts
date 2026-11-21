@@ -128,14 +128,14 @@ describe('بلوک نوبت سنجش — RBAC و قرارداد', () => {
     const A = createTestApp();
     const m = await asRole(A, 'manager');
     const st = await createStudent(m);
-    const srcMonday = '2030-01-07'; // دوشنبه
-    const tgtMonday = '2030-01-14'; // دوشنبهٔ بعد
-    const srcWin = tehranMinuteWindow(srcMonday, 570, 630); // ۰۹:۳۰–۱۰:۳۰ تهران
+    const srcSat = '2030-01-05'; // شنبه (مرز هفتهٔ تقویم — ۱.۲۷.۴۸)
+    const tgtSat = '2030-01-12';
+    const srcWin = tehranMinuteWindow(srcSat, 570, 630); // ۰۹:۳۰–۱۰:۳۰ تهران
     expect((await m.post('/api/appointments', apptBody(ALI_ID, srcWin.start, 60, [st.id]))).status).toBe(201);
     expect((await m.post('/api/appointments', apptBody(MARYAM_ID, srcWin.start, 60, [st.id]))).status).toBe(201);
-    // بازهٔ سنجش دوشنبهٔ هدف، همان ساعت — فقط علی درگیر است
-    await m.post('/api/assessment-blocks', { date: tgtMonday, start_minute: 570, end_minute: 690, therapist_ids: [ALI_ID] });
-    const copy = await m.post('/api/appointments/copy-week', { source_monday: srcMonday, target_monday: tgtMonday });
+    // بازهٔ سنجش شنبهٔ هدف، همان ساعت — فقط علی درگیر است
+    await m.post('/api/assessment-blocks', { date: tgtSat, start_minute: 570, end_minute: 690, therapist_ids: [ALI_ID] });
+    const copy = await m.post('/api/appointments/copy-week', { source_week_start: srcSat, target_week_start: tgtSat });
     expect(copy.status).toBe(200);
     const result = (copy.body as { data: { copied: number; conflicts: Array<{ type: string; staffId: string }> } }).data;
     expect(result.copied).toBe(1); // مریم — بدون بلوک — کپی شده است

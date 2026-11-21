@@ -201,8 +201,9 @@ export const CancelAppointmentSchema = z.object({
 });
 
 export const CopyWeekSchema = z.object({
-  source_monday: TehranYmdSchema,
-  target_monday: TehranYmdSchema,
+  /* ۱.۲۷.۴۸ — کپی هفته بر پایهٔ شنبه (مرز هفتهٔ تقویم) */
+  source_week_start: TehranYmdSchema,
+  target_week_start: TehranYmdSchema,
   staff_id: UuidSchema.optional(),
   dry_run: z.boolean().optional().default(false)
 });

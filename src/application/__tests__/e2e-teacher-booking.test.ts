@@ -153,30 +153,40 @@ describe('فاز ۵ — گارد محدودهٔ نوشتن نوبت', () => {
   });
 
   it('copy-week: درمانگر فقط هفتهٔ خودش؛ بدون staff_id هم 403', async () => {
-    const src = '2030-01-07'; // دوشنبه
-    const dst = '2030-01-14';
+    const src = '2030-01-05'; // شنبه (مرز هفتهٔ تقویم — ۱.۲۷.۴۸)
+    const dst = '2030-01-12';
 
     const hack = await ali.post('/api/appointments/copy-week', {
-      source_monday: src, target_monday: dst, staff_id: MARYAM_ID, dry_run: true
+      source_week_start: src, target_week_start: dst, staff_id: MARYAM_ID, dry_run: true
     });
     expect(hack.status).toBe(403);
 
     const all = await ali.post('/api/appointments/copy-week', {
-      source_monday: src, target_monday: dst, dry_run: true
+      source_week_start: src, target_week_start: dst, dry_run: true
     });
     expect(all.status).toBe(403);
 
     const own = await ali.post('/api/appointments/copy-week', {
-      source_monday: src, target_monday: dst, staff_id: ALI_ID, dry_run: true
+      source_week_start: src, target_week_start: dst, staff_id: ALI_ID, dry_run: true
     });
     expect(own.status).toBe(200);
+  });
+
+  it('رگرسیون ۱.۲۷.۴۸ — دوشنبه رد می‌شود (مرز هفتهٔ تقویم شنبه است؛ باگ دکمهٔ کپی)', async () => {
+    const bad = await sec.post('/api/appointments/copy-week', {
+      source_week_start: '2030-01-07', // دوشنبه — دیگر پذیرفته نیست
+      target_week_start: '2030-01-14',
+      dry_run: true
+    });
+    expect(bad.status).toBe(400);
+    expect(JSON.stringify(bad.body)).toContain('شنبه');
   });
 
   it('undo دستهٔ کپی دیگران — درمانگر 403', async () => {
     const st = await createStudent(sec);
     await sec.post('/api/appointments', apptBody(MARYAM_ID, '2030-01-07T08:00:00.000Z', 45, [st.id]));
     const copy = await sec.post('/api/appointments/copy-week', {
-      source_monday: '2030-01-07', target_monday: '2030-01-14', staff_id: MARYAM_ID, dry_run: false
+      source_week_start: '2030-01-05', target_week_start: '2030-01-12', staff_id: MARYAM_ID, dry_run: false
     });
     expect(copy.status).toBe(200);
     const batchId = (copy.body as { data: { batchId: string } }).data.batchId;
