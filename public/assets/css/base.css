@@ -98,10 +98,14 @@ html {
   --tag-custom: #9A6BD6; /* برچسب رنگی سفارشی از components.css به توکن آمد */
   /* تعریف اول --info حذف شد (دوبارتعریف؛ نسخهٔ دوم بلوک پایین #2493CE همیشه برنده بود — مقدار زنده تغییری نکرد) */
 
-  --shadow-1: 0 1px 2px rgba(32, 42, 58, 0.06), 0 4px 14px rgba(32, 42, 58, 0.065);
-  --shadow-2: 0 2px 6px rgba(32, 42, 58, 0.07), 0 10px 28px rgba(32, 42, 58, 0.11);
-  --shadow-3: 0 6px 16px rgba(32, 42, 58, 0.08), 0 20px 48px rgba(32, 42, 58, 0.16);
-  --shadow-sidebar: 0 8px 18px rgba(32, 42, 58, 0.10), 0 26px 52px rgba(32, 42, 58, 0.15);
+  /* ۱.۲۷.۴۷ — عمق بیشتر کارت‌ها (خواست کارفرما) — سه‌لایه: تماس + میانی + پراکنده */
+  --shadow-1: 0 1px 2px rgba(32, 42, 58, 0.08), 0 6px 18px rgba(32, 42, 58, 0.09), 0 14px 34px -12px rgba(32, 42, 58, 0.14);
+  --shadow-2: 0 2px 6px rgba(32, 42, 58, 0.09), 0 12px 32px rgba(32, 42, 58, 0.13), 0 22px 52px -16px rgba(32, 42, 58, 0.18);
+  --shadow-3: 0 6px 16px rgba(32, 42, 58, 0.10), 0 24px 56px rgba(32, 42, 58, 0.20), 0 36px 72px -20px rgba(32, 42, 58, 0.22);
+  --shadow-sidebar: 0 8px 20px rgba(32, 42, 58, 0.11), 0 30px 60px rgba(32, 42, 58, 0.17), 0 44px 80px -24px rgba(32, 42, 58, 0.20);
+  /* ۱.۲۷.۴۷ — نشان دوسطحی سیاه‌وسفید (خواست کارفرما: لوگوی مناسب تم) — در تیره وارونه می‌شود */
+  --logo-tile: #0A0A0A;
+  --logo-glyph: #FFFFFF;
 
   /* ── مقیاس شعاع (زبان طراحی مشترک «گرد و شناور») ──
      Tier A  --radius-xl   ۲۲px : سطح اصلی — کارت، مودال، سکشن تنظیمات، پنل راهنما
@@ -110,7 +114,7 @@ html {
              --radius-sm   ۱۰px : کنترل کوچک — آیکون‌باکس، اسکلتون، thumb
              --radius-xs    ۸px : میکرو — kbd، آیتم منو، thumb خیلی کوچک
      Tier P  --radius-full ۹۹۹px : قرصی — دکمه، آیتم منو، بج، چیپ، seg
-             --radius-2xl  ۲۸px : سایدبار شناور (هم‌خانوادهٔTier A ولی برجسته‌تر) */
+             --radius-2xl  ۳۴px : سایدبار شناور (۱.۲۷.۴۷ — خواست کارفرما: گردتر) */
   --radius-xs: 8px;
   --radius-sm: 10px;
   --radius-md: 14px;        /* مترادف radius — برخی viewها از این نام استفاده می‌کنند */
@@ -118,7 +122,7 @@ html {
   --radius: 14px;
   --radius-lg: 20px;
   --radius-xl: 22px; /* مودال دسکتاپ */
-  --radius-2xl: 28px; /* سایدبار گرد شناور (قبلاً هاردکد) */
+  --radius-2xl: 34px; /* ۱.۲۷.۴۷ — سایدبار گردتر (۲۸→۳۴؛ خواست کارفرما) */
   --radius-full: 999px;
 
   --ease: cubic-bezier(0.2, 0.6, 0.3, 1);
@@ -183,10 +187,12 @@ html {
   --info-strong: #6FC2EF; /* */
   /* تعریف اول --info تیره حذف شد (دوبارتعریف؛ #4FB3E8 بلوک پایین برنده بود) */
 
-  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.32), 0 3px 10px rgba(0, 0, 0, 0.28);
-  --shadow-2: 0 4px 16px rgba(0, 0, 0, 0.40), 0 2px 6px rgba(0, 0, 0, 0.30);
-  --shadow-3: 0 12px 36px rgba(0, 0, 0, 0.50), 0 4px 10px rgba(0, 0, 0, 0.34);
-  --shadow-sidebar: 0 8px 20px rgba(0, 0, 0, 0.40), 0 26px 56px rgba(0, 0, 0, 0.50);
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.34), 0 6px 18px rgba(0, 0, 0, 0.32), 0 14px 34px -12px rgba(0, 0, 0, 0.40);
+  --shadow-2: 0 4px 16px rgba(0, 0, 0, 0.44), 0 12px 32px rgba(0, 0, 0, 0.36), 0 22px 52px -16px rgba(0, 0, 0, 0.42);
+  --shadow-3: 0 12px 36px rgba(0, 0, 0, 0.54), 0 24px 56px rgba(0, 0, 0, 0.44), 0 36px 72px -20px rgba(0, 0, 0, 0.46);
+  --shadow-sidebar: 0 8px 20px rgba(0, 0, 0, 0.44), 0 30px 60px rgba(0, 0, 0, 0.52), 0 44px 80px -24px rgba(0, 0, 0, 0.50);
+  --logo-tile: #F7F3EA;
+  --logo-glyph: #171B20;
 
   --scrollbar-thumb: #3C434E;
   --scrollbar-thumb-hover: #4A525E;
@@ -212,14 +218,16 @@ html {
   --text-sub: var(--text-2);
   --radius-1: var(--radius-xs);
 
-  --fs-2xs: 0.75rem; /* 12 — : کف خوانایی متن فارسی */
-  --fs-xs: 0.8125rem; /* 13 — : +۱px برای خوانایی فارسی */
-  --fs-sm: 0.875rem; /* 14 — : +۱px */
-  --fs-md: 0.9375rem; /* 15 — بدنه پیش‌فرض (: 14→15 برای خوانایی بهتر) */
-  --fs-lg: 1rem;       /* 16 */
-  --fs-xl: 1.1875rem;  /* 19 */
-  --fs-2xl: 1.4375rem; /* 23 */
-  --fs-3xl: 1.75rem;   /* 28 */
+  /* ۱.۲۷.۴۷ — تایپوگرافی بزرگ‌تر (خواست کارفرما) — یک پله بالاتر در هر سطح؛
+     فونت همان وزیرمتن متغیر باندل‌شده (woff2، محور wght ۱۰۰–۹۰۰) با fallback کالیبرهٔ بالای فایل */
+  --fs-2xs: 0.8125rem; /* 13 */
+  --fs-xs: 0.875rem; /* 14 */
+  --fs-sm: 0.9375rem; /* 15 */
+  --fs-md: 1rem;       /* 16 — بدنه پیش‌فرض */
+  --fs-lg: 1.09375rem; /* 17.5 */
+  --fs-xl: 1.3125rem;  /* 21 */
+  --fs-2xl: 1.5625rem; /* 25 */
+  --fs-3xl: 1.9375rem; /* 31 */
 
   --sp-1: 4px;
   --sp-2: 8px;
@@ -229,7 +237,7 @@ html {
   --sp-6: 24px;
   --sp-8: 32px;
 
-  --sidebar-w: 248px;
+  --sidebar-w: 260px; /* ۱.۲۷.۴۷ — تایپ بزرگ‌تر جای بیشتر می‌خواهد */
   --topbar-h: 60px;
   /* تعریف اول --focus-ring حذف شد (دوبارتعریف؛ نسخهٔ دولایهٔ پایین همیشه برنده بود) */
 }
@@ -444,17 +452,22 @@ textarea {
   padding: var(--sp-2) var(--sp-2) var(--sp-4);
 }
 .brand__logo {
-  width: 42px;
-  height: 42px;
+  /* ۱.۲۷.۴۷ — لوگوی بزرگ‌تر (خواست کارفرما) */
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
   flex-shrink: 0;
   box-shadow: var(--shadow-1), 0 0 0 1px var(--border);
 }
-.brand__logo img {
+.brand__logo img,
+.brand__logo svg {
   width: 100%;
   height: 100%;
-  border-radius: 50%;
   display: block;
+}
+/* ۱.۲۷.۴۷ — نشان کاشی‌دار؛ گردی از خود SVG می‌آید */
+.brand__logo {
+  box-shadow: none;
 }
 .brand__name {
   font-weight: 700;

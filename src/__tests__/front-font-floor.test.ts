@@ -96,9 +96,9 @@ describe('گیت کف ۱۲px متن فارسی (فاز ۳ ممیزی کیفیت 
     expect(stale).toEqual([]);
   });
 
-  it('توکن کف --fs-2xs همان 0.75rem (۱۲px) مانده است', () => {
+  it('توکن کف --fs-2xs همان 0.8125rem (۱۳px) مانده است', () => {
     const tokens = readFileSync(join(ASSETS, 'css/base.css'), 'utf8') /* فاز D: ادغام tokens در base */;
-    expect(tokens).toMatch(/--fs-2xs:\s*0\.75rem/);
+    expect(tokens).toMatch(/--fs-2xs:\s*0\.8125rem/); /* ۱.۲۷.۴۷ — کف ۱۲→۱۳: تایپوگرافی بزرگ‌تر به خواست کارفرما */
   });
 
   it('S1-10 — کلاس مردهٔ hero-score__value حذف و --fs-display به هیروی واقعی وصل شده', () => {
