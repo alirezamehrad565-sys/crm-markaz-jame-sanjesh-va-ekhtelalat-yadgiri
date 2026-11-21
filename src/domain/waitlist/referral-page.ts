@@ -23,8 +23,11 @@ function safeToken(raw: string | null | undefined): string {
 }
 
 const PAGE_STYLES = `
-:root{--bg:#f6f7fb;--card:#ffffff;--ink:#1f2430;--muted:#6b7280;--brand:#2563eb;--brand-soft:#eef2ff;
---ok:#16a34a;--warn:#d97706;--err:#dc2626;--line:#e5e7eb;--r:14px}
+/* ۱.۲۷.۴۶ — هماهنگ با سایت (خواست کارفرما: زبان رنگی و گوشه‌های گرد خود سایت):
+   آینهٔ توکن‌های base.css — کرم گرم #F7F3EA · سطح #FFFDF8 · آبی #0D72A8 · کهربایی #D89428 ·
+   گردی Tier: کارت ۲۲ / درونی ۱۴ / کنترل ۱۰ / دکمه و پیل قرصی ۹۹۹ */
+:root{--bg:#F7F3EA;--card:#FFFDF8;--ink:#171B20;--muted:#4F565C;--brand:#0D72A8;--brand-soft:#E7F1F8;
+--ok:#267A54;--warn:#D89428;--err:#B8403A;--line:#D0CABB;--r:22px;--r-md:14px;--r-sm:10px}
 *{box-sizing:border-box}
 /* ۱.۲۷.۴۲ — فونت وزیر متن باندل‌شدهٔ خودی؛ پیش‌تر فقط CDN بود که آفلاین/کندی می‌شکست و Tahoma می‌نشست */
 @font-face{font-family:Vazirmatn;src:url('/assets/fonts/Vazirmatn-Variable.woff2') format('woff2');
@@ -33,17 +36,17 @@ html,body{margin:0;padding:0}
 /* ۱.۲۷.۴۰ — پس‌زمینهٔ گرادینتی سه‌لایه با دو هالهٔ رنگی ثابت (خواست کارفرما) — بدون تصویر، بدون لود اضافه */
 body{color:var(--ink);font-family:Vazirmatn,Tahoma,'Segoe UI',sans-serif;
 font-size:16px;line-height:1.9;direction:rtl;
-background:radial-gradient(640px 340px at 88% -6%,rgba(37,99,235,.16),transparent 66%),
-radial-gradient(560px 320px at 6% 104%,rgba(139,92,246,.14),transparent 66%),
-radial-gradient(420px 260px at 10% -4%,rgba(14,165,233,.10),transparent 64%),
-linear-gradient(168deg,#eef4ff 0%,#f6f7fb 46%,#fdf2f8 100%);
+background:radial-gradient(640px 340px at 88% -6%,rgba(13,114,168,.14),transparent 66%),
+radial-gradient(560px 320px at 6% 104%,rgba(216,148,40,.12),transparent 66%),
+radial-gradient(420px 260px at 10% -4%,rgba(13,114,168,.08),transparent 64%),
+linear-gradient(168deg,#F7F3EA 0%,#FBF7EE 46%,#F7F3EA 100%);
 background-attachment:fixed}
-.bar{position:fixed;top:0;right:0;left:0;height:5px;background:rgba(37,99,235,.14);z-index:5}
-.bar__fill{height:100%;width:0;background:linear-gradient(90deg,#2563eb,#7c3aed);transition:width .3s ease}
+.bar{position:fixed;top:0;right:0;left:0;height:5px;background:rgba(13,114,168,.16);z-index:5}
+.bar__fill{height:100%;width:0;background:linear-gradient(90deg,#0D72A8,#3E9BC9);transition:width .3s ease}
 .app{max-width:560px;margin:0 auto;padding:24px 16px;min-height:100dvh;
 display:flex;flex-direction:column;justify-content:safe center}
-.card{background:linear-gradient(180deg,#ffffff,#fbfcff);border:1px solid rgba(226,232,240,.9);
-border-radius:var(--r);padding:24px;box-shadow:0 10px 30px -14px rgba(37,99,235,.18),0 2px 8px rgba(15,23,42,.05)}
+.card{background:linear-gradient(180deg,#FFFDF8,#FBF8F1);border:1px solid rgba(208,202,187,.9);
+border-radius:var(--r);padding:24px;box-shadow:0 10px 30px -14px rgba(13,114,168,.16),0 2px 8px rgba(23,27,32,.05)}
 .step-no{color:var(--muted);font-size:13px;margin-bottom:8px}
 h1{font-size:20px;margin:0 0 6px}
 h2{font-size:19px;margin:0 0 10px}
@@ -55,11 +58,11 @@ animation:blink 1s steps(1) infinite;margin-inline-start:2px}
 /* ۱.۲۷.۳۶ — دکمه‌های هم‌اندازه: flex-basis صفر یعنی «ادامه» و «بازگشت» همیشه هم‌پهنا؛
    min-height مشترک یعنی هم‌قد — فارغ از طول متن */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:none;cursor:pointer;
-border-radius:12px;padding:12px 22px;font-family:inherit;font-size:15.5px;font-weight:700;width:100%;
+border-radius:999px;padding:12px 22px;font-family:inherit;font-size:15.5px;font-weight:700;width:100%;
 min-height:52px}
 /* ۱.۲۷.۴۰ — دکمهٔ اصلی گرادینتی؛ لبهٔ برجسته با سایهٔ رنگ برند */
-.btn--primary{background:linear-gradient(135deg,#2563eb 0%,#6d5cf6 100%);color:#fff;
-box-shadow:0 8px 20px -8px rgba(79,70,229,.55)}
+.btn--primary{background:linear-gradient(135deg,#0D72A8 0%,#0A5D8A 100%);color:#fff;
+box-shadow:0 8px 20px -8px rgba(13,114,168,.5)}
 .btn--primary:hover{filter:brightness(1.07)}
 .btn--primary:disabled{opacity:.45;cursor:not-allowed;filter:none;box-shadow:none}
 .btn--ghost{background:rgba(255,255,255,.85);color:var(--brand);border:1.5px solid var(--brand)}
@@ -69,11 +72,11 @@ box-shadow:0 8px 20px -8px rgba(79,70,229,.55)}
 .choice{display:flex;align-items:flex-start;gap:12px;background:rgba(255,255,255,.92);border:2px solid var(--line);
 border-radius:var(--r);padding:16px 18px;cursor:pointer;transition:border-color .15s,background .15s,box-shadow .15s;
 text-align:start;width:100%;font-family:inherit;position:relative}
-.choice:hover{border-color:var(--brand);box-shadow:0 6px 16px -8px rgba(37,99,235,.25)}
+.choice:hover{border-color:var(--brand);box-shadow:0 6px 16px -8px rgba(13,114,168,.25)}
 /* ۱.۲۷.۴۰ — انتخاب با گرادینت ملایم دو رنگ برند */
-.choice.sel{border-color:var(--brand);background:linear-gradient(135deg,#eef2ff,#f5f1ff);
-box-shadow:0 8px 22px -10px rgba(79,70,229,.35)}
-.choice.sel .no{background:linear-gradient(135deg,#2563eb,#6d5cf6);color:#fff}
+.choice.sel{border-color:var(--brand);background:linear-gradient(135deg,#E7F1F8,#F2F8FC);
+box-shadow:0 8px 22px -10px rgba(13,114,168,.3)}
+.choice.sel .no{background:linear-gradient(135deg,#0D72A8,#0A5D8A);color:#fff}
 .choice.sel::after{content:'✓';position:absolute;top:10px;left:14px;color:var(--brand);
 font-weight:800;font-size:16px}
 .choice b{display:block;font-size:16px;margin-bottom:2px}
@@ -83,18 +86,18 @@ color:var(--brand);text-align:center;line-height:28px;font-weight:800;font-size:
 /* ۱.۲۷.۳۶ — ردیف کارت‌ها با ارتفاع یکسان (بلندترین محتوا معیار همه است) */
 .choices{display:grid;gap:12px;grid-auto-rows:1fr}
 label.f{display:block;font-weight:700;margin:0 0 6px}
-input.i,select.i,textarea.i{width:100%;border:1.5px solid var(--line);border-radius:12px;padding:11px 14px;
+input.i,select.i,textarea.i{width:100%;border:1.5px solid var(--line);border-radius:var(--r-sm);padding:11px 14px;
 font-family:inherit;font-size:15.5px;background:#fff;color:var(--ink)}
-input.i:focus,select.i:focus,textarea.i:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+input.i:focus,select.i:focus,textarea.i:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px rgba(13,114,168,.14)}
 textarea.i{min-height:110px;resize:vertical}
 .field{margin-bottom:16px}
 .err-msg{color:var(--err);font-size:13.5px;margin-top:4px;display:none}
 .err-msg.show{display:block}
 .hint{color:var(--muted);font-size:13px;margin-top:4px}
 /* ۱.۲۷.۴۰ — نشان «رایگان» گرادینتی */
-.badge-free{display:inline-block;background:linear-gradient(135deg,#dcfce7,#e0f2fe);color:#15803d;
+.badge-free{display:inline-block;background:linear-gradient(135deg,#E3F2EA,#EEF8F2);color:#1E6B44;
 border-radius:999px;padding:4px 14px;font-size:13.5px;font-weight:700;margin-bottom:14px}
-.review{border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-top:6px;background:rgba(255,255,255,.9)}
+.review{border:1px solid var(--line);border-radius:var(--r-md);overflow:hidden;margin-top:6px;background:rgba(255,253,248,.9)}
 .review__row{display:flex;align-items:flex-start;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line)}
 .review__row:last-child{border-bottom:none}
 .review__row .k{color:var(--muted);font-size:13px;min-width:110px;padding-top:2px}
@@ -103,16 +106,16 @@ border-radius:999px;padding:4px 14px;font-size:13.5px;font-weight:700;margin-bot
 font-size:13px;font-weight:700;padding:2px 4px}
 .overlay{position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:10;display:flex;
 align-items:center;justify-content:center;padding:16px}
-.modal{background:#fff;border-radius:16px;max-width:480px;width:100%;max-height:85vh;overflow:auto;padding:22px}
+.modal{background:#FFFDF8;border-radius:var(--r-md);max-width:480px;width:100%;max-height:85vh;overflow:auto;padding:22px}
 .aware{font-size:15.5px;line-height:2.2}
 .aware ul{padding-inline-start:20px;color:var(--muted)}
 /* ۱.۲۷.۴۰ — لینک راهنما و نوار یادداشت با پس‌زمینهٔ گرادینتی ملایم */
-.guide-link{display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,#eef2ff,#e0f2fe);
-color:#1e40af;border-radius:12px;padding:10px 14px;font-size:13.5px;font-weight:700;text-decoration:none;margin-top:14px}
+.guide-link{display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,#E7F1F8,#EFF7FC);
+color:#0B5D8C;border-radius:var(--r-md);padding:10px 14px;font-size:13.5px;font-weight:700;text-decoration:none;margin-top:14px}
 .guide-link:active{opacity:.85}
-.note{background:linear-gradient(135deg,#eef2ff,#e0f2fe);border-radius:12px;padding:12px 14px;font-size:13.5px;
-color:#1e40af;margin-top:14px}
-.rowcard{border:1.5px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px;position:relative;
+.note{background:linear-gradient(135deg,#E7F1F8,#EFF7FC);border-radius:var(--r-md);padding:12px 14px;font-size:13.5px;
+color:#0B5D8C;margin-top:14px}
+.rowcard{border:1.5px solid var(--line);border-radius:var(--r-md);padding:14px;margin-bottom:12px;position:relative;
 background:rgba(255,255,255,.92)}
 .rowcard .rm{position:absolute;top:10px;left:10px;background:none;border:none;color:var(--err);
 cursor:pointer;font-family:inherit;font-size:13px;font-weight:700}
@@ -121,12 +124,12 @@ cursor:pointer;font-family:inherit;font-size:13px;font-weight:700}
 .pill{border:1.5px solid var(--line);background:#fff;border-radius:999px;padding:9px 18px;
 cursor:pointer;font-family:inherit;font-size:14px;min-height:44px;display:inline-flex;align-items:center}
 /* ۱.۲۷.۴۰ — پیل انتخاب‌شده گرادینتی */
-.pill.sel{border-color:var(--brand);background:linear-gradient(135deg,#eef2ff,#f5f1ff);color:var(--brand);
-font-weight:700;box-shadow:0 4px 12px -6px rgba(79,70,229,.4)}
+.pill.sel{border-color:var(--brand);background:linear-gradient(135deg,#E7F1F8,#F2F8FC);color:var(--brand);
+font-weight:700;box-shadow:0 4px 12px -6px rgba(13,114,168,.35)}
 .done{text-align:center}
 .done .big{font-size:46px;margin-bottom:6px}
 .switch-row{display:flex;align-items:center;justify-content:space-between;gap:10px;
-border:1.5px solid var(--line);border-radius:12px;padding:12px 14px}
+border:1.5px solid var(--line);border-radius:var(--r-md);padding:12px 14px}
 /* ۱.۲۷.۳۵ — افکت فید و جریان پیوسته؛ کاهش-حرکت رعایت می‌شود */
 .app>.card{animation:fadein .3s ease}
 @keyframes fadein{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
@@ -156,6 +159,18 @@ var CONCERNS = [
 ];
 var TEACH_CATS = ['delayed','learning_disorder','intellectual'];
 var TEACH_CAT_LABELS = {delayed:'دیرآموز', learning_disorder:'اختلال یادگیری', intellectual:'مشکوک به کم‌توانی'};
+/* ۱.۲۷.۴۶ — دو فیلد وضعیت خانواده از مسیر معلم (خواست کارفرما): همکاری خانواده + سطح مالی‌فرهنگی؛
+   همان مقیاس سه‌گانهٔ صندوق ورودی (low/mid/high) تا بج‌ها و KPI مستقیم بخواند
+   (کامنت درون HTML سرو می‌شود — واژهٔ ممنوعِ پین قدیمی در آن آورده نشود) */
+var FC_LEVELS = [{v:'low',t:'کم'},{v:'mid',t:'متوسط'},{v:'high',t:'زیاد'}];
+var LIV_LEVELS = [{v:'low',t:'کم‌برخوردار'},{v:'mid',t:'متوسط'},{v:'high',t:'برخوردار'}];
+var FC_T = {low:'کم', mid:'متوسط', high:'زیاد'};
+var LIV_T = {low:'کم‌برخوردار', mid:'متوسط', high:'برخوردار'};
+function famPills(list, kind, val, i){
+  return list.map(function(l){
+    return '<button class="pill '+kind+(val===l.v?' sel':'')+'" data-i="'+i+'" data-'+kind+'="'+l.v+'">'+l.t+'</button>';
+  }).join('');
+}
 var CAT_LABELS = {delayed:'دیرآموزی', learning_disorder:'اختلال یادگیری', intellectual:'مشکوک به کم‌توانی ذهنی', behavioral:'مشکلات رفتاری هیجانی', speech:'تأخیر گفتار و زبان', autism:'مشکوک به طیف اتیسم', other:'سایر'};
 var AWARE = [
   /* ۱.۲۷.۳۸ — بازنویسی محاوره‌ای و مفصل‌تر؛ بدون تذکر تکراری «تشخیص» به خواست کارفرما،
@@ -542,15 +557,21 @@ function rowCardHtml(r, i){
     '<input class="i rn" value="'+esc(r.name)+'"></div>'+
     '<div class="field"><label class="f">شماره موبایل والد</label>'+
     '<input class="i rp" inputmode="tel" dir="ltr" placeholder="09xxxxxxxxx" value="'+esc(r.phone)+'">'+
-    '<div class="err-msg">شماره موبایل ۱۱ رقم است و با ۰۹ شروع می‌شه</div></div></div>';
+    '<div class="err-msg">شماره موبایل ۱۱ رقم است و با ۰۹ شروع می‌شه</div></div>'+
+    '<div class="field"><label class="f">همکاری خانواده</label>'+
+    '<div class="pills">'+famPills(FC_LEVELS,'fcp',r.coop,i)+'</div>'+
+    '<div class="hint">ارتباط و همراهی خانواده با پیگیری‌های مدرسه و مرکز</div></div>'+
+    '<div class="field"><label class="f">سطح مالی و فرهنگی خانواده</label>'+
+    '<div class="pills">'+famPills(LIV_LEVELS,'lvp',r.liv,i)+'</div>'+
+    '<div class="hint">ارزیابی کلی شما به‌عنوان معلم کلاس — برای اولویت خدمات رایگان</div></div></div>';
 }
 
 function renderBatch(){
   setBar();
-  if(state.rows.length===0)state.rows=[{cat:null,name:'',phone:''}];
+  if(state.rows.length===0)state.rows=[{cat:null,name:'',phone:'',coop:null,liv:null}];
   app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
     '<h2>ثبت ارجاع‌های کلاس شما</h2>'+
-    '<p class="lead">برای هر دانش‌آموز دسته رو انتخاب کنید، اسمش و شماره‌ی والدش رو بنویسید.</p>'+
+    '<p class="lead">برای هر دانش‌آموز دسته رو انتخاب کنید، اسمش و شماره‌ی والدش رو بنویسید و وضعیت خانواده‌ش رو از نظر همکاری و سطح مالی‌فرهنگی مشخص کنید.</p>'+
     '<div id="rows">'+state.rows.map(rowCardHtml).join('')+'</div>'+
     '<button class="btn btn--ghost btn--sm" id="addRow">+ افزودن دانش‌آموز دیگر</button>'+
     '<div class="err-msg" id="bErr" style="margin-top:10px"></div>'+
@@ -559,8 +580,8 @@ function renderBatch(){
   document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=6;state.awareIdx=AWARE.length-1;render();});
   bindBatch();
   document.getElementById('addRow').addEventListener('click',function(){
-    state.rows.push({cat:null,name:'',phone:''});
-    document.getElementById('rows').insertAdjacentHTML('beforeend',rowCardHtml({cat:null,name:'',phone:''},state.rows.length-1));
+    state.rows.push({cat:null,name:'',phone:'',coop:null,liv:null});
+    document.getElementById('rows').insertAdjacentHTML('beforeend',rowCardHtml({cat:null,name:'',phone:'',coop:null,liv:null},state.rows.length-1));
     bindBatch();
   });
   var nx=app.querySelector('.btnrow .btn--primary');nx.textContent='ادامه به مرور نهایی';
@@ -572,11 +593,11 @@ function renderBatch(){
       r.name=card.querySelector('.rn').value.trim();
       r.phone=normPhone(card.querySelector('.rp').value.trim());
       var em=card.querySelector('.err-msg');
-      if(!r.name||r.name.length<2||!validPhone(r.phone)){ok=false;if(em)em.className='err-msg show';}
+      if(!r.name||r.name.length<2||!validPhone(r.phone)||!r.coop||!r.liv){ok=false;if(em)em.className='err-msg show';}
       else if(em)em.className='err-msg';
     });
     var be=document.getElementById('bErr');
-    if(!ok){be.className='err-msg show';be.textContent='نام و شماره موبایل والد هر دانش‌آموز رو کامل و درست بنویسید';return;}
+    if(!ok){be.className='err-msg show';be.textContent='برای هر دانش‌آموز، نام و شماره والد به‌همراه «همکاری خانواده» و «سطح مالی و فرهنگی خانواده» را کامل کنید';return;}
     be.className='err-msg';
     state.step=8;render();
   });
@@ -595,6 +616,21 @@ function bindBatch(){
     });
     card.querySelector('.rn').addEventListener('input',function(e){r.name=e.target.value;});
     card.querySelector('.rp').addEventListener('input',function(e){r.phone=e.target.value;});
+    /* ۱.۲۷.۴۶ — دو فیلد وضعیت خانواده: انتخاب پیل = ثبت در ردیف همان دانش‌آموز */
+    card.querySelectorAll('.fcp').forEach(function(p){
+      p.addEventListener('click',function(){
+        r.coop=p.getAttribute('data-fcp');
+        card.querySelectorAll('.fcp').forEach(function(x){x.classList.remove('sel');});
+        p.classList.add('sel');
+      });
+    });
+    card.querySelectorAll('.lvp').forEach(function(p){
+      p.addEventListener('click',function(){
+        r.liv=p.getAttribute('data-lvp');
+        card.querySelectorAll('.lvp').forEach(function(x){x.classList.remove('sel');});
+        p.classList.add('sel');
+      });
+    });
     var rm=card.querySelector('.rm');
     if(rm)rm.addEventListener('click',function(){
       state.rows.splice(i,1);render();
@@ -607,7 +643,8 @@ function renderTeachReview(){
   setBar();
   var rows=state.rows.map(function(r,i){
     return '<div class="review__row"><span class="k">'+(i+1)+'. '+TEACH_CAT_LABELS[r.cat]+'</span>'+
-      '<span class="v">'+esc(r.name)+' — '+esc(r.phone)+'</span></div>';
+      '<span class="v">'+esc(r.name)+' — '+esc(r.phone)+
+      '<br><small style="color:var(--muted)">همکاری: '+FC_T[r.coop]+' · مالی‌فرهنگی: '+LIV_T[r.liv]+'</small></span></div>';
   }).join('');
   app.innerHTML='<div class="card"><h2>همه چیز آماده ثبت است</h2>'+
     '<p class="lead">'+fa(state.rows.length)+' دانش‌آموز به لیست انتظار اضافه میشه. یک نگاه بیندازید:</p>'+
@@ -623,7 +660,9 @@ function renderTeachReview(){
       school_text:state.schoolName||null, grade_text:state.grade||null, class_text:state.klass||null,
       token:TOKEN||undefined,
       children:state.rows.map(function(r){
-        return {first_name:r.name, guardian_phone:r.phone, concern_category:r.cat, concern_tags:[], concern_text:null};
+        /* ۱.۲۷.۴۶ — دو فیلد وضعیت خانواده در payload هر کودک (اسکیما: الزام مسیر معلم) */
+        return {first_name:r.name, guardian_phone:r.phone, concern_category:r.cat, concern_tags:[], concern_text:null,
+                family_cooperation:r.coop, family_liv:r.liv};
       })
     };
     submit(payload, this);
