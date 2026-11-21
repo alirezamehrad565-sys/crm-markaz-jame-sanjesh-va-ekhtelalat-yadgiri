@@ -116,7 +116,7 @@ export interface WaitlistReferral {
   concernText: string | null;
   priorEval: boolean | null;
   priorEvalNote: string | null;
-  familyContext: { culture: string | null; finance: string | null; cooperation: string | null } | null;
+  familyContext: { culture: string | null; finance: string | null; cooperation: string | null; liv: string | null } | null;
   channel: string;
   chatId: string | null;
   submissionGroup: string | null;
@@ -144,6 +144,7 @@ export interface ReferralChildInput {
   family_culture?: string | null;
   family_finance?: string | null;
   family_cooperation?: string | null;
+  family_liv?: string | null; /* ۱.۲۷.۴۶ — سطح ترکیبی مالی‌فرهنگی از مسیر معلم */
 }
 
 export interface PublicReferralSubmitInput {

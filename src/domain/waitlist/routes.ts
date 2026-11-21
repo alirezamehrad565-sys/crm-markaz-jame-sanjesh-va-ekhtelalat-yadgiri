@@ -280,7 +280,13 @@ export function registerWaitlistRoutes(
     } catch {
       return c.json({ error: 'VALIDATION_ERROR', message: 'بدنهٔ درخواست JSON معتبر نیست' }, 400);
     }
-    const body = PublicReferralSubmissionSchema.parse(parsedBody);
+    /* ۱.۲۷.۴۶ — پیام issue اول زود مستقیم به کاربر می‌رود (مثلاً الزام دو فیلد وضعیت خانوادهٔ معلم)
+       به‌جای پیام عمومی «ورودی نامعتبر است»؛ سقف نرخ و سقف حجم بالای سر همان است. */
+    const parsedReferral = PublicReferralSubmissionSchema.safeParse(parsedBody);
+    if (!parsedReferral.success) {
+      return c.json({ error: 'VALIDATION_ERROR', message: parsedReferral.error.issues[0]?.message ?? 'ورودی نامعتبر است' }, 400);
+    }
+    const body = parsedReferral.data;
     const ip = (
       c.req.header('cf-connecting-ip') ??
       c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ??

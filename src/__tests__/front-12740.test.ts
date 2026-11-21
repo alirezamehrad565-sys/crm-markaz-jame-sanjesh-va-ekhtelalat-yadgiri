@@ -39,12 +39,16 @@ describe('گیت فرانت ۱.۲۷.۴۰ — زبان بصری گرادینتی 
   const fill = read('src/domain/case-events/public-form.ts');
   const preview = read('src/domain/case-events/preview-form.ts');
 
-  it('فرم معرفی — پس‌زمینهٔ گرادینتی سه‌لایه + هاله‌ها + دکمهٔ گرادینتی', () => {
-    expect(referral).toContain('radial-gradient(640px 340px at 88% -6%');
-    expect(referral).toContain('linear-gradient(168deg,#eef4ff 0%,#f6f7fb 46%,#fdf2f8 100%)');
+  it('فرم معرفی — پس‌زمینهٔ گرادینتی سه‌لایه + هاله‌ها + دکمهٔ گرادینتی (۱.۲۷.۴۶: هماهنگ با پالت سایت)', () => {
+    /* ۱.۲۷.۴۶ — خواست کارفرما: زبان رنگی و گوشه‌های گرد خود سایت؛ آینهٔ توکن‌های base.css
+       (کرم گرم + آبی #0D72A8 + کهربایی) جایگرین پالت قبلی ایندیگو شد — ساختار سه‌لایه پابرجاست */
+    expect(referral).toContain('radial-gradient(640px 340px at 88% -6%'); // ساختار هاله‌ها حفظ شد
+    expect(referral).toContain('linear-gradient(168deg,#F7F3EA 0%,#FBF7EE 46%,#F7F3EA 100%)'); // کرم سایت
+    expect(referral).toContain(':root{--bg:#F7F3EA'); // آینهٔ توکن‌های base.css
     expect(referral).toContain('background-attachment:fixed');
-    expect(referral).toContain('background:linear-gradient(135deg,#2563eb 0%,#6d5cf6 100%)');
-    expect(referral).toContain('background:linear-gradient(90deg,#2563eb,#7c3aed)'); // نوار پیشرفت
+    expect(referral).toContain('background:linear-gradient(135deg,#0D72A8 0%,#0A5D8A 100%)'); // آبی سایت
+    expect(referral).toContain('background:linear-gradient(90deg,#0D72A8,#3E9BC9)'); // نوار پیشرفت
+    expect(referral).toMatch(/\.btn\{[^}]*border-radius:999px/); // دکمهٔ قرصی — زبان واحد سایت
     expect(referral).toContain('prefers-reduced-motion'); // رعایت کاهش-حرکت حفظ شده
   });
 

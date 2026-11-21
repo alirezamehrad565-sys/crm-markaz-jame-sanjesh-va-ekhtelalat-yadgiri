@@ -50,7 +50,7 @@ describe('فرم عمومی معرفی به مرکز + اینباکس لیست �
     expect(rows[0].birthDate).toBe('2019-08-03'); // ۱۳۹۸/۰۵/۱۲
     /* ۱.۲۷.۳۶ — فرم تکمیلی خانواده در ستون JSON ثبت شده است */
     const famRow = A.sql.prepare(`SELECT family_context FROM waitlist_referrals WHERE id = ?`).get(familyId) as { family_context: string | null };
-    expect(JSON.parse(famRow.family_context ?? '{}')).toEqual({ culture: 'mid', finance: 'low', cooperation: 'high' });
+    expect(JSON.parse(famRow.family_context ?? '{}')).toEqual({ culture: 'mid', finance: 'low', cooperation: 'high', liv: null });
   });
 
   it('فرم خانواده با بیش از یک کودک → ۴۰۰', async () => {
@@ -83,9 +83,9 @@ describe('فرم عمومی معرفی به مرکز + اینباکس لیست �
       referrer_phone: '09121112233',
       school_text: 'دبستان شهید بهشتی',
       children: [
-        { first_name: 'سینا مرادی', guardian_phone: '09123333331', concern_category: 'delayed' },
-        { first_name: 'نازنین احمدی', guardian_phone: '09123333332', concern_category: 'autism' },
-        { first_name: 'رضا موسوی', guardian_phone: '09123333333', concern_category: 'learning_disorder' }
+        { first_name: 'سینا مرادی', guardian_phone: '09123333331', concern_category: 'delayed', family_cooperation: 'high', family_liv: 'mid' },
+        { first_name: 'نازنین احمدی', guardian_phone: '09123333332', concern_category: 'autism', family_cooperation: 'mid', family_liv: 'low' },
+        { first_name: 'رضا موسوی', guardian_phone: '09123333333', concern_category: 'learning_disorder', family_cooperation: 'high', family_liv: 'high' }
       ]
     });
     expect(res.status).toBe(201);
@@ -96,6 +96,23 @@ describe('فرم عمومی معرفی به مرکز + اینباکس لیست �
     expect(rows[0].refRole).toBe('teacher');
     expect(rows[0].guardianPhone).toBe('09123333331');
     expect(rows[2].guardianPhone).toBe('09123333333'); // — ارقام فارسی هم نرمال شد
+    /* ۱.۲۷.۴۶ — دو فیلد وضعیت خانوادهٔ معلم در JSON هر ردیف (همکاری + مالی‌فرهنگی ترکیبی) */
+    const tRow = A.sql.prepare(`SELECT family_context FROM waitlist_referrals WHERE id = ?`).get(rows[1].id) as { family_context: string | null };
+    expect(JSON.parse(tRow.family_context ?? '{}')).toEqual({ culture: null, finance: null, cooperation: 'mid', liv: 'low' });
+  });
+
+  it('معلم بدون فیلدهای وضعیت خانواده → ۴۰۰ با پیام فارسی (الزام ۱.۲۷.۴۶)', async () => {
+    const bad = await new Api(A).post('/public/referrals', {
+      role: 'teacher',
+      referrer_name: 'خانم صادقی',
+      referrer_phone: '09121112233',
+      school_text: 'دبستان شهید بهشتی',
+      children: [{ first_name: 'کودک آزمون', guardian_phone: '09123333331', concern_category: 'delayed' }]
+    });
+    expect(bad.status).toBe(400);
+    const body = bad.body as { message?: string };
+    expect(String(body.message)).toContain('همکاری خانواده');
+    expect(String(body.message)).toContain('سطح مالی و فرهنگی خانواده');
   });
 
   it('اعتبارسنجی: تلفن نامعتبر → ۴۰۰؛ بدون کودک → ۴۰۰؛ نقش نامعتبر → ۴۰۰', async () => {
@@ -194,9 +211,13 @@ describe('فرم عمومی معرفی به مرکز + اینباکس لیست �
     expect(html).toContain('@keyframes fadein');
     expect(res.headers.get('content-security-policy')).toContain("font-src 'self'"); // ۱.۲۷.۴۲ — فونت فقط خودی
     /* ۱.۲۷.۳۶ — گام فرم تکمیلی خانواده هست؛ گزینهٔ اتیسم دیگر پیشنهاد نمی‌شود */
-    expect(html).not.toContain('وضعیت خانواده'); // ۱.۲۷.۴۲ — فرم تکمیلی خانواده حذف شد (خواست کارفرما)
+    expect(html).not.toContain('فرم تکمیلی'); // ۱.۲۷.۴۲ — گام فرم تکمیلی خانواده حذف شد؛ ۱.۲۷.۴۶ جای آن پیل‌های مسیر معلم است
+    expect(html).toContain('همکاری خانواده'); // ۱.۲۷.۴۶ — دو فیلد وضعیت خانواده در ثبت دسته‌ای معلم
+    expect(html).toContain('سطح مالی و فرهنگی خانواده');
+    expect(html).toContain("famPills(FC_LEVELS,'fcp'"); // پیل‌های همکاری (کم/متوسط/زیاد)
+    expect(html).toContain("famPills(LIV_LEVELS,'lvp'"); // پیل‌های مالی‌فرهنگی (کم‌برخوردار/متوسط/برخوردار)
     expect(html).toContain('قبلاً جایی ارزیابی یا تشخیص داشته؟');
-    expect(html).not.toContain('سطح مالی خانواده') /* ۱.۲۷.۴۲ — فرم وضعیت خانواده حذف شد */;
+    expect(html).not.toContain('سطح مالی خانواده <') /* ۱.۲۷.۴۲ گام قدیمی؛ ۱.۲۷.۴۶ برچسب تازه «سطح مالی و فرهنگی خانواده» است */;
     expect(html).not.toContain('میزان همکاری خانواده') /* ۱.۲۷.۴۲ */;
     expect(html).not.toContain('نمی‌دانم') /* ۱.۲۷.۴۲ — گام حذف‌شده */;
     expect(html).not.toContain('data-c="autism"'); // کارت دغدغهٔ اتیسم حذف شده

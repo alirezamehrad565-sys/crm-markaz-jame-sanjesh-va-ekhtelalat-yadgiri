@@ -23,7 +23,9 @@ const CAT_LABELS = {
 const FAMILY_LABELS = {
   culture: { low: 'فرهنگی: کم', mid: 'فرهنگی: متوسط', high: 'فرهنگی: غنی' },
   finance: { low: 'مالی: کم‌برخوردار', mid: 'مالی: متوسط', high: 'مالی: برخوردار' },
-  cooperation: { low: 'همکاری: کم', mid: 'همکاری: متوسط', high: 'همکاری: زیاد' }
+  cooperation: { low: 'همکاری: کم', mid: 'همکاری: متوسط', high: 'همکاری: زیاد' },
+  /* ۱.۲۷.۴۶ — سطح ترکیبی «مالی‌فرهنگی» از مسیر معلم (خواست کارفرما: دو فیلد همکاری + مالی‌فرهنگی) */
+  liv: { low: 'مالی‌فرهنگی: کم‌برخوردار', mid: 'مالی‌فرهنگی: متوسط', high: 'مالی‌فرهنگی: برخوردار' }
 };
 
 const STATUS_LABELS = { new: 'جدید', accepted: 'پذیرفته‌شده', rejected: 'ردشده' };
@@ -108,7 +110,8 @@ export async function renderReferralInbox(container, opts = {}) {
   function famBadges(r) {
     if (!r.familyContext) return [];
     const fc = r.familyContext;
-    return ['culture', 'finance', 'cooperation']
+    /* ۱.۲۷.۴۶ — ترتیب: فیلدهای ثبتِ معلم اول (همکاری + مالی‌فرهنگی)، بعد فرم تکمیلی خانواده */
+    return ['cooperation', 'liv', 'culture', 'finance']
       .map((k) => fc[k] ? el('span', { class: 'badge badge--neutral' }, FAMILY_LABELS[k][fc[k]] ?? null) : null)
       .filter(Boolean);
   }
@@ -123,6 +126,7 @@ export async function renderReferralInbox(container, opts = {}) {
       ['وضع فرهنگی خانواده', fc?.culture ? (FAMILY_LABELS.culture[fc.culture] ?? fc.culture).replace('فرهنگی: ', '') : '—'],
       ['سطح مالی خانواده', fc?.finance ? (FAMILY_LABELS.finance[fc.finance] ?? fc.finance).replace('مالی: ', '') : '—'],
       ['میزان همکاری خانواده', fc?.cooperation ? (FAMILY_LABELS.cooperation[fc.cooperation] ?? fc.cooperation).replace('همکاری: ', '') : '—'],
+      ['سطح مالی و فرهنگی خانواده', fc?.liv ? (FAMILY_LABELS.liv[fc.liv] ?? fc.liv).replace('مالی‌فرهنگی: ', '') : '—'],
       ['ارزیابی قبلی', r.priorEval === true ? `بله${r.priorEvalNote ? ` — ${r.priorEvalNote}` : ''}` : r.priorEval === false ? 'خیر' : '—'],
       ['معرف', `${r.referrerName} (${r.refRole === 'teacher' ? 'معلم همکار' : 'خانواده'}) — ${fa(r.referrerPhone)}`],
       ['تلفن ولیّ', r.guardianPhone ? fa(r.guardianPhone) : '—'],
@@ -264,7 +268,10 @@ export async function renderReferralInbox(container, opts = {}) {
     const news = rows.filter((r) => r.status === 'new');
     const accepted = rows.filter((r) => r.status === 'accepted');
     const rejected = rows.filter((r) => r.status === 'rejected');
-    const poor = rows.filter((r) => r.status !== 'rejected' && r.familyContext?.finance === 'low');
+    /* ۱.۲۷.۴۶ — «کم‌برخوردار» هم از فرم تکمیلی خانواده (finance) و هم از گزارش معلم (liv)؛
+       همکاریِ زیاد معلم‌ها KPI خودش را گرفت — موقعیت طراحی‌شدهٔ دو فیلد تازه در صندوق */
+    const poor = rows.filter((r) => r.status !== 'rejected' && (r.familyContext?.finance === 'low' || r.familyContext?.liv === 'low'));
+    const coopHigh = rows.filter((r) => r.status !== 'rejected' && r.familyContext?.cooperation === 'high');
     kpis.replaceChildren(el('div', { class: 'kpi-grid', style: { marginBottom: 'var(--sp-3)' } },
       el('div', { class: `kpi kpi--${news.length > 0 ? 'error' : 'neutral'}` },
         el('div', { class: 'kpi__value' }, fa(news.length)),
@@ -274,6 +281,10 @@ export async function renderReferralInbox(container, opts = {}) {
         el('div', { class: 'kpi__value' }, fa(accepted.length)),
         el('div', { class: 'kpi__label' }, 'پذیرفته‌شده'),
         el('div', { class: 'kpi__hint' }, 'رفته‌ها به لیست انتظار')),
+      el('div', { class: 'kpi kpi--accent' },
+        el('div', { class: 'kpi__value' }, fa(coopHigh.length)),
+        el('div', { class: 'kpi__label' }, 'همکاری زیاد خانواده'),
+        el('div', { class: 'kpi__hint' }, 'از گزارش معلم‌ها — پیش‌بینی پیگیری')),
       el('div', { class: 'kpi kpi--accent' },
         el('div', { class: 'kpi__value' }, fa(poor.length)),
         el('div', { class: 'kpi__label' }, 'سطح مالی کم‌برخوردار'),

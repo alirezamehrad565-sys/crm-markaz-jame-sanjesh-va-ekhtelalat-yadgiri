@@ -147,11 +147,13 @@ function referralRowToDomain(row: ReferralRow): WaitlistReferral {
   let familyContext: WaitlistReferral['familyContext'] = null;
   if (row.family_context) {
     try {
-      const fc = JSON.parse(row.family_context) as { culture?: string | null; finance?: string | null; cooperation?: string | null };
+      const fc = JSON.parse(row.family_context) as { culture?: string | null; finance?: string | null; cooperation?: string | null; liv?: string | null };
       familyContext = {
         culture: typeof fc.culture === 'string' ? fc.culture : null,
         finance: typeof fc.finance === 'string' ? fc.finance : null,
-        cooperation: typeof fc.cooperation === 'string' ? fc.cooperation : null
+        cooperation: typeof fc.cooperation === 'string' ? fc.cooperation : null,
+        /* ۱.۲۷.۴۶ — سطح ترکیبی مالی‌فرهنگی از مسیر معلم */
+        liv: typeof fc.liv === 'string' ? fc.liv : null
       };
     } catch {
       familyContext = null;
@@ -829,11 +831,12 @@ export function createWaitlistService(deps: WaitlistDeps): WaitlistService {
               child.prior_eval === true ? 1 : child.prior_eval === false ? 0 : null,
               child.prior_eval_note ?? null,
               /* ۱.۲۷.۳۶ — فرم تکمیلی خانواده (JSON) — هیچ‌کدام خالی؟ ستون NULL */
-              (child.family_culture || child.family_finance || child.family_cooperation)
+              (child.family_culture || child.family_finance || child.family_cooperation || child.family_liv)
                 ? JSON.stringify({
                     culture: child.family_culture ?? null,
                     finance: child.family_finance ?? null,
-                    cooperation: child.family_cooperation ?? null
+                    cooperation: child.family_cooperation ?? null,
+                    liv: child.family_liv ?? null
                   })
                 : null,
               channel,
