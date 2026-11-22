@@ -184,6 +184,48 @@ export async function renderStudentProfile(container, ctx) {
   const isNewEvent = (e) => Boolean(seenAt && e.at > seenAt);
   setTimeout(() => { try { localStorage.setItem(seenKey, new Date().toISOString()); } catch { /* حالت خصوصی مرورگر */ } }, 5000);
 
+  /* ۱.۲۷.۵۶ — موج A بازطراحی پرونده (برندهٔ مسابقهٔ شش‌طرح: «فلوهای هدایت‌شده» + قاعدهٔ طرح ۱
+     «هر عمل یک خانهٔ ثابت»): منطق معلق‌ها یک منبع است — هم کارت وضعیت و هم برگهٔ جلسه از همین می‌خوانند. */
+  const upcomingAppt = () => {
+    const nowMs = Date.now();
+    return appointments
+      .filter((a) => a.status === 'scheduled' && Date.parse(a.startAt) > nowMs)
+      .sort((a, b) => (a.startAt < b.startAt ? -1 : 1))[0] ?? null;
+  };
+  const missingReportAppts = () => {
+    const nowMs = Date.now();
+    const notes = noteApptIdSet();
+    return appointments
+      .filter((a) => a.status === 'scheduled' && Date.parse(a.startAt) <= nowMs && a.myAttendance !== 'cancelled'
+        && !notes.has(a.appointmentId) && eventsOfAppt(a.appointmentId).length === 0)
+      .sort((a, b) => (a.startAt > b.startAt ? -1 : 1)); // قدیمی‌ترین اول
+  };
+
+  /* ۱.۲۷.۵۶ — حضور از خود پرونده ثبت‌شدنی می‌شود (گپ واقعی بازطراحی):
+     PATCH موجود /api/attendance/:apptId/:studentId؛ سرور گیت دارد (درمانگر فقط جلسهٔ خودش). */
+  async function markAttendance(a, status) {
+    try {
+      await api.patch(`/api/attendance/${a.appointmentId}/${id}`, { status });
+      toast('حضور جلسه ثبت شد', 'success');
+      if (await refreshCore()) { repaintChrome(); rerenderTabIf(['sessions', 'timeline']); }
+    } catch (err) {
+      toastError(err);
+    }
+  }
+  function openAttendanceModal(a) {
+    const { close } = openModal({
+      title: `ثبت حضور — جلسهٔ ${formatJalaliDateTime(a.startAt)}`,
+      body: el('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-2)' } },
+        [['present', 'حاضر'], ['late', 'حضور با تأخیر'], ['absent', 'غایب'], ['cancelled', 'لغو جلسه']].map(([st, lbl]) =>
+          el('button', {
+            class: 'btn btn--soft btn--sm', type: 'button',
+            onclick: (ev) => lockBtn(ev.currentTarget, async () => { await markAttendance(a, st); close(); })
+          }, lbl))
+      )
+    });
+    void close;
+  }
+
   /* ۱.۱۵.۰ — دکمه‌های دایره‌ای سادهٔ اقدام، روی خودِ کارت پرونده (به‌جای کاوش در تب‌ها و منوها):
      ویرایش · برچسب‌ها · هدف‌ها · معلم · تاریخچهٔ تحصیلی · حذف — همیشه جلوی چشم.
      هر دکمه با الگوی واحد قفل مشغولی (lockBtn) در برابر اسپم/دوبارکلیک محفوظ است و
@@ -262,18 +304,43 @@ export async function renderStudentProfile(container, ctx) {
           ),
           buildCardCircles() /* ۱.۱۵.۰ — دایره‌های اقدام گوشهٔ کارت؛ وابسته به دادهٔ موازی نیستند */
         ),
-        auxDone
+          auxDone
           ? el('div', { class: 'profile-actions' },
               nextActionBlock,
-              canCreateCaseEvents()
+              /* ۱.۲۷.۵۶ — موج A: جلسه‌های بی‌گزارش از دلِ تب جلسات به ردیف اقدام می‌آیند (یک منبع با برگهٔ جلسه) */
+              missingReportAppts().length > 0
+                ? el('button', {
+                    class: 'chip', type: 'button',
+                    title: 'ثبت گزارش برای قدیمی‌ترین جلسهٔ بی‌گزارش',
+                    onclick: () => { const m = missingReportAppts()[0]; openCaseEventForm({ student, appointmentId: m.appointmentId, onSaved: onCaseEventSaved }); }
+                  }, icon('file', 13), `${fa(missingReportAppts().length)} جلسهٔ بی‌گزارش`)
+                : null,
+              /* ۱.۲۷.۵۶ — موج A: خانهٔ ثابتِ «شروع ثبت» — هر عمل با گیت خودش (منشی هم گزارش و صدور دارد) */
+              (canCreateCaseEvents() || canSendReport)
                 ? el('div', { class: 'profile-actions__row' },
-                    el('button', {
-                      class: 'btn btn--primary btn--sm',
-                      onclick: () => openCaseEventForm({ student, onSaved: onCaseEventSaved })
-                    }, icon('plus', 15), 'ثبت رویداد پرونده'),
-                    /* UX-ممیزی: دو دکمهٔ هم‌شکل که فقط در یک واژه فرق داشتند («ارسال چک‌لیست با بله» / «ارسال تمرین با بله»)
-                       در یک منوی «ارسال با بله» ادغام شدند */
-                    baleSendMenu()
+                    canCreateCaseEvents()
+                      ? el('button', {
+                          class: 'btn btn--primary btn--sm',
+                          onclick: () => openCaseEventForm({ student, onSaved: onCaseEventSaved })
+                        }, icon('plus', 15), 'ثبت رویداد پرونده')
+                      : null,
+                    canCreateCaseEvents()
+                      ? /* UX-ممیزی: دو دکمهٔ هم‌شکل که فقط در یک واژه فرق داشتند («ارسال چک‌لیست با بله» / «ارسال تمرین با بله»)
+                           در یک منوی «ارسال با بله» ادغام شدند */
+                        baleSendMenu()
+                      : null,
+                    canSendReport
+                      ? el('button', {
+                          class: 'btn btn--soft btn--sm',
+                          onclick: () => openTeacherReportModal(student)
+                        }, icon('bot', 15), 'ارسال گزارش به معلم مدرسه')
+                      : null,
+                    canSendReport
+                      ? el('button', {
+                          class: 'btn btn--soft btn--sm',
+                          onclick: () => openSnapshotBuilder()
+                        }, icon('file', 15), 'صدور گزارش قطعی')
+                      : null
                   )
                 : null,
               canManageCase ? buildOwnerEditor(student, onOwnerSaved) : null
@@ -365,14 +432,13 @@ export async function renderStudentProfile(container, ctx) {
 
   let statusCard = buildStatusCard();
 
-  container.replaceChildren(
-    el('div', { class: 'page-head' },
-      el('div', { class: 'page-head__title' }, 'پروفایل دانش‌آموز'),
-      el('div', { style: { display: 'flex', gap: 'var(--sp-2)' } },
-        canSendReport ? el('button', { class: 'btn btn--soft btn--sm', onclick: () => openSnapshotBuilder() }, icon('file', 15), 'صدور گزارش قطعی') : null, // موج ۳ — ۱.۲۷.۵۵: زبان روزمره (واژهٔ طراحی «نسخه‌دار» حذف شد)
-        el('button', { class: 'btn btn--ghost btn--sm', onclick: () => { location.hash = '#/students'; } }, icon('chevR', 16), 'بازگشت به فهرست')
-      )
-    ),
+    container.replaceChildren(
+      el('div', { class: 'page-head' },
+        el('div', { class: 'page-head__title' }, 'پروفایل دانش‌آموز'),
+        el('div', { style: { display: 'flex', gap: 'var(--sp-2)' } },
+          el('button', { class: 'btn btn--ghost btn--sm', onclick: () => { location.hash = '#/students'; } }, icon('chevR', 16), 'بازگشت به فهرست')
+        )
+      ),
     statusCard,
     docsMount,
     el('div', { style: { marginTop: 'var(--sp-4)' } }, tabBar.root),
@@ -576,19 +642,10 @@ export async function renderStudentProfile(container, ctx) {
               onclick: () => openEducationHistory(student) // — ۱.۲۰.۰
             }, icon('eye', 15), 'مشاهده / مدیریت')
           ),
-          renderTeachersCard(student, container, ctx),
-          el('div', { style: { display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap', marginTop: 'var(--sp-4)' } },
-            el('button', {
-              class: 'btn btn--soft btn--sm',
-              onclick: () => openStudentForm({ student, onSaved: onStudentSaved })
-            }, icon('edit', 15), 'ویرایش اطلاعات'),
-            canSendReport
-              ? el('button', {
-                  class: 'btn btn--soft btn--sm',
-                  onclick: () => openTeacherReportModal(student)
-                }, icon('bot', 15), 'ارسال گزارش به معلم مدرسه')
-              : null
-          )
+          renderTeachersCard(student, container, ctx)
+          /* ۱.۲۷.۵۶ — موج A: ردیف تکراری انتهای تب info حذف شد — «ویرایش اطلاعات» در دایره‌های
+             اقدام کارت وضعیت است و «گزارش به معلم» و «صدور گزارش قطعی» خانهٔ ثابت‌شان ردیف
+             اقدامِ همان کارت است (همیشه نمایان، مستقل از تب فعال) */
         )
       )
     );
@@ -751,13 +808,9 @@ export async function renderStudentProfile(container, ctx) {
 
     box.replaceChildren(el('div', { class: 'card' },
       el('div', { class: 'card__head' },
-        el('div', { class: 'card__title' }, 'تاریخچهٔ پرونده'),
-        canCreateCaseEvents()
-          ? el('button', {
-              class: 'btn btn--soft btn--sm',
-              onclick: () => openCaseEventForm({ student, onSaved: onCaseEventSaved })
-            }, icon('plus', 15), 'ثبت رویداد پرونده')
-          : null
+        el('div', { class: 'card__title' }, 'تاریخچهٔ پرونده')
+        /* ۱.۲۷.۵۶ — موج A: دکمهٔ «ثبت رویداد» از سرصفه حذف شد — خانهٔ ثابتِ آن ردیف اقدام کارت
+           وضعیت است (همیشه نمایان)؛ میان‌بر تکراری گیج‌کننده بود */
       ),
       el('div', { class: 'card__body' }, rail, searchInput, chips, list, moreBtn)
     ));
@@ -843,14 +896,8 @@ export async function renderStudentProfile(container, ctx) {
   function buildSessionSheet() {
     if (!canCreateCaseEvents()) return null;
     const nowMs = Date.now();
-    const upcoming = appointments
-      .filter((a) => a.status === 'scheduled' && Date.parse(a.startAt) > nowMs)
-      .sort((a, b) => (a.startAt < b.startAt ? -1 : 1))[0] ?? null;
-    const notes = noteApptIdSet();
-    const missingReports = appointments
-      .filter((a) => a.status === 'scheduled' && Date.parse(a.startAt) <= nowMs && a.myAttendance !== 'cancelled'
-        && !notes.has(a.appointmentId) && eventsOfAppt(a.appointmentId).length === 0)
-      .sort((a, b) => (a.startAt > b.startAt ? -1 : 1)); // قدیمی‌ترین اول
+    const upcoming = upcomingAppt(); // ۱.۲۷.۵۶ — منبع واحد معلق‌ها با کارت وضعیت
+    const missingReports = missingReportAppts();
     const openFollowup = timeline.nextAction?.type === 'followup' ? timeline.nextAction : null;
     if (!upcoming && missingReports.length === 0 && !openFollowup) return null;
     const lastAppt = appointments
@@ -1120,13 +1167,9 @@ export async function renderStudentProfile(container, ctx) {
     box.replaceChildren(
       el('div', { class: 'card' },
         el('div', { class: 'card__head' },
-          el('div', { class: 'card__title' }, 'نوبت‌ها و حضور'),
-          canReport
-            ? el('button', {
-                class: 'btn btn--soft btn--sm',
-                onclick: () => openCaseEventForm({ student, onSaved: onCaseEventSaved })
-              }, icon('plus', 15), 'ثبت رویداد پرونده')
-            : null
+          el('div', { class: 'card__title' }, 'نوبت‌ها و حضور')
+          /* ۱.۲۷.۵۶ — موج A: دکمهٔ تکراری «ثبت رویداد» حذف شد؛ ثبت گزارش هر جلسه در ستون «گزارش»
+             همان جدول است و خانهٔ ثابتِ اقدام، کارت وضعیت */
         ),
         el('div', { class: 'card__body' },
           buildSessionSheet(),
@@ -1138,7 +1181,9 @@ export async function renderStudentProfile(container, ctx) {
                   { key: 'startAt', label: 'زمان', render: (a) => formatJalaliDateTime(a.startAt) },
                   { key: 'staffName', label: 'کارمند', render: (a) => a.staffName ?? '—' },
                   { key: 'status', label: 'وضعیت نوبت', render: (a) => statusBadge(a.status) },
-                  { key: 'myAttendance', label: 'حضور', render: (a) => statusBadge(a.myAttendance) },
+                  { key: 'myAttendance', label: 'حضور', render: (a) => canReport && a.status === 'scheduled'
+                    ? el('button', { class: 'chip', type: 'button', title: 'ثبت/تغییر حضور', onclick: () => openAttendanceModal(a) }, statusBadge(a.myAttendance))
+                    : statusBadge(a.myAttendance) }, // ۱.۲۷.۵۶ — حضور از خود پرونده ثبت‌شدنی شد
                   { key: 'report', label: 'گزارش', render: reportCell },
                   { key: 'go', label: '', align: 'end', render: () => el('button', { class: 'btn btn--ghost btn--sm', title: 'مشاهده در تقویم', onclick: () => { location.hash = '#/appointments'; } }, icon('calendar', 15)) }
                 ],
@@ -1171,10 +1216,7 @@ export async function renderStudentProfile(container, ctx) {
       el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, 'گزارش‌های ارسالی')),
       el('div', { class: 'card__body' },
         el('p', { class: 'cell-sub', style: { margin: '0 0 var(--sp-3)' } },
-          'گزارش‌های ثبت‌شده برای خانواده و معلم مدرسه در تب «تاریخچه» (رویدادهای پیام) قابل مشاهده است.'),
-        canSendReport
-          ? el('button', { class: 'btn btn--soft btn--sm', onclick: () => openTeacherReportModal(student) }, icon('bot', 15), 'ارسال گزارش به معلم مدرسه')
-          : null
+          'گزارش‌های ثبت‌شده برای خانواده و معلم مدرسه در تب «تاریخچه» (رویدادهای پیام) قابل مشاهده است. دکمهٔ ارسال تازه در ردیف اقدام کارت وضعیت بالای پرونده است.')
       )
     );
 
