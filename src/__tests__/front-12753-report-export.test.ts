@@ -57,12 +57,12 @@ describe('موج ۳ — timeline و کلاینت', () => {
     expect(timelineSvc).toContain("type: 'report_snapshot', id: s.id");
   });
 
-  it('کلاینت: دکمهٔ خروجی در page-head + فلوی انتخاب→قطعی‌سازی→نسخهٔ قطعی', () => {
-    expect(view).toContain("'خروجی نسخه‌دار'");
+  it('کلاینت: دکمهٔ صدور در page-head + فلوی انتخاب→قطعی‌سازی→گزارش قطعی', () => {
+    expect(view).toContain("'صدور گزارش قطعی'");
     expect(view).toContain('async function openSnapshotBuilder()');
     expect(view).toContain("api.post(`/api/students/${id}/report-snapshots`, { path_id: p.id })");
     expect(view).toContain('async function openSnapshotModal(sid)');
-    expect(view).toContain("'مطابقت محتوا: تأیید'");
+    expect(view).toContain("'اصالت سند: تأیید'");
   });
 
   it('آرشیو: چیپ «گزارش‌های خروجی» و بازکردن سند از خط زمانی (سند نه پیام)', () => {

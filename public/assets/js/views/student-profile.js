@@ -369,7 +369,7 @@ export async function renderStudentProfile(container, ctx) {
     el('div', { class: 'page-head' },
       el('div', { class: 'page-head__title' }, 'پروفایل دانش‌آموز'),
       el('div', { style: { display: 'flex', gap: 'var(--sp-2)' } },
-        canSendReport ? el('button', { class: 'btn btn--soft btn--sm', onclick: () => openSnapshotBuilder() }, icon('file', 15), 'خروجی نسخه‌دار') : null, // موج ۳
+        canSendReport ? el('button', { class: 'btn btn--soft btn--sm', onclick: () => openSnapshotBuilder() }, icon('file', 15), 'صدور گزارش قطعی') : null, // موج ۳ — ۱.۲۷.۵۵: زبان روزمره (واژهٔ طراحی «نسخه‌دار» حذف شد)
         el('button', { class: 'btn btn--ghost btn--sm', onclick: () => { location.hash = '#/students'; } }, icon('chevR', 16), 'بازگشت به فهرست')
       )
     ),
@@ -614,8 +614,8 @@ export async function renderStudentProfile(container, ctx) {
     let searchTimer = 0;
     const searchInput = el('input', {
       class: 'input', type: 'search',
-      placeholder: 'جست‌وجو در روایت (عنوان، توضیح، ثبت‌کننده)…',
-      'aria-label': 'جست‌وجو در روایت پرونده',
+      placeholder: 'جست‌وجو در تاریخچه (عنوان، توضیح، ثبت‌کننده)…',
+      'aria-label': 'جست‌وجو در تاریخچهٔ پرونده',
       style: { marginBottom: 'var(--sp-2)', maxWidth: '420px' },
       oninput: (e) => {
         clearTimeout(searchTimer);
@@ -714,7 +714,7 @@ export async function renderStudentProfile(container, ctx) {
     function paint() {
       if (state.events.length === 0) {
         list.replaceChildren(
-          emptyState({ iconName: 'clock', title: 'رویدادی ثبت نشده', hint: 'با ثبت نوبت، گزارش جلسه، ارزیابی یا پیگیری، روایت پرونده اینجا ساخته می‌شود.' })
+          emptyState({ iconName: 'clock', title: 'رویدادی ثبت نشده', hint: 'با ثبت نوبت، گزارش جلسه، ارزیابی یا پیگیری، تاریخچهٔ پرونده اینجا ساخته می‌شود.' })
         );
       } else {
         /* موج ۱ — سرصفهٔ فصل پیش از اولین رویداد هر فصل در جریان (هم در صفحهٔ اول، هم در append)؛
@@ -751,7 +751,7 @@ export async function renderStudentProfile(container, ctx) {
 
     box.replaceChildren(el('div', { class: 'card' },
       el('div', { class: 'card__head' },
-        el('div', { class: 'card__title' }, 'روایت پرونده — خط زمانی'),
+        el('div', { class: 'card__title' }, 'تاریخچهٔ پرونده'),
         canCreateCaseEvents()
           ? el('button', {
               class: 'btn btn--soft btn--sm',
@@ -806,7 +806,7 @@ export async function renderStudentProfile(container, ctx) {
     },
       el('div', { class: 'tl-item__head' },
         el('span', { class: 'tl-item__title' }, e.title),
-        e.milestone ? el('span', { title: e.milestoneLabel ?? 'لحظهٔ کلیدی روایت پرونده', 'aria-label': 'لحظهٔ کلیدی' }, icon('star', 13)) : null, // موج ۱
+        e.milestone ? el('span', { title: e.milestoneLabel ?? 'لحظهٔ کلیدی تاریخچهٔ پرونده', 'aria-label': 'لحظهٔ کلیدی' }, icon('star', 13)) : null, // موج ۱
         isNewEvent(e) ? el('span', { class: 'badge badge--primary' }, 'جدید') : null, // موج ۲
         el('span', { class: 'tl-item__time' }, formatJalaliDateTime(e.at))
       ),
@@ -815,7 +815,7 @@ export async function renderStudentProfile(container, ctx) {
       e.kind === 'followup' && e.open
         ? el('div', { style: { marginTop: 'var(--sp-2)', display: 'flex', gap: 'var(--sp-2)', alignItems: 'center', flexWrap: 'wrap' } },
             (e.dueAt && e.dueAt < new Date().toISOString())
-              ? el('span', { class: 'badge badge--error' }, 'سررسیده‌گذشته')
+              ? el('span', { class: 'badge badge--error' }, 'عقب‌افتاده')
               : el('span', { class: 'badge badge--warning' }, 'باز'),
             canCompleteFollowup()
               ? el('button', { class: 'btn btn--soft btn--sm', type: 'button', onclick: (ev2) => lockBtn(ev2.currentTarget, () => completeFollowup(e)) }, icon('check', 12), 'ثبت نتیجه')
@@ -864,7 +864,7 @@ export async function renderStudentProfile(container, ctx) {
         class: 'chip', type: 'button',
         title: 'مشاهده در خط زمانی (فیلتر پیگیری)',
         onclick: () => { location.hash = `#/students/${id}?tab=timeline&filter=followups`; }
-      }, icon('bell', 13), overdue ? 'پیگیری سررسیده‌گذشته' : 'پیگیری باز', openFollowup.at ? el('span', { class: 'cell-sub' }, `— سررسید: ${formatJalaliDateTime(openFollowup.at)}`) : null));
+      }, icon('bell', 13), overdue ? 'پیگیری عقب‌افتاده' : 'پیگیری باز', openFollowup.at ? el('span', { class: 'cell-sub' }, `— سررسید: ${formatJalaliDateTime(openFollowup.at)}`) : null));
     }
     if (missingReports.length > 0) {
       strip.push(el('button', {
@@ -1006,14 +1006,14 @@ export async function renderStudentProfile(container, ctx) {
     }
     paintVariant();
     openModal({
-      title: `نسخهٔ قطعی گزارش — ${fa(rec.reportNo)}`,
+      title: `گزارش قطعی — شمارهٔ ${fa(rec.reportNo)}`,
       body: el('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' } },
         el('div', { style: { display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap', alignItems: 'center' } },
-          rec.createdAt ? el('span', { class: 'cell-sub' }, `قطعی‌سازی: ${formatJalaliDateTime(rec.createdAt)}`) : null,
+          rec.createdAt ? el('span', { class: 'cell-sub' }, `تاریخ قطعی: ${formatJalaliDateTime(rec.createdAt)}`) : null,
           rec.signedName ? el('span', { class: 'cell-sub' }, `امضا: ${rec.signedName}${rec.signedRole ? ` — ${rec.signedRole}` : ''}`) : null,
           rec.hashVerified === true
-            ? el('span', { class: 'badge badge--success', title: `SHA-256: ${rec.contentHash}` }, 'مطابقت محتوا: تأیید')
-            : el('span', { class: 'badge badge--error', title: `SHA-256 ثبت‌شده: ${rec.contentHash}` }, 'هش محتوا هم‌خوان نیست')
+            ? el('span', { class: 'badge badge--success', title: `محتوای سند مو‌به‌مو با لحظهٔ صدور یکی است — کد کنترل: ${rec.contentHash}` }, 'اصالت سند: تأیید')
+            : el('span', { class: 'badge badge--error', title: `کد کنترل ثبت‌شده: ${rec.contentHash}` }, 'اصالت سند: هم‌خوان نیست')
         ),
         variantRow,
         content
@@ -1037,7 +1037,7 @@ export async function renderStudentProfile(container, ctx) {
         title: 'پیش‌نیاز گزارش: مسیر مداخله',
         body: el('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' } },
           el('p', { style: { margin: 0, lineHeight: '1.9' } },
-            'گزارش نسخه‌دار، «گزارش دورهٔ مداخله»ی این پرونده است: جمع‌بندی جلسات، کارت‌ها و سنجش‌های یک مسیر. این پرونده هنوز مسیری ندارد — اول در تب «تفسیر بالینی» مسیر را بسازید و تأیید کنید؛ بعد همین دکمه گزارش را با شماره و تاریخ قطعی صادر می‌کند.'),
+            'گزارش قطعی، «گزارش دورهٔ مداخله»ی این پرونده است: جمع‌بندی جلسات، کارت‌ها و سنجش‌های یک مسیر. این پرونده هنوز مسیری ندارد — اول در تب «تفسیر بالینی» مسیر را بسازید و تأیید کنید؛ بعد همین دکمه گزارش را با شماره و تاریخ قطعی صادر می‌کند.'),
           el('div', { style: { display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap' } },
             el('button', { class: 'btn btn--primary btn--sm', type: 'button', onclick: () => { close(); location.hash = `#/students/${id}?tab=clinical`; } }, icon('brain', 14), 'رفتن به تفسیر بالینی'),
             el('button', { class: 'btn btn--ghost btn--sm', type: 'button', onclick: () => close() }, 'بعداً')
@@ -1065,13 +1065,13 @@ export async function renderStudentProfile(container, ctx) {
             toastError(err);
           }
         })
-      }, icon('file', 14), 'صدور نسخهٔ قطعی')
+      }, icon('file', 14), 'صدور گزارش قطعی')
     ));
     const { close } = openModal({
-      title: 'خروجی نسخه‌دار — گزارش دورهٔ مداخله',
+      title: 'صدور گزارش قطعی — گزارش دورهٔ مداخله',
       body: el('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' } },
         el('p', { class: 'cell-sub', style: { margin: 0 } },
-          'گزارش در لحظهٔ صدور قطعی می‌شود: شمارهٔ سالانهٔ مرکز می‌گیرد، محتوایش هش و امضای صادرکننده ثبت می‌شود و ردپایش در تاریخچه (فیلتر «گزارش‌های خروجی») می‌ماند. نسخهٔ صادرشده با ویرایش بعدی پرونده عوض نمی‌شود.'),
+          'این گزارش همان لحظه شماره می‌گیرد (شمارهٔ سالانهٔ مرکز)، ثبت قطعی می‌شود و نام صادرکننده کنارش می‌ماند. بعداً هرچه در پرونده عوض شود، این گزارش همان می‌ماند که روز صدور بود. ردپایش هم در تاریخچه، فیلتر «گزارش‌های خروجی» می‌ماند.'),
         rows
       )
     });

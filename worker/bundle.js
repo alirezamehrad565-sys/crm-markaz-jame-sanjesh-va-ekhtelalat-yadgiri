@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.27.54";
+var APP_VERSION = "1.27.55";
 var NODE_MIN_VERSION = "1.26.0";
 
 // node_modules/zod/v4/classic/external.js
@@ -30532,7 +30532,7 @@ function createStudentTimelineService(db) {
         raw2.push({
           at: s.created_at,
           kind: "report_export",
-          title: `\u06AF\u0632\u0627\u0631\u0634 \u062E\u0631\u0648\u062C\u06CC \u0635\u0627\u062F\u0631 \u0634\u062F \u2014 ${s.report_no}`,
+          title: `\u06AF\u0632\u0627\u0631\u0634 \u0642\u0637\u0639\u06CC \u0635\u0627\u062F\u0631 \u0634\u062F \u2014 ${s.report_no}`,
           subtitle: s.template_key === "pathway_report" ? "\u06AF\u0632\u0627\u0631\u0634 \u062F\u0648\u0631\u0647\u0654 \u0645\u062F\u0627\u062E\u0644\u0647\u0654 \u0637\u0631\u062D \u062F\u0631\u0645\u0627\u0646" : s.template_key,
           actor: s.signed_name ?? null,
           ref: { type: "report_snapshot", id: s.id }

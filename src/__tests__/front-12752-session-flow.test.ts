@@ -33,14 +33,14 @@ describe('موج ۲ — کلاینت', () => {
   const view = read('public/assets/js/views/student-profile.js');
 
   it('جست‌وجو با debounce ۳۰۰ms و حداقل ۲ نویسه — بدون endpoint تازه', () => {
-    expect(view).toContain("placeholder: 'جست‌وجو در روایت (عنوان، توضیح، ثبت‌کننده)…'");
+    expect(view).toContain("placeholder: 'جست‌وجو در تاریخچه (عنوان، توضیح، ثبت‌کننده)…'");
     expect(view).toContain('state.q = v.length >= 2 ? v : null;');
     expect(view).toContain('if (state.q) query.q = state.q;');
   });
 
   it('صف پیگیری: ترتیب سررسیدی + بج سررسیده/باز + ثبت نتیجه با PATCH موجود', () => {
     expect(view).toContain('const queueMode = state.filter === \'followups\';');
-    expect(view).toContain("'سررسیده‌گذشته'");
+    expect(view).toContain("'عقب‌افتاده'"); // ۱.۲۷.۵۵ — واژهٔ روزمره جای «سررسیده‌گذشته»
     expect(view).toContain("api.patch(`/api/followups/${e.ref?.id}`, { status: 'done' })");
     expect(view).toContain("'ثبت نتیجه'");
   });

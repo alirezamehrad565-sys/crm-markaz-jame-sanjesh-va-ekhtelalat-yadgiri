@@ -59,7 +59,7 @@ describe('قرارداد فصل‌های روایت — کلاینت', () => {
   });
 
   it('ستارهٔ لحظهٔ کلیدی روی رویدادهای milestone', () => {
-    expect(view).toContain("e.milestone ? el('span', { title: e.milestoneLabel ?? 'لحظهٔ کلیدی روایت پرونده'");
+    expect(view).toContain("e.milestone ? el('span', { title: e.milestoneLabel ?? 'لحظهٔ کلیدی تاریخچهٔ پرونده'");
   });
 
   it('بدون import تازه در app.js — گراف بوت دست‌نخورده', () => {

@@ -560,7 +560,7 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
         raw.push({
           at: s.created_at,
           kind: 'report_export',
-          title: `گزارش خروجی صادر شد — ${s.report_no}`,
+          title: `گزارش قطعی صادر شد — ${s.report_no}`,
           subtitle: s.template_key === 'pathway_report' ? 'گزارش دورهٔ مداخلهٔ طرح درمان' : s.template_key,
           actor: s.signed_name ?? null,
           ref: { type: 'report_snapshot', id: s.id }
