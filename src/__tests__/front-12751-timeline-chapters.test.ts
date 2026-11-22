@@ -38,8 +38,8 @@ describe('قرارداد فصل‌های روایت — سرور', () => {
   it('chapters در TimelineResult اختیاری است و route فقط پاس‌ترو می‌کند', () => {
     expect(types).toContain('chapters?: TimelineChapter[]');
     expect(routes).toContain('chapters: result.chapters');
-    // تعهد موج ۱: هیچ SQL تازه‌ای اضافه نشده — شمارش db.query همان پایهٔ قبل از موج است (۱۲)
-    expect((service.match(/db\.query</g) ?? []).length).toBe(12);
+    // تعهد موج ۱: فصل‌بندی SQL تازه نمی‌خرد — موج ۳ یک منبع تازه افزود (report_snapshots) → ۱۳
+    expect((service.match(/db\.query</g) ?? []).length).toBe(13);
   });
 });
 

@@ -30,7 +30,8 @@ const KIND_META = {
   committee: { icon: 'clip', tone: 'accent' }, // — مصوبهٔ کمیسیون روی تایم‌لاین
   notification: { icon: 'bot', tone: 'success' },
   exercise: { icon: 'file', tone: 'accent' },
-  case_event: { icon: 'clip', tone: 'primary' } // — رویداد پرونده (فرم جلسه/چک‌لیست)
+  case_event: { icon: 'clip', tone: 'primary' }, // — رویداد پرونده (فرم جلسه/چک‌لیست)
+  report_export: { icon: 'file', tone: 'accent' } // موج ۳ — سند خروجی نسخه‌دار (طرح C)
 };
 
 const TIMELINE_FILTERS = [
@@ -41,6 +42,7 @@ const TIMELINE_FILTERS = [
   { key: 'followups', label: 'پیگیری', kinds: 'followup' },
   { key: 'committee', label: 'کمیسیون', kinds: 'committee' }, //
   { key: 'exercises', label: 'تکلیف تمرین', kinds: 'exercise' },
+  { key: 'reports', label: 'گزارش‌های خروجی', kinds: 'report_export' }, // موج ۳ — آرشیو اسناد نسخه‌دار
   { key: 'messages', label: 'پیام‌ها', kinds: 'notification' },
   { key: 'profile', label: 'پرونده', kinds: 'student_created,case_status,special_need,tags,waitlist' }
 ];
@@ -366,7 +368,10 @@ export async function renderStudentProfile(container, ctx) {
   container.replaceChildren(
     el('div', { class: 'page-head' },
       el('div', { class: 'page-head__title' }, 'پروفایل دانش‌آموز'),
-      el('button', { class: 'btn btn--ghost btn--sm', onclick: () => { location.hash = '#/students'; } }, icon('chevR', 16), 'بازگشت به فهرست')
+      el('div', { style: { display: 'flex', gap: 'var(--sp-2)' } },
+        canSendReport ? el('button', { class: 'btn btn--soft btn--sm', onclick: () => openSnapshotBuilder() }, icon('file', 15), 'خروجی نسخه‌دار') : null, // موج ۳
+        el('button', { class: 'btn btn--ghost btn--sm', onclick: () => { location.hash = '#/students'; } }, icon('chevR', 16), 'بازگشت به فهرست')
+      )
     ),
     statusCard,
     docsMount,
@@ -775,9 +780,12 @@ export async function renderStudentProfile(container, ctx) {
   function timelineItem(e) {
     const meta = KIND_META[e.kind] ?? { icon: 'clock', tone: 'neutral' };
     const isCaseEvent = e.kind === 'case_event' && e.ref?.type === 'case_event';
-    const link = !isCaseEvent ? KIND_LINKS[e.kind] : null;
-    const clickable = isCaseEvent || Boolean(link);
-    const openAction = isCaseEvent
+    const isSnapshot = e.kind === 'report_export' && e.ref?.type === 'report_snapshot'; // موج ۳
+    const link = !isCaseEvent && !isSnapshot ? KIND_LINKS[e.kind] : null;
+    const clickable = isCaseEvent || isSnapshot || Boolean(link);
+    const openAction = isSnapshot
+      ? () => openSnapshotModal(String(e.ref.id))
+      : isCaseEvent
       ? async () => {
           try {
             const res = await api.get(`/api/case-events/${e.ref.id}`);
@@ -884,6 +892,176 @@ export async function renderStudentProfile(container, ctx) {
           : el('div', { class: 'cell-sub' }, 'معلقی نیست — گزارش جلسات و پیگیری‌های این پرونده به‌روز است.')
       )
     );
+  }
+
+  /* ═══ موج ۳ (طرح C «پروندهٔ ناشر») — خروجی نسخه‌دار ═══
+     فلوی سه‌گامی: انتخاب مسیر → قطعی‌سازی (snapshot با شمارهٔ سالانه/SHA-256/امضا) → بازکردن نسخهٔ قطعی.
+     بازخوانی فقط از snapshot نه دادهٔ زنده؛ رندر نسخهٔ قطعی از سند ذخیره‌شده است (snapshot-first). */
+
+  function renderSnapshotBody(content, rec, variant) {
+    const sec = rec.sections ?? {};
+    const s = sec.summary ?? {};
+    const m = sec.monitoring ?? {};
+    const sessions = Array.isArray(sec.sessions) ? sec.sessions : [];
+    const kv = (k, v) => row(k, v ?? '—');
+    const fmtJal = (v) => (v ? formatJalaliNumeric(String(v).slice(0, 10)) : '—');
+    const pctOf = (v) => (v === null || v === undefined) ? '—' : `${fa(v)}٪`;
+
+    if (variant === 'family') {
+      const p = sec.parent ?? {};
+      content.replaceChildren(
+        el('div', { class: 'card' },
+          el('div', { class: 'card__body' },
+            p.headline ? el('h3', { style: { margin: '0 0 var(--sp-2)', fontSize: '15px' } }, p.headline) : null,
+            ...(p.paragraphs ?? []).map((t) => el('p', { style: { margin: '0 0 var(--sp-2)', lineHeight: '1.9' } }, t)),
+            Array.isArray(p.tips) && p.tips.length > 0
+              ? el('div', { style: { marginTop: 'var(--sp-2)' } },
+                  el('div', { class: 'card__title', style: { fontSize: '13px', marginBottom: 'var(--sp-1)' } }, 'توصیه‌ها'),
+                  ...p.tips.map((t) => el('div', { class: 'cell-sub', style: { margin: '0 0 var(--sp-1)' } }, `• ${t}`)))
+              : null,
+            sec.familySummary ? el('p', { class: 'cell-sub', style: { marginTop: 'var(--sp-3)', lineHeight: '1.9' } }, sec.familySummary) : null
+          )
+        )
+      );
+      return;
+    }
+
+    if (variant === 'school') {
+      const sc = sec.school ?? {};
+      content.replaceChildren(
+        el('div', { class: 'card' },
+          el('div', { class: 'card__body' },
+            sc.headline ? el('h3', { style: { margin: '0 0 var(--sp-2)', fontSize: '15px' } }, sc.headline) : null,
+            ...(sc.performance ?? []).map((t) => el('p', { style: { margin: '0 0 var(--sp-2)', lineHeight: '1.9' } }, t)),
+            Array.isArray(sc.actions) && sc.actions.length > 0
+              ? el('div', { style: { marginTop: 'var(--sp-2)' } },
+                  el('div', { class: 'card__title', style: { fontSize: '13px', marginBottom: 'var(--sp-1)' } }, 'اقدام‌های پیشنهادی'),
+                  ...sc.actions.map((t) => el('div', { class: 'cell-sub', style: { margin: '0 0 var(--sp-1)' } }, `• ${t}`)))
+              : null
+          )
+        )
+      );
+      return;
+    }
+
+    // واریانت متخصص: جمع‌بندی + پایش سه‌پرسشی + جدول جلسات + خلاصهٔ خانواده
+    content.replaceChildren(
+      el('div', { class: 'card' },
+        el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, 'جمع‌بندی دوره')),
+        el('div', { class: 'card__body' },
+          el('div', { class: 'info-list' },
+            kv('هدف مداخله', sec.pathway?.targetTitle),
+            kv('قالب', sec.pathway?.templateTitle),
+            kv('جلسات برگزار', `${fa(s.sessionsDone ?? 0)} از ${fa(s.sessionsTotal ?? 0)}${s.sessionsSkipped ? ` — ${fa(s.sessionsSkipped)} اجرا نشده` : ''}`),
+            kv('کارت‌های انجام‌شده', `${fa(s.cardsDone ?? 0)} از ${fa(s.cardsTotal ?? 0)}${s.cardsDonePct != null ? ` (${fa(s.cardsDonePct)}٪)` : ''}`),
+            kv('بازهٔ نتایج', `${fmtJal(s.doneDateFirst)} تا ${fmtJal(s.doneDateLast)}`),
+            kv('تسلط آخرین سنجش', m.masteryPct != null ? `${pctOf(m.masteryPct)}${m.masteryAchieved ? ' — به هدف رسیده' : ''}` : null),
+            kv('شیب به‌ازای جلسه', m.slopePerSession != null ? fa(m.slopePerSession) : null),
+            kv('پایبندی دوز', m.doseAdherencePct != null ? pctOf(m.doseAdherencePct) : null),
+            kv('وفاداری اجرا', m.fidelityPct != null ? pctOf(m.fidelityPct) : null),
+            kv('تصمیم پایش', m.decisionLabel ?? null)
+          ),
+          sec.familySummary ? el('p', { class: 'cell-sub', style: { marginTop: 'var(--sp-3)', lineHeight: '1.9' } }, sec.familySummary) : null
+        )
+      ),
+      el('div', { class: 'card', style: { marginTop: 'var(--sp-3)' } },
+        el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, `جلسات (${fa(sessions.length)})`)),
+        el('div', { class: 'card__body' },
+          sessions.length === 0
+            ? el('div', { class: 'cell-sub' }, 'جلسه‌ای در این دوره ثبت نشده بود — بخش خالی صادقانه می‌گوید، جای‌نگهدار نیست.')
+            : dataTable({
+                columns: [
+                  { key: 'ord', label: '#', render: (r) => fa(r.ord) },
+                  { key: 'title', label: 'جلسه', render: (r) => r.title ?? '—' },
+                  { key: 'status', label: 'وضعیت', render: (r) => statusBadge(r.status) },
+                  { key: 'doneAt', label: 'انجام', render: (r) => fmtJal(r.doneAt) },
+                  { key: 'cards', label: 'کارت‌ها', render: (r) => `${fa(r.cardsDone ?? 0)}/${fa(r.cardsTotal ?? 0)}` },
+                  { key: 'outcome', label: 'نتیجه', render: (r) => r.outcome ?? '—' }
+                ],
+                rows: sessions
+              })
+        )
+      )
+    );
+  }
+
+  async function openSnapshotModal(sid) {
+    let rec;
+    try {
+      rec = (await api.get(`/api/students/${id}/report-snapshots/${sid}`)).data;
+    } catch (err) {
+      toastError(err);
+      return;
+    }
+    let variant = 'clinical';
+    const content = el('div', {});
+    const variantRow = el('div', { class: 'tl-filters' });
+    function paintVariant() {
+      variantRow.replaceChildren(...[
+        { key: 'clinical', label: 'متخصص' },
+        { key: 'family', label: 'خانواده' },
+        { key: 'school', label: 'مدرسه' }
+      ].map((v) => el('button', { class: `chip${variant === v.key ? ' is-active' : ''}`, onclick: () => { variant = v.key; paintVariant(); } }, v.label)));
+      renderSnapshotBody(content, rec, variant);
+    }
+    paintVariant();
+    openModal({
+      title: `نسخهٔ قطعی گزارش — ${fa(rec.reportNo)}`,
+      body: el('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' } },
+        el('div', { style: { display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap', alignItems: 'center' } },
+          rec.createdAt ? el('span', { class: 'cell-sub' }, `قطعی‌سازی: ${formatJalaliDateTime(rec.createdAt)}`) : null,
+          rec.signedName ? el('span', { class: 'cell-sub' }, `امضا: ${rec.signedName}${rec.signedRole ? ` — ${rec.signedRole}` : ''}`) : null,
+          rec.hashVerified === true
+            ? el('span', { class: 'badge badge--success', title: `SHA-256: ${rec.contentHash}` }, 'مطابقت محتوا: تأیید')
+            : el('span', { class: 'badge badge--error', title: `SHA-256 ثبت‌شده: ${rec.contentHash}` }, 'هش محتوا هم‌خوان نیست')
+        ),
+        variantRow,
+        content
+      )
+    });
+  }
+
+  async function openSnapshotBuilder() {
+    let paths = [];
+    try {
+      paths = (await api.get(`/api/students/${id}/clinical-paths`)).data ?? [];
+    } catch (err) {
+      toastError(err);
+      return;
+    }
+    if (!Array.isArray(paths) || paths.length === 0) {
+      toast('برای این پرونده مسیر مداخله‌ای ثبت نشده — گزارش دوره از مسیر ساخته می‌شود', 'warning');
+      return;
+    }
+    const rows = paths.map((p) => el('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--sp-2)', flexWrap: 'wrap', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: 'var(--sp-2) var(--sp-3)' } },
+      el('div', {},
+        el('div', { style: { fontWeight: 600 } }, p.targetTitle ?? p.title ?? 'مسیر مداخله'),
+        el('div', { class: 'cell-sub' }, [p.templateTitle, p.status].filter(Boolean).join(' — ') || '—')),
+      el('button', {
+        class: 'btn btn--primary btn--sm', type: 'button',
+        onclick: (ev) => lockBtn(ev.currentTarget, async () => {
+          try {
+            const res = await api.post(`/api/students/${id}/report-snapshots`, { path_id: p.id });
+            const rec = res.data;
+            toast(`گزارش شمارهٔ ${fa(rec.reportNo)} صادر و قطعی شد — ردپایش در «گزارش‌های خروجی» تاریخچه است`, 'success');
+            close();
+            if (await refreshEventsData()) { repaintChrome(); rerenderTabIf(['timeline', 'comms']); }
+            openSnapshotModal(rec.id);
+          } catch (err) {
+            toastError(err);
+          }
+        })
+      }, icon('file', 14), 'صدور نسخهٔ قطعی')
+    ));
+    const { close } = openModal({
+      title: 'خروجی نسخه‌دار — گزارش دورهٔ مداخله',
+      body: el('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' } },
+        el('p', { class: 'cell-sub', style: { margin: 0 } },
+          'گزارش در لحظهٔ صدور قطعی می‌شود: شمارهٔ سالانهٔ مرکز می‌گیرد، محتوایش هش و امضای صادرکننده ثبت می‌شود و ردپایش در تاریخچه (فیلتر «گزارش‌های خروجی») می‌ماند. نسخهٔ صادرشده با ویرایش بعدی پرونده عوض نمی‌شود.'),
+        rows
+      )
+    });
+    void close;
   }
 
   function renderSessionsTab(box) {

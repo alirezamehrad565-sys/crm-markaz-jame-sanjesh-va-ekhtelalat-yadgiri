@@ -82,6 +82,14 @@ interface CaseEventRow {
   type_category: string;
 }
 
+interface SnapshotRow {
+  id: string;
+  report_no: string;
+  template_key: string;
+  signed_name: string | null;
+  created_at: string;
+}
+
 export function createStudentTimelineService(db: DbClient): StudentTimelineService {
   /* ۱.۲۵.۷۲ — تکه‌بندی ۹۰تایی (سقف ۱۰۰ بایند D1): خط زمانیِ یک دانش‌آموز سال‌ها رویداد دارد؛
      ادغام تکه‌ها بی‌اشکال است چون mergeTimelineEvents کل خط زمانی را دوباره مرتب می‌کند */
@@ -227,6 +235,16 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
           WHERE resource_type = 'intervention_path'
             AND action IN ('clinical_path.create', 'clinical_path.decision')
             AND resource_id IN (SELECT id FROM intervention_paths WHERE student_id = ?)
+          ORDER BY created_at ASC`,
+        [studentId]
+      );
+
+      /* موج ۳ (طرح C) — گزارش‌های خروجی نسخه‌دار: منبع دهم تجمیع؛ سند با شماره و امضا در روایت می‌نشیند */
+      const snapshots = await db.query<SnapshotRow>(
+        `SELECT id, report_no, template_key, signed_name,
+                strftime('%Y-%m-%dT%H:%M:%SZ', created_at) AS created_at
+           FROM report_snapshots
+          WHERE student_id = ?
           ORDER BY created_at ASC`,
         [studentId]
       );
@@ -537,8 +555,19 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
         });
       }
 
-      const merged = mergeTimelineEvents(raw);
+      /* موج ۳ (طرح C) — اسناد خروجی در روایت: «گزارش‌دادن» خودش رویداد پرونده می‌شود (سند، نه پیام) */
+      for (const s of snapshots) {
+        raw.push({
+          at: s.created_at,
+          kind: 'report_export',
+          title: `گزارش خروجی صادر شد — ${s.report_no}`,
+          subtitle: s.template_key === 'pathway_report' ? 'گزارش دورهٔ مداخلهٔ طرح درمان' : s.template_key,
+          actor: s.signed_name ?? null,
+          ref: { type: 'report_snapshot', id: s.id }
+        });
+      }
 
+      const merged = mergeTimelineEvents(raw);
       /* ═══ موج ۱ — فصل‌بندی روایت پرونده (طرح D) ═══
          periodizeTimeline خالص و قطعی است؛ جمع‌بندی هر فصل «آمار-و-نقل» از ردیف‌های
          ساخت‌یافتهٔ همین فراخوانی است — هیچ SQL تازه‌ای اضافه نمی‌شود (تعهد موج ۱). */

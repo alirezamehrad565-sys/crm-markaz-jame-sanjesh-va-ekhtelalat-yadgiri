@@ -15,7 +15,8 @@ export const TIMELINE_KINDS = [
   'committee',
   'exercise',
   'clinical_path',
-  'case_event'
+  'case_event',
+  'report_export' // موج ۳ — سند خروجی نسخه‌دار از پرونده (طرح C: گزارش در تاریخچه «سند» است نه رویداد)
 ] as const;
 
 export type TimelineKind = (typeof TIMELINE_KINDS)[number];
