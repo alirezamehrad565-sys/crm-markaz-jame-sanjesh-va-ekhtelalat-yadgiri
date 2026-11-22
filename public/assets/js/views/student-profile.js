@@ -1030,7 +1030,21 @@ export async function renderStudentProfile(container, ctx) {
       return;
     }
     if (!Array.isArray(paths) || paths.length === 0) {
-      toast('برای این پرونده مسیر مداخله‌ای ثبت نشده — گزارش دوره از مسیر ساخته می‌شود', 'warning');
+      /* ۱.۲۷.۵۴ — بازتولید باگ «دکمهٔ خروجی کار نمی‌کند»: پیام بن‌بست جای اقدام بود.
+         گزارش نسخه‌دار از مسیر مداخله ساخته می‌شود؛ اگر مسیری نیست، کاربر مستقیم به جای
+         ساختنش برود — نه یک toast بی‌خروجی. */
+      const { close } = openModal({
+        title: 'پیش‌نیاز گزارش: مسیر مداخله',
+        body: el('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' } },
+          el('p', { style: { margin: 0, lineHeight: '1.9' } },
+            'گزارش نسخه‌دار، «گزارش دورهٔ مداخله»ی این پرونده است: جمع‌بندی جلسات، کارت‌ها و سنجش‌های یک مسیر. این پرونده هنوز مسیری ندارد — اول در تب «تفسیر بالینی» مسیر را بسازید و تأیید کنید؛ بعد همین دکمه گزارش را با شماره و تاریخ قطعی صادر می‌کند.'),
+          el('div', { style: { display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap' } },
+            el('button', { class: 'btn btn--primary btn--sm', type: 'button', onclick: () => { close(); location.hash = `#/students/${id}?tab=clinical`; } }, icon('brain', 14), 'رفتن به تفسیر بالینی'),
+            el('button', { class: 'btn btn--ghost btn--sm', type: 'button', onclick: () => close() }, 'بعداً')
+          )
+        )
+      });
+      void close;
       return;
     }
     const rows = paths.map((p) => el('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--sp-2)', flexWrap: 'wrap', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: 'var(--sp-2) var(--sp-3)' } },
