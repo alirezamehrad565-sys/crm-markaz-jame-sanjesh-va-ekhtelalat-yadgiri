@@ -22273,8 +22273,6 @@ var DEFAULT_CENTER_HOURS = [
   { weekday: 3, startMinute: 9 * 60, endMinute: 17 * 60 },
   { weekday: 4, startMinute: 9 * 60, endMinute: 13 * 60 }
 ];
-var CALENDAR_DAY_START_MINUTE = 6 * 60;
-var CALENDAR_DAY_END_MINUTE = 22 * 60;
 var ANNOUNCEMENT_TITLE_MAX = 120;
 var ANNOUNCEMENT_BODY_MAX = 2e3;
 var KNOWLEDGE_TITLE_MAX = 140;
@@ -22366,6 +22364,23 @@ var WAITLIST_NAME_MAX = 120;
 var WAITLIST_SERVICE_TYPE_MAX = 120;
 var WAITLIST_NOTE_MAX = 1e3;
 var WAITLIST_LIST_LIMIT = 500;
+var REFERRAL_FAMILY_LEVELS = [
+  "low",
+  "mid",
+  "high"
+];
+var REFERRAL_CATEGORIES = [
+  "delayed",
+  "learning_disorder",
+  "intellectual",
+  "behavioral",
+  "autism",
+  "speech",
+  "other"
+];
+var REFERRAL_CHILDREN_MAX = 50;
+var REFERRAL_CONCERN_MAX = 1e3;
+var REFERRAL_REJECT_REASON_MAX = 300;
 var TODO_STATUSES = ["pending", "done"];
 var TODO_PRIORITIES = ["normal", "urgent"];
 var TODO_BOXES = ["inbox", "outbox"];
@@ -22530,6 +22545,17 @@ var AssessmentBlockCreateSchema = external_exports.object({
   message: "\u067E\u0627\u06CC\u0627\u0646 \u0628\u0627\u0632\u0647\u0654 \u0633\u0646\u062C\u0634 \u0628\u0627\u06CC\u062F \u0628\u0639\u062F \u0627\u0632 \u0634\u0631\u0648\u0639 \u0622\u0646 \u0628\u0627\u0634\u062F",
   path: ["end_minute"]
 });
+var AssessmentBlockPatchSchema = external_exports.object({
+  date: external_exports.string().regex(/^\d{4}-\d{2}-\d{2}$/, "\u062A\u0627\u0631\u06CC\u062E \u0628\u0627\u06CC\u062F \u0634\u06A9\u0644 YYYY-MM-DD \u0628\u0627\u0634\u062F").optional(),
+  start_minute: external_exports.number().int().min(0).max(1439).optional(),
+  end_minute: external_exports.number().int().min(1).max(1440).optional(),
+  staff_id: UuidSchema.optional(),
+  note: external_exports.string().max(500).nullish(),
+  version: external_exports.number().int().positive()
+}).refine(
+  (v) => v.start_minute === void 0 || v.end_minute === void 0 || v.end_minute > v.start_minute,
+  { message: "\u067E\u0627\u06CC\u0627\u0646 \u0628\u0627\u0632\u0647\u0654 \u0633\u0646\u062C\u0634 \u0628\u0627\u06CC\u062F \u0628\u0639\u062F \u0627\u0632 \u0634\u0631\u0648\u0639 \u0622\u0646 \u0628\u0627\u0634\u062F", path: ["end_minute"] }
+);
 var UpdateAppointmentSchema = external_exports.object({
   note: external_exports.string().max(2e3).nullish(),
   version: external_exports.number().int().positive()
@@ -22546,8 +22572,9 @@ var CancelAppointmentSchema = external_exports.object({
   version: external_exports.number().int().positive()
 });
 var CopyWeekSchema = external_exports.object({
-  source_monday: TehranYmdSchema,
-  target_monday: TehranYmdSchema,
+  /* ۱.۲۷.۴۸ — کپی هفته بر پایهٔ شنبه (مرز هفتهٔ تقویم) */
+  source_week_start: TehranYmdSchema,
+  target_week_start: TehranYmdSchema,
   staff_id: UuidSchema.optional(),
   dry_run: external_exports.boolean().optional().default(false)
 });
@@ -23188,6 +23215,107 @@ var ScreeningQuerySchema = external_exports.object({
   q: external_exports.string().trim().max(80).optional(),
   tag: external_exports.string().trim().max(800).optional()
 });
+var IqEvaluationCreateSchema = external_exports.object({
+  result_option: external_exports.number().int("\u06AF\u0632\u06CC\u0646\u0647\u0654 \u0646\u062A\u06CC\u062C\u0647 \u0628\u0627\u06CC\u062F \u0639\u062F\u062F \u0635\u062D\u06CC\u062D \u0628\u0627\u0634\u062F").min(1, "\u06CC\u06A9\u06CC \u0627\u0632 \u06AF\u0632\u06CC\u0646\u0647\u200C\u0647\u0627\u06CC \u06F1 \u062A\u0627 \u06F7 \u0631\u0627 \u0627\u0646\u062A\u062E\u0627\u0628 \u06A9\u0646\u06CC\u062F").max(7, "\u06CC\u06A9\u06CC \u0627\u0632 \u06AF\u0632\u06CC\u0646\u0647\u200C\u0647\u0627\u06CC \u06F1 \u062A\u0627 \u06F7 \u0631\u0627 \u0627\u0646\u062A\u062E\u0627\u0628 \u06A9\u0646\u06CC\u062F"),
+  autism_referral: external_exports.boolean().optional().default(false),
+  leiter_score: external_exports.number().finite("\u0646\u0645\u0631\u0647\u0654 \u0644\u06CC\u200C\u062A\u0631 \u0628\u0627\u06CC\u062F \u0639\u062F\u062F \u0628\u0627\u0634\u062F").nullish(),
+  wechsler_verbal_score: external_exports.number().finite("\u0646\u0645\u0631\u0647\u0654 \u0648\u06A9\u0633\u0644\u0631 \u0628\u0627\u06CC\u062F \u0639\u062F\u062F \u0628\u0627\u0634\u062F").nullish(),
+  goodenough_score: external_exports.number().finite("\u0646\u0645\u0631\u0647\u0654 \u06AF\u0648\u062F\u06CC\u0646\u0627\u0641 \u0628\u0627\u06CC\u062F \u0639\u062F\u062F \u0628\u0627\u0634\u062F").nullish(),
+  clinical_observations: external_exports.string().max(2e3, "\u0645\u0634\u0627\u0647\u062F\u0627\u062A \u0628\u0627\u0644\u06CC\u0646\u06CC \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F2\u06F0\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").optional()
+});
+var ReferralChildSchema = external_exports.object({
+  first_name: external_exports.string().trim().min(2, "\u0646\u0627\u0645 \u06A9\u0648\u062F\u06A9 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").max(80, "\u0646\u0627\u0645 \u06A9\u0648\u062F\u06A9 \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F8\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A"),
+  birth_date: TehranYmdSchema.nullish(),
+  /* تاریخ تولد شمسیِ تایپی از فرم عمومی — سرویس با jalaliToGregorianYmd به میلادی می‌بَرد؛
+     تبدیل در یک نقطهٔ سمت سرور تا الگوریتم مشترکِ تست‌شدهٔ سامانه تک‌منبع بماند */
+  birth_date_text: external_exports.string().trim().max(20, "\u062A\u0627\u0631\u06CC\u062E \u062A\u0648\u0644\u062F \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F2\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").optional(),
+  school_text: external_exports.string().trim().max(120).optional(),
+  grade_text: external_exports.string().trim().max(40).optional(),
+  class_text: external_exports.string().trim().max(40).optional(),
+  concern_category: external_exports.enum(REFERRAL_CATEGORIES).nullish(),
+  /* تلفن ولیّ هر کودک — در ثبت دسته‌ای معلم به‌ازای هر ردیف جدا می‌آید؛
+     در ثبت خانواده خود معرف همان ولیّ است و از referrer_phone استفاده می‌شود */
+  guardian_phone: GuardianPhoneSchema.nullish(),
+  concern_tags: external_exports.array(external_exports.string().trim().min(2).max(40)).max(8, "\u062D\u062F\u0627\u06A9\u062B\u0631 \u06F8 \u0628\u0631\u0686\u0633\u0628 \u062F\u063A\u062F\u063A\u0647").optional().default([]),
+  concern_text: external_exports.string().trim().max(REFERRAL_CONCERN_MAX).optional(),
+  prior_eval: external_exports.boolean().nullish(),
+  prior_eval_note: external_exports.string().trim().max(300).optional(),
+  /* ۱.۲۷.۳۶ — فرم تکمیلی وضعیت خانواده زیر هر دانش‌آموز (اختیاری؛ «نمی‌دانم» ارسال نمی‌شود) */
+  family_culture: external_exports.enum(REFERRAL_FAMILY_LEVELS).nullish(),
+  family_finance: external_exports.enum(REFERRAL_FAMILY_LEVELS).nullish(),
+  family_cooperation: external_exports.enum(REFERRAL_FAMILY_LEVELS).nullish(),
+  /* ۱.۲۷.۴۶ — «سطح مالی و فرهنگی خانواده» (فیلد ترکیبی مسیر معلم؛ خواست کارفرما) —
+     معلم یک ارزیابی کلی می‌دهد؛ فرهنگی/مالی جدا فقط از فرم تکمیلی خانواده پر می‌شود */
+  family_liv: external_exports.enum(REFERRAL_FAMILY_LEVELS).nullish()
+});
+var PublicReferralSubmissionSchema = external_exports.object({
+  role: external_exports.enum(["family", "teacher"], { message: "\u0646\u0642\u0634 \u0645\u0639\u0631\u0641 \u0628\u0627\u06CC\u062F \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u06CC\u0627 \u0645\u0639\u0644\u0645 \u0628\u0627\u0634\u062F" }),
+  referrer_name: external_exports.string().trim().min(2, "\u0646\u0627\u0645 \u0645\u0639\u0631\u0641 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").max(80, "\u0646\u0627\u0645 \u0645\u0639\u0631\u0641 \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F8\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A"),
+  referrer_phone: GuardianPhoneSchema,
+  school_text: external_exports.string().trim().max(120).optional(),
+  grade_text: external_exports.string().trim().max(40).optional(),
+  class_text: external_exports.string().trim().max(40).optional(),
+  token: external_exports.string().trim().max(200).optional(),
+  children: external_exports.array(ReferralChildSchema).min(1, "\u062D\u062F\u0627\u0642\u0644 \u06CC\u06A9 \u06A9\u0648\u062F\u06A9 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A").max(REFERRAL_CHILDREN_MAX, `\u062D\u062F\u0627\u06A9\u062B\u0631 ${REFERRAL_CHILDREN_MAX} \u06A9\u0648\u062F\u06A9 \u062F\u0631 \u0647\u0631 \u062B\u0628\u062A`)
+}).superRefine((v, ctx) => {
+  if (v.role !== "teacher") return;
+  v.children.forEach((c, i) => {
+    const missing = [];
+    if (!c.family_cooperation) missing.push("\u0647\u0645\u06A9\u0627\u0631\u06CC \u062E\u0627\u0646\u0648\u0627\u062F\u0647");
+    if (!c.family_liv) missing.push("\u0633\u0637\u062D \u0645\u0627\u0644\u06CC \u0648 \u0641\u0631\u0647\u0646\u06AF\u06CC \u062E\u0627\u0646\u0648\u0627\u062F\u0647");
+    if (missing.length > 0) {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: ["children", i],
+        message: `\u0628\u0631\u0627\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \xAB${c.first_name || `\u0631\u062F\u06CC\u0641 ${i + 1}`}\xBB \u0627\u06CC\u0646 \u0641\u06CC\u0644\u062F\u0647\u0627 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A: ${missing.join(" \u0648 ")}`
+      });
+    }
+  });
+});
+var ReferralRejectSchema = external_exports.object({
+  reason: external_exports.string().trim().min(2, "\u062F\u0644\u06CC\u0644 \u0631\u062F \u0644\u0627\u0632\u0645 \u0627\u0633\u062A \u2014 \u0628\u0631\u0627\u06CC \u0645\u0639\u0631\u0641 \u0642\u0627\u0628\u0644 \u0627\u0631\u0633\u0627\u0644 \u0627\u0633\u062A").max(REFERRAL_REJECT_REASON_MAX, `\u062F\u0644\u06CC\u0644 \u0631\u062F \u062D\u062F\u0627\u06A9\u062B\u0631 ${REFERRAL_REJECT_REASON_MAX} \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A`)
+});
+var FormBlockSchema = external_exports.object({
+  kind: external_exports.enum(["text", "longtext", "number", "phone", "select", "multi", "yes_no", "note"], {
+    message: "\u0646\u0648\u0639 \u0628\u0644\u0648\u06A9 \u0645\u0639\u062A\u0628\u0631 \u0646\u06CC\u0633\u062A"
+  }),
+  label: external_exports.string().trim().min(2, "\u0628\u0631\u0686\u0633\u0628 \u0628\u0644\u0648\u06A9 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").max(200, "\u0628\u0631\u0686\u0633\u0628 \u0628\u0644\u0648\u06A9 \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F2\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A"),
+  required: external_exports.boolean().optional().default(false),
+  options: external_exports.array(
+    external_exports.object({
+      value: external_exports.string().trim().min(1, "\u0645\u0642\u062F\u0627\u0631 \u06AF\u0632\u06CC\u0646\u0647 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A").max(40),
+      label: external_exports.string().trim().min(1, "\u0628\u0631\u0686\u0633\u0628 \u06AF\u0632\u06CC\u0646\u0647 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A").max(100)
+    })
+  ).max(12, "\u062D\u062F\u0627\u06A9\u062B\u0631 \u06F1\u06F2 \u06AF\u0632\u06CC\u0646\u0647").optional(),
+  note: external_exports.string().trim().max(2e3, "\u0645\u062A\u0646 \u0635\u0641\u062D\u0647\u0654 \u0622\u06AF\u0627\u0647\u06CC \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F2\u06F0\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").optional()
+}).refine((b) => b.kind === "select" || b.kind === "multi" ? (b.options?.length ?? 0) >= 2 : true, {
+  message: "\u0628\u0631\u0627\u06CC \u0628\u0644\u0648\u06A9 \u0627\u0646\u062A\u062E\u0627\u0628\u060C \u062D\u062F\u0627\u0642\u0644 \u062F\u0648 \u06AF\u0632\u06CC\u0646\u0647 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A"
+}).refine((b) => b.kind === "note" ? Boolean(b.note && b.note.trim().length >= 4) : true, {
+  message: "\u0628\u0631\u0627\u06CC \u0635\u0641\u062D\u0647\u0654 \u0622\u06AF\u0627\u0647\u06CC\u060C \u0645\u062A\u0646 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A"
+});
+var FormUpsertSchema = external_exports.object({
+  title: external_exports.string().trim().min(2, "\u0639\u0646\u0648\u0627\u0646 \u0641\u0631\u0645 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").max(120, "\u0639\u0646\u0648\u0627\u0646 \u0641\u0631\u0645 \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F1\u06F2\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A"),
+  slug: external_exports.string().trim().regex(/^[a-z0-9][a-z0-9-]{2,59}$/, "\u0627\u0633\u0644\u0627\u06AF \u0641\u0642\u0637 \u062D\u0631\u0648\u0641 \u0644\u0627\u062A\u06CC\u0646 \u06A9\u0648\u0686\u06A9\u060C \u0631\u0642\u0645 \u0648 \u062E\u0637\u200C\u062A\u06CC\u0631\u0647 (\u06F3 \u062A\u0627 \u06F6\u06F0 \u0646\u0648\u06CC\u0633\u0647)"),
+  description: external_exports.string().trim().max(500, "\u062A\u0648\u0636\u06CC\u062D \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F5\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").optional(),
+  blocks: external_exports.array(FormBlockSchema).max(60, "\u062D\u062F\u0627\u06A9\u062B\u0631 \u06F6\u06F0 \u0628\u0644\u0648\u06A9 \u062F\u0631 \u0647\u0631 \u0641\u0631\u0645").default([]),
+  published: external_exports.boolean().optional().default(false)
+});
+var FormResponseSubmitSchema = external_exports.object({
+  answers: external_exports.array(
+    external_exports.object({
+      index: external_exports.number().int().min(0, "\u0627\u0646\u062F\u06CC\u0633 \u0628\u0644\u0648\u06A9 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A").max(59),
+      value: external_exports.union([
+        external_exports.string().max(2e3, "\u067E\u0627\u0633\u062E \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F2\u06F0\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A"),
+        external_exports.array(external_exports.string().max(100)).max(12, "\u062D\u062F\u0627\u06A9\u062B\u0631 \u06F1\u06F2 \u0627\u0646\u062A\u062E\u0627\u0628"),
+        external_exports.number().finite("\u067E\u0627\u0633\u062E \u0639\u062F\u062F\u06CC \u0628\u0627\u06CC\u062F \u0639\u062F\u062F \u0628\u0627\u0634\u062F"),
+        external_exports.boolean()
+      ])
+    })
+  ).max(60),
+  respondent_name: external_exports.string().trim().min(2, "\u0646\u0627\u0645 \u067E\u0627\u0633\u062E\u200C\u062F\u0647\u0646\u062F\u0647 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").max(80),
+  respondent_phone: GuardianPhoneSchema.nullish(),
+  token: external_exports.string().trim().max(200).optional()
+});
 
 // src/core/shared/features.ts
 var FEATURES = {
@@ -23766,7 +23894,7 @@ function createAuditWriter(db, opts) {
 __name(createAuditWriter, "createAuditWriter");
 
 // src/core/version.ts
-var APP_VERSION = "1.27.14";
+var APP_VERSION = "1.27.50";
 var NODE_MIN_VERSION = "1.26.0";
 
 // src/application/rum/pure.ts

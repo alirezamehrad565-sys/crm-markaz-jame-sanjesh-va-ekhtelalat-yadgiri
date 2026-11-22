@@ -15,6 +15,7 @@ import { openEducationHistory } from '../archive-form.js'; // — تاریخچه
 import { openStudentForm } from '../student-form.js'; // — فرم مشترک ویرایش (کد ملی/مسئول/مسیر) — جایگزین فرم قدیمی داخلی
 import { openBotLinkModal, resolveBotUsername, buildBotLink } from '../bot-link.js'; // — لینک احراز خودکار بات (: ساخت لینک در تب ارتباطات هم)
 import { renderDocsQuickCard } from '../document-requests.js'; // — : درخواست مدارک با بله + کارت مدارک دریافتی
+import { createProfileRegistry } from '../profile/registry.js'; // — موج ۰ اسکلت لولایی: dispatch تب از رجیستری + fallback قدیمی
 
 const KIND_META = {
   student_created: { icon: 'user', tone: 'success' },
@@ -216,11 +217,24 @@ export async function renderStudentProfile(container, ctx) {
   const content = el('div', {});
   let activeTabKey = 'info'; // تب فعال — برای بازسازی نوار پس از رسیدن داده
 
+  /* موج ۰ طرح ارتقای پرونده (PROFILE-UPGRADE-DESIGN §۵) — سه تب کم‌اتصال (فقط student لازم دارند)
+     از رجیستری سرو می‌گیرند؛ info/sessions/comms/exercises/timeline فعلاً روی fallback قدیمی‌اند
+     (S4..S7 مهاجرت بعدی). رندررهای پایین عیناً به‌عنوان fallback می‌مانند — رفتار امروز دست‌نخورده. */
+  const profileTabs = createProfileRegistry([
+    { key: 'clinical', when: () => canSeeClinical, mount: (box) => renderClinicalTabContent(box) },
+    { key: 'narrative', when: () => canSeeClinical, mount: (box) => renderNarrativeTabContent(box) },
+    { key: 'games', when: () => canSeeGames, mount: (box) => renderGamesTabContent(box) } // ۱.۲۵.۲۴ — chunk داینامیک حفظ می‌شود
+  ]);
+
+
   function selectTab(key, { silent = false } = {}) {
     activeTabKey = key;
     tabBar.setActive(key); // kit خودش کلیک را فعال نمی‌کند — صریح فعال می‌کنیم
     if (!silent) content.replaceChildren(skeletonState('list', 4)); /* silent = بازسازی درجای تب فعال (جریان پیوستهٔ ۱.۲۰.۰) */
     if (!auxDone) { pendingTab = key; return; } // دادهٔ موازی هنوز نرسیده — بعد از رسیدن رندر می‌شود
+    /* موج ۰ — dispatch رجیستری‌اول؛ null یعنی fallback (نقشهٔ کامل قدیمی پایین حفظ شده است) */
+    const desc = profileTabs.resolve(key, ctx);
+    if (desc) { desc.mount(content, ctx); return; }
     const renderer = {
       info: renderInfoTab,
       clinical: renderClinicalTabContent, //
