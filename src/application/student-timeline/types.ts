@@ -27,6 +27,48 @@ export interface TimelineEvent {
   subtitle?: string | null;
   actor?: string | null;
   ref?: { type: string; id: string } | null;
+  /* موج ۱ (طرح D §۲) — فصل‌بندی و لحظه‌های کلیدی:
+     boundary فقط قرارداد داخلی سرور برای periodizeTimeline است (کلاینت مصرف نمی‌کند)؛
+     milestone/milestoneLabel رویدادهای گره‌خورده با تصمیم‌ها (کمیسیون/وضعیت/مسیر/پذیرش/وکسلر)؛
+     chapterId پس از فصل‌بندی به هر رویداد می‌چسبد تا کلاینت سرصفهٔ فصل را در جریان بگذارد. */
+  boundary?: 'screening' | 'assessment' | 'plan' | 'review';
+  milestone?: boolean;
+  milestoneLabel?: string;
+  chapterId?: string;
+}
+
+/* موج ۱ — فصل‌های روایت پرونده: قطعی، بدون LLM و بدون ادعای بالینی (فقط آمار-و-نقل) */
+export type TimelinePhase = 'screening' | 'assessment' | 'plan' | 'treatment' | 'review' | 'scattered';
+
+export interface TimelineChapterSummary {
+  sessions: number;
+  attended: number;
+  absent: number;
+  cancelledSessions: number;
+  pendingSessions: number;
+  exercisesAssigned: number;
+  exercisesSubmitted: number;
+  exercisesCorrected: number;
+  followupsCreated: number;
+  committeeDecisions: number;
+  caseEvents: number;
+  milestones: number;
+}
+
+export interface TimelineChapterTrend {
+  attendancePct: number | null;
+  scores: Array<{ at: string; pct: number }>;
+}
+
+export interface TimelineChapter {
+  id: string;
+  phase: TimelinePhase;
+  run?: number; // شمارهٔ دورهٔ درمان (۱، ۲، …) — فقط برای phase=treatment
+  from: string;
+  to: string;
+  eventCount: number;
+  summary: TimelineChapterSummary;
+  trend: TimelineChapterTrend;
 }
 
 export interface TimelineNextAction {
@@ -52,6 +94,9 @@ export interface TimelineResult {
   events: TimelineEvent[];
   nextAction: TimelineNextAction | null;
   hasMore: boolean;
+  /* موج ۱ — فصل‌های کل خط زمانی (مستقل از صفحه‌سازی؛ سرور کل ردیف‌ها را می‌خواند).
+     اختیاری تا مصرف‌کنندهٔ کهنه نشکند. */
+  chapters?: TimelineChapter[];
 }
 
 export interface StudentTimelineService {

@@ -47,6 +47,49 @@ const TIMELINE_FILTERS = [
 
 const TIMELINE_PAGE = 30;
 
+/* موج ۱ — فصل‌های روایت (طرح D «فصل‌های پرونده»): برچسب/آیکون هر فاز؛ جمع‌بندی «آمار-و-نقل»
+   و نوار روند از سرور می‌آید (periodizeTimeline قطعی — بدون LLM و بدون ادعای بالینی). */
+const TIMELINE_PHASE_META = {
+  screening: { label: 'غربال و ورود', icon: 'clock' },
+  assessment: { label: 'ارزیابی', icon: 'clip' },
+  plan: { label: 'طرح درمان', icon: 'target' },
+  treatment: { label: 'دورهٔ درمان', icon: 'calendar' },
+  review: { label: 'بازسنجی و تصمیم', icon: 'refresh' },
+  scattered: { label: 'ثبت‌های پراکنده', icon: 'clock' }
+};
+
+/* سرصفهٔ هر فصل در جریان خط زمانی — فقط از دادهٔ همان پاسخ؛ بدون fetch تازه */
+function chapterHeader(ch) {
+  const meta = TIMELINE_PHASE_META[ch.phase] ?? TIMELINE_PHASE_META.scattered;
+  const s = ch.summary ?? {};
+  const bits = [];
+  if (s.sessions > 0) bits.push(`${fa(s.sessions)} جلسه`);
+  if (s.absent > 0) bits.push(`${fa(s.absent)} غایب`);
+  if (s.cancelledSessions > 0) bits.push(`${fa(s.cancelledSessions)} لغو`);
+  if (s.pendingSessions > 0) bits.push(`${fa(s.pendingSessions)} در انتظار`);
+  if (s.exercisesAssigned > 0) bits.push(`${fa(s.exercisesAssigned)} تمرین ارسالی`);
+  if (s.exercisesCorrected > 0) bits.push(`${fa(s.exercisesCorrected)} بازخورد تمرین`);
+  if (s.followupsCreated > 0) bits.push(`${fa(s.followupsCreated)} پیگیری جدید`);
+  if (s.caseEvents > 0) bits.push(`${fa(s.caseEvents)} رویداد`);
+  const otherMilestones = Math.max(0, (s.milestones ?? 0) - (s.committeeDecisions ?? 0));
+  if (otherMilestones > 0) bits.push(`${fa(otherMilestones)} نقطهٔ کلیدی`);
+  const scores = ch.trend?.scores ?? [];
+  const bars = scores.length > 1
+    ? el('span', { style: { display: 'inline-flex', alignItems: 'flex-end', gap: '2px', height: '14px' } },
+        scores.map((x) => el('span', { style: { width: '4px', height: `${Math.max(2, Math.round((x.pct * 14) / 100))}px`, background: 'var(--primary)', opacity: '0.75', borderRadius: '1px', display: 'inline-block' } })))
+    : null;
+  const ap = ch.trend?.attendancePct;
+  return el('div', { style: { margin: 'var(--sp-4) 0 var(--sp-2)', paddingBottom: 'var(--sp-2)', borderBottom: '1px dashed var(--border)', display: 'flex', flexDirection: 'column', gap: 'var(--sp-1)' } },
+    el('div', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', flexWrap: 'wrap' } },
+      el('span', { class: 'badge badge--primary' }, icon(meta.icon, 12), ch.phase === 'treatment' && (ch.run ?? 1) > 1 ? `${meta.label} ${fa(ch.run)}` : meta.label),
+      el('span', { class: 'cell-sub' }, `${formatJalaliNumeric(String(ch.from).slice(0, 10))} تا ${formatJalaliNumeric(String(ch.to).slice(0, 10))}`),
+      (ap !== null && ap !== undefined) ? el('span', { class: 'badge badge--neutral' }, `حضور ${fa(ap)}٪`) : null,
+      bars
+    ),
+    bits.length > 0 ? el('div', { class: 'cell-sub' }, bits.join(' · ')) : null
+  );
+}
+
 export async function renderStudentProfile(container, ctx) {
   container.replaceChildren(skeletonState('list', 6));
   const id = ctx.params.id;
@@ -520,7 +563,10 @@ export async function renderStudentProfile(container, ctx) {
       offset: 0,
       hasMore: deepFilter ? false : (timeline.meta?.hasMore ?? false),
       events: deepFilter ? [] : [...timeline.data],
-      loading: false
+      loading: false,
+      chapters: Array.isArray(timeline.chapters) ? timeline.chapters : [], // موج ۱ — فصل‌های کل خط زمانی
+      range: null, // موج ۱ — نمای یک فصل با from/to سرور (پارامتر موجود)
+      lastChapterId: null // موج ۱ — سرصفهٔ فصل در append ادامه می‌یابد
     };
 
     const list = el('div', { class: 'tl-list' });
@@ -533,6 +579,34 @@ export async function renderStudentProfile(container, ctx) {
       chips.appendChild(chip);
     }
 
+    /* موج ۱ — ریل فصل‌ها: کلیک روی هر فصل = نمای همان بازه با from/to سرور؛ بدون endpoint تازه */
+    const rail = el('div', { class: 'tl-filters', style: { marginBottom: 'var(--sp-2)' } });
+    function chapterLabel(ch) {
+      const meta = TIMELINE_PHASE_META[ch.phase] ?? TIMELINE_PHASE_META.scattered;
+      return ch.phase === 'treatment' && (ch.run ?? 1) > 1 ? `${meta.label} ${fa(ch.run)}` : meta.label;
+    }
+    function paintRail() {
+      const chs = state.chapters ?? [];
+      if (chs.length < 2) { rail.replaceChildren(); rail.style.display = 'none'; return; }
+      rail.replaceChildren(
+        el('button', { class: `chip${state.range ? '' : ' is-active'}`, onclick: () => setRange(null) }, 'همهٔ دوره‌ها'),
+        ...chs.map((ch) => el('button', {
+          class: `chip${state.range?.from === ch.from ? ' is-active' : ''}`,
+          title: `${chapterLabel(ch)} — از ${formatJalaliNumeric(String(ch.from).slice(0, 10))}`,
+          onclick: () => setRange({ from: ch.from, to: ch.to })
+        }, chapterLabel(ch)))
+      );
+      rail.style.display = '';
+    }
+    function setRange(range) {
+      state.range = range;
+      state.offset = 0;
+      state.events = [];
+      refreshChips();
+      paintRail();
+      load(false);
+    }
+
     function refreshChips() {
       for (const c of chips.children) c.classList.toggle('is-active', c.dataset.key === state.filter);
     }
@@ -541,7 +615,9 @@ export async function renderStudentProfile(container, ctx) {
       state.filter = key;
       state.offset = 0;
       state.events = [];
+      state.range = null; // موج ۱ — فیلتر نوع، نمای فصل را پاک می‌کند
       refreshChips();
+      paintRail();
       load(false);
     }
 
@@ -549,14 +625,20 @@ export async function renderStudentProfile(container, ctx) {
     async function load(append) {
       const myGen = ++gen;
       state.loading = true;
+      if (!append) state.lastChapterId = null; // موج ۱ — سرصفه از نو
       const f = TIMELINE_FILTERS.find((x) => x.key === state.filter);
       const query = { limit: TIMELINE_PAGE, offset: state.offset };
       if (f?.kinds) query.kinds = f.kinds;
+      if (state.range) { query.from = state.range.from; query.to = state.range.to; }
       try {
         const res = await api.get(`/api/students/${id}/timeline${qs(query)}`);
         if (myGen !== gen) return; // F2: پاسخ کهنه — فیلتر/صفحهٔ جدیدتری در پرواز است
         state.events = append ? [...state.events, ...res.data] : res.data;
         state.hasMore = Boolean(res.meta?.hasMore);
+        if (Array.isArray(res.meta?.chapters) && res.meta.chapters.length > 0) { // موج ۱ — فصل‌ها همیشه از کل خط زمانی
+          state.chapters = res.meta.chapters;
+          paintRail();
+        }
         paint();
       } catch (err) {
         if (myGen === gen) toastError(err);
@@ -576,7 +658,19 @@ export async function renderStudentProfile(container, ctx) {
           emptyState({ iconName: 'clock', title: 'رویدادی ثبت نشده', hint: 'با ثبت نوبت، گزارش جلسه، ارزیابی یا پیگیری، روایت پرونده اینجا ساخته می‌شود.' })
         );
       } else {
-        list.replaceChildren(...state.events.map(timelineItem));
+        /* موج ۱ — سرصفهٔ فصل پیش از اولین رویداد هر فصل در جریان (هم در صفحهٔ اول، هم در append) */
+        const parts = [];
+        let lastCh = state.lastChapterId;
+        for (const e of state.events) {
+          if (e.chapterId && e.chapterId !== lastCh) {
+            const ch = (state.chapters ?? []).find((c) => c.id === e.chapterId);
+            if (ch) parts.push(chapterHeader(ch));
+            lastCh = e.chapterId;
+          }
+          parts.push(timelineItem(e));
+        }
+        state.lastChapterId = lastCh;
+        list.replaceChildren(...parts);
       }
       moreBtn.style.display = state.hasMore ? '' : 'none';
     }
@@ -591,9 +685,10 @@ export async function renderStudentProfile(container, ctx) {
             }, icon('plus', 15), 'ثبت رویداد پرونده')
           : null
       ),
-      el('div', { class: 'card__body' }, chips, list, moreBtn)
+      el('div', { class: 'card__body' }, rail, chips, list, moreBtn)
     ));
 
+    paintRail();
     if (state.events.length === 0) load(false);
     else paint();
   }
@@ -634,6 +729,7 @@ export async function renderStudentProfile(container, ctx) {
     },
       el('div', { class: 'tl-item__head' },
         el('span', { class: 'tl-item__title' }, e.title),
+        e.milestone ? el('span', { title: e.milestoneLabel ?? 'لحظهٔ کلیدی روایت پرونده', 'aria-label': 'لحظهٔ کلیدی' }, icon('star', 13)) : null, // موج ۱
         el('span', { class: 'tl-item__time' }, formatJalaliDateTime(e.at))
       ),
       e.subtitle ? el('div', { class: 'tl-item__sub' }, e.subtitle) : null,

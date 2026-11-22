@@ -1,9 +1,9 @@
 import { NotFoundError } from '@core/errors';
-import { FOLLOWUP_OPEN_STATUSES } from '@core/shared';
+import { FOLLOWUP_OPEN_STATUSES, faDigits } from '@core/shared';
 import type { AuthContext } from '@core/shared';
 import type { DbClient } from '@core/db';
 import { inParamChunks, inPlaceholders } from '@core/db/in-chunks'; // ۱.۲۵.۷۲ — دروازهٔ IN-list (بدهی ف۶ ⑧)
-import type { TimelineEvent, TimelineFilters, TimelineResult, StudentTimelineService } from './types';
+import type { TimelineChapter, TimelineEvent, TimelineFilters, TimelineResult, StudentTimelineService } from './types';
 import {
   appointmentEventState,
   deriveNextAction,
@@ -13,6 +13,7 @@ import {
   mergeTimelineEvents,
   paginateTimeline,
   parseCompositeRef,
+  periodizeTimeline,
   subtitleWith,
   CASE_STATUS_LABELS_FA,
   COMMITTEE_DECISION_LABELS_FA,
@@ -255,7 +256,8 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
           const changes = parseChanges(a.changes);
           const from = labelOf(CASE_STATUS_LABELS_FA, changes?.case_status?.from);
           const to = labelOf(CASE_STATUS_LABELS_FA, changes?.case_status?.to);
-          raw.push({ at: a.created_at, kind: 'case_status', title: 'وضعیت پرونده تغییر کرد', subtitle: `از «${from}» به «${to}»`, actor: actorOf(a.actor_id), ref: { type: 'student', id: studentId } });
+          /* موج ۱ — تغییر وضعیت پرونده یک «تصمیم» است: مرز review + لحظهٔ کلیدی */
+          raw.push({ at: a.created_at, kind: 'case_status', title: 'وضعیت پرونده تغییر کرد', subtitle: `از «${from}» به «${to}»`, actor: actorOf(a.actor_id), ref: { type: 'student', id: studentId }, boundary: 'review', milestone: true, milestoneLabel: `تغییر وضعیت پرونده: ${to}` });
         } else if (a.action === 'student.special_need.changed') {
           const changes = parseChanges(a.changes);
           const toType = changes?.special_need_type?.to;
@@ -342,11 +344,11 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
         const wl = wlById.get(wa.resource_id);
         const waited = wl ? waitDays(wl.created_at, wa.created_at) : null;
         if (wa.action === 'waitlist.waiting_set') {
-          raw.push({ at: wa.created_at, kind: 'waitlist', title: 'وارد لیست انتظار شد', subtitle: null, actor: actorOf(wa.actor_id), ref: { type: 'waitlist', id: wa.resource_id } });
+          raw.push({ at: wa.created_at, kind: 'waitlist', title: 'وارد لیست انتظار شد', subtitle: null, actor: actorOf(wa.actor_id), ref: { type: 'waitlist', id: wa.resource_id }, boundary: 'screening' });
         } else if (wa.action === 'waitlist.schedule') {
           raw.push({ at: wa.created_at, kind: 'waitlist', title: 'نوبت اول از لیست انتظار ثبت شد', subtitle: waited !== null ? `مدت انتظار: ${faDays(waited)}` : null, actor: actorOf(wa.actor_id), ref: { type: 'waitlist', id: wa.resource_id } });
         } else if (wa.action === 'waitlist.admitted') {
-          raw.push({ at: wa.created_at, kind: 'waitlist', title: 'پذیرش شد — پرونده فعال شد', subtitle: waited !== null ? `مدت انتظار: ${faDays(waited)}` : null, actor: null, ref: { type: 'waitlist', id: wa.resource_id } });
+          raw.push({ at: wa.created_at, kind: 'waitlist', title: 'پذیرش شد — پرونده فعال شد', subtitle: waited !== null ? `مدت انتظار: ${faDays(waited)}` : null, actor: null, ref: { type: 'waitlist', id: wa.resource_id }, boundary: 'assessment', milestone: true });
         }
       }
 
@@ -386,7 +388,10 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
               title: `تصمیم کمیسیون: ${toLabel}`,
               subtitle: `${ci.topic} · ${meetingLabel}`,
               actor: actorOf(ca.actor_id),
-              ref: { type: 'committee_item', id: ci.id }
+              ref: { type: 'committee_item', id: ci.id },
+              boundary: 'review', // موج ۱ — تصمیم کمیسیون مرز بازسنجی + لحظهٔ کلیدی
+              milestone: true,
+              milestoneLabel: `تصمیم کمیسیون: ${toLabel}`
             });
           } else {
             raw.push({
@@ -451,7 +456,8 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
             title: 'مسیر مداخله ساخته شد',
             subtitle: null,
             actor: actorOf(pa.actor_id),
-            ref: { type: 'clinical_path', id: pa.resource_id }
+            ref: { type: 'clinical_path', id: pa.resource_id },
+            boundary: 'plan' // موج ۱ — آغاز فاز طرح درمان
           });
         } else if (pa.action === 'clinical_path.decision') {
           const changes = parseChanges(pa.changes);
@@ -463,16 +469,23 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
             title: toLabel ? `تصمیم مسیر مداخله: ${toLabel}` : 'تصمیم مسیر مداخله',
             subtitle: changes?.reassess_at?.to ? 'بازسنجی ۴–۶ هفته برنامه‌ریزی شد' : null,
             actor: actorOf(pa.actor_id),
-            ref: { type: 'clinical_path', id: pa.resource_id }
+            ref: { type: 'clinical_path', id: pa.resource_id },
+            boundary: 'review', // موج ۱ — تصمیم مسیر مرز بازسنجی + لحظهٔ کلیدی
+            milestone: true,
+            ...(toLabel ? { milestoneLabel: `تصمیم مسیر مداخله: ${toLabel}` } : {})
           });
         }
       }
 
+      /* موج ۱ — نمونه‌های امتیاز رویدادها برای نوار روند فصل‌ها (نرمال به درصد) */
+      const scoreSamples: Array<{ at: string; pct: number }> = [];
       for (const ce of caseEvents) {
         const cancelled = ce.status === 'cancelled';
         const pending = ce.status === 'pending_family';
         // تشخیص پاسخ‌دهنده: معلمِ مقیدشده (teacher_name/teacher_binding) ≠ خانواده
         let informantName: string | null = null;
+        let milestone: boolean | undefined;
+        let milestoneLabel: string | undefined;
         try {
           const pp = ce.payload ? (JSON.parse(ce.payload) as Record<string, unknown>) : null;
           const tName = pp?.['teacher_name'];
@@ -485,6 +498,18 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
             const tb = pp['teacher_binding'] as { name?: unknown };
             if (typeof tb?.name === 'string' && tb.name.trim()) informantName = tb.name.trim();
           }
+          /* موج ۱ — وکسلر از دل case_events: مهم‌ترین سند ارزیابی اول‌بار در روایت سطح می‌گیرد
+             (طرح D §۳؛ شکل داده: wechsler-link.ts — engine_output.value = JSON با ok+profile.fsiq) */
+          const eo = pp?.['engine_output'];
+          const rawVal = eo && typeof eo === 'object' ? (eo as { value?: unknown }).value : eo;
+          if (typeof rawVal === 'string' && rawVal.includes('"fsiq"')) {
+            const eng = JSON.parse(rawVal) as { ok?: unknown; profile?: { fsiq?: number | null; fsiqBand?: string | null } | null };
+            if (eng?.ok && typeof eng.profile?.fsiq === 'number') {
+              milestone = true;
+              const band = eng.profile?.fsiqBand;
+              milestoneLabel = `نیم‌رخ وکسلر — FSIQ ${faDigits(String(eng.profile?.fsiq))}${band ? ` — ${band}` : ''}`;
+            }
+          }
         } catch { /* keep null */ }
         let subtitle: string | null = ce.summary;
         if (cancelled) subtitle = 'رویداد لغو شد';
@@ -492,7 +517,11 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
         else if (ce.analysis) {
           try {
             const an = JSON.parse(ce.analysis) as { score: number; band: string | null; total: number; maxScore?: number };
-            subtitle = `امتیاز ${an.score.toLocaleString('fa-IR')} از ${(an.maxScore ?? an.total * 3).toLocaleString('fa-IR')}${an.band ? ` — ${an.band}` : ''}`;
+            const max = an.maxScore ?? an.total * 3;
+            subtitle = `امتیاز ${an.score.toLocaleString('fa-IR')} از ${max.toLocaleString('fa-IR')}${an.band ? ` — ${an.band}` : ''}`;
+            if (max > 0 && typeof an.score === 'number') {
+              scoreSamples.push({ at: ce.occurred_at, pct: Math.max(0, Math.min(100, Math.round((100 * an.score) / max))) });
+            }
           } catch { /* keep summary */ }
         }
         raw.push({
@@ -501,15 +530,68 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
           title: `${ce.type_icon ?? ''} رویداد: ${ce.type_title}`.trim(),
           subtitle,
           actor: ce.filled_by_chat_id ? (informantName ? `معلم: ${informantName}` : 'خانواده') : ce.staff_name,
-          ref: { type: 'case_event', id: ce.id }
+          ref: { type: 'case_event', id: ce.id },
+          ...(milestone ? { milestone, milestoneLabel } : {})
         });
       }
 
       const merged = mergeTimelineEvents(raw);
-      const filtered = filterTimelineEvents(merged, filters);
+
+      /* ═══ موج ۱ — فصل‌بندی روایت پرونده (طرح D) ═══
+         periodizeTimeline خالص و قطعی است؛ جمع‌بندی هر فصل «آمار-و-نقل» از ردیف‌های
+         ساخت‌یافتهٔ همین فراخوانی است — هیچ SQL تازه‌ای اضافه نمی‌شود (تعهد موج ۱). */
+      const nowIso = new Date().toISOString();
+      const periods = periodizeTimeline(merged, { nowIso });
+      const chapterBounds = periods.map((p, i) => ({ from: p.from, to: i === periods.length - 1 ? nowIso : periods[i + 1].from }));
+      const chapterIdOf = (at: string): string | undefined => {
+        for (let i = chapterBounds.length - 1; i >= 0; i--) {
+          if (at >= chapterBounds[i].from && at <= chapterBounds[i].to) return periods[i].id;
+        }
+        return undefined;
+      };
+      const withCh: TimelineEvent[] = merged.map((e) => {
+        const cid = chapterIdOf(e.at);
+        return cid ? { ...e, chapterId: cid } : e;
+      });
+
+      const chapters: TimelineChapter[] = periods.map((p, i) => {
+        const { from, to } = chapterBounds[i];
+        const inCh = (at: string): boolean => at >= from && at <= to;
+        const apptsIn = appts.filter((a) => inCh(a.start_at));
+        const attended = apptsIn.filter((a) => a.status === 'scheduled' && (a.attendance === 'present' || a.attendance === 'late')).length;
+        const absent = apptsIn.filter((a) => a.attendance === 'absent').length;
+        const cancelledSessions = apptsIn.filter((a) => a.status === 'cancelled' || a.attendance === 'cancelled').length;
+        const pendingSessions = apptsIn.filter((a) => a.status === 'scheduled' && a.attendance === 'pending').length;
+        const exIn = exerciseAudits.filter((a) => inCh(a.created_at));
+        const evIn = withCh.filter((e) => e.chapterId === p.id);
+        const denom = attended + absent;
+        return {
+          ...p,
+          eventCount: evIn.length,
+          summary: {
+            sessions: attended,
+            attended,
+            absent,
+            cancelledSessions,
+            pendingSessions,
+            exercisesAssigned: exIn.filter((a) => a.action === 'exercise.assigned').length,
+            exercisesSubmitted: exIn.filter((a) => a.action === 'exercise.submitted').length,
+            exercisesCorrected: exIn.filter((a) => a.action === 'exercise.corrected').length,
+            followupsCreated: followupAudits.filter((a) => a.action === 'followup.created' && inCh(a.created_at)).length,
+            committeeDecisions: evIn.filter((e) => e.kind === 'committee' && e.milestone).length,
+            caseEvents: caseEvents.filter((c) => c.status !== 'cancelled' && inCh(c.occurred_at)).length,
+            milestones: evIn.filter((e) => e.milestone).length
+          },
+          trend: {
+            attendancePct: denom > 0 ? Math.round((100 * attended) / denom) : null,
+            scores: scoreSamples.filter((s) => inCh(s.at)).slice(-12)
+          }
+        };
+      });
+
+      const filtered = filterTimelineEvents(withCh, filters);
       const { page, hasMore } = paginateTimeline(filtered, filters.limit, filters.offset);
 
-      const nowIso = new Date().toISOString();
       const nextApptRow = appts
         .filter((a) => a.status === 'scheduled' && a.start_at > nowIso)
         .sort((a, b) => (a.start_at < b.start_at ? -1 : 1))[0] ?? null;
@@ -521,7 +603,7 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
         .map((f) => ({ id: f.id, title: f.title, dueAt: f.due_at }));
       const nextAction = deriveNextAction(nextAppt, openFus);
 
-      return { events: page, nextAction, hasMore };
+      return { events: page, nextAction, hasMore, chapters };
     }
   };
 }
