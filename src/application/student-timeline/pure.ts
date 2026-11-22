@@ -114,10 +114,17 @@ export function filterTimelineEvents(events: readonly TimelineEvent[], filters: 
   const validKinds = filters.kinds
     ? new Set<TimelineKind>(filters.kinds.filter((k): k is TimelineKind => (TIMELINE_KINDS as readonly string[]).includes(k)))
     : null;
+  /* موج ۲ — جست‌وجوی متنی روی title/subtitle/actor (همان سه فیلد نرمال سرور)؛
+     LIKE ساده با الگوی search/service.ts — بدون پرواز به متن کامل payload */
+  const q = filters.q?.trim().toLowerCase();
   return events.filter((e) => {
     if (filters.from && e.at < filters.from) return false;
     if (filters.to && e.at > filters.to) return false;
     if (validKinds && !validKinds.has(e.kind)) return false;
+    if (q) {
+      const hay = `${e.title ?? ''}\n${e.subtitle ?? ''}\n${e.actor ?? ''}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
     return true;
   });
 }

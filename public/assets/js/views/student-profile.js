@@ -158,6 +158,30 @@ export async function renderStudentProfile(container, ctx) {
      chunk مخصوص خودش دارد (import داینامیک در renderGamesTabContent) تا از بار پروفایل سبک بماند */
   const canSeeGames = session.user && ['manager', 'therapist'].includes(session.user.role);
 
+  /* موج ۲ — ابزارهای جلسه/پیگیری در سطح نما: هم برگهٔ جلسه (طرح B)، هم تب جلسات و خط زمانی از همین می‌خوانند */
+  const eventsOfAppt = (apptId) => caseEvents.filter((e) => e.appointmentId === apptId && e.status !== 'cancelled');
+  const noteApptIdSet = () => new Set(noteEvents.map((n) => (n.ref?.id ? String(n.ref.id).split('/')[0] : null)).filter(Boolean));
+  const isProfileOwner = () => Boolean(session.user?.staffId && student.ownerStaffId && student.ownerStaffId === session.user.staffId);
+  const canCompleteFollowup = () => session.user && ['manager', 'secretary', 'therapist'].includes(session.user.role);
+
+  /* موج ۲ — «ثبت نتیجه» روی صف پیگیری: PATCH موجود /api/followups/:id؛ حلقهٔ پیگیری بسته می‌شود */
+  async function completeFollowup(e) {
+    try {
+      await api.patch(`/api/followups/${e.ref?.id}`, { status: 'done' });
+      toast('پیگیری تکمیل شد', 'success');
+      if (await refreshEventsData()) { repaintChrome(); rerenderTabIf(['timeline', 'sessions']); }
+    } catch (err) {
+      toastError(err);
+    }
+  }
+
+  /* موج ۲ (طرح D §۳) — «جدیدها» فقط سمت کلاینت با seen-at محلی؛ صفر ریسک audit/حریم */
+  const seenKey = `cs.profile.seen.${id}`;
+  let seenAt = null;
+  try { seenAt = localStorage.getItem(seenKey); } catch { seenAt = null; }
+  const isNewEvent = (e) => Boolean(seenAt && e.at > seenAt);
+  setTimeout(() => { try { localStorage.setItem(seenKey, new Date().toISOString()); } catch { /* حالت خصوصی مرورگر */ } }, 5000);
+
   /* ۱.۱۵.۰ — دکمه‌های دایره‌ای سادهٔ اقدام، روی خودِ کارت پرونده (به‌جای کاوش در تب‌ها و منوها):
      ویرایش · برچسب‌ها · هدف‌ها · معلم · تاریخچهٔ تحصیلی · حذف — همیشه جلوی چشم.
      هر دکمه با الگوی واحد قفل مشغولی (lockBtn) در برابر اسپم/دوبارکلیک محفوظ است و
@@ -361,6 +385,15 @@ export async function renderStudentProfile(container, ctx) {
   auxPromise.then(() => {
     auxDone = true;
     repaintChrome();
+    /* موج ۲ (طرح B) — لندینگ نقش‌محور: فقط وقتی کاربر خودش تب درخواست نکرده و درمانگرِ مسئول
+       نوبت امروز/فردای نزدیک دارد، برگهٔ جلسه (تب جلسات) جای اطلاعات پایه می‌نشیند؛
+       دیپ‌لینک‌ها عیناً محترم‌اند. */
+    const nowMs = Date.now();
+    if (!requestedTab && !pendingTab && isProfileOwner()
+      && appointments.some((a) => a.status === 'scheduled' && Date.parse(a.startAt) > nowMs && Date.parse(a.startAt) - nowMs <= 2 * 86_400_000)) {
+      selectTab('sessions');
+      return;
+    }
     const target = pendingTab ?? activeTabKey;
     pendingTab = null;
     selectTab(target);
@@ -566,11 +599,31 @@ export async function renderStudentProfile(container, ctx) {
       loading: false,
       chapters: Array.isArray(timeline.chapters) ? timeline.chapters : [], // موج ۱ — فصل‌های کل خط زمانی
       range: null, // موج ۱ — نمای یک فصل با from/to سرور (پارامتر موجود)
-      lastChapterId: null // موج ۱ — سرصفهٔ فصل در append ادامه می‌یابد
+      lastChapterId: null, // موج ۱ — سرصفهٔ فصل در append ادامه می‌یابد
+      q: null // موج ۲ — جست‌وجوی متنی سرور-محور
     };
 
     const list = el('div', { class: 'tl-list' });
     const moreBtn = el('button', { class: 'btn btn--soft btn--sm', type: 'button', style: { marginTop: 'var(--sp-4)' }, onclick: (e) => { const btn = e.currentTarget; /* F1: currentTarget بعد از dispatch تهی می‌شود — پیش از کار ناهمگام گرفتارش کن */ btn.disabled = true; btn.setAttribute('aria-busy', 'true'); loadMore().finally(() => { btn.disabled = false; btn.removeAttribute('aria-busy'); }); } /* S4-23 */ }, icon('refresh', 15), 'نمایش رویدادهای بیشتر');
+    /* موج ۲ — جست‌وجوی متنی سرور-محور (طرح D §۳): q با debounce؛ گارد نسل همان F2 */
+    let searchTimer = 0;
+    const searchInput = el('input', {
+      class: 'input', type: 'search',
+      placeholder: 'جست‌وجو در روایت (عنوان، توضیح، ثبت‌کننده)…',
+      'aria-label': 'جست‌وجو در روایت پرونده',
+      style: { marginBottom: 'var(--sp-2)', maxWidth: '420px' },
+      oninput: (e) => {
+        clearTimeout(searchTimer);
+        const v = e.currentTarget.value.trim();
+        searchTimer = setTimeout(() => {
+          state.q = v.length >= 2 ? v : null;
+          state.offset = 0;
+          state.events = [];
+          load(false);
+        }, 300);
+      }
+    });
+
     const chips = el('div', { class: 'tl-filters' });
 
     for (const f of TIMELINE_FILTERS) {
@@ -630,6 +683,7 @@ export async function renderStudentProfile(container, ctx) {
       const query = { limit: TIMELINE_PAGE, offset: state.offset };
       if (f?.kinds) query.kinds = f.kinds;
       if (state.range) { query.from = state.range.from; query.to = state.range.to; }
+      if (state.q) query.q = state.q; // موج ۲
       try {
         const res = await api.get(`/api/students/${id}/timeline${qs(query)}`);
         if (myGen !== gen) return; // F2: پاسخ کهنه — فیلتر/صفحهٔ جدیدتری در پرواز است
@@ -658,11 +712,26 @@ export async function renderStudentProfile(container, ctx) {
           emptyState({ iconName: 'clock', title: 'رویدادی ثبت نشده', hint: 'با ثبت نوبت، گزارش جلسه، ارزیابی یا پیگیری، روایت پرونده اینجا ساخته می‌شود.' })
         );
       } else {
-        /* موج ۱ — سرصفهٔ فصل پیش از اولین رویداد هر فصل در جریان (هم در صفحهٔ اول، هم در append) */
+        /* موج ۱ — سرصفهٔ فصل پیش از اولین رویداد هر فصل در جریان (هم در صفحهٔ اول، هم در append)؛
+           موج ۲ — در «صف پیگیری» ترتیب سررسیدی حاکم است و سرصفه فصل نمی‌گیرد (نمای وظیفه‌محور) */
+        const queueMode = state.filter === 'followups';
+        let evs = state.events;
+        if (queueMode) {
+          const nowIso = new Date().toISOString();
+          evs = [...evs].sort((a, b) => {
+            const pr = (x) => (x.open && (!x.dueAt || x.dueAt < nowIso) ? 0 : x.open ? 1 : 2);
+            const pa = pr(a); const pb = pr(b);
+            if (pa !== pb) return pa - pb;
+            const da = a.dueAt ?? '9999-12-31T23:59:59.999Z';
+            const db = b.dueAt ?? '9999-12-31T23:59:59.999Z';
+            if (da !== db) return da < db ? -1 : 1;
+            return a.at > b.at ? -1 : 1;
+          });
+        }
         const parts = [];
         let lastCh = state.lastChapterId;
-        for (const e of state.events) {
-          if (e.chapterId && e.chapterId !== lastCh) {
+        for (const e of evs) {
+          if (!queueMode && e.chapterId && e.chapterId !== lastCh) {
             const ch = (state.chapters ?? []).find((c) => c.id === e.chapterId);
             if (ch) parts.push(chapterHeader(ch));
             lastCh = e.chapterId;
@@ -685,7 +754,7 @@ export async function renderStudentProfile(container, ctx) {
             }, icon('plus', 15), 'ثبت رویداد پرونده')
           : null
       ),
-      el('div', { class: 'card__body' }, rail, chips, list, moreBtn)
+      el('div', { class: 'card__body' }, rail, searchInput, chips, list, moreBtn)
     ));
 
     paintRail();
@@ -730,10 +799,20 @@ export async function renderStudentProfile(container, ctx) {
       el('div', { class: 'tl-item__head' },
         el('span', { class: 'tl-item__title' }, e.title),
         e.milestone ? el('span', { title: e.milestoneLabel ?? 'لحظهٔ کلیدی روایت پرونده', 'aria-label': 'لحظهٔ کلیدی' }, icon('star', 13)) : null, // موج ۱
+        isNewEvent(e) ? el('span', { class: 'badge badge--primary' }, 'جدید') : null, // موج ۲
         el('span', { class: 'tl-item__time' }, formatJalaliDateTime(e.at))
       ),
       e.subtitle ? el('div', { class: 'tl-item__sub' }, e.subtitle) : null,
       e.actor ? el('div', { class: 'tl-item__actor' }, `توسط ${e.actor}`) : null,
+      e.kind === 'followup' && e.open
+        ? el('div', { style: { marginTop: 'var(--sp-2)', display: 'flex', gap: 'var(--sp-2)', alignItems: 'center', flexWrap: 'wrap' } },
+            (e.dueAt && e.dueAt < new Date().toISOString())
+              ? el('span', { class: 'badge badge--error' }, 'سررسیده‌گذشته')
+              : el('span', { class: 'badge badge--warning' }, 'باز'),
+            canCompleteFollowup()
+              ? el('button', { class: 'btn btn--soft btn--sm', type: 'button', onclick: (ev2) => lockBtn(ev2.currentTarget, () => completeFollowup(e)) }, icon('check', 12), 'ثبت نتیجه')
+              : null)
+        : null, // موج ۲ — صف پیگیری اکشن‌محور (طرح B/E)
       isCaseEvent ? (() => {
         const ev = caseEvents.find((x) => x.id === e.ref?.id);
         if (!ev) return null;
@@ -751,6 +830,62 @@ export async function renderStudentProfile(container, ctx) {
     );
   }
 
+  /* موج ۲ (طرح B) — برگهٔ جلسه: پاسخ سه‌سؤالِ قبل از جلسه («از قبل چه گذشت / چه معلق است / جلسهٔ بعد کی»)
+     فقط از دادهٔ همین نما — صفر fetch تازه؛ بدون برگه معنادار، اصلاً رندر نمی‌شود (بدون placeholder) */
+  function buildSessionSheet() {
+    if (!canCreateCaseEvents()) return null;
+    const nowMs = Date.now();
+    const upcoming = appointments
+      .filter((a) => a.status === 'scheduled' && Date.parse(a.startAt) > nowMs)
+      .sort((a, b) => (a.startAt < b.startAt ? -1 : 1))[0] ?? null;
+    const notes = noteApptIdSet();
+    const missingReports = appointments
+      .filter((a) => a.status === 'scheduled' && Date.parse(a.startAt) <= nowMs && a.myAttendance !== 'cancelled'
+        && !notes.has(a.appointmentId) && eventsOfAppt(a.appointmentId).length === 0)
+      .sort((a, b) => (a.startAt > b.startAt ? -1 : 1)); // قدیمی‌ترین اول
+    const openFollowup = timeline.nextAction?.type === 'followup' ? timeline.nextAction : null;
+    if (!upcoming && missingReports.length === 0 && !openFollowup) return null;
+    const lastAppt = appointments
+      .filter((a) => Date.parse(a.startAt) <= nowMs && a.myAttendance !== 'cancelled' && a.myAttendance !== 'absent')
+      .sort((a, b) => (a.startAt > b.startAt ? -1 : 1))[0] ?? null;
+    const lastEvs = lastAppt ? eventsOfAppt(lastAppt.appointmentId) : [];
+    const strip = [];
+    if (openFollowup) {
+      const overdue = !openFollowup.at || Date.parse(openFollowup.at) < nowMs;
+      strip.push(el('button', {
+        class: 'chip', type: 'button',
+        title: 'مشاهده در خط زمانی (فیلتر پیگیری)',
+        onclick: () => { location.hash = `#/students/${id}?tab=timeline&filter=followups`; }
+      }, icon('bell', 13), overdue ? 'پیگیری سررسیده‌گذشته' : 'پیگیری باز', openFollowup.at ? el('span', { class: 'cell-sub' }, `— سررسید: ${formatJalaliDateTime(openFollowup.at)}`) : null));
+    }
+    if (missingReports.length > 0) {
+      strip.push(el('button', {
+        class: 'chip', type: 'button',
+        title: 'ثبت گزارش برای قدیمی‌ترین جلسهٔ بی‌گزارش',
+        onclick: () => openCaseEventForm({ student, appointmentId: missingReports[0].appointmentId, onSaved: onCaseEventSaved })
+      }, icon('file', 13), `${fa(missingReports.length)} جلسهٔ گذشتهٔ بی‌گزارش`));
+    }
+    const continueRow = lastAppt
+      ? el('div', { style: { display: 'flex', gap: 'var(--sp-2)', alignItems: 'center', flexWrap: 'wrap' } },
+          el('span', { class: 'cell-sub' }, `ادامه از جلسهٔ قبل — ${formatJalaliDateTime(lastAppt.startAt)}:`),
+          lastEvs.length > 0
+            ? el('button', { class: 'btn btn--soft btn--sm', onclick: () => openCaseEventDetail(lastEvs[0], { onChanged: onCaseEventSaved }) }, icon('eye', 13), `رویداد جلسهٔ قبل${lastEvs.length > 1 ? ` (${fa(lastEvs.length)})` : ''}`)
+            : el('span', { class: 'cell-sub' }, 'بدون رویداد ثبت‌شده'))
+      : null;
+    return el('div', { class: 'card', style: { border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: 'var(--sp-3)', marginBottom: 'var(--sp-4)' } },
+      el('div', { class: 'card__title', style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', fontSize: '14px' } }, icon('calendar', 15), upcoming ? 'برگهٔ جلسهٔ پیش رو' : 'برگهٔ جلسه'),
+      el('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-2)', marginTop: 'var(--sp-2)' } },
+        upcoming
+          ? el('div', { class: 'cell-sub' }, `جلسهٔ بعدی: ${formatJalaliDateTime(upcoming.startAt)}${upcoming.staffName ? ` — ${upcoming.staffName}` : ''}`)
+          : null,
+        continueRow,
+        strip.length > 0
+          ? el('div', { style: { display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap' } }, strip)
+          : el('div', { class: 'cell-sub' }, 'معلقی نیست — گزارش جلسات و پیگیری‌های این پرونده به‌روز است.')
+      )
+    );
+  }
+
   function renderSessionsTab(box) {
     const counts = { present: 0, absent: 0, pending: 0, cancelled: 0 };
     for (const a of appointments) counts[a.myAttendance] = (counts[a.myAttendance] ?? 0) + 1;
@@ -761,13 +896,8 @@ export async function renderStudentProfile(container, ctx) {
       el('span', { class: 'badge badge--warning' }, `${fa(counts.pending)} در انتظار`)
     );
 
-    const noteApptIds = new Set(
-      noteEvents
-        .map((n) => (n.ref?.id ? String(n.ref.id).split('/')[0] : null))
-        .filter(Boolean)
-    );
-    const eventsOfAppt = (apptId) => caseEvents.filter((e) => e.appointmentId === apptId && e.status !== 'cancelled');
     const canReport = canCreateCaseEvents();
+    const noteApptIds = noteApptIdSet(); // موج ۲ — منبع واحد با برگهٔ جلسه
 
     const reportCell = (a) => {
       const evs = eventsOfAppt(a.appointmentId);
@@ -807,6 +937,7 @@ export async function renderStudentProfile(container, ctx) {
             : null
         ),
         el('div', { class: 'card__body' },
+          buildSessionSheet(),
           statsBar,
           appointments.length === 0
             ? emptyState({ iconName: 'calendar', title: 'هنوز نوبتی ثبت نشده', hint: 'دفتر از «تقویم نوبت‌ها» و درمانگر از «تقویم من» می‌تواند نوبت ثبت کند.' })

@@ -55,7 +55,7 @@ describe('قرارداد فصل‌های روایت — کلاینت', () => {
   it('سرصفهٔ آمار-و-نقل هر فصل در جریان رویدادها (هم در append)', () => {
     expect(view).toContain('function chapterHeader(');
     expect(view).toContain('state.lastChapterId');
-    expect(view).toContain("el('div', { class: 'card__body' }, rail, chips, list, moreBtn)");
+    expect(view).toContain("el('div', { class: 'card__body' }, rail, searchInput, chips, list, moreBtn)"); // موج ۲: جست‌وجو هم نشست
   });
 
   it('ستارهٔ لحظهٔ کلیدی روی رویدادهای milestone', () => {

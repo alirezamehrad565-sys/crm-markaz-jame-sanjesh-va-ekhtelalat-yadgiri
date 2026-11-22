@@ -330,12 +330,14 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
       for (const fa of followupAudits) {
         const fu = fuById.get(fa.resource_id);
         if (!fu) continue;
+        /* موج ۲ — سررسید و باز/بسته روی رویداد پیگیری: بج «سررسیده» و صف اکشن‌محور کلاینت (طرح B/E) */
+        const open = (FOLLOWUP_OPEN_STATUSES as readonly string[]).includes(fu.status);
         if (fa.action === 'followup.created') {
-          raw.push({ at: fa.created_at, kind: 'followup', title: 'پیگیری ایجاد شد', subtitle: fu.title, actor: actorOf(fa.actor_id), ref: { type: 'followup', id: fu.id } });
+          raw.push({ at: fa.created_at, kind: 'followup', title: 'پیگیری ایجاد شد', subtitle: fu.title, actor: actorOf(fa.actor_id), ref: { type: 'followup', id: fu.id }, dueAt: fu.due_at, open });
         } else if (fa.action === 'followup.completed') {
-          raw.push({ at: fa.created_at, kind: 'followup', title: 'پیگیری تکمیل شد', subtitle: fu.title, actor: actorOf(fa.actor_id), ref: { type: 'followup', id: fu.id } });
+          raw.push({ at: fa.created_at, kind: 'followup', title: 'پیگیری تکمیل شد', subtitle: fu.title, actor: actorOf(fa.actor_id), ref: { type: 'followup', id: fu.id }, dueAt: fu.due_at, open });
         } else if (fa.action === 'followup.updated') {
-          raw.push({ at: fa.created_at, kind: 'followup', title: 'پیگیری به‌روزرسانی شد', subtitle: fu.title, actor: actorOf(fa.actor_id), ref: { type: 'followup', id: fu.id } });
+          raw.push({ at: fa.created_at, kind: 'followup', title: 'پیگیری به‌روزرسانی شد', subtitle: fu.title, actor: actorOf(fa.actor_id), ref: { type: 'followup', id: fu.id }, dueAt: fu.due_at, open });
         }
       }
 

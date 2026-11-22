@@ -63,6 +63,19 @@ describe('filterTimelineEvents — from/to/kinds', () => {
   it('بدون فیلتر = همه', () => {
     expect(filterTimelineEvents(events, {})).toHaveLength(3);
   });
+
+  it('موج ۲ — جست‌وجوی q روی title/subtitle/actor (متن فارسی و لاتین)', () => {
+    const evs = [
+      ev('2025-01-05T10:00:00Z', 'appointment', 'جلسه — حضور ثبت شد'),
+      Object.assign(ev('2025-02-05T10:00:00Z', 'case_event', 'رویداد: چک‌لیست', 'ce1'), { subtitle: 'تمرین تنفس', actor: 'معلم: سارا' }),
+      Object.assign(ev('2025-03-05T10:00:00Z', 'session_note', 'گزارش جلسه ثبت شد', 'n1'), { actor: 'دکتر رضایی' })
+    ];
+    expect(filterTimelineEvents(evs, { q: 'تنفس' }).map((x) => x.title)).toEqual(['رویداد: چک‌لیست']);
+    expect(filterTimelineEvents(evs, { q: 'رضا' })).toHaveLength(1);
+    expect(filterTimelineEvents(evs, { q: 'حضور' })).toHaveLength(1);
+    expect(filterTimelineEvents(evs, { q: '   ' })).toHaveLength(3); // فقط فاصله = بی‌فیلتر
+    expect(filterTimelineEvents(evs, { q: 'چیزی-که-نیست' })).toHaveLength(0);
+  });
 });
 
 describe('paginateTimeline', () => {

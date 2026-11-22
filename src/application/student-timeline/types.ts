@@ -35,6 +35,9 @@ export interface TimelineEvent {
   milestone?: boolean;
   milestoneLabel?: string;
   chapterId?: string;
+  /* موج ۲ — فقط رویدادهای پیگیری: سررسید و باز/بسته برای بج «سررسیده» و صف اکشن‌محور (طرح B/E) */
+  dueAt?: string | null;
+  open?: boolean;
 }
 
 /* موج ۱ — فصل‌های روایت پرونده: قطعی، بدون LLM و بدون ادعای بالینی (فقط آمار-و-نقل) */
@@ -84,6 +87,8 @@ export interface TimelineFilters {
   kinds?: TimelineKind[];
   limit?: number;
   offset?: number;
+  /* موج ۲ — جست‌وجوی متنی روی title/subtitle/actor (طرح D §۳؛ سرور بلااستفاده بود) */
+  q?: string;
 }
 
 export interface StudentTimelineDeps {
