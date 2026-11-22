@@ -1024,8 +1024,8 @@ body.is-login { background: var(--bg); }
 }
 
 .login__logo {
-  /* ۱.۲۷.۴۷ — لوگوی بزرگ‌تر (خواست کارفرما) — SVG کاشی‌دار؛ گردی از خود نشان می‌آید */
-  width: 96px; height: 96px; border-radius: 24px;
+  /* ۱.۲۷.۴۹ — لوگوی ورود کوچک‌تر (بازتنظیم به خواست کارفرما) */
+  width: 80px; height: 80px; border-radius: 20px;
   display: block;
   margin-inline: auto;
   animation: logo-in var(--dur-4) var(--ease-out) 80ms both; /* A17 */
