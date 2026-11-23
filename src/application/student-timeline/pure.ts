@@ -60,7 +60,7 @@ export interface AppointmentStateInput {
 
 /* ۱.۱۸.۰ — سیستم موازی «وضعیت عملیاتی» (آمد/نیامد/شروع و اتمام جلسه) حذف شد؛
    عنوان رویداد نوبت فقط از حضور و غیاب واقعی دانش‌آموز ساخته می‌شود. */
-export function appointmentEventState(a: AppointmentStateInput): { title: string; subtitle: string | null } {
+export function appointmentEventState(a: AppointmentStateInput, now: number = Date.now()): { title: string; subtitle: string | null } {
   const durationMin = Math.max(0, Math.round((Date.parse(a.endAt) - Date.parse(a.startAt)) / 60000));
   const who = null; // staffName در service اضافه می‌شود
   void who;
@@ -76,6 +76,10 @@ export function appointmentEventState(a: AppointmentStateInput): { title: string
   }
   if (a.attendance === 'present') {
     return { title: 'جلسه — حضور ثبت شد', subtitle: subtitleWith(null, `${faDigits(durationMin)} دقیقه`) };
+  }
+  /* ۱.۲۷.۵۹ — نقد پرونده: جلسهٔ گذشتهٔ بدون ثبت حضور، «در انتظار برگزاری» خوانده نمی‌شود */
+  if (Date.parse(a.startAt) < now) {
+    return { title: 'جلسه — حضور ثبت نشده', subtitle: subtitleWith(null, `${faDigits(durationMin)} دقیقه — برگزار شد، بدون ثبت حضور`) };
   }
   return { title: 'نوبت جلسه', subtitle: subtitleWith(null, `${faDigits(durationMin)} دقیقه — در انتظار برگزاری`) };
 }

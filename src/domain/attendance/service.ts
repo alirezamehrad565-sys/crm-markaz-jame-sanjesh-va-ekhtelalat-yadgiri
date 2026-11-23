@@ -18,7 +18,7 @@ export interface AttendanceService {
   mark(
     appointmentId: string,
     studentId: string,
-    status: 'present' | 'late' | 'absent' | 'cancelled',
+    status: 'present' | 'late' | 'absent' | 'cancelled' | 'pending',
     note: string | undefined,
     actor: AuthContext
   ): Promise<{ appointmentId: string; studentId: string; status: string }>;
@@ -36,8 +36,8 @@ export function createAttendanceService(deps: AttendanceDeps): AttendanceService
       observer = o;
     },
     async mark(appointmentId, studentId, status, note, actor) {
-      const row = await db.queryOne<{ appt_status: string; attendance: string; staff_id: string }>(
-        `SELECT a.status AS appt_status, s.attendance, a.staff_id
+      const row = await db.queryOne<{ appt_status: string; attendance: string; staff_id: string; start_at: string }>(
+        `SELECT a.status AS appt_status, s.attendance, a.staff_id, a.start_at
            FROM appointments a
            JOIN appointment_students s ON s.appointment_id = a.id
           WHERE a.id = ? AND s.student_id = ?`,
@@ -52,6 +52,11 @@ export function createAttendanceService(deps: AttendanceDeps): AttendanceService
       }
       if (row.appt_status === 'cancelled') {
         throw new ValidationError('ثبت حضور روی نوبت لغوشده مجاز نیست');
+      }
+      /* ۱.۲۷.۵۹ — گارد زمانی نقد پرونده: حضور فقط از دو ساعت پیش از شروع به بعد ثبت می‌شود؛
+         برگرداندن به «در انتظار» (اصلاح اشتباه) در هر زمانی مجاز است. */
+      if (status !== 'pending' && Date.parse(row.start_at) > Date.now() + 2 * 60 * 60 * 1000) {
+        throw new ValidationError('ثبت حضور پیش از برگزاری جلسه مجاز نیست — از دو ساعت پیش از شروع قابل ثبت است');
       }
 
       await db.transaction(async (tx) => {

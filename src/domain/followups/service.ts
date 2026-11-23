@@ -20,6 +20,7 @@ interface FollowUpRow {
   creator_name: string | null;
   due_at: string | null;
   status: string;
+  result: string | null;
   completed_at: string | null;
   created_at: string;
   updated_at: string;
@@ -39,6 +40,7 @@ function rowToFollowUp(row: FollowUpRow): FollowUp {
     createdByName: row.creator_name,
     dueAt: row.due_at,
     status: row.status as FollowUp['status'],
+    result: row.result,
     completedAt: row.completed_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at
@@ -52,7 +54,7 @@ const SELECT_BASE = `
          (st.first_name || ' ' || st.last_name) AS student_name,
          f.title, f.assignee_id, sa.full_name AS assignee_name,
          f.created_by, sc.full_name AS creator_name,
-         f.due_at, f.status, f.completed_at, f.created_at, f.updated_at
+         f.due_at, f.status, f.result, f.completed_at, f.created_at, f.updated_at
     FROM followups f
     LEFT JOIN students st ON st.id = f.student_id
     LEFT JOIN staff sa ON sa.id = f.assignee_id
@@ -138,6 +140,7 @@ export function createFollowUpsService(deps: FollowUpDeps): FollowUpsService {
       createdByName: null,
       dueAt,
       status: 'open',
+      result: null,
       completedAt: null,
       createdAt: nowIso,
       updatedAt: nowIso
@@ -249,6 +252,16 @@ export function createFollowUpsService(deps: FollowUpDeps): FollowUpsService {
             sets.push('due_at = ?');
             params.push(dueAt);
             changes.due_at = { from: row.due_at, to: dueAt };
+          }
+        }
+
+        /* ۱.۲۷.۵۹ — نقد پرونده: بستن پیگیری بدون ثبت نتیجه، نقص اثبات‌شده بود */
+        if (patch.result !== undefined) {
+          const result = patch.result.trim();
+          if (result !== (row.result ?? '')) {
+            sets.push('result = ?');
+            params.push(result === '' ? null : result);
+            changes.result = { from: row.result, to: result === '' ? null : result };
           }
         }
 

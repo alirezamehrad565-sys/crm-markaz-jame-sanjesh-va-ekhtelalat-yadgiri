@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.27.58";
+var APP_VERSION = "1.27.59";
 var NODE_MIN_VERSION = "1.26.0";
 
 // node_modules/zod/v4/classic/external.js
@@ -22857,7 +22857,7 @@ var CopyWeekSchema = external_exports.object({
   dry_run: external_exports.boolean().optional().default(false)
 });
 var MarkAttendanceSchema = external_exports.object({
-  status: external_exports.enum([ATTENDANCE_STATUS.PRESENT, ATTENDANCE_STATUS.LATE, ATTENDANCE_STATUS.ABSENT, ATTENDANCE_STATUS.CANCELLED]),
+  status: external_exports.enum([ATTENDANCE_STATUS.PENDING, ATTENDANCE_STATUS.PRESENT, ATTENDANCE_STATUS.LATE, ATTENDANCE_STATUS.ABSENT, ATTENDANCE_STATUS.CANCELLED]),
   note: external_exports.string().max(1e3).optional()
 });
 var GuardianPhoneSchema = external_exports.string().transform((v) => {
@@ -23336,10 +23336,11 @@ var NewFollowUpSchema = external_exports.object({
 var UpdateFollowUpSchema = external_exports.object({
   status: FollowUpStatusSchema.optional(),
   assignee_id: UuidSchema.optional(),
-  due_at: IsoDateTimeSchema.nullable().optional()
+  due_at: IsoDateTimeSchema.nullable().optional(),
+  result: external_exports.string().trim().max(500, "\u0646\u062A\u06CC\u062C\u0647\u0654 \u067E\u06CC\u06AF\u06CC\u0631\u06CC \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F5\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").optional()
 }).refine(
-  (v) => v.status !== void 0 || v.assignee_id !== void 0 || v.due_at !== void 0,
-  { message: "\u062D\u062F\u0627\u0642\u0644 \u06CC\u06A9\u06CC \u0627\u0632 \u0648\u0636\u0639\u06CC\u062A/\u0645\u0633\u0626\u0648\u0644/\u0645\u0647\u0644\u062A \u0628\u0627\u06CC\u062F \u0627\u0631\u0633\u0627\u0644 \u0634\u0648\u062F" }
+  (v) => v.status !== void 0 || v.assignee_id !== void 0 || v.due_at !== void 0 || v.result !== void 0,
+  { message: "\u062D\u062F\u0627\u0642\u0644 \u06CC\u06A9\u06CC \u0627\u0632 \u0648\u0636\u0639\u06CC\u062A/\u0645\u0633\u0626\u0648\u0644/\u0645\u0647\u0644\u062A/\u0646\u062A\u06CC\u062C\u0647 \u0628\u0627\u06CC\u062F \u0627\u0631\u0633\u0627\u0644 \u0634\u0648\u062F" }
 );
 var TodoPrioritySchema = external_exports.enum(TODO_PRIORITIES);
 var TodoStatusSchema = external_exports.enum(TODO_STATUSES);
@@ -27191,7 +27192,8 @@ function createAppointmentService(deps) {
       assertAppointmentScope(actor, current.staffId);
       await db.transaction(async (tx) => {
         const events = await tx.queryOne(
-          `SELECT COUNT(*) AS cnt FROM case_events WHERE appointment_id = ?`,
+          /* ۱.۲۷.۵۹ — رویدادهای حذف‌شده (deleted_at) مانع حذف نوبت نیستند */
+          `SELECT COUNT(*) AS cnt FROM case_events WHERE appointment_id = ? AND deleted_at IS NULL`,
           [id]
         );
         if ((events?.cnt ?? 0) > 0) {
@@ -27482,7 +27484,7 @@ function createAttendanceService(deps) {
     },
     async mark(appointmentId, studentId, status, note, actor) {
       const row = await db.queryOne(
-        `SELECT a.status AS appt_status, s.attendance, a.staff_id
+        `SELECT a.status AS appt_status, s.attendance, a.staff_id, a.start_at
            FROM appointments a
            JOIN appointment_students s ON s.appointment_id = a.id
           WHERE a.id = ? AND s.student_id = ?`,
@@ -27496,6 +27498,9 @@ function createAttendanceService(deps) {
       }
       if (row.appt_status === "cancelled") {
         throw new ValidationError("\u062B\u0628\u062A \u062D\u0636\u0648\u0631 \u0631\u0648\u06CC \u0646\u0648\u0628\u062A \u0644\u063A\u0648\u0634\u062F\u0647 \u0645\u062C\u0627\u0632 \u0646\u06CC\u0633\u062A");
+      }
+      if (status !== "pending" && Date.parse(row.start_at) > Date.now() + 2 * 60 * 60 * 1e3) {
+        throw new ValidationError("\u062B\u0628\u062A \u062D\u0636\u0648\u0631 \u067E\u06CC\u0634 \u0627\u0632 \u0628\u0631\u06AF\u0632\u0627\u0631\u06CC \u062C\u0644\u0633\u0647 \u0645\u062C\u0627\u0632 \u0646\u06CC\u0633\u062A \u2014 \u0627\u0632 \u062F\u0648 \u0633\u0627\u0639\u062A \u067E\u06CC\u0634 \u0627\u0632 \u0634\u0631\u0648\u0639 \u0642\u0627\u0628\u0644 \u062B\u0628\u062A \u0627\u0633\u062A");
       }
       await db.transaction(async (tx) => {
         await tx.execute(
@@ -29926,7 +29931,7 @@ function jalaliLabelOf(ymd) {
   return jalaliLabel(ymd);
 }
 __name(jalaliLabelOf, "jalaliLabelOf");
-function appointmentEventState(a) {
+function appointmentEventState(a, now = Date.now()) {
   const durationMin = Math.max(0, Math.round((Date.parse(a.endAt) - Date.parse(a.startAt)) / 6e4));
   const who = null;
   void who;
@@ -29941,6 +29946,9 @@ function appointmentEventState(a) {
   }
   if (a.attendance === "present") {
     return { title: "\u062C\u0644\u0633\u0647 \u2014 \u062D\u0636\u0648\u0631 \u062B\u0628\u062A \u0634\u062F", subtitle: subtitleWith(null, `${faDigits(durationMin)} \u062F\u0642\u06CC\u0642\u0647`) };
+  }
+  if (Date.parse(a.startAt) < now) {
+    return { title: "\u062C\u0644\u0633\u0647 \u2014 \u062D\u0636\u0648\u0631 \u062B\u0628\u062A \u0646\u0634\u062F\u0647", subtitle: subtitleWith(null, `${faDigits(durationMin)} \u062F\u0642\u06CC\u0642\u0647 \u2014 \u0628\u0631\u06AF\u0632\u0627\u0631 \u0634\u062F\u060C \u0628\u062F\u0648\u0646 \u062B\u0628\u062A \u062D\u0636\u0648\u0631`) };
   }
   return { title: "\u0646\u0648\u0628\u062A \u062C\u0644\u0633\u0647", subtitle: subtitleWith(null, `${faDigits(durationMin)} \u062F\u0642\u06CC\u0642\u0647 \u2014 \u062F\u0631 \u0627\u0646\u062A\u0638\u0627\u0631 \u0628\u0631\u06AF\u0632\u0627\u0631\u06CC`) };
 }
@@ -34146,6 +34154,7 @@ function rowToFollowUp(row) {
     createdByName: row.creator_name,
     dueAt: row.due_at,
     status: row.status,
+    result: row.result,
     completedAt: row.completed_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at
@@ -34158,7 +34167,7 @@ var SELECT_BASE2 = `
          (st.first_name || ' ' || st.last_name) AS student_name,
          f.title, f.assignee_id, sa.full_name AS assignee_name,
          f.created_by, sc.full_name AS creator_name,
-         f.due_at, f.status, f.completed_at, f.created_at, f.updated_at
+         f.due_at, f.status, f.result, f.completed_at, f.created_at, f.updated_at
     FROM followups f
     LEFT JOIN students st ON st.id = f.student_id
     LEFT JOIN staff sa ON sa.id = f.assignee_id
@@ -34236,6 +34245,7 @@ function createFollowUpsService(deps) {
       createdByName: null,
       dueAt,
       status: "open",
+      result: null,
       completedAt: null,
       createdAt: nowIso2,
       updatedAt: nowIso2
@@ -34336,6 +34346,14 @@ function createFollowUpsService(deps) {
             changes.due_at = { from: row.due_at, to: dueAt };
           }
         }
+        if (patch.result !== void 0) {
+          const result = patch.result.trim();
+          if (result !== (row.result ?? "")) {
+            sets.push("result = ?");
+            params.push(result === "" ? null : result);
+            changes.result = { from: row.result, to: result === "" ? null : result };
+          }
+        }
         const statusChanged = newStatus !== status;
         if (statusChanged) {
           sets.push("status = ?");
@@ -34422,7 +34440,8 @@ function registerFollowUpRoutes(app, service) {
       {
         status: body.status,
         assigneeId: body.assignee_id,
-        dueAt: body.due_at === void 0 ? void 0 : body.due_at
+        dueAt: body.due_at === void 0 ? void 0 : body.due_at,
+        result: body.result
       },
       actor
     );

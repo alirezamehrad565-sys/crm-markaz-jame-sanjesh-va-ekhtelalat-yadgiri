@@ -866,6 +866,7 @@ export interface FollowUp {
   createdByName: string | null;
   dueAt: string | null;
   status: FollowUpStatus;
+  result: string | null;
   completedAt: string | null;
   createdAt: string;
   updatedAt: string;

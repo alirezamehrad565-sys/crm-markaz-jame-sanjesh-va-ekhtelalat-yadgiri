@@ -209,7 +209,7 @@ export const CopyWeekSchema = z.object({
 });
 
 export const MarkAttendanceSchema = z.object({
-  status: z.enum([ATTENDANCE_STATUS.PRESENT, ATTENDANCE_STATUS.LATE, ATTENDANCE_STATUS.ABSENT, ATTENDANCE_STATUS.CANCELLED]),
+  status: z.enum([ATTENDANCE_STATUS.PENDING, ATTENDANCE_STATUS.PRESENT, ATTENDANCE_STATUS.LATE, ATTENDANCE_STATUS.ABSENT, ATTENDANCE_STATUS.CANCELLED]),
   note: z.string().max(1000).optional()
 });
 
@@ -877,11 +877,12 @@ export const UpdateFollowUpSchema = z
   .object({
     status: FollowUpStatusSchema.optional(),
     assignee_id: UuidSchema.optional(),
-    due_at: IsoDateTimeSchema.nullable().optional()
+    due_at: IsoDateTimeSchema.nullable().optional(),
+    result: z.string().trim().max(500, 'نتیجهٔ پیگیری حداکثر ۵۰۰ نویسه است').optional()
   })
   .refine(
-    (v) => v.status !== undefined || v.assignee_id !== undefined || v.due_at !== undefined,
-    { message: 'حداقل یکی از وضعیت/مسئول/مهلت باید ارسال شود' }
+    (v) => v.status !== undefined || v.assignee_id !== undefined || v.due_at !== undefined || v.result !== undefined,
+    { message: 'حداقل یکی از وضعیت/مسئول/مهلت/نتیجه باید ارسال شود' }
   );
 
 export const TodoPrioritySchema = z.enum(TODO_PRIORITIES);

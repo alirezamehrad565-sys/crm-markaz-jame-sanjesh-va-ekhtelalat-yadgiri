@@ -442,7 +442,8 @@ export function createAppointmentService(deps: AppointmentDeps): AppointmentServ
 
       await db.transaction(async (tx) => {
         const events = await tx.queryOne<{ cnt: number }>(
-          `SELECT COUNT(*) AS cnt FROM case_events WHERE appointment_id = ?`,
+          /* ۱.۲۷.۵۹ — رویدادهای حذف‌شده (deleted_at) مانع حذف نوبت نیستند */
+          `SELECT COUNT(*) AS cnt FROM case_events WHERE appointment_id = ? AND deleted_at IS NULL`,
           [id]
         );
         if ((events?.cnt ?? 0) > 0) {

@@ -54,7 +54,8 @@ export function registerFollowUpRoutes(app: AppHono, service: FollowUpsService):
       {
         status: body.status,
         assigneeId: body.assignee_id,
-        dueAt: body.due_at === undefined ? undefined : body.due_at
+        dueAt: body.due_at === undefined ? undefined : body.due_at,
+        result: body.result
       },
       actor
     );
