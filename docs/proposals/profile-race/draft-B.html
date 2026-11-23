@@ -1,0 +1,555 @@
+<!doctype html>
+<html dir="rtl" lang="fa">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>طرح B — خط مونتاژ گام‌های درمان — وایرفریم (دسکتاپ ۱۴۴۰ + موبایل ۳۹۰)</title>
+<style>
+  :root{
+    --paper:#f3eee5; --canvas:#f7f3ec; --card:#fffdf8; --line:#e6dccd; --line2:#d9cfc0;
+    --ink:#2b2620; --sub:#847868; --rail:#cdbfa9;
+    --brand:#14606f; --brandsoft:#e3eef1; --brandline:#b7d3da;
+    --ok:#2f7d3b; --oksoft:#e7f2e9; --okline:#bcd9c1;
+    --warn:#a4611a; --warnsoft:#fbf1df; --warnline:#ecd6b0;
+    --danger:#a8342c; --dangersoft:#fae9e7;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font:13px/1.7 Vazirmatn,Vazir,Tahoma,"Segoe UI",sans-serif}
+  .dochead{max-width:1180px;margin:26px auto 6px;padding:0 18px}
+  .dochead h1{font-size:21px;margin:0 0 6px}
+  .dochead p{margin:0;color:var(--sub)}
+  .canvaslabel{max-width:1500px;margin:26px auto 10px;padding:0 18px;font-weight:700;color:var(--brand);display:flex;align-items:center;gap:8px}
+  .canvaslabel::after{content:"";flex:1;border-top:1px dashed var(--line2)}
+  .frame{max-width:1500px;margin:0 auto 8px;padding:0 18px;overflow-x:auto}
+  .canvas{background:var(--canvas);border:1px solid var(--line2);border-radius:16px;overflow:hidden;box-shadow:0 10px 30px rgba(60,48,30,.08)}
+  .canvas--desktop{width:1440px}
+  .canvas--mobile{width:390px;max-width:100%;margin:0 auto;border-radius:26px}
+
+  /* ───── اجزای مشترک ───── */
+  .appbar{display:flex;align-items:center;justify-content:space-between;padding:7px 16px;background:#fbf8f2;border-bottom:1px solid var(--line);color:var(--sub);font-size:11px}
+  .chip{display:inline-flex;align-items:center;gap:5px;background:#fff;border:1px solid var(--line);border-radius:999px;padding:2px 10px;font-size:11px;color:var(--sub)}
+  .chip--brand{background:var(--brandsoft);border-color:var(--brandline);color:var(--brand)}
+  .b{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line);background:#fff;border-radius:999px;padding:1px 9px;font-size:11px;color:var(--sub);white-space:nowrap}
+  .b--ok{background:var(--oksoft);border-color:var(--okline);color:var(--ok)}
+  .b--warn{background:var(--warnsoft);border-color:var(--warnline);color:var(--warn)}
+  .b--danger{background:var(--dangersoft);border-color:#ecc4bf;color:var(--danger)}
+  .b--brand{background:var(--brandsoft);border-color:var(--brandline);color:var(--brand)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px}
+  .btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:#fff;border-radius:9px;padding:5px 12px;font:inherit;font-size:12px;color:var(--ink);white-space:nowrap}
+  .btn--primary{background:var(--brand);border-color:var(--brand);color:#fff}
+  .btn--ghost{background:transparent;border-color:transparent;color:var(--brand);text-decoration:underline;text-underline-offset:3px}
+  .btn--sm{padding:3px 9px;font-size:11px}
+  .sub{color:var(--sub);font-size:11px}
+  .meter{height:6px;border-radius:999px;background:#ece5d8;overflow:hidden;display:block}
+  .meter i{display:block;height:100%;border-radius:999px;background:var(--brand)}
+  .meter--ok i{background:var(--ok)}
+  .note{border:1px dashed var(--warnline);background:#fdf9ef;color:#8a6a35;border-radius:10px;padding:7px 12px;font-size:11px}
+  .h-empty{color:var(--sub);font-size:11px;font-style:normal;border:1px dashed var(--line2);border-radius:8px;padding:4px 9px;display:inline-block;background:#faf7f0}
+
+  /* ───── نوار هویت ───── */
+  .idbar{position:sticky;top:0;z-index:6;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 16px;background:#fffdf8;border-bottom:1px solid var(--line)}
+  .avatar{width:40px;height:40px;border-radius:12px;background:var(--brandsoft);border:1px solid var(--brandline);color:var(--brand);display:flex;align-items:center;justify-content:center;font-weight:700;flex:0 0 auto}
+  .idname{font-weight:800;font-size:15px}
+  .idmeta{color:var(--sub);font-size:11px}
+  .idsp{flex:1}
+  .menubtn{position:relative;display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:#fff;border-radius:9px;padding:5px 12px;font-size:12px}
+  .menufly{position:absolute;top:calc(100% + 6px);left:0;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 24px rgba(60,48,30,.14);padding:6px;min-width:220px;text-align:right;display:none}
+  .menubtn:focus .menufly,.menubtn:focus-within .menufly{display:block}
+  .menufly div{padding:6px 10px;border-radius:7px;font-size:12px;white-space:nowrap}
+  .menufly div:hover{background:var(--brandsoft)}
+  .menufly .sep{border-top:1px dashed var(--line);margin:4px 2px;padding:0}
+  .menufly .danger{color:var(--danger)}
+  .menufly span{float:left;color:var(--sub);font-size:10px}
+
+  /* ───── خط درمان ───── */
+  .linebox{padding:14px 16px 4px}
+  .linehead{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:10px;flex-wrap:wrap}
+  .linetitle{font-size:17px;font-weight:800;margin:0}
+  .linemeta{color:var(--sub);font-size:11px;margin-top:2px}
+  .linetools{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .rail{display:flex;align-items:flex-start;overflow-x:auto;padding:4px 2px 14px;position:relative}
+  .joint{flex:0 0 24px;position:relative;align-self:stretch;min-height:64px}
+  .joint::before{content:"";position:absolute;top:24px;right:0;left:0;border-top:2px solid var(--rail)}
+  .joint::after{content:"◀";position:absolute;top:17px;left:0;font-size:10px;color:var(--rail)}
+  .stop{flex:0 0 auto;width:186px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:9px 11px;margin-top:0;min-width:0}
+  .stop h4{margin:0 0 4px;font-size:12.5px;line-height:1.5}
+  .stop .stepno{color:var(--sub);font-size:10.5px;display:flex;align-items:center;gap:5px;margin-bottom:4px}
+  .dot{width:9px;height:9px;border-radius:99px;display:inline-block;flex:0 0 auto}
+  .dot--ok{background:var(--ok)} .dot--live{background:var(--brand);box-shadow:0 0 0 3px var(--brandsoft)} .dot--q{background:#cfc5b3}
+  .crit{font-size:11px;color:var(--sub);margin:3px 0 5px}
+  .stopfoot{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;align-items:center}
+  .stop--judge{width:252px;border-right:3px solid var(--brand)}
+  .stop--goal{width:208px;border-right:3px solid var(--ok)}
+  .stop--out{width:168px;border-style:dashed}
+  .stop--done{opacity:.82}
+  .stop--q{border-style:dashed;background:#faf6ee;color:#6d6250}
+  .stop--live{width:322px;border-color:var(--brand);box-shadow:0 0 0 3px var(--brandsoft);margin-top:-4px}
+  .stationsmini{display:flex;gap:5px;flex-wrap:wrap;margin-top:7px}
+  .statmini{font-size:10.5px;border:1px solid var(--line);border-radius:8px;padding:2px 8px;background:#fff;color:var(--sub)}
+  .statmini.done{border-color:var(--okline);background:var(--oksoft);color:var(--ok)}
+  .statmini.todo{border-color:var(--brandline);background:var(--brandsoft);color:var(--brand)}
+  .secondpath{display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-top:1px dashed var(--line);padding:8px 2px 4px;color:var(--sub);font-size:11.5px}
+  .warnbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--warnsoft);border:1px solid var(--warnline);border-radius:10px;padding:6px 12px;margin-top:10px;font-size:11.5px;color:var(--warn)}
+
+  /* ───── کارت گام فعال ───── */
+  .activecard{margin:2px 16px 0;padding:12px 14px;position:relative}
+  .activecard::before{content:"";position:absolute;top:-12px;right:1065px;width:2px;height:12px;background:var(--brand)}
+  .ac-head{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:9px}
+  .ac-head h3{margin:0;font-size:14px}
+  .stgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+  .station{border:1px solid var(--line);border-radius:10px;padding:9px 11px;background:#fbf8f2}
+  .station h5{margin:0 0 5px;font-size:12px;display:flex;gap:6px;align-items:center}
+  .station ul{margin:0;padding:0;list-style:none;font-size:11px;color:var(--ink)}
+  .station li{padding:2px 0;display:flex;gap:6px;align-items:baseline;flex-wrap:wrap}
+  .btnrow{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}
+
+  /* ───── کشوها ───── */
+  .drawers{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin:14px 16px 6px}
+  details.drw{background:var(--card);border:1px solid var(--line);border-radius:12px;min-width:0}
+  details.drw summary{cursor:pointer;padding:9px 12px;font-weight:700;font-size:12px;display:flex;align-items:center;gap:7px;list-style:none}
+  details.drw summary::-webkit-details-marker{display:none}
+  details.drw summary::after{content:"▾";color:var(--sub);margin-right:auto}
+  details.drw[open] summary::after{content:"▴"}
+  .drwbody{padding:2px 12px 11px;font-size:11.5px;border-top:1px dashed var(--line)}
+  .row{display:flex;gap:8px;align-items:baseline;padding:4px 0;border-bottom:1px dotted #eee3d2;flex-wrap:wrap}
+  .row:last-child{border-bottom:0}
+  .row .k{color:var(--sub);font-size:11px;flex:0 0 auto}
+
+  /* ───── یادداشت‌های طراح ───── */
+  .notes{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:10px 16px 16px}
+  .notes .note{color:#7c6438}
+  .notes b{display:block;margin-bottom:3px}
+
+  /* ───── موبایل ───── */
+  .m-appbar{display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:#fbf8f2;border-bottom:1px solid var(--line)}
+  .m-idbar{display:flex;gap:10px;align-items:center;padding:10px 14px;background:#fffdf8;border-bottom:1px solid var(--line)}
+  .m-idbar .avatar{width:36px;height:36px}
+  .m-pos{position:sticky;top:0;z-index:6;display:flex;align-items:center;gap:8px;padding:7px 14px;background:var(--brandsoft);border-bottom:1px solid var(--brandline);font-size:11.5px;color:var(--brand);font-weight:700}
+  .m-dots{display:flex;gap:4px;margin-right:auto}
+  .m-dots i{width:7px;height:7px;border-radius:99px;background:#b7d3da;display:block}
+  .m-dots i.on{background:var(--brand)} .m-dots i.done{background:var(--ok)}
+  .vrail{padding:12px 14px 6px;display:flex;flex-direction:column}
+  .vstop{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:9px 12px}
+  .vstop--done{opacity:.85}
+  .vstop--q{border-style:dashed;background:#faf6ee;color:#6d6250}
+  .vstop--live{border-color:var(--brand);box-shadow:0 0 0 3px var(--brandsoft)}
+  .vjoint{width:2px;height:14px;background:var(--rail);margin-right:26px}
+  .vcta{position:sticky;bottom:0;background:#fffdf8;border-top:1px solid var(--line);padding:9px 14px;display:flex;gap:8px}
+  .vcta .btn{flex:1;justify-content:center}
+  .m-drawers{display:flex;flex-direction:column;gap:9px;margin:12px 14px 14px}
+  .m-notes{margin:0 14px 16px;display:flex;flex-direction:column;gap:8px}
+
+  /* واکنش‌گرایی صفحهٔ سند (نه بوم‌ها) */
+  @media (max-width:900px){
+    .stgrid{grid-template-columns:1fr}
+    .drawers{grid-template-columns:repeat(2,1fr)}
+    .notes{grid-template-columns:1fr}
+    .activecard::before{display:none}
+  }
+  @media (max-width:640px){
+    .drawers{grid-template-columns:1fr}
+    .idbar{flex-wrap:wrap}
+    .activecard{margin:2px 12px 0}
+    .drawers,.notes{margin:10px 12px 6px}
+  }
+</style>
+</head>
+<body>
+
+<div class="dochead">
+  <h1>طرح B — «خط مونتاژ گام‌های درمان» · وایرفریم بدون JS</h1>
+  <p>دادهٔ نمونهٔ بریف: علی محمدی، ۱۵ سال و ۵ ماه، پنجم دبستان · درمانگر: مریم احمدی · هدف درمانی نهایی: «بهبود روخوانی» · مسیر فعال: «دقت شنیداری — گام ۳ از ۸». واژهٔ «خط مونتاژ» زبان طراحی است؛ در UI: «مسیر مداخله».</p>
+</div>
+
+<div class="canvaslabel">نمای دسکتاپ — عرض ۱۴۴۰</div>
+<div class="frame">
+<div class="canvas canvas--desktop">
+
+  <div class="appbar">
+    <span>مرکز جامع سنجش، آموزش‌های توانبخشی و مداخلات بهینهم</span>
+    <span style="display:flex;gap:6px;align-items:center">
+      <span class="chip chip--brand">نمای درمانگر — مریم احمدی</span>
+      <span class="chip">تم روشن / تیره</span>
+    </span>
+  </div>
+
+  <header class="idbar">
+    <div class="avatar">۴</div>
+    <div>
+      <div class="idname">علی محمدی <span class="sub">— ۱۵ سال و ۵ ماه · پنجم دبستان</span></div>
+      <div class="idmeta">درمانگر: مریم احمدی · مسئول پرونده: دکتر ستایش مطهری · مسیر پرونده: درمان</div>
+    </div>
+    <div class="idsp"></div>
+    <span class="b b--ok">فعال</span>
+    <span class="b">۴ جلسه ثبت‌شده</span>
+    <span class="b b--warn">۱ پیگیری عقب‌افتاده</span>
+    <span class="b b--warn">مدارک: ۲ سند مانده</span>
+    <div class="menubtn" tabindex="0">⋯ اقدامات برچسب‌دار
+      <div class="menufly">
+        <div>ثبت گزارش قطعی <span>سه واریانت + چاپ A4</span></div>
+        <div>ویرایش اطلاعات پایه <span>کشوی شناسنامه</span></div>
+        <div>انتقال مسئولیت <span>مدیر</span></div>
+        <div>ارسال گزارش به معلم مدرسه</div>
+        <div>درخواست/ثبت مدارک <span>با بله</span></div>
+        <div class="sep"></div>
+        <div class="danger">حذف پرونده <span>ته منو</span></div>
+      </div>
+    </div>
+  </header>
+
+  <section class="linebox">
+    <div class="linehead">
+      <div>
+        <h2 class="linetitle">مسیر مداخلهٔ فعال: دقت شنیداری</h2>
+        <div class="linemeta">هدف درمانی نهایی: بهبود روخوانی — تأییدشده ۱۴۰۵/۰۷/۲۴ · گام ۳ از ۸ · معیار پیشرفت روی خود خط می‌خوانیم، نه از شمارش جلسه</div>
+      </div>
+      <div class="linetools">
+        <span class="chip">◀ ▶ پیمایش خط</span>
+        <span class="btn btn--sm">برو به گام جاری</span>
+        <span class="btn btn--sm">کشوی تفسیر کامل</span>
+      </div>
+    </div>
+
+    <div class="rail">
+      <!-- سر خط: قضاوت بالینی -->
+      <div class="stop stop--judge">
+        <div class="stepno"><span class="dot dot--live"></span> سرِ خط — قضاوت بالینی</div>
+        <h4>نارساخوانی تحولی — ضعف پردازش شنیداری</h4>
+        <div class="crit">اطمینان: بالا · امتیاز شواهد: ۱۷ · هم‌گرایی منابع: هم‌گرا</div>
+        <div class="crit">ملاک‌ها: ۴ از ۷ برآورده · شرح‌حال: ثبت‌شده ۱۴۰۵/۰۷/۲۰ · وکسلر: FSIQ ۱۰۲</div>
+        <div class="stopfoot"><span class="btn btn--sm btn--ghost">بازکردن تفسیر کامل</span><span class="b b--brand">مسیر از همین‌جا ساخته شد</span></div>
+      </div>
+      <div class="joint"></div>
+      <!-- هدف -->
+      <div class="stop stop--goal">
+        <div class="stepno"><span class="dot dot--ok"></span> هدف درمانی نهایی</div>
+        <h4>بهبود روخوانی</h4>
+        <div class="crit">روخوانی متن پایهٔ دوم با روانی قابل‌قبول تا پایان دوره (SMART ثبت‌شده)</div>
+        <div class="stopfoot"><span class="b b--ok">تأییدشده</span></div>
+      </div>
+      <div class="joint"></div>
+      <!-- گام ۱ -->
+      <div class="stop stop--done">
+        <div class="stepno"><span class="dot dot--ok"></span> گام ۱ — انجام‌شده</div>
+        <h4>تمایز شنیداری کلمات متضاد</h4>
+        <div class="crit">معیار: ۸۰٪ پاسخ درست در دو جلسهٔ متوالی — برآورده ۱۴۰۵/۰۸/۰۹</div>
+        <div class="stopfoot"><span class="b b--ok">گزارش گام ✓</span><span class="b">۲ جلسه</span></div>
+      </div>
+      <div class="joint"></div>
+      <!-- گام ۲ -->
+      <div class="stop stop--done">
+        <div class="stepno"><span class="dot dot--ok"></span> گام ۲ — انجام‌شده</div>
+        <h4>تمایز در کلمات هم‌آوا</h4>
+        <div class="crit">معیار: ۷۵٪ پاسخ درست — برآورده ۱۴۰۵/۰۸/۱۸</div>
+        <div class="stopfoot"><span class="b b--ok">گزارش گام ✓</span><span class="b">۲ جلسه</span></div>
+      </div>
+      <div class="joint"></div>
+      <!-- گام ۳ فعال -->
+      <div class="stop stop--live">
+        <div class="stepno"><span class="dot dot--live"></span> گام ۳ — گام جاری</div>
+        <h4>تشخیص صدای هدف در شلوغی</h4>
+        <div class="crit">معیار: پاسخ درست ≥۷۰٪ در دو جلسهٔ متوالی — جلسهٔ اول: ۶۲٪</div>
+        <span class="meter"><i style="width:62%"></i></span>
+        <div class="crit" style="margin-top:5px">جلسهٔ بعد این گام: سه‌شنبه ۱۴۰۵/۰۹/۰۴ — ۱۶:۰۰ · مریم احمدی</div>
+        <div class="stationsmini">
+          <span class="statmini done">آماده‌سازی ✓</span>
+          <span class="statmini">حضور ◔</span>
+          <span class="statmini todo">ثبت گزارش — مانده</span>
+          <span class="statmini">پیگیری</span>
+        </div>
+        <div class="stopfoot"><span class="btn btn--sm btn--primary">ثبت گزارش همین گام</span><span class="b b--warn">۱ گزارش عقب‌مانده</span></div>
+      </div>
+      <div class="joint"></div>
+      <!-- گام ۴..۸ -->
+      <div class="stop stop--q">
+        <div class="stepno"><span class="dot dot--q"></span> گام ۴ — در صف</div>
+        <h4>تمایز صدای هدف میان نویز پس‌زمینه</h4>
+        <div class="crit">معیار: ۷۰٪ در دو جلسهٔ متوالی</div>
+      </div>
+      <div class="joint"></div>
+      <div class="stop stop--q">
+        <div class="stepno"><span class="dot dot--q"></span> گام ۵ — در صف</div>
+        <h4>توالی صدایی ۳ تا ۴ بیت</h4>
+        <div class="crit">معیار: ترتیب درست ۴ توالی از ۵</div>
+      </div>
+      <div class="joint"></div>
+      <div class="stop stop--q">
+        <div class="stepno"><span class="dot dot--q"></span> گام ۶ — در صف</div>
+        <h4>تمایز در واژه‌های بلندتر</h4>
+        <div class="crit">معیار: ۷۵٪ پاسخ درست</div>
+      </div>
+      <div class="joint"></div>
+      <div class="stop stop--q">
+        <div class="stepno"><span class="dot dot--q"></span> گام ۷ — در صف</div>
+        <h4>تعمیم به خواندن بلند</h4>
+        <div class="crit">معیار: کمتر از ۳ خطای شنیداری در یک صفحهٔ خواندنی</div>
+      </div>
+      <div class="joint"></div>
+      <div class="stop stop--q">
+        <div class="stepno"><span class="dot dot--q"></span> گام ۸ — در صف</div>
+        <h4>تثبیت و سنجش پایانی گام</h4>
+        <div class="crit">معیار: حفظ ملاک در بازسنجی کوتاه</div>
+      </div>
+      <div class="joint"></div>
+      <!-- خروجی خط -->
+      <div class="stop stop--out">
+        <div class="stepno"><span class="dot dot--q"></span> انتهای خط</div>
+        <h4>بازسنجی و تصمیم دوره</h4>
+        <div class="crit">قفل تا اتمام گام ۸ — پس از بازسنجی: ادامه / تغییر مسیر / صدور گزارش قطعی</div>
+        <div class="stopfoot"><span class="h-empty">هنوز قفل است</span></div>
+      </div>
+    </div>
+
+    <div class="secondpath">
+      <span class="b b--warn">مسیر دوم — پیشنهاد</span>
+      <span>آگاهی واجی — پیشنهاد ثبت‌شده ۱۴۰۵/۰۸/۲۱، در انتظار بازبینی؛ پس از بازبینی به‌عنوان خط جداگانه کنار همین خط می‌نشیند (قاطی نمی‌شوند).</span>
+      <span class="btn btn--sm">بازبینی پیشنهاد</span>
+    </div>
+
+    <div class="warnbar">
+      <b>مانده‌های امروز روی خط:</b>
+      <span class="b b--danger">جلسهٔ ۱۴۰۵/۰۸/۲۷ بی‌گزارش — روی کارت گام ۳</span>
+      <span class="b b--danger">پیگیری «چک‌لیست معلم» عقب‌افتاده — سررسید ۱۴۰۵/۰۹/۰۱</span>
+      <span class="b b--warn">مدارک: ۲ سند مانده از خانواده</span>
+      <span class="btn btn--sm btn--ghost">همه با یک کلیک به محل اقدام می‌پرند</span>
+    </div>
+  </section>
+
+  <!-- کارت گام فعال — همان کارت گام ۳ روی خط؛ جزئیات ایستگاه‌های فروریخته -->
+  <section class="card activecard">
+    <div class="ac-head">
+      <span class="b b--brand">کارت گام جاری — همان کارت گام ۳ روی خط</span>
+      <h3>گام ۳: تشخیص صدای هدف در شلوغی</h3>
+      <span class="b">جلسهٔ ۲ از ۳ همین گام</span>
+      <span class="b b--warn">معیار هنوز برآورده نشده — ۶۲٪ از ۷۰٪</span>
+      <span class="idsp"></span>
+      <span class="btn btn--sm btn--ghost">جزئیات پروتکل گام</span>
+    </div>
+    <div class="stgrid">
+      <div class="station">
+        <h5>۱. آماده‌سازی این گام <span class="b b--ok">موضوع جلسهٔ قبل می‌آید</span></h5>
+        <ul>
+          <li><span class="k">از جلسهٔ قبل (۱۴۰۵/۰۸/۲۵):</span> کارت‌های تمایز شنیداری ۳ — سطح ۲</li>
+          <li><span class="k">کارت جلسهٔ امروز:</span> ۱۲ کارت هدف‌دار از پروتکل گام ۳</li>
+          <li><span class="k">مدارک:</span> ۲ سند مانده — یادآوری با بله ارسال شد</li>
+        </ul>
+        <div class="btnrow"><span class="btn btn--sm">ادامه از جلسهٔ قبل</span></div>
+      </div>
+      <div class="station">
+        <h5>۲. برگزاری — حضور این جلسه</h5>
+        <ul>
+          <li><span class="k">جلسهٔ هدف:</span> سه‌شنبه ۱۴۰۵/۰۹/۰۴ — ۱۶:۰۰ · مریم احمدی</li>
+          <li><span class="k">قاعده:</span> ثبت حضور از دو ساعت پیش از شروع؛ برای جلسهٔ برگزارنشده بسته است</li>
+          <li><span class="k">بایگانی دوره:</span> ۳ حاضر · ۱ غایب · ۰ در انتظار</li>
+        </ul>
+        <div class="btnrow">
+          <span class="btn btn--sm">حاضر</span><span class="btn btn--sm">حضور با تأخیر</span>
+          <span class="btn btn--sm">غایب</span><span class="btn btn--sm">لغو جلسه</span>
+        </div>
+      </div>
+      <div class="station">
+        <h5>۳. ثبت گزارش همین گام <span class="b b--danger">۱ جلسهٔ بی‌گزارش</span></h5>
+        <ul>
+          <li><span class="k">بی‌گزارش:</span> جلسهٔ ۱۴۰۵/۰۸/۲۷ — قدیمی‌ترین اول</li>
+          <li><span class="k">فرم:</span> رویداد مداخله با گام ۳ پیش‌فرض + ملاک پیشرفت</li>
+          <li><span class="k">منشی:</span> ثبت گزارش در اختیار درمانگر/مدیر است — یادآوری با بله</li>
+        </ul>
+        <div class="btnrow">
+          <span class="btn btn--sm btn--primary">ثبت گزارش جلسهٔ ۱۴۰۵/۰۸/۲۷</span>
+          <span class="btn btn--sm btn--ghost">نوع دیگری از رویداد</span>
+        </div>
+      </div>
+    </div>
+    <div class="btnrow" style="margin-top:10px;border-top:1px dashed var(--line);padding-top:9px">
+      <span class="b b--danger">۴. پیگیری همین گام — چک‌لیست معلم: عقب‌افتاده (سررسید ۱۴۰۵/۰۹/۰۱)</span>
+      <span class="btn btn--sm">ثبت نتیجه</span>
+      <span class="btn btn--sm">یادآوری با بله</span>
+      <span class="btn btn--sm btn--ghost">پیگیری جدید برای این گام</span>
+    </div>
+  </section>
+
+  <!-- کشوهای پشتیبان -->
+  <section class="drawers">
+    <details class="drw" open>
+      <summary>شناسنامه و اطلاعات پایه</summary>
+      <div class="drwbody">
+        <div class="row"><span class="k">نام:</span> علی محمدی</div>
+        <div class="row"><span class="k">سن/پایه:</span> ۱۵ سال و ۵ ماه · پنجم دبستان</div>
+        <div class="row"><span class="k">درمانگر/مسئول:</span> مریم احمدی · دکتر ستایش مطهری</div>
+        <div class="row"><span class="k">تگ‌ها:</span> <span class="b">نارساخوانی</span> <span class="b">دقت شنیداری</span></div>
+        <div class="row"><span class="k">تمرکز درمان:</span> پردازش شنیداری — روخوانی</div>
+        <div class="btnrow"><span class="btn btn--sm">ویرایش</span></div>
+      </div>
+    </details>
+    <details class="drw" open>
+      <summary>تفسیر و روایت — بالینی</summary>
+      <div class="drwbody">
+        <div class="row"><span class="k">قضاوت:</span> فرضیهٔ ۱ نارساخوانی — اطمینان بالا · شواهد ۱۷ · هم‌گرا</div>
+        <div class="row"><span class="k">ملاک‌ها:</span> ۴ از ۷ برآورده (جدول کامل DSM-5-TR در عمق)</div>
+        <div class="row"><span class="k">شرح‌حال:</span> ثبت‌شده ۱۴۰۵/۰۷/۲۰ — سه بخش</div>
+        <div class="row"><span class="k">روایت سه‌فصل:</span> فصل ۱ کامل · فصل ۲ پیش‌نویس · فصل ۳ <span class="h-empty">نوشته نشده — ندارم</span></div>
+        <div class="btnrow"><span class="btn btn--sm">بازکردن تفسیر کامل</span></div>
+      </div>
+    </details>
+    <details class="drw" open>
+      <summary>تاریخچه و جلسات</summary>
+      <div class="drwbody">
+        <div class="row"><span class="k">فصل جاری:</span> دورهٔ مداخله — فصل ۲ · نقطهٔ کلیدی: تأیید هدف (۱۴۰۵/۰۷/۲۴)</div>
+        <div class="row"><span class="k">جلسات:</span> ۴ ثبت‌شده · حضور ۳ حاضر / ۱ غایب</div>
+        <div class="row"><span class="k">نوبت بعدی:</span> ۱۴۰۵/۰۹/۰۴ — ۱۶:۰۰ <span class="btn btn--sm">تغییر/ثبت نوبت</span></div>
+        <div class="row"><span class="k">فیلترها:</span> جلسات · رویدادها · گزارش‌ها · تمرین · بازی · پیگیری · بایگانی · کمیسیون</div>
+        <div class="btnrow"><span class="btn btn--sm">بازکردن خط زمانی</span></div>
+      </div>
+    </details>
+    <details class="drw" open>
+      <summary>گزارش‌ها و مدارک</summary>
+      <div class="drwbody">
+        <div class="row"><span class="k">گزارش قطعی:</span> <span class="h-empty">صدور قطعی ثبت نشده — از منوی ⋯ صادر کنید</span></div>
+        <div class="row"><span class="k">واریانت‌ها:</span> متخصص / خانواده / مدرسه + چاپ A4</div>
+        <div class="row"><span class="k">مدارک (با بله):</span> ۴ از ۶ رسیده — روایی، املا، ریاضی، کارنامه · ۲ سند مانده</div>
+        <div class="btnrow"><span class="btn btn--sm">کارت مدارک</span></div>
+      </div>
+    </details>
+    <details class="drw" open>
+      <summary>تمرین، بازی و ارتباطات</summary>
+      <div class="drwbody">
+        <div class="row"><span class="k">تمرین فعال:</span> بستهٔ تمایز شنیداری ۲ — ارسال ۱۴۰۵/۰۸/۲۸ · بازخورد: نیامده</div>
+        <div class="row"><span class="k">بازی‌ها:</span> <span class="h-empty">بازی تجویزشده ثبت نشده — ندارم</span></div>
+        <div class="row"><span class="k">بله:</span> متصل · آخرین ارسال: گزارش جلسهٔ ۱۴۰۵/۰۸/۲۵ به خانواده</div>
+        <div class="btnrow"><span class="btn btn--sm">ارسال تمرین</span><span class="btn btn--sm">برگهٔ پیشرفت</span></div>
+      </div>
+    </details>
+  </section>
+
+  <section class="notes">
+    <div class="note"><b>حاکمیت و نقش‌ها:</b> نمای درمانگر/مدیر — خط کامل. منشی: آماده‌سازی، حضور، پیگیری، مدارک؛ ثبت گزارش و قضاوت برای او «یادآوری به درمانگر» است. ناظر فقط‌خواندنی. نمای خانواده-معلم: کارت قضاوت پنهان؛ گام‌ها با زبان ساده («برنامهٔ جلسات — جلسهٔ ۳ از ۸»)؛ DSM و مالی در هیچ خروجی خانواده نمی‌آید.</div>
+    <div class="note"><b>دقیق‌لینک‌ها:</b> <span dir="ltr">?tab=… / ?section=…</span> → ریدایرکت نرم به کشوی متناظر؛ <span dir="ltr">?station=ready|hold|log|follow</span> → کارت گام جاری با ایستگاه باز متناظر؛ <span dir="ltr">?tab=timeline&filter=followups</span> → کشوی تاریخچه با فیلتر پیگیری. هیچ لینک قدیمی نمی‌شکند.</div>
+    <div class="note"><b>قواعد ترسیم:</b> بدون JS — بازشدن کشوها با details/summary و منوی ⋯ با focus. کف فونت ۱۲px (سند ۱۱px فقط برای زیرنویس طراح). هر بخش یا دادهٔ زنده دارد یا صادقانه «ندارم» می‌گوید (بازی‌ها، فصل ۳ روایت، گزارش قطعی). خط از دادهٔ موجود می‌سازد — صفر فراخوان تازه.</div>
+  </section>
+
+</div>
+</div>
+
+<div class="canvaslabel">نمای موبایل — عرض ۳۹۰</div>
+<div class="frame">
+<div class="canvas canvas--mobile">
+
+  <div class="m-appbar">
+    <span class="sub">بهینهم — مرکز توانبخشی</span>
+    <span style="display:flex;gap:6px"><span class="chip chip--brand">مریم احمدی</span><span class="chip">☰</span></span>
+  </div>
+
+  <div class="m-idbar">
+    <div class="avatar">۴</div>
+    <div style="flex:1;min-width:0">
+      <div class="idname" style="font-size:14px">علی محمدی</div>
+      <div class="idmeta">۱۵ سال و ۵ ماه · پنجم دبستان · مریم احمدی</div>
+    </div>
+    <span class="b b--ok">فعال</span>
+    <span class="menubtn" style="padding:4px 9px">⋯</span>
+  </div>
+
+  <div class="m-pos">دقت شنیداری — گام ۳ از ۸ <span class="m-dots"><i class="done"></i><i class="done"></i><i class="on"></i><i></i><i></i><i></i><i></i><i></i></span></div>
+
+  <div class="vrail">
+    <div class="vstop">
+      <div class="stepno"><span class="dot dot--live"></span> سرِ خط — قضاوت بالینی</div>
+      <h4 style="margin:2px 0;font-size:12.5px">نارساخوانی — ضعف پردازش شنیداری · هم‌گرا</h4>
+      <div class="crit">شرح‌حال ثبت‌شده ۱۴۰۵/۰۷/۲۰ · ۴ از ۷ ملاک</div>
+      <div class="btnrow"><span class="btn btn--sm btn--ghost">تفسیر کامل</span></div>
+    </div>
+    <div class="vjoint"></div>
+    <div class="vstop vstop--done">
+      <div class="stepno"><span class="dot dot--ok"></span> هدف نهایی</div>
+      <div style="font-weight:700;font-size:12.5px">بهبود روخوانی</div>
+    </div>
+    <div class="vjoint"></div>
+    <div class="vstop vstop--done">
+      <div class="stepno"><span class="dot dot--ok"></span> گام ۱ — انجام‌شده</div>
+      <div style="font-size:12px;font-weight:700">تمایز کلمات متضاد</div>
+      <div class="crit">معیار ۸۰٪ برآورده · گزارش ✓</div>
+    </div>
+    <div class="vjoint"></div>
+    <div class="vstop vstop--done">
+      <div class="stepno"><span class="dot dot--ok"></span> گام ۲ — انجام‌شده</div>
+      <div style="font-size:12px;font-weight:700">تمایز کلمات هم‌آوا</div>
+      <div class="crit">معیار ۷۵٪ برآورده · گزارش ✓</div>
+    </div>
+    <div class="vjoint"></div>
+    <div class="vstop vstop--live">
+      <div class="stepno"><span class="dot dot--live"></span> گام ۳ — گام جاری</div>
+      <div style="font-weight:700;font-size:12.5px">تشخیص صدای هدف در شلوغی</div>
+      <div class="crit">معیار: ≥۷۰٪ در دو جلسهٔ متوالی — جلسهٔ اول: ۶۲٪</div>
+      <span class="meter"><i style="width:62%"></i></span>
+      <div class="crit" style="margin-top:5px">جلسهٔ بعد: سه‌شنبه ۱۴۰۵/۰۹/۰۴ — ۱۶:۰۰</div>
+      <div class="stationsmini">
+        <span class="statmini done">آماده‌سازی ✓</span><span class="statmini">حضور ◔</span><span class="statmini todo">ثبت گزارش — مانده</span>
+      </div>
+      <div class="btnrow"><span class="btn btn--sm">حاضر</span><span class="btn btn--sm">تأخیر</span><span class="btn btn--sm">غایب</span><span class="btn btn--sm">لغو</span></div>
+      <div class="btnrow"><span class="btn btn--sm btn--danger b b--danger">۱ جلسهٔ بی‌گزارش: ۱۴۰۵/۰۸/۲۷</span></div>
+    </div>
+    <div class="vjoint"></div>
+    <div class="vstop vstop--q">
+      <div class="stepno"><span class="dot dot--q"></span> گام ۴ تا ۸ — در صف</div>
+      <div class="crit">نویز پس‌زمینه → توالی صدایی → واژه‌های بلندتر → خواندن بلند → تثبیت</div>
+    </div>
+    <div class="vjoint"></div>
+    <div class="vstop vstop--q">
+      <div class="stepno"><span class="dot dot--q"></span> انتهای خط</div>
+      <div style="font-size:12px;font-weight:700">بازسنجی و تصمیم دوره</div>
+      <div class="crit">قفل تا اتمام گام ۸</div>
+    </div>
+  </div>
+
+  <div class="m-notes">
+    <div class="note"><b>مانده‌های امروز:</b> جلسهٔ ۱۴۰۵/۰۸/۲۷ بی‌گزارش · پیگیری «چک‌لیست معلم» عقب‌افتاده · ۲ سند مدارک مانده — هر یک با لمس به همان کارت می‌پرد.</div>
+    <div class="note"><b>نمای خانواده-معلم:</b> کارت قضاوت پنهان؛ گام‌ها «برنامهٔ جلسات — جلسهٔ ۳ از ۸» با زبان ساده؛ DSM و مالی پنهان.</div>
+  </div>
+
+  <div class="m-drawers">
+    <details class="drw" open>
+      <summary>تفسیر و روایت — بالینی</summary>
+      <div class="drwbody">
+        <div class="row"><span class="k">قضاوت:</span> نارساخوانی — اطمینان بالا · شواهد ۱۷ · هم‌گرا</div>
+        <div class="row"><span class="k">روایت:</span> فصل ۱ کامل · فصل ۲ پیش‌نویس · فصل ۳ <span class="h-empty">ندارم</span></div>
+      </div>
+    </details>
+    <details class="drw" open>
+      <summary>تاریخچه و جلسات</summary>
+      <div class="drwbody">
+        <div class="row"><span class="k">فصل جاری:</span> دورهٔ مداخله — فصل ۲</div>
+        <div class="row"><span class="k">جلسات:</span> ۴ ثبت‌شده · ۳ حاضر / ۱ غایب</div>
+        <div class="row"><span class="k">نوبت بعدی:</span> ۱۴۰۵/۰۹/۰۴</div>
+      </div>
+    </details>
+    <details class="drw" open>
+      <summary>گزارش‌ها و مدارک</summary>
+      <div class="drwbody">
+        <div class="row"><span class="k">گزارش قطعی:</span> <span class="h-empty">صدور قطعی ثبت نشده</span></div>
+        <div class="row"><span class="k">مدارک:</span> ۴ از ۶ رسیده · ۲ سند مانده</div>
+      </div>
+    </details>
+    <details class="drw" open>
+      <summary>تمرین، بازی و ارتباطات</summary>
+      <div class="drwbody">
+        <div class="row"><span class="k">تمرین:</span> بستهٔ تمایز شنیداری ۲ — بازخورد: نیامده</div>
+        <div class="row"><span class="k">بازی‌ها:</span> <span class="h-empty">تجویزشده ثبت نشده — ندارم</span></div>
+        <div class="row"><span class="k">بله:</span> متصل · آخرین ارسال ۱۴۰۵/۰۸/۲۵</div>
+      </div>
+    </details>
+  </div>
+
+  <div class="vcta">
+    <span class="btn btn--primary">ثبت گزارش همین گام</span>
+    <span class="btn">ثبت حضور</span>
+  </div>
+
+</div>
+</div>
+
+<div class="dochead" style="margin-bottom:30px">
+  <p>طرح B — خط مونتاژ گام‌های درمان · وایرفریم خودکفا بدون JS · فایل همراه سند: طرح-B.md · بدون فونت و تصویر بیرونی؛ همهٔ گلیف‌ها متنی‌اند.</p>
+</div>
+
+</body>
+</html>
