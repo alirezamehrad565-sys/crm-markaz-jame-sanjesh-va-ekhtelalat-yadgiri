@@ -23,7 +23,9 @@ const CAT_LABELS = {
 const FAMILY_LABELS = {
   culture: { low: 'فرهنگی: کم', mid: 'فرهنگی: متوسط', high: 'فرهنگی: غنی' },
   finance: { low: 'مالی: کم‌برخوردار', mid: 'مالی: متوسط', high: 'مالی: برخوردار' },
-  cooperation: { low: 'همکاری: کم', mid: 'همکاری: متوسط', high: 'همکاری: زیاد' }
+  cooperation: { low: 'همکاری: کم', mid: 'همکاری: متوسط', high: 'همکاری: زیاد' },
+  /* ۱.۲۷.۴۶ — سطح ترکیبی «مالی‌فرهنگی» از مسیر معلم (خواست کارفرما: دو فیلد همکاری + مالی‌فرهنگی) */
+  liv: { low: 'مالی‌فرهنگی: کم‌برخوردار', mid: 'مالی‌فرهنگی: متوسط', high: 'مالی‌فرهنگی: برخوردار' }
 };
 
 const STATUS_LABELS = { new: 'جدید', accepted: 'پذیرفته‌شده', rejected: 'ردشده' };
@@ -40,6 +42,42 @@ export async function renderReferralInbox(container, opts = {}) {
   let rows = [];
   let filter = 'new';
   let query = '';
+  let shareBase = ''; /* ۱.۲۷.۴۴ — از پاسخ API (env استقرار) یا محل فعلی پنل */
+
+  /* جعبهٔ «لینک عمومی معرفی به مرکز» — خواست کارفرما ۱.۲۷.۴۴: لینک برای گذاشتن در گروه‌ها/کانال‌ها؛
+     فرم بدون ورود برای همه باز است و معرفی‌ها در همین صندوق می‌آید. */
+  function shareUrl() {
+    return `${String(shareBase || location.origin).replace(/\/+$/, '')}/public/referral`;
+  }
+  const shareInput = el('input', {
+    class: 'input',
+    readonly: 'readonly',
+    'aria-label': 'لینک عمومی معرفی به مرکز',
+    style: { flex: '1', minWidth: '0' },
+    onclick: (e) => e.target.select()
+  });
+  async function copyShare() {
+    const url = shareUrl();
+    try {
+      await navigator.clipboard.writeText(url);
+      toast('لینک کپی شد — در گروه یا کانال موردنظر بگذارید', 'success');
+    } catch {
+      shareInput.value = url;
+      shareInput.focus();
+      shareInput.select();
+      document.execCommand('copy'); /* fallback مرورگرهای بدون clipboard API */
+      toast('لینک کپی شد', 'success');
+    }
+  }
+  const shareCard = el('div', { class: 'card', style: { marginBottom: 'var(--sp-3)' } },
+    el('div', { class: 'card__body', style: { display: 'flex', gap: 'var(--sp-2)', alignItems: 'center', flexWrap: 'wrap' } },
+      el('span', { style: { fontSize: '14px' } }, '🔗 لینک عمومی معرفی به مرکز:'),
+      shareInput,
+      el('button', { class: 'btn btn--soft btn--sm', onclick: copyShare }, icon('copy', 14), 'کپی'),
+      el('span', { class: 'muted', style: { fontSize: '12px', flexBasis: '100%' } },
+        'بدون ورود برای همه باز می‌شود — در هر گروه یا کانالی بگذارید؛ معرفی‌ها همین‌جا در صندوق ورودی می‌آید.')
+    )
+  );
 
   const head = embedded
     ? el('p', { class: 'muted', style: { fontSize: '13px', margin: '0 0 var(--sp-3)' } },
@@ -72,7 +110,8 @@ export async function renderReferralInbox(container, opts = {}) {
   function famBadges(r) {
     if (!r.familyContext) return [];
     const fc = r.familyContext;
-    return ['culture', 'finance', 'cooperation']
+    /* ۱.۲۷.۴۶ — ترتیب: فیلدهای ثبتِ معلم اول (همکاری + مالی‌فرهنگی)، بعد فرم تکمیلی خانواده */
+    return ['cooperation', 'liv', 'culture', 'finance']
       .map((k) => fc[k] ? el('span', { class: 'badge badge--neutral' }, FAMILY_LABELS[k][fc[k]] ?? null) : null)
       .filter(Boolean);
   }
@@ -87,6 +126,7 @@ export async function renderReferralInbox(container, opts = {}) {
       ['وضع فرهنگی خانواده', fc?.culture ? (FAMILY_LABELS.culture[fc.culture] ?? fc.culture).replace('فرهنگی: ', '') : '—'],
       ['سطح مالی خانواده', fc?.finance ? (FAMILY_LABELS.finance[fc.finance] ?? fc.finance).replace('مالی: ', '') : '—'],
       ['میزان همکاری خانواده', fc?.cooperation ? (FAMILY_LABELS.cooperation[fc.cooperation] ?? fc.cooperation).replace('همکاری: ', '') : '—'],
+      ['سطح مالی و فرهنگی خانواده', fc?.liv ? (FAMILY_LABELS.liv[fc.liv] ?? fc.liv).replace('مالی‌فرهنگی: ', '') : '—'],
       ['ارزیابی قبلی', r.priorEval === true ? `بله${r.priorEvalNote ? ` — ${r.priorEvalNote}` : ''}` : r.priorEval === false ? 'خیر' : '—'],
       ['معرف', `${r.referrerName} (${r.refRole === 'teacher' ? 'معلم همکار' : 'خانواده'}) — ${fa(r.referrerPhone)}`],
       ['تلفن ولیّ', r.guardianPhone ? fa(r.guardianPhone) : '—'],
@@ -228,7 +268,10 @@ export async function renderReferralInbox(container, opts = {}) {
     const news = rows.filter((r) => r.status === 'new');
     const accepted = rows.filter((r) => r.status === 'accepted');
     const rejected = rows.filter((r) => r.status === 'rejected');
-    const poor = rows.filter((r) => r.status !== 'rejected' && r.familyContext?.finance === 'low');
+    /* ۱.۲۷.۴۶ — «کم‌برخوردار» هم از فرم تکمیلی خانواده (finance) و هم از گزارش معلم (liv)؛
+       همکاریِ زیاد معلم‌ها KPI خودش را گرفت — موقعیت طراحی‌شدهٔ دو فیلد تازه در صندوق */
+    const poor = rows.filter((r) => r.status !== 'rejected' && (r.familyContext?.finance === 'low' || r.familyContext?.liv === 'low'));
+    const coopHigh = rows.filter((r) => r.status !== 'rejected' && r.familyContext?.cooperation === 'high');
     kpis.replaceChildren(el('div', { class: 'kpi-grid', style: { marginBottom: 'var(--sp-3)' } },
       el('div', { class: `kpi kpi--${news.length > 0 ? 'error' : 'neutral'}` },
         el('div', { class: 'kpi__value' }, fa(news.length)),
@@ -238,6 +281,10 @@ export async function renderReferralInbox(container, opts = {}) {
         el('div', { class: 'kpi__value' }, fa(accepted.length)),
         el('div', { class: 'kpi__label' }, 'پذیرفته‌شده'),
         el('div', { class: 'kpi__hint' }, 'رفته‌ها به لیست انتظار')),
+      el('div', { class: 'kpi kpi--accent' },
+        el('div', { class: 'kpi__value' }, fa(coopHigh.length)),
+        el('div', { class: 'kpi__label' }, 'همکاری زیاد خانواده'),
+        el('div', { class: 'kpi__hint' }, 'از گزارش معلم‌ها — پیش‌بینی پیگیری')),
       el('div', { class: 'kpi kpi--accent' },
         el('div', { class: 'kpi__value' }, fa(poor.length)),
         el('div', { class: 'kpi__label' }, 'سطح مالی کم‌برخوردار'),
@@ -271,6 +318,8 @@ export async function renderReferralInbox(container, opts = {}) {
     try {
       const res = await api.get('/api/waitlist/referrals');
       rows = res.data ?? [];
+      shareBase = String(res.public_base_url ?? '').trim() || location.origin; /* ۱.۲۷.۴۴ */
+      shareInput.value = shareUrl();
       paint();
       opts.onCount?.(rows.filter((r) => r.status === 'new').length); // ۱.۲۷.۳۸ — شمار تب «صندوق ورودی» در لیست انتظار
     } catch (err) {
@@ -283,7 +332,7 @@ export async function renderReferralInbox(container, opts = {}) {
     }
   }
 
-  container.replaceChildren(head, kpis, chipbar, list);
+  container.replaceChildren(head, shareCard, kpis, chipbar, list); /* ۱.۲۷.۴۴ — جعبهٔ اشتراک بعد از سرتیتر */
   paint();
   await load();
 }

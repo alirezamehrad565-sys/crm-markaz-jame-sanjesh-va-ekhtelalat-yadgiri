@@ -707,7 +707,7 @@ export interface DashboardService {
 | POST | /api/appointments/:id/cancel | { version } | 200: { data } | 404, 409 |
 | POST | /api/appointments/:id/students | { student_id, facet_id? } | 204 | 404, 409 |
 | DELETE | /api/appointments/:id/students/:studentId | — | 204 | 404 |
-| POST | /api/appointments/copy-week | { source_monday, target_monday, staff_id?, dry_run? } | 200: { batch_id?, copied, conflicts } | 400 |
+| POST | /api/appointments/copy-week | { source_week_start, target_week_start, staff_id?, dry_run? } — هر دو باید شنبه باشند (مرز هفتهٔ تقویم؛ ۱.۲۷.۴۸) | 200: { batchId?, copied, conflicts } | 400 |
 | POST | /api/appointments/copy-week/:batchId/undo | — | 200: { removed } | 404, 409 |
 
 ### ۹.۲ attendance — Endpoints

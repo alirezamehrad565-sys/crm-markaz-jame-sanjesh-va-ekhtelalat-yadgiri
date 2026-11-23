@@ -1024,7 +1024,8 @@ body.is-login { background: var(--bg); }
 }
 
 .login__logo {
-  width: 76px; height: 76px; border-radius: 50%;
+  /* ۱.۲۷.۴۹ — لوگوی ورود کوچک‌تر (بازتنظیم به خواست کارفرما) */
+  width: 80px; height: 80px; border-radius: 20px;
   display: block;
   margin-inline: auto;
   animation: logo-in var(--dur-4) var(--ease-out) 80ms both; /* A17 */
@@ -4666,6 +4667,143 @@ body.cb-printing #cb-print-root { display: block; }
   .has-scroll-x::after { display: none; }
 }
 
+/* ═══ ۱.۲۷.۵۸ — پوستهٔ «میز جلسه + پروندهٔ مرجع» (برندهٔ مسابقهٔ بازطراحی پروندهٔ دانش‌آموز — طرح ۴) ═══
+   نوار هویت ۶۴px + نوار فلو (آماده‌سازی←برگزاری←ثبت←پیگیری) + میز دوستونه (میز ۲/۳ + مرجع آکاردئونی ۱/۳).
+   موبایل ≤۹۸۰px: تک‌ستونی؛ استپر فلو دوستونهٔ فشرده؛ CTA اصلی چسبان پایین زیر قوس شست.
+   جای‌گذاری: قبل از بلوک ممیزی لمس — پنجرهٔ tail قرارداد تست front-ux-pro-max دست‌نخورده می‌ماند. */
+
+/* نوار هویت فشرده — جایگزین کارت سربرگِ نیم‌صفحه‌ای */
+.idbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-3);
+  padding: var(--sp-2) var(--sp-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  margin-top: var(--sp-4);
+}
+.idbar__main { flex: 1 1 240px; min-width: 0; }
+.idbar__name { font-weight: 800; font-size: 16px; line-height: 1.5; }
+.idbar__badges { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-2); align-items: center; }
+.idbar__side { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+.idbar__owner {
+  flex-basis: 100%;
+  display: flex; align-items: center; gap: var(--sp-2);
+  padding-top: var(--sp-2);
+  border-top: 1px dashed var(--border);
+}
+.idbar .avatar-lg { border-radius: var(--radius-full); }
+
+/* نوار فلو — ایستگاه‌ها با مانده‌های واقعی؛ روی دسکتاپ چسبان زیر سربرگ */
+.flowbar {
+  display: flex;
+  align-items: stretch;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+  position: sticky;
+  top: 10px;
+  z-index: 25;
+}
+.flowbar__steps {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--sp-2);
+}
+.flowstep {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--sp-2) var(--sp-3);
+  display: flex; flex-direction: column; gap: 2px;
+  text-align: right; cursor: pointer; min-width: 0;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.flowstep:hover { border-color: var(--primary); }
+.flowstep.is-active { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary) inset; }
+.flowstep__label {
+  display: flex; align-items: center; gap: var(--sp-1);
+  font-weight: 700; font-size: 13.5px; white-space: nowrap;
+}
+.flowstep__rem {
+  font-size: 12px; color: var(--text-2);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.flowstep.is-active .flowstep__rem { color: var(--primary); }
+.flowbar__cta { align-self: center; white-space: nowrap; }
+
+/* میز دوستونه: میز جلسه (۲/۳) + پروندهٔ مرجع (۱/۳) */
+.desk {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: var(--sp-4);
+  align-items: start;
+  margin-top: var(--sp-4);
+}
+.desk__main, .desk__ref { min-width: 0; }
+.desk__main .card__body { display: flex; flex-direction: column; gap: var(--sp-2); }
+.missrow {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--sp-2) var(--sp-3);
+  font-size: 13.5px;
+}
+.nextappt { margin-bottom: var(--sp-3); }
+.nextappt__when {
+  display: flex; align-items: center; gap: var(--sp-2);
+  font-weight: 700; margin-bottom: var(--sp-2);
+}
+.nextappt__row { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
+
+/* پروندهٔ مرجع — آکاردئون نه‌بخشی */
+.reflist { display: flex; flex-direction: column; gap: var(--sp-2); }
+.refitem {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.refitem > summary {
+  list-style: none;
+  display: flex; align-items: center; gap: var(--sp-2);
+  padding: var(--sp-3);
+  cursor: pointer;
+  font-weight: 700; font-size: 14px;
+  user-select: none;
+}
+.refitem > summary::-webkit-details-marker { display: none; }
+.refitem > summary:hover { color: var(--primary); }
+.refitem[open] > summary { border-bottom: 1px dashed var(--border); color: var(--primary); }
+.refitem__body { padding: var(--sp-3); max-height: 72vh; overflow: auto; }
+.refitem__body .card { margin-bottom: var(--sp-3); }
+.refitem__body .card:last-child { margin-bottom: 0; }
+
+/* CTA چسبان موبایل — نسخهٔ پایین‌صفحه‌ای «ادامه از جلسهٔ قبل» */
+.flow-cta-mobile { display: none; }
+
+@media (max-width: 980px) {
+  .desk { grid-template-columns: 1fr; }
+  .idbar { margin-top: var(--sp-3); padding: var(--sp-2) var(--sp-3); }
+  .idbar__side { flex-basis: 100%; justify-content: flex-start; }
+  .idbar__owner { flex-basis: 100%; }
+  .flowbar { position: static; }
+  .flowbar__steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .flowbar__cta { display: none; }
+  .flow-cta-mobile {
+    display: flex;
+    position: sticky;
+    bottom: 0;
+    z-index: 25;
+    padding: var(--sp-2) 0;
+    background: linear-gradient(to top, var(--surface-2) 70%, transparent);
+  }
+  .flow-cta-mobile .btn { flex: 1; }
+  .refitem__body { max-height: none; }
+}
+
 /* ══════════ ممیزی UX با skill «UI/UX Pro Max» (uupm.cc) — نسخهٔ ۱.۰۹.۰ ══════════
    بلوک لمسی پایانی: بعد از همهٔ بلوک‌های (max-width) می‌آید تا روی دستگاه‌های لمسی
    برندهٔ آبشار باشد — کف اهداف لمسی WCAG 2.5.8 (≥24px) + فاصلهٔ لمسی (skill: Touch Spacing) */
@@ -4820,3 +4958,16 @@ body.cb-printing #cb-print-root { display: block; }
   .gmk-detail__grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 480px) { .gmk-card__title { font-size: var(--fs-md); } .gmk-fact, .gmk-chip { max-width: 100%; } }
+
+/* ═══ ۱.۲۷.۵۷ — موج C: چاپ A4 گزارش قطعی — #print-root تنها محتوای چاپ‌شدنی است ═══ */
+#print-root { display: none; }
+@media print {
+  body > *:not(#print-root) { display: none !important; }
+  #print-root { display: block; }
+}
+#print-root .print-doc { color: #171B20; font-size: 11pt; line-height: 1.8; }
+#print-root .print-doc__head { text-align: center; border-bottom: 1.5px solid #968B76; padding-bottom: 8px; margin-bottom: 14px; }
+#print-root .print-doc__title { font-weight: 700; font-size: 14pt; margin-bottom: 4px; }
+#print-root .print-doc .card { box-shadow: none; border: 1px solid #D0CABB; break-inside: avoid; }
+#print-root .print-doc table { width: 100%; font-size: 10.5pt; border-collapse: collapse; }
+#print-root .print-doc th, #print-root .print-doc td { border: 1px solid #D0CABB; padding: 4px 6px; text-align: right; }

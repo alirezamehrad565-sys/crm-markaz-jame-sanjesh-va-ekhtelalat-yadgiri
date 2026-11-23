@@ -22,6 +22,7 @@ describe('گیت فرانت ۱.۲۷.۳۸ — صندوق ورودی در لیست
   const archiveForm = read('public/assets/js/archive-form.js');
   const referralPage = read('src/domain/waitlist/referral-page.ts');
   const guidePage = read('src/domain/waitlist/guide-page.ts');
+  const schemas = read('src/core/shared/schemas.ts');
   const waitRoutes = read('src/domain/waitlist/routes.ts');
   const webhook = read('src/core/notify/bale/webhook.ts');
   const botCommands = read('src/application/notify/bot-commands.ts');
@@ -66,6 +67,48 @@ describe('گیت فرانت ۱.۲۷.۳۸ — صندوق ورودی در لیست
     expect(referralPage).toContain('گام‌های کوچیک‌تر');
     expect(referralPage).toContain('مغزش فقط یه مسیر رو متفاوت پردازش می‌کنه');
     expect(referralPage).toContain('انتظارِ واقع‌بینانه');
+  });
+
+  it('⑤ جعبهٔ «لینک عمومی معرفی» برای اشتراک در گروه‌ها — مطلق، کپی‌پذیر، بدون توکن (۱.۲۷.۴۴)', () => {
+    expect(view).toContain('لینک عمومی معرفی به مرکز');
+    expect(view).toContain("String(res.public_base_url ?? '').trim() || location.origin"); // پایه از استقرار؛ دسکتاپ → مبدأ فعلی
+    expect(view).toContain('/public/referral'); // لینک ثابت فرم عمومی
+    expect(view).toContain('navigator.clipboard.writeText'); // کپی یک‌کلیکی
+    expect(view).toContain("document.execCommand('copy')"); // fallback
+    expect(view).toContain('shareCard'); // جعبه در بدنهٔ اصلی نما مونت شده
+    // مسیر API پایه را می‌دهد (env استقرار) — و لینک هیچ‌گاه توکن ندارد
+    expect(waitRoutes).toContain('public_base_url: opts?.publicBaseUrl ?? null');
+    expect(read('src/application/api-routing/index.ts')).toContain(
+      'registerWaitlistRoutes(app, services.waitlist, { publicBaseUrl: deps.publicBaseUrl ?? null })'
+    );
+    const shareIdx = view.indexOf('shareUrl()');
+    expect(view.slice(shareIdx, shareIdx + 120)).not.toContain('token'); // بدون توکن نشست/چت
+    // بات هم لینک ساده می‌دهد (بدون ?token=) — قابل فوروارد به هر گروه
+    expect(botCommands).toContain("+ '/public/referral';");
+    expect(botCommands).not.toMatch(/refWebLink[^\n]*token=/);
+  });
+
+  it('⑥ دو فیلد وضعیت خانوادهٔ معلم + موقعیت صندوق + هماهنگی پالت فرم با سایت (۱.۲۷.۴۶)', () => {
+    /* خواست کارفرما: در مسیر معلم، فرم «همکاری خانواده» و «سطح مالی و فرهنگی خانواده» داشته باشد؛
+       چون KPI صندوق ساخته شده، موقعیت این دو فیلد هم طراحی شده: بج روی ورودی + ردیف مودال + KPI */
+    expect(referralPage).toContain('همکاری خانواده');
+    expect(referralPage).toContain('سطح مالی و فرهنگی خانواده');
+    expect(referralPage).toContain("famPills(FC_LEVELS,'fcp'"); // پیل‌های مقیاس سه‌گانه
+    expect(referralPage).toContain("famPills(LIV_LEVELS,'lvp'");
+    expect(referralPage).toContain('family_cooperation:r.coop, family_liv:r.liv'); // payload هر کودک
+    // اسکیما: liv ترکیبی + الزام برای مسیر معلم
+    expect(schemas).toContain('family_liv: z.enum(REFERRAL_FAMILY_LEVELS).nullish()');
+    expect(schemas).toContain("if (v.role !== 'teacher') return;");
+    // صندوق: واژگان ترکیبی + بج + مودال + دو KPI (کم‌برخوردار از liv هم می‌خواند)
+    expect(view).toContain("liv: { low: 'مالی‌فرهنگی: کم‌برخوردار'");
+    expect(view).toContain("['cooperation', 'liv', 'culture', 'finance']");
+    expect(view).toContain('سطح مالی و فرهنگی خانواده');
+    expect(view).toContain('همکاری زیاد خانواده');
+    expect(view).toContain("r.familyContext?.finance === 'low' || r.familyContext?.liv === 'low'");
+    expect(waitRoutes).toContain('parsedReferral.error.issues[0]?.message'); // پیام فارسی issue اول
+    // پالت فرم = پالت سایت (کرم/آبی/کهربایی + گردی قرصی دکمه)
+    expect(referralPage).toContain(':root{--bg:#F7F3EA');
+    expect(referralPage).toContain('linear-gradient(135deg,#0D72A8 0%,#0A5D8A 100%)');
   });
 
   it('③ راهنمای عمومی سه‌دسته سرو می‌شود — همان قرارداد /public/referral', () => {

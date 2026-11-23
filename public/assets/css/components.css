@@ -57,10 +57,18 @@ html[dir='ltr'] .ico--flip svg { transform: none; }
 .btn--primary {
   background: var(--grad-primary, var(--primary));
   color: var(--on-primary);
+  /* ۱.۲۷.۴۹ — عمق نرم‌تر دکمه (بازتنظیم به خواست کارفرما): دولایه ملایم + هایلایت بالای قرص */
+  box-shadow:
+    0 1px 4px color-mix(in srgb, var(--primary) 22%, transparent),
+    0 8px 20px -8px color-mix(in srgb, var(--primary) 32%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 .btn--primary:hover:not(:disabled) {
   background: var(--grad-primary-hover, var(--primary-hover));
-  box-shadow: var(--glow-primary);
+  box-shadow:
+    0 2px 6px color-mix(in srgb, var(--primary) 26%, transparent),
+    0 12px 26px -8px color-mix(in srgb, var(--primary) 40%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18); /* ۱.۲۷.۴۹ نرم‌تر — glow سه‌لایهٔ hover حذف شد */
 }
 .btn--primary:active:not(:disabled) { box-shadow: none; }
 
@@ -77,12 +85,14 @@ html[dir='ltr'] .ico--flip svg { transform: none; }
 .btn--soft {
   background: var(--primary-soft);
   color: var(--on-primary-soft);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--primary) 12%, transparent), 0 4px 10px -4px color-mix(in srgb, var(--primary) 16%, transparent); /* ۱.۲۷.۴۹ نرم‌تر */
 }
 .btn--soft:hover:not(:disabled) { background: color-mix(in srgb, var(--primary-soft) 70%, var(--primary) 12%); }
 
 .btn--accent {
   background: var(--accent);
   color: var(--on-accent);
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--accent) 22%, transparent), 0 8px 18px -8px color-mix(in srgb, var(--accent) 34%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.18); /* ۱.۲۷.۴۹ نرم‌تر */
 }
 .btn--accent:hover:not(:disabled) { background: var(--accent-hover); }
 

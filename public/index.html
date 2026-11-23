@@ -15,27 +15,36 @@
   <meta name="theme-color" content="#F7F3EA" />
   <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#191C22" />
   <!-- نشان جدید مرکز + PWA: favicon برداری + PNG نسخه‌دار (با هر انتشار «?v=» bump شود) -->
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=1.27.43" />
-  <link rel="icon" type="image/png" sizes="32x32" href="/assets/img/logo-32.png?v=1.27.43" />
-  <link rel="icon" type="image/png" sizes="64x64" href="/favicon.png?v=1.27.43" />
-  <link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png?v=1.27.43" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=1.27.57" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/img/logo-32.png?v=1.27.57" />
+  <link rel="icon" type="image/png" sizes="64x64" href="/favicon.png?v=1.27.57" />
+  <link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png?v=1.27.57" />
   <link rel="manifest" href="/manifest.webmanifest" />
   <!-- پیش‌بارگذاری: فونت متغیر واحد (wght ۱۰۰–۹۰۰) + نشان سایدبار/ورود — بهبود LCP -->
   <link rel="preload" href="/assets/fonts/Vazirmatn-Variable.woff2" as="font" type="font/woff2" crossorigin />
-  <link rel="preload" href="/assets/img/logo-192.png?v=1.27.43" as="image" fetchpriority="high" />
+  <link rel="preload" href="/assets/img/logo-192.png?v=1.27.57" as="image" fetchpriority="high" />
   <!-- assetهای نسخه‌دار: با هر انتشار «?v=» را در همین فایل bump کنید
        تا کش یک‌سالهٔ immutable ــ/ِassets/* در _headers── باطل شود (cache busting) -->
-  <link rel="stylesheet" href="/assets/css/base.css?v=1.27.43" />
-  <link rel="stylesheet" href="/assets/css/components.css?v=1.27.43" />
-  <link rel="stylesheet" href="/assets/css/views.css?v=1.27.43" />
-  <script src="/assets/js/theme-boot.js?v=1.27.43"></script>
+  <link rel="stylesheet" href="/assets/css/base.css?v=1.27.57" />
+  <link rel="stylesheet" href="/assets/css/components.css?v=1.27.57" />
+  <link rel="stylesheet" href="/assets/css/views.css?v=1.27.57" />
+  <script src="/assets/js/theme-boot.js?v=1.27.57"></script>
 </head>
 <body>
   <div class="shell">
     <aside class="sidebar" id="sidebar">
       <div class="brand">
         <div class="brand__logo">
-          <img src="/assets/img/logo-192.png?v=1.27.43" alt="نشان مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام" width="40" height="40" />
+<svg viewBox="0 0 512 512" width="56" height="56" role="img" aria-label="نشان مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام" xmlns="http://www.w3.org/2000/svg">
+          <!-- ۱.۲۷.۴۷ — نشان مونوکروم دوسطحی (خواست کارفرما: مناسب تم مشکی‌وسفید) — در تم تیره وارونه می‌شود -->
+          <rect width="512" height="512" rx="116" fill="var(--logo-tile)"/>
+          <circle cx="256" cy="106" r="38" fill="none" stroke="var(--logo-glyph)" stroke-width="26"/>
+          <rect x="142" y="150" width="228" height="72" rx="36" fill="var(--logo-glyph)"/>
+          <rect x="170" y="196" width="172" height="236" rx="48" fill="var(--logo-glyph)"/>
+          <rect x="198" y="246" width="116" height="132" rx="22" fill="var(--logo-tile)"/>
+          <path d="M256 258 C284 300 284 340 256 372 C228 340 228 300 256 258 Z" fill="var(--logo-glyph)"/>
+          <rect x="158" y="446" width="196" height="30" rx="15" fill="var(--logo-glyph)"/>
+        </svg>
         </div>
         <div>
           <div class="brand__name">مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام</div>
@@ -95,7 +104,7 @@
   <link rel="modulepreload" href="/assets/dist/chunk.JGJMXBNJ.js" />
   <link rel="modulepreload" href="/assets/dist/chunk.UHZTI42Q.js" />
  <!-- ورودی باندل نام‌دار (hashدار؛ کش یک‌ساله immutable در _headers) — با build-client.mjs بازسازی می‌شود -->
- <script type="module" src="/assets/dist/boot.4VRJ2G57.js"></script>
+ <script type="module" src="/assets/dist/boot.PVHHUHDO.js"></script>
   <!-- ثبت Service Worker (PWA): پس از بار کامل صفحه، بدون رقابت با منابع بحرانی -->
   <script>
     if ('serviceWorker' in navigator) {

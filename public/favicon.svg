@@ -1,9 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <!-- فاوآیکون برداری: فانوس (نشان مرکز) · I12: پالت هم‌مقدار توکن‌های برند (#1C3B4E=primary-soft تیره، #D89428=accent، #F7F3EA=bg) + وزن خط هم‌خانوادهٔ اپ -->
-  <rect width="32" height="32" rx="7" fill="#1C3B4E"/>
-  <circle cx="16" cy="6.4" r="2.3" fill="none" stroke="#F7F3EA" stroke-width="1.7"/>
-  <path d="M11.6 13.2 Q16 8.2 20.4 13.2 Z" fill="#F7F3EA"/>
-  <rect x="11.2" y="13.8" width="9.6" height="10.2" rx="1.6" fill="none" stroke="#F7F3EA" stroke-width="2.2"/>
-  <path d="M16 16.1c1.9 2.1 1.9 4.3 0 6.1c-1.9-1.8-1.9-4 0-6.1z" fill="#D89428"/>
-  <rect x="10.2" y="25.4" width="11.6" height="1.9" rx="0.95" fill="#F7F3EA"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- ۱.۲۷.۴۷ — نشان مونوکروم فانوس (خواست کارفرما: مناسب تم مشکی‌وسفید) -->
+  <rect width="512" height="512" rx="116" fill="#0A0A0A"/>
+  <circle cx="256" cy="106" r="38" fill="none" stroke="#FFFFFF" stroke-width="26"/>
+  <rect x="142" y="150" width="228" height="72" rx="36" fill="#FFFFFF"/>
+  <rect x="170" y="196" width="172" height="236" rx="48" fill="#FFFFFF"/>
+  <rect x="198" y="246" width="116" height="132" rx="22" fill="#0A0A0A"/>
+  <path d="M256 258 C284 300 284 340 256 372 C228 340 228 300 256 258 Z" fill="#FFFFFF"/>
+  <rect x="158" y="446" width="196" height="30" rx="15" fill="#FFFFFF"/>
 </svg>

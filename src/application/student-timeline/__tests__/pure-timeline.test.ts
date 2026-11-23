@@ -7,12 +7,13 @@ import {
   appointmentEventState,
   parseCompositeRef,
   jalaliDateTimeLabel,
+  periodizeTimeline,
   CASE_STATUS_LABELS_FA
 } from '../pure';
 import type { TimelineEvent } from '../types';
 
-function ev(at: string, kind: TimelineEvent['kind'], title = 't', refId?: string): TimelineEvent {
-  return { at, kind, title, subtitle: null, actor: null, ref: refId ? { type: 'x', id: refId } : null };
+function ev(at: string, kind: TimelineEvent['kind'], title = 't', refId?: string, extra: Partial<TimelineEvent> = {}): TimelineEvent {
+  return { at, kind, title, subtitle: null, actor: null, ref: refId ? { type: 'x', id: refId } : null, ...extra };
 }
 
 describe('mergeTimelineEvents — ترتیب قطعی', () => {
@@ -61,6 +62,19 @@ describe('filterTimelineEvents — from/to/kinds', () => {
 
   it('بدون فیلتر = همه', () => {
     expect(filterTimelineEvents(events, {})).toHaveLength(3);
+  });
+
+  it('موج ۲ — جست‌وجوی q روی title/subtitle/actor (متن فارسی و لاتین)', () => {
+    const evs = [
+      ev('2025-01-05T10:00:00Z', 'appointment', 'جلسه — حضور ثبت شد'),
+      Object.assign(ev('2025-02-05T10:00:00Z', 'case_event', 'رویداد: چک‌لیست', 'ce1'), { subtitle: 'تمرین تنفس', actor: 'معلم: سارا' }),
+      Object.assign(ev('2025-03-05T10:00:00Z', 'session_note', 'گزارش جلسه ثبت شد', 'n1'), { actor: 'دکتر رضایی' })
+    ];
+    expect(filterTimelineEvents(evs, { q: 'تنفس' }).map((x) => x.title)).toEqual(['رویداد: چک‌لیست']);
+    expect(filterTimelineEvents(evs, { q: 'رضا' })).toHaveLength(1);
+    expect(filterTimelineEvents(evs, { q: 'حضور' })).toHaveLength(1);
+    expect(filterTimelineEvents(evs, { q: '   ' })).toHaveLength(3); // فقط فاصله = بی‌فیلتر
+    expect(filterTimelineEvents(evs, { q: 'چیزی-که-نیست' })).toHaveLength(0);
   });
 });
 
@@ -160,5 +174,85 @@ describe('ابزارها', () => {
   it('لیبل وضعیت پرونده کامل است (۵ مقدار §12.1)', () => {
     expect(Object.keys(CASE_STATUS_LABELS_FA)).toHaveLength(5);
     expect(CASE_STATUS_LABELS_FA.in_intervention).toBe('در مداخله');
+  });
+});
+
+describe('periodizeTimeline — فصل‌بندی قطعی روایت (موج ۱ طرح D)', () => {
+  const NOW = '2025-06-01T00:00:00Z';
+
+  it('سفر کامل: غربال→ارزیابی→طرح→درمان→بازسنجی→درمان ۲', () => {
+    const events = [
+      ev('2025-01-01T00:00:00Z', 'student_created', 'پرونده تشکیل شد'),
+      ev('2025-01-05T00:00:00Z', 'waitlist', 'وارد لیست انتظار شد', 'w1', { boundary: 'screening' }),
+      ev('2025-01-20T00:00:00Z', 'waitlist', 'پذیرش شد — پرونده فعال شد', 'w1', { boundary: 'assessment', milestone: true }),
+      ev('2025-02-01T00:00:00Z', 'clinical_path', 'مسیر مداخله ساخته شد', 'p1', { boundary: 'plan' }),
+      ev('2025-02-05T00:00:00Z', 'appointment', 'جلسه — حضور ثبت شد'),
+      ev('2025-02-12T00:00:00Z', 'appointment', 'جلسه — حضور ثبت شد'),
+      ev('2025-03-01T00:00:00Z', 'committee', 'تصمیم کمیسیون: مصوب', 'c1', { boundary: 'review', milestone: true }),
+      ev('2025-03-10T00:00:00Z', 'appointment', 'جلسه — حضور ثبت شد')
+    ];
+    const chs = periodizeTimeline(events, { nowIso: NOW });
+    expect(chs.map((c) => c.phase)).toEqual(['screening', 'assessment', 'plan', 'treatment', 'review', 'treatment']);
+    // رویدادِ پیش از اولین مرز به اولین فصل می‌پیوندد — نه فصل ساختگی «پراکنده»
+    expect(chs[0].from).toBe('2025-01-01T00:00:00Z');
+    expect(chs[3].run).toBe(1);
+    expect(chs[5].run).toBe(2);
+    for (let i = 0; i < chs.length - 1; i++) expect(chs[i].to).toBe(chs[i + 1].from); // پیوستگی
+    expect(chs[chs.length - 1].to).toBe(NOW);
+    expect(chs.every((c) => c.eventCount > 0)).toBe(true);
+  });
+
+  it('شکاف ۲۱+ روزهٔ جلسات پیاپی درمان را می‌شکند؛ فاصلهٔ کوتاه همان دوره می‌ماند', () => {
+    const events = [
+      ev('2025-01-01T00:00:00Z', 'waitlist', 'وارد لیست انتظار شد', 'w1', { boundary: 'screening' }),
+      ev('2025-01-10T00:00:00Z', 'waitlist', 'پذیرش شد', 'w1', { boundary: 'assessment' }),
+      ev('2025-01-15T00:00:00Z', 'appointment', 'جلسه'),
+      ev('2025-03-01T00:00:00Z', 'appointment', 'جلسه'), // ~۴۵ روز بعد — دورهٔ تازه
+      ev('2025-03-08T00:00:00Z', 'appointment', 'جلسه') // ۷ روز بعد — ادامهٔ همان دوره
+    ];
+    const chs = periodizeTimeline(events, { nowIso: NOW });
+    expect(chs.map((c) => c.phase)).toEqual(['screening', 'assessment', 'treatment', 'treatment']);
+    expect(chs.filter((c) => c.phase === 'treatment').map((c) => c.run)).toEqual([1, 2]);
+  });
+
+  it('بدون هیچ مرزی → تک‌فصل «ثبت‌های پراکنده» (بدون عنوان بالینی ساختگی)', () => {
+    const events = [
+      ev('2025-01-01T00:00:00Z', 'student_created'),
+      ev('2025-01-10T00:00:00Z', 'appointment'),
+      ev('2025-01-20T00:00:00Z', 'session_note')
+    ];
+    const chs = periodizeTimeline(events, { nowIso: NOW });
+    expect(chs).toHaveLength(1);
+    expect(chs[0].phase).toBe('scattered');
+    expect(chs[0].from).toBe('2025-01-01T00:00:00Z');
+    expect(chs[0].to).toBe(NOW);
+  });
+
+  it('جلسهٔ تنها با نبود مرز، فصل درمان نمی‌سازد (فقط از plan/assessment/review)', () => {
+    const chs = periodizeTimeline([ev('2025-01-01T00:00:00Z', 'appointment')], { nowIso: NOW });
+    expect(chs).toHaveLength(1);
+    expect(chs[0].phase).toBe('scattered');
+  });
+
+  it('مرز روی فصل هم‌نام فصل تازه نمی‌سازد — فصل ادامه می‌یابد', () => {
+    const chs = periodizeTimeline([
+      ev('2025-01-01T00:00:00Z', 'waitlist', 'وارد لیست انتظار شد', 'w1', { boundary: 'screening' }),
+      ev('2025-01-08T00:00:00Z', 'waitlist', 'وارد لیست انتظار شد', 'w2', { boundary: 'screening' }),
+      ev('2025-02-01T00:00:00Z', 'waitlist', 'پذیرش شد', 'w2', { boundary: 'assessment' })
+    ], { nowIso: NOW });
+    expect(chs.map((c) => c.phase)).toEqual(['screening', 'assessment']);
+  });
+
+  it('خط زمانی خالی → هیچ فصلی', () => {
+    expect(periodizeTimeline([], { nowIso: NOW })).toEqual([]);
+  });
+
+  it('ورودی مرتب‌نشده هم قطعی فصل‌بندی می‌شود (مرتب‌سازی صعودی داخلی)', () => {
+    const chs = periodizeTimeline([
+      ev('2025-02-01T00:00:00Z', 'clinical_path', 'مسیر مداخله ساخته شد', 'p1', { boundary: 'plan' }),
+      ev('2025-01-01T00:00:00Z', 'student_created')
+    ], { nowIso: NOW });
+    expect(chs[0].from).toBe('2025-01-01T00:00:00Z');
+    expect(chs[0].phase).toBe('plan');
   });
 });

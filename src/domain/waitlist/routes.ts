@@ -45,7 +45,12 @@ function referralRateGuard(ip: string, chatKey: string | null): void {
   }
 }
 
-export function registerWaitlistRoutes(app: AppHono, service: WaitlistService): void {
+export function registerWaitlistRoutes(
+  app: AppHono,
+  service: WaitlistService,
+  /* ۱.۲۷.۴۴ — پایهٔ لینک عمومی معرفی برای جعبهٔ اشتراک پنل (از env استقرار؛ دسکتاپ null) */
+  opts?: { publicBaseUrl?: string | null }
+): void {
   app.get('/api/waitlist', async (c) => {
     const status = c.req.query('status') as never | undefined;
     const priority = c.req.query('priority') as never | undefined;
@@ -69,7 +74,9 @@ export function registerWaitlistRoutes(app: AppHono, service: WaitlistService): 
       status: c.req.query('status') || undefined,
       year: c.req.query('year') || undefined
     });
-    return c.json({ data: items }, 200);
+    /* ۱.۲۷.۴۴ — جعبهٔ «لینک عمومی معرفی» پنل از همین فیلد می‌خواند؛ در موتور محلی null است
+       و نما به location.origin برمی‌گردد (لینک LAN فقط برای شبکهٔ داخلی معنا دارد). */
+    return c.json({ data: items, public_base_url: opts?.publicBaseUrl ?? null }, 200);
   });
 
   app.post('/api/waitlist/referrals/:id/accept', requireRole('manager', 'secretary'), async (c) => {
@@ -273,7 +280,13 @@ export function registerWaitlistRoutes(app: AppHono, service: WaitlistService): 
     } catch {
       return c.json({ error: 'VALIDATION_ERROR', message: 'بدنهٔ درخواست JSON معتبر نیست' }, 400);
     }
-    const body = PublicReferralSubmissionSchema.parse(parsedBody);
+    /* ۱.۲۷.۴۶ — پیام issue اول زود مستقیم به کاربر می‌رود (مثلاً الزام دو فیلد وضعیت خانوادهٔ معلم)
+       به‌جای پیام عمومی «ورودی نامعتبر است»؛ سقف نرخ و سقف حجم بالای سر همان است. */
+    const parsedReferral = PublicReferralSubmissionSchema.safeParse(parsedBody);
+    if (!parsedReferral.success) {
+      return c.json({ error: 'VALIDATION_ERROR', message: parsedReferral.error.issues[0]?.message ?? 'ورودی نامعتبر است' }, 400);
+    }
+    const body = parsedReferral.data;
     const ip = (
       c.req.header('cf-connecting-ip') ??
       c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ??

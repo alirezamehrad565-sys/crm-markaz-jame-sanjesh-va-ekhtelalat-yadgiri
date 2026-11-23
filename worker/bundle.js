@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.27.43";
+var APP_VERSION = "1.27.57";
 var NODE_MIN_VERSION = "1.26.0";
 
 // node_modules/zod/v4/classic/external.js
@@ -22850,8 +22850,9 @@ var CancelAppointmentSchema = external_exports.object({
   version: external_exports.number().int().positive()
 });
 var CopyWeekSchema = external_exports.object({
-  source_monday: TehranYmdSchema,
-  target_monday: TehranYmdSchema,
+  /* ۱.۲۷.۴۸ — کپی هفته بر پایهٔ شنبه (مرز هفتهٔ تقویم) */
+  source_week_start: TehranYmdSchema,
+  target_week_start: TehranYmdSchema,
   staff_id: UuidSchema.optional(),
   dry_run: external_exports.boolean().optional().default(false)
 });
@@ -23520,7 +23521,10 @@ var ReferralChildSchema = external_exports.object({
   /* ۱.۲۷.۳۶ — فرم تکمیلی وضعیت خانواده زیر هر دانش‌آموز (اختیاری؛ «نمی‌دانم» ارسال نمی‌شود) */
   family_culture: external_exports.enum(REFERRAL_FAMILY_LEVELS).nullish(),
   family_finance: external_exports.enum(REFERRAL_FAMILY_LEVELS).nullish(),
-  family_cooperation: external_exports.enum(REFERRAL_FAMILY_LEVELS).nullish()
+  family_cooperation: external_exports.enum(REFERRAL_FAMILY_LEVELS).nullish(),
+  /* ۱.۲۷.۴۶ — «سطح مالی و فرهنگی خانواده» (فیلد ترکیبی مسیر معلم؛ خواست کارفرما) —
+     معلم یک ارزیابی کلی می‌دهد؛ فرهنگی/مالی جدا فقط از فرم تکمیلی خانواده پر می‌شود */
+  family_liv: external_exports.enum(REFERRAL_FAMILY_LEVELS).nullish()
 });
 var PublicReferralSubmissionSchema = external_exports.object({
   role: external_exports.enum(["family", "teacher"], { message: "\u0646\u0642\u0634 \u0645\u0639\u0631\u0641 \u0628\u0627\u06CC\u062F \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u06CC\u0627 \u0645\u0639\u0644\u0645 \u0628\u0627\u0634\u062F" }),
@@ -23531,6 +23535,20 @@ var PublicReferralSubmissionSchema = external_exports.object({
   class_text: external_exports.string().trim().max(40).optional(),
   token: external_exports.string().trim().max(200).optional(),
   children: external_exports.array(ReferralChildSchema).min(1, "\u062D\u062F\u0627\u0642\u0644 \u06CC\u06A9 \u06A9\u0648\u062F\u06A9 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A").max(REFERRAL_CHILDREN_MAX, `\u062D\u062F\u0627\u06A9\u062B\u0631 ${REFERRAL_CHILDREN_MAX} \u06A9\u0648\u062F\u06A9 \u062F\u0631 \u0647\u0631 \u062B\u0628\u062A`)
+}).superRefine((v, ctx) => {
+  if (v.role !== "teacher") return;
+  v.children.forEach((c, i) => {
+    const missing = [];
+    if (!c.family_cooperation) missing.push("\u0647\u0645\u06A9\u0627\u0631\u06CC \u062E\u0627\u0646\u0648\u0627\u062F\u0647");
+    if (!c.family_liv) missing.push("\u0633\u0637\u062D \u0645\u0627\u0644\u06CC \u0648 \u0641\u0631\u0647\u0646\u06AF\u06CC \u062E\u0627\u0646\u0648\u0627\u062F\u0647");
+    if (missing.length > 0) {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: ["children", i],
+        message: `\u0628\u0631\u0627\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \xAB${c.first_name || `\u0631\u062F\u06CC\u0641 ${i + 1}`}\xBB \u0627\u06CC\u0646 \u0641\u06CC\u0644\u062F\u0647\u0627 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A: ${missing.join(" \u0648 ")}`
+      });
+    }
+  });
 });
 var ReferralRejectSchema = external_exports.object({
   reason: external_exports.string().trim().min(2, "\u062F\u0644\u06CC\u0644 \u0631\u062F \u0644\u0627\u0632\u0645 \u0627\u0633\u062A \u2014 \u0628\u0631\u0627\u06CC \u0645\u0639\u0631\u0641 \u0642\u0627\u0628\u0644 \u0627\u0631\u0633\u0627\u0644 \u0627\u0633\u062A").max(REFERRAL_REJECT_REASON_MAX, `\u062F\u0644\u06CC\u0644 \u0631\u062F \u062D\u062F\u0627\u06A9\u062B\u0631 ${REFERRAL_REJECT_REASON_MAX} \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A`)
@@ -26654,21 +26672,21 @@ __name(selectStudentsOfAppointments, "selectStudentsOfAppointments");
 var DAY_MS = 24 * 60 * 60 * 1e3;
 async function copyWeek(ctx) {
   const { db, audit, logger, actor, input: input2 } = ctx;
-  for (const [label, ymd] of [["source_monday", input2.sourceMonday], ["target_monday", input2.targetMonday]]) {
+  for (const [label, ymd] of [["source_week_start", input2.sourceWeekStart], ["target_week_start", input2.targetWeekStart]]) {
     const day = (/* @__PURE__ */ new Date(`${ymd}T00:00:00.000Z`)).getUTCDay();
-    if (day !== 1) {
-      throw new ValidationError(`${label} \u0628\u0627\u06CC\u062F \u062F\u0648\u0634\u0646\u0628\u0647 \u0628\u0627\u0634\u062F (${ymd})`);
+    if (day !== 6) {
+      throw new ValidationError(`${label} \u0628\u0627\u06CC\u062F \u0634\u0646\u0628\u0647 \u0628\u0627\u0634\u062F (${ymd})`);
     }
   }
-  if (Date.parse(input2.targetMonday) <= Date.parse(input2.sourceMonday)) {
-    throw new ValidationError("target_monday \u0628\u0627\u06CC\u062F \u0628\u0639\u062F \u0627\u0632 source_monday \u0628\u0627\u0634\u062F");
+  if (Date.parse(input2.targetWeekStart) <= Date.parse(input2.sourceWeekStart)) {
+    throw new ValidationError("target_week_start \u0628\u0627\u06CC\u062F \u0628\u0639\u062F \u0627\u0632 source_week_start \u0628\u0627\u0634\u062F");
   }
   if (actor.role === "therapist" && input2.staffId !== actor.staffId) {
     throw new ForbiddenError("\u06A9\u067E\u06CC \u0647\u0641\u062A\u0647 \u0641\u0642\u0637 \u0628\u0631\u0627\u06CC \u0628\u0631\u0646\u0627\u0645\u0647\u0654 \u062E\u0648\u062F\u0650 \u0634\u0645\u0627 \u0645\u062C\u0627\u0632 \u0627\u0633\u062A");
   }
-  const sourceRange = tehranDayRange(input2.sourceMonday);
+  const sourceRange = tehranDayRange(input2.sourceWeekStart);
   const sourceEnd = new Date(Date.parse(sourceRange.end) + 7 * DAY_MS).toISOString();
-  const shiftMs = Date.parse(`${input2.targetMonday}T00:00:00.000Z`) - Date.parse(`${input2.sourceMonday}T00:00:00.000Z`);
+  const shiftMs = Date.parse(`${input2.targetWeekStart}T00:00:00.000Z`) - Date.parse(`${input2.sourceWeekStart}T00:00:00.000Z`);
   const conditions = [`start_at >= ?`, `start_at < ?`, `status = 'scheduled'`];
   const params = [sourceRange.start, sourceEnd];
   if (input2.staffId) {
@@ -26759,8 +26777,8 @@ async function copyWeek(ctx) {
       resourceType: "appointment_batch",
       resourceId: batchId,
       changes: {
-        source_monday: { from: null, to: input2.sourceMonday },
-        target_monday: { from: null, to: input2.targetMonday },
+        source_week_start: { from: null, to: input2.sourceWeekStart },
+        target_week_start: { from: null, to: input2.targetWeekStart },
         copied: { from: null, to: toCopy.length },
         skipped_conflicts: { from: null, to: conflicts.length }
       }
@@ -27345,8 +27363,8 @@ function registerRoutes(app, service) {
     const actor = getAuthContext(c);
     const body = CopyWeekSchema.parse(await c.req.json());
     const input2 = {
-      sourceMonday: body.source_monday,
-      targetMonday: body.target_monday,
+      sourceWeekStart: body.source_week_start,
+      targetWeekStart: body.target_week_start,
       staffId: body.staff_id,
       dryRun: body.dry_run
     };
@@ -29858,7 +29876,9 @@ var TIMELINE_KINDS = [
   "committee",
   "exercise",
   "clinical_path",
-  "case_event"
+  "case_event",
+  "report_export"
+  // موج ۳ — سند خروجی نسخه‌دار از پرونده (طرح C: گزارش در تاریخچه «سند» است نه رویداد)
 ];
 
 // src/application/student-timeline/pure.ts
@@ -29957,10 +29977,17 @@ function mergeTimelineEvents(raw2) {
 __name(mergeTimelineEvents, "mergeTimelineEvents");
 function filterTimelineEvents(events, filters) {
   const validKinds = filters.kinds ? new Set(filters.kinds.filter((k) => TIMELINE_KINDS.includes(k))) : null;
+  const q = filters.q?.trim().toLowerCase();
   return events.filter((e) => {
     if (filters.from && e.at < filters.from) return false;
     if (filters.to && e.at > filters.to) return false;
     if (validKinds && !validKinds.has(e.kind)) return false;
+    if (q) {
+      const hay = `${e.title ?? ""}
+${e.subtitle ?? ""}
+${e.actor ?? ""}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
     return true;
   });
 }
@@ -30000,6 +30027,84 @@ function parseCompositeRef(resourceId) {
   return { appointmentId: resourceId.slice(0, idx), studentId: resourceId.slice(idx + 1) };
 }
 __name(parseCompositeRef, "parseCompositeRef");
+var TREATMENT_GAP_DAYS = 21;
+var TREATMENT_GAP_MS = TREATMENT_GAP_DAYS * 864e5;
+function periodizeTimeline(events, opts = {}) {
+  const asc = [...events].sort((a, b) => a.at < b.at ? -1 : a.at > b.at ? 1 : 0);
+  if (asc.length === 0) return [];
+  const nowIso2 = opts.nowIso ?? (/* @__PURE__ */ new Date()).toISOString();
+  const segs = [];
+  let phase = null;
+  let run = 0;
+  let lastApptAt = null;
+  const openSeg = /* @__PURE__ */ __name((p, at) => {
+    phase = p;
+    const seg = { phase: p, from: at, count: 0 };
+    if (p === "treatment") {
+      run += 1;
+      seg.run = run;
+    }
+    segs.push(seg);
+  }, "openSeg");
+  for (const e of asc) {
+    let want = null;
+    if (e.boundary === "screening" || e.boundary === "assessment" || e.boundary === "plan" || e.boundary === "review") {
+      want = e.boundary;
+    } else if ((e.kind === "appointment" || e.kind === "exercise") && (phase === "plan" || phase === "assessment" || phase === "review")) {
+      want = "treatment";
+    }
+    let opened = false;
+    if (phase === null) {
+      openSeg(want ?? "scattered", e.at);
+      opened = true;
+    } else if (want && want !== phase) {
+      if (phase === "scattered" && segs.length === 1 && segs[0].phase === "scattered") segs.pop();
+      openSeg(want, e.at);
+      opened = true;
+    }
+    if (!opened && phase === "treatment" && e.kind === "appointment" && lastApptAt !== null && Date.parse(e.at) - Date.parse(lastApptAt) > TREATMENT_GAP_MS) {
+      openSeg("treatment", e.at);
+    }
+    const seg = segs[segs.length - 1];
+    seg.count += 1;
+    if (e.kind === "appointment") lastApptAt = e.at;
+  }
+  if (segs.length === 1 && segs[0].phase === "scattered") {
+    return [buildChapter("ch-1", segs[0], asc[0].at, nowIso2, asc.length)];
+  }
+  return segs.map((seg, i) => {
+    const from = i === 0 ? asc[0].at : seg.from;
+    const to = i === segs.length - 1 ? nowIso2 : segs[i + 1].from;
+    return buildChapter(`ch-${i + 1}`, seg, from, to, seg.count);
+  });
+}
+__name(periodizeTimeline, "periodizeTimeline");
+function buildChapter(id, seg, from, to, eventCount) {
+  return {
+    id,
+    phase: seg.phase,
+    ...seg.run !== void 0 ? { run: seg.run } : {},
+    from,
+    to,
+    eventCount,
+    summary: {
+      sessions: 0,
+      attended: 0,
+      absent: 0,
+      cancelledSessions: 0,
+      pendingSessions: 0,
+      exercisesAssigned: 0,
+      exercisesSubmitted: 0,
+      exercisesCorrected: 0,
+      followupsCreated: 0,
+      committeeDecisions: 0,
+      caseEvents: 0,
+      milestones: 0
+    },
+    trend: { attendancePct: null, scores: [] }
+  };
+}
+__name(buildChapter, "buildChapter");
 
 // src/application/student-timeline/service.ts
 function createStudentTimelineService(db) {
@@ -30122,6 +30227,14 @@ function createStudentTimelineService(db) {
           ORDER BY created_at ASC`,
         [studentId]
       );
+      const snapshots = await db.query(
+        `SELECT id, report_no, template_key, signed_name,
+                strftime('%Y-%m-%dT%H:%M:%SZ', created_at) AS created_at
+           FROM report_snapshots
+          WHERE student_id = ?
+          ORDER BY created_at ASC`,
+        [studentId]
+      );
       const actors = await actorNames([
         ...studentAudits.map((a) => a.actor_id),
         ...moveAudits.map((a) => a.actor_id),
@@ -30146,7 +30259,7 @@ function createStudentTimelineService(db) {
           const changes = parseChanges(a.changes);
           const from = labelOf(CASE_STATUS_LABELS_FA, changes?.case_status?.from);
           const to = labelOf(CASE_STATUS_LABELS_FA, changes?.case_status?.to);
-          raw2.push({ at: a.created_at, kind: "case_status", title: "\u0648\u0636\u0639\u06CC\u062A \u067E\u0631\u0648\u0646\u062F\u0647 \u062A\u063A\u06CC\u06CC\u0631 \u06A9\u0631\u062F", subtitle: `\u0627\u0632 \xAB${from}\xBB \u0628\u0647 \xAB${to}\xBB`, actor: actorOf(a.actor_id), ref: { type: "student", id: studentId } });
+          raw2.push({ at: a.created_at, kind: "case_status", title: "\u0648\u0636\u0639\u06CC\u062A \u067E\u0631\u0648\u0646\u062F\u0647 \u062A\u063A\u06CC\u06CC\u0631 \u06A9\u0631\u062F", subtitle: `\u0627\u0632 \xAB${from}\xBB \u0628\u0647 \xAB${to}\xBB`, actor: actorOf(a.actor_id), ref: { type: "student", id: studentId }, boundary: "review", milestone: true, milestoneLabel: `\u062A\u063A\u06CC\u06CC\u0631 \u0648\u0636\u0639\u06CC\u062A \u067E\u0631\u0648\u0646\u062F\u0647: ${to}` });
         } else if (a.action === "student.special_need.changed") {
           const changes = parseChanges(a.changes);
           const toType = changes?.special_need_type?.to;
@@ -30215,12 +30328,13 @@ function createStudentTimelineService(db) {
       for (const fa2 of followupAudits) {
         const fu = fuById.get(fa2.resource_id);
         if (!fu) continue;
+        const open2 = FOLLOWUP_OPEN_STATUSES.includes(fu.status);
         if (fa2.action === "followup.created") {
-          raw2.push({ at: fa2.created_at, kind: "followup", title: "\u067E\u06CC\u06AF\u06CC\u0631\u06CC \u0627\u06CC\u062C\u0627\u062F \u0634\u062F", subtitle: fu.title, actor: actorOf(fa2.actor_id), ref: { type: "followup", id: fu.id } });
+          raw2.push({ at: fa2.created_at, kind: "followup", title: "\u067E\u06CC\u06AF\u06CC\u0631\u06CC \u0627\u06CC\u062C\u0627\u062F \u0634\u062F", subtitle: fu.title, actor: actorOf(fa2.actor_id), ref: { type: "followup", id: fu.id }, dueAt: fu.due_at, open: open2 });
         } else if (fa2.action === "followup.completed") {
-          raw2.push({ at: fa2.created_at, kind: "followup", title: "\u067E\u06CC\u06AF\u06CC\u0631\u06CC \u062A\u06A9\u0645\u06CC\u0644 \u0634\u062F", subtitle: fu.title, actor: actorOf(fa2.actor_id), ref: { type: "followup", id: fu.id } });
+          raw2.push({ at: fa2.created_at, kind: "followup", title: "\u067E\u06CC\u06AF\u06CC\u0631\u06CC \u062A\u06A9\u0645\u06CC\u0644 \u0634\u062F", subtitle: fu.title, actor: actorOf(fa2.actor_id), ref: { type: "followup", id: fu.id }, dueAt: fu.due_at, open: open2 });
         } else if (fa2.action === "followup.updated") {
-          raw2.push({ at: fa2.created_at, kind: "followup", title: "\u067E\u06CC\u06AF\u06CC\u0631\u06CC \u0628\u0647\u200C\u0631\u0648\u0632\u0631\u0633\u0627\u0646\u06CC \u0634\u062F", subtitle: fu.title, actor: actorOf(fa2.actor_id), ref: { type: "followup", id: fu.id } });
+          raw2.push({ at: fa2.created_at, kind: "followup", title: "\u067E\u06CC\u06AF\u06CC\u0631\u06CC \u0628\u0647\u200C\u0631\u0648\u0632\u0631\u0633\u0627\u0646\u06CC \u0634\u062F", subtitle: fu.title, actor: actorOf(fa2.actor_id), ref: { type: "followup", id: fu.id }, dueAt: fu.due_at, open: open2 });
         }
       }
       const wlById = new Map(waitlistRows.map((w) => [w.id, w]));
@@ -30228,11 +30342,11 @@ function createStudentTimelineService(db) {
         const wl = wlById.get(wa.resource_id);
         const waited = wl ? waitDays(wl.created_at, wa.created_at) : null;
         if (wa.action === "waitlist.waiting_set") {
-          raw2.push({ at: wa.created_at, kind: "waitlist", title: "\u0648\u0627\u0631\u062F \u0644\u06CC\u0633\u062A \u0627\u0646\u062A\u0638\u0627\u0631 \u0634\u062F", subtitle: null, actor: actorOf(wa.actor_id), ref: { type: "waitlist", id: wa.resource_id } });
+          raw2.push({ at: wa.created_at, kind: "waitlist", title: "\u0648\u0627\u0631\u062F \u0644\u06CC\u0633\u062A \u0627\u0646\u062A\u0638\u0627\u0631 \u0634\u062F", subtitle: null, actor: actorOf(wa.actor_id), ref: { type: "waitlist", id: wa.resource_id }, boundary: "screening" });
         } else if (wa.action === "waitlist.schedule") {
           raw2.push({ at: wa.created_at, kind: "waitlist", title: "\u0646\u0648\u0628\u062A \u0627\u0648\u0644 \u0627\u0632 \u0644\u06CC\u0633\u062A \u0627\u0646\u062A\u0638\u0627\u0631 \u062B\u0628\u062A \u0634\u062F", subtitle: waited !== null ? `\u0645\u062F\u062A \u0627\u0646\u062A\u0638\u0627\u0631: ${faDays(waited)}` : null, actor: actorOf(wa.actor_id), ref: { type: "waitlist", id: wa.resource_id } });
         } else if (wa.action === "waitlist.admitted") {
-          raw2.push({ at: wa.created_at, kind: "waitlist", title: "\u067E\u0630\u06CC\u0631\u0634 \u0634\u062F \u2014 \u067E\u0631\u0648\u0646\u062F\u0647 \u0641\u0639\u0627\u0644 \u0634\u062F", subtitle: waited !== null ? `\u0645\u062F\u062A \u0627\u0646\u062A\u0638\u0627\u0631: ${faDays(waited)}` : null, actor: null, ref: { type: "waitlist", id: wa.resource_id } });
+          raw2.push({ at: wa.created_at, kind: "waitlist", title: "\u067E\u0630\u06CC\u0631\u0634 \u0634\u062F \u2014 \u067E\u0631\u0648\u0646\u062F\u0647 \u0641\u0639\u0627\u0644 \u0634\u062F", subtitle: waited !== null ? `\u0645\u062F\u062A \u0627\u0646\u062A\u0638\u0627\u0631: ${faDays(waited)}` : null, actor: null, ref: { type: "waitlist", id: wa.resource_id }, boundary: "assessment", milestone: true });
         }
       }
       for (const n of notifications) {
@@ -30270,7 +30384,11 @@ function createStudentTimelineService(db) {
               title: `\u062A\u0635\u0645\u06CC\u0645 \u06A9\u0645\u06CC\u0633\u06CC\u0648\u0646: ${toLabel}`,
               subtitle: `${ci.topic} \xB7 ${meetingLabel}`,
               actor: actorOf(ca.actor_id),
-              ref: { type: "committee_item", id: ci.id }
+              ref: { type: "committee_item", id: ci.id },
+              boundary: "review",
+              // موج ۱ — تصمیم کمیسیون مرز بازسنجی + لحظهٔ کلیدی
+              milestone: true,
+              milestoneLabel: `\u062A\u0635\u0645\u06CC\u0645 \u06A9\u0645\u06CC\u0633\u06CC\u0648\u0646: ${toLabel}`
             });
           } else {
             raw2.push({
@@ -30333,7 +30451,9 @@ function createStudentTimelineService(db) {
             title: "\u0645\u0633\u06CC\u0631 \u0645\u062F\u0627\u062E\u0644\u0647 \u0633\u0627\u062E\u062A\u0647 \u0634\u062F",
             subtitle: null,
             actor: actorOf(pa.actor_id),
-            ref: { type: "clinical_path", id: pa.resource_id }
+            ref: { type: "clinical_path", id: pa.resource_id },
+            boundary: "plan"
+            // موج ۱ — آغاز فاز طرح درمان
           });
         } else if (pa.action === "clinical_path.decision") {
           const changes = parseChanges(pa.changes);
@@ -30345,14 +30465,21 @@ function createStudentTimelineService(db) {
             title: toLabel ? `\u062A\u0635\u0645\u06CC\u0645 \u0645\u0633\u06CC\u0631 \u0645\u062F\u0627\u062E\u0644\u0647: ${toLabel}` : "\u062A\u0635\u0645\u06CC\u0645 \u0645\u0633\u06CC\u0631 \u0645\u062F\u0627\u062E\u0644\u0647",
             subtitle: changes?.reassess_at?.to ? "\u0628\u0627\u0632\u0633\u0646\u062C\u06CC \u06F4\u2013\u06F6 \u0647\u0641\u062A\u0647 \u0628\u0631\u0646\u0627\u0645\u0647\u200C\u0631\u06CC\u0632\u06CC \u0634\u062F" : null,
             actor: actorOf(pa.actor_id),
-            ref: { type: "clinical_path", id: pa.resource_id }
+            ref: { type: "clinical_path", id: pa.resource_id },
+            boundary: "review",
+            // موج ۱ — تصمیم مسیر مرز بازسنجی + لحظهٔ کلیدی
+            milestone: true,
+            ...toLabel ? { milestoneLabel: `\u062A\u0635\u0645\u06CC\u0645 \u0645\u0633\u06CC\u0631 \u0645\u062F\u0627\u062E\u0644\u0647: ${toLabel}` } : {}
           });
         }
       }
+      const scoreSamples = [];
       for (const ce of caseEvents) {
         const cancelled = ce.status === "cancelled";
         const pending = ce.status === "pending_family";
         let informantName = null;
+        let milestone;
+        let milestoneLabel;
         try {
           const pp = ce.payload ? JSON.parse(ce.payload) : null;
           const tName = pp?.["teacher_name"];
@@ -30365,6 +30492,16 @@ function createStudentTimelineService(db) {
             const tb = pp["teacher_binding"];
             if (typeof tb?.name === "string" && tb.name.trim()) informantName = tb.name.trim();
           }
+          const eo = pp?.["engine_output"];
+          const rawVal = eo && typeof eo === "object" ? eo.value : eo;
+          if (typeof rawVal === "string" && rawVal.includes('"fsiq"')) {
+            const eng = JSON.parse(rawVal);
+            if (eng?.ok && typeof eng.profile?.fsiq === "number") {
+              milestone = true;
+              const band = eng.profile?.fsiqBand;
+              milestoneLabel = `\u0646\u06CC\u0645\u200C\u0631\u062E \u0648\u06A9\u0633\u0644\u0631 \u2014 FSIQ ${faDigits(String(eng.profile?.fsiq))}${band ? ` \u2014 ${band}` : ""}`;
+            }
+          }
         } catch {
         }
         let subtitle = ce.summary;
@@ -30373,7 +30510,11 @@ function createStudentTimelineService(db) {
         else if (ce.analysis) {
           try {
             const an = JSON.parse(ce.analysis);
-            subtitle = `\u0627\u0645\u062A\u06CC\u0627\u0632 ${an.score.toLocaleString("fa-IR")} \u0627\u0632 ${(an.maxScore ?? an.total * 3).toLocaleString("fa-IR")}${an.band ? ` \u2014 ${an.band}` : ""}`;
+            const max = an.maxScore ?? an.total * 3;
+            subtitle = `\u0627\u0645\u062A\u06CC\u0627\u0632 ${an.score.toLocaleString("fa-IR")} \u0627\u0632 ${max.toLocaleString("fa-IR")}${an.band ? ` \u2014 ${an.band}` : ""}`;
+            if (max > 0 && typeof an.score === "number") {
+              scoreSamples.push({ at: ce.occurred_at, pct: Math.max(0, Math.min(100, Math.round(100 * an.score / max))) });
+            }
           } catch {
           }
         }
@@ -30383,18 +30524,75 @@ function createStudentTimelineService(db) {
           title: `${ce.type_icon ?? ""} \u0631\u0648\u06CC\u062F\u0627\u062F: ${ce.type_title}`.trim(),
           subtitle,
           actor: ce.filled_by_chat_id ? informantName ? `\u0645\u0639\u0644\u0645: ${informantName}` : "\u062E\u0627\u0646\u0648\u0627\u062F\u0647" : ce.staff_name,
-          ref: { type: "case_event", id: ce.id }
+          ref: { type: "case_event", id: ce.id },
+          ...milestone ? { milestone, milestoneLabel } : {}
+        });
+      }
+      for (const s of snapshots) {
+        raw2.push({
+          at: s.created_at,
+          kind: "report_export",
+          title: `\u06AF\u0632\u0627\u0631\u0634 \u0642\u0637\u0639\u06CC \u0635\u0627\u062F\u0631 \u0634\u062F \u2014 ${s.report_no}`,
+          subtitle: s.template_key === "pathway_report" ? "\u06AF\u0632\u0627\u0631\u0634 \u062F\u0648\u0631\u0647\u0654 \u0645\u062F\u0627\u062E\u0644\u0647\u0654 \u0637\u0631\u062D \u062F\u0631\u0645\u0627\u0646" : s.template_key,
+          actor: s.signed_name ?? null,
+          ref: { type: "report_snapshot", id: s.id }
         });
       }
       const merged = mergeTimelineEvents(raw2);
-      const filtered = filterTimelineEvents(merged, filters);
-      const { page: page2, hasMore } = paginateTimeline(filtered, filters.limit, filters.offset);
       const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
+      const periods = periodizeTimeline(merged, { nowIso: nowIso2 });
+      const chapterBounds = periods.map((p, i) => ({ from: p.from, to: i === periods.length - 1 ? nowIso2 : periods[i + 1].from }));
+      const chapterIdOf = /* @__PURE__ */ __name((at) => {
+        for (let i = chapterBounds.length - 1; i >= 0; i--) {
+          if (at >= chapterBounds[i].from && at <= chapterBounds[i].to) return periods[i].id;
+        }
+        return void 0;
+      }, "chapterIdOf");
+      const withCh = merged.map((e) => {
+        const cid = chapterIdOf(e.at);
+        return cid ? { ...e, chapterId: cid } : e;
+      });
+      const chapters = periods.map((p, i) => {
+        const { from, to } = chapterBounds[i];
+        const inCh = /* @__PURE__ */ __name((at) => at >= from && at <= to, "inCh");
+        const apptsIn = appts.filter((a) => inCh(a.start_at));
+        const attended = apptsIn.filter((a) => a.status === "scheduled" && (a.attendance === "present" || a.attendance === "late")).length;
+        const absent = apptsIn.filter((a) => a.attendance === "absent").length;
+        const cancelledSessions = apptsIn.filter((a) => a.status === "cancelled" || a.attendance === "cancelled").length;
+        const pendingSessions = apptsIn.filter((a) => a.status === "scheduled" && a.attendance === "pending").length;
+        const exIn = exerciseAudits.filter((a) => inCh(a.created_at));
+        const evIn = withCh.filter((e) => e.chapterId === p.id);
+        const denom = attended + absent;
+        return {
+          ...p,
+          eventCount: evIn.length,
+          summary: {
+            sessions: attended,
+            attended,
+            absent,
+            cancelledSessions,
+            pendingSessions,
+            exercisesAssigned: exIn.filter((a) => a.action === "exercise.assigned").length,
+            exercisesSubmitted: exIn.filter((a) => a.action === "exercise.submitted").length,
+            exercisesCorrected: exIn.filter((a) => a.action === "exercise.corrected").length,
+            followupsCreated: followupAudits.filter((a) => a.action === "followup.created" && inCh(a.created_at)).length,
+            committeeDecisions: evIn.filter((e) => e.kind === "committee" && e.milestone).length,
+            caseEvents: caseEvents.filter((c) => c.status !== "cancelled" && inCh(c.occurred_at)).length,
+            milestones: evIn.filter((e) => e.milestone).length
+          },
+          trend: {
+            attendancePct: denom > 0 ? Math.round(100 * attended / denom) : null,
+            scores: scoreSamples.filter((s) => inCh(s.at)).slice(-12)
+          }
+        };
+      });
+      const filtered = filterTimelineEvents(withCh, filters);
+      const { page: page2, hasMore } = paginateTimeline(filtered, filters.limit, filters.offset);
       const nextApptRow = appts.filter((a) => a.status === "scheduled" && a.start_at > nowIso2).sort((a, b) => a.start_at < b.start_at ? -1 : 1)[0] ?? null;
       const nextAppt = nextApptRow ? { id: nextApptRow.id, startAt: nextApptRow.start_at, staffName: nextApptRow.staff_name } : null;
       const openFus = followups.filter((f) => FOLLOWUP_OPEN_STATUSES.includes(f.status)).map((f) => ({ id: f.id, title: f.title, dueAt: f.due_at }));
       const nextAction = deriveNextAction(nextAppt, openFus);
-      return { events: page2, nextAction, hasMore };
+      return { events: page2, nextAction, hasMore, chapters };
     }
   };
 }
@@ -30444,12 +30642,187 @@ function registerStudentTimelineRoutes(app, service) {
       to: c.req.query("to") || void 0,
       kinds,
       limit: c.req.query("limit") ? Number.parseInt(c.req.query("limit"), 10) : void 0,
-      offset: c.req.query("offset") ? Number.parseInt(c.req.query("offset"), 10) : void 0
+      offset: c.req.query("offset") ? Number.parseInt(c.req.query("offset"), 10) : void 0,
+      q: c.req.query("q") || void 0
+      // موج ۲ — جست‌وجوی متنی روایت
     }, actor);
-    return c.json({ data: result.events, nextAction: result.nextAction, meta: { hasMore: result.hasMore } }, 200);
+    return c.json({ data: result.events, nextAction: result.nextAction, meta: { hasMore: result.hasMore, chapters: result.chapters } }, 200);
   });
 }
 __name(registerStudentTimelineRoutes, "registerStudentTimelineRoutes");
+
+// src/application/report-export/service.ts
+var TEMPLATE_PATHWAY = "pathway_report";
+function reportNoOf(jy, seq) {
+  return `${jy}-${String(seq).padStart(4, "0")}`;
+}
+__name(reportNoOf, "reportNoOf");
+function jalaliYearOfIso(iso) {
+  const ymd = tehranYmdOf(iso);
+  const [gy, gm, gd] = ymd.split("-").map((x) => Number.parseInt(x, 10));
+  return toJalaliParts(gy, gm, gd).jy;
+}
+__name(jalaliYearOfIso, "jalaliYearOfIso");
+async function sha256Hex(text) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+__name(sha256Hex, "sha256Hex");
+function rowToRecord2(row) {
+  let sections = null;
+  try {
+    sections = JSON.parse(row.sections_json);
+  } catch {
+    sections = null;
+  }
+  return {
+    id: row.id,
+    studentId: row.student_id,
+    templateKey: row.template_key,
+    pathId: row.path_id,
+    periodFrom: row.period_from,
+    periodTo: row.period_to,
+    reportNo: row.report_no,
+    contentHash: row.content_hash,
+    hashVerified: false,
+    // در getOne با بازمحاسبه پر می‌شود؛ لیست صرفاً فهرست است
+    signedBy: row.signed_by,
+    signedName: row.signed_name,
+    signedRole: row.signed_role,
+    createdAt: row.created_at,
+    sections
+  };
+}
+__name(rowToRecord2, "rowToRecord");
+function createReportExportService(deps) {
+  const { db, audit } = deps;
+  const now = deps.now ?? (() => /* @__PURE__ */ new Date());
+  return {
+    /* قطعی‌سازی: گزارش زندهٔ مسیر → JSON قطعی + هش + شمارهٔ سالانه + امضاکننده → snapshot مُهر می‌شود */
+    async create(studentId, input2, actor) {
+      const report = await deps.buildReport(input2.pathId, actor);
+      if (!report?.pathway || report.pathway.studentId !== studentId) {
+        throw new NotFoundError("\u0645\u0633\u06CC\u0631 \u0645\u062F\u0627\u062E\u0644\u0647 \u0628\u0631\u0627\u06CC \u0627\u06CC\u0646 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632");
+      }
+      const sectionsJson = JSON.stringify(report);
+      const contentHash = await sha256Hex(sectionsJson);
+      const nowIso2 = now().toISOString();
+      const jy = jalaliYearOfIso(nowIso2);
+      const id = crypto.randomUUID();
+      let lastErr = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const cnt = await db.queryOne(
+          `SELECT COUNT(*) AS n FROM report_snapshots WHERE report_no LIKE ?`,
+          [`${jy}-%`]
+        );
+        const reportNo = reportNoOf(jy, (cnt?.n ?? 0) + 1);
+        try {
+          await db.execute(
+            `INSERT INTO report_snapshots
+               (id, student_id, template_key, path_id, period_from, period_to,
+                sections_json, content_hash, report_no, signed_by, signed_name, signed_role, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ','now'))`,
+            [
+              id,
+              studentId,
+              TEMPLATE_PATHWAY,
+              input2.pathId,
+              null,
+              null,
+              sectionsJson,
+              contentHash,
+              reportNo,
+              actor.staffId,
+              actor.displayName,
+              actor.role
+            ]
+          );
+          await audit.log({
+            actorId: actor.staffId,
+            action: "report.snapshot.created",
+            resourceType: "report_snapshot",
+            resourceId: id,
+            changes: { report_no: { from: null, to: reportNo } }
+          });
+          return {
+            id,
+            studentId,
+            templateKey: TEMPLATE_PATHWAY,
+            pathId: input2.pathId,
+            periodFrom: null,
+            periodTo: null,
+            reportNo,
+            contentHash,
+            hashVerified: true,
+            signedBy: actor.staffId,
+            signedName: actor.displayName,
+            signedRole: actor.role,
+            createdAt: nowIso2,
+            sections: report
+          };
+        } catch (err) {
+          lastErr = err;
+          if (!String(err?.message ?? "").includes("UNIQUE")) throw err;
+        }
+      }
+      throw lastErr instanceof Error ? lastErr : new Error("\u0635\u062F\u0648\u0631 \u0634\u0645\u0627\u0631\u0647\u0654 \u06AF\u0632\u0627\u0631\u0634 \u0633\u0647 \u062A\u0644\u0627\u0634 \u0646\u0627\u0645\u0648\u0641\u0642 \u062F\u0627\u0634\u062A");
+    },
+    async list(studentId) {
+      const rows = await db.query(
+        `SELECT id, student_id, template_key, path_id, period_from, period_to,
+                sections_json, content_hash, report_no, signed_by, signed_name, signed_role,
+                strftime('%Y-%m-%dT%H:%M:%SZ', created_at) AS created_at
+           FROM report_snapshots
+          WHERE student_id = ?
+          ORDER BY created_at DESC, report_no DESC
+          LIMIT 100`,
+        [studentId]
+      );
+      return rows.map(rowToRecord2);
+    },
+    /* بازخوانی نسخهٔ قطعی — هش در لحظهٔ خواندن بازمحاسبه می‌شود: «بازتولید عین محتوا» */
+    async getOne(studentId, id) {
+      const row = await db.queryOne(
+        `SELECT id, student_id, template_key, path_id, period_from, period_to,
+                sections_json, content_hash, report_no, signed_by, signed_name, signed_role,
+                strftime('%Y-%m-%dT%H:%M:%SZ', created_at) AS created_at
+           FROM report_snapshots
+          WHERE student_id = ? AND id = ?`,
+        [studentId, id]
+      );
+      if (!row) throw new NotFoundError("\u0646\u0633\u062E\u0647\u0654 \u0642\u0637\u0639\u06CC \u06AF\u0632\u0627\u0631\u0634");
+      const rec = rowToRecord2(row);
+      rec.hashVerified = await sha256Hex(row.sections_json) === row.content_hash;
+      return rec;
+    }
+  };
+}
+__name(createReportExportService, "createReportExportService");
+
+// src/application/report-export/routes.ts
+var REPORT_ROLES = ["manager", "secretary", "therapist"];
+function registerReportExportRoutes(app, service) {
+  app.post("/api/students/:id/report-snapshots", requireRole(...REPORT_ROLES), async (c) => {
+    const actor = getAuthContext(c);
+    const body = await c.req.json();
+    if (typeof body?.path_id !== "string" || body.path_id.length === 0) {
+      return c.json({ error: "VALIDATION", message: "\u0634\u0646\u0627\u0633\u0647\u0654 \u0645\u0633\u06CC\u0631 \u0645\u062F\u0627\u062E\u0644\u0647 \u0627\u0644\u0632\u0627\u0645\u06CC \u0627\u0633\u062A" }, 400);
+    }
+    const created = await service.create(c.req.param("id"), { pathId: body.path_id }, actor);
+    return c.json({ data: created }, 201);
+  });
+  app.get("/api/students/:id/report-snapshots", requireRole(...REPORT_ROLES), async (c) => {
+    getAuthContext(c);
+    const items = await service.list(c.req.param("id"));
+    return c.json({ data: items }, 200);
+  });
+  app.get("/api/students/:id/report-snapshots/:sid", requireRole(...REPORT_ROLES), async (c) => {
+    getAuthContext(c);
+    const item = await service.getOne(c.req.param("id"), c.req.param("sid"));
+    return c.json({ data: item }, 200);
+  });
+}
+__name(registerReportExportRoutes, "registerReportExportRoutes");
 
 // src/application/special-needs/types.ts
 var ATTENTION_REASONS = [
@@ -30990,7 +31363,9 @@ function referralRowToDomain(row) {
       familyContext = {
         culture: typeof fc.culture === "string" ? fc.culture : null,
         finance: typeof fc.finance === "string" ? fc.finance : null,
-        cooperation: typeof fc.cooperation === "string" ? fc.cooperation : null
+        cooperation: typeof fc.cooperation === "string" ? fc.cooperation : null,
+        /* ۱.۲۷.۴۶ — سطح ترکیبی مالی‌فرهنگی از مسیر معلم */
+        liv: typeof fc.liv === "string" ? fc.liv : null
       };
     } catch {
       familyContext = null;
@@ -31632,10 +32007,11 @@ function createWaitlistService(deps) {
               child.prior_eval === true ? 1 : child.prior_eval === false ? 0 : null,
               child.prior_eval_note ?? null,
               /* ۱.۲۷.۳۶ — فرم تکمیلی خانواده (JSON) — هیچ‌کدام خالی؟ ستون NULL */
-              child.family_culture || child.family_finance || child.family_cooperation ? JSON.stringify({
+              child.family_culture || child.family_finance || child.family_cooperation || child.family_liv ? JSON.stringify({
                 culture: child.family_culture ?? null,
                 finance: child.family_finance ?? null,
-                cooperation: child.family_cooperation ?? null
+                cooperation: child.family_cooperation ?? null,
+                liv: child.family_liv ?? null
               }) : null,
               channel,
               meta3.chatId ?? null,
@@ -31770,8 +32146,11 @@ function safeToken(raw2) {
 }
 __name(safeToken, "safeToken");
 var PAGE_STYLES = `
-:root{--bg:#f6f7fb;--card:#ffffff;--ink:#1f2430;--muted:#6b7280;--brand:#2563eb;--brand-soft:#eef2ff;
---ok:#16a34a;--warn:#d97706;--err:#dc2626;--line:#e5e7eb;--r:14px}
+/* \u06F1.\u06F2\u06F7.\u06F4\u06F6 \u2014 \u0647\u0645\u0627\u0647\u0646\u06AF \u0628\u0627 \u0633\u0627\u06CC\u062A (\u062E\u0648\u0627\u0633\u062A \u06A9\u0627\u0631\u0641\u0631\u0645\u0627: \u0632\u0628\u0627\u0646 \u0631\u0646\u06AF\u06CC \u0648 \u06AF\u0648\u0634\u0647\u200C\u0647\u0627\u06CC \u06AF\u0631\u062F \u062E\u0648\u062F \u0633\u0627\u06CC\u062A):
+   \u0622\u06CC\u0646\u0647\u0654 \u062A\u0648\u06A9\u0646\u200C\u0647\u0627\u06CC base.css \u2014 \u06A9\u0631\u0645 \u06AF\u0631\u0645 #F7F3EA \xB7 \u0633\u0637\u062D #FFFDF8 \xB7 \u0622\u0628\u06CC #0D72A8 \xB7 \u06A9\u0647\u0631\u0628\u0627\u06CC\u06CC #D89428 \xB7
+   \u06AF\u0631\u062F\u06CC Tier: \u06A9\u0627\u0631\u062A \u06F2\u06F2 / \u062F\u0631\u0648\u0646\u06CC \u06F1\u06F4 / \u06A9\u0646\u062A\u0631\u0644 \u06F1\u06F0 / \u062F\u06A9\u0645\u0647 \u0648 \u067E\u06CC\u0644 \u0642\u0631\u0635\u06CC \u06F9\u06F9\u06F9 */
+:root{--bg:#F7F3EA;--card:#FFFDF8;--ink:#171B20;--muted:#4F565C;--brand:#0D72A8;--brand-soft:#E7F1F8;
+--ok:#267A54;--warn:#D89428;--err:#B8403A;--line:#D0CABB;--r:22px;--r-md:14px;--r-sm:10px}
 *{box-sizing:border-box}
 /* \u06F1.\u06F2\u06F7.\u06F4\u06F2 \u2014 \u0641\u0648\u0646\u062A \u0648\u0632\u06CC\u0631 \u0645\u062A\u0646 \u0628\u0627\u0646\u062F\u0644\u200C\u0634\u062F\u0647\u0654 \u062E\u0648\u062F\u06CC\u061B \u067E\u06CC\u0634\u200C\u062A\u0631 \u0641\u0642\u0637 CDN \u0628\u0648\u062F \u06A9\u0647 \u0622\u0641\u0644\u0627\u06CC\u0646/\u06A9\u0646\u062F\u06CC \u0645\u06CC\u200C\u0634\u06A9\u0633\u062A \u0648 Tahoma \u0645\u06CC\u200C\u0646\u0634\u0633\u062A */
 @font-face{font-family:Vazirmatn;src:url('/assets/fonts/Vazirmatn-Variable.woff2') format('woff2');
@@ -31780,17 +32159,17 @@ html,body{margin:0;padding:0}
 /* \u06F1.\u06F2\u06F7.\u06F4\u06F0 \u2014 \u067E\u0633\u200C\u0632\u0645\u06CC\u0646\u0647\u0654 \u06AF\u0631\u0627\u062F\u06CC\u0646\u062A\u06CC \u0633\u0647\u200C\u0644\u0627\u06CC\u0647 \u0628\u0627 \u062F\u0648 \u0647\u0627\u0644\u0647\u0654 \u0631\u0646\u06AF\u06CC \u062B\u0627\u0628\u062A (\u062E\u0648\u0627\u0633\u062A \u06A9\u0627\u0631\u0641\u0631\u0645\u0627) \u2014 \u0628\u062F\u0648\u0646 \u062A\u0635\u0648\u06CC\u0631\u060C \u0628\u062F\u0648\u0646 \u0644\u0648\u062F \u0627\u0636\u0627\u0641\u0647 */
 body{color:var(--ink);font-family:Vazirmatn,Tahoma,'Segoe UI',sans-serif;
 font-size:16px;line-height:1.9;direction:rtl;
-background:radial-gradient(640px 340px at 88% -6%,rgba(37,99,235,.16),transparent 66%),
-radial-gradient(560px 320px at 6% 104%,rgba(139,92,246,.14),transparent 66%),
-radial-gradient(420px 260px at 10% -4%,rgba(14,165,233,.10),transparent 64%),
-linear-gradient(168deg,#eef4ff 0%,#f6f7fb 46%,#fdf2f8 100%);
+background:radial-gradient(640px 340px at 88% -6%,rgba(13,114,168,.14),transparent 66%),
+radial-gradient(560px 320px at 6% 104%,rgba(216,148,40,.12),transparent 66%),
+radial-gradient(420px 260px at 10% -4%,rgba(13,114,168,.08),transparent 64%),
+linear-gradient(168deg,#F7F3EA 0%,#FBF7EE 46%,#F7F3EA 100%);
 background-attachment:fixed}
-.bar{position:fixed;top:0;right:0;left:0;height:5px;background:rgba(37,99,235,.14);z-index:5}
-.bar__fill{height:100%;width:0;background:linear-gradient(90deg,#2563eb,#7c3aed);transition:width .3s ease}
+.bar{position:fixed;top:0;right:0;left:0;height:5px;background:rgba(13,114,168,.16);z-index:5}
+.bar__fill{height:100%;width:0;background:linear-gradient(90deg,#0D72A8,#3E9BC9);transition:width .3s ease}
 .app{max-width:560px;margin:0 auto;padding:24px 16px;min-height:100dvh;
 display:flex;flex-direction:column;justify-content:safe center}
-.card{background:linear-gradient(180deg,#ffffff,#fbfcff);border:1px solid rgba(226,232,240,.9);
-border-radius:var(--r);padding:24px;box-shadow:0 10px 30px -14px rgba(37,99,235,.18),0 2px 8px rgba(15,23,42,.05)}
+.card{background:linear-gradient(180deg,#FFFDF8,#FBF8F1);border:1px solid rgba(208,202,187,.9);
+border-radius:var(--r);padding:24px;box-shadow:0 10px 30px -14px rgba(13,114,168,.16),0 2px 8px rgba(23,27,32,.05)}
 .step-no{color:var(--muted);font-size:13px;margin-bottom:8px}
 h1{font-size:20px;margin:0 0 6px}
 h2{font-size:19px;margin:0 0 10px}
@@ -31802,11 +32181,11 @@ animation:blink 1s steps(1) infinite;margin-inline-start:2px}
 /* \u06F1.\u06F2\u06F7.\u06F3\u06F6 \u2014 \u062F\u06A9\u0645\u0647\u200C\u0647\u0627\u06CC \u0647\u0645\u200C\u0627\u0646\u062F\u0627\u0632\u0647: flex-basis \u0635\u0641\u0631 \u06CC\u0639\u0646\u06CC \xAB\u0627\u062F\u0627\u0645\u0647\xBB \u0648 \xAB\u0628\u0627\u0632\u06AF\u0634\u062A\xBB \u0647\u0645\u06CC\u0634\u0647 \u0647\u0645\u200C\u067E\u0647\u0646\u0627\u061B
    min-height \u0645\u0634\u062A\u0631\u06A9 \u06CC\u0639\u0646\u06CC \u0647\u0645\u200C\u0642\u062F \u2014 \u0641\u0627\u0631\u063A \u0627\u0632 \u0637\u0648\u0644 \u0645\u062A\u0646 */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:none;cursor:pointer;
-border-radius:12px;padding:12px 22px;font-family:inherit;font-size:15.5px;font-weight:700;width:100%;
+border-radius:999px;padding:12px 22px;font-family:inherit;font-size:15.5px;font-weight:700;width:100%;
 min-height:52px}
 /* \u06F1.\u06F2\u06F7.\u06F4\u06F0 \u2014 \u062F\u06A9\u0645\u0647\u0654 \u0627\u0635\u0644\u06CC \u06AF\u0631\u0627\u062F\u06CC\u0646\u062A\u06CC\u061B \u0644\u0628\u0647\u0654 \u0628\u0631\u062C\u0633\u062A\u0647 \u0628\u0627 \u0633\u0627\u06CC\u0647\u0654 \u0631\u0646\u06AF \u0628\u0631\u0646\u062F */
-.btn--primary{background:linear-gradient(135deg,#2563eb 0%,#6d5cf6 100%);color:#fff;
-box-shadow:0 8px 20px -8px rgba(79,70,229,.55)}
+.btn--primary{background:linear-gradient(135deg,#0D72A8 0%,#0A5D8A 100%);color:#fff;
+box-shadow:0 8px 20px -8px rgba(13,114,168,.5)}
 .btn--primary:hover{filter:brightness(1.07)}
 .btn--primary:disabled{opacity:.45;cursor:not-allowed;filter:none;box-shadow:none}
 .btn--ghost{background:rgba(255,255,255,.85);color:var(--brand);border:1.5px solid var(--brand)}
@@ -31816,11 +32195,11 @@ box-shadow:0 8px 20px -8px rgba(79,70,229,.55)}
 .choice{display:flex;align-items:flex-start;gap:12px;background:rgba(255,255,255,.92);border:2px solid var(--line);
 border-radius:var(--r);padding:16px 18px;cursor:pointer;transition:border-color .15s,background .15s,box-shadow .15s;
 text-align:start;width:100%;font-family:inherit;position:relative}
-.choice:hover{border-color:var(--brand);box-shadow:0 6px 16px -8px rgba(37,99,235,.25)}
+.choice:hover{border-color:var(--brand);box-shadow:0 6px 16px -8px rgba(13,114,168,.25)}
 /* \u06F1.\u06F2\u06F7.\u06F4\u06F0 \u2014 \u0627\u0646\u062A\u062E\u0627\u0628 \u0628\u0627 \u06AF\u0631\u0627\u062F\u06CC\u0646\u062A \u0645\u0644\u0627\u06CC\u0645 \u062F\u0648 \u0631\u0646\u06AF \u0628\u0631\u0646\u062F */
-.choice.sel{border-color:var(--brand);background:linear-gradient(135deg,#eef2ff,#f5f1ff);
-box-shadow:0 8px 22px -10px rgba(79,70,229,.35)}
-.choice.sel .no{background:linear-gradient(135deg,#2563eb,#6d5cf6);color:#fff}
+.choice.sel{border-color:var(--brand);background:linear-gradient(135deg,#E7F1F8,#F2F8FC);
+box-shadow:0 8px 22px -10px rgba(13,114,168,.3)}
+.choice.sel .no{background:linear-gradient(135deg,#0D72A8,#0A5D8A);color:#fff}
 .choice.sel::after{content:'\u2713';position:absolute;top:10px;left:14px;color:var(--brand);
 font-weight:800;font-size:16px}
 .choice b{display:block;font-size:16px;margin-bottom:2px}
@@ -31830,18 +32209,18 @@ color:var(--brand);text-align:center;line-height:28px;font-weight:800;font-size:
 /* \u06F1.\u06F2\u06F7.\u06F3\u06F6 \u2014 \u0631\u062F\u06CC\u0641 \u06A9\u0627\u0631\u062A\u200C\u0647\u0627 \u0628\u0627 \u0627\u0631\u062A\u0641\u0627\u0639 \u06CC\u06A9\u0633\u0627\u0646 (\u0628\u0644\u0646\u062F\u062A\u0631\u06CC\u0646 \u0645\u062D\u062A\u0648\u0627 \u0645\u0639\u06CC\u0627\u0631 \u0647\u0645\u0647 \u0627\u0633\u062A) */
 .choices{display:grid;gap:12px;grid-auto-rows:1fr}
 label.f{display:block;font-weight:700;margin:0 0 6px}
-input.i,select.i,textarea.i{width:100%;border:1.5px solid var(--line);border-radius:12px;padding:11px 14px;
+input.i,select.i,textarea.i{width:100%;border:1.5px solid var(--line);border-radius:var(--r-sm);padding:11px 14px;
 font-family:inherit;font-size:15.5px;background:#fff;color:var(--ink)}
-input.i:focus,select.i:focus,textarea.i:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+input.i:focus,select.i:focus,textarea.i:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px rgba(13,114,168,.14)}
 textarea.i{min-height:110px;resize:vertical}
 .field{margin-bottom:16px}
 .err-msg{color:var(--err);font-size:13.5px;margin-top:4px;display:none}
 .err-msg.show{display:block}
 .hint{color:var(--muted);font-size:13px;margin-top:4px}
 /* \u06F1.\u06F2\u06F7.\u06F4\u06F0 \u2014 \u0646\u0634\u0627\u0646 \xAB\u0631\u0627\u06CC\u06AF\u0627\u0646\xBB \u06AF\u0631\u0627\u062F\u06CC\u0646\u062A\u06CC */
-.badge-free{display:inline-block;background:linear-gradient(135deg,#dcfce7,#e0f2fe);color:#15803d;
+.badge-free{display:inline-block;background:linear-gradient(135deg,#E3F2EA,#EEF8F2);color:#1E6B44;
 border-radius:999px;padding:4px 14px;font-size:13.5px;font-weight:700;margin-bottom:14px}
-.review{border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-top:6px;background:rgba(255,255,255,.9)}
+.review{border:1px solid var(--line);border-radius:var(--r-md);overflow:hidden;margin-top:6px;background:rgba(255,253,248,.9)}
 .review__row{display:flex;align-items:flex-start;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line)}
 .review__row:last-child{border-bottom:none}
 .review__row .k{color:var(--muted);font-size:13px;min-width:110px;padding-top:2px}
@@ -31850,16 +32229,16 @@ border-radius:999px;padding:4px 14px;font-size:13.5px;font-weight:700;margin-bot
 font-size:13px;font-weight:700;padding:2px 4px}
 .overlay{position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:10;display:flex;
 align-items:center;justify-content:center;padding:16px}
-.modal{background:#fff;border-radius:16px;max-width:480px;width:100%;max-height:85vh;overflow:auto;padding:22px}
+.modal{background:#FFFDF8;border-radius:var(--r-md);max-width:480px;width:100%;max-height:85vh;overflow:auto;padding:22px}
 .aware{font-size:15.5px;line-height:2.2}
 .aware ul{padding-inline-start:20px;color:var(--muted)}
 /* \u06F1.\u06F2\u06F7.\u06F4\u06F0 \u2014 \u0644\u06CC\u0646\u06A9 \u0631\u0627\u0647\u0646\u0645\u0627 \u0648 \u0646\u0648\u0627\u0631 \u06CC\u0627\u062F\u062F\u0627\u0634\u062A \u0628\u0627 \u067E\u0633\u200C\u0632\u0645\u06CC\u0646\u0647\u0654 \u06AF\u0631\u0627\u062F\u06CC\u0646\u062A\u06CC \u0645\u0644\u0627\u06CC\u0645 */
-.guide-link{display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,#eef2ff,#e0f2fe);
-color:#1e40af;border-radius:12px;padding:10px 14px;font-size:13.5px;font-weight:700;text-decoration:none;margin-top:14px}
+.guide-link{display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,#E7F1F8,#EFF7FC);
+color:#0B5D8C;border-radius:var(--r-md);padding:10px 14px;font-size:13.5px;font-weight:700;text-decoration:none;margin-top:14px}
 .guide-link:active{opacity:.85}
-.note{background:linear-gradient(135deg,#eef2ff,#e0f2fe);border-radius:12px;padding:12px 14px;font-size:13.5px;
-color:#1e40af;margin-top:14px}
-.rowcard{border:1.5px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px;position:relative;
+.note{background:linear-gradient(135deg,#E7F1F8,#EFF7FC);border-radius:var(--r-md);padding:12px 14px;font-size:13.5px;
+color:#0B5D8C;margin-top:14px}
+.rowcard{border:1.5px solid var(--line);border-radius:var(--r-md);padding:14px;margin-bottom:12px;position:relative;
 background:rgba(255,255,255,.92)}
 .rowcard .rm{position:absolute;top:10px;left:10px;background:none;border:none;color:var(--err);
 cursor:pointer;font-family:inherit;font-size:13px;font-weight:700}
@@ -31868,12 +32247,12 @@ cursor:pointer;font-family:inherit;font-size:13px;font-weight:700}
 .pill{border:1.5px solid var(--line);background:#fff;border-radius:999px;padding:9px 18px;
 cursor:pointer;font-family:inherit;font-size:14px;min-height:44px;display:inline-flex;align-items:center}
 /* \u06F1.\u06F2\u06F7.\u06F4\u06F0 \u2014 \u067E\u06CC\u0644 \u0627\u0646\u062A\u062E\u0627\u0628\u200C\u0634\u062F\u0647 \u06AF\u0631\u0627\u062F\u06CC\u0646\u062A\u06CC */
-.pill.sel{border-color:var(--brand);background:linear-gradient(135deg,#eef2ff,#f5f1ff);color:var(--brand);
-font-weight:700;box-shadow:0 4px 12px -6px rgba(79,70,229,.4)}
+.pill.sel{border-color:var(--brand);background:linear-gradient(135deg,#E7F1F8,#F2F8FC);color:var(--brand);
+font-weight:700;box-shadow:0 4px 12px -6px rgba(13,114,168,.35)}
 .done{text-align:center}
 .done .big{font-size:46px;margin-bottom:6px}
 .switch-row{display:flex;align-items:center;justify-content:space-between;gap:10px;
-border:1.5px solid var(--line);border-radius:12px;padding:12px 14px}
+border:1.5px solid var(--line);border-radius:var(--r-md);padding:12px 14px}
 /* \u06F1.\u06F2\u06F7.\u06F3\u06F5 \u2014 \u0627\u0641\u06A9\u062A \u0641\u06CC\u062F \u0648 \u062C\u0631\u06CC\u0627\u0646 \u067E\u06CC\u0648\u0633\u062A\u0647\u061B \u06A9\u0627\u0647\u0634-\u062D\u0631\u06A9\u062A \u0631\u0639\u0627\u06CC\u062A \u0645\u06CC\u200C\u0634\u0648\u062F */
 .app>.card{animation:fadein .3s ease}
 @keyframes fadein{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
@@ -31902,6 +32281,18 @@ var CONCERNS = [
 ];
 var TEACH_CATS = ['delayed','learning_disorder','intellectual'];
 var TEACH_CAT_LABELS = {delayed:'\u062F\u06CC\u0631\u0622\u0645\u0648\u0632', learning_disorder:'\u0627\u062E\u062A\u0644\u0627\u0644 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC', intellectual:'\u0645\u0634\u06A9\u0648\u06A9 \u0628\u0647 \u06A9\u0645\u200C\u062A\u0648\u0627\u0646\u06CC'};
+/* \u06F1.\u06F2\u06F7.\u06F4\u06F6 \u2014 \u062F\u0648 \u0641\u06CC\u0644\u062F \u0648\u0636\u0639\u06CC\u062A \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u0627\u0632 \u0645\u0633\u06CC\u0631 \u0645\u0639\u0644\u0645 (\u062E\u0648\u0627\u0633\u062A \u06A9\u0627\u0631\u0641\u0631\u0645\u0627): \u0647\u0645\u06A9\u0627\u0631\u06CC \u062E\u0627\u0646\u0648\u0627\u062F\u0647 + \u0633\u0637\u062D \u0645\u0627\u0644\u06CC\u200C\u0641\u0631\u0647\u0646\u06AF\u06CC\u061B
+   \u0647\u0645\u0627\u0646 \u0645\u0642\u06CC\u0627\u0633 \u0633\u0647\u200C\u06AF\u0627\u0646\u0647\u0654 \u0635\u0646\u062F\u0648\u0642 \u0648\u0631\u0648\u062F\u06CC (low/mid/high) \u062A\u0627 \u0628\u062C\u200C\u0647\u0627 \u0648 KPI \u0645\u0633\u062A\u0642\u06CC\u0645 \u0628\u062E\u0648\u0627\u0646\u062F
+   (\u06A9\u0627\u0645\u0646\u062A \u062F\u0631\u0648\u0646 HTML \u0633\u0631\u0648 \u0645\u06CC\u200C\u0634\u0648\u062F \u2014 \u0648\u0627\u0698\u0647\u0654 \u0645\u0645\u0646\u0648\u0639\u0650 \u067E\u06CC\u0646 \u0642\u062F\u06CC\u0645\u06CC \u062F\u0631 \u0622\u0646 \u0622\u0648\u0631\u062F\u0647 \u0646\u0634\u0648\u062F) */
+var FC_LEVELS = [{v:'low',t:'\u06A9\u0645'},{v:'mid',t:'\u0645\u062A\u0648\u0633\u0637'},{v:'high',t:'\u0632\u06CC\u0627\u062F'}];
+var LIV_LEVELS = [{v:'low',t:'\u06A9\u0645\u200C\u0628\u0631\u062E\u0648\u0631\u062F\u0627\u0631'},{v:'mid',t:'\u0645\u062A\u0648\u0633\u0637'},{v:'high',t:'\u0628\u0631\u062E\u0648\u0631\u062F\u0627\u0631'}];
+var FC_T = {low:'\u06A9\u0645', mid:'\u0645\u062A\u0648\u0633\u0637', high:'\u0632\u06CC\u0627\u062F'};
+var LIV_T = {low:'\u06A9\u0645\u200C\u0628\u0631\u062E\u0648\u0631\u062F\u0627\u0631', mid:'\u0645\u062A\u0648\u0633\u0637', high:'\u0628\u0631\u062E\u0648\u0631\u062F\u0627\u0631'};
+function famPills(list, kind, val, i){
+  return list.map(function(l){
+    return '<button class="pill '+kind+(val===l.v?' sel':'')+'" data-i="'+i+'" data-'+kind+'="'+l.v+'">'+l.t+'</button>';
+  }).join('');
+}
 var CAT_LABELS = {delayed:'\u062F\u06CC\u0631\u0622\u0645\u0648\u0632\u06CC', learning_disorder:'\u0627\u062E\u062A\u0644\u0627\u0644 \u06CC\u0627\u062F\u06AF\u06CC\u0631\u06CC', intellectual:'\u0645\u0634\u06A9\u0648\u06A9 \u0628\u0647 \u06A9\u0645\u200C\u062A\u0648\u0627\u0646\u06CC \u0630\u0647\u0646\u06CC', behavioral:'\u0645\u0634\u06A9\u0644\u0627\u062A \u0631\u0641\u062A\u0627\u0631\u06CC \u0647\u06CC\u062C\u0627\u0646\u06CC', speech:'\u062A\u0623\u062E\u06CC\u0631 \u06AF\u0641\u062A\u0627\u0631 \u0648 \u0632\u0628\u0627\u0646', autism:'\u0645\u0634\u06A9\u0648\u06A9 \u0628\u0647 \u0637\u06CC\u0641 \u0627\u062A\u06CC\u0633\u0645', other:'\u0633\u0627\u06CC\u0631'};
 var AWARE = [
   /* \u06F1.\u06F2\u06F7.\u06F3\u06F8 \u2014 \u0628\u0627\u0632\u0646\u0648\u06CC\u0633\u06CC \u0645\u062D\u0627\u0648\u0631\u0647\u200C\u0627\u06CC \u0648 \u0645\u0641\u0635\u0644\u200C\u062A\u0631\u061B \u0628\u062F\u0648\u0646 \u062A\u0630\u06A9\u0631 \u062A\u06A9\u0631\u0627\u0631\u06CC \xAB\u062A\u0634\u062E\u06CC\u0635\xBB \u0628\u0647 \u062E\u0648\u0627\u0633\u062A \u06A9\u0627\u0631\u0641\u0631\u0645\u0627\u060C
@@ -32288,15 +32679,21 @@ function rowCardHtml(r, i){
     '<input class="i rn" value="'+esc(r.name)+'"></div>'+
     '<div class="field"><label class="f">\u0634\u0645\u0627\u0631\u0647 \u0645\u0648\u0628\u0627\u06CC\u0644 \u0648\u0627\u0644\u062F</label>'+
     '<input class="i rp" inputmode="tel" dir="ltr" placeholder="09xxxxxxxxx" value="'+esc(r.phone)+'">'+
-    '<div class="err-msg">\u0634\u0645\u0627\u0631\u0647 \u0645\u0648\u0628\u0627\u06CC\u0644 \u06F1\u06F1 \u0631\u0642\u0645 \u0627\u0633\u062A \u0648 \u0628\u0627 \u06F0\u06F9 \u0634\u0631\u0648\u0639 \u0645\u06CC\u200C\u0634\u0647</div></div></div>';
+    '<div class="err-msg">\u0634\u0645\u0627\u0631\u0647 \u0645\u0648\u0628\u0627\u06CC\u0644 \u06F1\u06F1 \u0631\u0642\u0645 \u0627\u0633\u062A \u0648 \u0628\u0627 \u06F0\u06F9 \u0634\u0631\u0648\u0639 \u0645\u06CC\u200C\u0634\u0647</div></div>'+
+    '<div class="field"><label class="f">\u0647\u0645\u06A9\u0627\u0631\u06CC \u062E\u0627\u0646\u0648\u0627\u062F\u0647</label>'+
+    '<div class="pills">'+famPills(FC_LEVELS,'fcp',r.coop,i)+'</div>'+
+    '<div class="hint">\u0627\u0631\u062A\u0628\u0627\u0637 \u0648 \u0647\u0645\u0631\u0627\u0647\u06CC \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u0628\u0627 \u067E\u06CC\u06AF\u06CC\u0631\u06CC\u200C\u0647\u0627\u06CC \u0645\u062F\u0631\u0633\u0647 \u0648 \u0645\u0631\u06A9\u0632</div></div>'+
+    '<div class="field"><label class="f">\u0633\u0637\u062D \u0645\u0627\u0644\u06CC \u0648 \u0641\u0631\u0647\u0646\u06AF\u06CC \u062E\u0627\u0646\u0648\u0627\u062F\u0647</label>'+
+    '<div class="pills">'+famPills(LIV_LEVELS,'lvp',r.liv,i)+'</div>'+
+    '<div class="hint">\u0627\u0631\u0632\u06CC\u0627\u0628\u06CC \u06A9\u0644\u06CC \u0634\u0645\u0627 \u0628\u0647\u200C\u0639\u0646\u0648\u0627\u0646 \u0645\u0639\u0644\u0645 \u06A9\u0644\u0627\u0633 \u2014 \u0628\u0631\u0627\u06CC \u0627\u0648\u0644\u0648\u06CC\u062A \u062E\u062F\u0645\u0627\u062A \u0631\u0627\u06CC\u06AF\u0627\u0646</div></div></div>';
 }
 
 function renderBatch(){
   setBar();
-  if(state.rows.length===0)state.rows=[{cat:null,name:'',phone:''}];
+  if(state.rows.length===0)state.rows=[{cat:null,name:'',phone:'',coop:null,liv:null}];
   app.innerHTML='<div class="card"><div class="step-no">'+stepNo()+'</div>'+
     '<h2>\u062B\u0628\u062A \u0627\u0631\u062C\u0627\u0639\u200C\u0647\u0627\u06CC \u06A9\u0644\u0627\u0633 \u0634\u0645\u0627</h2>'+
-    '<p class="lead">\u0628\u0631\u0627\u06CC \u0647\u0631 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u062F\u0633\u062A\u0647 \u0631\u0648 \u0627\u0646\u062A\u062E\u0627\u0628 \u06A9\u0646\u06CC\u062F\u060C \u0627\u0633\u0645\u0634 \u0648 \u0634\u0645\u0627\u0631\u0647\u200C\u06CC \u0648\u0627\u0644\u062F\u0634 \u0631\u0648 \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F.</p>'+
+    '<p class="lead">\u0628\u0631\u0627\u06CC \u0647\u0631 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u062F\u0633\u062A\u0647 \u0631\u0648 \u0627\u0646\u062A\u062E\u0627\u0628 \u06A9\u0646\u06CC\u062F\u060C \u0627\u0633\u0645\u0634 \u0648 \u0634\u0645\u0627\u0631\u0647\u200C\u06CC \u0648\u0627\u0644\u062F\u0634 \u0631\u0648 \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F \u0648 \u0648\u0636\u0639\u06CC\u062A \u062E\u0627\u0646\u0648\u0627\u062F\u0647\u200C\u0634 \u0631\u0648 \u0627\u0632 \u0646\u0638\u0631 \u0647\u0645\u06A9\u0627\u0631\u06CC \u0648 \u0633\u0637\u062D \u0645\u0627\u0644\u06CC\u200C\u0641\u0631\u0647\u0646\u06AF\u06CC \u0645\u0634\u062E\u0635 \u06A9\u0646\u06CC\u062F.</p>'+
     '<div id="rows">'+state.rows.map(rowCardHtml).join('')+'</div>'+
     '<button class="btn btn--ghost btn--sm" id="addRow">+ \u0627\u0641\u0632\u0648\u062F\u0646 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u062F\u06CC\u06AF\u0631</button>'+
     '<div class="err-msg" id="bErr" style="margin-top:10px"></div>'+
@@ -32305,8 +32702,8 @@ function renderBatch(){
   document.querySelector('[data-act="back"]').addEventListener('click',function(){state.step=6;state.awareIdx=AWARE.length-1;render();});
   bindBatch();
   document.getElementById('addRow').addEventListener('click',function(){
-    state.rows.push({cat:null,name:'',phone:''});
-    document.getElementById('rows').insertAdjacentHTML('beforeend',rowCardHtml({cat:null,name:'',phone:''},state.rows.length-1));
+    state.rows.push({cat:null,name:'',phone:'',coop:null,liv:null});
+    document.getElementById('rows').insertAdjacentHTML('beforeend',rowCardHtml({cat:null,name:'',phone:'',coop:null,liv:null},state.rows.length-1));
     bindBatch();
   });
   var nx=app.querySelector('.btnrow .btn--primary');nx.textContent='\u0627\u062F\u0627\u0645\u0647 \u0628\u0647 \u0645\u0631\u0648\u0631 \u0646\u0647\u0627\u06CC\u06CC';
@@ -32318,11 +32715,11 @@ function renderBatch(){
       r.name=card.querySelector('.rn').value.trim();
       r.phone=normPhone(card.querySelector('.rp').value.trim());
       var em=card.querySelector('.err-msg');
-      if(!r.name||r.name.length<2||!validPhone(r.phone)){ok=false;if(em)em.className='err-msg show';}
+      if(!r.name||r.name.length<2||!validPhone(r.phone)||!r.coop||!r.liv){ok=false;if(em)em.className='err-msg show';}
       else if(em)em.className='err-msg';
     });
     var be=document.getElementById('bErr');
-    if(!ok){be.className='err-msg show';be.textContent='\u0646\u0627\u0645 \u0648 \u0634\u0645\u0627\u0631\u0647 \u0645\u0648\u0628\u0627\u06CC\u0644 \u0648\u0627\u0644\u062F \u0647\u0631 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u0631\u0648 \u06A9\u0627\u0645\u0644 \u0648 \u062F\u0631\u0633\u062A \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F';return;}
+    if(!ok){be.className='err-msg show';be.textContent='\u0628\u0631\u0627\u06CC \u0647\u0631 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632\u060C \u0646\u0627\u0645 \u0648 \u0634\u0645\u0627\u0631\u0647 \u0648\u0627\u0644\u062F \u0628\u0647\u200C\u0647\u0645\u0631\u0627\u0647 \xAB\u0647\u0645\u06A9\u0627\u0631\u06CC \u062E\u0627\u0646\u0648\u0627\u062F\u0647\xBB \u0648 \xAB\u0633\u0637\u062D \u0645\u0627\u0644\u06CC \u0648 \u0641\u0631\u0647\u0646\u06AF\u06CC \u062E\u0627\u0646\u0648\u0627\u062F\u0647\xBB \u0631\u0627 \u06A9\u0627\u0645\u0644 \u06A9\u0646\u06CC\u062F';return;}
     be.className='err-msg';
     state.step=8;render();
   });
@@ -32341,6 +32738,21 @@ function bindBatch(){
     });
     card.querySelector('.rn').addEventListener('input',function(e){r.name=e.target.value;});
     card.querySelector('.rp').addEventListener('input',function(e){r.phone=e.target.value;});
+    /* \u06F1.\u06F2\u06F7.\u06F4\u06F6 \u2014 \u062F\u0648 \u0641\u06CC\u0644\u062F \u0648\u0636\u0639\u06CC\u062A \u062E\u0627\u0646\u0648\u0627\u062F\u0647: \u0627\u0646\u062A\u062E\u0627\u0628 \u067E\u06CC\u0644 = \u062B\u0628\u062A \u062F\u0631 \u0631\u062F\u06CC\u0641 \u0647\u0645\u0627\u0646 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 */
+    card.querySelectorAll('.fcp').forEach(function(p){
+      p.addEventListener('click',function(){
+        r.coop=p.getAttribute('data-fcp');
+        card.querySelectorAll('.fcp').forEach(function(x){x.classList.remove('sel');});
+        p.classList.add('sel');
+      });
+    });
+    card.querySelectorAll('.lvp').forEach(function(p){
+      p.addEventListener('click',function(){
+        r.liv=p.getAttribute('data-lvp');
+        card.querySelectorAll('.lvp').forEach(function(x){x.classList.remove('sel');});
+        p.classList.add('sel');
+      });
+    });
     var rm=card.querySelector('.rm');
     if(rm)rm.addEventListener('click',function(){
       state.rows.splice(i,1);render();
@@ -32353,7 +32765,8 @@ function renderTeachReview(){
   setBar();
   var rows=state.rows.map(function(r,i){
     return '<div class="review__row"><span class="k">'+(i+1)+'. '+TEACH_CAT_LABELS[r.cat]+'</span>'+
-      '<span class="v">'+esc(r.name)+' \u2014 '+esc(r.phone)+'</span></div>';
+      '<span class="v">'+esc(r.name)+' \u2014 '+esc(r.phone)+
+      '<br><small style="color:var(--muted)">\u0647\u0645\u06A9\u0627\u0631\u06CC: '+FC_T[r.coop]+' \xB7 \u0645\u0627\u0644\u06CC\u200C\u0641\u0631\u0647\u0646\u06AF\u06CC: '+LIV_T[r.liv]+'</small></span></div>';
   }).join('');
   app.innerHTML='<div class="card"><h2>\u0647\u0645\u0647 \u0686\u06CC\u0632 \u0622\u0645\u0627\u062F\u0647 \u062B\u0628\u062A \u0627\u0633\u062A</h2>'+
     '<p class="lead">'+fa(state.rows.length)+' \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u0628\u0647 \u0644\u06CC\u0633\u062A \u0627\u0646\u062A\u0638\u0627\u0631 \u0627\u0636\u0627\u0641\u0647 \u0645\u06CC\u0634\u0647. \u06CC\u06A9 \u0646\u06AF\u0627\u0647 \u0628\u06CC\u0646\u062F\u0627\u0632\u06CC\u062F:</p>'+
@@ -32369,7 +32782,9 @@ function renderTeachReview(){
       school_text:state.schoolName||null, grade_text:state.grade||null, class_text:state.klass||null,
       token:TOKEN||undefined,
       children:state.rows.map(function(r){
-        return {first_name:r.name, guardian_phone:r.phone, concern_category:r.cat, concern_tags:[], concern_text:null};
+        /* \u06F1.\u06F2\u06F7.\u06F4\u06F6 \u2014 \u062F\u0648 \u0641\u06CC\u0644\u062F \u0648\u0636\u0639\u06CC\u062A \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u062F\u0631 payload \u0647\u0631 \u06A9\u0648\u062F\u06A9 (\u0627\u0633\u06A9\u06CC\u0645\u0627: \u0627\u0644\u0632\u0627\u0645 \u0645\u0633\u06CC\u0631 \u0645\u0639\u0644\u0645) */
+        return {first_name:r.name, guardian_phone:r.phone, concern_category:r.cat, concern_tags:[], concern_text:null,
+                family_cooperation:r.coop, family_liv:r.liv};
       })
     };
     submit(payload, this);
@@ -32677,7 +33092,7 @@ function referralRateGuard(ip, chatKey) {
   }
 }
 __name(referralRateGuard, "referralRateGuard");
-function registerWaitlistRoutes(app, service) {
+function registerWaitlistRoutes(app, service, opts) {
   app.get("/api/waitlist", async (c) => {
     const status = c.req.query("status");
     const priority = c.req.query("priority");
@@ -32698,7 +33113,7 @@ function registerWaitlistRoutes(app, service) {
       status: c.req.query("status") || void 0,
       year: c.req.query("year") || void 0
     });
-    return c.json({ data: items }, 200);
+    return c.json({ data: items, public_base_url: opts?.publicBaseUrl ?? null }, 200);
   });
   app.post("/api/waitlist/referrals/:id/accept", requireRole("manager", "secretary"), async (c) => {
     const actor = getAuthContext(c);
@@ -32876,7 +33291,11 @@ function registerWaitlistRoutes(app, service) {
     } catch {
       return c.json({ error: "VALIDATION_ERROR", message: "\u0628\u062F\u0646\u0647\u0654 \u062F\u0631\u062E\u0648\u0627\u0633\u062A JSON \u0645\u0639\u062A\u0628\u0631 \u0646\u06CC\u0633\u062A" }, 400);
     }
-    const body = PublicReferralSubmissionSchema.parse(parsedBody);
+    const parsedReferral = PublicReferralSubmissionSchema.safeParse(parsedBody);
+    if (!parsedReferral.success) {
+      return c.json({ error: "VALIDATION_ERROR", message: parsedReferral.error.issues[0]?.message ?? "\u0648\u0631\u0648\u062F\u06CC \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A" }, 400);
+    }
+    const body = parsedReferral.data;
     const ip = (c.req.header("cf-connecting-ip") ?? c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? "local").slice(0, 64);
     referralRateGuard(ip, body.token ?? null);
     const created = await service.submitReferral(
@@ -35072,7 +35491,7 @@ function createExerciseBankService(deps) {
     }
   }
   __name(replaceFocus, "replaceFocus");
-  function rowToRecord4(row, tags, files = [], focus = []) {
+  function rowToRecord5(row, tags, files = [], focus = []) {
     const primary = files[0] ?? (row.file_key && row.file_name ? { id: "", filename: row.file_name, mime: row.file_mime ?? "application/octet-stream", size: row.file_size ?? 0 } : null);
     return {
       id: row.id,
@@ -35092,7 +35511,7 @@ function createExerciseBankService(deps) {
       updatedAt: row.updated_at
     };
   }
-  __name(rowToRecord4, "rowToRecord");
+  __name(rowToRecord5, "rowToRecord");
   async function attachmentsForExercises(exerciseIds) {
     const map2 = /* @__PURE__ */ new Map();
     if (exerciseIds.length === 0) return map2;
@@ -35350,7 +35769,7 @@ function createExerciseBankService(deps) {
       const attMap = await attachmentsForExercises(rows.map((r) => r.id));
       const focusMap = await focusForExercises(rows.map((r) => r.id));
       const items = await Promise.all(
-        rows.map((r) => rowToRecord4(r, tagMap.get(r.id) ?? [], attMap.get(r.id) ?? [], focusMap.get(r.id) ?? []))
+        rows.map((r) => rowToRecord5(r, tagMap.get(r.id) ?? [], attMap.get(r.id) ?? [], focusMap.get(r.id) ?? []))
       );
       return { items, total, page: win.page, pageSize, hasMore: win.hasMore };
     },
@@ -35430,7 +35849,7 @@ function createExerciseBankService(deps) {
       const tagMap = await tagsForExercises([id]);
       const files = await attachmentsOf(id);
       const focusMap = await focusForExercises([id]);
-      return rowToRecord4(row, tagMap.get(id) ?? [], files, focusMap.get(id) ?? []);
+      return rowToRecord5(row, tagMap.get(id) ?? [], files, focusMap.get(id) ?? []);
     },
     async create(input2, actor) {
       assertStaffRole(actor);
@@ -36129,7 +36548,7 @@ function createExerciseBankService(deps) {
       const attMap = await attachmentsForExercises(exerciseRows.map((r) => r.id));
       const exFocusMap = await focusForExercises(exerciseRows.map((r) => r.id));
       const exercises = exerciseRows.map((row) => {
-        const exercise = rowToRecord4(row, exTagMap.get(row.id) ?? [], attMap.get(row.id) ?? [], exFocusMap.get(row.id) ?? []);
+        const exercise = rowToRecord5(row, exTagMap.get(row.id) ?? [], attMap.get(row.id) ?? [], exFocusMap.get(row.id) ?? []);
         const matched = exercise.tags.filter((t) => studentTagIds.has(t.id)).map((t) => ({ id: t.id, name: tagNames.get(t.id) ?? t.name }));
         const matchedFocus = exercise.focus.filter((k) => expandFocusKeys([k]).some((x) => studentFocusExpanded.has(x))).map((k) => ({ key: k, fa: focusLabel(k) ?? k }));
         return { exercise, matched, matchedFocus, score: matched.length + matchedFocus.length };
@@ -45762,11 +46181,11 @@ function isoOf2(d) {
   return d.toISOString();
 }
 __name(isoOf2, "isoOf");
-async function sha256Hex(input2) {
+async function sha256Hex2(input2) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input2));
   return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
 }
-__name(sha256Hex, "sha256Hex");
+__name(sha256Hex2, "sha256Hex");
 function randomSecret() {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
@@ -46277,7 +46696,7 @@ function createGamesService(deps) {
     const expiresAt = new Date(Math.min(new Date(endOfDay).getTime(), ttlEnd.getTime()));
     await db.execute(
       `INSERT INTO game_links (jti, mission_id, token_hash, issued_by, expires_at) VALUES (?,?,?,?,?)`,
-      [jti, missionId, await sha256Hex(token), actor.staffId, isoOf2(expiresAt)]
+      [jti, missionId, await sha256Hex2(token), actor.staffId, isoOf2(expiresAt)]
     );
     await audit.log({ actorId: actor.staffId, action: "game_link_issue", resourceType: "game_link", resourceId: jti });
     const base = deps.publicBaseUrl?.replace(/\/+$/, "") ?? "";
@@ -46304,7 +46723,7 @@ function createGamesService(deps) {
     const expiresAt = new Date(now().getTime() + PREVIEW_TTL_MINUTES * 60 * 1e3);
     await db.execute(
       `INSERT INTO game_preview_tokens (jti, package_id, package_version, token_hash, issued_by, expires_at, created_at) VALUES (?,?,?,?,?,?,?)`,
-      [jti, packageId, version2, await sha256Hex(token), actor.staffId, isoOf2(expiresAt), isoOf2(now())]
+      [jti, packageId, version2, await sha256Hex2(token), actor.staffId, isoOf2(expiresAt), isoOf2(now())]
     );
     await audit.log({ actorId: actor.staffId, action: "game_preview_issue", resourceType: "game_preview", resourceId: jti });
     const base = deps.publicBaseUrl?.replace(/\/+$/, "") ?? "";
@@ -46316,7 +46735,7 @@ function createGamesService(deps) {
     if (dot <= 0) return null;
     const row = await db.queryOne(`SELECT * FROM game_preview_tokens WHERE jti = ?`, [token.slice(0, dot)]);
     if (!row) return null;
-    if (await sha256Hex(token) !== row.token_hash) return null;
+    if (await sha256Hex2(token) !== row.token_hash) return null;
     if (row.revoked_at) return null;
     if (new Date(row.expires_at).getTime() <= now().getTime()) return null;
     const pkgRow = await db.queryOne(
@@ -46392,7 +46811,7 @@ function createGamesService(deps) {
     const jti = token.slice(0, dot);
     const link = await db.queryOne(`SELECT * FROM game_links WHERE jti = ?`, [jti]);
     if (!link) return null;
-    const hash2 = await sha256Hex(token);
+    const hash2 = await sha256Hex2(token);
     if (hash2 !== link.token_hash) return null;
     const mission = await db.queryOne(`SELECT * FROM game_missions WHERE id = ?`, [link.mission_id]);
     if (!mission) return null;
@@ -61666,7 +62085,7 @@ function registerScreeningRoutes(app, service) {
 __name(registerScreeningRoutes, "registerScreeningRoutes");
 
 // src/domain/announcements/service.ts
-function rowToRecord2(row) {
+function rowToRecord3(row) {
   return {
     id: row.id,
     title: row.title,
@@ -61682,7 +62101,7 @@ function rowToRecord2(row) {
     updatedAt: row.updated_at
   };
 }
-__name(rowToRecord2, "rowToRecord");
+__name(rowToRecord3, "rowToRecord");
 var SELECT_COLS = `a.id, a.title, a.body, a.show_login, a.show_panel, a.bot_sent_staff,
        a.bot_sent_families, a.active, a.created_by, s.full_name AS created_by_name,
        a.created_at, a.updated_at`;
@@ -61693,7 +62112,7 @@ function createAnnouncementService(deps) {
       `SELECT ${SELECT_COLS} FROM announcements a JOIN staff s ON s.id = a.created_by WHERE a.id = ?`,
       [id]
     );
-    return row ? rowToRecord2(row) : null;
+    return row ? rowToRecord3(row) : null;
   }
   __name(getById, "getById");
   return {
@@ -61744,14 +62163,14 @@ function createAnnouncementService(deps) {
           WHERE a.active = 1 AND a.show_panel = 1
           ORDER BY a.created_at DESC LIMIT 5`
       );
-      return rows.map(rowToRecord2);
+      return rows.map(rowToRecord3);
     },
     async listAll() {
       const rows = await db.query(
         `SELECT ${SELECT_COLS} FROM announcements a JOIN staff s ON s.id = a.created_by
           ORDER BY a.created_at DESC LIMIT 200`
       );
-      return rows.map(rowToRecord2);
+      return rows.map(rowToRecord3);
     },
     async update(id, input2, actor) {
       const existing = await getById(id);
@@ -61915,7 +62334,7 @@ function registerAnnouncementRoutes(app, service) {
 __name(registerAnnouncementRoutes, "registerAnnouncementRoutes");
 
 // src/domain/knowledge/service.ts
-function rowToRecord3(row, attachments) {
+function rowToRecord4(row, attachments) {
   return {
     id: row.id,
     title: row.title,
@@ -61930,7 +62349,7 @@ function rowToRecord3(row, attachments) {
     updatedAt: row.updated_at
   };
 }
-__name(rowToRecord3, "rowToRecord");
+__name(rowToRecord4, "rowToRecord");
 var SELECT_COLS2 = `k.id, k.title, k.body, k.category, k.pinned, k.published,
        k.created_by, s.full_name AS created_by_name, k.created_at, k.updated_at`;
 function concatSegments2(segments) {
@@ -61969,7 +62388,7 @@ function createKnowledgeService(deps) {
       [id]
     );
     if (!row) return null;
-    return rowToRecord3(row, await attachmentsOf(id));
+    return rowToRecord4(row, await attachmentsOf(id));
   }
   __name(getById, "getById");
   async function attachmentsOf(itemId) {
@@ -62037,7 +62456,7 @@ function createKnowledgeService(deps) {
           LIMIT 30`
       );
       const attMap = await attachmentsForItems(rows.map((r) => r.id));
-      return rows.map((r) => rowToRecord3(r, attMap.get(r.id) ?? []));
+      return rows.map((r) => rowToRecord4(r, attMap.get(r.id) ?? []));
     },
     async listAll() {
       const rows = await db.query(
@@ -62046,7 +62465,7 @@ function createKnowledgeService(deps) {
           LIMIT 200`
       );
       const attMap = await attachmentsForItems(rows.map((r) => r.id));
-      return rows.map((r) => rowToRecord3(r, attMap.get(r.id) ?? []));
+      return rows.map((r) => rowToRecord4(r, attMap.get(r.id) ?? []));
     },
     async create(input2, actor) {
       const id = crypto.randomUUID();
@@ -63616,7 +64035,7 @@ function createDocsService(deps) {
     }
   }
   __name(assertOffice, "assertOffice");
-  function rowToRecord4(row, files) {
+  function rowToRecord5(row, files) {
     return {
       id: row.id,
       title: row.title,
@@ -63630,7 +64049,7 @@ function createDocsService(deps) {
       updatedAt: row.updated_at
     };
   }
-  __name(rowToRecord4, "rowToRecord");
+  __name(rowToRecord5, "rowToRecord");
   async function filesOfDocs(docIds) {
     const map2 = /* @__PURE__ */ new Map();
     if (docIds.length === 0) return map2;
@@ -63662,7 +64081,7 @@ function createDocsService(deps) {
     const row = await getDocRow(id);
     if (!row) return null;
     const fileMap = await filesOfDocs([id]);
-    return rowToRecord4(row, fileMap.get(id) ?? []);
+    return rowToRecord5(row, fileMap.get(id) ?? []);
   }
   __name(getDocRecord, "getDocRecord");
   async function assertDocExists(id) {
@@ -63751,7 +64170,7 @@ function createDocsService(deps) {
       const page2 = rows.slice(0, limit);
       const fileMap = await filesOfDocs(page2.map((r) => r.id));
       return {
-        items: page2.map((r) => rowToRecord4(r, fileMap.get(r.id) ?? [])),
+        items: page2.map((r) => rowToRecord5(r, fileMap.get(r.id) ?? [])),
         hasMore
       };
     },
@@ -80804,6 +81223,11 @@ function createServices(deps) {
     publicBaseUrl: deps.publicBaseUrl ?? null,
     injectPathProbe: /* @__PURE__ */ __name((pathId, input2, actor) => clinicalEngine.addPathProbe(pathId, input2, actor), "injectPathProbe")
   });
+  const reportExport = createReportExportService({
+    db,
+    audit,
+    buildReport: /* @__PURE__ */ __name((pathId, actor) => clinicalEngine.getPathwayReport(pathId, { from: null, to: null }, actor), "buildReport")
+  });
   const backup = createBackupService({ db, audit, logger, baleToken: deps.baleToken ?? null, sender: deps.backupDocumentSender ?? null });
   const rum = createRumService({ db, logger });
   const clientErrors = createClientErrorsService({ db, logger });
@@ -80835,7 +81259,7 @@ function createServices(deps) {
   });
   const contentScore = createContentScoreService(db, audit);
   const bugReports = createBugReportService(db, audit);
-  return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, clearbook, docs, finance, reports, waitlist, followups, sessionNotes, todos, exerciseBank, documentRequests, caseEvents, clinicalEngine, otEngine, games, backup, rum, centerKpi, networkContent, bugReports, clientErrors, health, growth, contentScore };
+  return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, clearbook, docs, finance, reports, waitlist, followups, sessionNotes, todos, exerciseBank, documentRequests, caseEvents, clinicalEngine, reportExport, otEngine, games, backup, rum, centerKpi, networkContent, bugReports, clientErrors, health, growth, contentScore };
 }
 __name(createServices, "createServices");
 function createApp(deps) {
@@ -80980,7 +81404,7 @@ function createApp(deps) {
   registerRoutes3(app, services.studentProfile);
   registerStudentTimelineRoutes(app, services.studentTimeline);
   registerSpecialNeedsRoutes(app, services.specialNeeds);
-  registerWaitlistRoutes(app, services.waitlist);
+  registerWaitlistRoutes(app, services.waitlist, { publicBaseUrl: deps.publicBaseUrl ?? null });
   registerFormBuilderRoutes(app, createFormBuilderService({ db: services.db, audit: services.audit, logger: services.logger }));
   registerFollowUpRoutes(app, services.followups);
   registerTodoRoutes(app, services.todos);
@@ -80988,6 +81412,7 @@ function createApp(deps) {
   registerRoutes4(app, services.documentRequests);
   registerCaseEventsRoutes(app, services.caseEvents);
   registerClinicalEngineRoutes(app, services.clinicalEngine);
+  registerReportExportRoutes(app, services.reportExport);
   registerGamesRoutes(app, services.games);
   registerOtEngineRoutes(app, services.otEngine);
   registerCaseEventPublicRoutes(app, services.caseEvents, {

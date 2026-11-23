@@ -201,8 +201,9 @@ export const CancelAppointmentSchema = z.object({
 });
 
 export const CopyWeekSchema = z.object({
-  source_monday: TehranYmdSchema,
-  target_monday: TehranYmdSchema,
+  /* ۱.۲۷.۴۸ — کپی هفته بر پایهٔ شنبه (مرز هفتهٔ تقویم) */
+  source_week_start: TehranYmdSchema,
+  target_week_start: TehranYmdSchema,
   staff_id: UuidSchema.optional(),
   dry_run: z.boolean().optional().default(false)
 });
@@ -1250,22 +1251,43 @@ export const ReferralChildSchema = z.object({
   /* ۱.۲۷.۳۶ — فرم تکمیلی وضعیت خانواده زیر هر دانش‌آموز (اختیاری؛ «نمی‌دانم» ارسال نمی‌شود) */
   family_culture: z.enum(REFERRAL_FAMILY_LEVELS).nullish(),
   family_finance: z.enum(REFERRAL_FAMILY_LEVELS).nullish(),
-  family_cooperation: z.enum(REFERRAL_FAMILY_LEVELS).nullish()
+  family_cooperation: z.enum(REFERRAL_FAMILY_LEVELS).nullish(),
+  /* ۱.۲۷.۴۶ — «سطح مالی و فرهنگی خانواده» (فیلد ترکیبی مسیر معلم؛ خواست کارفرما) —
+     معلم یک ارزیابی کلی می‌دهد؛ فرهنگی/مالی جدا فقط از فرم تکمیلی خانواده پر می‌شود */
+  family_liv: z.enum(REFERRAL_FAMILY_LEVELS).nullish()
 });
 
-export const PublicReferralSubmissionSchema = z.object({
-  role: z.enum(['family', 'teacher'], { message: 'نقش معرف باید خانواده یا معلم باشد' }),
-  referrer_name: z.string().trim().min(2, 'نام معرف حداقل ۲ نویسه است').max(80, 'نام معرف حداکثر ۸۰ نویسه است'),
-  referrer_phone: GuardianPhoneSchema,
-  school_text: z.string().trim().max(120).optional(),
-  grade_text: z.string().trim().max(40).optional(),
-  class_text: z.string().trim().max(40).optional(),
-  token: z.string().trim().max(200).optional(),
-  children: z
-    .array(ReferralChildSchema)
-    .min(1, 'حداقل یک کودک لازم است')
-    .max(REFERRAL_CHILDREN_MAX, `حداکثر ${REFERRAL_CHILDREN_MAX} کودک در هر ثبت`)
-});
+export const PublicReferralSubmissionSchema = z
+  .object({
+    role: z.enum(['family', 'teacher'], { message: 'نقش معرف باید خانواده یا معلم باشد' }),
+    referrer_name: z.string().trim().min(2, 'نام معرف حداقل ۲ نویسه است').max(80, 'نام معرف حداکثر ۸۰ نویسه است'),
+    referrer_phone: GuardianPhoneSchema,
+    school_text: z.string().trim().max(120).optional(),
+    grade_text: z.string().trim().max(40).optional(),
+    class_text: z.string().trim().max(40).optional(),
+    token: z.string().trim().max(200).optional(),
+    children: z
+      .array(ReferralChildSchema)
+      .min(1, 'حداقل یک کودک لازم است')
+      .max(REFERRAL_CHILDREN_MAX, `حداکثر ${REFERRAL_CHILDREN_MAX} کودک در هر ثبت`)
+  })
+  /* ۱.۲۷.۴۶ — در مسیر معلم، دو فیلد وضعیت خانواده برای «هر» دانش‌آموز الزامی است
+     (خواست کارفرما: همکاری خانواده + سطح مالی‌فرهنگی — خوراک KPI صندوق ورودی) */
+  .superRefine((v, ctx) => {
+    if (v.role !== 'teacher') return;
+    v.children.forEach((c, i) => {
+      const missing: string[] = [];
+      if (!c.family_cooperation) missing.push('همکاری خانواده');
+      if (!c.family_liv) missing.push('سطح مالی و فرهنگی خانواده');
+      if (missing.length > 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['children', i],
+          message: `برای دانش‌آموز «${c.first_name || `ردیف ${i + 1}`}» این فیلدها لازم است: ${missing.join(' و ')}`
+        });
+      }
+    });
+  });
 
 export const ReferralRejectSchema = z.object({
   reason: z

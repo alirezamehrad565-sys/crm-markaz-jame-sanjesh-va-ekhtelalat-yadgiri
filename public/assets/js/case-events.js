@@ -46,7 +46,7 @@ export function canCreateCaseEvents() {
   return Boolean(session.user && ['manager', 'therapist'].includes(session.user.role));
 }
 
-export async function openCaseEventForm({ student, appointmentId = null, onSaved, defaultTypeId = null, occurredYmd = null, onlyKeys = null, pickerTitle = null }) {
+export async function openCaseEventForm({ student, appointmentId = null, onSaved, defaultTypeId = null, occurredYmd = null, onlyKeys = null, pickerTitle = null, previousEventRef = null }) {
   let types = [];
   try {
     types = await fetchCaseEventTypes(true);
@@ -58,6 +58,20 @@ export async function openCaseEventForm({ student, appointmentId = null, onSaved
     toast('هنوز نوعی رویداد ساخته نشده — مدیر از «فرم‌ها و پرسش‌نامه‌ها» نوع بسازد.');
     return;
   }
+  /* ۱.۲۷.۵۷ — موج B: prefill «ادامه از جلسهٔ قبل» — تعریف فیلدهای فرم قبلی همین‌جا حل می‌شود چون
+     کتابخانهٔ انواع این‌جاست؛ پرونده فقط ارجاع می‌فرستد (eventTypeId + at + payload).
+     در اسکوپ مشترکِ هر دو مسیر (onlyKeys و preferred) — نه داخل یک شاخه */
+  const previousEvent = previousEventRef
+    ? (() => {
+        const t = types.find((x) => x.id === previousEventRef.eventTypeId) ?? null;
+        return {
+          at: previousEventRef.at,
+          payload: previousEventRef.payload ?? {},
+          typeName: t?.title ?? null,
+          fields: t?.fields ?? []
+        };
+      })()
+    : null;
   if (onlyKeys && onlyKeys.length > 0) {
     const allowed = new Set(onlyKeys);
     const filtered = types.filter((t) => allowed.has(t.key));
@@ -65,7 +79,7 @@ export async function openCaseEventForm({ student, appointmentId = null, onSaved
       toast('فرم مورد نظر در کتابخانه فعال نیست');
       return;
     }
-    openTypePicker({ student, appointmentId, onSaved, allTypes: filtered, occurredYmd, pickerTitle, lockTypePick: false });
+    openTypePicker({ student, appointmentId, onSaved, allTypes: filtered, occurredYmd, pickerTitle, lockTypePick: false, previousEvent });
     return;
   }
 
@@ -78,18 +92,19 @@ export async function openCaseEventForm({ student, appointmentId = null, onSaved
         occurredYmd: occurredYmd || tehranTodayYmd(),
         appointmentId,
         onSaved,
-        allTypes: types
+        allTypes: types,
+        previousEvent
       });
       return;
     }
 
-    openTypePicker({ student, appointmentId, onSaved, allTypes: types, occurredYmd });
+    openTypePicker({ student, appointmentId, onSaved, allTypes: types, occurredYmd, previousEvent });
   } catch (err) {
     toastError(err);
   }
 }
 
-function openTypePicker({ student, appointmentId = null, onSaved, allTypes, occurredYmd = null, pickerTitle = null }) {
+function openTypePicker({ student, appointmentId = null, onSaved, allTypes, occurredYmd = null, pickerTitle = null, previousEvent = null }) {
   const types = allTypes ?? [];
 
   const rank = { session: 0, checklist: 1, note: 2 };
@@ -127,7 +142,7 @@ function openTypePicker({ student, appointmentId = null, onSaved, allTypes, occu
       pick: (t) => openDynamicForm({
         student, type: t,
         occurredYmd: hiddenYmd?.value || occurredYmd || tehranTodayYmd(),
-        appointmentId, onSaved, allTypes: types
+        appointmentId, onSaved, allTypes: types, previousEvent
       })
     },
     {
@@ -212,7 +227,7 @@ function openTypePicker({ student, appointmentId = null, onSaved, allTypes, occu
   searchInput.addEventListener('input', () => renderGrid(searchInput.value));
 }
 
-function openDynamicForm({ student, type, occurredYmd, appointmentId, onSaved, allTypes = null }) {
+function openDynamicForm({ student, type, occurredYmd, appointmentId, onSaved, allTypes = null, previousEvent = null }) {
   const fields = (type.fields ?? []).map((f) => fieldToForm(f));
   const target = fillTargetOf(type);
   const submitLabel = 'ثبت روی خط زمانی';
@@ -275,6 +290,46 @@ function openDynamicForm({ student, type, occurredYmd, appointmentId, onSaved, a
         changeBtn
       );
       form.prepend(bar);
+      /* ۱.۲۷.۵۷ — موج B: بلوک «ادامه از جلسهٔ قبل» — پاسخ‌های جلسهٔ پیشین را نشان می‌دهد و با اجازهٔ
+         کاربر فقط فیلدهای خالی را پر می‌کند؛ هیچ‌چیز بی‌اجازه بازنویسی نمی‌شود */
+      if (previousEvent) {
+        const values = previousEvent.payload ?? {};
+        const val = (k) => { const raw = values[k]?.value ?? values[k]; return (raw == null || String(raw).trim() === '') ? null : String(raw); };
+        const prevRows = (previousEvent.fields ?? []).filter((f) => f.type !== 'heading').map((f) => {
+          const v = val(f.key);
+          return v ? el('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } },
+            el('span', { style: { fontWeight: 600 } }, `${f.label}:`),
+            el('span', { class: 'cell-sub' }, v)) : null;
+        }).filter(Boolean);
+        const applyBtn = el('button', {
+          class: 'btn btn--soft btn--sm', type: 'button',
+          onclick: () => {
+            let n = 0;
+            for (const f of previousEvent.fields ?? []) {
+              if (f.type === 'heading') continue;
+              const v = val(f.key);
+              if (!v) continue;
+              const input = form.elements[f.key];
+              if (!input || input.value) continue;
+              const it = (input.type || '').toLowerCase();
+              if (input.tagName === 'TEXTAREA' || input.tagName === 'SELECT' || it === 'text' || it === 'number') {
+                input.value = v;
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+                n += 1;
+              }
+            }
+            toast(n > 0 ? `${fa(n)} پاسخ از جلسهٔ قبل آورده شد — مرور و به‌روز کنید` : 'فیلدها از قبل پر بودند — چیزی جایگزین نشد');
+          }
+        }, icon('clock', 14), 'بردن مقادیر جلسهٔ قبل به فرم');
+        bar.after(el('details', { style: { gridColumn: '1 / -1', background: 'var(--surface-2)', borderRadius: 'var(--radius-md)', padding: '10px 12px', marginBottom: 'var(--sp-2)' } },
+          el('summary', { style: { cursor: 'pointer', fontWeight: 600 } },
+            `ادامه از جلسهٔ قبل — ${previousEvent.typeName ?? 'گزارش'} ثبت‌شده در ${formatJalaliNumeric(String(previousEvent.at).slice(0, 10))}`),
+          prevRows.length > 0
+            ? el('div', { style: { display: 'flex', flexDirection: 'column', gap: '4px', padding: '8px 0' } }, prevRows)
+            : el('div', { class: 'cell-sub', style: { padding: '8px 0' } }, 'در گزارش قبلی پاسخی ثبت نشده بود.'),
+          applyBtn));
+      }
       const countable = (type.fields ?? []).filter((f) => f.type !== 'heading');
       if (countable.length >= 8) {
         const progressText = el('span', { style: { fontWeight: '600' } });

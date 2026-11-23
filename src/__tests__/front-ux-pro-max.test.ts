@@ -64,7 +64,7 @@ describe('گیت ممیزی UI/UX Pro Max (uupm.cc) — 1.09.0', () => {
   });
 
   test('نسخه: سو 1.19.0 — قفل هم‌نسخه‌ای bump با انتشار (برچسب نسخهٔ سایدبار)', () => {
-    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1.27.43'/);
+    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1.27.57'/);
   });
 
   test('۱.۱۹.۰ — روز کاری: جریان پیوسته (هیچ اکشنی کل نما را re-render نمی‌کند)', () => {
@@ -179,13 +179,13 @@ describe('گیت ممیزی UI/UX Pro Max (uupm.cc) — 1.09.0', () => {
     expect(mobileCircles![0]).toMatch(/padding-inline-start:\s*0/);
   });
 
-  test('۱.۱۵.۰ — پروفایل: دکمه‌های دایره‌ای اقدام روی کارت پرونده (جای مودال/منوی پنهان)', () => {
+  test('۱.۲۷.۵۸ — پروفایل: منوی برچسب‌دار «اقدامات» در نوار هویت (جای دکمه‌های دایره‌ای بی‌برچسب ۱.۱۵.۰)', () => {
     const profile = readFileSync(join(__dirname, '../../public/assets/js/views/student-profile.js'), 'utf8');
-    // نوار دایره‌ها روی خود کارت ساخته می‌شود و شش اقدام کلیدی را پوشش می‌دهد
-    expect(profile).toMatch(/buildCardCircles/);
-    expect(profile).toMatch(/class: 'card-circles'/);
-    expect(profile).toMatch(/icon-circle--danger/);
-    // هر دکمه با قفل مشغولی واحد (ضد اسپم) باز می‌شود
+    // منوی برچسب‌دار ⋯ روی نوار هویت ساخته می‌شود و همهٔ اقدام کلیدی را با نام روشن پوشش می‌دهد
+    expect(profile).toMatch(/buildIdentityMenu/);
+    expect(profile).toMatch(/'اقدامات پرونده — ویرایش، برچسب‌ها، معلم‌ها، تاریخچهٔ تحصیلی، حذف'/);
+    expect(profile).toMatch(/dd__item--danger/); // «حذف کامل» تم خطر دارد و از مسیر ناوبری خارج شده
+    // هر آیتم با قفل مشغولی واحد (ضد اسپم) باز می‌شود
     expect(profile).toMatch(/lockBtn\(e\.currentTarget, onclick\)/);
     // API حذف و API معلم (POST/DELETE) مستقیماً سیم‌کشی شده‌اند
     expect(profile).toMatch(/openStudentDelete\(student/);
@@ -196,10 +196,8 @@ describe('گیت ممیزی UI/UX Pro Max (uupm.cc) — 1.09.0', () => {
     const sharedTeachers = readFileSync(join(__dirname, '../../public/assets/js/student-teachers.js'), 'utf8');
     expect(sharedTeachers).toMatch(/\/teachers`, \{/); // POST
     expect(sharedTeachers).toMatch(/\/teachers\/\$\{t\.id\}/); // DELETE
-    // استایل دایره: گردی کامل + هدف لمسی ≥38px و 42px روی لمس
-    expect(views).toMatch(/\.icon-circle\s*\{[^}]*border-radius:\s*var\(--radius-full\)/);
-    expect(views).toMatch(/\.icon-circle\s*\{[^}]*width:\s*38px/);
-    expect(views).toMatch(/@media\s*\(pointer:\s*coarse\)\s*\{[^@]*\.icon-circle\s*\{\s*width:\s*42px/);
+    // استایل آیتم منو: هدف لمسی درخت dd حفظ است (الگوی مشترک dd__item)
+    expect(views).toMatch(/\.dd__item\s*\{[^}]*min-height:\s*(3[8-9]|[4-9]\d)px|\.dd__item\s*\{[^}]*padding/);
   });
 
   test('۱.۱۲.۰ — UX روانی ناوبری: گود اسکرول پایدار + ارتفاع ثابت اوتلت + قفل مشغولی دکمه', () => {

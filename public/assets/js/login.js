@@ -4,12 +4,19 @@ import { el, icon } from './ui.js';
 const SESSION_KEY = 'cs.loginOk';
 
 function brandLogo() {
-  return el('img', {
-    class: 'login__logo',
-    src: '/assets/img/logo-192.png?v=0.86.1',
-    alt: 'نشان مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام',
-    width: '76', height: '76'
-  });
+  /* ۱.۲۷.۴۷ — لوگوی بزرگ‌تر (۹۶px) و دوسطحی سیاه‌وسفید؛ SVG درون‌خطی با متغیرهای تم وارونه می‌شود */
+  const node = el('span', { class: 'login__logo' });
+  node.innerHTML = `<svg viewBox="0 0 512 512" width="96" height="96" role="img" aria-label="نشان مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام" xmlns="http://www.w3.org/2000/svg">
+    <!-- ۱.۲۷.۴۷ — نشان مونوکروم دوسطحی — وارونه در تم تیره -->
+    <rect width="512" height="512" rx="116" fill="var(--logo-tile)"/>
+    <circle cx="256" cy="106" r="38" fill="none" stroke="var(--logo-glyph)" stroke-width="26"/>
+    <rect x="142" y="150" width="228" height="72" rx="36" fill="var(--logo-glyph)"/>
+    <rect x="170" y="196" width="172" height="236" rx="48" fill="var(--logo-glyph)"/>
+    <rect x="198" y="246" width="116" height="132" rx="22" fill="var(--logo-tile)"/>
+    <path d="M256 258 C284 300 284 340 256 372 C228 340 228 300 256 258 Z" fill="var(--logo-glyph)"/>
+    <rect x="158" y="446" width="196" height="30" rx="15" fill="var(--logo-glyph)"/>
+        </svg>`;
+  return node;
 }
 
 async function drawPublicAnnouncements(box) {

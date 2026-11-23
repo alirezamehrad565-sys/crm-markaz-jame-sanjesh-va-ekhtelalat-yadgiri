@@ -1,6 +1,6 @@
 {
   "name": "center-system",
-  "version": "1.27.43",
+  "version": "1.27.58",
   "private": true,
   "type": "module",
   "author": {
@@ -45,7 +45,9 @@
     "build:engine-server": "node scripts/build-engine-server.mjs",
     "smoke:engine": "node scripts/engine/engine-smoke.mjs",
     "smoke:engine:adapter": "SMOKE_ENGINE=adapter node scripts/engine/engine-smoke.mjs",
-    "audit:sec": "node scripts/sec-audit.mjs"
+    "audit:sec": "node scripts/sec-audit.mjs",
+    "bench:complexity": "node scripts/complexity-bench.mjs",
+    "bench:gate": "node scripts/complexity-bench.mjs --gate"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.5",

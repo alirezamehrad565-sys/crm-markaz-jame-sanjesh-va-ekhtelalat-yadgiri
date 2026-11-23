@@ -27,6 +27,7 @@ import { createStudentProfileService, registerRoutes as studentProfileRoutes } f
 import type { StudentProfileService } from '@domain/student-profile';
 import { createStudentTimelineService, registerStudentTimelineRoutes } from '@app/student-timeline';
 import type { StudentTimelineService } from '@app/student-timeline';
+import { createReportExportService, registerReportExportRoutes } from '@app/report-export'; // ۱.۲۷.۵۳ — موج ۳ ارتقای پرونده: اسناد خروجی نسخه‌دار (طرح C)
 import { createSpecialNeedsService, registerSpecialNeedsRoutes } from '@app/special-needs';
 import type { SpecialNeedsService } from '@app/special-needs';
 import { createWaitlistService, registerWaitlistRoutes } from '@domain/waitlist';
@@ -181,6 +182,7 @@ export interface Services {
   documentRequests: DocumentRequestService;
   caseEvents: CaseEventsService;
   clinicalEngine: ClinicalEngineService;
+  reportExport: ReturnType<typeof createReportExportService>; // ۱.۲۷.۵۳ — موج ۳ ارتقای پرونده: اسناد خروجی نسخه‌دار
   otEngine: OtEngineService;
   games: GamesService; // ۱.۲۵.۰۷ — بستر بک‌اند بازی
   backup: BackupService;
@@ -485,6 +487,13 @@ export function createServices(deps: AppDeps): Services {
     injectPathProbe: (pathId, input, actor) => clinicalEngine.addPathProbe(pathId, input, actor)
   });
 
+  // ۱.۲۷.۵۳ — موج ۳ ارتقای پرونده (طرح C «پروندهٔ ناشر»): قطعی‌سازی خروجی‌ها با snapshot-first؛
+  // سازندهٔ گزارش تزریقی است (قرارداد «نه وابستگی ماژولی domain→domain» — هم‌الگوی formulationOt)
+  const reportExport = createReportExportService({
+    db, audit,
+    buildReport: (pathId, actor) => clinicalEngine.getPathwayReport(pathId, { from: null, to: null }, actor)
+  });
+
   // مکانیک پشتیبان‌گیری و بازیابی
   const backup = createBackupService({ db, audit, logger, baleToken: deps.baleToken ?? null, sender: deps.backupDocumentSender ?? null }); // ارسال به آیدی بله
 
@@ -532,7 +541,7 @@ export function createServices(deps: AppDeps): Services {
   // بازاعمال ۱.۲۵.۵۱ — گزارش باگ به پشتیبانی CP (صف محلی؛ ارسال در @app/bug-report-forward)
   const bugReports = createBugReportService(db, audit);
 
-  return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, clearbook, docs, finance, reports, waitlist, followups, sessionNotes, todos, exerciseBank, documentRequests, caseEvents, clinicalEngine, otEngine, games, backup, rum, centerKpi, networkContent, bugReports, clientErrors, health, growth, contentScore };
+  return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, clearbook, docs, finance, reports, waitlist, followups, sessionNotes, todos, exerciseBank, documentRequests, caseEvents, clinicalEngine, reportExport, otEngine, games, backup, rum, centerKpi, networkContent, bugReports, clientErrors, health, growth, contentScore };
 }
 
 export function createApp(deps: AppDeps): AppHono {
@@ -768,7 +777,7 @@ export function createApp(deps: AppDeps): AppHono {
   registerStudentTimelineRoutes(app, services.studentTimeline); // فاز ۶: تایم‌لاین §11
   registerSpecialNeedsRoutes(app, services.specialNeeds); // فاز ۷: نیازهای ویژه §12 + وضعیت مدرسه §15
 
-  registerWaitlistRoutes(app, services.waitlist);
+  registerWaitlistRoutes(app, services.waitlist, { publicBaseUrl: deps.publicBaseUrl ?? null }); /* ۱.۲۷.۴۴ */
 
   // ۱.۲۷.۳۴ — فرم‌ساز تعاملی عمومی: CRUD فرم‌ها (مدیر/منشی) + صفحهٔ بدون‌لاگین /public/form/:slug
   // و ثبت پاسخ با سقف نرخ درون‌حافظه — ماژول مستقل @domain/form-builder (MIGRATIONS.md: 0120)
@@ -785,6 +794,8 @@ export function createApp(deps: AppDeps): AppHono {
   registerCaseEventsRoutes(app, services.caseEvents);
 
   registerClinicalEngineRoutes(app, services.clinicalEngine);
+
+  registerReportExportRoutes(app, services.reportExport); // ۱.۲۷.۵۳ — موج ۳ ارتقای پرونده: snapshot خروجی‌ها
 
   registerGamesRoutes(app, services.games); // ۱.۲۵.۰۷ — API پرسنلی بازی‌ها
 

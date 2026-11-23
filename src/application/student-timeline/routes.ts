@@ -19,9 +19,11 @@ export function registerStudentTimelineRoutes(app: AppHono, service: StudentTime
       to: c.req.query('to') || undefined,
       kinds,
       limit: c.req.query('limit') ? Number.parseInt(c.req.query('limit')!, 10) : undefined,
-      offset: c.req.query('offset') ? Number.parseInt(c.req.query('offset')!, 10) : undefined
+      offset: c.req.query('offset') ? Number.parseInt(c.req.query('offset')!, 10) : undefined,
+      q: c.req.query('q') || undefined // موج ۲ — جست‌وجوی متنی روایت
     }, actor);
 
-    return c.json({ data: result.events, nextAction: result.nextAction, meta: { hasMore: result.hasMore } }, 200);
+    /* موج ۱ — فصل‌های روایت پرونده در meta می‌آیند (کلاینت کهنه فیلد ناشناخته را نادیده می‌گیرد) */
+    return c.json({ data: result.events, nextAction: result.nextAction, meta: { hasMore: result.hasMore, chapters: result.chapters } }, 200);
   });
 }

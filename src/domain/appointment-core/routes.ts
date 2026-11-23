@@ -16,8 +16,8 @@ export function registerRoutes(app: AppHono, service: AppointmentService): void 
     const actor = getAuthContext(c);
     const body = CopyWeekSchema.parse(await c.req.json<unknown>());
     const input: CopyWeekInput = {
-      sourceMonday: body.source_monday,
-      targetMonday: body.target_monday,
+      sourceWeekStart: body.source_week_start,
+      targetWeekStart: body.target_week_start,
       staffId: body.staff_id,
       dryRun: body.dry_run
     };
