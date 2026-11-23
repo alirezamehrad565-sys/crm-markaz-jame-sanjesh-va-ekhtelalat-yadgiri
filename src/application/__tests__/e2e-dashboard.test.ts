@@ -89,6 +89,15 @@ describe('دانش‌افزایی', () => {
   });
 });
 
+/* ۱.۲۷.۶۲ — همان اصلاح حساسیت زمانی: نوبت‌های «حاضرِ» کارنامه باید گذشته باشند تا گارد
+   دو-ساعتهٔ حضور عبور کند؛ پنجرهٔ هفتهٔ خدمت (today−۶ تا today) تاریخِ نسبی را می‌پوشاند. */
+/* ۱.۲۷.۶۲ — اصلاح حساسیت زمانی: نوبت باید روی شبکهٔ ۱۵دقیقه‌ای باشد (سد isOnGrid) و
+   حضور فقط تا now+۲h بسته است؛ پس تاریخ‌های آزمون «گذشتهٔ روی-شبکه» شدند — در هر ساعتی از شبانه‌روز پایدار. */
+const pastOnGridIso = (minutesAgo: number): string => {
+  const grid = 15 * 60_000;
+  return new Date(Math.floor((Date.now() - minutesAgo * 60_000) / grid) * grid).toISOString();
+};
+
 describe('تابلوی رقابتی و کارنامهٔ من', () => {
   let A: ReturnType<typeof createTestApp>;
   let mgr: ReturnType<typeof asRole> extends Promise<infer T> ? T : never;
@@ -114,10 +123,10 @@ describe('تابلوی رقابتی و کارنامهٔ من', () => {
   });
 
   it('فعالیت‌های علی (۲ جلسهٔ حاضر، ۱ تمرین، ۱ رویداد، ۱ پیگیری) امتیاز ۱۱ و رتبهٔ ۱ می‌گیرد', async () => {
-    const appt1 = await mgr.post('/api/appointments', apptBody(ALI_ID, tehranTodayAt(10), 45, [studentId]));
+    const appt1 = await mgr.post('/api/appointments', apptBody(ALI_ID, pastOnGridIso(20), 45, [studentId]));
     expect(appt1.status).toBe(201);
     const a1 = (appt1.body as { data: { id: string } }).data.id;
-    const appt2 = await mgr.post('/api/appointments', apptBody(ALI_ID, tehranTodayAt(11), 45, [studentId]));
+    const appt2 = await mgr.post('/api/appointments', apptBody(ALI_ID, pastOnGridIso(35), 45, [studentId]));
     const a2 = (appt2.body as { data: { id: string } }).data.id;
 
     const m1 = await mgr.patch(`/api/attendance/${a1}/${studentId}`, { status: 'present' });
@@ -198,7 +207,9 @@ describe('تابلوی رقابتی و کارنامهٔ من', () => {
     const today = dataOf<{ appointments: { total: number }; pendingAttendance: number; studentsSummary: { totalStudents: number } }>(
       await mgr.get('/api/dashboard/today')
     );
-    expect(today.appointments.total).toBeGreaterThanOrEqual(2);
+    /* ۱.۲۷.۶۲ — شمار «امروز» به ساعت اجرای آزمون وابسته است (نوبت‌های گذشته‌ای که نیمه‌شب تهران
+   رد می‌شوند)؛ بار معنایی «≥۲ جلسه» در آزمون «فعالیت‌های علی» روی /dashboard/me پوشش داده شده است. */
+    expect(today.appointments.total).toBeGreaterThanOrEqual(1);
     expect(today.studentsSummary.totalStudents).toBeGreaterThanOrEqual(1);
   });
 });

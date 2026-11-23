@@ -9,6 +9,7 @@ import { fetchTags, fetchStudentTags, tagChip, openTagEditor } from '../tagging.
 import { fetchStudentFocus, focusLabels, openFocusEditor } from '../student-focus.js'; // درخت هدف در پروفایل
 import { openCaseEventForm, openCaseEventDetail, canCreateCaseEvents, openChecklistSendModal, fillTargetOf } from '../case-events.js'; // — رویدادهای پرونده + ارسال چک‌لیست + سه‌هدف
 import { computeDeskState } from '../profile/desk-state.js'; // — ۱.۲۷.۶۰: قاعدهٔ واحد «وضعیت میز» (جدول ۵ نقد)
+import { stationBadge } from '../profile/station-state.js'; // — ۱.۲۷.۶۲ موج ۱: بج/خط شمارشی ایستگاه (تابع خالص، یک منبع با آزمون گیت)
 import { openExerciseSendModal, renderExercisesTab } from '../exercise-send.js'; // — ارسال تمرین با بله + تب تمرین‌ها
 import { renderClinicalTab } from '../clinical-insights.js'; // — تب تفسیر بالینی + پروتکل قضاوت
 import { pathwayChip, canEditPathway, openPathwayModal } from '../session-type.js'; // — مسیر پرونده
@@ -365,12 +366,16 @@ export async function renderStudentProfile(container, ctx) {
         ? el('span', { class: `badge badge--${student.specialNeedSeverity === 'severe' ? 'error' : 'warning'}`, title: 'نیاز ویژهٔ شناسایی‌شده' },
             SPECIAL_NEED_TYPE_LABELS[student.specialNeedType] ?? student.specialNeedType)
         : null,
-      el('span', { class: 'cell-sub' }, `مدرسه: ${schoolName(student.schoolId) ?? '—'}${student.className ? ` — ${student.className}` : ''}`)
+      /* ۱.۲۷.۶۲ — موج ۱: «مدرسه/کلاس» از ردیف بج‌ها حذف شد (گلوگاه پهنای نوار هویت تک‌ردیفی) —
+         در tooltip نام می‌نشیند و جزئیات کامل در بخش «اطلاعات پایه» است */
     );
 
     return el('div', { class: 'idbar' },
       el('div', { class: 'avatar-lg', style: { width: '40px', height: '40px', fontSize: '17px', flex: '0 0 auto' } }, student.firstName.charAt(0)),
-      el('div', { class: 'idbar__main' },
+      el('div', {
+        class: 'idbar__main',
+        title: `مدرسه: ${schoolName(student.schoolId) ?? '—'}${student.className ? ` — ${student.className}` : ''}${student.teacherName ? ` — معلم: ${student.teacherName}` : ''}`
+      },
         el('div', { class: 'idbar__name' }, `${student.firstName} ${student.lastName}`),
         badges
       ),
@@ -399,6 +404,7 @@ export async function renderStudentProfile(container, ctx) {
   const content = el('div', {});
   let activeSectionKey = null; // بخشِ بازِ پروندهٔ مرجع (کلید refSections) یا null — میز جلسهٔ خالص
   let activeStation = 'ready'; // ایستگاه فعال میز جلسه
+  let workbarCollapsed = false; // ۱.۲۷.۶۲ — موج ۱: نوار کار تاشو (پیش‌فرض باز؛ خم‌کردن = فقط نوار ابزار)
 
   /* موج ۰ طرح ارتقای پرونده — رجیستری همان است؛ dispatch به ظرف مشترک می‌رود.
      `content` ظرف مشترک رندرر فعال است: به بدنهٔ بخشِ باز جابه‌جا می‌شود تا mount تنبل و
@@ -469,27 +475,45 @@ export async function renderStudentProfile(container, ctx) {
     lockBtn(e.currentTarget, () => openCaseEventForm({ student, appointmentId: t.appointmentId, occurredYmd: tehranYmdOfIso(t.startAt), previousEventRef: prev, defaultTypeId: prev?.eventTypeId ?? null, onSaved: onCaseEventSaved }));
   }
 
+  /* ۱.۲۷.۶۲ — موج ۱ «کارگاه درمان»: نوار ابزار فشرده تک‌خطی — هر ایستگاه یک چیپ با بج شمارشیِ
+     واقعی (از stationBadge خالص) و خط مانده فقط در tooltip؛ ارتفاع کروم ≤۱۶۰px گیت موج ۱ است.
+     همان قرارداد قبلی: tablist + پیمایش کیبورد + ?station= + CTA «ادامه از جلسهٔ قبل». */
+  function reportedApptIds() {
+    return [...noteApptIdSet(), ...caseEvents.filter((e) => e.appointmentId && e.status !== 'cancelled').map((e) => e.appointmentId)];
+  }
+
   function buildFlowBar() {
+    const badgeData = () => ({
+      appointments,
+      reportedApptIds: reportedApptIds(),
+      openFollowups,
+      nowMs: Date.now()
+    });
     const steps = el('div', { class: 'flowbar__steps', role: 'tablist', 'aria-label': 'فلوی جلسه' },
-      STATION_ORDER.map((key) => el('button', {
-        class: `flowstep${activeStation === key ? ' is-active' : ''}`,
-        type: 'button', role: 'tab', 'aria-selected': activeStation === key ? 'true' : 'false',
-        title: `${STATION_LABEL[key]} — ${stationRemLine(key)}`,
-        onclick: () => setStation(key),
-        /* ۱.۲۷.۵۹ — نقد پرونده: پیمایش tablist با کلیدهای جهت/Home/End (نقص ۱۶) */
-        onkeydown: (ev) => {
-          if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(ev.key)) return;
-          ev.preventDefault();
-          const i = STATION_ORDER.indexOf(key);
-          const j = ev.key === 'ArrowLeft' ? i + 1 : ev.key === 'ArrowRight' ? i - 1 : ev.key === 'Home' ? 0 : STATION_ORDER.length - 1;
-          const n = Math.min(STATION_ORDER.length - 1, Math.max(0, j));
-          setStation(STATION_ORDER[n]);
-          ev.currentTarget.parentElement.querySelectorAll('.flowstep')[n].focus();
-        }
-      },
-        el('span', { class: 'flowstep__label' }, icon(STATION_ICON[key], 14), STATION_LABEL[key]),
-        el('span', { class: 'flowstep__rem' }, stationRemLine(key))
-      ))
+      STATION_ORDER.map((key) => {
+        const st = auxDone ? stationBadge(key, badgeData()) : null;
+        return el('button', {
+          class: `flowstep${activeStation === key ? ' is-active' : ''}${st && st.n > 0 ? ' has-pending' : ''}`,
+          type: 'button', role: 'tab', 'aria-selected': activeStation === key ? 'true' : 'false',
+          title: `${STATION_LABEL[key]} — ${stationRemLine(key)}`,
+          onclick: () => setStation(key),
+          /* ۱.۲۷.۵۹ — نقد پرونده: پیمایش tablist با کلیدهای جهت/Home/End (نقص ۱۶) */
+          onkeydown: (ev) => {
+            if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(ev.key)) return;
+            ev.preventDefault();
+            const i = STATION_ORDER.indexOf(key);
+            const j = ev.key === 'ArrowLeft' ? i + 1 : ev.key === 'ArrowRight' ? i - 1 : ev.key === 'Home' ? 0 : STATION_ORDER.length - 1;
+            const n = Math.min(STATION_ORDER.length - 1, Math.max(0, j));
+            setStation(STATION_ORDER[n]);
+            ev.currentTarget.parentElement.querySelectorAll('.flowstep')[n].focus();
+          }
+        },
+          el('span', { class: 'flowstep__label' }, icon(STATION_ICON[key], 14), STATION_LABEL[key]),
+          st && st.n > 0
+            ? el('span', { class: `stbadge stbadge--${st.tone}`, 'aria-label': st.line }, fa(st.n))
+            : (st ? el('span', { class: 'stbadge stbadge--ok', 'aria-label': st.line }, icon('check', 11)) : null)
+        );
+      })
     );
     /* ۱.۲۷.۵۹ — نقد پرونده: «ادامه از جلسهٔ قبل» فقط با جلسهٔ گذشتهٔ بی‌گزارش معنا دارد (نقص ۸) */
     const cta = canCreateCaseEvents() && missingReportAppts().length > 0
@@ -795,8 +819,28 @@ export async function renderStudentProfile(container, ctx) {
     );
   }
 
+  /* ۱.۲۷.۶۲ — موج ۱: نوار کار تاشو — پنل ایستگاه فعال زیر سرصفهٔ نازکِ خودش می‌نشیند؛
+     بستنش یعنی درمانگر فقط نوار ابزار را بالا می‌خواهد (کروم حداقلی). */
+  function buildWorkbar(key) {
+    const head = el('div', { class: 'workbar__head' },
+      el('div', { class: 'workbar__title' },
+        icon(STATION_ICON[key], 15),
+        el('b', {}, STATION_LABEL[key]),
+        el('span', { class: 'cell-sub' }, stationRemLine(key))
+      ),
+      el('button', {
+        class: 'btn btn--ghost btn--sm workbar__toggle', type: 'button',
+        'aria-expanded': String(!workbarCollapsed),
+        title: workbarCollapsed ? 'بازکردن نوار کار ایستگاه فعال' : 'بستن نوار کار — فقط نوار ابزار بماند',
+        onclick: () => { workbarCollapsed = !workbarCollapsed; renderDesk(); }
+      }, icon(workbarCollapsed ? 'chevD' : 'chevU', 14), workbarCollapsed ? 'بازکردن نوار کار' : 'بستن نوار کار')
+    );
+    const body = workbarCollapsed ? null : el('div', { class: 'workbar__body' }, buildStationPanel(key));
+    return el('div', { class: `workbar${workbarCollapsed ? ' workbar--collapsed' : ''}` }, head, body);
+  }
+
   function renderDesk() {
-    deskMain.replaceChildren(buildStationPanel(activeStation));
+    deskMain.replaceChildren(buildWorkbar(activeStation));
     deskRef.replaceChildren(buildNextApptCard(), refRoot);
   }
 

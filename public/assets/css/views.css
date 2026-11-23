@@ -4781,6 +4781,58 @@ body.cb-printing #cb-print-root { display: block; }
 .refitem__body .card { margin-bottom: var(--sp-3); }
 .refitem__body .card:last-child { margin-bottom: 0; }
 
+/* ═══ ۱.۲۷.۶۲ — موج ۱ «کارگاه درمان»: نوار ابزار ایستگاه تک‌خطی + بج شمارشی + نوار کار تاشو ═══
+   گیت موج ۱: کروم بالای صفحه (سربرگ صفحه + نوار هویت + نوار ابزار) ≤ ۱۶۰px در ۱۴۴۰×۹۰۰. */
+.flowbar { margin-top: var(--sp-2); }
+.flowbar__steps { display: flex; gap: var(--sp-1); flex-wrap: nowrap; }
+.flowstep {
+  flex: 1 1 0;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-1);
+  padding: var(--sp-1) var(--sp-2);
+  min-height: 34px;
+}
+.flowstep__label { font-size: 13px; font-weight: 700; white-space: nowrap; }
+.stbadge {
+  min-width: 20px; height: 20px; padding: 0 6px; border-radius: var(--radius-full);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 800; line-height: 1; flex: 0 0 auto;
+}
+.stbadge--error { background: var(--error-soft); color: var(--on-error-soft); }
+.stbadge--warning { background: var(--warning-soft); color: var(--on-warning-soft); }
+.stbadge--success { background: var(--success-soft); color: var(--on-success-soft); }
+.stbadge--ok { background: transparent; color: var(--success); border: 1px solid var(--border); }
+.flowstep.has-pending { border-color: var(--warning); }
+.idbar { margin-top: var(--sp-3); }
+/* ۱.۲۷.۶۲ — موج ۱: نوار هویت تک‌ردیفی دسکتاپ (گیت کروم ≤۱۶۰px) — مسئول پرونده در همان ردیف؛
+   موبایل (بلوک media پایین) همان شکسته‌شدن قبلی را دارد */
+.idbar { padding: var(--sp-2) var(--sp-3); gap: var(--sp-2) var(--sp-3); }
+.idbar__badges { gap: var(--sp-1); }
+.idbar__badges .badge { font-size: 12px; }
+.idbar__owner {
+  flex-basis: auto;
+  padding-top: 0;
+  border-top: none;
+  margin-inline-start: auto;
+}
+.idbar__owner .select--sm { min-width: 150px; max-width: 190px; }
+.idbar__owner .case-status-edit { gap: var(--sp-1); flex-wrap: nowrap; }
+.workbar {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.workbar__head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); flex-wrap: wrap;
+}
+.workbar__title { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+.workbar__body { border-top: 1px dashed var(--border); padding: var(--sp-3); }
+.workbar--collapsed .workbar__head { padding-block: var(--sp-2); }
+.workbar__body .card { border: none; padding: 0; background: transparent; }
+.workbar__body .card__head { padding-top: 0; }
 /* CTA چسبان موبایل — نسخهٔ پایین‌صفحه‌ای «ادامه از جلسهٔ قبل» */
 .flow-cta-mobile { display: none; }
 
