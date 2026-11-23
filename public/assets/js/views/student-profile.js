@@ -1,6 +1,6 @@
 import { api, qs } from '../api.js';
 import { fa, enDigits, formatJalaliDateTime, formatJalaliNumeric, formatStoredJalaliNumeric, STUDENT_GRADES, gradeLabel, isPlaceholderNid } from '../format.js';
-import { el, icon, formModal, openModal, confirmModal, toast, toastError, statusBadge, dataTable, skeletonState, emptyState, errorState, tabs, callBadge, lockBtn } from '../ui.js';
+import { el, icon, formModal, openModal, confirmModal, toast, toastError, statusBadge, dataTable, skeletonState, emptyState, errorState, callBadge, lockBtn } from '../ui.js';
 import { openStudentDelete } from '../student-delete.js'; // — حذف کامل پرونده (جریان واحد با فهرست دانش‌آموزان)
 import { SPECIAL_NEED_TYPE_LABELS, SPECIAL_NEED_SEVERITY_LABELS, SPECIAL_NEED_SEVERITY_TONES } from '../taxonomy.js'; /* ۱.۲۵.۰۲ — واژه‌نامهٔ مشترک نیاز ویژه */
 import { openTeacherManager } from '../student-teachers.js'; // — مدیریت معلم‌ها: افزودن/حذف (APIهای POST/DELETE معلم)
@@ -252,154 +252,147 @@ export async function renderStudentProfile(container, ctx) {
     void close;
   }
 
-  /* ۱.۱۵.۰ — دکمه‌های دایره‌ای سادهٔ اقدام، روی خودِ کارت پرونده (به‌جای کاوش در تب‌ها و منوها):
-     ویرایش · برچسب‌ها · هدف‌ها · معلم · تاریخچهٔ تحصیلی · حذف — همیشه جلوی چشم.
-     هر دکمه با الگوی واحد قفل مشغولی (lockBtn) در برابر اسپم/دوبارکلیک محفوظ است و
-     هر کدام مستقیم API خودش را می‌کوبد: PATCH پرونده، PUT هدف‌ها، POST/DELETE معلم، DELETE پرونده. */
-  function buildCardCircles() {
-    const circle = (iconName, label, onclick, danger = false) =>
+  /* ۱.۲۷.۵۸ — پوستهٔ «میز جلسه + پروندهٔ مرجع» (برندهٔ مسابقهٔ بازطراحی، طرح ۴):
+     شش دکمهٔ آیکونیِ بی‌برچسب کارت قدیمی به یک منوی برچسب‌دار «⋯» در نوار هویت رفت —
+     هر اقدام با نام روشن و پیامدش، «حذف کامل پرونده» با تم خطر و خارج از مسیر ناوبری.
+     هر آیتم همان الگوی قفل مشغولی واحد (lockBtn) و API مستقیم خودش را دارد. */
+  function buildIdentityMenu() {
+    const item = (iconName, label, onclick, danger = false) =>
       el('button', {
-        class: `icon-circle${danger ? ' icon-circle--danger' : ''}`,
-        type: 'button', title: label, 'aria-label': label,
-        onclick: (e) => lockBtn(e.currentTarget, onclick)
-      }, icon(iconName, 17));
+        class: `dd__item${danger ? ' dd__item--danger' : ''}`,
+        type: 'button', role: 'menuitem',
+        onclick: (e) => { close(); lockBtn(e.currentTarget, onclick); }
+      }, icon(iconName, 15), el('span', {}, label));
 
-    return el('div', { class: 'card-circles', role: 'group', 'aria-label': 'اقدامات پرونده' },
-      circle('edit', 'ویرایش اطلاعات', () =>
-        openStudentForm({ student, onSaved: onStudentSaved })),
-      canManageTags
-        ? circle('tag', 'برچسب‌ها', async () => {
-            let tags = [];
-            try { tags = await fetchTags(); } catch { tags = []; }
-            openTagEditor({
-              student,
-              tags,
-              current: studentTags,
-              canCreateTag: session.user?.role === 'manager',
-              onSaved: onTagsSaved
-            });
-          })
+    const panel = el('div', { class: 'dd__panel', style: { display: 'none' }, role: 'menu', 'aria-label': 'اقدامات پرونده' });
+    const btn = el('button', {
+      class: 'btn btn--ghost btn--sm', type: 'button',
+      'aria-haspopup': 'menu', 'aria-expanded': 'false',
+      title: 'اقدامات پرونده — ویرایش، برچسب‌ها، معلم‌ها، تاریخچهٔ تحصیلی، حذف'
+    }, icon('dots', 16), el('span', {}, 'اقدامات'), icon('chevD', 12));
+    const root = el('div', { class: 'dd idbar__menu' }, btn, panel);
+    function close() {
+      panel.style.display = 'none';
+      btn.setAttribute('aria-expanded', 'false');
+      document.removeEventListener('mousedown', outside, true);
+      document.removeEventListener('keydown', esc, true);
+    }
+    function outside(e) { if (!root.contains(e.target)) close(); }
+    function esc(e) { if (e.key === 'Escape') { close(); btn.focus(); } }
+    btn.addEventListener('click', () => {
+      const open = panel.style.display !== 'none';
+      if (open) { close(); return; }
+      panel.replaceChildren(
+        item('edit', 'ویرایش اطلاعات', () =>
+          openStudentForm({ student, onSaved: onStudentSaved })),
+        canManageTags
+          ? item('tag', 'برچسب‌ها', async () => {
+              let tags = [];
+              try { tags = await fetchTags(); } catch { tags = []; }
+              openTagEditor({
+                student,
+                tags,
+                current: studentTags,
+                canCreateTag: session.user?.role === 'manager',
+                onSaved: onTagsSaved
+              });
+            })
+          : null,
+        canManageTags
+          ? item('target', 'هدف‌های شناختی', () =>
+              openFocusEditor({ student, onSaved: onFocusSaved }))
+          : null,
+        item('users', 'معلم‌های پرونده — افزودن و حذف', () =>
+          openTeacherManager(student, { onChanged: () => rerenderTabIf(['info']) })),
+        item('school', 'تاریخچهٔ تحصیلی', () =>
+          openEducationHistory(student)), // — ۱.۲۰.۰: تاریخچه چیزی از این نما را عوض نمی‌کند؛ بدون rebuild
+        canEditPathway(student)
+          ? item('refresh', 'تغییر مسیر پرونده — تفسیر بالینی بر همین اساس شاخه می‌خورد', () =>
+              openPathwayModal(student, onPathwaySaved))
+          : null,
+        canManageCase
+          ? item('trash', 'حذف کامل پرونده — تأیید دومرحله‌ای', () =>
+              openStudentDelete(student, { onDeleted: () => { location.hash = '#/students'; } }), true)
+          : null
+      );
+      panel.style.display = 'block';
+      btn.setAttribute('aria-expanded', 'true');
+      document.addEventListener('mousedown', outside, true);
+      document.addEventListener('keydown', esc, true);
+    });
+    return root;
+  }
+
+  /* ۱.۲۷.۵۸ — نوار هویت فشرده (~۶۴px): جایگزین کارت سربرگِ نیم‌صفحه‌ای که در هر ۸ تب تکرار می‌شد.
+     یک‌خطی: هویت + بج‌ها + فصل جاری (کلیک → بازشدن تاریخچه در پروندهٔ مرجع) + دو اقدام سرنویس
+     («صدور گزارش قطعی» و منوی برچسب‌دار «اقدامات»). مسئول پرونده بدون مسئول، درجا در همین نوار
+     اصلاح می‌شود و «جلسهٔ بی‌گزارش» به‌جای متن منفعل، دکمه در نوار فلو دارد. */
+  function buildIdentityBar() {
+    const badges = el('div', { class: 'idbar__badges' },
+      statusBadge(student.active ? 'active' : 'inactive'),
+      student.gender ? statusBadge(student.gender) : null,
+      student.grade ? el('span', { class: 'badge badge--neutral' }, gradeLabel(student.grade)) : null,
+      pathwayChip(student.pathway),
+      /* ۱.۲۷.۵۷ — موج B: فصل جاری پرونده در یک نگاه — از فصل‌بندی تاریخچه (یک منبع)؛ ۱.۲۷.۵۸: کلیک‌پذیر */
+      auxDone && Array.isArray(timeline?.meta?.chapters) && timeline.meta.chapters.length > 0
+        ? el('button', {
+            class: 'badge badge--primary', type: 'button',
+            title: 'فصل جاری پرونده — از فصل‌بندی تاریخچه · کلیک: بازکردن تاریخچه در پروندهٔ مرجع',
+            onclick: () => openRef('timeline')
+          }, `فصل جاری: ${chapterLabelOf(timeline.meta.chapters.at(-1))}`)
         : null,
-      canManageTags
-        ? circle('target', 'هدف‌های شناختی', () =>
-            openFocusEditor({ student, onSaved: onFocusSaved }))
+      student.ownerName
+        ? el('span', { class: 'badge badge--accent', title: 'مسئول پرونده — سپردن رسمی پرونده به درمانگر' }, `مسئول پرونده: ${student.ownerName}`)
         : null,
-      circle('users', 'معلم‌های پرونده — افزودن و حذف', () =>
-        openTeacherManager(student, { onChanged: () => rerenderTabIf(['info']) })),
-      circle('school', 'تاریخچهٔ تحصیلی', () =>
-        openEducationHistory(student)), // — ۱.۲۰.۰: تاریخچه چیزی از این نما را عوض نمی‌کند؛ بدون rebuild
+      student.specialNeedType
+        ? el('span', { class: `badge badge--${student.specialNeedSeverity === 'severe' ? 'error' : 'warning'}`, title: 'نیاز ویژهٔ شناسایی‌شده' },
+            SPECIAL_NEED_TYPE_LABELS[student.specialNeedType] ?? student.specialNeedType)
+        : null,
+      el('span', { class: 'cell-sub' }, `مدرسه: ${schoolName(student.schoolId) ?? '—'}${student.className ? ` — ${student.className}` : ''}`)
+    );
+
+    return el('div', { class: 'idbar' },
+      el('div', { class: 'avatar-lg', style: { width: '40px', height: '40px', fontSize: '17px', flex: '0 0 auto' } }, student.firstName.charAt(0)),
+      el('div', { class: 'idbar__main' },
+        el('div', { class: 'idbar__name' }, `${student.firstName} ${student.lastName}`),
+        badges
+      ),
+      el('div', { class: 'idbar__side' },
+        canSendReport
+          ? el('button', {
+              class: 'btn btn--primary btn--sm', type: 'button',
+              title: 'صدور گزارش قطعی از دادهٔ همان لحظه — شمارهٔ سالانه، سه واریانت و چاپ A4',
+              onclick: (e) => lockBtn(e.currentTarget, openSnapshotBuilder)
+            }, icon('file', 15), 'صدور گزارش قطعی')
+          : null,
+        buildIdentityMenu()
+      ),
       canManageCase
-        ? circle('trash', 'حذف کامل پرونده', () =>
-            openStudentDelete(student, { onDeleted: () => { location.hash = '#/students'; } }), true)
+        ? el('div', { class: 'idbar__owner' }, buildOwnerEditor(student, onOwnerSaved))
         : null
     );
   }
 
-  /* کارت وضعیت دو مرحله‌ای: در رندر فوری فقط هویت و بج‌های پایه (دادهٔ خود دانش‌آموز)؛
-     پس از رسیدن دادهٔ موازی، «اقدام بعدی» و ردیف اقدامات هم اضافه می‌شوند. */
-  function buildStatusCard() {
-    const nextActionBlock = auxDone ? buildNextActionBlock(timeline.nextAction) : null;
-    return el('div', { class: 'card' },
-      el('div', { class: 'card__body' },
-        el('div', { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', flexWrap: 'wrap' } },
-          el('div', { class: 'avatar-lg' }, student.firstName.charAt(0)),
-          el('div', { style: { flex: 1, minWidth: 0 } },
-            el('h2', { style: { marginBottom: 'var(--sp-2)' } }, `${student.firstName} ${student.lastName}`),
-            el('div', { style: { display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap', alignItems: 'center' } },
-              statusBadge(student.active ? 'active' : 'inactive'),
-              student.gender ? statusBadge(student.gender) : null,
-              student.grade ? el('span', { class: 'badge badge--neutral' }, gradeLabel(student.grade)) : null,
-              pathwayChip(student.pathway),
-              canEditPathway(student)
-                ? el('button', {
-                    class: 'btn btn--ghost btn--sm',
-                    style: { padding: 'var(--sp-1) var(--sp-2)' },
-                    title: 'تغییر مسیر پرونده — تب تفسیر بالینی بر همین اساس شاخه می‌خورد',
-                    onclick: () => openPathwayModal(student, onPathwaySaved)
-                  }, icon('edit', 13), 'مسیر')
-                : null,
-              /* ۱.۲۷.۵۷ — موج B: فصل جاری پرونده در یک نگاه — از همان فصل‌بندی تاریخچه (یک منبع) */
-              auxDone && Array.isArray(timeline?.meta?.chapters) && timeline.meta.chapters.length > 0
-                ? el('span', { class: 'badge badge--primary', title: 'فصل جاری پرونده — از فصل‌بندی تاریخچه' },
-                    `فصل جاری: ${chapterLabelOf(timeline.meta.chapters.at(-1))}`)
-                : null,
-              student.ownerName
-                ? el('span', { class: 'badge badge--accent', title: 'مسئول پرونده — سپردن رسمی پرونده به درمانگر' }, `مسئول پرونده: ${student.ownerName}`)
-                : null,
-              student.specialNeedType
-                ? el('span', { class: `badge badge--${student.specialNeedSeverity === 'severe' ? 'error' : 'warning'}`, title: 'نیاز ویژهٔ شناسایی‌شده' },
-                    SPECIAL_NEED_TYPE_LABELS[student.specialNeedType] ?? student.specialNeedType)
-                : null,
-              el('span', { class: 'cell-sub' }, `مدرسه: ${schoolName(student.schoolId) ?? '—'}${student.className ? ` — ${student.className}` : ''}`)
-            )
-          ),
-          buildCardCircles() /* ۱.۱۵.۰ — دایره‌های اقدام گوشهٔ کارت؛ وابسته به دادهٔ موازی نیستند */
-        ),
-          auxDone
-          ? el('div', { class: 'profile-actions' },
-              nextActionBlock,
-              /* ۱.۲۷.۵۶ — موج A: جلسه‌های بی‌گزارش از دلِ تب جلسات به ردیف اقدام می‌آیند (یک منبع با برگهٔ جلسه) */
-              missingReportAppts().length > 0
-                ? el('button', {
-                    class: 'chip', type: 'button',
-                    title: 'ثبت گزارش برای قدیمی‌ترین جلسهٔ بی‌گزارش',
-                    onclick: () => { const m = missingReportAppts()[0]; openCaseEventForm({ student, appointmentId: m.appointmentId, previousEventRef: previousSessionEvent(m.appointmentId), onSaved: onCaseEventSaved }); }
-                  }, icon('file', 13), `${fa(missingReportAppts().length)} جلسهٔ بی‌گزارش`)
-                : null,
-              /* ۱.۲۷.۵۶ — موج A: خانهٔ ثابتِ «شروع ثبت» — هر عمل با گیت خودش (منشی هم گزارش و صدور دارد) */
-              (canCreateCaseEvents() || canSendReport)
-                ? el('div', { class: 'profile-actions__row' },
-                    canCreateCaseEvents()
-                      ? el('button', {
-                          class: 'btn btn--primary btn--sm',
-                          onclick: () => openCaseEventForm({ student, onSaved: onCaseEventSaved })
-                        }, icon('plus', 15), 'ثبت رویداد پرونده')
-                      : null,
-                    canCreateCaseEvents()
-                      ? /* UX-ممیزی: دو دکمهٔ هم‌شکل که فقط در یک واژه فرق داشتند («ارسال چک‌لیست با بله» / «ارسال تمرین با بله»)
-                           در یک منوی «ارسال با بله» ادغام شدند */
-                        baleSendMenu()
-                      : null,
-                    canSendReport
-                      ? el('button', {
-                          class: 'btn btn--soft btn--sm',
-                          onclick: () => openTeacherReportModal(student)
-                        }, icon('bot', 15), 'ارسال گزارش به معلم مدرسه')
-                      : null,
-                    canSendReport
-                      ? el('button', {
-                          class: 'btn btn--soft btn--sm',
-                          onclick: () => openSnapshotBuilder()
-                        }, icon('file', 15), 'صدور گزارش قطعی')
-                      : null
-                  )
-                : null,
-              canManageCase ? buildOwnerEditor(student, onOwnerSaved) : null
-            )
-          : null
-      )
-    );
-  }
-
+  /* ═══ ۱.۲۷.۵۸ — پوستهٔ «میز جلسه + پروندهٔ مرجع» (برندهٔ مسابقهٔ بازطراحی — طرح ۴) ═══
+     هر بازِکردن پرونده یک «شیفت جلسه» است: نوار فلو می‌گوید کجای آماده‌سازی←برگزاری←ثبت←پیگیری
+     هستیم و دقیقاً چه مانده؛ میز جلسه فقط ایستگاه فعال را نشان می‌دهد؛ همهٔ چیزهای قطعی و تاریخی
+     در ستون «پروندهٔ مرجع» آکاردئونی زندگی می‌کنند. تب‌های تخت حذف شدند ولی رندررهای محتوایی
+     (info/timeline/sessions/clinical/narrative/exercises/games/comms) عیناً همان‌های قبلی‌اند و
+     در خانه‌های تازه سرو می‌شوند — هیچ قابلیتی بی‌خانه نمانده (docs/PROFILE-UI-TOURNAMENT.md). */
   const content = el('div', {});
-  let activeTabKey = 'info'; // تب فعال — برای بازسازی نوار پس از رسیدن داده
+  let activeSectionKey = null; // بخشِ بازِ پروندهٔ مرجع (کلید refSections) یا null — میز جلسهٔ خالص
+  let activeStation = 'ready'; // ایستگاه فعال میز جلسه
 
-  /* موج ۰ طرح ارتقای پرونده (PROFILE-UPGRADE-DESIGN §۵) — سه تب کم‌اتصال (فقط student لازم دارند)
-     از رجیستری سرو می‌گیرند؛ info/sessions/comms/exercises/timeline فعلاً روی fallback قدیمی‌اند
-     (S4..S7 مهاجرت بعدی). رندررهای پایین عیناً به‌عنوان fallback می‌مانند — رفتار امروز دست‌نخورده. */
+  /* موج ۰ طرح ارتقای پرونده — رجیستری همان است؛ dispatch به ظرف مشترک می‌رود.
+     `content` ظرف مشترک رندرر فعال است: به بدنهٔ بخشِ باز جابه‌جا می‌شود تا mount تنبل و
+     جریان پیوستهٔ ۱.۲۰.۰ (هیچ اکشنی کل نما را rebuild نمی‌کند) عیناً برقرار بماند. */
   const profileTabs = createProfileRegistry([
     { key: 'clinical', when: () => canSeeClinical, mount: (box) => renderClinicalTabContent(box) },
     { key: 'narrative', when: () => canSeeClinical, mount: (box) => renderNarrativeTabContent(box) },
     { key: 'games', when: () => canSeeGames, mount: (box) => renderGamesTabContent(box) } // ۱.۲۵.۲۴ — chunk داینامیک حفظ می‌شود
   ]);
 
-
-  function selectTab(key, { silent = false } = {}) {
-    activeTabKey = key;
-    tabBar.setActive(key); // kit خودش کلیک را فعال نمی‌کند — صریح فعال می‌کنیم
-    if (!silent) content.replaceChildren(skeletonState('list', 4)); /* silent = بازسازی درجای تب فعال (جریان پیوستهٔ ۱.۲۰.۰) */
-    if (!auxDone) { pendingTab = key; return; } // دادهٔ موازی هنوز نرسیده — بعد از رسیدن رندر می‌شود
-    /* موج ۰ — dispatch رجیستری‌اول؛ null یعنی fallback (نقشهٔ کامل قدیمی پایین حفظ شده است) */
+  function dispatchTab(key) {
     const desc = profileTabs.resolve(key, ctx);
     if (desc) { desc.mount(content, ctx); return; }
     const renderer = {
@@ -410,9 +403,328 @@ export async function renderStudentProfile(container, ctx) {
       comms: renderCommsTab,
       exercises: renderExercisesTabContent,
       games: renderGamesTabContent, // ۱.۲۵.۲۴ — میز تجویز بازی در خود پرونده
-      narrative: renderNarrativeTabContent // ۱.۲۷.۲۶ — M3 POLISH-3: روایت بالینی
+      narrative: renderNarrativeTabContent, // ۱.۲۷.۲۶ — M3 POLISH-3: روایت بالینی
+      snapshot: renderSnapshotSection // ۱.۲۷.۵۸ — خانهٔ دائمی گزارش‌های قطعی (آ-۵)
     }[key];
     (renderer ?? renderInfoTab)(content);
+  }
+
+  /* ─── نوار فلو: چهار ایستگاه با «مانده‌های واقعی» — یک منبع با برگهٔ جلسه (معلق‌های موج A) ─── */
+  const STATION_ORDER = ['ready', 'hold', 'log', 'follow'];
+  const STATION_LABEL = { ready: 'آماده‌سازی', hold: 'برگزاری', log: 'ثبت گزارش', follow: 'پیگیری' };
+  const STATION_ICON = { ready: 'checklist', hold: 'user', log: 'file', follow: 'bell' };
+  const openFollowupAction = () => (timeline.nextAction?.type === 'followup' ? timeline.nextAction : null);
+
+  function stationRemLine(key) {
+    if (!auxDone) return 'در حال آماده‌سازی داده‌ها…';
+    if (key === 'ready') {
+      const target = missingReportAppts()[0] ?? upcomingAppt();
+      if (!target) return 'جلسهٔ پیش‌رو ثبت نشده — از «تقویم نوبت‌ها» نوبت بسازید';
+      return previousSessionEvent(target.appointmentId)
+        ? 'موضوع جلسهٔ قبل در فرم گزارش می‌آید'
+        : 'از جلسهٔ قبل رویدادی برای بردن نیست';
+    }
+    if (key === 'hold') {
+      const nowMs = Date.now();
+      const pending = appointments.filter((a) => a.status === 'scheduled' && Date.parse(a.startAt) <= nowMs && a.myAttendance === 'pending').length;
+      return pending > 0 ? `${fa(pending)} حضور ثبت‌نشده` : 'حضور جلسات به‌روز است';
+    }
+    if (key === 'log') {
+      const n = missingReportAppts().length;
+      return n > 0 ? `${fa(n)} جلسهٔ بی‌گزارش` : 'گزارش جلسات به‌روز است';
+    }
+    const fu = openFollowupAction();
+    return fu ? (fu.at && Date.parse(fu.at) < Date.now() ? 'پیگیری عقب‌افتاده' : 'پیگیری باز') : 'پیگیری به‌روز است';
+  }
+
+  function continueFromPrevious(e) {
+    const t = missingReportAppts()[0] ?? upcomingAppt();
+    if (!t) { toast('نوبتی برای گزارش نیست — از «تقویم نوبت‌ها» نوبت بسازید'); return; }
+    lockBtn(e.currentTarget, () => openCaseEventForm({ student, appointmentId: t.appointmentId, previousEventRef: previousSessionEvent(t.appointmentId), onSaved: onCaseEventSaved }));
+  }
+
+  function buildFlowBar() {
+    const steps = el('div', { class: 'flowbar__steps', role: 'tablist', 'aria-label': 'فلوی جلسه' },
+      STATION_ORDER.map((key) => el('button', {
+        class: `flowstep${activeStation === key ? ' is-active' : ''}`,
+        type: 'button', role: 'tab', 'aria-selected': activeStation === key ? 'true' : 'false',
+        title: `${STATION_LABEL[key]} — ${stationRemLine(key)}`,
+        onclick: () => { activeStation = key; renderDesk(); }
+      },
+        el('span', { class: 'flowstep__label' }, icon(STATION_ICON[key], 14), STATION_LABEL[key]),
+        el('span', { class: 'flowstep__rem' }, stationRemLine(key))
+      ))
+    );
+    const cta = canCreateCaseEvents()
+      ? el('button', {
+          class: 'btn btn--primary btn--sm flowbar__cta', type: 'button',
+          title: 'اقدام اصلی: گزارش جلسه با بردن مقادیر جلسهٔ قبل — قدیمی‌ترین جلسهٔ بی‌گزارش یا جلسهٔ پیش رو',
+          onclick: continueFromPrevious
+        }, icon('send', 15), 'ادامه از جلسهٔ قبل')
+      : null;
+    return el('div', { class: 'flowbar' }, steps, cta);
+  }
+
+  /* ─── میز جلسه: فقط ایستگاه فعال رندر می‌شود (ناحیهٔ ۳ نقشه) ─── */
+  const deskMain = el('div', { class: 'desk__main' });
+  const deskRef = el('div', { class: 'desk__ref' });
+  const desk = el('div', { class: 'desk' }, deskMain, deskRef);
+  const idbarHolder = el('div', {});
+  const flowHolder = el('div', {});
+  /* CTA چسبان پایین موبایل — جایگزین ناوبری تب‌های بریدهٔ وضع قبل؛ روی دسکتاپ مخفی است */
+  const flowCtaHolder = el('div', { class: 'flow-cta-mobile' });
+
+  /* جریان پیوستهٔ ۱.۲۰.۰ — callbackهای mutation پیش از mount تعریف می‌شوند چون نوار هویت/پنل‌های میز
+     هنگام ساخت به آن‌ها ارجاع می‌دهند (const پیش از استفاده — الگوی TDZ-safe). خود توابع
+     refreshCore/repaintChrome/… declaration هستند و hoist می‌شوند؛ اینجا هیچ‌کدام اجرا نمی‌شوند. */
+  const onStudentSaved = async () => { if (await refreshCore()) { repaintChrome(); rerenderTabIf(['info', 'comms']); } };
+  const onTagsSaved = async () => { if (await refreshTagsData()) { repaintChrome(); rerenderTabIf(['info']); } };
+  const onFocusSaved = async () => { if (await refreshFocusData()) { repaintChrome(); rerenderTabIf(['info']); } };
+  const onPathwaySaved = async () => { if (await refreshCore()) { repaintChrome(); rerenderTabIf(['info', 'clinical']); } };
+  const onOwnerSaved = async () => { if (await refreshCore()) repaintChrome(); };
+  const onSpecialNeedSaved = async () => { if (await refreshCore()) { repaintChrome(); rerenderTabIf(['info']); } };
+  const onCaseEventSaved = async () => { if (await refreshEventsData()) { repaintChrome(); rerenderTabIf(['timeline', 'sessions']); } };
+  const onBaleSent = async () => { if (await refreshEventsData()) { repaintChrome(); rerenderTabIf(['timeline', 'sessions', 'exercises']); } };
+  const docsMount = el('div', {}); // کارت خودگردان مدارک (۱.۲۰.۰) — یک‌بار fetch، در ایستگاه آماده‌سازی جابه‌جا می‌شود
+  renderDocsQuickCard(docsMount, student);
+
+  function buildStationPanel(key) {
+    if (key === 'ready') {
+      const target = auxDone ? (missingReportAppts()[0] ?? upcomingAppt()) : null;
+      const prev = target ? previousSessionEvent(target.appointmentId) : null;
+      return el('div', { class: 'card' },
+        el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, 'آماده‌سازی — ادامه از جلسهٔ قبل')),
+        el('div', { class: 'card__body' },
+          target
+            ? el('div', { class: 'cell-sub' }, `جلسهٔ هدف: ${formatJalaliDateTime(target.startAt)}${target.staffName ? ` — ${target.staffName}` : ''}`)
+            : el('div', { class: 'cell-sub' }, 'جلسهٔ هدفی برای آماده‌سازی نیست'),
+          prev
+            ? el('div', { class: 'cell-sub' }, 'موضوع جلسهٔ قبل هنگام بازشدن فرم گزارش خودکار برمی‌گردد.')
+            : el('div', { class: 'cell-sub' }, 'از جلسات قبل رویداد قطعی‌ای نیست — فرم از صفر شروع می‌شود.'),
+          canCreateCaseEvents()
+            ? el('button', {
+                class: 'btn btn--primary btn--sm', type: 'button', style: { alignSelf: 'flex-start' },
+                onclick: continueFromPrevious
+              }, icon('send', 15), 'ادامه از جلسهٔ قبل')
+            : null,
+          docsMount /* کارت مدارک تازهٔ بله — خانهٔ تازه‌اش ایستگاه آماده‌سازی است (نقشه: ۳-الف) */
+        )
+      );
+    }
+    if (key === 'hold') {
+      const nowMs = Date.now();
+      const target = upcomingAppt()
+        ?? appointments
+          .filter((a) => a.status === 'scheduled' && Date.parse(a.startAt) <= nowMs && a.myAttendance === 'pending')
+          .sort((a, b) => (a.startAt > b.startAt ? -1 : 1))[0]
+        ?? null;
+      const counts = { present: 0, absent: 0, pending: 0, cancelled: 0 };
+      for (const a of appointments) counts[a.myAttendance] = (counts[a.myAttendance] ?? 0) + 1;
+      return el('div', { class: 'card' },
+        el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, 'برگزاری — ثبت حضور')),
+        el('div', { class: 'card__body' },
+          target
+            ? el('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-2)' } },
+                el('div', { class: 'cell-sub' }, `جلسهٔ ${formatJalaliDateTime(target.startAt)}${target.staffName ? ` — ${target.staffName}` : ''}`),
+                el('div', { style: { display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap' } },
+                  [['present', 'حاضر'], ['late', 'حضور با تأخیر'], ['absent', 'غایب'], ['cancelled', 'لغو جلسه']].map(([st, lbl]) =>
+                    el('button', {
+                      class: 'btn btn--soft btn--sm', type: 'button',
+                      onclick: (e) => lockBtn(e.currentTarget, async () => { await markAttendance(target, st); renderDesk(); })
+                    }, lbl))
+                ),
+                el('div', { class: 'cell-sub' }, 'ثبت با یک کلیک، همان لحظه — سرور گیت دارد: درمانگر فقط جلسهٔ خودش.')
+              )
+            : emptyState({ iconName: 'calendar', title: 'حضور فعالی برای ثبت نیست', hint: 'نوبت امروز/پیش رو و نوبت‌های گذشتهٔ بدون حضور این‌جا می‌نشینند.' }),
+          el('div', { style: { display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap', marginTop: 'var(--sp-3)' } },
+            el('span', { class: 'badge badge--success' }, `${fa(counts.present)} حاضر`),
+            el('span', { class: 'badge badge--error' }, `${fa(counts.absent)} غایب`),
+            el('span', { class: 'badge badge--warning' }, `${fa(counts.pending)} در انتظار`)
+          )
+        )
+      );
+    }
+    if (key === 'log') {
+      const missing = auxDone ? missingReportAppts() : [];
+      return el('div', { class: 'card' },
+        el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, 'ثبت گزارش جلسه')),
+        el('div', { class: 'card__body' },
+          canCreateCaseEvents()
+            ? el('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-2)' } },
+                el('button', {
+                  class: 'btn btn--primary btn--sm', type: 'button', style: { alignSelf: 'flex-start' },
+                  onclick: (e) => lockBtn(e.currentTarget, () => openCaseEventForm({ student, onSaved: onCaseEventSaved }))
+                }, icon('plus', 15), 'ثبت رویداد پرونده'),
+                missing.length > 0
+                  ? el('div', { class: 'cell-sub' }, `${fa(missing.length)} جلسهٔ بی‌گزارش — قدیمی‌ترین اول؛ «جلسهٔ بی‌گزارش» یعنی جلسهٔ گذشته بدون رویداد ثبت‌شده:`)
+                  : el('div', { class: 'cell-sub' }, 'جلسهٔ بی‌گزارش ندارید — گزارش جلسات به‌روز است.'),
+                missing.slice(0, 5).map((a) =>
+                  el('div', { class: 'missrow' },
+                    el('span', {}, formatJalaliDateTime(a.startAt)),
+                    el('button', {
+                      class: 'btn btn--soft btn--sm', type: 'button',
+                      onclick: (e) => lockBtn(e.currentTarget, () => openCaseEventForm({ student, appointmentId: a.appointmentId, previousEventRef: previousSessionEvent(a.appointmentId), onSaved: onCaseEventSaved }))
+                    }, icon('file', 13), 'ثبت گزارش همین جلسه')
+                  ))
+              )
+            : el('div', { class: 'cell-sub' }, 'ثبت گزارش در اختیار درمانگر/منشی/مدیر است.')
+        )
+      );
+    }
+    // follow — پیگیری با بله + صف پیگیری
+    const fu = auxDone ? openFollowupAction() : null;
+    return el('div', { class: 'card' },
+      el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, 'پیگیری با بله')),
+      el('div', { class: 'card__body' },
+        (canCreateCaseEvents() || canSendReport)
+          ? el('div', { class: 'profile-actions__row' },
+              canCreateCaseEvents() ? baleSendMenu() : null,
+              canSendReport
+                ? el('button', {
+                    class: 'btn btn--soft btn--sm', type: 'button',
+                    onclick: () => openTeacherReportModal(student)
+                  }, icon('bot', 15), 'ارسال گزارش به معلم مدرسه')
+                : null
+            )
+          : el('div', { class: 'cell-sub' }, 'ابزارهای پیگیری در اختیار درمانگر/منشی/مدیر است.'),
+        fu
+          ? el('button', {
+              class: 'chip', type: 'button',
+              title: 'مشاهده در خط زمانی (فیلتر پیگیری) و ثبت نتیجه',
+              onclick: () => { location.hash = `#/students/${id}?tab=timeline&filter=followups`; }
+            }, icon('bell', 13), fu.at && Date.parse(fu.at) < Date.now() ? 'پیگیری عقب‌افتاده' : 'پیگیری باز', fu.at ? el('span', { class: 'cell-sub' }, `— سررسید: ${formatJalaliDateTime(fu.at)}`) : null)
+          : el('div', { class: 'cell-sub' }, 'پیگیری بازی نیست — صف پیگیری در «تاریخچه» با فیلتر پیگیری است.')
+      )
+    );
+  }
+
+  /* ─── کارت «جلسهٔ بعدی و نوبت‌ها» (ناحیهٔ ۵ نقشه) + ستون «پروندهٔ مرجع» (ناحیهٔ ۴) ─── */
+  function buildNextApptCard() {
+    const upcoming = auxDone ? upcomingAppt() : null;
+    return el('div', { class: 'card nextappt' },
+      el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, 'جلسهٔ بعدی و نوبت‌ها')),
+      el('div', { class: 'card__body' },
+        upcoming
+          ? el('div', { class: 'nextappt__when' }, icon('calendar', 15), el('span', {}, formatJalaliDateTime(upcoming.startAt)), upcoming.staffName ? el('span', { class: 'cell-sub' }, `— ${upcoming.staffName}`) : null)
+          : el('div', { class: 'cell-sub' }, 'نوبت پیش‌رویی ثبت نشده — دفتر از «تقویم نوبت‌ها» نوبت می‌سازد.'),
+        el('div', { class: 'nextappt__row' },
+          el('button', { class: 'btn btn--soft btn--sm', type: 'button', onclick: () => { location.hash = '#/appointments'; } }, icon('calendar', 14), 'تغییر/ثبت نوبت'),
+          el('button', { class: 'btn btn--ghost btn--sm', type: 'button', onclick: () => openRef('sessions') }, icon('clock', 14), 'بایگانی جلسات و حضور')
+        )
+      )
+    );
+  }
+
+  function refSections() {
+    return [
+      { key: 'info', label: 'اطلاعات پایه', icon: 'user', when: () => true },
+      { key: 'timeline', label: 'تاریخچه با فصل‌ها و نقطه‌های کلیدی', icon: 'clock', when: () => true },
+      { key: 'clinical', label: 'تفسیر بالینی و طرح درمان', icon: 'brain', when: () => canSeeClinical },
+      { key: 'narrative', label: 'روایت بالینی (سه فصل)', icon: 'book', when: () => canSeeClinical },
+      { key: 'snapshot', label: 'گزارش‌های قطعی — واریانت متخصص/خانواده/مدرسه + چاپ A4', icon: 'file', when: () => true },
+      { key: 'sessions', label: 'بایگانی جلسات، حضور و نوبت‌ها', icon: 'calendar', when: () => true },
+      { key: 'exercises', label: 'تمرین‌ها و بسته‌های تکلیف', icon: 'file', when: () => true },
+      { key: 'games', label: 'بازی‌ها', icon: 'gamepad', when: () => canSeeGames },
+      { key: 'comms', label: 'ارتباطات و ربات بله — لینک اتصال · برگهٔ پیشرفت', icon: 'bot', when: () => true }
+    ];
+  }
+
+  function buildReference() {
+    const items = refSections().filter((s) => s.when()).map((s) => {
+      const body = el('div', { class: 'refitem__body' });
+      const node = el('details', { class: 'refitem', 'data-ref': s.key },
+        el('summary', {}, icon(s.icon, 15), el('span', {}, s.label)),
+        body
+      );
+      node.addEventListener('toggle', () => {
+        if (node.open) openRef(s.key, { node, body });
+        else closeRef(s.key);
+      });
+      return node;
+    });
+    return el('div', { class: 'reflist' }, items);
+  }
+  const refRoot = buildReference(); // یک‌بار ساخته می‌شود؛ وضعیت باز/بسته بین رندرهای میز می‌ماند
+
+  function openRef(key, { node, body } = {}) {
+    if (!node || !body) {
+      const found = refRoot.querySelector(`details[data-ref="${key}"]`);
+      if (!found) return;
+      found.open = true; // toggle → openRef دوباره با node/body می‌آید
+      return;
+    }
+    if (activeSectionKey === key) return;
+    if (activeSectionKey) {
+      const prev = refRoot.querySelector(`details[data-ref="${activeSectionKey}"]`);
+      if (prev && prev !== node) prev.open = false; // toggle → closeRef قبلی
+    }
+    activeSectionKey = key;
+    body.replaceChildren(content);
+    dispatchTab(key);
+  }
+
+  function closeRef(key) {
+    if (activeSectionKey !== key) return;
+    activeSectionKey = null;
+    content.replaceChildren(); // رندرر فعال رها می‌شود؛ بازکردن دوباره، تازه mount می‌کند
+  }
+
+  /* ۱.۲۷.۵۸ — آ-۵: خانهٔ دائمی «گزارش‌های قطعی» — صدور + آرشیو نسخه‌های صادرشده (رفع «گزارش قطعی بی‌خانه») */
+  async function renderSnapshotSection(box) {
+    box.replaceChildren(skeletonState('list', 3));
+    let evts = [];
+    try {
+      evts = (await api.get(`/api/students/${id}/timeline${qs({ kinds: 'report_export', limit: 30 })}`)).data ?? [];
+    } catch (err) {
+      box.replaceChildren(errorState(err, () => renderSnapshotSection(box)));
+      return;
+    }
+    const rows = evts.filter((e) => e.kind === 'report_export' && e.ref?.type === 'report_snapshot'); // موج ۳ — سند خروجی نسخه‌دار
+    box.replaceChildren(
+      el('div', { class: 'card' },
+        el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, 'گزارش‌های قطعی')),
+        el('div', { class: 'card__body' },
+          el('p', { class: 'cell-sub', style: { margin: '0 0 var(--sp-3)' } },
+            'گزارش قطعی از دادهٔ لحظهٔ صدور ثبت می‌شود — شمارهٔ سالانه، سه واریانت (متخصص/خانواده/مدرسه) و چاپ A4.'),
+          canSendReport
+            ? el('button', {
+                class: 'btn btn--primary btn--sm', type: 'button', style: { marginBottom: 'var(--sp-3)' },
+                onclick: (e) => lockBtn(e.currentTarget, openSnapshotBuilder)
+              }, icon('file', 15), 'صدور گزارش قطعی')
+            : null,
+          rows.length > 0
+            ? dataTable({
+                columns: [
+                  { key: 'at', label: 'زمان صدور', render: (e) => formatJalaliDateTime(e.at ?? e.createdAt) },
+                  { key: 'title', label: 'عنوان', render: (e) => e.title ?? 'گزارش قطعی' },
+                  { key: 'go', label: '', align: 'end', render: (e) => el('button', {
+                      class: 'btn btn--ghost btn--sm', type: 'button',
+                      title: 'نمایش گزارش قطعی و چاپ A4',
+                      onclick: () => openSnapshotModal(String(e.ref.id))
+                    }, icon('eye', 14)) }
+                ],
+                rows
+              })
+            : el('div', { class: 'cell-sub' }, 'هنوز گزارش قطعی صادر نشده — «صدور گزارش قطعی» اولین سند را می‌سازد.')
+        )
+      )
+    );
+  }
+
+  function renderDesk() {
+    deskMain.replaceChildren(buildStationPanel(activeStation));
+    deskRef.replaceChildren(buildNextApptCard(), refRoot);
+  }
+
+  function buildFlowCta() {
+    if (!canCreateCaseEvents()) return el('div', { class: 'flow-cta-mobile' });
+    return el('div', { class: 'flow-cta-mobile' },
+      el('button', {
+        class: 'btn btn--primary', type: 'button',
+        title: 'اقدام اصلی: گزارش جلسه با بردن مقادیر جلسهٔ قبل',
+        onclick: continueFromPrevious
+      }, icon('send', 15), 'اقدام بعدی: ادامه از جلسهٔ قبل')
+    );
   }
 
   /* UX-ممیزی: منوی «ارسال با بله» — جای دو دکمهٔ دوقلو */
@@ -444,61 +756,57 @@ export async function renderStudentProfile(container, ctx) {
     return root;
   }
 
-  function tabItems() {
-    return [
-      { key: 'info', label: 'اطلاعات پایه', icon: 'user', onSelect: selectTab },
-      ...(canSeeClinical ? [{ key: 'clinical', label: 'تفسیر بالینی', icon: 'brain', onSelect: selectTab }] : []),
-      ...(canSeeClinical ? [{ key: 'narrative', label: 'روایت بالینی', icon: 'book', onSelect: selectTab }] : []), // ۱.۲۷.۲۶ — M3 POLISH-3: خط زمان «از فرضیه تا نتیجه»
-      { key: 'timeline', label: 'تاریخچه', icon: 'clock', onSelect: selectTab },
-      { key: 'sessions', label: auxDone ? `جلسات (${fa(appointments.length)})` : 'جلسات', icon: 'calendar', onSelect: selectTab },
-      { key: 'exercises', label: 'تمرین‌ها', icon: 'file', onSelect: selectTab },
-      ...(canSeeGames ? [{ key: 'games', label: 'بازی‌ها', icon: 'gamepad', onSelect: selectTab }] : []), // ۱.۲۵.۲۴
-      { key: 'comms', label: 'ارتباطات', icon: 'bot', onSelect: selectTab }
-    ];
-  }
-  let tabBar = tabs(tabItems(), 'info');
-
-  const docsMount = el('div', { style: { marginTop: 'var(--sp-4)' } });
-  renderDocsQuickCard(docsMount, student); // — ۱.۲۰.۰: کارت مدارک خودگردان است؛ نیازی به rebuild کل نما ندارد
-
-  let statusCard = buildStatusCard();
-
-    container.replaceChildren(
-      el('div', { class: 'page-head' },
-        el('div', { class: 'page-head__title' }, 'پروفایل دانش‌آموز'),
-        el('div', { style: { display: 'flex', gap: 'var(--sp-2)' } },
-          el('button', { class: 'btn btn--ghost btn--sm', onclick: () => { location.hash = '#/students'; } }, icon('chevR', 16), 'بازگشت به فهرست')
-        )
-      ),
-    statusCard,
-    docsMount,
-    el('div', { style: { marginTop: 'var(--sp-4)' } }, tabBar.root),
-    el('div', { style: { marginTop: 'var(--sp-4)' } }, content)
+  /* ─── سوارکردن پوسته: page-head + نوار هویت + نوار فلو + میز جلسه/مرجع ───
+     نوار هویت و فلو در holders می‌نشینند تا repaintChrome بدون rebuild کل نما درجا تعویضشان کند. */
+  container.replaceChildren(
+    el('div', { class: 'page-head' },
+      el('div', { class: 'page-head__title' }, 'پروفایل دانش‌آموز'),
+      el('div', { style: { display: 'flex', gap: 'var(--sp-2)' } },
+        el('button', { class: 'btn btn--ghost btn--sm', onclick: () => { location.hash = '#/students'; } }, icon('chevR', 16), 'بازگشت به فهرست')
+      )
+    ),
+    idbarHolder,
+    flowHolder,
+    desk,
+    flowCtaHolder
   );
+  idbarHolder.replaceChildren(buildIdentityBar());
+  flowHolder.replaceChildren(buildFlowBar());
+  flowCtaHolder.replaceChildren(buildFlowCta());
+  renderDesk();
 
   const requestedTab = ctx.query?.tab;
   const timelineDeepFilter = ctx.query?.filter ?? (requestedTab === 'followups' ? 'followups' : null);
+  /* ۱.۲۷.۵۸ — دیپ‌لینک‌های قدیمی (?tab=…) محترم می‌مانند: هر کلید تبِ قدیم به خانهٔ تازه‌اش
+     می‌رود (تب‌های مرجع → همان بخش؛ sessions → ایستگاه ثبت میز؛ followups → تاریخچه با فیلتر).
+     ترتیب knownTabs قدیمی برای سازگاری نگه داشته شد. */
   const knownTabs = ['info', 'timeline', 'sessions', 'comms', 'exercises'];
   if (canSeeClinical) knownTabs.splice(1, 0, 'clinical', 'narrative');
-  selectTab(requestedTab === 'followups' ? 'timeline' : (knownTabs.includes(requestedTab) ? requestedTab : 'info'));
+  const REF_OF_TAB = { info: 'info', timeline: 'timeline', clinical: 'clinical', narrative: 'narrative', exercises: 'exercises', games: 'games', comms: 'comms' };
+  const requestedRef = REF_OF_TAB[requestedTab === 'followups' ? 'timeline' : requestedTab] ?? null;
+  if (requestedTab === 'sessions') activeStation = 'log';
+  if (requestedRef) pendingTab = requestedRef; // دادهٔ موازی هنوز نرسیده — بعد از رسیدن، بخش باز می‌شود
 
-  /* رسیدن دادهٔ پس‌زمینه: کارت وضعیت و نوار تب‌ها درجا تازه می‌شوند و تب در انتظار (یا تب فعال)
-     با دادهٔ کامل رندر می‌شود. */
+  /* رسیدن دادهٔ پس‌زمینه: نوار هویت/فلو و میز درجا تازه می‌شوند و بخش در انتظار باز می‌شود. */
   auxPromise.then(() => {
     auxDone = true;
     repaintChrome();
-    /* موج ۲ (طرح B) — لندینگ نقش‌محور: فقط وقتی کاربر خودش تب درخواست نکرده و درمانگرِ مسئول
-       نوبت امروز/فردای نزدیک دارد، برگهٔ جلسه (تب جلسات) جای اطلاعات پایه می‌نشیند؛
-       دیپ‌لینک‌ها عیناً محترم‌اند. */
+    /* موج ۲ (طرح B) — لندینگ نقش‌محور: فقط وقتی کاربر خودش مقصد درخواست نکرده و درمانگرِ مسئول
+       نوبت امروز/فردای نزدیک دارد، مستقیم در ایستگاه «برگزاری» می‌نشیند؛ دیپ‌لینک‌ها عیناً محترم‌اند. */
     const nowMs = Date.now();
     if (!requestedTab && !pendingTab && isProfileOwner()
       && appointments.some((a) => a.status === 'scheduled' && Date.parse(a.startAt) > nowMs && Date.parse(a.startAt) - nowMs <= 2 * 86_400_000)) {
-      selectTab('sessions');
+      activeStation = 'hold';
+      renderDesk();
       return;
     }
-    const target = pendingTab ?? activeTabKey;
-    pendingTab = null;
-    selectTab(target);
+    if (pendingTab) {
+      const target = pendingTab;
+      pendingTab = null;
+      openRef(target);
+    } else if (activeSectionKey) {
+      dispatchTab(activeSectionKey); // بخشی که کاربر پیش از رسیدن داده باز کرده بود — با دادهٔ کامل
+    }
   });
 
   /* — ۱.۲۰.۰ جریان پیوستهٔ پروفایل (الگوی ۱.۱۹.۰ روز کاری): هیچ اکشنی دیگر کل نما را re-render نمی‌کند.
@@ -507,19 +815,17 @@ export async function renderStudentProfile(container, ctx) {
   let refreshSeq = 0;
   const seqGuard = () => { const s = ++refreshSeq; return () => s === refreshSeq; };
 
-  /* تعویض درجای کارت وضعیت + نوار تب‌ها (همان الگوی رسیدن دادهٔ پس‌زمینه) */
+  /* تعویض درجای نوار هویت + نوار فلو + میز (همان الگوی رسیدن دادهٔ پس‌زمینه؛ ۱.۲۰.۰ دست‌نخورده) */
   function repaintChrome() {
-    const freshCard = buildStatusCard();
-    statusCard.replaceWith(freshCard);
-    statusCard = freshCard;
-    const freshBar = tabs(tabItems(), activeTabKey);
-    tabBar.root.replaceWith(freshBar.root);
-    tabBar = freshBar;
+    idbarHolder.replaceChildren(buildIdentityBar());
+    flowHolder.replaceChildren(buildFlowBar());
+    flowCtaHolder.replaceChildren(buildFlowCta());
+    renderDesk();
   }
 
-  /* تب فعال فقط وقتی دوباره رندر می‌شود که دادهٔ آن واقعاً عوض شده — صفحه‌بندی/فیلتر محلی بقیهٔ تب‌ها می‌ماند */
+  /* بخش مرجعِ باز فقط وقتی دوباره رندر می‌شود که دادهٔ آن واقعاً عوض شده — صفحه‌بندی/فیلتر محلی بقیه می‌ماند */
   function rerenderTabIf(keys) {
-    if (keys.includes(activeTabKey)) selectTab(activeTabKey, { silent: true });
+    if (activeSectionKey && keys.includes(activeSectionKey)) dispatchTab(activeSectionKey);
   }
 
   async function refreshCore() {
@@ -556,15 +862,6 @@ export async function renderStudentProfile(container, ctx) {
     } catch (err) { toastError(err); return false; }
     return isStale();
   }
-
-  const onStudentSaved = async () => { if (await refreshCore()) { repaintChrome(); rerenderTabIf(['info', 'comms']); } };
-  const onTagsSaved = async () => { if (await refreshTagsData()) { repaintChrome(); rerenderTabIf(['info']); } };
-  const onFocusSaved = async () => { if (await refreshFocusData()) { repaintChrome(); rerenderTabIf(['info']); } };
-  const onPathwaySaved = async () => { if (await refreshCore()) { repaintChrome(); rerenderTabIf(['info', 'clinical']); } };
-  const onOwnerSaved = async () => { if (await refreshCore()) repaintChrome(); };
-  const onSpecialNeedSaved = async () => { if (await refreshCore()) { repaintChrome(); rerenderTabIf(['info']); } };
-  const onCaseEventSaved = async () => { if (await refreshEventsData()) { repaintChrome(); rerenderTabIf(['timeline', 'sessions']); } };
-  const onBaleSent = async () => { if (await refreshEventsData()) { repaintChrome(); rerenderTabIf(['timeline', 'sessions', 'exercises']); } };
 
   function renderExercisesTabContent(box) {
     renderExercisesTab(box, { student, onChanged: async () => { if (await refreshEventsData()) rerenderTabIf(['timeline', 'sessions']); } }); /* ۱.۲۰.۰ */
@@ -1274,7 +1571,7 @@ export async function renderStudentProfile(container, ctx) {
       el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, 'گزارش‌های ارسالی')),
       el('div', { class: 'card__body' },
         el('p', { class: 'cell-sub', style: { margin: '0 0 var(--sp-3)' } },
-          'گزارش‌های ثبت‌شده برای خانواده و معلم مدرسه در تب «تاریخچه» (رویدادهای پیام) قابل مشاهده است. دکمهٔ ارسال تازه در ردیف اقدام کارت وضعیت بالای پرونده است.')
+          'گزارش‌های ثبت‌شده برای خانواده و معلم مدرسه در بخش «تاریخچه» (رویدادهای پیام) قابل مشاهده است. دکمهٔ ارسال تازه در ایستگاه «پیگیری» میز جلسه است.')
       )
     );
 

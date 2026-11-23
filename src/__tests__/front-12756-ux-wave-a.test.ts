@@ -19,21 +19,22 @@ describe('موج A — هر عمل یک خانهٔ ثابت', () => {
     expect(view).not.toContain("'نوبت‌ها و حضور'),\n          canReport");
   });
 
-  it('گزارش به معلم یک خانهٔ ثابت در ردیف اقدام دارد — کارت گزارش‌های ارسالی فقط راهنماست', () => {
+  it('گزارش به معلم یک خانهٔ ثابت دارد — از ردیف اقدام کارت قدیمی به ایستگاه «پیگیری» میز جلسه (۱.۲۷.۵۸)', () => {
     // فقط یک دکمهٔ دکمه‌وار — رخداد دوم، عنوان مودال باز است نه دکمهٔ تکراری
     expect((view.match(/icon\('bot', 15\), 'ارسال گزارش به معلم مدرسه'/g) ?? []).length).toBe(1);
-    expect(view).toContain('دکمهٔ ارسال تازه در ردیف اقدام کارت وضعیت بالای پرونده است.');
+    expect(view).toContain('دکمهٔ ارسال تازه در ایستگاه «پیگیری» میز جلسه است.');
   });
 
-  it('صدور گزارش قطعی از page-head جزیره‌ای به ردیف اقدام آمد', () => {
+  it('صدور گزارش قطعی دو خانهٔ دائمی دارد: نوار هویت + بخش آ-۵ مرجع (۱.۲۷.۵۸ — رفع «گزارش قطعی بی‌خانه»)', () => {
     expect(view).not.toContain("onclick: () => openSnapshotBuilder() }, icon('file', 15), 'صدور گزارش قطعی') : null");
-    expect(view).toContain("onclick: () => openSnapshotBuilder()\n                        }, icon('file', 15), 'صدور گزارش قطعی')");
+    expect((view.match(/lockBtn\(e\.currentTarget, openSnapshotBuilder\)/g) ?? []).length).toBe(2);
+    expect(view).toContain("}, icon('file', 15), 'صدور گزارش قطعی')");
     expect(view).toContain("'بازگشت به فهرست'"); // page-head فقط ناوبری
   });
 
-  it('ردیف اقدام با گیت per-item — منشی (canSendReport) هم گزارش و صدور می‌بیند', () => {
+  it('ایستگاه پیگیری با گیت per-item — منشی (canSendReport) هم گزارش معلم را می‌بیند (۱.۲۷.۵۸)', () => {
     expect(view).toContain('(canCreateCaseEvents() || canSendReport)');
-    expect(view).toContain("canSendReport\n                      ? el('button', {\n                          class: 'btn btn--soft btn--sm',\n                          onclick: () => openTeacherReportModal(student)");
+    expect(view).toContain("canSendReport\n                ? el('button', {\n                    class: 'btn btn--soft btn--sm', type: 'button',\n                    onclick: () => openTeacherReportModal(student)");
   });
 
   it('چیپ جلسه‌های بی‌گزارش کنار اقدام بعدی — از منبع واحد با برگهٔ جلسه', () => {

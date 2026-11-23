@@ -28,8 +28,8 @@ describe('موج B — فلوی جلسه', () => {
     expect(ce).toContain('در گزارش قبلی پاسخی ثبت نشده بود.');
   });
 
-  it('prefill از هر دو CTA وصل است: چیپ بی‌گزارش و دکمهٔ ثبت گزارش جدول', () => {
-    expect((view.match(/previousEventRef: previousSessionEvent\(/g) ?? []).length).toBe(2);
+  it('prefill از هر سه CTA وصل است: CTA نوار فلو، ردیف بی‌گزارش میز و دکمهٔ ثبت گزارش بایگانی (۱.۲۷.۵۸)', () => {
+    expect((view.match(/previousEventRef: previousSessionEvent\(/g) ?? []).length).toBe(3);
   });
 
   it('فصل جاری در کارت وضعیت — یک منبع با فصل‌بندی تاریخچه، بعد از رسیدن داده', () => {
