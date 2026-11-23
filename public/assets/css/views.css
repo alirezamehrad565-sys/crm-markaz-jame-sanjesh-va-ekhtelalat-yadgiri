@@ -4833,6 +4833,123 @@ body.cb-printing #cb-print-root { display: block; }
 .workbar--collapsed .workbar__head { padding-block: var(--sp-2); }
 .workbar__body .card { border: none; padding: 0; background: transparent; }
 .workbar__body .card__head { padding-top: 0; }
+.workbar-holder { margin-top: var(--sp-2); }
+
+/* ═══ ۱.۲۷.۶۳ — موج ۲: پوستهٔ «کارگاه درمان» — هاب چسبان + ریل لبه + کشوی مرجع ═══ */
+.workshop {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 236px; /* RTL: ستون اول (راست) = هاب، ستون دوم (چپ) = ریل لبه */
+  gap: var(--sp-4);
+  align-items: start;
+  margin-top: var(--sp-3);
+}
+.hub { min-width: 0; display: flex; flex-direction: column; gap: var(--sp-3); }
+.hub__sticky {
+  position: sticky;
+  top: 8px;
+  z-index: 24;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.hub__sticky:empty { display: none; }
+.hub__stitle { font-size: 12.5px; color: var(--text-2); font-weight: 700; }
+.hub__sticky .chip { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hub__next { border-style: dashed; }
+.hub__body { min-height: 420px; }
+.hub__mount { min-width: 0; }
+.hub-today { display: flex; flex-direction: column; gap: var(--sp-3); }
+
+/* ریل لبه — ۹ بخش مرجع با برچسب کوتاه؛ چسبان تا انتهای اسکرول */
+.edge {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  position: sticky;
+  top: 8px;
+}
+.edge__head {
+  font-size: 12.5px; font-weight: 800; color: var(--text-2);
+  padding: 0 var(--sp-2) var(--sp-1);
+}
+.edge__btn {
+  display: flex; align-items: center; gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer; font-size: 13px; font-weight: 600;
+  text-align: right; min-height: 36px;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.edge__btn:hover { border-color: var(--primary); color: var(--primary); }
+.edge__btn.is-active { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary) inset; color: var(--primary); }
+.edge__btn span:not(.edge__hint) { flex: 1; min-width: 0; }
+.edge__hint { font-size: 12px; color: var(--text-2); border: 1px dashed var(--border); border-radius: var(--radius-full); padding: 1px 8px; }
+
+/* کشوی مرجع — لبهٔ مقابلِ شروعِ خواندن (چپ در RTL)؛ موبایل: باتوم‌شیت */
+.refdrawer {
+  position: fixed;
+  inset-block: 0;
+  inset-inline-end: 0; /* در RTL = لبهٔ چپ صفحه */
+  width: min(440px, 94vw);
+  background: var(--bg, var(--surface));
+  box-shadow: -12px 0 40px rgb(0 0 0 / .22);
+  z-index: 60;
+  transform: translateX(calc(-100% - 24px));
+  /* ۱.۲۷.۶۳ — کشوی بسته با translate در RTL سرریز اسکرول می‌سازد؛ visibility آن را از
+     محاسبهٔ overflow خارج می‌کند (تأخیر transition تا انیمیشن بسته‌شدن دیده شود) */
+  visibility: hidden;
+  transition: transform .22s ease, visibility 0s linear .22s;
+  display: flex;
+  flex-direction: column;
+}
+.refdrawer.is-open { transform: none; visibility: visible; transition: transform .22s ease; }
+.refdrawer__head {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2);
+  padding: var(--sp-3);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.refdrawer__title { display: flex; align-items: center; gap: var(--sp-2); font-size: 14px; min-width: 0; }
+.refdrawer__mount { flex: 1; overflow: auto; padding: var(--sp-3); }
+.refdrawer__mount .card { margin-bottom: var(--sp-3); }
+.refdrawer__backdrop {
+  position: fixed; inset: 0;
+  background: rgb(0 0 0 / .38);
+  z-index: 55;
+  opacity: 0; pointer-events: none;
+  transition: opacity .2s ease;
+}
+.refdrawer__backdrop.is-open { opacity: 1; pointer-events: auto; }
+
+@media (max-width: 1080px) {
+  .workshop { grid-template-columns: 1fr; }
+  .edge {
+    position: static;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: var(--sp-1);
+  }
+  .edge__head { display: none; }
+  .edge__btn { flex: 0 0 auto; white-space: nowrap; }
+  .refdrawer {
+    inset-block: auto;
+    top: 0; bottom: 0;
+    inset-inline-end: 0;
+    width: 100%;
+    max-width: none;
+    transform: translateY(105%);
+    box-shadow: 0 -12px 40px rgb(0 0 0 / .25);
+  }
+  .refdrawer.is-open { transform: none; }
+}
 /* CTA چسبان موبایل — نسخهٔ پایین‌صفحه‌ای «ادامه از جلسهٔ قبل» */
 .flow-cta-mobile { display: none; }
 
@@ -4844,6 +4961,12 @@ body.cb-printing #cb-print-root { display: block; }
   .flowbar { position: static; }
   .flowbar__steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .flowbar__cta { display: none; }
+  /* ۱.۲۷.۶۳ — موج ۲: چیپ‌های نوار ابزار و نوار هویت تک‌ردیفی دسکتاپ، در موبایل می‌شکنند
+     (۴چیپ nowrap و owner بدون wrap در ۳۹۰px سرریز افقی می‌ساختند) */
+  .flowbar__steps { flex-wrap: wrap; }
+  .flowstep { flex: 1 1 46%; }
+  .idbar__owner .case-status-edit { flex-wrap: wrap; }
+  .idbar__owner { margin-inline-start: 0; }
   .flow-cta-mobile {
     display: flex;
     position: sticky;

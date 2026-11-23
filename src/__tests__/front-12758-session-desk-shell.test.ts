@@ -54,7 +54,10 @@ describe('پوستهٔ «میز جلسه + پروندهٔ مرجع» — ۱.۲۷
 
   it('دیپ‌لینک ?tab= محترم: نقشهٔ REF_OF_TAB + جلسهٔ قدیمی → ایستگاه ثبت + followups → تاریخچه', () => {
     expect(view).toContain("const REF_OF_TAB = { info: 'info', timeline: 'timeline', clinical: 'clinical', narrative: 'narrative', exercises: 'exercises', games: 'games', comms: 'comms' }");
-    expect(view).toContain("if (requestedTab === 'sessions') activeStation = 'log'");
+    /* ۱.۲۷.۶۳ — موج ۲: نگاشت دیپ‌لینک کارگاه به تابع خالص landing.js رفت؛ پوستهٔ کلاسیک همان گارد را دارد */
+    expect(view).toContain("if (!isWorkshop && requestedTab === 'sessions') activeStation = 'log'");
+    const landing = read('public/assets/js/profile/landing.js');
+    expect(landing).toContain("if (where === 'station') return { hub, drawer: null, station: stationParam ?? 'log' };");
     expect(view).toContain("requestedTab === 'followups' ? 'timeline' : requestedTab");
     expect(view).toContain('if (requestedRef) pendingTab = requestedRef'); // بافر دادهٔ موازی حفظ
   });

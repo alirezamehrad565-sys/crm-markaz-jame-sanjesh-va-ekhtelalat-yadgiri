@@ -10,6 +10,7 @@ import { fetchStudentFocus, focusLabels, openFocusEditor } from '../student-focu
 import { openCaseEventForm, openCaseEventDetail, canCreateCaseEvents, openChecklistSendModal, fillTargetOf } from '../case-events.js'; // — رویدادهای پرونده + ارسال چک‌لیست + سه‌هدف
 import { computeDeskState } from '../profile/desk-state.js'; // — ۱.۲۷.۶۰: قاعدهٔ واحد «وضعیت میز» (جدول ۵ نقد)
 import { stationBadge } from '../profile/station-state.js'; // — ۱.۲۷.۶۲ موج ۱: بج/خط شمارشی ایستگاه (تابع خالص، یک منبع با آزمون گیت)
+import { resolveWorkshopLanding } from '../profile/landing.js'; // — ۱.۲۷.۶۳ موج ۲: فرود پوستهٔ «کارگاه درمان» (تابع خالص)
 import { openExerciseSendModal, renderExercisesTab } from '../exercise-send.js'; // — ارسال تمرین با بله + تب تمرین‌ها
 import { renderClinicalTab } from '../clinical-insights.js'; // — تب تفسیر بالینی + پروتکل قضاوت
 import { pathwayChip, canEditPathway, openPathwayModal } from '../session-type.js'; // — مسیر پرونده
@@ -165,6 +166,21 @@ export async function renderStudentProfile(container, ctx) {
   /* ۱.۲۵.۲۴ — تب بازی‌ها: هم‌سطح دسترسی سرور (تجویز/گزارش فقط مدیر/درمانگر)؛
      chunk مخصوص خودش دارد (import داینامیک در renderGamesTabContent) تا از بار پروفایل سبک بماند */
   const canSeeGames = session.user && ['manager', 'therapist'].includes(session.user.role);
+
+  /* ۱.۲۷.۶۳ — موج ۲ «کارگاه درمان» (برندهٔ مسابقهٔ بازطراحی — طرح C، برنامهٔ docs/PROFILE-REDESIGN-PROGRAM.md):
+     هاب درمان چسبان قهرمان صفحه است (تفسیر بالینی و طرح درمان همیشه در بدنهٔ هاب)؛ ایستگاه‌های جلسه
+     نوار ابزار + نوار کار تاشو؛ ۹ بخش مرجع به ریل لبه + کشوی لغزنده می‌روند. فلگ برگشت:
+     localStorage 'cs.profile.shell' = 'desk' یا ?shell=desk — پوستهٔ کلاسیک میز جلسه دست‌نخورده می‌ماند. */
+  const shellMode = (() => {
+    try {
+      const u = new URL(location.hash.slice(1), location.origin);
+      const q = u.searchParams.get('shell');
+      if (q === 'desk' || q === 'workshop') return q;
+      if (localStorage.getItem('cs.profile.shell') === 'desk') return 'desk';
+    } catch { /* نشانی غیراستاندارد یا حالت خصوصی مرورگر */ }
+    return 'workshop';
+  })();
+  const isWorkshop = shellMode === 'workshop';
 
   /* موج ۲ — ابزارهای جلسه/پیگیری در سطح نما: هم برگهٔ جلسه (طرح B)، هم تب جلسات و خط زمانی از همین می‌خوانند */
   const eventsOfAppt = (apptId) => caseEvents.filter((e) => e.appointmentId === apptId && e.status !== 'cancelled');
@@ -328,6 +344,13 @@ export async function renderStudentProfile(container, ctx) {
           ? item('refresh', 'تغییر مسیر پرونده — تفسیر بالینی بر همین اساس شاخه می‌خورد', () =>
               openPathwayModal(student, onPathwaySaved))
           : null,
+        /* ۱.۲۷.۶۳ — موج ۲: فلگ برگشت پوسته — کارگاه درمان ↔ میز جلسهٔ کلاسیک؛ بدون مهاجرت داده */
+        item(isWorkshop ? 'calendar' : 'target',
+          isWorkshop ? 'پوستهٔ کلاسیک میز جلسه — برگشت به چیدمان قبلی' : 'بازگشت به کارگاه درمان',
+          () => {
+            try { localStorage.setItem('cs.profile.shell', isWorkshop ? 'desk' : 'workshop'); } catch { /* حالت خصوصی */ }
+            location.reload(); // کل پوسته عوض می‌شود — reload ساده و بی‌ابهام (فلگ از localStorage می‌آید)
+          }),
         canManageCase
           ? item('trash', 'حذف کامل پرونده — تأیید دومرحله‌ای', () =>
               openStudentDelete(student, { onDeleted: () => { location.hash = '#/students'; } }), true)
@@ -404,20 +427,20 @@ export async function renderStudentProfile(container, ctx) {
   const content = el('div', {});
   let activeSectionKey = null; // بخشِ بازِ پروندهٔ مرجع (کلید refSections) یا null — میز جلسهٔ خالص
   let activeStation = 'ready'; // ایستگاه فعال میز جلسه
-  let workbarCollapsed = false; // ۱.۲۷.۶۲ — موج ۱: نوار کار تاشو (پیش‌فرض باز؛ خم‌کردن = فقط نوار ابزار)
+  let workbarCollapsed = isWorkshop; // ۱.۲۷.۶۲ — نوار کار تاشو (موج ۲: در کارگاه، پیش‌فرض جمع — تفسیر بالینی قهرمان است)
 
-  /* موج ۰ طرح ارتقای پرونده — رجیستری همان است؛ dispatch به ظرف مشترک می‌رود.
-     `content` ظرف مشترک رندرر فعال است: به بدنهٔ بخشِ باز جابه‌جا می‌شود تا mount تنبل و
-     جریان پیوستهٔ ۱.۲۰.۰ (هیچ اکشنی کل نما را rebuild نمی‌کند) عیناً برقرار بماند. */
+  /* موج ۰ طرح ارتقای پرونده — رجیستری همان است؛ dispatch به ظرف مقصد می‌رود (موج ۲: مقصد
+     صریح می‌شود — هاب درمان/کشوی مرجع در پوستهٔ کارگاه، ظرف مشترک content در پوستهٔ کلاسیک)
+     تا mount تنبل و جریان پیوستهٔ ۱.۲۰.۰ (هیچ اکشنی کل نما را rebuild نمی‌کند) عیناً برقرار بماند. */
   const profileTabs = createProfileRegistry([
     { key: 'clinical', when: () => canSeeClinical, mount: (box) => renderClinicalTabContent(box) },
     { key: 'narrative', when: () => canSeeClinical, mount: (box) => renderNarrativeTabContent(box) },
     { key: 'games', when: () => canSeeGames, mount: (box) => renderGamesTabContent(box) } // ۱.۲۵.۲۴ — chunk داینامیک حفظ می‌شود
   ]);
 
-  function dispatchTab(key) {
+  function dispatchTab(key, box = content) {
     const desc = profileTabs.resolve(key, ctx);
-    if (desc) { desc.mount(content, ctx); return; }
+    if (desc) { desc.mount(box, ctx); return; }
     const renderer = {
       info: renderInfoTab,
       clinical: renderClinicalTabContent, //
@@ -427,9 +450,21 @@ export async function renderStudentProfile(container, ctx) {
       exercises: renderExercisesTabContent,
       games: renderGamesTabContent, // ۱.۲۵.۲۴ — میز تجویز بازی در خود پرونده
       narrative: renderNarrativeTabContent, // ۱.۲۷.۲۶ — M3 POLISH-3: روایت بالینی
-      snapshot: renderSnapshotSection // ۱.۲۷.۵۸ — خانهٔ دائمی گزارش‌های قطعی (آ-۵)
+      snapshot: renderSnapshotSection, // ۱.۲۷.۵۸ — خانهٔ دائمی گزارش‌های قطعی (آ-۵)
+      today: renderTodayHub // ۱.۲۷.۶۳ — هاب امروز (نقش‌های غیربالینی): برگهٔ جلسه + ایستگاه فعال
     }[key];
-    (renderer ?? renderInfoTab)(content);
+    (renderer ?? renderInfoTab)(box);
+  }
+
+  /* ۱.۲۷.۶۳ — هاب امروز: واریانت هاب پیگیری برای منشی/ناظر — برگهٔ جلسه + پنل ایستگاه فعال
+     از همان سازنده‌های موجود؛ هیچ رندر تازه‌ای ساخته نمی‌شود. */
+  function renderTodayHub(box) {
+    box.replaceChildren(
+      el('div', { class: 'hub-today' },
+        buildSessionSheet(),
+        buildStationPanel(activeStation)
+      )
+    );
   }
 
   /* ─── نوار فلو: چهار ایستگاه با «مانده‌های واقعی» — یک منبع با برگهٔ جلسه (معلق‌های موج A) ─── */
@@ -547,6 +582,91 @@ export async function renderStudentProfile(container, ctx) {
   const flowHolder = el('div', {});
   /* CTA چسبان پایین موبایل — جایگزین ناوبری تب‌های بریدهٔ وضع قبل؛ روی دسکتاپ مخفی است */
   const flowCtaHolder = el('div', { class: 'flow-cta-mobile' });
+
+  /* ═══ ۱.۲۷.۶۳ — موج ۲: پوستهٔ «کارگاه درمان» — هاب درمان + ریل لبه + کشوی مرجع ═══
+     هاب: نوار sticky (خط درمان از فصل‌بندی تاریخچه + جلسهٔ بعدی) روی بدنه‌ای که تفسیر بالینی و
+     طرح درمان را همیشه نشان می‌دهد (ز-۱/۲/۳ درون همان رندرر بالینی موجود — صفر fetch تازه).
+     ریل لبه: ۹ بخش مرجع با برچسب کوتاه؛ کلیک = کشوی لغزنده با همان رندررهای قدیمی.
+     در پوستهٔ کلاسیک (فلگ desk) هیچ‌کدام ساخته نمی‌شود — رفتار ۱.۲۷.۵۸ عیناً می‌ماند. */
+  const hubStickyEl = el('div', { class: 'hub__sticky' });
+  const hubMount = el('div', { class: 'hub__mount' });
+  const hubBody = el('div', { class: 'hub__body' }, hubMount);
+  const hub = el('div', { class: 'hub' }, hubStickyEl, hubBody);
+  const edge = el('div', { class: 'edge', role: 'navigation', 'aria-label': 'پروندهٔ مرجع — ریل بخش‌ها' });
+  const workshop = el('div', { class: 'workshop' }, hub, edge);
+  const workbarHolder = el('div', { class: 'workbar-holder' });
+  let hubMountedKey = null; // محتوای درحال‌نمایش هاب — repaint نباید دوباره mount کند (جریان پیوستهٔ ۱.۲۰.۰)
+  let hubDefaultKey = null;
+
+  const RAIL_SHORT_LABEL = {
+    info: 'اطلاعات پایه',
+    timeline: 'تاریخچه',
+    clinical: 'تفسیر و طرح درمان',
+    narrative: 'روایت بالینی',
+    snapshot: 'گزارش‌های قطعی',
+    sessions: 'جلسات و حضور',
+    exercises: 'تمرین‌ها',
+    games: 'بازی‌ها',
+    comms: 'ارتباطات'
+  };
+  const railMetaOf = (key) => refSections().find((s) => s.key === key) ?? null;
+
+  function buildEdgeRail() {
+    const items = refSections().filter((s) => s.when()).map((s) =>
+      el('button', {
+        class: 'edge__btn', type: 'button', 'data-edge': s.key,
+        title: s.label,
+        onclick: () => openRef(s.key)
+      },
+        icon(s.icon, 15),
+        el('span', {}, RAIL_SHORT_LABEL[s.key] ?? s.label),
+        /* بالینی خانه‌اش هاب است — روی ریل به‌جای دکمهٔ بازکننده، نشانگر «در هاب» */
+        s.key === 'clinical'
+          ? el('span', { class: 'edge__hint' }, 'در هاب')
+          : null
+      )
+    );
+    return [el('div', { class: 'edge__head' }, 'پروندهٔ مرجع'), ...items];
+  }
+
+  /* نوار sticky هاب: خط درمان (فصل‌های واقعی تاریخچه) + جلسهٔ بعدی — صفر fetch تازه */
+  function buildHubSticky() {
+    const chips = [];
+    if (auxDone && Array.isArray(timeline?.meta?.chapters) && timeline.meta.chapters.length > 0) {
+      const chs = timeline.meta.chapters;
+      const current = chs.at(-1);
+      chips.push(el('span', { class: 'hub__stitle' }, 'خط درمان:'));
+      for (const ch of chs.slice(-6)) {
+        const isCurrent = ch === current;
+        chips.push(el('button', {
+          class: `chip${isCurrent ? ' is-active' : ''}`, type: 'button',
+          title: `${chapterLabelOf(ch)} — از ${formatJalaliNumeric(String(ch.from).slice(0, 10))} تا ${formatJalaliNumeric(String(ch.to).slice(0, 10))}؛ کلیک: تاریخچهٔ پرونده`,
+          onclick: () => openRef('timeline')
+        }, icon(isCurrent ? 'target' : 'check', 12), chapterLabelOf(ch)));
+      }
+    }
+    const up = auxDone ? upcomingAppt() : null;
+    if (up) {
+      chips.push(el('span', { class: 'chip hub__next', title: 'نزدیک‌ترین نوبت scheduled این دانش‌آموز — تغییر از «تقویم نوبت‌ها»' },
+        icon('calendar', 12), `جلسهٔ بعدی: ${formatJalaliDateTime(up.startAt)}`));
+    }
+    return chips;
+  }
+
+  /* کشوی مرجع — مقصد ریل لبه؛ همان رندررهای قدیمی با ظرف اختصاصی (هاب دست‌نخورده می‌ماند) */
+  const drawerTitle = el('div', { class: 'refdrawer__title' });
+  const drawerMount = el('div', { class: 'refdrawer__mount' });
+  const drawerCloseBtn = el('button', {
+    class: 'btn btn--ghost btn--sm', type: 'button', 'aria-label': 'بستن کشوی مرجع',
+    onclick: () => closeRef(activeSectionKey)
+  }, icon('x', 15), 'بستن');
+  const drawerBackdrop = el('div', { class: 'refdrawer__backdrop' });
+  const drawer = el('div', { class: 'refdrawer', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'پروندهٔ مرجع' },
+    el('div', { class: 'refdrawer__head' }, drawerTitle, drawerCloseBtn),
+    drawerMount
+  );
+  const drawerEsc = (e) => { if (e.key === 'Escape' && activeSectionKey) closeRef(activeSectionKey); };
+  drawerBackdrop.addEventListener('click', () => { if (activeSectionKey) closeRef(activeSectionKey); });
 
   /* جریان پیوستهٔ ۱.۲۰.۰ — callbackهای mutation پیش از mount تعریف می‌شوند چون نوار هویت/پنل‌های میز
      هنگام ساخت به آن‌ها ارجاع می‌دهند (const پیش از استفاده — الگوی TDZ-safe). خود توابع
@@ -740,7 +860,7 @@ export async function renderStudentProfile(container, ctx) {
     });
     return el('div', { class: 'reflist' }, items);
   }
-  const refRoot = buildReference(); // یک‌بار ساخته می‌شود؛ وضعیت باز/بسته بین رندرهای میز می‌ماند
+  const refRoot = isWorkshop ? null : buildReference(); // پوستهٔ کلاسیک؛ در کارگاه ریل لبه + کشو جای آن را می‌گیرد
 
   /* ۱.۲۷.۶۰ — نقد §۹ هفتهٔ ۲: بخش بازِ پروندهٔ مرجع هم در نشانی می‌ماند (نقص ۱۴ کامل —
      نقص ایستگاه در ۱.۲۷.۵۹ بسته شد؛ این نیمهٔ «بخش» آن است) */
@@ -753,6 +873,23 @@ export async function renderStudentProfile(container, ctx) {
   }
 
   function openRef(key, { node, body } = {}) {
+    /* ۱.۲۷.۶۳ — موج ۲: در کارگاه، بالینی خانه‌اش هاب است (کلیک چیپ خط درمان → تاریخچه در کشو)؛
+       بقیهٔ بخش‌ها کشوی لغزنده با همان رندررهای قدیمی — هاب دست‌نخورده می‌ماند. */
+    if (isWorkshop) {
+      if (key === 'clinical') return;
+      if (activeSectionKey === key) return;
+      activeSectionKey = key;
+      syncSectionUrl(key);
+      const meta = railMetaOf(key);
+      drawerTitle.replaceChildren(icon(meta?.icon ?? 'file', 15), el('b', {}, meta?.label ?? RAIL_SHORT_LABEL[key] ?? key));
+      drawerMount.replaceChildren();
+      dispatchTab(key, drawerMount);
+      drawer.classList.add('is-open');
+      drawerBackdrop.classList.add('is-open');
+      document.addEventListener('keydown', drawerEsc, true);
+      drawerCloseBtn.focus();
+      return;
+    }
     if (!node || !body) {
       const found = refRoot.querySelector(`details[data-ref="${key}"]`);
       if (!found) return;
@@ -774,6 +911,15 @@ export async function renderStudentProfile(container, ctx) {
     if (activeSectionKey !== key) return;
     activeSectionKey = null;
     syncSectionUrl(null);
+    if (isWorkshop) {
+      drawer.classList.remove('is-open');
+      drawerBackdrop.classList.remove('is-open');
+      drawerMount.replaceChildren();
+      document.removeEventListener('keydown', drawerEsc, true);
+      const railBtn = edge.querySelector(`button[data-edge="${key}"]`);
+      if (railBtn) railBtn.focus(); // فوکوس به دکمهٔ ریل — پیمایش کیبورد قطع نمی‌شود
+      return;
+    }
     content.replaceChildren(); // رندرر فعال رها می‌شود؛ بازکردن دوباره، تازه mount می‌کند
   }
 
@@ -840,6 +986,19 @@ export async function renderStudentProfile(container, ctx) {
   }
 
   function renderDesk() {
+    /* ۱.۲۷.۶۳ — موج ۲: در کارگاه، «میز» یعنی نوار ابزار + نوار کار جمع‌شده + نوار sticky هاب؛
+       بدنهٔ هاب فقط یک‌بار mount می‌شود (تفسیر بالینی/امروز) و repaintها دستش نمی‌زنند. */
+    if (isWorkshop) {
+      workbarHolder.replaceChildren(buildWorkbar(activeStation));
+      hubStickyEl.replaceChildren(...buildHubSticky());
+      if (!hubMountedKey) {
+        hubMountedKey = hubDefaultKey ?? (canSeeClinical ? 'clinical' : 'today');
+        dispatchTab(hubMountedKey, hubMount);
+      } else if (hubMountedKey === 'today') {
+        dispatchTab('today', hubMount); // هاب امروز به ایستگاه فعال وابسته است — با تعویض ایستگاه تازه می‌شود
+      }
+      return;
+    }
     deskMain.replaceChildren(buildWorkbar(activeStation));
     deskRef.replaceChildren(buildNextApptCard(), refRoot);
   }
@@ -885,20 +1044,35 @@ export async function renderStudentProfile(container, ctx) {
     return root;
   }
 
-  /* ─── سوارکردن پوسته: page-head + نوار هویت + نوار فلو + میز جلسه/مرجع ───
-     نوار هویت و فلو در holders می‌نشینند تا repaintChrome بدون rebuild کل نما درجا تعویضشان کند. */
-  container.replaceChildren(
-    el('div', { class: 'page-head' },
-      el('div', { class: 'page-head__title' }, 'پروندهٔ دانش‌آموز'), /* ۱.۲۷.۶۰ — یک واژه در کل محصول (نقص ۱۶) */
-      el('div', { style: { display: 'flex', gap: 'var(--sp-2)' } },
-        el('button', { class: 'btn btn--ghost btn--sm', onclick: () => { location.hash = '#/students'; } }, icon('chevR', 16), 'بازگشت به فهرست')
-      )
-    ),
-    idbarHolder,
-    flowHolder,
-    desk,
-    flowCtaHolder
+  /* ─── سوارکردن پوسته: page-head + نوار هویت + نوار ابزار + (کارگاه | میز کلاسیک) ───
+     نوار هویت و ابزار در holders می‌نشینند تا repaintChrome بدون rebuild کل نما درجا تعویضشان کند. */
+  const pageHead = el('div', { class: 'page-head' },
+    el('div', { class: 'page-head__title' }, 'پروندهٔ دانش‌آموز'), /* ۱.۲۷.۶۰ — یک واژه در کل محصول (نقص ۱۶) */
+    el('div', { style: { display: 'flex', gap: 'var(--sp-2)' } },
+      el('button', { class: 'btn btn--ghost btn--sm', onclick: () => { location.hash = '#/students'; } }, icon('chevR', 16), 'بازگشت به فهرست')
+    )
   );
+  if (isWorkshop) {
+    container.replaceChildren(
+      pageHead,
+      idbarHolder,
+      flowHolder,
+      workbarHolder,
+      workshop,
+      drawerBackdrop,
+      drawer,
+      flowCtaHolder
+    );
+    edge.replaceChildren(...buildEdgeRail());
+  } else {
+    container.replaceChildren(
+      pageHead,
+      idbarHolder,
+      flowHolder,
+      desk,
+      flowCtaHolder
+    );
+  }
   idbarHolder.replaceChildren(buildIdentityBar());
   flowHolder.replaceChildren(buildFlowBar());
   flowCtaHolder.replaceChildren(buildFlowCta());
@@ -906,18 +1080,33 @@ export async function renderStudentProfile(container, ctx) {
 
   const requestedTab = ctx.query?.tab;
   const timelineDeepFilter = ctx.query?.filter ?? (requestedTab === 'followups' ? 'followups' : null);
+  /* ۱.۲۷.۶۳ — موج ۲: فرود کارگاه از تابع خالص resolveWorkshopLanding (یک منبع با آزمون گیت)؛
+     پوستهٔ کلاسیک همان نگاشت REF_OF_TAB قبلی را دارد. */
+  const landing = isWorkshop
+    ? resolveWorkshopLanding({ canSeeClinical: Boolean(canSeeClinical), canSeeGames: Boolean(canSeeGames), query: ctx.query ?? {} })
+    : null;
   /* ۱.۲۷.۵۸ — دیپ‌لینک‌های قدیمی (?tab=…) محترم می‌مانند: هر کلید تبِ قدیم به خانهٔ تازه‌اش
      می‌رود (تب‌های مرجع → همان بخش؛ sessions → ایستگاه ثبت میز؛ followups → تاریخچه با فیلتر).
      ترتیب knownTabs قدیمی برای سازگاری نگه داشته شد. */
   const knownTabs = ['info', 'timeline', 'sessions', 'comms', 'exercises'];
   if (canSeeClinical) knownTabs.splice(1, 0, 'clinical', 'narrative');
   const REF_OF_TAB = { info: 'info', timeline: 'timeline', clinical: 'clinical', narrative: 'narrative', exercises: 'exercises', games: 'games', comms: 'comms' };
-  const requestedRef = REF_OF_TAB[requestedTab === 'followups' ? 'timeline' : requestedTab] ?? null;
-  if (requestedTab === 'sessions') activeStation = 'log';
+  const requestedRef = !isWorkshop ? (REF_OF_TAB[requestedTab === 'followups' ? 'timeline' : requestedTab] ?? null) : null;
+  if (!isWorkshop && requestedTab === 'sessions') activeStation = 'log';
   /* ۱.۲۷.۵۹ — ایستگاه از نشانی (?station=…)؛ ۱.۲۷.۶۰ — بخش مرجع از نشانی (?section=…) برمی‌گردد */
+  if (landing?.station) activeStation = landing.station;
   if (STATION_ORDER.includes(ctx.query?.station)) activeStation = ctx.query.station;
-  if (!requestedRef && ctx.query?.section) pendingTab = String(ctx.query.section);
-  if (requestedRef) pendingTab = requestedRef; // دادهٔ موازی هنوز نرسیده — بعد از رسیدن، بخش باز می‌شود
+  if (isWorkshop) {
+    hubDefaultKey = landing.hub;
+    if (hubMountedKey && hubMountedKey !== hubDefaultKey) { // فرود دیپ‌لینک متفاوت با mount اولیه — هاب عوض می‌شود
+      hubMountedKey = hubDefaultKey;
+      dispatchTab(hubMountedKey, hubMount);
+    }
+    if (landing.drawer) pendingTab = landing.drawer;
+  } else {
+    if (!requestedRef && ctx.query?.section) pendingTab = String(ctx.query.section);
+    if (requestedRef) pendingTab = requestedRef; // دادهٔ موازی هنوز نرسیده — بعد از رسیدن، بخش باز می‌شود
+  }
 
   /* رسیدن دادهٔ پس‌زمینه: نوار هویت/فلو و میز درجا تازه می‌شوند و بخش در انتظار باز می‌شود. */
   auxPromise.then(() => {
@@ -956,9 +1145,11 @@ export async function renderStudentProfile(container, ctx) {
     renderDesk();
   }
 
-  /* بخش مرجعِ باز فقط وقتی دوباره رندر می‌شود که دادهٔ آن واقعاً عوض شده — صفحه‌بندی/فیلتر محلی بقیه می‌ماند */
+  /* بخش مرجعِ باز فقط وقتی دوباره رندر می‌شود که دادهٔ آن واقعاً عوض شده — صفحه‌بندی/فیلتر محلی بقیه می‌ماند.
+     ۱.۲۷.۶۳ — در کارگاه، کشو به ظرف خودش mount می‌شود و هاب همیشه‌نما هم با تغییر دادهٔ همان کلید تازه می‌شود. */
   function rerenderTabIf(keys) {
-    if (activeSectionKey && keys.includes(activeSectionKey)) dispatchTab(activeSectionKey);
+    if (activeSectionKey && keys.includes(activeSectionKey)) dispatchTab(activeSectionKey, isWorkshop ? drawerMount : content);
+    if (isWorkshop && hubMountedKey && keys.includes(hubMountedKey)) dispatchTab(hubMountedKey, hubMount);
   }
 
   async function refreshCore() {

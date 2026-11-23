@@ -75,7 +75,8 @@ describe('ساختار موج ۱ — نوار ابزار + نوار کار در 
   });
 
   it('نوار کار تاشو: پیش‌فرض باز، toggling با aria-expanded، renderDesk از آن عبور می‌کند', () => {
-    expect(view).toContain('let workbarCollapsed = false');
+    /* ۱.۲۷.۶۳ — موج ۲: در کارگاه نوار کار پیش‌فرض جمع است (تفسیر بالینی قهرمان فولد اول)؛ پوستهٔ کلاسیک باز */
+    expect(view).toContain('let workbarCollapsed = isWorkshop;');
     expect(view).toMatch(/function buildWorkbar\(key\)/);
     expect(view).toMatch(/'aria-expanded': String\(!workbarCollapsed\)/);
     expect(view).toMatch(/deskMain\.replaceChildren\(buildWorkbar\(activeStation\)\)/);

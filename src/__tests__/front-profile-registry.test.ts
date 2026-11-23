@@ -64,7 +64,9 @@ describe('قرارداد اسکلت لولایی در student-profile.js', () =>
   it('dispatch رجیستری‌اول و سپس fallback قدیمی', () => {
     expect(view).toContain("import { createProfileRegistry } from '../profile/registry.js'");
     expect(view).toContain('const desc = profileTabs.resolve(key, ctx);');
-    expect(view).toContain('if (desc) { desc.mount(content, ctx); return; }');
+    /* ۱.۲۷.۶۳ — موج ۲: dispatch مقصد صریح می‌گیرد (هاب/کشو در کارگاه، ظرف مشترک content در کلاسیک) */
+    expect(view).toContain('function dispatchTab(key, box = content)');
+    expect(view).toContain('if (desc) { desc.mount(box, ctx); return; }');
     // نقشهٔ قدیمی کامل باقی است — کلیدهای مهاجرت‌شده هم fallback دارند
     for (const k of ['info: renderInfoTab', 'clinical: renderClinicalTabContent', 'timeline: renderTimelineTab', 'sessions: renderSessionsTab', 'comms: renderCommsTab', 'exercises: renderExercisesTabContent', 'games: renderGamesTabContent', 'narrative: renderNarrativeTabContent']) {
       expect(view).toContain(k);
