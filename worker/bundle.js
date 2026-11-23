@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.27.60";
+var APP_VERSION = "1.27.61";
 var NODE_MIN_VERSION = "1.26.0";
 
 // node_modules/zod/v4/classic/external.js
@@ -23506,19 +23506,21 @@ var ReferralChildSchema = external_exports.object({
   first_name: external_exports.string().trim().min(2, "\u0646\u0627\u0645 \u06A9\u0648\u062F\u06A9 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").max(80, "\u0646\u0627\u0645 \u06A9\u0648\u062F\u06A9 \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F8\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A"),
   birth_date: TehranYmdSchema.nullish(),
   /* تاریخ تولد شمسیِ تایپی از فرم عمومی — سرویس با jalaliToGregorianYmd به میلادی می‌بَرد؛
-     تبدیل در یک نقطهٔ سمت سرور تا الگوریتم مشترکِ تست‌شدهٔ سامانه تک‌منبع بماند */
-  birth_date_text: external_exports.string().trim().max(20, "\u062A\u0627\u0631\u06CC\u062E \u062A\u0648\u0644\u062F \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F2\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").optional(),
-  school_text: external_exports.string().trim().max(120).optional(),
-  grade_text: external_exports.string().trim().max(40).optional(),
-  class_text: external_exports.string().trim().max(40).optional(),
+     تبدیل در یک نقطهٔ سمت سرور تا الگوریتم مشترکِ تست‌شدهٔ سامانه تک‌منبع بماند
+     ۱.۲۷.۶۱ — فرم عمومی برای «خالی» null می‌فرستد (قرارداد صفحه)؛ این فیلدها nullish‌اند
+     وگرنه گام آخرِ رفرال با «expected string, received null» رد می‌شد؛ سرویس از قبل null را می‌فهمد */
+  birth_date_text: external_exports.string().trim().max(20, "\u062A\u0627\u0631\u06CC\u062E \u062A\u0648\u0644\u062F \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F2\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").nullish(),
+  school_text: external_exports.string().trim().max(120).nullish(),
+  grade_text: external_exports.string().trim().max(40).nullish(),
+  class_text: external_exports.string().trim().max(40).nullish(),
   concern_category: external_exports.enum(REFERRAL_CATEGORIES).nullish(),
   /* تلفن ولیّ هر کودک — در ثبت دسته‌ای معلم به‌ازای هر ردیف جدا می‌آید؛
      در ثبت خانواده خود معرف همان ولیّ است و از referrer_phone استفاده می‌شود */
   guardian_phone: GuardianPhoneSchema.nullish(),
   concern_tags: external_exports.array(external_exports.string().trim().min(2).max(40)).max(8, "\u062D\u062F\u0627\u06A9\u062B\u0631 \u06F8 \u0628\u0631\u0686\u0633\u0628 \u062F\u063A\u062F\u063A\u0647").optional().default([]),
-  concern_text: external_exports.string().trim().max(REFERRAL_CONCERN_MAX).optional(),
+  concern_text: external_exports.string().trim().max(REFERRAL_CONCERN_MAX).nullish(),
   prior_eval: external_exports.boolean().nullish(),
-  prior_eval_note: external_exports.string().trim().max(300).optional(),
+  prior_eval_note: external_exports.string().trim().max(300).nullish(),
   /* ۱.۲۷.۳۶ — فرم تکمیلی وضعیت خانواده زیر هر دانش‌آموز (اختیاری؛ «نمی‌دانم» ارسال نمی‌شود) */
   family_culture: external_exports.enum(REFERRAL_FAMILY_LEVELS).nullish(),
   family_finance: external_exports.enum(REFERRAL_FAMILY_LEVELS).nullish(),
@@ -23531,9 +23533,10 @@ var PublicReferralSubmissionSchema = external_exports.object({
   role: external_exports.enum(["family", "teacher"], { message: "\u0646\u0642\u0634 \u0645\u0639\u0631\u0641 \u0628\u0627\u06CC\u062F \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u06CC\u0627 \u0645\u0639\u0644\u0645 \u0628\u0627\u0634\u062F" }),
   referrer_name: external_exports.string().trim().min(2, "\u0646\u0627\u0645 \u0645\u0639\u0631\u0641 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").max(80, "\u0646\u0627\u0645 \u0645\u0639\u0631\u0641 \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F8\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A"),
   referrer_phone: GuardianPhoneSchema,
-  school_text: external_exports.string().trim().max(120).optional(),
-  grade_text: external_exports.string().trim().max(40).optional(),
-  class_text: external_exports.string().trim().max(40).optional(),
+  /* ۱.۲۷.۶۱ — مسیر معلم هم برای «بدون مدرسه/پایه/کلاس» null می‌فرستد */
+  school_text: external_exports.string().trim().max(120).nullish(),
+  grade_text: external_exports.string().trim().max(40).nullish(),
+  class_text: external_exports.string().trim().max(40).nullish(),
   token: external_exports.string().trim().max(200).optional(),
   children: external_exports.array(ReferralChildSchema).min(1, "\u062D\u062F\u0627\u0642\u0644 \u06CC\u06A9 \u06A9\u0648\u062F\u06A9 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A").max(REFERRAL_CHILDREN_MAX, `\u062D\u062F\u0627\u06A9\u062B\u0631 ${REFERRAL_CHILDREN_MAX} \u06A9\u0648\u062F\u06A9 \u062F\u0631 \u0647\u0631 \u062B\u0628\u062A`)
 }).superRefine((v, ctx) => {

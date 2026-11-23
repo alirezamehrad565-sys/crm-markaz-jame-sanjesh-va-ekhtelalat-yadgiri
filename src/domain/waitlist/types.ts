@@ -133,14 +133,14 @@ export interface ReferralChildInput {
   birth_date?: string | null;
   birth_date_text?: string | null;
   guardian_phone?: string | null;
-  school_text?: string;
-  grade_text?: string;
-  class_text?: string;
+  school_text?: string | null;
+  grade_text?: string | null;
+  class_text?: string | null;
   concern_category?: string | null;
   concern_tags?: string[];
-  concern_text?: string;
+  concern_text?: string | null;
   prior_eval?: boolean | null;
-  prior_eval_note?: string;
+  prior_eval_note?: string | null;
   family_culture?: string | null;
   family_finance?: string | null;
   family_cooperation?: string | null;
@@ -151,9 +151,9 @@ export interface PublicReferralSubmitInput {
   role: 'family' | 'teacher';
   referrer_name: string;
   referrer_phone: string;
-  school_text?: string;
-  grade_text?: string;
-  class_text?: string;
+  school_text?: string | null;
+  grade_text?: string | null;
+  class_text?: string | null;
   token?: string;
   children: ReferralChildInput[];
 }

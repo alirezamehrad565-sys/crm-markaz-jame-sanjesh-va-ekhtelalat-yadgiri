@@ -1232,11 +1232,13 @@ export const ReferralChildSchema = z.object({
   first_name: z.string().trim().min(2, 'نام کودک حداقل ۲ نویسه است').max(80, 'نام کودک حداکثر ۸۰ نویسه است'),
   birth_date: TehranYmdSchema.nullish(),
   /* تاریخ تولد شمسیِ تایپی از فرم عمومی — سرویس با jalaliToGregorianYmd به میلادی می‌بَرد؛
-     تبدیل در یک نقطهٔ سمت سرور تا الگوریتم مشترکِ تست‌شدهٔ سامانه تک‌منبع بماند */
-  birth_date_text: z.string().trim().max(20, 'تاریخ تولد حداکثر ۲۰ نویسه است').optional(),
-  school_text: z.string().trim().max(120).optional(),
-  grade_text: z.string().trim().max(40).optional(),
-  class_text: z.string().trim().max(40).optional(),
+     تبدیل در یک نقطهٔ سمت سرور تا الگوریتم مشترکِ تست‌شدهٔ سامانه تک‌منبع بماند
+     ۱.۲۷.۶۱ — فرم عمومی برای «خالی» null می‌فرستد (قرارداد صفحه)؛ این فیلدها nullish‌اند
+     وگرنه گام آخرِ رفرال با «expected string, received null» رد می‌شد؛ سرویس از قبل null را می‌فهمد */
+  birth_date_text: z.string().trim().max(20, 'تاریخ تولد حداکثر ۲۰ نویسه است').nullish(),
+  school_text: z.string().trim().max(120).nullish(),
+  grade_text: z.string().trim().max(40).nullish(),
+  class_text: z.string().trim().max(40).nullish(),
   concern_category: z.enum(REFERRAL_CATEGORIES).nullish(),
   /* تلفن ولیّ هر کودک — در ثبت دسته‌ای معلم به‌ازای هر ردیف جدا می‌آید؛
      در ثبت خانواده خود معرف همان ولیّ است و از referrer_phone استفاده می‌شود */
@@ -1246,9 +1248,9 @@ export const ReferralChildSchema = z.object({
     .max(8, 'حداکثر ۸ برچسب دغدغه')
     .optional()
     .default([]),
-  concern_text: z.string().trim().max(REFERRAL_CONCERN_MAX).optional(),
+  concern_text: z.string().trim().max(REFERRAL_CONCERN_MAX).nullish(),
   prior_eval: z.boolean().nullish(),
-  prior_eval_note: z.string().trim().max(300).optional(),
+  prior_eval_note: z.string().trim().max(300).nullish(),
   /* ۱.۲۷.۳۶ — فرم تکمیلی وضعیت خانواده زیر هر دانش‌آموز (اختیاری؛ «نمی‌دانم» ارسال نمی‌شود) */
   family_culture: z.enum(REFERRAL_FAMILY_LEVELS).nullish(),
   family_finance: z.enum(REFERRAL_FAMILY_LEVELS).nullish(),
@@ -1263,9 +1265,10 @@ export const PublicReferralSubmissionSchema = z
     role: z.enum(['family', 'teacher'], { message: 'نقش معرف باید خانواده یا معلم باشد' }),
     referrer_name: z.string().trim().min(2, 'نام معرف حداقل ۲ نویسه است').max(80, 'نام معرف حداکثر ۸۰ نویسه است'),
     referrer_phone: GuardianPhoneSchema,
-    school_text: z.string().trim().max(120).optional(),
-    grade_text: z.string().trim().max(40).optional(),
-    class_text: z.string().trim().max(40).optional(),
+    /* ۱.۲۷.۶۱ — مسیر معلم هم برای «بدون مدرسه/پایه/کلاس» null می‌فرستد */
+    school_text: z.string().trim().max(120).nullish(),
+    grade_text: z.string().trim().max(40).nullish(),
+    class_text: z.string().trim().max(40).nullish(),
     token: z.string().trim().max(200).optional(),
     children: z
       .array(ReferralChildSchema)
