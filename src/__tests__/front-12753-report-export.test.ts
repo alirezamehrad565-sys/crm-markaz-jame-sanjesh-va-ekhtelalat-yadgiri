@@ -66,7 +66,7 @@ describe('موج ۳ — timeline و کلاینت', () => {
   });
 
   it('آرشیو: چیپ «گزارش‌های خروجی» و بازکردن سند از خط زمانی (سند نه پیام)', () => {
-    expect(view).toContain("{ key: 'reports', label: 'گزارش‌های خروجی', kinds: 'report_export' }");
+    expect(view).toContain("{ key: 'reports', label: 'گزارش‌های قطعی', kinds: 'report_export' }");
     expect(view).toContain('const isSnapshot = e.kind === \'report_export\' && e.ref?.type === \'report_snapshot\'');
     expect(view).toContain('report_export: { icon: \'file\', tone: \'accent\' }');
   });

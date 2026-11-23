@@ -59,10 +59,10 @@ describe('پوستهٔ «میز جلسه + پروندهٔ مرجع» — ۱.۲۷
     expect(view).toContain('if (requestedRef) pendingTab = requestedRef'); // بافر دادهٔ موازی حفظ
   });
 
-  it('لندینگ نقش‌محور موج B: درمانگرِ مسئول با نوبت نزدیک → ایستگاه برگزاری', () => {
-    expect(view).toContain("activeStation = 'hold'");
-    expect(view).toContain('2 * 86_400_000');
-    expect(view).toContain('if (!requestedTab && !pendingTab && isProfileOwner()');
+  it('لندینگ از قاعدهٔ واحد «وضعیت میز» (جدول ۵ نقد، ۱.۲۷.۶۰) — جلسهٔ نزدیک → آماده‌سازی نه برگزاری', () => {
+    expect(view).toContain('activeStation = computeDeskState({');
+    expect(view).toContain('!STATION_ORDER.includes(ctx.query?.station)');
+    expect(view).toContain("import { computeDeskState } from '../profile/desk-state.js'");
   });
 
   it('CTA چسبان موبایل + گرید دوستونه: CSS پوسته با رسپانسیو ≤980px', () => {

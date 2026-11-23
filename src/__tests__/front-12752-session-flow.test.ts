@@ -41,7 +41,7 @@ describe('موج ۲ — کلاینت', () => {
   it('صف پیگیری: ترتیب سررسیدی + بج سررسیده/باز + ثبت نتیجه با PATCH موجود', () => {
     expect(view).toContain('const queueMode = state.filter === \'followups\';');
     expect(view).toContain("'عقب‌افتاده'"); // ۱.۲۷.۵۵ — واژهٔ روزمره جای «سررسیده‌گذشته»
-    expect(view).toContain("api.patch(`/api/followups/${e.ref?.id}`, { status: 'done' })");
+    expect(view).toContain("api.patch(`/api/followups/${e.ref?.id ?? e.id}`");
     expect(view).toContain("'ثبت نتیجه'");
   });
 
@@ -54,10 +54,10 @@ describe('موج ۲ — کلاینت', () => {
     expect(view).toContain('el(\'div\', { class: \'card__body\' },\n          buildSessionSheet(),');
   });
 
-  it('لندینگ نقش‌محور فقط برای درمانگرِ مسئول با نوبت امروز/فردا و بدون دیپ‌لینک', () => {
+  it('لندینگ از قاعدهٔ واحد «وضعیت میز» (جدول ۵ نقد، ۱.۲۷.۶۰) — نه قاعدهٔ نقش‌محور جدا', () => {
     expect(view).toContain('const isProfileOwner = () =>');
-    expect(view).toContain('if (!requestedTab && !pendingTab && isProfileOwner()');
-    expect(view).toContain('2 * 86_400_000');
+    expect(view).toContain('activeStation = computeDeskState({');
+    expect(view).toContain('!STATION_ORDER.includes(ctx.query?.station)');
   });
 
   it('جدیدها با seen-at محلی و بدون جدول/endpoint', () => {

@@ -1409,7 +1409,7 @@ async function openDetailModal(appointmentId) {
               href: `#/students/${s.studentId}`,
               class: 'cell-main',
               style: { fontSize: 'var(--fs-sm)', color: 'var(--text-1)', textDecoration: 'none' },
-              title: 'مشاهده پروفایل دانش‌آموز',
+              title: 'مشاهده پروندهٔ دانش‌آموز',
               onclick: () => close() // مودال روی نمای جدید معنا ندارد
             }, state.studentNames.get(s.studentId) ?? s.studentId),
             el('span', { style: { marginInlineStart: 'auto' } },

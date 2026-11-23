@@ -122,7 +122,7 @@ export async function renderProgressReport(container, ctx) {
   try {
     student = (await api.get(`/api/students/${id}`)).data;
   } catch (err) {
-    container.replaceChildren(emptyState({ iconName: 'alert', title: 'دانش‌آموز پیدا نشد', hint: err?.message ?? 'از پروفایل دانش‌آموز دوباره وارد شوید.' }));
+    container.replaceChildren(emptyState({ iconName: 'alert', title: 'دانش‌آموز پیدا نشد', hint: err?.message ?? 'از پروندهٔ دانش‌آموز دوباره وارد شوید.' }));
     return;
   }
 

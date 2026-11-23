@@ -46,7 +46,7 @@ export function canCreateCaseEvents() {
   return Boolean(session.user && ['manager', 'therapist'].includes(session.user.role));
 }
 
-export async function openCaseEventForm({ student, appointmentId = null, onSaved, defaultTypeId = null, occurredYmd = null, onlyKeys = null, pickerTitle = null, previousEventRef = null }) {
+export async function openCaseEventForm({ student, appointmentId = null, onSaved, defaultTypeId = null, defaultTypeKey = null, occurredYmd = null, onlyKeys = null, pickerTitle = null, previousEventRef = null }) {
   let types = [];
   try {
     types = await fetchCaseEventTypes(true);
@@ -84,7 +84,15 @@ export async function openCaseEventForm({ student, appointmentId = null, onSaved
   }
 
   try {
-    const preferred = types.find((t) => t.id === defaultTypeId) ?? types.find((t) => t.id === readLastTypeId()) ?? null;
+    /* ۱.۲۷.۶۰ — نقد §۶: فرم گزارش مستقیم باز می‌شود — با defaultTypeId (نوع جلسهٔ قبل)،
+       defaultTypeKey (کلید پایدار مثل intervention) یا آخرین نوع انتخابی؛ فقط فرم درمانگر
+       مستقیم باز می‌شود — چک‌لیست خانواده/معلم باید از مسیر «ارسال با بله» برود */
+    const wanted = defaultTypeId
+      ? (types.find((t) => t.id === defaultTypeId) ?? null)
+      : defaultTypeKey
+        ? (types.find((t) => t.key === defaultTypeKey) ?? null)
+        : (types.find((t) => t.id === readLastTypeId()) ?? null);
+    const preferred = wanted && fillTargetOf(wanted).group === 'therapist' ? wanted : null;
     if (preferred) {
       openDynamicForm({
         student,

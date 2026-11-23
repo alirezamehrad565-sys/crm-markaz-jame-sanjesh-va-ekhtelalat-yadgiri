@@ -8,6 +8,7 @@ import { session } from '../state.js';
 import { fetchTags, fetchStudentTags, tagChip, openTagEditor } from '../tagging.js';
 import { fetchStudentFocus, focusLabels, openFocusEditor } from '../student-focus.js'; // درخت هدف در پروفایل
 import { openCaseEventForm, openCaseEventDetail, canCreateCaseEvents, openChecklistSendModal, fillTargetOf } from '../case-events.js'; // — رویدادهای پرونده + ارسال چک‌لیست + سه‌هدف
+import { computeDeskState } from '../profile/desk-state.js'; // — ۱.۲۷.۶۰: قاعدهٔ واحد «وضعیت میز» (جدول ۵ نقد)
 import { openExerciseSendModal, renderExercisesTab } from '../exercise-send.js'; // — ارسال تمرین با بله + تب تمرین‌ها
 import { renderClinicalTab } from '../clinical-insights.js'; // — تب تفسیر بالینی + پروتکل قضاوت
 import { pathwayChip, canEditPathway, openPathwayModal } from '../session-type.js'; // — مسیر پرونده
@@ -43,7 +44,7 @@ const TIMELINE_FILTERS = [
   { key: 'followups', label: 'پیگیری', kinds: 'followup' },
   { key: 'committee', label: 'کمیسیون', kinds: 'committee' }, //
   { key: 'exercises', label: 'تکلیف تمرین', kinds: 'exercise' },
-  { key: 'reports', label: 'گزارش‌های خروجی', kinds: 'report_export' }, // موج ۳ — آرشیو اسناد نسخه‌دار
+  { key: 'reports', label: 'گزارش‌های قطعی', kinds: 'report_export' }, // موج ۳ — آرشیو اسناد نسخه‌دار
   { key: 'messages', label: 'پیام‌ها', kinds: 'notification' },
   { key: 'profile', label: 'پرونده', kinds: 'student_created,case_status,special_need,tags,waitlist' }
 ];
@@ -215,7 +216,7 @@ export async function renderStudentProfile(container, ctx) {
       .filter((a) => a.status === 'scheduled' && Date.parse(a.startAt) <= nowMs
         && (a.myAttendance === 'present' || a.myAttendance === 'late')
         && !notes.has(a.appointmentId) && eventsOfAppt(a.appointmentId).length === 0)
-      .sort((a, b) => (a.startAt > b.startAt ? -1 : 1)); // قدیمی‌ترین اول
+      .sort((a, b) => (a.startAt < b.startAt ? -1 : 1)); // قدیمی‌ترین اول (۱.۲۷.۶۰ — واقعاً قدیمی‌ترین)
   };
 
   /* ۱.۲۷.۵۷ — موج B: برچسب فصل در یک نقطه — هم کارت وضعیت هم ریل تاریخچه از همین می‌خوانند
@@ -456,14 +457,16 @@ export async function renderStudentProfile(container, ctx) {
     const overdue = fus.filter((f) => f.dueAt && Date.parse(f.dueAt) < Date.now()).length;
     if (overdue > 0) return `${fa(overdue)} پیگیری عقب‌افتاده`;
     if (fus.length > 0) return `${fa(fus.length)} پیگیری باز`;
-    return 'پیگیری بازی نیست — پیگیری را از «اقدامات» بسازید';
+    return 'پیگیری باز نیست — پیگیری را از «اقدامات» بسازید';
   }
 
   function continueFromPrevious(e) {
     const t = missingReportAppts()[0] ?? upcomingAppt();
     if (!t) { toast('نوبتی برای گزارش نیست — از «تقویم نوبت‌ها» نوبت بسازید'); return; }
-    /* ۱.۲۷.۵۹ — نقد پرونده: تاریخ پیش‌فرض فرم = تاریخ همان جلسه، نه امروز (نقص ۸) */
-    lockBtn(e.currentTarget, () => openCaseEventForm({ student, appointmentId: t.appointmentId, occurredYmd: tehranYmdOfIso(t.startAt), previousEventRef: previousSessionEvent(t.appointmentId), onSaved: onCaseEventSaved }));
+    /* ۱.۲۷.۵۹ — تاریخ پیش‌فرض فرم = تاریخ همان جلسه (نقص ۸)؛ ۱.۲۷.۶۰ — §۶: فرم «همان نوع
+       جلسهٔ قبل» مستقیم باز می‌شود، نه انتخاب‌گر ۳۳نوعه */
+    const prev = previousSessionEvent(t.appointmentId);
+    lockBtn(e.currentTarget, () => openCaseEventForm({ student, appointmentId: t.appointmentId, occurredYmd: tehranYmdOfIso(t.startAt), previousEventRef: prev, defaultTypeId: prev?.eventTypeId ?? null, onSaved: onCaseEventSaved }));
   }
 
   function buildFlowBar() {
@@ -549,10 +552,7 @@ export async function renderStudentProfile(container, ctx) {
             ? el('div', { class: 'cell-sub' }, 'موضوع جلسهٔ قبل هنگام بازشدن فرم گزارش خودکار برمی‌گردد.')
             : el('div', { class: 'cell-sub' }, 'از جلسات قبل رویداد قطعی‌ای نیست — فرم از صفر شروع می‌شود.'),
           canCreateCaseEvents() && missingReportAppts().length > 0
-            ? el('button', {
-                class: 'btn btn--primary btn--sm', type: 'button', style: { alignSelf: 'flex-start' },
-                onclick: continueFromPrevious
-              }, icon('send', 15), 'ادامه از جلسهٔ قبل')
+            ? null /* ۱.۲۷.۶۰ — نقد §۵: دکمهٔ تکراری حذف شد؛ «ادامه از جلسهٔ قبل» فقط در نوار فلو و CTA موبایل است */
             : null,
           docsMount /* کارت مدارک تازهٔ بله — خانهٔ تازه‌اش ایستگاه آماده‌سازی است (نقشه: ۳-الف) */
         )
@@ -612,8 +612,13 @@ export async function renderStudentProfile(container, ctx) {
                     el('span', {}, formatJalaliDateTime(a.startAt)),
                     el('button', {
                       class: 'btn btn--soft btn--sm', type: 'button',
-                      onclick: (e) => lockBtn(e.currentTarget, () => openCaseEventForm({ student, appointmentId: a.appointmentId, occurredYmd: tehranYmdOfIso(a.startAt), previousEventRef: previousSessionEvent(a.appointmentId), onSaved: onCaseEventSaved }))
-                    }, icon('file', 13), 'ثبت گزارش همین جلسه')
+                      onclick: (e) => lockBtn(e.currentTarget, () => openCaseEventForm({ student, appointmentId: a.appointmentId, occurredYmd: tehranYmdOfIso(a.startAt), previousEventRef: previousSessionEvent(a.appointmentId), defaultTypeKey: 'intervention', onSaved: onCaseEventSaved }))
+                    }, icon('file', 13), 'ثبت گزارش همین جلسه'),
+                    /* ۱.۲۷.۶۰ — نقد §۶: انتخاب‌گر ۳۳نوعه به دکمهٔ ثانویه منتقل شد؛ فرم گزارش مستقیم باز می‌شود */
+                    el('button', {
+                      class: 'btn btn--ghost btn--sm', type: 'button',
+                      onclick: () => openCaseEventForm({ student, appointmentId: a.appointmentId, occurredYmd: tehranYmdOfIso(a.startAt), onSaved: onCaseEventSaved })
+                    }, 'نوع دیگری از رویداد')
                   ))
               )
             : el('div', { class: 'cell-sub' }, session.user?.role === 'secretary'
@@ -653,7 +658,7 @@ export async function renderStudentProfile(container, ctx) {
                     : null),
                 resultHost);
             })
-          : el('div', { class: 'cell-sub' }, 'پیگیری بازی نیست — پیگیری را از «اقدامات» بسازید.'),
+          : el('div', { class: 'cell-sub' }, 'پیگیری باز نیست — پیگیری را از «اقدامات» بسازید.'),
         fu
           ? el('button', {
               class: 'chip', type: 'button',
@@ -713,6 +718,16 @@ export async function renderStudentProfile(container, ctx) {
   }
   const refRoot = buildReference(); // یک‌بار ساخته می‌شود؛ وضعیت باز/بسته بین رندرهای میز می‌ماند
 
+  /* ۱.۲۷.۶۰ — نقد §۹ هفتهٔ ۲: بخش بازِ پروندهٔ مرجع هم در نشانی می‌ماند (نقص ۱۴ کامل —
+     نقص ایستگاه در ۱.۲۷.۵۹ بسته شد؛ این نیمهٔ «بخش» آن است) */
+  function syncSectionUrl(key) {
+    try {
+      const u = new URL(location.hash.slice(1), location.origin);
+      if (key) u.searchParams.set('section', key); else u.searchParams.delete('section');
+      history.replaceState(null, '', `#${u.pathname}${u.search}`);
+    } catch { /* نشانی غیراستاندارد — بی‌صدا رد شود */ }
+  }
+
   function openRef(key, { node, body } = {}) {
     if (!node || !body) {
       const found = refRoot.querySelector(`details[data-ref="${key}"]`);
@@ -726,6 +741,7 @@ export async function renderStudentProfile(container, ctx) {
       if (prev && prev !== node) prev.open = false; // toggle → closeRef قبلی
     }
     activeSectionKey = key;
+    syncSectionUrl(key);
     body.replaceChildren(content);
     dispatchTab(key);
   }
@@ -733,6 +749,7 @@ export async function renderStudentProfile(container, ctx) {
   function closeRef(key) {
     if (activeSectionKey !== key) return;
     activeSectionKey = null;
+    syncSectionUrl(null);
     content.replaceChildren(); // رندرر فعال رها می‌شود؛ بازکردن دوباره، تازه mount می‌کند
   }
 
@@ -828,7 +845,7 @@ export async function renderStudentProfile(container, ctx) {
      نوار هویت و فلو در holders می‌نشینند تا repaintChrome بدون rebuild کل نما درجا تعویضشان کند. */
   container.replaceChildren(
     el('div', { class: 'page-head' },
-      el('div', { class: 'page-head__title' }, 'پروفایل دانش‌آموز'),
+      el('div', { class: 'page-head__title' }, 'پروندهٔ دانش‌آموز'), /* ۱.۲۷.۶۰ — یک واژه در کل محصول (نقص ۱۶) */
       el('div', { style: { display: 'flex', gap: 'var(--sp-2)' } },
         el('button', { class: 'btn btn--ghost btn--sm', onclick: () => { location.hash = '#/students'; } }, icon('chevR', 16), 'بازگشت به فهرست')
       )
@@ -853,23 +870,25 @@ export async function renderStudentProfile(container, ctx) {
   const REF_OF_TAB = { info: 'info', timeline: 'timeline', clinical: 'clinical', narrative: 'narrative', exercises: 'exercises', games: 'games', comms: 'comms' };
   const requestedRef = REF_OF_TAB[requestedTab === 'followups' ? 'timeline' : requestedTab] ?? null;
   if (requestedTab === 'sessions') activeStation = 'log';
-  /* ۱.۲۷.۵۹ — نقد پرونده: ایستگاه از نشانی صفحه (?station=…) برمی‌گردد (نقص ۱۴) */
+  /* ۱.۲۷.۵۹ — ایستگاه از نشانی (?station=…)؛ ۱.۲۷.۶۰ — بخش مرجع از نشانی (?section=…) برمی‌گردد */
   if (STATION_ORDER.includes(ctx.query?.station)) activeStation = ctx.query.station;
+  if (!requestedRef && ctx.query?.section) pendingTab = String(ctx.query.section);
   if (requestedRef) pendingTab = requestedRef; // دادهٔ موازی هنوز نرسیده — بعد از رسیدن، بخش باز می‌شود
 
   /* رسیدن دادهٔ پس‌زمینه: نوار هویت/فلو و میز درجا تازه می‌شوند و بخش در انتظار باز می‌شود. */
   auxPromise.then(() => {
     auxDone = true;
-    repaintChrome();
-    /* موج ۲ (طرح B) — لندینگ نقش‌محور: فقط وقتی کاربر خودش مقصد درخواست نکرده و درمانگرِ مسئول
-       نوبت امروز/فردای نزدیک دارد، مستقیم در ایستگاه «برگزاری» می‌نشیند؛ دیپ‌لینک‌ها عیناً محترم‌اند. */
-    const nowMs = Date.now();
-    if (!requestedTab && !pendingTab && isProfileOwner()
-      && appointments.some((a) => a.status === 'scheduled' && Date.parse(a.startAt) > nowMs && Date.parse(a.startAt) - nowMs <= 2 * 86_400_000)) {
-      activeStation = 'hold';
-      renderDesk();
-      return;
+    /* ۱.۲۷.۶۰ — نقد §۹: فرود از قاعدهٔ واحد «وضعیت میز» (جدول ۵) — جای قاعدهٔ نقش‌محور جدا؛
+       نشانگر نوار فلو و فرودگاه دیگر دو حرف نمی‌زنند (ریشهٔ نقص‌های ۳/۵/۷ و شکایت §۷ از فرود درمانگر).
+       جلسهٔ فردای درمانگر دیگر ایستگاه «برگزاری» را باز نمی‌کند — سرور هم حضور آینده را می‌بندد. */
+    if (!requestedTab && !pendingTab && !STATION_ORDER.includes(ctx.query?.station)) {
+      activeStation = computeDeskState({
+        appointments,
+        openFollowups,
+        reportApptIds: [...noteApptIdSet(), ...caseEvents.filter((e) => e.appointmentId && e.status !== 'cancelled').map((e) => e.appointmentId)]
+      }).station;
     }
+    repaintChrome();
     if (pendingTab) {
       const target = pendingTab;
       pendingTab = null;
@@ -1263,7 +1282,12 @@ export async function renderStudentProfile(container, ctx) {
       style: clickable ? { cursor: 'pointer' } : null,
       /* S4-22: آیتم کلیک‌پذیرِ تایم‌لاین با کیبورد هم باز می‌شود */
       ...(clickable ? { role: 'button', tabindex: '0' } : {}),
-      onclick: openAction
+      /* ۱.۲۷.۶۰ — نقد §۷: کلیک/کیبورد روی دکمه یا فیلد درونی، مال خودِ کنترل است —
+         نه پرش به فیلتر تاریخچه (حباب‌شدن کلیکِ «ثبت نتیجه») */
+      onclick: (e) => {
+        if (e.target.closest('button, input, select, textarea, a')) return;
+        openAction();
+      }
     },
       el('div', { class: 'tl-item__head' },
         el('span', { class: 'tl-item__title' }, e.title),
@@ -1332,7 +1356,7 @@ export async function renderStudentProfile(container, ctx) {
       strip.push(el('button', {
         class: 'chip', type: 'button',
         title: 'ثبت گزارش برای قدیمی‌ترین جلسهٔ بی‌گزارش',
-        onclick: () => openCaseEventForm({ student, appointmentId: missingReports[0].appointmentId, occurredYmd: tehranYmdOfIso(missingReports[0].startAt), onSaved: onCaseEventSaved })
+        onclick: () => openCaseEventForm({ student, appointmentId: missingReports[0].appointmentId, occurredYmd: tehranYmdOfIso(missingReports[0].startAt), defaultTypeKey: 'intervention', onSaved: onCaseEventSaved })
       }, icon('file', 13), `${fa(missingReports.length)} جلسهٔ گذشتهٔ بی‌گزارش`));
     }
     const continueRow = lastAppt
@@ -1522,7 +1546,7 @@ export async function renderStudentProfile(container, ctx) {
         title: 'پیش‌نیاز گزارش: مسیر مداخله',
         body: el('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' } },
           el('p', { style: { margin: 0, lineHeight: '1.9' } },
-            'گزارش قطعی، «گزارش دورهٔ مداخله»ی این پرونده است: جمع‌بندی جلسات، کارت‌ها و سنجش‌های یک مسیر. این پرونده هنوز مسیری ندارد — اول در تب «تفسیر بالینی» مسیر را بسازید و تأیید کنید؛ بعد همین دکمه گزارش را با شماره و تاریخ قطعی صادر می‌کند.'),
+            'گزارش قطعی، «گزارش دورهٔ مداخله»ی این پرونده است: جمع‌بندی جلسات، کارت‌ها و سنجش‌های یک مسیر. این پرونده هنوز مسیری ندارد — اول در بخش «تفسیر بالینی» پروندهٔ مرجع مسیر را بسازید و تأیید کنید؛ بعد همین دکمه گزارش را با شماره و تاریخ قطعی صادر می‌کند.'),
           el('div', { style: { display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap' } },
             el('button', { class: 'btn btn--primary btn--sm', type: 'button', onclick: () => { close(); location.hash = `#/students/${id}?tab=clinical`; } }, icon('brain', 14), 'رفتن به تفسیر بالینی'),
             el('button', { class: 'btn btn--ghost btn--sm', type: 'button', onclick: () => close() }, 'بعداً')
@@ -1547,7 +1571,7 @@ export async function renderStudentProfile(container, ctx) {
           try {
             const res = await api.post(`/api/students/${id}/report-snapshots`, { path_id: p.id });
             const rec = res.data;
-            toast(`گزارش شمارهٔ ${fa(rec.reportNo)} صادر و قطعی شد — ردپایش در «گزارش‌های خروجی» تاریخچه است`, 'success');
+            toast(`گزارش شمارهٔ ${fa(rec.reportNo)} صادر و قطعی شد — ردپایش در «گزارش‌های قطعی» تاریخچه است`, 'success');
             close();
             if (await refreshEventsData()) { repaintChrome(); rerenderTabIf(['timeline', 'comms']); }
             openSnapshotModal(rec.id);
@@ -1561,7 +1585,7 @@ export async function renderStudentProfile(container, ctx) {
       title: 'صدور گزارش قطعی — گزارش دورهٔ مداخله',
       body: el('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' } },
         el('p', { class: 'cell-sub', style: { margin: 0 } },
-          'این گزارش همان لحظه شماره می‌گیرد (شمارهٔ سالانهٔ مرکز)، ثبت قطعی می‌شود و نام صادرکننده کنارش می‌ماند. بعداً هرچه در پرونده عوض شود، این گزارش همان می‌ماند که روز صدور بود. ردپایش هم در تاریخچه، فیلتر «گزارش‌های خروجی» می‌ماند.'),
+          'این گزارش همان لحظه شماره می‌گیرد (شمارهٔ سالانهٔ مرکز)، ثبت قطعی می‌شود و نام صادرکننده کنارش می‌ماند. بعداً هرچه در پرونده عوض شود، این گزارش همان می‌ماند که روز صدور بود. ردپایش هم در تاریخچه، فیلتر «گزارش‌های قطعی» می‌ماند.'),
         rows
       )
     });
@@ -1600,7 +1624,7 @@ export async function renderStudentProfile(container, ctx) {
           ? el('button', {
               class: 'btn btn--soft btn--sm',
               title: 'ثبت گزارش برای این جلسه',
-              onclick: () => openCaseEventForm({ student, appointmentId: a.appointmentId, previousEventRef: previousSessionEvent(a.appointmentId), onSaved: onCaseEventSaved })
+              onclick: () => openCaseEventForm({ student, appointmentId: a.appointmentId, occurredYmd: tehranYmdOfIso(a.startAt), previousEventRef: previousSessionEvent(a.appointmentId), defaultTypeKey: 'intervention', onSaved: onCaseEventSaved })
             }, icon('plus', 13), 'ثبت گزارش')
           : el('span', { class: 'cell-sub' }, '—');
       }

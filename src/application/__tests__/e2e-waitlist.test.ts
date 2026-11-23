@@ -248,6 +248,10 @@ describe('فاز W — تبدیل به نوبت (اتمیک)', () => {
     const r = await sec.post(`/api/waitlist/${e.id}/schedule`, { ...scheduleBody(), student_id: STUDENT1_ID });
     const apptId = (r.body as { data: { appointment: { id: string } } }).data.appointment.id;
 
+    // ۱.۲۷.۶۰ — گارد زمانی نقد: پذیرش خودکار هنگام برگزاری واقعی (شروع در گذشته) مجاز است
+    A.sql.prepare(`UPDATE appointments SET start_at = ?, end_at = ? WHERE id = ?`)
+      .run(new Date(Date.now() - 3_600_000).toISOString(), new Date(Date.now() - 2_700_000).toISOString(), apptId);
+
     const mark = await sec.patch(`/api/attendance/${apptId}/${STUDENT1_ID}`, { status: 'present' });
     expect(mark.status).toBe(200);
 
