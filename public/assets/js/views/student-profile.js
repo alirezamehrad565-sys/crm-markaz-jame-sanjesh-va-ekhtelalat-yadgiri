@@ -11,6 +11,7 @@ import { openCaseEventForm, openCaseEventDetail, canCreateCaseEvents, openCheckl
 import { openExerciseSendModal, renderExercisesTab } from '../exercise-send.js'; // — ارسال تمرین با بله + تب تمرین‌ها
 import { renderClinicalTab } from '../clinical-insights.js'; // — تب تفسیر بالینی + پروتکل قضاوت
 import { pathwayChip, canEditPathway, openPathwayModal } from '../session-type.js'; // — مسیر پرونده
+import { PATH_STATUS_LABEL, PATH_STATUS_BADGE } from '../clinical-content.js'; // — ۱.۲۷.۵۷ موج C: برچسب فارسی وضعیت مسیر (هم‌منبع با تب تفسیر بالینی؛ در همان چانک)
 import { openEducationHistory } from '../archive-form.js'; // — تاریخچهٔ تحصیلی
 import { openStudentForm } from '../student-form.js'; // — فرم مشترک ویرایش (کد ملی/مسئول/مسیر) — جایگزین فرم قدیمی داخلی
 import { openBotLinkModal, resolveBotUsername, buildBotLink } from '../bot-link.js'; // — لینک احراز خودکار بات (: ساخت لینک در تب ارتباطات هم)
@@ -201,6 +202,31 @@ export async function renderStudentProfile(container, ctx) {
       .sort((a, b) => (a.startAt > b.startAt ? -1 : 1)); // قدیمی‌ترین اول
   };
 
+  /* ۱.۲۷.۵۷ — موج B: برچسب فصل در یک نقطه — هم کارت وضعیت هم ریل تاریخچه از همین می‌خوانند
+     (نسخهٔ قبلی داخل اسکوپ تب تاریخچه بود و از کارت وضعیت دیده نمی‌شد) */
+  const chapterLabelOf = (ch) => {
+    const meta = TIMELINE_PHASE_META[ch.phase] ?? TIMELINE_PHASE_META.scattered;
+    return ch.phase === 'treatment' && (ch.run ?? 1) > 1 ? `${meta.label} ${fa(ch.run)}` : meta.label;
+  };
+
+  /* ۱.۲۷.۵۷ — موج B: ارجاع «ادامه از جلسهٔ قبل» — آخرین رویداد قطعی جلسه‌های پیشین؛
+     مستقل از ترتیب آرایه نوبت‌ها (صعودی/نزولی) با مقایسهٔ زمان، نه اندیس؛
+     تعریف فیلدهای فرم قبلی در case-events حل می‌شود چون کتابخانهٔ انواع آن‌جاست */
+  const previousSessionEvent = (apptId) => {
+    const cur = appointments.find((a) => a.appointmentId === apptId);
+    if (!cur) return null;
+    const before = appointments
+      .filter((a) => a.appointmentId !== apptId && Date.parse(a.startAt) < Date.parse(cur.startAt))
+      .sort((a, b) => (a.startAt > b.startAt ? -1 : 1)); // نزدیک‌ترین جلسهٔ قبل اول
+    for (const a of before) {
+      const ev = caseEvents
+        .filter((e) => e.appointmentId === a.appointmentId && e.status !== 'cancelled' && e.status !== 'draft')
+        .sort((x, y) => (x.at > y.at ? -1 : 1))[0];
+      if (ev) return { eventTypeId: ev.eventTypeId, at: ev.occurredAt ?? ev.createdAt, payload: ev.payload ?? {} };
+    }
+    return null;
+  };
+
   /* ۱.۲۷.۵۶ — حضور از خود پرونده ثبت‌شدنی می‌شود (گپ واقعی بازطراحی):
      PATCH موجود /api/attendance/:apptId/:studentId؛ سرور گیت دارد (درمانگر فقط جلسهٔ خودش). */
   async function markAttendance(a, status) {
@@ -292,6 +318,11 @@ export async function renderStudentProfile(container, ctx) {
                     onclick: () => openPathwayModal(student, onPathwaySaved)
                   }, icon('edit', 13), 'مسیر')
                 : null,
+              /* ۱.۲۷.۵۷ — موج B: فصل جاری پرونده در یک نگاه — از همان فصل‌بندی تاریخچه (یک منبع) */
+              auxDone && Array.isArray(timeline?.meta?.chapters) && timeline.meta.chapters.length > 0
+                ? el('span', { class: 'badge badge--primary', title: 'فصل جاری پرونده — از فصل‌بندی تاریخچه' },
+                    `فصل جاری: ${chapterLabelOf(timeline.meta.chapters.at(-1))}`)
+                : null,
               student.ownerName
                 ? el('span', { class: 'badge badge--accent', title: 'مسئول پرونده — سپردن رسمی پرونده به درمانگر' }, `مسئول پرونده: ${student.ownerName}`)
                 : null,
@@ -312,7 +343,7 @@ export async function renderStudentProfile(container, ctx) {
                 ? el('button', {
                     class: 'chip', type: 'button',
                     title: 'ثبت گزارش برای قدیمی‌ترین جلسهٔ بی‌گزارش',
-                    onclick: () => { const m = missingReportAppts()[0]; openCaseEventForm({ student, appointmentId: m.appointmentId, onSaved: onCaseEventSaved }); }
+                    onclick: () => { const m = missingReportAppts()[0]; openCaseEventForm({ student, appointmentId: m.appointmentId, previousEventRef: previousSessionEvent(m.appointmentId), onSaved: onCaseEventSaved }); }
                   }, icon('file', 13), `${fa(missingReportAppts().length)} جلسهٔ بی‌گزارش`)
                 : null,
               /* ۱.۲۷.۵۶ — موج A: خانهٔ ثابتِ «شروع ثبت» — هر عمل با گیت خودش (منشی هم گزارش و صدور دارد) */
@@ -697,8 +728,7 @@ export async function renderStudentProfile(container, ctx) {
     /* موج ۱ — ریل فصل‌ها: کلیک روی هر فصل = نمای همان بازه با from/to سرور؛ بدون endpoint تازه */
     const rail = el('div', { class: 'tl-filters', style: { marginBottom: 'var(--sp-2)' } });
     function chapterLabel(ch) {
-      const meta = TIMELINE_PHASE_META[ch.phase] ?? TIMELINE_PHASE_META.scattered;
-      return ch.phase === 'treatment' && (ch.run ?? 1) > 1 ? `${meta.label} ${fa(ch.run)}` : meta.label;
+      return chapterLabelOf(ch); /* ۱.۲۷.۵۷ — موج B: یک منبع، هم کارت وضعیت هم ریل */
     }
     function paintRail() {
       const chs = state.chapters ?? [];
@@ -1032,6 +1062,28 @@ export async function renderStudentProfile(container, ctx) {
     );
   }
 
+  /* ۱.۲۷.۵۷ — موج C: چاپ A4 از snapshot — همان محتوای واریانت جاری با سربرگ سند؛ فقط از سند
+     قطعی رندر می‌شود نه دادهٔ زندهٔ پرونده (snapshot-first) */
+  function printSnapshot(rec, variant, contentNode) {
+    const audienceLabel = { clinical: 'برای مخاطب: متخصص', family: 'برای مخاطب: خانواده', school: 'برای مخاطب: مدرسه' }[variant] ?? '';
+    let root = document.getElementById('print-root');
+    if (!root) { root = el('div', { id: 'print-root' }); document.body.appendChild(root); }
+    root.replaceChildren(
+      el('div', { class: 'print-doc' },
+        el('div', { class: 'print-doc__head' },
+          el('div', { class: 'print-doc__title' }, 'گزارش قطعی دورهٔ مداخله'),
+          el('div', {}, `${student.firstName} ${student.lastName} — کد ملی: ${fa(student.nationalId ?? '—')}${student.grade ? ` — پایهٔ ${gradeLabel(student.grade)}` : ''}`),
+          el('div', {}, `شمارهٔ گزارش: ${fa(rec.reportNo)} — تاریخ قطعی: ${formatJalaliDateTime(rec.createdAt)}${rec.signedName ? ` — امضا: ${rec.signedName}${rec.signedRole ? ` (${rec.signedRole})` : ''}` : ''}`),
+          el('div', {}, audienceLabel)
+        ),
+        contentNode.cloneNode(true)
+      )
+    );
+    const cleanup = () => { root.replaceChildren(); window.removeEventListener('afterprint', cleanup); };
+    window.addEventListener('afterprint', cleanup);
+    window.print();
+  }
+
   async function openSnapshotModal(sid) {
     let rec;
     try {
@@ -1060,7 +1112,8 @@ export async function renderStudentProfile(container, ctx) {
           rec.signedName ? el('span', { class: 'cell-sub' }, `امضا: ${rec.signedName}${rec.signedRole ? ` — ${rec.signedRole}` : ''}`) : null,
           rec.hashVerified === true
             ? el('span', { class: 'badge badge--success', title: `محتوای سند مو‌به‌مو با لحظهٔ صدور یکی است — کد کنترل: ${rec.contentHash}` }, 'اصالت سند: تأیید')
-            : el('span', { class: 'badge badge--error', title: `کد کنترل ثبت‌شده: ${rec.contentHash}` }, 'اصالت سند: هم‌خوان نیست')
+            : el('span', { class: 'badge badge--error', title: `کد کنترل ثبت‌شده: ${rec.contentHash}` }, 'اصالت سند: هم‌خوان نیست'),
+          el('button', { class: 'btn btn--soft btn--sm', type: 'button', onclick: () => printSnapshot(rec, variant, content) }, icon('printer', 14), 'چاپ A4')
         ),
         variantRow,
         content
@@ -1097,7 +1150,12 @@ export async function renderStudentProfile(container, ctx) {
     const rows = paths.map((p) => el('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--sp-2)', flexWrap: 'wrap', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: 'var(--sp-2) var(--sp-3)' } },
       el('div', {},
         el('div', { style: { fontWeight: 600 } }, p.targetTitle ?? p.title ?? 'مسیر مداخله'),
-        el('div', { class: 'cell-sub' }, [p.templateTitle, p.status].filter(Boolean).join(' — ') || '—')),
+        /* ۱.۲۷.۵۷ — موج C: پیش‌نمایش پیش از صدور — وضعیت با بج درست (نشتی کلید انگلیسی بسته شد) +
+           شمار جلسات ثبت‌شدهٔ مسیر؛ کاربر قبل از قطعی‌شدن می‌داند در چه چیزی شماره می‌گیرد */
+        el('div', { style: { display: 'flex', gap: 'var(--sp-1)', flexWrap: 'wrap', alignItems: 'center' } },
+          p.templateTitle ? el('span', { class: 'cell-sub' }, p.templateTitle) : null,
+          el('span', { class: `badge ${PATH_STATUS_BADGE[p.status] ?? 'badge--neutral'}` }, PATH_STATUS_LABEL[p.status] ?? p.status),
+          el('span', { class: 'cell-sub' }, `${fa(p.sessions?.length ?? 0)} جلسهٔ ثبت‌شده در این مسیر`))),
       el('button', {
         class: 'btn btn--primary btn--sm', type: 'button',
         onclick: (ev) => lockBtn(ev.currentTarget, async () => {
@@ -1157,7 +1215,7 @@ export async function renderStudentProfile(container, ctx) {
           ? el('button', {
               class: 'btn btn--soft btn--sm',
               title: 'ثبت گزارش برای این جلسه',
-              onclick: () => openCaseEventForm({ student, appointmentId: a.appointmentId, onSaved: onCaseEventSaved })
+              onclick: () => openCaseEventForm({ student, appointmentId: a.appointmentId, previousEventRef: previousSessionEvent(a.appointmentId), onSaved: onCaseEventSaved })
             }, icon('plus', 13), 'ثبت گزارش')
           : el('span', { class: 'cell-sub' }, '—');
       }

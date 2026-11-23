@@ -4821,3 +4821,16 @@ body.cb-printing #cb-print-root { display: block; }
   .gmk-detail__grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 480px) { .gmk-card__title { font-size: var(--fs-md); } .gmk-fact, .gmk-chip { max-width: 100%; } }
+
+/* ═══ ۱.۲۷.۵۷ — موج C: چاپ A4 گزارش قطعی — #print-root تنها محتوای چاپ‌شدنی است ═══ */
+#print-root { display: none; }
+@media print {
+  body > *:not(#print-root) { display: none !important; }
+  #print-root { display: block; }
+}
+#print-root .print-doc { color: #171B20; font-size: 11pt; line-height: 1.8; }
+#print-root .print-doc__head { text-align: center; border-bottom: 1.5px solid #968B76; padding-bottom: 8px; margin-bottom: 14px; }
+#print-root .print-doc__title { font-weight: 700; font-size: 14pt; margin-bottom: 4px; }
+#print-root .print-doc .card { box-shadow: none; border: 1px solid #D0CABB; break-inside: avoid; }
+#print-root .print-doc table { width: 100%; font-size: 10.5pt; border-collapse: collapse; }
+#print-root .print-doc th, #print-root .print-doc td { border: 1px solid #D0CABB; padding: 4px 6px; text-align: right; }
