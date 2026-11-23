@@ -23894,7 +23894,7 @@ function createAuditWriter(db, opts) {
 __name(createAuditWriter, "createAuditWriter");
 
 // src/core/version.ts
-var APP_VERSION = "1.27.56";
+var APP_VERSION = "1.27.58";
 var NODE_MIN_VERSION = "1.26.0";
 
 // src/application/rum/pure.ts
