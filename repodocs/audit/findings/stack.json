@@ -1,0 +1,548 @@
+{
+  "schema_version": 3,
+  "run_id": "aud-20261124-8ca4227",
+  "auditor": "stack",
+  "scanned_at": "2026-11-24T22:35:00Z",
+  "scope": {
+    "included": [
+      "package.json",
+      "package-lock.json",
+      "wrangler.toml",
+      "wrangler.games.toml",
+      "vitest.config.ts",
+      "tsconfig.json",
+      "tsconfig.node-server.json",
+      "Dockerfile",
+      "docker-compose.yml",
+      "docker-compose.caddy.yml",
+      "Caddyfile",
+      ".env.selfhost.example",
+      "worker/entry.js",
+      "worker/games-entry.js",
+      "worker/src-entry.mjs",
+      "worker/src-entry-node.mjs",
+      "worker/scoring.js",
+      "worker/scoring.d.ts",
+      "src/index.ts",
+      "src/games-worker.ts",
+      "src/core/version.ts",
+      "src/core/storage/index.ts",
+      "src/core/storage/r2-store.ts",
+      "src/core/storage/d1-store.ts",
+      "src/core/storage/chunked-d1-store.ts",
+      "src/core/auth/runtime-secret.ts",
+      "src/core/shared/constants.ts",
+      "src/core/shared/types.ts",
+      "src/application/api-routing/index.ts",
+      "src/application/games-standalone/index.ts",
+      "src/application/instance-sync/provision.ts",
+      "src/node-sync/app.ts",
+      "src/test/mock-d1.ts",
+      "src/test/harness.ts",
+      "server/node-main.ts",
+      "server/crons.ts",
+      "scripts/build-bundle.mjs",
+      "scripts/build-central-bundle.mjs",
+      "scripts/build-client.mjs",
+      "scripts/build-engine-server.mjs",
+      "scripts/build-selfhost.mjs",
+      "scripts/build-worker-bundle.mjs",
+      "scripts/build-worker-games.mjs",
+      "scripts/bump-version.mjs",
+      "scripts/desktop-check.mjs",
+      "scripts/dev-lan.mjs",
+      "scripts/engine/config.mjs",
+      "scripts/engine/engine.mjs",
+      "scripts/engine/engine-paths.mjs",
+      "scripts/desktop/build-installer-runtime.mjs",
+      "scripts/desktop/config.mjs",
+      "desktop/src-tauri/Cargo.toml",
+      "desktop/src-tauri/tauri.conf.json",
+      "desktop/src-tauri/src/cf_deploy.rs",
+      "docs/ARCHITECTURE.md",
+      "docs/rust/acceptance-checklist.md",
+      "docs/rust/installer.md",
+      "docs/rust/phases.md",
+      "docs/rust/install-runtime-audit.md"
+    ],
+    "excluded": [
+      "node_modules",
+      "dist",
+      "worker/bundle.js",
+      "worker/games-bundle.js",
+      "worker/central-bundle.js",
+      "scripts/engine/engine-server.js",
+      "public/assets/dist",
+      "public/assets/vendor"
+    ],
+    "unscanned": [
+      "desktop/src-tauri/src/lib.rs",
+      "desktop/src-tauri/src/engine.rs",
+      "desktop/src-tauri/src/engine_watchdog.rs",
+      "desktop/src-tauri/src/deploy_plan.rs",
+      "desktop/src-tauri/src/secure_store.rs",
+      "desktop/src-tauri/src/main.rs",
+      "desktop/installer",
+      "server/env.ts",
+      "server/static.ts",
+      "server/cli.ts",
+      "server/__tests__",
+      "scripts/ops",
+      "scripts/load",
+      "migrations"
+    ],
+    "limitations": [
+      "jCodeMunch در این اجرا در دسترس نبود؛ هر ادعای «مصرف ندارد / تسهیل‌مرده» با دو جست‌وجوی grep با شکل متفاوت که هم‌نظر بودند به‌علاوهٔ یک خواندن مستقیم فایل تأیید شد.",
+      "باندل‌های تولیدی (worker/bundle.js، worker/games-bundle.js، worker/central-bundle.js، scripts/engine/engine-server.js) و دارایی‌های vendor/minified طبق سیاست اجرا بسته شدند؛ هم‌گامی باندل↔منبع فقط از طریق اسکریپت‌های ساخت و سربرگ‌های commit‌شده ارزیابی شد، نه محتوای باندل.",
+      "هیچ کد، تست، بیلد یا درخواست شبکه‌ای اجرا نشد؛ نسخه‌ها از package-lock.json و مانیفست‌ها خوانده شد، نه از درخت نصب‌شده یا رجیستری.",
+      "سورس‌های Rust دسکتاپ فقط در مرز استقرار ابر (cf_deploy.rs) بررسی شدند؛ ماژول‌های درونی Rust برای پوشهٔ auditorهای دیگر ثبت شده است.",
+      "بررسی vitest/ماک D1 ایستا بود: ادعای «بدون Miniflare» فقط از vitest.config.ts و src/test/mock-d1.ts تأیید شد، نه با اجرای تست."
+    ]
+  },
+  "findings": [
+    {
+      "id": "stack-001",
+      "kind": "undeclared-dependency",
+      "title": "آداپتور R2 از env.EXERCISE_FILES تغذیه می‌شود اما هیچ پیکربندی استقرار binding مربوطه را اعلان نکرده است",
+      "severity": "medium",
+      "confidence": "high",
+      "identity": {
+        "path": "src/index.ts",
+        "symbol": "EXERCISE_FILES",
+        "assertion": "env.EXERCISE_FILES به‌عنوان باکت R2‌مانند فایل‌های تمرین مصرف می‌شود، اما هیچ‌یک از پیکربندی‌های استقرار (wrangler.toml، wrangler.games.toml، سلف‌هاست Node، بایندهای موتور محلی) binding R2 برای آن اعلان نکرده‌اند؛ در نتیجه آداپتور r2-store در هیچ هدف استقراری قابل رسیدن نیست و ذخیرهٔ فایل همیشه روی chunked-D1 می‌افتد."
+      },
+      "evidence": [
+        {
+          "path": "wrangler.toml",
+          "detail": "خواندن مستقیم کل فایل: فقط بخش‌های [assets]، [[d1_databases]]، [triggers]، [vars]، [observability] و [[services]] وجود دارد؛ هیچ [[r2_buckets]] اعلان نشده است."
+        },
+        {
+          "path": "wrangler.games.toml",
+          "line": 21,
+          "detail": "تنها binding این کانفیگ هم ASSETS و DB است؛ بدون [[r2_buckets]]."
+        },
+        {
+          "path": "src/index.ts",
+          "line": 26,
+          "detail": "اعلان EXERCISE_FILES?: unknown در interface Env."
+        },
+        {
+          "path": "src/index.ts",
+          "line": 82,
+          "detail": "exerciseBucket: env.EXERCISE_FILES ?? null — بدون binding، همیشه null."
+        },
+        {
+          "path": "src/application/api-routing/index.ts",
+          "line": 220,
+          "detail": "انتخاب ذخیره‌ساز فقط وقتی deps.exerciseBucket درست‌باشد createR2ObjectStore است، وگرنه createChunkedD1ObjectStore — پس با binding غایب، مسیر R2 هرگز فعال نمی‌شود."
+        },
+        {
+          "path": "src/core/storage/r2-store.ts",
+          "line": 4,
+          "detail": "آداپتور کامل R2 (put/get/delete/putSegments) تعریف شده اما با این کانفیگ‌ها فقط کد مردهٔ استقراری است."
+        },
+        {
+          "path": "server/node-main.ts",
+          "line": 31,
+          "detail": "workerEnv سلف‌هاست فقط DB/ENV/CF_ACCESS_TEAM_DOMAIN/BALE_*/CLINIC_NAME/AUTH_SECRET/PUBLIC_BASE_URL را می‌سازد — EXERCISE_FILES هم اینجا غایب است."
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": ""
+      },
+      "remediation": {
+        "observable_effect": "آپلود فایل‌های تمرین در همهٔ اهداف استقرار روی ذخیرهٔ chunked-D1 اجرا می‌شود؛ آداپتور R2 و هر توثیق رابط کاربری به R2 عملاً بی‌اثر است.",
+        "change_boundary": "یا افزودن [[r2_buckets]] با binding=EXERCISE_FILES به wrangler.toml (و تصمیم معادل برای سلف‌هاست/موتور محلی)، یا حذف/آرشیو آداپتور r2-store اگر fallback-D1 طراحی نهایی است.",
+        "done_when": "binding در کانفیگ استقرار موجود و قابل اشاره در Env تایپ‌شده باشد، یا آداپتور R2 از مخزن حذف شده باشد.",
+        "uncertainties": [
+          "نظر کامنت‌های کد نشان می‌دهد fallback-D1 عمدی است؛ معلوم نیست مالک پروژه افزودن R2 را در نقشه راه دارد یا حذف مسیر را ترجیح می‌دهد."
+        ]
+      }
+    },
+    {
+      "id": "stack-002",
+      "kind": "conflicting-tooling",
+      "title": "ناهم‌گامی نسخهٔ پوستهٔ دسکتاپ (1.27.58) با APP_VERSION (1.27.74) در حالی که گیت desktop:check برابری را الزام می‌کند",
+      "severity": "medium",
+      "confidence": "high",
+      "identity": {
+        "path": "desktop/src-tauri/tauri.conf.json",
+        "symbol": "version",
+        "assertion": "نسخهٔ tauri.conf.json و Cargo.toml پوستهٔ دسکتاپ (1.27.58) با APP_VERSION در src/core/version.ts (1.27.74) برابر نیست، در حالی که scripts/desktop-check.mjs برابری هر دو را گیت می‌گیرد؛ پس در این revision گیت desktop:check قرمز است."
+      },
+      "evidence": [
+        {
+          "path": "desktop/src-tauri/tauri.conf.json",
+          "line": 4,
+          "detail": "\"version\": \"1.27.58\"."
+        },
+        {
+          "path": "desktop/src-tauri/Cargo.toml",
+          "line": 3,
+          "detail": "version = \"1.27.58\" — کامنت خط ۷ می‌گوید نسخهٔ پوسته باید با APP_VERSION هم‌گام بماند."
+        },
+        {
+          "path": "src/core/version.ts",
+          "line": 7,
+          "detail": "APP_VERSION = '1.27.74' (هم‌ارز package.json:3)."
+        },
+        {
+          "path": "scripts/desktop-check.mjs",
+          "line": 28,
+          "detail": "گیت‌های خطوط ۲۸-۴۱ هر دو فایل را با APP_VERSION مقایسه و در عدم برابری bad() می‌دهند — یعنی شکست گیت در همین revision از محتوای فایل‌ها قابل استنتاج است."
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": ""
+      },
+      "remediation": {
+        "observable_effect": "اجرای npm run desktop:check در این revision شکست می‌خورد و بامپ‌های اخیر اپ (تا 1.27.74) به پوستهٔ دسکتاپ منتقل نشده‌اند.",
+        "change_boundary": "هم‌گام‌سازی نسخهٔ tauri.conf.json و Cargo.toml با APP_VERSION از طریق scripts/bump-version.mjs یا بامپ دستی.",
+        "done_when": "هر سه مقدار نسخه برابر و گیت desktop:check سبز شود.",
+        "uncertainties": [
+          "زمان‌مهر فایل‌ها (باندل‌ها 2026-11-24، فایل‌های دسکتاپ 2026-11-22) نشان می‌دهد بامپ اپ بعد از آخرین به‌روزرسانی دسکتاپ انجام شده؛ معلوم نیست اصلاح در بامپ بعدی برنامه‌ریزی شده یا نیت دیگری وجود دارد."
+        ]
+      }
+    },
+    {
+      "id": "stack-003",
+      "kind": "undeclared-dependency",
+      "title": "باینری workerd به‌عنوان ران‌تایم موتور محلی مستقیماً مصرف می‌شود اما فقط وابستگی ترانزیتیو wrangler است",
+      "severity": "medium",
+      "confidence": "high",
+      "identity": {
+        "path": "scripts/engine/engine.mjs",
+        "symbol": "findWorkerdBinary",
+        "assertion": "موتور محلی باینری workerd را از node_modules/workerd و node_modules/@cloudflare/workerd-linux-64 بار می‌کند؛ این بسته‌ها در package.json اعلان نشده‌اند و فقط از مسیر wrangler/miniflare می‌آیند، پس ارتقای wrangler می‌تواند موتور محلی و مانیفست ران‌تایم نصاب دسکتاپ را بشکند."
+      },
+      "evidence": [
+        {
+          "path": "scripts/engine/engine.mjs",
+          "line": 276,
+          "detail": "findWorkerdBinary فقط دو مسیر node_modules/workerd/bin/workerd و node_modules/@cloudflare/workerd-linux-64/bin/workerd را می‌جستد (خطوط ۲۷۸-۲۷۹) و در نبودشان بوت شکست می‌خورد؛ مقدار پیش‌فرض engine در خط ۱۱۱ «workerd» است."
+        },
+        {
+          "path": "scripts/desktop-check.mjs",
+          "line": 112,
+          "detail": "نسخهٔ workerd مستقیماً از node_modules/workerd/package.json خوانده و در مانیفست ران‌تایم نصاب ثبت می‌شود."
+        },
+        {
+          "path": "package.json",
+          "line": 52,
+          "detail": "در dependencies و devDependencies هیچ workerd اعلان نشده است."
+        },
+        {
+          "path": "package-lock.json",
+          "line": 3189,
+          "detail": "node_modules/workerd با نسخهٔ قفل‌شدهٔ 1.20250718.0 به‌عنوان وابستگی ترانزیتیو (درخواست‌شده از مسیر wrangler/miniflare) ثبت شده است."
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": ""
+      },
+      "remediation": {
+        "observable_effect": "زیرساخت موتور محلی و مونتاژ نصاب دسکتاپ به نسخهٔ workerدی وابسته است که مالک مستقیمی در مانیفست پروژه ندارد؛ تنها بهانهٔ موجود بودن آن، نصب wrangler است.",
+        "change_boundary": "اعلان صریح workerd به‌عنوان devDependency پین‌شده، یا vendoring باینری در فرایند نصاب.",
+        "done_when": "workerd در package.json/package-lock به‌عنوان وابستگی مستقیم قابل ارجاع باشد یا مسیر تأمین آن از منبع دیگری مستند و پین شود.",
+        "uncertainties": [
+          "حالت adapter درون‌پروسه‌ای دسکتاپ (بدون workerd) ریسک را در نصاب کاهش می‌دهد؛ اندازهٔ ریسک برای CLI توسعه‌دهنده (engine پیش‌فرض workerd) بیشتر است."
+        ]
+      }
+    },
+    {
+      "id": "stack-004",
+      "kind": "unused-dependency",
+      "title": "بستهٔ npm web-vitals هیچ importی ندارد؛ ران‌تایم از نسخهٔ vendor‌شدهٔ کامیت‌شده استفاده می‌کند",
+      "severity": "low",
+      "confidence": "high",
+      "identity": {
+        "path": "package.json",
+        "symbol": "web-vitals",
+        "assertion": "devDependency web-vitals در گراف بیلد یا کد وارد نمی‌شود؛ RUM کلاینت از فایل vendor‌شدهٔ public/assets/vendor/web-vitals.attribution.js (v6.2.3) استفاده می‌کند و بستهٔ npm فقط هم‌نسخه‌سازی مجازی دارد."
+      },
+      "evidence": [
+        {
+          "path": "package.json",
+          "line": 66,
+          "detail": "\"web-vitals\": \"^6.2.3\" در devDependencies."
+        },
+        {
+          "path": "public/assets/js/rum.js",
+          "line": 8,
+          "detail": "import از '../vendor/web-vitals.attribution.js' — نه از بستهٔ npm."
+        },
+        {
+          "path": "public/assets/vendor/web-vitals.attribution.js",
+          "line": 1,
+          "detail": "سربرگ فایل vendor نسخهٔ 6.2.3 را اعلام می‌کند؛ تنها نقش یافته‌شدهٔ بستهٔ npm، مرجع نسخه‌سازی است. — دو شکل جست‌وجو: (۱) grep الگوی import در src/scripts/public — فقط vendor و کامنت؛ (۲) grep نام بسته در کل مخزن — فقط vendor، کامنت build-client.mjs:64 و docs؛ هر دو هم‌نظر + خواندن مستقیم rum.js."
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": ""
+      },
+      "remediation": {
+        "observable_effect": "بسته‌ای در درخت وابستگی‌ها نصب/به‌روز می‌شود که هیچ مصرف ساخت یا ران‌تایمی ندارد.",
+        "change_boundary": "حذف وابستگی و مستندسازی نسخهٔ vendor در سربرگ فایل vendor، یا افزودن اسکریپت رسمی تازه‌سازی vendor از node_modules اگر نقش پین نسخه عمدی است.",
+        "done_when": "یا وابستگی حذف شود یا نقش آن در اسکریپت/مستندات صریح شود.",
+        "uncertainties": [
+          "احتمال دارد نگه‌داشتن آن به‌عنوان «پین نسخه برای تازه‌سازی دستی vendor» عمدی باشد؛ اثر عملی صرفاً هزینهٔ نگه‌داری است."
+        ]
+      }
+    },
+    {
+      "id": "stack-005",
+      "kind": "duplicate-purpose-libs",
+      "title": "دو پیاده‌سازی هم‌هدف ObjectStore روی D1 وجود دارد و سیم‌کشی تولید فقط نسخهٔ chunked را مصرف می‌کند",
+      "severity": "low",
+      "confidence": "high",
+      "identity": {
+        "path": "src/core/storage/d1-store.ts",
+        "symbol": "createD1ObjectStore",
+        "assertion": "در src/core/storage دو فروشگاه D1‌پایهٔ هم‌هدف وجود دارد (تک‌رک base64 در d1-store و chunked-d1-store)؛ سیم‌کشی تولیدی (api-routing) فقط createChunkedD1ObjectStore را مصرف می‌کند و createD1ObjectStore فقط در تست‌ها وارد می‌شود."
+      },
+      "evidence": [
+        {
+          "path": "src/core/storage/index.ts",
+          "line": 2,
+          "detail": "هر دو createD1ObjectStore و createChunkedD1ObjectStore از بارل صادر می‌شوند."
+        },
+        {
+          "path": "src/application/api-routing/index.ts",
+          "line": 222,
+          "detail": "تنها مصرف تولیدی: createChunkedD1ObjectStore(db)؛ createD1ObjectStore در این فایل وارد/مصرف نشده است."
+        },
+        {
+          "path": "src/core/storage/d1-store.ts",
+          "line": 27,
+          "detail": "پیاده‌سازی تک‌رک base64 با سقف MAX_EXERCISE_FILE_BYTES. — تأیید «بدون مصرف تولیدی»: grep فایل-لیست createD1ObjectStore (فقط تست‌ها + index + خودش) و grep الگوی import '@core/storage' (api-routing فقط R2+chunked) هم‌نظر؛ خواندن مستقیم سیم‌کشی در api-routing:۲۲۰-۲۲۲."
+        },
+        {
+          "path": "src/core/storage/chunked-d1-store.ts",
+          "line": 60,
+          "detail": "پیاده‌سازی chunked — انتخاب واقعی تولید."
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": ""
+      },
+      "remediation": {
+        "observable_effect": "نگه‌داری دو مسیر هم‌هدف برای ذخیرهٔ آبجکت روی D1؛ نسخهٔ تک‌رک فقط توسط پنج فایل تست زنده نگه داشته می‌شود.",
+        "change_boundary": "تجمیع تست‌ها روی فروشگاه chunked و حذف d1-store، یا مستندسازی صریح نقش آن به‌عنوان دابل تست.",
+        "done_when": "یک فروشگاه تولیدی باقی بماند یا نقش دومی در کد/مستندات صریح شود.",
+        "uncertainties": [
+          "ممکن است تست‌ها عمداً روی پیاده‌سازی ساده‌تر برای ایزوله‌کردن منطق دامنه اجرا می‌شوند؛ حذف نیازمند بازبینی تست‌هاست."
+        ]
+      }
+    },
+    {
+      "id": "stack-006",
+      "kind": "outdated-release-line",
+      "title": "خطوط انتشار قدیمی در زنجیرهٔ ابزار dev — wrangler 3.x و vitest 2.x — با types جلوتر از ران‌تایم workerd",
+      "severity": "low",
+      "confidence": "medium",
+      "identity": {
+        "path": "package.json",
+        "symbol": "wrangler",
+        "assertion": "wrangler روی خط 3.x قفل است (3.114.17) و vitest روی 2.x (2.1.9)، در حالی که @cloudflare/workers-types نسخهٔ 4.20260702.1 (نمایانگر runtime 2026-07) از compatibility_date 2025-01-01 و workerd قفل‌شدهٔ 1.20250718.0 حدود یک سال جلوتر است."
+      },
+      "evidence": [
+        {
+          "path": "package.json",
+          "line": 65,
+          "detail": "\"vitest\": \"^2.1.8\" و خط ۶۷ \"wrangler\": \"^3.99.0\"."
+        },
+        {
+          "path": "package-lock.json",
+          "detail": "نسخه‌های قفل‌شده: wrangler 3.114.17، vitest 2.1.9، @cloudflare/workers-types 4.20260702.1، workerd 1.20250718.0 (از خواندن مستقیم lock با اسکریپت JSON)."
+        },
+        {
+          "path": "wrangler.toml",
+          "line": 3,
+          "detail": "compatibility_date = \"2025-01-01\" — کوچک‌تر از خط types؛ skew تایپ/ران‌تایم بی‌سند در مانیفست."
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": ""
+      },
+      "remediation": {
+        "observable_effect": "پرهیز از امکانات wrangler 4، از دست دادن اصلاحات vitest 3+، و تایپ‌چک با سطح API جدیدتر از ران‌تایمی که باندل در آن اجرا می‌شود.",
+        "change_boundary": "ارتقای برنامه‌ریزی‌شدهٔ wrangler به 4.x و vitest به خط فعلی، به‌همراه هم‌ترازسازی workers-types با compatibility_date.",
+        "done_when": "خطوط انتشار در مانیفست با compatibility_date و workerd هم‌تراز شوند.",
+        "uncertainties": [
+          "هیچ شکست عملیاتی مشاهده نشد — wrangler 3 با این compat-date کار می‌کند؛ ارزیابی صرفاً از نسخه‌های قفل‌شده است و نسخهٔ «آخر» رجیستری بررسی نشد (شبکه ممنوع)."
+        ]
+      }
+    },
+    {
+      "id": "stack-007",
+      "kind": "undeclared-dependency",
+      "title": "کف نسخهٔ Node در مانیفست اعلان نشده، در حالی که node:sqlite (Node >= 22.5) پیش‌نیاز تست و موتور است و اهداف استقرار خط‌های متفاوتی دارند",
+      "severity": "low",
+      "confidence": "high",
+      "identity": {
+        "path": "package.json",
+        "symbol": "engines",
+        "assertion": "package.json هیچ فیلد engines ندارد؛ ماک D1 تست‌ها روی node:sqlite سوار است که به Node >= 22.5 نیاز دارد، Docker روی node:24 است، سایدکار دسکتاپ 22.23.5 پین شده و هیچ‌کدام در مانیفست واحد ثبت نشده است."
+      },
+      "evidence": [
+        {
+          "path": "src/test/mock-d1.ts",
+          "line": 8,
+          "detail": "loadSqlite در نبود node:sqlite خطای صریح «نیاز: >=22.5» می‌دهد — کف واقعی اجرای تست‌ها."
+        },
+        {
+          "path": "scripts/engine/engine.mjs",
+          "line": 21,
+          "detail": "import { DatabaseSync } from 'node:sqlite' — همان پیش‌نیاز برای موتور محلی و adapter."
+        },
+        {
+          "path": "Dockerfile",
+          "line": 8,
+          "detail": "FROM node:24-bookworm-slim (هر دو مرحلهٔ build و runtime) — خط 24."
+        },
+        {
+          "path": "scripts/desktop/build-installer-runtime.mjs",
+          "line": 37,
+          "detail": "PINNED_NODE_VERSION = '22.23.5' برای سایدکار نصاب — خط سومِ Node در همان مخزن."
+        },
+        {
+          "path": "package.json",
+          "detail": "بدون فیلد engines (خواندن مستقیم فایل) — کف نسخه فقط در پیام خطای ماک مستند است."
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": ""
+      },
+      "remediation": {
+        "observable_effect": "مشارکت‌کننده با Node قدیمی‌تر (مثلاً 20) تست‌ها و موتور را با خطای مبهم از دست می‌دهد و اختلاف رفتار node:sqlite بین خطوط 22/24 بدون سند باقی می‌ماند.",
+        "change_boundary": "افزودن engines.node (>=22.5، ترجیحاً هم‌خط با سایدکار پین‌شده) به package.json و مستند کف در README/contributing.",
+        "done_when": "engines در package.json موجود و با Dockerfile/سایدکار هم‌راستا باشد.",
+        "uncertainties": [
+          "انتخاب خط 22 یا 24 به تصمیم مالک بستگی دارد؛ خود اجرای فعلی مشکلی مشاهده نشد."
+        ]
+      }
+    },
+    {
+      "id": "stack-008",
+      "kind": "conflicting-tooling",
+      "title": "ارجاع به اسکریپت‌های npm که در package.json وجود ندارند — build:worker در کد و desktop:dev/engine:dev/usb:pack در مستندات",
+      "severity": "low",
+      "confidence": "high",
+      "identity": {
+        "path": "scripts/desktop/build-installer-runtime.mjs",
+        "symbol": "build:worker",
+        "assertion": "پیام راهنمای build-installer-runtime.mjs برای بازسازی worker/bundle.js دستور «npm run build:worker» می‌دهد که در package.json تعریف نشده (نام واقعی: اجرای مستقیم scripts/build-worker-bundle.mjs)، و مستندات به desktop:dev، engine:dev و usb:pack ارجاع می‌دهند که وجود ندارند (usb:pack صراحتاً حذف شده است)."
+      },
+      "evidence": [
+        {
+          "path": "scripts/desktop/build-installer-runtime.mjs",
+          "line": 180,
+          "detail": "['worker/bundle.js', 'npm run build:worker (scripts/build-worker-bundle.mjs)'] — نام اسکریپت تعریف‌نشده؛ package.json فقط build:games-worker/build:engine-server/build:selfhost دارد. — تأیید: استخراج تمام الگوهای «npm run X» از scripts/docs/desktop (۳۴ نام یکتا) و مقایسه با کلیدهای package.json — فقط build:worker در کد اجرایی غایب بود؛ بقیه (desktop:dev، engine:dev، usb:pack، seed:) فقط در docs."
+        },
+        {
+          "path": "docs/rust/phases.md",
+          "line": 34,
+          "detail": "ارجاع به npm run engine:dev و npm run desktop:dev (خط ۳۶) — هیچ‌کدام در package.json نیست."
+        },
+        {
+          "path": "docs/rust/acceptance-checklist.md",
+          "line": 21,
+          "detail": "ردیف پذیرش به npm run desktop:dev ارجاع می‌دهد."
+        },
+        {
+          "path": "docs/rust/installer.md",
+          "line": 13,
+          "detail": "usb:pack رسماً حذف شده (بازنگری 1.27.41) اما در acceptance-checklist.md:67 همچنان در چک‌لیست است."
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": ""
+      },
+      "remediation": {
+        "observable_effect": "دنبال‌کردن پیام خطای مونتاژ نصاب یا چک‌لیست پذیرش به دستور ناموجود می‌رسد؛ بار نگه‌داری اسکریپت worker/bundle.js فقط با دانستن مسیر مستقیم فایل ممکن است.",
+        "change_boundary": "اصلاح پیام در build-installer-runtime.mjs به مسیر واقعی (node scripts/build-worker-bundle.mjs یا افزودن اسکریپت build:worker) و به‌روزرسانی ارجاعات docs.",
+        "done_when": "هیچ ارجاع npm run به کلید تعریف‌نشده در کد اجرایی نماند و ارجاعات docs با اسکریپت‌های فعلی هم‌خوان باشد.",
+        "uncertainties": [
+          "ندارد — عدم تعریف کلیدها از مقایسهٔ مستقیم با package.json معلوم است؛ فقط نیت (افزودن اسکریپت یا اصلاح متن) تصمیم مالک است."
+        ]
+      }
+    },
+    {
+      "id": "stack-009",
+      "kind": "conflicting-tooling",
+      "title": "کتابخانهٔ منبع scoring.js داخل پوشهٔ worker/ (دیرکتوری باندل‌های تولیدی) نگه‌داری می‌شود و TSها با مسیر نسبی از آن import می‌کنند",
+      "severity": "low",
+      "confidence": "high",
+      "identity": {
+        "path": "worker/scoring.js",
+        "symbol": "CONTENT_FORMULA",
+        "assertion": "worker/scoring.js هم لایهٔ اجرایی مسیر /api/scoring/ در ورودی باندل است و هم کتابخانهٔ منبعی که سه ماژول TS با مسیر نسبی ../../../worker/scoring.js آن را وارد می‌کنند؛ colocate شدن سورس با باندل‌های «دست‌نزنید» مالکیت دیرکتوری worker/ را دوپاره می‌کند."
+      },
+      "evidence": [
+        {
+          "path": "src/application/api-routing/index.ts",
+          "line": 94,
+          "detail": "import { handleScoring } from '../../../worker/scoring.js' — وابستگی منبع به فایل داخل دیرکتوری خروجی باندل."
+        },
+        {
+          "path": "src/application/settings/service.ts",
+          "line": 19,
+          "detail": "import از '../../../worker/scoring.js'."
+        },
+        {
+          "path": "src/application/reports/service.ts",
+          "line": 11,
+          "detail": "import { effectiveContentFormula, productionScoreOf, SCORING_CONFIG_KEY } از '../../../worker/scoring.js'."
+        },
+        {
+          "path": "worker/src-entry.mjs",
+          "line": 5,
+          "detail": "همان فایل هم به‌عنوان لایهٔ اجرایی /api/scoring/ روی ورودی ورکر سوار است (خطوط ۱۰-۲۰) — دو نقش برای یک فایل."
+        },
+        {
+          "path": "tsconfig.json",
+          "line": 23,
+          "detail": "include فقط src/**/*.ts است؛ worker/scoring.js خارج از پروژهٔ TS می‌ماند و تنها با worker/scoring.d.ts تایپ می‌شود."
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": ""
+      },
+      "remediation": {
+        "observable_effect": "پاک‌سازی آیندهٔ دیرکتوری worker/ (که سربرگ باندل‌ها می‌گوید «دست نزنید») می‌تواند کتابخانهٔ زندهٔ فرمول امتیاز را هدف بگیرد؛ یافتن مالک فرمول برای خواننده دشوار است.",
+        "change_boundary": "انتقال کتابخانه به src/ (مثلاً src/core/scoring) و نگه‌داشتن فقط wrapper ورودی در worker/، یا مستندسازی صریح دو نقش scoring.js.",
+        "done_when": "دیرکتوری worker/ فقط آرتیفکت‌های استقرار/ورودی را داشته باشد و importهای منبع به مسیر src/ اشاره کنند، یا نقش دوگانه در README دیرکتوری ثبت شود.",
+        "uncertainties": [
+          "چیدمان فعلی احتمالاً نتیجهٔ تاریخی «تلفیق KPI در ورکر» است؛ مهاجرت مسیر، مرز بازسازی باندل‌ها را هم لمس می‌کند و باید با smoke باندل آزمایش شود."
+        ]
+      }
+    }
+  ]
+}

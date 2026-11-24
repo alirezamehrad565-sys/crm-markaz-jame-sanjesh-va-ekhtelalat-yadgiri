@@ -1,0 +1,468 @@
+{
+  "schema_version": 3,
+  "run_id": "aud-20261124-8ca4227",
+  "auditor": "testing",
+  "scanned_at": "2026-11-24T22:16:13Z",
+  "scope": {
+    "included": [
+      "src",
+      "server",
+      "src/test",
+      "scripts",
+      ".github/workflows",
+      "vitest.config.ts",
+      "package.json",
+      "public/assets/js",
+      "docs/CODE-QUALITY-BENCHMARK.md",
+      "docs/PROFILE-GLOSSARY.md",
+      "docs/release-1.27.22.md"
+    ],
+    "excluded": [
+      "node_modules",
+      "dist",
+      "worker/bundle.js",
+      "worker/central-bundle.js"
+    ],
+    "unscanned": [
+      "desktop/src-tauri"
+    ],
+    "limitations": [
+      "Static analysis only: executing tests/builds was forbidden for this run, so coverage judgments derive from import/reference analysis and file inventory, not from runtime coverage data.",
+      "No jCodeMunch index available for this run (explicit employer decision recorded in revision 8ca4227 commit message); all evidence gathered by direct file reads and grep over the worktree.",
+      "Test-case counts (3184 it/test occurrences across 293 test files) are syntactic occurrence counts, not runtime pass/fail counts.",
+      "Rust/Tauri desktop side was only inventoried (9 .rs files, 47 inline test attributes, cargo test wired in desktop-build.yml step 'cargo test --all-targets'), not audited in depth.",
+      "CI gate wiring was read step-by-step from .github/workflows/ci.yml, cf-deploy.yml, desktop-build.yml, docker-publish.yml; workflow execution history was not accessible."
+    ]
+  },
+  "findings": [
+    {
+      "id": "testing-001",
+      "kind": "unverified-critical-path",
+      "title": "CF Access JWT authentication branch and jwt.ts verifyAccessToken have no test coverage",
+      "severity": "high",
+      "confidence": "high",
+      "identity": {
+        "path": "src/core/auth/middleware.ts",
+        "symbol": "authMiddleware/verifyAccessToken",
+        "assertion": "The Cloudflare Access JWT authentication path (final fallback branch of authMiddleware plus verifyAccessToken in src/core/auth/jwt.ts) is never executed by any test in the repository"
+      },
+      "evidence": [
+        {
+          "path": "src/core/auth/middleware.ts",
+          "line": 104,
+          "detail": "Final fallback branch reads Cf-Access-Jwt-Assertion header, calls verifyAccessToken against CF_ACCESS_TEAM_DOMAIN, then resolveStaffByEmail — this branch ends authMiddleware; no test file imports jwt.ts or sends this header (grep over src/**/__tests__ and server/**/__tests__ finds zero references to verifyAccessToken or Cf-Access-Jwt-Assertion as request input)"
+        },
+        {
+          "path": "src/core/auth/jwt.ts",
+          "detail": "80-line module implementing CF Access token verification (signature/expiry/team-domain/aud checks); zero test imports across the suite — the vitest include pattern covers src/**/__tests__ so absence is not a config artifact"
+        },
+        {
+          "path": "src/application/__tests__/e2e-auth.test.ts",
+          "line": 59,
+          "detail": "The dedicated auth e2e suite exercises only the Bearer session-JWT path (login, tampered token, no token, logout revocation, expired session, legacy no-sid token) and the X-Dev-Staff-Id development bypass; it never exercises the CF Access fallback that production traffic on the Cloudflare deployment reaches"
+        },
+        {
+          "path": "src/test/harness.ts",
+          "line": 173,
+          "detail": "createTestApp sets CF_ACCESS_TEAM_DOMAIN: 'test.team.example.com' in env, but no test in the repository consumes that setting through the middleware fallback"
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "confirmed",
+        "counterevidence": [
+          {
+            "path": "repodocs/audit/notes/verdicts-testing-ui.md",
+            "line": 1,
+            "detail": "تأیید رقیب: verifyAccessToken فقط در jwt.ts:41 و middleware.ts:101؛ grep بی‌حساسیت روی همهٔ *.test.ts صفر ارجاع؛ هیچ تستی Cf-Access-Jwt-Assertion نمی‌فرستد و mock برای /cdn-cgi/access/certs هم نیست؛ ۴۰۱ِ «بدون توکن» قبل از شاخهٔ CF throw می‌شود (middleware.ts:97-99). اصلاح استنادی: هارنس CF_ACCESS_TEAM_DOMAIN را در خطوط 125/149 می‌گذارد نه 173."
+          }
+        ],
+        "note": "تأیید مستقل کور در 2026-11-24 (verifier: independent-blind-verifier)"
+      },
+      "remediation": {
+        "observable_effect": "Signature/audience/expiry verification and the resolveStaffByEmail role mapping for the primary production login path could regress without any test failing; e2e-auth would stay green",
+        "change_boundary": "src/core/auth/__tests__/jwt.test.ts (new unit tests for verifyAccessToken with crafted JWTs) and a small addition to src/application/__tests__/e2e-auth.test.ts posting Cf-Access-Jwt-Assertion through createTestApp",
+        "done_when": "At minimum: valid-token, wrong-team-domain, expired-token, unsigned-token, unknown-email, and inactive-staff cases each produce the middleware's intended 200/401 outcome under the existing harness",
+        "uncertainties": [
+          "Whether production traffic actually reaches this branch depends on the Cloudflare Access configuration outside the repository; if Access is always enabled the branch is critical, if not it is a secondary path"
+        ]
+      }
+    },
+    {
+      "id": "testing-002",
+      "kind": "assurance-level-mismatch",
+      "title": "Frontend regression gates assert source-text regex instead of executing UI code; 75 of 84 front JS modules never run under test",
+      "severity": "high",
+      "confidence": "high",
+      "identity": {
+        "path": "src/__tests__",
+        "symbol": "front-* text gates",
+        "assertion": "51 of 56 front-* test files read public/assets/js sources with readFileSync and assert regex patterns (implementation-copy checks); only 9 front JS modules are ever imported and executed, and no DOM or browser test tooling exists, so the ~25,809-line views layer (appointments 1673, student-profile 2020, exercises 1607, clearbook 1423, screening 1316, working-day 1247, settings 990, finance 971) is verified only as text"
+      },
+      "evidence": [
+        {
+          "path": "src/__tests__/front-12557.test.ts",
+          "line": 15,
+          "detail": "Representative gate: read('app.js'), read('ui.js'), read('views/bug-report.js') then expect(source).toMatch(/const SHIFT_BREAK_MINUTE = 13 \\* 60;/) — asserts exact source tokens, so a harmless rename breaks the gate while a semantic regression that keeps the token passes; 51 of the 56 front-* files use the same readFileSync pattern"
+        },
+        {
+          "path": "vitest.config.ts",
+          "line": 14,
+          "detail": "environment: 'node' and include limited to src/**/__tests__ and server/**/__tests__; no jsdom/happy-dom/browser project is configured"
+        },
+        {
+          "path": "package.json",
+          "line": 59,
+          "detail": "devDependencies contain no playwright/cypress/puppeteer/jsdom/testing-library — the only executed-frontend tests import 9 modules total (ui.js, format.js, csv-rtl.js, taxonomy.js, feedback-sheet.js, profile/landing.js, profile/therapy-line.js, views/health-panel.js, views/cloud-setup.js), all as pure functions without DOM"
+        },
+        {
+          "path": "public/assets/js/views/appointments.js",
+          "detail": "1673-line scheduling view is referenced by 10+ test files only as regex-gate text (front-12758, front-supervisor-readonly, front-drill-3, ...); its handlers, state transitions and rendering never execute under test"
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "confirmed",
+        "counterevidence": [
+          {
+            "path": "repodocs/audit/notes/verdicts-testing-ui.md",
+            "line": 1,
+            "detail": "تأیید رقیب با تصحیح عددی: ۵۶ فایل front-*، ۵۱ readFileSync ✓؛ environment node بدون jsdom ✓؛ بدون playwright/cypress ✓؛ شمارش دقیق اجرای ماژول: ۱۰ ماژول واقعاً import و اجرا می‌شوند (profile/registry.js هم هست که ممیز از قلم انداخته بود) → ۷۴ از ۸۴ ماژول فرانت هرگز اجرا نمی‌شوند (≈۸۸٪) — جوهر یافته پابرجا؛ FakeDocument دست‌ساز فقط src/tutorial را اجرا می‌کند."
+          }
+        ],
+        "note": "تأیید مستقل کور در 2026-11-24 (verifier: independent-blind-verifier)"
+      },
+      "remediation": {
+        "observable_effect": "Frontend logic regressions (broken handlers, wrong state transitions, rendering crashes) ship with all gates green; simultaneously every cosmetic refactor risks red gates, training developers to distrust the suite",
+        "change_boundary": "public/assets/js/views (extract pure view/model functions as already done for health-panel.js) plus new vitest behavioral tests importing them; optionally a DOM environment project in vitest.config.ts",
+        "done_when": "The largest views (appointments, student-profile, exercises, clearbook) each have at least behavioral tests of their pure logic following the existing front-updater/front-sync-status pattern, and gate files stop pinning cosmetic source tokens",
+        "uncertainties": [
+          "Whether a browser E2E layer (playwright) is desired is a product decision; the minimal fix is unit-level execution of extracted pure functions, which the codebase already partially adopts"
+        ]
+      }
+    },
+    {
+      "id": "testing-003",
+      "kind": "invalid-verification",
+      "title": "MockD1 diverges from real D1 semantics: RETURNING statements return no rows, batch drops row results, booleans silently coerced",
+      "severity": "medium",
+      "confidence": "high",
+      "identity": {
+        "path": "src/test/mock-d1.ts",
+        "symbol": "isRowReturning/MockD1.batch/normalizeParam",
+        "assertion": "The D1 mock's row-detection heuristic and batch implementation do not reproduce real D1 behavior for RETURNING clauses, batch result rows, and boolean binds, so some production contracts are unverifiable or silently falsified in tests"
+      },
+      "evidence": [
+        {
+          "path": "src/test/mock-d1.ts",
+          "line": 33,
+          "detail": "isRowReturning matches only ^\\s*(SELECT|WITH|PRAGMA|EXPLAIN); DELETE ... RETURNING / INSERT ... RETURNING fall into stmt.run() so all()/first() return [] / null while real D1 returns the affected rows"
+        },
+        {
+          "path": "src/application/client-errors/service.ts",
+          "line": 121,
+          "detail": "pruneOld() returns deleted.length from db.query('DELETE ... RETURNING id') — under the mock this is always 0; e2e-client-errors.test.ts:151 asserts surviving DB rows instead, so the count contract is never verified; same pattern at src/application/rum/service.ts:133"
+        },
+        {
+          "path": "src/test/mock-d1.ts",
+          "line": 88,
+          "detail": "batch() returns only { success, meta } per statement — per-statement result rows of real D1 batch are discarded; also normalizeParam (line 19) converts booleans to 1/0 whereas real D1 rejects boolean binds, hiding a class of bind bugs"
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": ""
+      },
+      "remediation": {
+        "observable_effect": "Purge/retention count reporting and any future batch-read or boolean-bind code behave differently in tests than in production without failing the suite",
+        "change_boundary": "src/test/mock-d1.ts (extend isRowReturning with RETURNING suffix, return per-statement results in batch, reject booleans like real D1)",
+        "done_when": "A test asserting pruneOld()'s returned count against known old rows passes under the mock and the mock rejects boolean binds the way D1 does",
+        "uncertainties": [
+          "Exact D1 meta fields (duration, rows_read) remain approximations; only behavior-affecting gaps are addressed"
+        ]
+      }
+    },
+    {
+      "id": "testing-004",
+      "kind": "unverified-critical-path",
+      "title": "API-key middleware authentication branch is never exercised end-to-end",
+      "severity": "medium",
+      "confidence": "high",
+      "identity": {
+        "path": "src/core/auth/middleware.ts",
+        "symbol": "authMiddleware X-Api-Key branch",
+        "assertion": "The X-Api-Key authentication branch (format check, hash lookup, owner-active check, last-used touch) has no test that sends the header through the app; only the key generation/hash helpers are unit tested"
+      },
+      "evidence": [
+        {
+          "path": "src/core/auth/middleware.ts",
+          "line": 38,
+          "detail": "API-key branch: looksLikeApiKey → hashApiKey → findApiKeyByHash → owner active check → waitUntil(touchApiKeyLastUsed); grep over all test files finds no request carrying X-Api-Key"
+        },
+        {
+          "path": "src/core/auth/__tests__/api-keys.test.ts",
+          "line": 2,
+          "detail": "Imports only generateApiKey, hashApiKey, looksLikeApiKey — the middleware integration (including revocation and inactive-owner rejection) is unverified"
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": ""
+      },
+      "remediation": {
+        "observable_effect": "A regression in key lookup or owner-activity enforcement would allow 401s for valid keys or, worse, accept revoked keys without any test failing",
+        "change_boundary": "src/application/__tests__/ (new e2e case in e2e-auth.test.ts or an e2e-api-keys.test.ts) seeding an api_keys row via the existing harness",
+        "done_when": "Valid key → 200 with api-key identity, revoked key → 401, inactive owner → 401, malformed key → 401 are each asserted through app.request",
+        "uncertainties": [
+          "None beyond whether key routes themselves are covered elsewhere (src/application/keys has no __tests__ directory either)"
+        ]
+      }
+    },
+    {
+      "id": "testing-005",
+      "kind": "unverified-critical-path",
+      "title": "Worker scheduled() cron orchestration in src/index.ts is invoked by no test",
+      "severity": "medium",
+      "confidence": "high",
+      "identity": {
+        "path": "src/index.ts",
+        "symbol": "scheduled",
+        "assertion": "The ~270-line scheduled handler that wires digest, reminders, cp-sync/cp-report/cp-content cycles, bug-report forwarding, alert cycle and audit retention is never called by any test; only the underlying services are tested individually"
+      },
+      "evidence": [
+        {
+          "path": "src/index.ts",
+          "line": 385,
+          "detail": "export default { fetch, scheduled } — grep over all test files finds no .scheduled( invocation and no import of src/index.ts (only src/__tests__/sec-12743.test.ts mentions the path as scanned text)"
+        },
+        {
+          "path": "server/__tests__/crons.test.ts",
+          "line": 20,
+          "detail": "Cron matching is unit tested for the node server (server/crons.ts), but the worker's scheduled dispatch order, per-job error isolation, env parsing (AUDIT_LOG_RETENTION_DAYS, ALERTS_DISABLED) and waitUntil usage are unverified"
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": ""
+      },
+      "remediation": {
+        "observable_effect": "A regression in the orchestration (wrong job order, one job's throw aborting the rest, mis-parsed env) ships silently; nightly digest/reminders could stop without CI noticing",
+        "change_boundary": "src/application/__tests__/ or a new src/__tests__/scheduled.test.ts calling worker.scheduled(fakeEvent, harnessEnv, fakeCtx) with MockD1",
+        "done_when": "One test exercises scheduled() end-to-end with stubbed services/clock and asserts each job ran (or was skipped) and one failing job does not abort the others",
+        "uncertainties": [
+          "Service constructors take real deps; test may need light stubbing of cron windows — feasibility under the existing harness not yet proven"
+        ]
+      }
+    },
+    {
+      "id": "testing-006",
+      "kind": "assurance-level-mismatch",
+      "title": "Gates documented as mandatory (bench:gate, ui-voice-check, contrast-check, desktop-check, smoke:games, audit:sec) are not wired into CI",
+      "severity": "medium",
+      "confidence": "high",
+      "identity": {
+        "path": ".github/workflows/ci.yml",
+        "symbol": "test job steps",
+        "assertion": "ci.yml wires 15 steps (npm audit --omit=dev, typecheck, vitest, build:client, worker bundle build + node --check, games bundle, engine smoke workerd/adapter, perf-budget, migrations-doc, versions, d1-compat, csp-hash, selfhost smoke) but several gates that project docs declare part of the release chain run only manually"
+      },
+      "evidence": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "line": 13,
+          "detail": "Step list of the single 'test' job — no step invokes scripts/complexity-bench.mjs --gate, ui-voice-check.mjs, contrast-check.mjs, desktop-check.mjs, games-bundle-smoke.mjs, or sec-audit.mjs"
+        },
+        {
+          "path": "docs/CODE-QUALITY-BENCHMARK.md",
+          "line": 88,
+          "detail": "Requires 'هر نسخه: npm run bench:gate در زنجیرهٔ گیت‌ها' — the gate exists as an npm script but is absent from ci.yml, so the documented policy and enforced policy diverge"
+        },
+        {
+          "path": "docs/release-1.27.22.md",
+          "line": 7,
+          "detail": "Release record shows ui-voice-check, contrast-check and desktop:check were run manually for that release, confirming they are expected quality gates yet remain unenforced in CI"
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": ""
+      },
+      "remediation": {
+        "observable_effect": "Complexity debt, UI-voice token violations, contrast regressions and secret-leak patterns can merge to main without CI redness despite the repo's own policy documents",
+        "change_boundary": ".github/workflows/ci.yml (add steps for bench:gate, ui-voice-check, contrast-check; optionally desktop:check and sec-audit where platform-independent)",
+        "done_when": "Each documented gate appears as a ci.yml step or the policy docs are amended to mark it manual",
+        "uncertainties": [
+          "desktop:check and smoke:games may require artifacts/environments CI lacks; audit:sec may produce noise on the dev dependency tree — owners may have chosen manual runs deliberately"
+        ]
+      }
+    },
+    {
+      "id": "testing-007",
+      "kind": "unverified-critical-path",
+      "title": "Five large domain modules (wechsler-engine, case-formulation, ot-engine, finance, student-profile) have no dedicated unit tests and rely on narrow e2e paths",
+      "severity": "medium",
+      "confidence": "medium",
+      "identity": {
+        "path": "src/domain",
+        "symbol": "wechsler-engine/case-formulation/ot-engine/finance/student-profile",
+        "assertion": "Modules of 1,214–2,189 LOC contain zero in-module test files; they execute only through a handful of e2e API flows, so scoring-table and cutoff boundary values are verified for few inputs"
+      },
+      "evidence": [
+        {
+          "path": "src/domain/wechsler-engine/engine.js",
+          "detail": "1,848-line psychometric engine (2,135 LOC module) with no __tests__ directory; grep shows zero test imports — exercised only via e2e-wechsler-restoration.test.ts (one canonical raw-score profile through case-events) and clinical-engine integration tests that import ../infer, not the engine"
+        },
+        {
+          "path": "src/domain/case-formulation/engine.js",
+          "detail": "1,986-line engine (2,182 LOC module), no dedicated tests; indirect coverage from e2e-case-formulation.test.ts and clinical-engine/__tests__/cutoffs-12506.test.ts (imports formulateCase)"
+        },
+        {
+          "path": "src/domain/ot-engine/service.ts",
+          "detail": "1,135-line service (1,476 LOC module), no dedicated tests; only e2e-ot-engine.test.ts via createTestApp; same pattern for finance (1,214 LOC, e2e-finance only) and student-profile (2,189 LOC, e2e students flows only)"
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": "Confidence medium: indirect e2e coverage demonstrably exists and includes adversarial cases; the claim is about depth (boundary values across IQ tables/cutoff edges) not absence"
+      },
+      "remediation": {
+        "observable_effect": "Off-by-one and boundary regressions in clinical scoring tables (scaled scores, percentile edges, cutoff bands) are caught only if an e2e fixture happens to hit the same boundary",
+        "change_boundary": "src/domain/wechsler-engine/__tests__/, case-formulation/__tests__/, ot-engine/__tests__/, finance/__tests__/ — pure-function unit tests over table edges",
+        "done_when": "Each engine has unit tests covering at least the extreme and boundary raw-score conversions and each finance/student-profile rule branch",
+        "uncertainties": [
+          "engines are .js with .d.ts — importable from vitest already (pattern proven by front tests), so effort is test authoring, not infrastructure"
+        ]
+      }
+    },
+    {
+      "id": "testing-008",
+      "kind": "flaky-pattern",
+      "title": "Wall-clock dependence without clock injection: no fake timers anywhere, 38 test files read Date.now(), scheduling tests depend on Tehran-midnight boundaries",
+      "severity": "low",
+      "confidence": "medium",
+      "identity": {
+        "path": "src/test/harness.ts",
+        "symbol": "quarterHourFromNow/tehranTodayAt",
+        "assertion": "Time-sensitive tests use the real clock; appointment-window helpers and a 15ms sleep-based ordering assumption can produce environment-dependent failures"
+      },
+      "evidence": [
+        {
+          "path": "src/test/harness.ts",
+          "line": 272,
+          "detail": "quarterHourFromNow and tehranTodayAt derive appointment windows from Date.now() with a hardcoded +210-minute Tehran offset; ~10 e2e suites (e2e-standard-flow, e2e-waitlist, e2e-board-ops, ...) build fixtures from the wall clock, so runs near midnight Tehran time exercise different day-boundary branches than midday runs"
+        },
+        {
+          "path": "src/application/__tests__/e2e-docs.test.ts",
+          "line": 444,
+          "detail": "File ordering regression test separates two uploads with 'await new Promise(r => setTimeout(r, 15))' — if the timestamp column's resolution ever changes the ordering key can collide; no vi.useFakeTimers/setSystemTime exists anywhere in the suite (grep: 0 files)"
+        },
+        {
+          "path": "src/application/__tests__/e2e-rate-limit.test.ts",
+          "detail": "Rate-limit window test counts requests inside a real-clock rolling window; long CI pauses between steps can silently change the admitted count"
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": ""
+      },
+      "remediation": {
+        "observable_effect": "Occasional environment-dependent red runs whose root cause is wall-clock position, not the code under test",
+        "change_boundary": "src/test/harness.ts (inject a controllable clock, or standardize vi.setSystemTime in time-sensitive suites)",
+        "done_when": "Appointment-window and ordering tests pass identically with a clock pinned at a Tehran-midnight boundary and midday",
+        "uncertainties": [
+          "Iran abolished DST (fixed UTC+3:30), so the hardcoded offset is currently correct; risk is boundary-day branch coverage, not offset drift"
+        ]
+      }
+    },
+    {
+      "id": "testing-009",
+      "kind": "invalid-verification",
+      "title": "Cron parity test pins a hardcoded list and cites a wrangler.prod.toml that does not exist in the repository",
+      "severity": "low",
+      "confidence": "high",
+      "identity": {
+        "path": "server/__tests__/crons.test.ts",
+        "symbol": "ALL_CRONS parity test",
+        "assertion": "The parity test asserts a literal 5-expression array and its title claims equality with wrangler.prod.toml (absent file); wrangler.toml lists only 4 crons, so test literal and deploy config can drift silently"
+      },
+      "evidence": [
+        {
+          "path": "server/__tests__/crons.test.ts",
+          "line": 33,
+          "detail": "it('... همان ۵ عبارت wrangler.prod.toml ...') with expect([...ALL_CRONS].sort()).toEqual(['*/15 * * * *', ...]) — no file wrangler.prod.toml exists (ls: wrangler.toml, wrangler.games.toml only)"
+        },
+        {
+          "path": "wrangler.toml",
+          "line": 19,
+          "detail": "crons = [\"0 17 * * *\", \"30 6 * * *\", \"0 4 * * *\", \"30 14 * * *\"] — four expressions; the */15 CP-sync expression exists only in server/crons.ts (node self-host), so the parity the title promises is not machine-checked against any deploy file"
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": ""
+      },
+      "remediation": {
+        "observable_effect": "Adding/removing a cron in wrangler.toml or server/crons.ts fails no test even though the suite claims to pin their parity",
+        "change_boundary": "server/__tests__/crons.test.ts (read wrangler.toml and compare parsed crons instead of a literal; fix the stale title)",
+        "done_when": "Parity assertion parses the actual wrangler config files and the test title names files that exist",
+        "uncertainties": [
+          "Whether the 5th */15 expression is intentionally self-host-only (docs suggest yes); the test should encode that distinction explicitly"
+        ]
+      }
+    },
+    {
+      "id": "testing-010",
+      "kind": "no-verification-infra",
+      "title": "server/ entry modules cli.ts, env.ts and node-main.ts have no unit tests; node-main covered only by a /health smoke",
+      "severity": "low",
+      "confidence": "high",
+      "identity": {
+        "path": "server",
+        "symbol": "cli.ts/env.ts/node-main.ts",
+        "assertion": "Of five server modules (496 LOC) only crons.ts and static.ts are unit tested; the node entry (bind loop, worker fetch bridging, env assembly) is exercised solely by the CI selfhost smoke hitting /health"
+      },
+      "evidence": [
+        {
+          "path": "server/node-main.ts",
+          "detail": "109-line entry (server bootstrap) — no test imports it; .github/workflows/ci.yml:88-95 smoke runs dist/server.js and curls /health plus index only, so any non-health route bridging regression (static fallback, worker handoff) is unverified"
+        },
+        {
+          "path": "server/cli.ts",
+          "detail": "87-line CLI argument/env parsing module with no test; same for server/env.ts (46 lines)"
+        },
+        {
+          "path": "server/__tests__/static.test.ts",
+          "line": 57,
+          "detail": "Existing tests show the pattern is feasible: createStaticServer is tested for traversal/dotfile/ETag; cli/env/node-main simply lack equivalents"
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": ""
+      },
+      "remediation": {
+        "observable_effect": "A CLI/env regression (wrong bind host, mis-parsed PORT/DATA_DIR) or non-health server-side routing bug reaches installs before any test fails",
+        "change_boundary": "server/__tests__/ (add cli.test.ts, env.test.ts; optionally a node-main test using a random port like the CI smoke)",
+        "done_when": "CLI/env parsing cases and one node-main boot with a non-health request pass in vitest",
+        "uncertainties": [
+          "node-main binds sockets; vitest can handle it but port hygiene must follow the CI smoke pattern (ephemeral port)"
+        ]
+      }
+    }
+  ]
+}

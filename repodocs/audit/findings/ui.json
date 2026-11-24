@@ -1,0 +1,317 @@
+{
+  "schema_version": 3,
+  "run_id": "aud-20261124-8ca4227",
+  "auditor": "ui",
+  "scanned_at": "2026-11-24T00:00:00Z",
+  "scope": {
+    "included": [
+      "public/assets/css/base.css",
+      "public/assets/css/components.css",
+      "public/assets/css/views.css",
+      "public/assets/js/ui.js",
+      "public/assets/js/app.js",
+      "public/assets/js/global-search.js",
+      "public/assets/js/format.js",
+      "public/assets/js/views/server-pill.js",
+      "public/assets/js/views/reports.js"
+    ],
+    "excluded": [
+      "public/assets/dist",
+      "public/assets/vendor"
+    ],
+    "unscanned": [
+      "public/assets/play",
+      "public/assets/js/views/appointments.js",
+      "public/assets/js/views/archive.js",
+      "public/assets/js/views/backup.js",
+      "public/assets/js/views/bug-report.js",
+      "public/assets/js/views/case-event-types.js",
+      "public/assets/js/views/center-kpi.js",
+      "public/assets/js/views/clearbook.js",
+      "public/assets/js/views/client-errors.js",
+      "public/assets/js/views/cloud-setup.js",
+      "public/assets/js/views/dashboard.js",
+      "public/assets/js/views/docs.js",
+      "public/assets/js/views/exercises.js",
+      "public/assets/js/views/family-surveys.js",
+      "public/assets/js/views/finance.js",
+      "public/assets/js/views/form-builder.js",
+      "public/assets/js/views/games.js",
+      "public/assets/js/views/health-panel.js",
+      "public/assets/js/views/not-found.js",
+      "public/assets/js/views/outbox.js",
+      "public/assets/js/views/progress-board.js",
+      "public/assets/js/views/progress-report.js",
+      "public/assets/js/views/referral-inbox.js",
+      "public/assets/js/views/schools.js",
+      "public/assets/js/views/screening.js",
+      "public/assets/js/views/settings.js",
+      "public/assets/js/views/special-needs.js",
+      "public/assets/js/views/staff.js",
+      "public/assets/js/views/student-profile.js",
+      "public/assets/js/views/students.js",
+      "public/assets/js/views/treatment-plans.js",
+      "public/assets/js/views/working-day.js",
+      "public/assets/js/views/working-hours.js"
+    ],
+    "limitations": [
+      "ممیزی فقط-کد بود (بدون اجرای مرورگر)؛ ابعاد لمسی و کنتراست‌ها با محاسبهٔ ایستا سنجیده شد نه رندر واقعی.",
+      "پوستهٔ HTML اپ (sidebar/topbar/main در index.html ساختهٔ build) بیرون از public/assets است؛ نقش‌های landmark پوسته از این دامنه قابل پین‌کردن نبود و فقط از طریق app.js (getElementById) بازرسی شد.",
+      "پوشش نماها نمونه‌ای بود: ui.js/global-search/server-pill/reports عمیق خوانده شد و بقیهٔ نماها فقط با پویش‌های الگویی (aria/role/Escape/px/hex) پوشش داده شدند.",
+      "dist و vendor به‌موجب ممنوعیت کارفرما (باندل) از دامنه خارج شد."
+    ]
+  },
+  "findings": [
+    {
+      "id": "ui-001",
+      "kind": "accessibility-gap",
+      "title": "هدف لمسی tag-chip__x در مد لمسی ۲۲px است — زیر کف ۲۴px گواه WCAG 2.5.8 AA که خود بلوک مدعی رعایت آن است",
+      "severity": "high",
+      "confidence": "high",
+      "identity": {
+        "path": "public/assets/css/components.css",
+        "symbol": ".tag-chip__x",
+        "assertion": "در بلوک @media (pointer: coarse)، اهداف لمسی زیر کف ۲۴px (WCAG 2.5.8 AA) باقی می‌مانند؛ tag-chip__x ۲۲px است."
+      },
+      "evidence": [
+        {
+          "path": "public/assets/css/components.css",
+          "line": 759,
+          "detail": ".tag-chip__x { width: 22px; height: 22px; } در مد pointer:coarse — زیر ۲۴px."
+        },
+        {
+          "path": "public/assets/css/components.css",
+          "line": 754,
+          "detail": "کامنت بلوک: «تکمیل اهداف لمسی زیر ۲۴px (کف WCAG 2.5.8 AA) روی لمس» — ادعای همان بلوک با مقدار ۲۲px در تضاد است."
+        },
+        {
+          "path": "public/assets/css/components.css",
+          "line": 124,
+          "detail": "کف کلی اپ برای ردیف‌های تعاملی 42px (button.search-row min-height: 42px) — ۲۲px یک‌سوم زیر کف داخلی."
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "confirmed",
+        "counterevidence": [
+          {
+            "path": "repodocs/audit/notes/verdicts-testing-ui.md",
+            "line": 1,
+            "detail": "تأیید رقیب — شدیدتر از ادعا: قاعدهٔ پایهٔ .tag-chip__x (width/height 15px، padding:0) در خط 806 بعد از بلاک coarse با specificity برابر می‌آید و ترتیب منبع مغلوبش می‌کند → اندازهٔ مؤثر واقعی در مد لمسی 15px است نه 22px؛ قاعدهٔ 759 عملاً کد مرده است. استثناهای WCAG 2.5.8 رد شدند (چیپ والد کلیک‌پذیر نیست tagging.js:36-44؛ gap 4px خط 827؛ border-box سراسری). تخفیف جزئی: .tag-del با 24px (خط 758) استثنای هدف هم‌ارز در رابط ویرایشگر تگ — ولی در نمایش چیپِ حذف‌پذیر تنها مسیر حذف همان × 15px است."
+          }
+        ],
+        "note": "تأیید مستقل کور در 2026-11-24 (verifier: independent-blind-verifier)"
+      },
+      "remediation": {
+        "change_boundary": "پیش‌نویس پیش از Decide: برطرف‌کردن وضعیت توصیف‌شده در عنوان یافته (هدف لمسی tag-chip__x در مد لمسی ۲۲px است — زیر کف ۲۴px گواه WCAG 2.5.8 AA که خود بلوک مدعی رعایت آن است) با کمترین تغییر، پس از تأیید رقیب و تصمیم کارفرما",
+        "done_when": "اصلاح اعمال شود و تست/گیت پوشانندهٔ رفتار اصلاح‌شده در سوئیت سبز شود",
+        "observable_effect": "رفتار توصیف‌شده در عنوان یافته (هدف لمسی tag-chip__x در مد لمسی ۲۲px است — زیر کف ۲۴px گواه WCAG 2.5.8 AA که خود بلوک مدعی رعایت آن است) دیگر در سنجش یا اجرا مشاهده نشود",
+        "uncertainties": []
+      }
+    },
+    {
+      "id": "ui-002",
+      "kind": "inconsistent-presentation-system",
+      "title": "در مد لمسی، اهداف متعدد ۲۶–۳۸px زیر کف ۴۲px اعلام‌شدهٔ خود اپ هستند",
+      "severity": "medium",
+      "confidence": "high",
+      "identity": {
+        "path": "public/assets/css/components.css",
+        "symbol": "@media (pointer: coarse) بلوک کف لمسی",
+        "assertion": "کف لمسی داخلی اپ ۴۲px است اما در pointer:coarse هشت کلاس کنترلی بین ۲۶ تا ۳۸px رها شده‌اند."
+      },
+      "evidence": [
+        {
+          "path": "public/assets/css/components.css",
+          "line": 124,
+          "detail": "min-height: 42px با کامنت «کف لمسی» — مبنا."
+        },
+        {
+          "path": "public/assets/css/components.css",
+          "line": 756,
+          "detail": ".row-menu__item { min-height: 38px; } و سایر اعضای بلوک: row-menu__btn/call-badge ۳۲ (خط ۷۵۵ و ۷۵۷)، combo__clear ۲۶ (خط ۷۶۰)، toast__close ۳۰ (خط ۷۶۱)، att-seg__btn ۳۸ (خط ۷۶۲) — همه زیر ۴۲."
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": ""
+      },
+      "remediation": {
+        "change_boundary": "پیش‌نویس پیش از Decide: برطرف‌کردن وضعیت توصیف‌شده در عنوان یافته (در مد لمسی، اهداف متعدد ۲۶–۳۸px زیر کف ۴۲px اعلام‌شدهٔ خود اپ هستند) با کمترین تغییر، پس از تأیید رقیب و تصمیم کارفرما",
+        "done_when": "اصلاح اعمال شود و تست/گیت پوشانندهٔ رفتار اصلاح‌شده در سوئیت سبز شود",
+        "observable_effect": "رفتار توصیف‌شده در عنوان یافته (در مد لمسی، اهداف متعدد ۲۶–۳۸px زیر کف ۴۲px اعلام‌شدهٔ خود اپ هستند) دیگر در سنجش یا اجرا مشاهده نشود",
+        "uncertainties": []
+      }
+    },
+    {
+      "id": "ui-003",
+      "kind": "hardcoded-design-values",
+      "title": "حدود دوازده اندازهٔ فونت px هاردکد خارج از مقیاس تایپ توکنی — و گوت کف فونت فقط زیر ۱۲px را می‌بیند",
+      "severity": "medium",
+      "confidence": "high",
+      "identity": {
+        "path": "public/assets/css/base.css",
+        "symbol": "font-size px literals",
+        "assertion": "مقیاس تایپ توکنی (--fs-2xs..--fs-display) وجود دارد اما چند اعلان font-size: Npx مقادیر معادل توکن را به‌صورت px خام نگه می‌دارند؛ گوت front-font-floor فقط اندازه‌های زیر ۱۲px را می‌گیرد و این مواضع ≥۱۲px بی‌گیت می‌مانند."
+      },
+      "evidence": [
+        {
+          "path": "public/assets/css/base.css",
+          "line": 224,
+          "detail": "توکن‌ها: --fs-2xs 0.75rem(۱۲)، --fs-xs ۰.۸۱۲۵rem(۱۳)، --fs-sm ۰.۸۷۵rem(۱۴) — هم‌مقدارهای px خام پایین."
+        },
+        {
+          "path": "public/assets/css/base.css",
+          "line": 879,
+          "detail": ".avatar { font-size: 12px; } — معادل --fs-2xs ولی px خام."
+        },
+        {
+          "path": "public/assets/css/components.css",
+          "line": 206,
+          "detail": ".combo__clear font-size: 14px؛ خط ۱۷۳۹ هم font-size: 13px — معادل --fs-sm و --fs-xs."
+        },
+        {
+          "path": "public/assets/css/views.css",
+          "line": 1489,
+          "detail": ".wl-board-card__counts 13px؛ خطوط ۱۴۹۶/۱۵۰۳ (۱۴px)، ۱۵۸۲ (todo-item__meta 12px)، ۲۱۴۵ (exb-picked__x 14px)، ۲۴۱۸ (lb-score b 22px بدون توکن هم‌مقدار)."
+        },
+        {
+          "path": "src/__tests__/front-font-floor.test.ts",
+          "line": 45,
+          "detail": "گیت فقط hit های size < 12 را می‌شمارد؛ مواضع ۱۲px به بالا از دید گوت خارج‌اند."
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": ""
+      },
+      "remediation": {
+        "change_boundary": "پیش‌نویس پیش از Decide: برطرف‌کردن وضعیت توصیف‌شده در عنوان یافته (حدود دوازده اندازهٔ فونت px هاردکد خارج از مقیاس تایپ توکنی — و گوت کف فونت فقط زیر ۱۲px را می‌بیند) با کمترین تغییر، پس از تأیید رقیب و تصمیم کارفرما",
+        "done_when": "اصلاح اعمال شود و تست/گیت پوشانندهٔ رفتار اصلاح‌شده در سوئیت سبز شود",
+        "observable_effect": "رفتار توصیف‌شده در عنوان یافته (حدود دوازده اندازهٔ فونت px هاردکد خارج از مقیاس تایپ توکنی — و گوت کف فونت فقط زیر ۱۲px را می‌بیند) دیگر در سنجش یا اجرا مشاهده نشود",
+        "uncertainties": []
+      }
+    },
+    {
+      "id": "ui-004",
+      "kind": "accessibility-gap",
+      "title": "فوکوس اولیهٔ openModal انتخابگرش visibility را چک نمی‌کند و می‌تواند روی input پنهان بیفتد",
+      "severity": "low",
+      "confidence": "medium",
+      "identity": {
+        "path": "public/assets/js/ui.js",
+        "symbol": "openModal",
+        "assertion": "ابتدای بازشدن مودال با querySelector('input, select, textarea, button.btn--primary') فوکوس می‌گذارد؛ برخلاف فیلتر getClientRects تلهٔ فوکوس (همان تابع)، عنصر پنهان (مثل hiddenInput کامبو یا چک‌باکس سوییچ display:none) را کنار نمی‌گذارد."
+      },
+      "evidence": [
+        {
+          "path": "public/assets/js/ui.js",
+          "line": 426,
+          "detail": "const first = modal.querySelector('input, select, textarea, button.btn--primary'); setTimeout(() => first.focus(), 60) — بدون فیلتر visibility."
+        },
+        {
+          "path": "public/assets/js/ui.js",
+          "line": 397,
+          "detail": "focusablesOf همان مودال با .filter((n) => n.getClientRects().length > 0) عناصر غیررندرشده را حذف می‌کند — دو معیار ناسازگار در یک تابع."
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": ""
+      },
+      "remediation": {
+        "change_boundary": "پیش‌نویس پیش از Decide: برطرف‌کردن وضعیت توصیف‌شده در عنوان یافته (فوکوس اولیهٔ openModal انتخابگرش visibility را چک نمی‌کند و می‌تواند روی input پنهان بیفتد) با کمترین تغییر، پس از تأیید رقیب و تصمیم کارفرما",
+        "done_when": "اصلاح اعمال شود و تست/گیت پوشانندهٔ رفتار اصلاح‌شده در سوئیت سبز شود",
+        "observable_effect": "رفتار توصیف‌شده در عنوان یافته (فوکوس اولیهٔ openModal انتخابگرش visibility را چک نمی‌کند و می‌تواند روی input پنهان بیفتد) دیگر در سنجش یا اجرا مشاهده نشود",
+        "uncertainties": []
+      }
+    },
+    {
+      "id": "ui-005",
+      "kind": "accessibility-gap",
+      "title": "بج وضعیت سرور (server-pill) هیچ aria/role ندارد و تغییر وضعیت به فناوری‌های یاری‌رسان اعلام نمی‌شود؛ چهار نما هم صفر aria",
+      "severity": "medium",
+      "confidence": "medium",
+      "identity": {
+        "path": "public/assets/js/views/server-pill.js",
+        "symbol": "SERVER_STATE_VIEWS",
+        "assertion": "مؤلفهٔ همیشه‌مرئی سربرگ که Booting/Failed/Degraded را نشان می‌دهد هیچ role=status یا aria-live ندارد؛ تغییر وضعیت فقط بصری (کلاس بج + متن) است."
+      },
+      "evidence": [
+        {
+          "path": "public/assets/js/views/server-pill.js",
+          "line": 24,
+          "detail": "جدول SERVER_STATE_VIEWS فقط badge/dot/label می‌سازد؛ کل فایل ۱۴۴خطی صفر تطبیق برای aria- یا role= دارد (پویش grep)."
+        },
+        {
+          "path": "public/assets/js/views/outbox.js",
+          "detail": "پویش الگویی: client-errors.js، cloud-setup.js، outbox.js، server-pill.js صفر aria-/role دارند — ناهمگن با گزارش‌ها (reports.js با aria-busy سه‌گانه در خطوط ۱۴۵/۴۱۲/۶۵۳)."
+        },
+        {
+          "path": "public/assets/js/views/reports.js",
+          "line": 145,
+          "detail": "content.setAttribute('aria-busy', 'true') هنگام بارگذاری — الگوی درستِ موجود که در بج سربرگ غایب است."
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": ""
+      },
+      "remediation": {
+        "change_boundary": "پیش‌نویس پیش از Decide: برطرف‌کردن وضعیت توصیف‌شده در عنوان یافته (بج وضعیت سرور (server-pill) هیچ aria/role ندارد و تغییر وضعیت به فناوری‌های یاری‌رسان اعلام نمی‌شود؛ چهار نما هم صفر aria) با کمترین تغییر، پس از تأیید رقیب و تصمیم کارفرما",
+        "done_when": "اصلاح اعمال شود و تست/گیت پوشانندهٔ رفتار اصلاح‌شده در سوئیت سبز شود",
+        "observable_effect": "رفتار توصیف‌شده در عنوان یافته (بج وضعیت سرور (server-pill) هیچ aria/role ندارد و تغییر وضعیت به فناوری‌های یاری‌رسان اعلام نمی‌شود؛ چهار نما هم صفر aria) دیگر در سنجش یا اجرا مشاهده نشود",
+        "uncertainties": []
+      }
+    },
+    {
+      "id": "ui-006",
+      "kind": "inconsistent-presentation-system",
+      "title": "color: #fff هاردکد روی hover دایرهٔ خطر در تم تیره کنتراست ۲٫۸۲ (زیر ۳٫۰ مؤلفهٔ UI) می‌دهد",
+      "severity": "medium",
+      "confidence": "high",
+      "identity": {
+        "path": "public/assets/css/views.css",
+        "symbol": ".icon-circle--danger:hover",
+        "assertion": "مقدار رنگ ثابت #fff برای متن آیکون روی پس‌زمینهٔ var(--danger) فقط با مقدار روشن توکن (#B8403A) سنجیده شده؛ در تم تیره --danger به #E97971 تغییر می‌کند و نسبت #fff به آن ۲٫۸۲ است."
+      },
+      "evidence": [
+        {
+          "path": "public/assets/css/views.css",
+          "line": 1813,
+          "detail": ".icon-circle--danger:hover { background: var(--danger); border-color: var(--danger); color: #fff; }"
+        },
+        {
+          "path": "public/assets/css/base.css",
+          "line": 90,
+          "detail": "توکن تیره: --danger: #E97971 (مترادف --error تیره) — محاسبهٔ WCAG: #fff/#E97971 = ۲٫۸۲ زیر آستانهٔ ۳٫۰ مؤلفهٔ UI؛ حالت روشن #fff/#B8403A = ۵٫۴۸ سالم."
+        },
+        {
+          "path": "scripts/contrast-check.mjs",
+          "line": 17,
+          "detail": "گوت کنتراست فقط جفت‌های توکنی پین‌شده را می‌سنجد؛ جفت رنگ-هاردکد × توکن در دامنهٔ گوت نیست — کور‌گوتِ همین موضع."
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": ""
+      },
+      "remediation": {
+        "change_boundary": "پیش‌نویس پیش از Decide: برطرف‌کردن وضعیت توصیف‌شده در عنوان یافته (color: #fff هاردکد روی hover دایرهٔ خطر در تم تیره کنتراست ۲٫۸۲ (زیر ۳٫۰ مؤلفهٔ UI) می‌دهد) با کمترین تغییر، پس از تأیید رقیب و تصمیم کارفرما",
+        "done_when": "اصلاح اعمال شود و تست/گیت پوشانندهٔ رفتار اصلاح‌شده در سوئیت سبز شود",
+        "observable_effect": "رفتار توصیف‌شده در عنوان یافته (color: #fff هاردکد روی hover دایرهٔ خطر در تم تیره کنتراست ۲٫۸۲ (زیر ۳٫۰ مؤلفهٔ UI) می‌دهد) دیگر در سنجش یا اجرا مشاهده نشود",
+        "uncertainties": []
+      }
+    }
+  ]
+}

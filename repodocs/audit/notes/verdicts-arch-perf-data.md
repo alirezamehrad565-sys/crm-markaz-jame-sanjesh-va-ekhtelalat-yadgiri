@@ -1,0 +1,10 @@
+# احکام تأییدکنندهٔ رقیب مستقل — گروه architecture/performance/data (run_id: aud-20261124-8ca4227)
+
+> تأییدکنندهٔ کور مستقل، فقط‌خواندنی، revision 8ca4227.
+
+| id | حکم | شاهد کلیدی | توضیح |
+|---|---|---|---|
+| architecture-001 | confirmed | api-routing/index.ts:151-197,544,772,784,877,893-947 | تمام شمارش‌ها بازتولید شد: ۹۵۶ خط؛ ۴۵ سرویس؛ ۸ ناظر؛ ساخت دو-ناقلهٔ assessment-blocks/form-builder/dashboard؛ هندلر KPI ~۵۵ خطی؛ ~۵۸ register* + ۲ app.route + ۷ روت inline. تخفیف‌دهنده: ~۵۹ ماژول register خودشان را دارند و این فایل عمدتاً چسبِ ترکیب/ثبت/میان‌افزار است — «god-module» فقط دربارهٔ آمیختن سه نقش در همین فایل صادق است (شدت high قابل بحث، برپایهٔ دقت ادعا نگه داشته شد). |
+| architecture-004 | downgraded | docs/ARCHITECTURE.md §4.3؛ @core/shared/app.ts | فکت‌ها درست‌اند (۲۸ routes.ts، ۳۳۱ ثبت در domain، ۴۴۷ کل، بدون رجیستری) ولی «نقض مرز» نیست: قاعدهٔ پروژه صریحاً الگوی register را واجب کرده و AppHono عامدانه در core/shared تعریف شده «تا همهٔ ماژول‌ها یک generic یکسان داشته باشند». هزینهٔ واقعی باقی‌مانده: جفت‌شدگی به Hono در ۲۸ ماژول. شدت: medium. |
+| performance-001 | confirmed | chunked-d1-store.ts:74,83-87,33-58,13-22,5؛ constants.ts:307؛ src/index.ts:82 | خواندن واقعاً متوالی (COUNT + حلقهٔ await LIMIT 6 OFFSET n)، نوشتن DELETE + INSERT تک‌تکه، decode کاراکتربه‌کاراکتر، CHUNK_BYTES=1.5M، سقف 50MB. حجم تولید شواهدی در مخزن ندارد (restore-drill روی D1 محلیِ seed با ۰ ردیف بود)؛ wrangler.prod.toml وجود ندارد و بدون binding R2، مسیر D1 تکه‌ای پیش‌فرض تولید است. حکم: confirmed برای اثر لاتنتِ امروز. |
+| data-001 | downgraded | MIGRATIONS.md:184,188؛ update-remote.mjs:211؛ gen-instance-sync-migration.mjs:59 | واگرایی 0026 واقعی و اثبات‌شده (سند: ترتیب پروداکشن drop→create مقابل replay لغوی create→drop؛ جدول central_records در پروداکشن هست)؛ 0047 در واقع سه فایل دارد؛ اعمال تولید filename-based و بدون هش محتوا. تخفیف: سیاست کتبی «بدون backfill/تغییرنام» (MIGRATIONS.md:190-211) + گیت CI check-migrations-doc موجود؛ صفر مصرف‌کنندهٔ کدی central_records. اثبات‌نشده: هم‌ارزی اسکیمای 0046/0047 بازسازی‌شده با پروداکشن (نیازمند diff، خارج از دسترس فقط‌خواندنی). شدت: medium. |

@@ -1,0 +1,542 @@
+{
+  "schema_version": 3,
+  "run_id": "aud-20261124-8ca4227",
+  "auditor": "architecture",
+  "scanned_at": "2026-11-24T22:13:36Z",
+  "scope": {
+    "included": [
+      "src/index.ts",
+      "src/games-worker.ts",
+      "src/application",
+      "src/domain",
+      "src/core",
+      "src/node-sync",
+      "src/node-sync-runner",
+      "src/node-sync-client",
+      "src/internal-sync",
+      "src/cloud-setup",
+      "src/tutorial",
+      "server",
+      "worker/scoring.js",
+      "worker/scoring.d.ts",
+      "worker/entry.js",
+      "worker/games-entry.js",
+      "public/assets/js",
+      "wrangler.toml",
+      "wrangler.games.toml",
+      "tsconfig.json",
+      "package.json",
+      "vitest.config.ts"
+    ],
+    "excluded": [
+      "node_modules",
+      "dist",
+      "worker/bundle.js",
+      "worker/central-bundle.js",
+      "worker/games-bundle.js"
+    ],
+    "unscanned": [
+      "desktop",
+      "scripts",
+      "migrations",
+      "docs",
+      "public/assets/play",
+      "public/assets/vendor",
+      "public/assets/css",
+      "public/assets/img",
+      "public/assets/fonts",
+      ".github",
+      "src/test",
+      "src/__tests__",
+      "src/application/__tests__",
+      "src/core/__tests__"
+    ],
+    "limitations": [
+      "ممیزی فقط‌خواندنی بدون اجرای کد/بیلد و بدون شبکه؛ به تصمیم مجریِ ران، jCodeMunch در دسترس نبود و همهٔ شواهد با خواندن مستقیم و grep تأیید شد.",
+      "شمارش مسیرها با grep الگوی app.(get|post|put|patch|delete)( در src است: ۴۴۱ ثبت در سطح مخزن + ۷ روت درون‌خطی در api-routing ≈ ۴۴۸ (ادعای ~۴۴۷ تأیید می‌شود)؛ شمارش دقیق هر زیراپ از رجیستری مرکزیِ غایب نتیجه گرفته شده است.",
+      "باندل‌های تولیدشده (worker/bundle.js و هم‌خانواده) طبق محدودهٔ مصوب باز نشدند؛ worker/scoring.js و scoring.d.ts به‌عنوان سورس واقعی خوانده شدند.",
+      "سمت Rust (desktop/src-tauri) و اسکریپت‌ها و مایگریشن‌ها خارج از محدودهٔ این ممیز بود و خوانده نشد.",
+      "سمت فرانت فقط از منظر الگوی لایه‌بندی (app.js/router/state/api/ui/views) بررسی شد؛ ممیزی کیفی تک‌نماها با ممیز ui است."
+    ]
+  },
+  "findings": [
+    {
+      "id": "architecture-001",
+      "kind": "god-module",
+      "title": "createApp/createServices در api-routing: ترکیب DI، نصب ناظرها، میان‌افزار و ~۵۷ ثبت مسیر در یک واحد ۹۵۶ خطی با ۴۵ سرویس",
+      "severity": "high",
+      "confidence": "high",
+      "identity": {
+        "path": "src/application/api-routing/index.ts",
+        "symbol": "createApp/createServices/Services",
+        "assertion": "یک فایل ۹۵۶ خطی هم ریشهٔ ترکیب (ساخت ۴۵ سرویس و نصب ۸ ناظر) است، هم میزبان میان‌افزار سراسری، هم رجیستریِ نشدهٔ ~۵۷ ثبت مسیر و چند روت درون‌خطی با منطق کسب‌وکار؛ ساخت برخی سرویس‌ها هم در createApp و هم در createServices انجام می‌شود."
+      },
+      "evidence": [
+        {
+          "path": "src/application/api-routing/index.ts",
+          "line": 544,
+          "detail": "شیء Services با ۴۵ عضو در یک return تک‌خطی برگردانده می‌شود (db تا contentScore)؛ اینترفیس آن در خطوط ۱۵۱-۱۹۷ تعریف شده است."
+        },
+        {
+          "path": "src/application/api-routing/index.ts",
+          "line": 199,
+          "detail": "createServices حدود ۳۴۷ خط (۱۹۹-۵۴۵) فقط ساخت و سیم‌کشی سرویس‌هاست و در خطوط ۳۴۱-۴۸۰ هشت ناظر (setLifecycleObserver، setObserver، setNotifier، setGradeObserver، setSendObserver×۲، setFillObserver، setMonitorFocusProvider) را نصب می‌کند."
+        },
+        {
+          "path": "src/application/api-routing/index.ts",
+          "line": 772,
+          "detail": "سرویس‌ها دو-ناقله ساخته می‌شوند: assessment-blocks (۷۷۲) و form-builder (۷۸۴) و dashboard (۸۷۷) درون بدنهٔ createApp و هم‌زمان با ثبت مسیر ساخته می‌شوند، در حالی که بقیهٔ ۴۵ سرویس در createServices هستند."
+        },
+        {
+          "path": "src/application/api-routing/index.ts",
+          "line": 893,
+          "detail": "هندلر GET /api/dashboard/kpis حدود ۵۵ خط (۸۹۳-۹۴۷) منطق تجمیع نقش‌محور (۱۱ منبع موازی + گارد نقش + بازسازی Request برای scoring) را درون لایهٔ مسیریابی نگه می‌دارد."
+        },
+        {
+          "path": "src/application/api-routing/index.ts",
+          "line": 553,
+          "detail": "قلاب تستی (app as unknown as { __services?: Services }).__services = services در کد پروداکشن تعبیه شده است."
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "confirmed",
+        "counterevidence": [
+          {
+            "path": "repodocs/audit/notes/verdicts-arch-perf-data.md",
+            "line": 1,
+            "detail": "تأیید رقیب با بازتولید شمارش‌ها: ۹۵۶ خط؛ ۴۵ سرویس (151-197، :544)؛ ۸ ناظر؛ ساخت دو-ناقله 772/784/877؛ هندلر KPI ~۵۵ خطی 893-947؛ ~۵۸ register* + ۲ app.route + ۷ روت inline. تخفیف‌دهنده: ~۵۹ ماژول register خودشان را دارند و این فایل عمدتاً چسبِ ترکیب است — «god-module» فقط دربارهٔ آمیختن سه نقش در همین فایل صادق است."
+          }
+        ],
+        "note": "تأیید مستقل کور در 2026-11-24 (verifier: independent-blind-verifier)"
+      },
+      "remediation": {
+        "observable_effect": "هر تغییر سیم‌کشی یا مسیر تازه، ویرایش یک فایل مرکزی ۹۵۶ خطی را تحمیل می‌کند؛ مرور diff و تعارض‌های هم‌زمان در همین فایل متمرکز می‌شود.",
+        "change_boundary": "تفکیک سه نقش در همان ماژول یا ماژول‌های خواهر: composition root (createServices)، رجیستری مسیرها (فهرست مرکزی ماژول‌های روت) و میان‌افزار سراسری؛ انتقال ساخت سرویس‌های inline به createServices و انتقال تجمیع KPI داشبورد به یک سرویس @app/dashboard.",
+        "done_when": "createApp دیگر سرویس نسازد و هندلر چندخطی منطق‌دار نداشته باشد؛ افزودن یک ماژول دامنه فقط یک ورودی به رجیستری مسیر باشد.",
+        "uncertainties": [
+          "انتخاب شکل رجیستری (آرایهٔ declarative یا تابع register) به تصمیم Decide واگذار است؛ رفتار runtime باید با تست‌های موجود e2e ثابت بماند."
+        ]
+      }
+    },
+    {
+      "id": "architecture-002",
+      "kind": "inconsistent-conventions",
+      "title": "حلقهٔ اعلان (انتخاب کانال + clinicName + حلقهٔ enqueue با dedup + flush) سه‌بار در api-routing و دوباره در لایهٔ notify و حتی یک سرویس domain تکرار شده است",
+      "severity": "medium",
+      "confidence": "high",
+      "identity": {
+        "path": "src/application/api-routing/index.ts",
+        "symbol": "caseEvents.setSendObserver / exerciseBank.setSendObserver / caseEvents.setFillObserver",
+        "assertion": "سه بلوک ناظر اعلان در createServices همان الگوی «getChannel('bale') ? 'bale' : 'internal' → getClinicName → حلقهٔ enqueue با dedupKey → dispatchPending(50)» را تکرار می‌کنند و همین الگو در senders.ts و exercise-submission-bot.ts و domain/document-requests هم بازتولید شده است."
+      },
+      "evidence": [
+        {
+          "path": "src/application/api-routing/index.ts",
+          "line": 366,
+          "detail": "caseEvents.setSendObserver (خطوط ۳۶۶-۳۸۳) و exerciseBank.setSendObserver (خطوط ۴۲۳-۴۴۰) با diff خط‌به‌خط مقایسه شدند: ۱۷ خط بدنه بایت‌به‌بایت یکسان است و فقط نام گیرنده در خط اول تفاوت دارد."
+        },
+        {
+          "path": "src/application/api-routing/index.ts",
+          "line": 386,
+          "detail": "caseEvents.setFillObserver (۳۸۶-۴۲۱) همان حلقهٔ enqueue/flush را با قالب و payload متفاوت سومین بار تکرار می‌کند (dispatchPending(50) در خطوط ۳۸۱، ۴۱۷ و ۴۳۸)."
+        },
+        {
+          "path": "src/application/notify/senders.ts",
+          "line": 36,
+          "detail": "عبارت انتخاب کانال «getChannel('bale') ? 'bale' : 'internal'» در کل مخزن ۱۸ بار در ۸ فایل تکرار شده (senders.ts:36,87,147,222,356,393,429,483؛ digest.ts:94,256,297؛ alerts.ts:18؛ exercise-submission-bot.ts:125؛ api-routing:367,397,424؛ domain/document-requests/service.ts:240)."
+        },
+        {
+          "path": "src/domain/document-requests/service.ts",
+          "line": 240,
+          "detail": "یک سرویس domain خودش کانال را انتخاب و enqueue/flush می‌کند؛ یعنی سیاست اعلانِ در @app/notify متمرکزنشده به لایهٔ domain هم نشت کرده است."
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": ""
+      },
+      "remediation": {
+        "observable_effect": "تغییر سیاست اعلان (مثلاً سقف flush، کلید dedup یا منطق کانال) باید در دست‌کم ۵ نقطه اعمال شود؛ ناهم‌گامی تدریجی بین این نقاط در دسترس است.",
+        "change_boundary": "یک helper مشترک در @app/notify (مثلاً enqueueToMany(notify, {chats, template, vars, dedupBase, flush})) و حذف حلقهٔ دستی از هر سه ناظر و senders.ts؛ تزریق همان helper به document-requests.",
+        "done_when": "عبارت انتخاب کانال و حلقهٔ enqueue/flush فقط یک تعریف در مخزن داشته باشد و ناظرهای api-routing به فراخوان آن تبدیل شوند.",
+        "uncertainties": [
+          "رفتار dedupKey و ترتیب flush باید عیناً حفظ شود؛ تست‌های موجود notify مرجع ثبات‌اند."
+        ]
+      }
+    },
+    {
+      "id": "architecture-003",
+      "kind": "boundary-violation",
+      "title": "وابستگی معکوس domain→application: سه import واقعی از @app داخل src/domain",
+      "severity": "medium",
+      "confidence": "high",
+      "identity": {
+        "path": "src/domain/document-requests/service.ts",
+        "symbol": "SettingsService/pageParams",
+        "assertion": "لایهٔ domain که باید مستقل از application باشد، در دو ماژول از نوع‌ها و یک تابع زمان‌اجرای لایهٔ application (@app/settings و @app/http) import می‌گیرد."
+      },
+      "evidence": [
+        {
+          "path": "src/domain/document-requests/service.ts",
+          "line": 9,
+          "detail": "import type { SettingsService } from '@app/settings'; و همان import در src/domain/document-requests/types.ts:6."
+        },
+        {
+          "path": "src/domain/student-profile/routes.ts",
+          "line": 6,
+          "detail": "import { pageParams } from '@app/http'; — وابستگی زمان‌اجرا (نه فقط type) از domain به application."
+        },
+        {
+          "path": "tsconfig.json",
+          "line": 13,
+          "detail": "نقشهٔ aliasها (@core/*، @domain/*، @app/*) جهت مجاز را مؤید ساختار three-layer نشان می‌دهد؛ سه import فوق جهت وارونه‌اند. در کل src/domain هیچ import دیگری از @app یافت نشد (grep)."
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": ""
+      },
+      "remediation": {
+        "observable_effect": "استفادهٔ مجدد از ماژول‌های document-requests/student-profile در میزبان دیگر بدون کشیدن @app/settings و @app/http ممکن نیست.",
+        "change_boundary": "تعریف قرارداد پارامترهای صفحه‌بندی در @core/shared و پراکسی SettingsService از طریق تزریق وابستگی در composition root (هم‌الگوی تزریق تابع formulationOt).",
+        "done_when": "grep «from '@app/» در src/domain صفر نتیجه بدهد.",
+        "uncertainties": [
+          "هیچ‌کدام؛ تغییر صرفاً ساختاری و در مرز امضاهاست."
+        ]
+      }
+    },
+    {
+      "id": "architecture-004",
+      "kind": "boundary-violation",
+      "title": "لایهٔ HTTP داخل ماژول‌های domain زندگی می‌کند: ۲۸ فایل routes.ts با ~۳۳۱ ثبت مسیر و نوع AppHono/getAuthContext در domain، بدون رجیستری مسیر مرکزی",
+      "severity": "high",
+      "confidence": "high",
+      "identity": {
+        "path": "src/domain",
+        "symbol": "routes.ts (28 ماژول)",
+        "assertion": "برخلاف هدف «domain نباید HTTP بداند»، هر ماژول دامنه خودش مسیرهای Hono را ثبت می‌کند (app.get/post/put/patch/delete)، نوع AppHono از core/shared می‌گیرد و گیت‌های احراز/نقش را در همان routes.ts اعمال می‌کند؛ رجیستری مرکزی مسیر وجود ندارد و api-routing فقط ۵۷ خط فراخوانی پراکنده دارد."
+      },
+      "evidence": [
+        {
+          "path": "src/domain/appointment-core/routes.ts",
+          "line": 9,
+          "detail": "نمونهٔ نماینده: import type { AppHono, CopyWeekInput } from '@core/shared' و import { getAuthContext, requireRole } from '@core/auth' در یک ماژول دامنه؛ همین الگو در ۲۸ فایل routes.ts زیر src/domain تکرار شده است."
+        },
+        {
+          "path": "src/core/shared/app.ts",
+          "line": 1,
+          "detail": "نوع AppHono (import type { Hono } from 'hono') در core/shared تعریف شده و ۲۹ فایل domain آن را مصرف می‌کنند؛ همچنین src/core/auth/middleware.ts:1 نوع‌های Context/MiddlewareHandler هونو را import می‌کند — یعنی نوع فریم‌ورک HTTP به core نشت کرده است."
+        },
+        {
+          "path": "src/application/api-routing/index.ts",
+          "line": 769,
+          "detail": "بدون هیچ رجیستری، ۵۷ فراخوانی register*/Routes(app, ...) (خطوط ۷۶۹-۸۵۴) به‌همراه ۷ روت درون‌خطی مسیرها را پخش می‌کند؛ grep کل src: ۴۴۱ ثبت مسیر با پیشوند app. که ۳۳۱ مورد آن در src/domain است (application: ۹۵)."
+        },
+        {
+          "path": "src/domain/case-events/routes.ts",
+          "line": 20,
+          "detail": "نمونهٔ نماینده: امضای registerCaseEventsRoutes(app: AppHono, ...) (خط ۱۰) با import نوع AppHono از @core/shared (خط ۱) و گیت‌های احراز/نقش @core/auth (خط ۲)؛ یک نمونه: app.post('/api/case-events/types', requireRole('manager','secretary','therapist'), ...) در خط ۲۰ — ۳۳ ثبت مسیر در همین یک فایل؛ پارس query، کد وضعیت و پیام خطای فارسی در خود routes.ts نوشته می‌شود؛ فقط import مستقیم پکیج hono در src/domain صفر است (نوع‌ها از @core/shared می‌آیند)."
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "downgraded",
+        "counterevidence": [
+          {
+            "path": "repodocs/audit/notes/verdicts-arch-perf-data.md",
+            "line": 1,
+            "detail": "تخفیف رقیب: فکت‌ها درست‌اند (۲۸ routes.ts، ۳۳۱ ثبت در domain) ولی «نقض مرز» نیست — docs/ARCHITECTURE.md §4.3 الگوی register را به‌عنوان قرارداد رسمی مستند کرده و AppHono عامدانه در @core/shared/app.ts تعریف شده؛ هزینهٔ واقعی باقی‌مانده: جفت‌شدگی به Hono در ۲۸ ماژول و نبود رجیستری مرکزی."
+          }
+        ],
+        "note": "تأیید مستقل کور در 2026-11-24 (verifier: independent-blind-verifier)",
+        "resulting_severity": "medium"
+      },
+      "remediation": {
+        "observable_effect": "جابه‌جایی فریم‌ورک HTTP یا افزودن میزبان جدید مستلزم دست‌زدن به ۲۸ ماژول دامنه است؛ یافتن «همهٔ مسیرهای یک منبع» فقط با جستجوی پراکنده ممکن است و ترتیب ثبت (عمومی قبل از گیت auth) به ترتیب دستی خطوط در createApp گره خورده است.",
+        "change_boundary": "دو گزینه برای Decide: (الف) پذیرش صریح قرارداد «routes.ts در دامنه» و مستندسازی آن به‌عنوان قاعده با رجیستری سبک (هر ماژول یک متادیتا export کند)؛ (ب) انتقال تدریجی ثبت مسیرها به لایهٔ application و باقی‌گذتن service/pure در domain.",
+        "done_when": "فهرست مرکزی مسیرها (یا متادیتای هر ماژول) نقطهٔ واحد کشف مسیرها باشد و سمت domain دیگر نوع AppHono مصرف نکند (در گزینهٔ ب).",
+        "uncertainties": [
+          "گزینهٔ ب بازنویسی گسترده است و طبق راهنمای ممیز فقط با تصمیم Decide؛ تا آن‌زمان الگوی فعلی coherent است."
+        ]
+      }
+    },
+    {
+      "id": "architecture-005",
+      "kind": "inconsistent-conventions",
+      "title": "قرارداد مستند «نه وابستگی ماژولی domain→domain» فقط برای ۴ جفت با تزریق تابع رعایت شده و ۸ import مقدارِ domain→domain باقی مانده است",
+      "severity": "medium",
+      "confidence": "high",
+      "identity": {
+        "path": "src/domain",
+        "symbol": "domain-to-domain imports",
+        "assertion": "کد قرارداد «نه وابستگی ماژولی domain→domain» را با تزریق تابع (formulationOt، injectPathProbe، exerciseIdsExist، buildReport، setMonitorFocusProvider) اجرا می‌کند، اما هم‌زمان ۱۷ یال import بین ماژول‌های domain (۸ مورد مقدار/زمان‌اجرا) وجود دارد و یک جفت با setter injection و کامنت «حل circular dependency» وصله شده است."
+      },
+      "evidence": [
+        {
+          "path": "src/application/api-routing/index.ts",
+          "line": 205,
+          "detail": "appointments.setConflictEngine(conflictEngine); // حل circular dependency — شکستن چرخه با setter در composition root به‌جای مرز ماژولی."
+        },
+        {
+          "path": "src/domain/ot-engine/service.ts",
+          "line": 3,
+          "detail": "import { SNAP_IV_CUTOFFS, SCARED_CUTOFFS } from '@domain/clinical-engine/instruments' — وابستگی زمان‌اجرا؛ در مقابل clinical-engine/service.ts:48 فقط نوع‌ها را از ot-engine/types می‌گیرد (import type) — چرخهٔ سطح امضا بین دو موتور."
+        },
+        {
+          "path": "src/domain/clinical-engine/service.ts",
+          "line": 46,
+          "detail": "import { formulateCase, ageYearsFromBirthDate } from '@domain/case-formulation' — وابستگی مقدار میان دو موتور دامنه؛ هم‌زمان در خط ۴۷۷ هم‌فایل قرارداد «نه وابستگی ماژولی domain→domain» برای case-events به‌صورت تزریق تابع رعایت شده است."
+        },
+        {
+          "path": "src/domain/appointment-core/service.ts",
+          "line": 8,
+          "detail": "import { assertNoAssessmentBlockInRange } from '@domain/assessment-blocks' و week-copy.ts:8 هم‌الگو — یال مقدار دیگر؛ جمع یال‌ها: appointment-core→assessment-blocks×۲، finance/clearbook/docs/knowledge→exercise-bank×۶، working-day→attendance (type)، clinical-engine→case-events (type)×۴، ot-engine→clinical-engine (مقدار)، clinical-engine→case-formulation (مقدار)."
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": ""
+      },
+      "remediation": {
+        "observable_effect": "قاعدهٔ معماری در کد دوپهلو است: خواننده نمی‌داند کدام یال domain→domain مجاز است؛ چرخه‌های بالقوه فقط با ترتیب ساخت در createServices مهار می‌شوند.",
+        "change_boundary": "کوت‌های برش (SNAP_IV/SCARED_CUTOFFS) و ابزارهای pure مشترک به @core/shared یا یک پاکِت مشترک دامنه منتقل شوند و بقیهٔ یال‌ها یا تزریق تابع شوند یا در سند معماری به‌عنوان استثنای مجاز ثبت شوند.",
+        "done_when": "یال مقدار domain→domain یا صفر باشد یا فهرست استثناهای مصوب در docs با کد هم‌خوان باشد؛ کامنت «حل circular dependency» حذف شود.",
+        "uncertainties": [
+          "تکلیف type-only imports (بدون هزینهٔ زمان‌اجرا) باید صریحاً در قرارداد تعریف شود."
+        ]
+      }
+    },
+    {
+      "id": "architecture-006",
+      "kind": "boundary-violation",
+      "title": "لایهٔ application سه‌جا مستقیماً از ماژول استقرار worker/ import می‌گیرد و تابلوی scoring با بازسازی Request از مسیر HTTP فراخوانی می‌شود",
+      "severity": "medium",
+      "confidence": "high",
+      "identity": {
+        "path": "src/application/api-routing/index.ts",
+        "symbol": "handleScoring",
+        "assertion": "worker/scoring.js (سورس ورکر مستقل scoring با entry جدا در wrangler) با مسیر نسبی ../../../worker/scoring.js در سه فایل application مصرف می‌شود و در /api/dashboard/kpis با ساخت Request مصنوعی به /api/scoring/board صدازده می‌شود — فراخوانی سرویس از طریق شبیه‌سازی HTTP."
+      },
+      "evidence": [
+        {
+          "path": "src/application/api-routing/index.ts",
+          "line": 94,
+          "detail": "import { handleScoring } from '../../../worker/scoring.js'; // تلفیق KPI: تابلو از لایهٔ scoring — تنها import مسیر نسبی که از درخت src/ بیرون می‌زند و به واحد استقرار دیگری (worker/) می‌رسد."
+        },
+        {
+          "path": "src/application/api-routing/index.ts",
+          "line": 910,
+          "detail": "handleScoring(new Request(new URL('/api/scoring/board?period=month', c.req.url), { headers: c.req.raw.headers }), c.env) — فراخوانی درونی از راه بازسازی Request با هدرهای خام درخواست کاربر (عبور احراز از مسیر HTTP داخلی)."
+        },
+        {
+          "path": "src/application/settings/service.ts",
+          "line": 19,
+          "detail": "import متغیرهای CONTENT_FORMULA/USAGE_FORMULA/SCORING_EPOCH/ADMIN_USAGE_CAP از '../../../worker/scoring.js'؛ مشابه در src/application/reports/service.ts:11 (effectiveContentFormula، productionScoreOf)."
+        },
+        {
+          "path": "wrangler.toml",
+          "line": 2,
+          "detail": "main = \"worker/entry.js\" — worker/ واحد استقرار مستقل ورکر است؛ scoring.d.ts فقط تایپ آن را به src می‌دهد؛ پیوند سه‌گانهٔ فوق این مرز را در زمان کامپایل می‌دوزد و خارج از قالب aliasهای tsconfig است."
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": ""
+      },
+      "remediation": {
+        "observable_effect": "تغییر سورس scoring بدون رعایت هم‌زمانی باندل ورکر و باندل اصلی می‌تواند دو رفتار نسخه‌پریش بسازد؛ مسیر نسبی بیرون از src نیز قرارداد aliasهای پروژه را می‌شکند.",
+        "change_boundary": "انتقال هستهٔ خالص scoring (فرمول‌ها و توابع pure) به src/core/scoring یا src/domain/scoring و مصرف آن هم توسط worker و هم application؛ در مسیر KPI صدازدن مستقیم تابع به‌جای بازسازی Request.",
+        "done_when": "هیچ فایلی از src/ با مسیر نسبی به worker/ import نداشته باشد و /api/dashboard/kpis بدون Request مصنوعی امتیاز بگیرد.",
+        "uncertainties": [
+          "رفتار عبور هدرهای احراز از مسیر مصنوعی باید در بازطراحی معادل‌سازی شود (authContext به‌جای هدر خام)."
+        ]
+      }
+    },
+    {
+      "id": "architecture-007",
+      "kind": "inconsistent-conventions",
+      "title": "پنج زیرسیستم سینک (node-sync، node-sync-runner، node-sync-client، internal-sync، cloud-setup) بیرون از قالب سه‌لایه و با سبک import ناهمگون قرار گرفته‌اند",
+      "severity": "medium",
+      "confidence": "medium",
+      "identity": {
+        "path": "src/node-sync",
+        "symbol": "sync family",
+        "assertion": "پنج پوشهٔ هم‌خانوادهٔ سینک در سطح src/ بیرون از application/domain/core زندگی می‌کنند، api-routing آن‌ها را با مسیر نسبی (نه alias) مصرف می‌کند، خودشان به @app/http وصل‌اند و میان خودشان یال‌های عرضی (node-sync-runner→cloud-setup، internal-sync→node-sync) دارند؛ در کنار آن @app/instance-sync ششمین پشتهٔ سینک است."
+      },
+      "evidence": [
+        {
+          "path": "src/application/api-routing/index.ts",
+          "line": 116,
+          "detail": "چهار import نسبی در فایلی که در بقیهٔ ۱۲۰ خط import آن فقط alias دارد: '../../node-sync/app'، '../../internal-sync'، '../../node-sync-runner/status'، '../../application/instance-sync/index'؛ نمونهٔ مشابه در src/application/auth/routes.ts:10 و src/application/system/error-package.ts:15."
+        },
+        {
+          "path": "src/node-sync/app.ts",
+          "line": 51,
+          "detail": "import { parseApiRateLimitPerMin, makeKeyedRateLimiter, API_RATE_LIMIT_WINDOW_MS } from '@app/http' — ماژول بیرون‌ازلایه به application وصل است؛ جای طبیعی این زیراپ لایهٔ application است (خود createInstanceSyncApp در @app/instance-sync همین الگو را رعایت کرده)."
+        },
+        {
+          "path": "src/node-sync-runner/panel.ts",
+          "line": 8,
+          "detail": "import { csEl, csButton } from '../cloud-setup/dom-build.js' — یال عرضی runner→cloud-setup؛ و runner.ts:43 با سبک متفاوت '../core/version.js' (نسبی با پسوند .js) معادل @core/version را import می‌کند — دو سبک نام‌دهی در یک خانواده."
+        },
+        {
+          "path": "src/internal-sync/outbox.ts",
+          "line": 67,
+          "detail": "import مقدار از '../node-sync' (خط ۶۷) و import type آن (خط ۶۸) — کامنت خط ۸ صراحتاً به NODE_PUSH_DOMAIN_SET در src/node-sync/service.ts ارجاع می‌دهد («هم‌سطح — آینهٔ فهرست سفید سمت ابر»)؛ مرز مسئولیت internal-sync (استقرار) با node-sync (قرارداد نود) در پوشه‌های جدا اما یال‌دار."
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": ""
+      },
+      "remediation": {
+        "observable_effect": "کشف «چه چیزی سینک است» نیازمند مرور شش پوشهٔ پراکنده است؛ alias و مسیر نسبی در یک فایل، ابزارهای خودکار مرزها را کور می‌کند.",
+        "change_boundary": "جمع‌آوری خانوادهٔ سینک زیر یک ریشهٔ واحد (مثلاً @app/sync/* یا یک پوشهٔ src/sync با بارل مشخص) و یکدست‌کردن importها با alias؛ مستند کردن جهت‌های مجاز بین زیرسیستم‌ها.",
+        "done_when": "api-routing خانوادهٔ سینک را فقط با alias مصرف کند و نقشهٔ یال‌های مجاز درون خانواده در سند rust/node-sync.md بیاید.",
+        "uncertainties": [
+          "جابه‌جایی پوشه‌ها مسیرهای import و اسکریپت‌های بیلد (خارج از محدودهٔ این ممیز) را نیز تغییر می‌دهد."
+        ]
+      }
+    },
+    {
+      "id": "architecture-008",
+      "kind": "inconsistent-conventions",
+      "title": "زنجیرهٔ عمومی HTTP (request-id → محدودساز نوشتنی per-IP → no-store → 404 کم‌دست) سه‌بار در سه زیراپ به‌صورت دستی کپی شده است",
+      "severity": "medium",
+      "confidence": "high",
+      "identity": {
+        "path": "src/application/api-routing/index.ts",
+        "symbol": "generic middleware chain",
+        "assertion": "همان زنجیرهٔ میان‌افزار عمومی در api-routing، games-standalone و node-sync/app به‌صورت مستقل تکرار شده و کامنت‌های خود کد یکسان‌بودن را تأیید می‌کنند؛ سازوکار مشترکی برای آن وجود ندارد."
+      },
+      "evidence": [
+        {
+          "path": "src/application/api-routing/index.ts",
+          "line": 565,
+          "detail": "زنجیرهٔ اصلی: request-id (۵۶۵-۵۷۴)، محدودساز نوشتنی per-IP (۵۸۴-۶۱۳)، no-store (۶۲۵-۶۲۸)، 404 (۹۵۳)."
+        },
+        {
+          "path": "src/application/games-standalone/index.ts",
+          "line": 55,
+          "detail": "کپی دوم: requestId با `req-${crypto.randomUUID()}` و runWithRequestId (۵۵-۶۰)، Retry-After (۷۵)، no-store (۹۷)، notFound (۱۵۸)؛ کامنت خط ۶: «همگی هم‌الگوی اپ اصلی»."
+        },
+        {
+          "path": "src/node-sync/app.ts",
+          "line": 135,
+          "detail": "کپی سوم: request-id (۱۳۵-۱۴۰)، makeKeyedRateLimiter (۱۸۵)، no-store (۲۰۶)، notFound (۴۵۰)؛ کامنت خطوط ۹-۱۱: «زنجیرهٔ عمومی درون زیراپ (هم‌الگوی اپ اصلی و games-standalone)»."
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": ""
+      },
+      "remediation": {
+        "observable_effect": "اصلاح امنیتی/رفتاری در زنجیرهٔ عمومی باید سه‌جا (و با آیندهٔ زیراپ‌های تازه، بیشتر) اعمال شود؛ واگرایی پنهان بین زیراپ‌ها ممکن است.",
+        "change_boundary": "یک سازندهٔ مشترک در @app/http (مثلاً applyGenericChain(app, opts)) که request-id، محدودساز، no-store و 404 را با پارامتر نصب کند؛ سه زیراپ آن را صدا بزنند.",
+        "done_when": "سه کپی حذف و فقط یک تعریف زنجیره در مخزن بماند و تست‌های ۴۰۱/۴۰۴/۴۲۹ هر سه زیراپ سبز بمانند.",
+        "uncertainties": [
+          "تفاوت‌های ریز فعلی (مثلاً پیام 404، گیت per-node در node-sync) باید به پارامترهای سازنده تبدیل شود."
+        ]
+      }
+    },
+    {
+      "id": "architecture-009",
+      "kind": "inconsistent-conventions",
+      "title": "نقطهٔ ورود src/index.ts چهار جفت تابع probe/wrapper با شکل یکسان (گیت ۶۰ثانیه‌ای + waitUntil + config + binding) را بدون انتزاع تکرار می‌کند",
+      "severity": "low",
+      "confidence": "high",
+      "identity": {
+        "path": "src/index.ts",
+        "symbol": "probeCpSync/probeCpReport/probeCpContent/probeBugReportForward",
+        "assertion": "چهار دروازهٔ فرصت‌طلب و چهار پوشش کرون در نقطهٔ ورود، بدنهٔ تقریباً یکسان با متغیر ماژول‌سطح مُهر زمان دارند؛ dispatch کرون هم با زنجیرهٔ if روی event.cron انجام می‌شود."
+      },
+      "evidence": [
+        {
+          "path": "src/index.ts",
+          "line": 243,
+          "detail": "چهار probe هم‌شکل: probeCpSync (۲۴۳-۲۵۵ با let cpSyncProbeAt: ۲۴۲)، probeCpReport (۲۷۲-۲۸۴)، probeCpContent (۳۱۰-۳۲۲)، probeBugReportForward (۳۴۵-۳۵۷) — فقط تابع/config متفاوت است."
+        },
+        {
+          "path": "src/index.ts",
+          "line": 223,
+          "detail": "چهار wrapper کرون هم‌شکل: runCpSyncCycle، runCpReportCycle، runCpContentCycleWrap، runBugReportForwardWrap (۲۲۳-۳۴۱) که همه createDb + createLogger('sync') + فراخوان با config/binding را تکرار می‌کنند."
+        },
+        {
+          "path": "src/index.ts",
+          "line": 385,
+          "detail": "scheduled با سه if روی event.cron و یک fallback پیش‌فرض dispatch می‌کند؛ چهار عبارت کرون wrangler.toml (ترگرهای ۴گانه) با همین ترتیب هم‌خوان است — رفتار درست اما فاقد جدول نگاشت cron→handler."
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": ""
+      },
+      "remediation": {
+        "observable_effect": "افزودن مأموریت دوره‌ای تازه، کپی دو تابع (probe + wrapper) و یک if دیگر را تحمیل می‌کند و ریسک فراموشی مُهر زمان ماژول‌سطح دارد.",
+        "change_boundary": "جدول declarative {cronExpr, cycleFn, probeFn, gateMs} در src/index.ts و یک probeGeneric مشترک با متغیر مُهر درون جدول.",
+        "done_when": "هر مأموریت دوره‌ای فقط یک ورودی جدول باشد و probeها حذف شوند.",
+        "uncertainties": [
+          "قید سقف ۵ کرون پلن Free و رفتار isolate-level مُهرها باید عیناً حفظ شود."
+        ]
+      }
+    },
+    {
+      "id": "architecture-010",
+      "kind": "inconsistent-conventions",
+      "title": "ابزارهای عمومی فایل (sanitizeFilename، validateExerciseFileBytes، parseMultipartStream) داخل ماژول ویژگی exercise-bank زندگی می‌کنند و چهار ماژول دیگر domain به آن وصل شده‌اند",
+      "severity": "low",
+      "confidence": "high",
+      "identity": {
+        "path": "src/domain/exercise-bank",
+        "symbol": "pure/multipart",
+        "assertion": "توابع عمومی بدون ربط به تمرین‌بان در @domain/exercise-bank/pure و @domain/exercise-bank/multipart قرار دارند و finance، clearbook، docs و knowledge به همین پاکِت ویژگی وابسته شده‌اند — هستهٔ مشترک دفن‌شده در یک ویژگی."
+      },
+      "evidence": [
+        {
+          "path": "src/domain/finance/routes.ts",
+          "line": 6,
+          "detail": "import { parseMultipartStream } from '@domain/exercise-bank/multipart'; همان import در clearbook/routes.ts:15، docs/routes.ts:6 و knowledge/routes.ts:5."
+        },
+        {
+          "path": "src/domain/finance/service.ts",
+          "line": 13,
+          "detail": "import { sanitizeFilename } from '@domain/exercise-bank/pure'; مشابه در clearbook/service.ts:18 و knowledge/service.ts:9 (با validateExerciseFileBytes) — هیچ‌کدام از این سه ماژول ربطی به تمرین‌بان ندارند."
+        },
+        {
+          "path": "src/domain/exercise-bank/pure.ts",
+          "line": 25,
+          "detail": "محل تعریف ابزارهای عمومی: sanitizeFilename (خط ۲۵) و validateExerciseFileBytes (خط ۵۵) و parseMultipartStream در multipart.ts:59؛ محتوا عمومی است (پاک‌سازی نام فایل، اعتبارسنجی بایت‌ها، پارس multipart) و جای قراردادی آن @core/storage یا @app/http است — نام پاکِت ویژگی‌محور، محتوا هستهٔ مشترک."
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": ""
+      },
+      "remediation": {
+        "observable_effect": "یال‌های domain→domain ساختگی (هستهٔ architecture-005) و ریسک تصور وابستگی معنایی به تمرین‌بان؛ حرکت/تغییر exercise-bank چهار ماژول بی‌ربط را می‌شکند.",
+        "change_boundary": "انتقال pure/multipart به @core/shared (یا @core/storage) با حفظ exportهای قبلی به‌صورت re-export موقت.",
+        "done_when": "چهار importکنندهٔ بی‌ربط به @core اشاره کنند و یال‌های finance/clearbook/docs/knowledge→exercise-bank صفر شوند.",
+        "uncertainties": [
+          "هیچ‌کدام؛ جابه‌جایی خالص با re-export مرحله‌ای کم‌ریسک است."
+        ]
+      }
+    }
+  ]
+}

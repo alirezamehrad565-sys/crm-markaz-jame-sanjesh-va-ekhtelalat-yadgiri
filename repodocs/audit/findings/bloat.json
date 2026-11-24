@@ -1,0 +1,588 @@
+{
+  "schema_version": 3,
+  "run_id": "aud-20261124-8ca4227",
+  "auditor": "bloat",
+  "scanned_at": "2026-11-24T22:26:59Z",
+  "scope": {
+    "included": [
+      "src",
+      "public",
+      "scripts",
+      "server",
+      "worker",
+      "docs",
+      "package.json",
+      "wrangler.toml",
+      "wrangler.games.toml",
+      ".github"
+    ],
+    "excluded": [
+      "node_modules",
+      "dist",
+      "public/assets/dist",
+      "worker/bundle.js",
+      "worker/central-bundle.js",
+      "worker/games-bundle.js"
+    ],
+    "unscanned": [
+      "desktop/src-tauri/src",
+      "desktop/src-tauri/boot-dist",
+      "public/assets/vendor",
+      "public/assets/play",
+      "public/assets/fonts",
+      "public/assets/img",
+      "package-lock.json",
+      "migrations"
+    ],
+    "limitations": [
+      "jCodeMunch index unavailable in this environment (dispatcher decision recorded in revision 8ca4227); consumer analysis used two independently-shaped grep passes plus direct file reads: (1) repo-wide word-boundary identifier scan over 790 exported symbols in src/core/shared and public/assets/js, (2) import-statement/module-reference enumeration, (3) in-file occurrence counts and direct reads of each claimed-dead symbol.",
+      "Script reference scan covered extensions json/md/toml/yml/yaml/ts/mjs/rs/html/sh/py/conf; references in other file formats were not scanned.",
+      "CSS class analysis is word-boundary and case-sensitive; dynamic class composition was manually re-checked via template-literal/concat/map patterns (chart__dot--*, att-seg__btn--*, wd-mark--*, wd-opschip--*, cb-status--*, hue-1..8, is-skipped, lb-rank--*, sn-cell--* classified as used). One false negative (.phone) caused by identifier collision with a JS local variable was caught and reclassified as dead.",
+      "Zod schema atoms in src/core/shared/schemas.ts that are consumed by internal composition inside the same file (e.g. IsoDateTimeSchema, NationalIdSchema, SlotAlignedTimeSchema) were classified as used, not dead; only atoms with zero internal and zero external references are reported.",
+      "Migrations were treated as immutable append-only history and were not audited for removal; vendored third-party assets and generated bundles are outside hand-maintained scope.",
+      "No project code was executed, no build was run, no network access was used; all evidence is static."
+    ]
+  },
+  "findings": [
+    {
+      "id": "bloat-001",
+      "kind": "dead-code",
+      "title": "شاخهٔ آداپتور R2 در همهٔ استقرارهای فعلی غیرقابل‌رسیدن است (بایند EXERCISE_FILES تعریف نشده)",
+      "severity": "low",
+      "confidence": "high",
+      "identity": {
+        "path": "src/core/storage/r2-store.ts",
+        "symbol": "createR2ObjectStore",
+        "assertion": "آداپتور R2 سیم‌کشی شده ولی هیچ نقطهٔ ورودی یا پیکربندی ممیزشده‌ای بایند EXERCISE_FILES را فراهم نمی‌کند؛ در نتیجه شاخهٔ R2 در workers/docker/desktop هرگز اجرا نمی‌شود و ذخیرهٔ پیوست‌ها همیشه روی chunked-D1 است"
+      },
+      "evidence": [
+        {
+          "path": "src/core/storage/r2-store.ts",
+          "line": 4,
+          "detail": "createR2ObjectStore صادر می‌شود؛ ارجاع‌های مخزن فقط composition root و تست واحد خود آن (storage.test.ts:73) هستند."
+        },
+        {
+          "path": "src/application/api-routing/index.ts",
+          "line": 220,
+          "detail": "composition root: exerciseStorage = deps.exerciseBucket ? createR2ObjectStore(...) : createChunkedD1ObjectStore(db)."
+        },
+        {
+          "path": "src/index.ts",
+          "line": 82,
+          "detail": "تنها تأمین‌کنندهٔ exerciseBucket در ورودی ورکر: env.EXERCISE_FILES ?? null."
+        },
+        {
+          "path": "wrangler.toml",
+          "line": 8,
+          "detail": "بایندها فقط ASSETS/DB/CP هستند؛ بخش r2_buckets و بایند EXERCISE_FILES در wrangler.toml و wrangler.games.toml وجود ندارند."
+        },
+        {
+          "path": "server",
+          "detail": "ورودی‌های node/desktop (server/ و src/cloud-setup/) هیچ exerciseBucket تأمین نمی‌کنند؛ جستجوی repo-wide فقط src/index.ts و api-routing را نشان می‌دهد."
+        },
+        {
+          "path": "docs/EXERCISE-BANK.md",
+          "line": 116,
+          "detail": "بایند EXERCISE_FILES به‌صورت «کامنت‌شده» مستند است با دستور فعال‌سازی."
+        },
+        {
+          "path": "docs/fish-crab/TECHNICAL_AUDIT.md",
+          "line": 91,
+          "detail": "P3-12: R2 بایندنشده؛ تصمیم مستند هنوز معلق است (G6 در MIGRATION_PLAN.md:74)."
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": ""
+      },
+      "remediation": {
+        "observable_effect": "حدود ۳۰ خط آداپتور + تست آن نگه‌داری می‌شوند بدون آن‌که در هیچ استقراری اجرا شوند؛ مسیر ذخیرهٔ فایل همیشه chunked-D1 است.",
+        "change_boundary": "حذف توصیه نمی‌شود تا تصمیم مستند P3-12/G6 گرفته شود: یا بایند R2 تعریف و در تولید مصرف شود، یا آداپتور + تست + سطرهای docs در یک تغییر واحد حذف شوند.",
+        "done_when": "بایند در wrangler تعریف و در استقرار مصرف شود، یا آداپتور با ADR حذف شود و createR2ObjectStore از repo حذف شده باشد.",
+        "uncertainties": [
+          "نقشهٔ راه صدا (docs/clinical/interactive-games-roadmap.md:15 و :35) R2 را برای نسخهٔ آینده اعلام کرده؛ احتمال فعال‌سازی عمدی وجود دارد."
+        ]
+      }
+    },
+    {
+      "id": "bloat-002",
+      "kind": "dead-code",
+      "title": "پنج export مرده در public/assets/js (event-pick، exercise-pick، illustrations)",
+      "severity": "low",
+      "confidence": "high",
+      "identity": {
+        "path": "public/assets/js/event-pick.js",
+        "symbol": "appendEventToTextarea",
+        "assertion": "چهار تابع و یک ثابت صادرشده هیچ مصرف درونی و بیرونی ندارند؛ ماژول‌های مادر (event-pick/exercise-pick) زنده‌اند ولی فقط از طریق openEventPicker/openExercisePicker مصرف می‌شوند"
+      },
+      "evidence": [
+        {
+          "path": "public/assets/js/event-pick.js",
+          "line": 9,
+          "detail": "appendEventToTextarea: فقط تعریف؛ صفر فراخوانی درون‌فایلی و صفر ذکر در کل مخزن (اسکن word-boundary)."
+        },
+        {
+          "path": "public/assets/js/event-pick.js",
+          "line": 27,
+          "detail": "eventPickButton: فقط تعریف؛ کلاس expick-open که تولید می‌کند هم در JS دیگر مصرف نمی‌شود."
+        },
+        {
+          "path": "public/assets/js/exercise-pick.js",
+          "line": 19,
+          "detail": "appendExerciseToTextarea: فقط تعریف؛ صفر مصرف."
+        },
+        {
+          "path": "public/assets/js/exercise-pick.js",
+          "line": 32,
+          "detail": "bankPickButton: فقط تعریف؛ صفر مصرف."
+        },
+        {
+          "path": "public/assets/js/illustrations.js",
+          "line": 22,
+          "detail": "illoHeroOrnament: ماژول با ۵ view مصرف‌نده دارد ولی فهرست import آن‌ها فقط ۶ نگارهٔ دیگر را می‌گیرد؛ این ثابت هیچ ذکری ندارد."
+        },
+        {
+          "path": "public/assets/js/plan-cards.js",
+          "line": 6,
+          "detail": "تنها مصرف‌ندهٔ هر دو ماژول: فقط openExercisePicker و openEventPicker را import می‌کند؛ هیچ فایل دیگری event-pick.js یا exercise-pick.js را import نمی‌کند."
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": ""
+      },
+      "remediation": {
+        "observable_effect": "حدود ۶۰ خط تابع/ثابت مرده در باندل کلاینت؛ سطح export گمراه‌کننده برای نگهدارنده.",
+        "change_boundary": "حذف چهار تابع و یک ثابت از سه فایل؛ هیچ تست متنی به این نام‌ها ارجاع ندارد (اسکن src/__tests__ انجام شد).",
+        "done_when": "جستجوی هر پنج شناسه در مخزن فقط فایل‌های حذف‌شده را نشان ندهد و suite تست پاس شود.",
+        "uncertainties": [
+          "illoHeroOrnament احتمالاً بازماندهٔ hero صفحات فرود قبلی است؛ اگر موج هنری G2 دوباره hero می‌سازد ممکن است به‌عمد نگه داشته شده باشد."
+        ]
+      }
+    },
+    {
+      "id": "bloat-003",
+      "kind": "dead-code",
+      "title": "شش اسکیمای zod صادرشده در src/core/shared/schemas.ts هیچ مصرف‌نده‌ای ندارند",
+      "severity": "low",
+      "confidence": "high",
+      "identity": {
+        "path": "src/core/shared/schemas.ts",
+        "symbol": "SearchQuerySchema",
+        "assertion": "AppointmentStatusSchema، AttendanceStatusSchema، SearchQuerySchema، WaitlistStatusSchema، TodoStatusSchema و TodoBoxSchema نه در ترکیب درونی schemas.ts به‌کار می‌روند و نه در هیچ فایل دیگری ذکر می‌شوند؛ برخلاف اتم‌های دیگر (IsoDateTimeSchema، NationalIdSchema و …) که درون‌سازی فعال دارند"
+      },
+      "evidence": [
+        {
+          "path": "src/core/shared/schemas.ts",
+          "line": 108,
+          "detail": "AppointmentStatusSchema: یک ذکر درون‌فایلی (تعریف)؛ ماژول appointment-core قرارداد خودش را دارد."
+        },
+        {
+          "path": "src/core/shared/schemas.ts",
+          "line": 112,
+          "detail": "AttendanceStatusSchema: فقط تعریف."
+        },
+        {
+          "path": "src/core/shared/schemas.ts",
+          "line": 626,
+          "detail": "SearchQuerySchema: فقط تعریف؛ جستجوی repo-wide فقط barrel (index.ts:53) را نشان می‌دهد؛ ماژول search/app نمونهٔ خودش را دارد."
+        },
+        {
+          "path": "src/core/shared/schemas.ts",
+          "line": 805,
+          "detail": "WaitlistStatusSchema: فقط تعریف."
+        },
+        {
+          "path": "src/core/shared/schemas.ts",
+          "line": 889,
+          "detail": "TodoStatusSchema و TodoBoxSchema (سطر ۸۹۰): فقط تعریف."
+        },
+        {
+          "path": "src/core/shared/index.ts",
+          "line": 53,
+          "detail": "echoهای barrel در سطرهای 2، 3، 22، 24، 53، 93 — بازنشر بدون مصرف‌نده."
+        },
+        {
+          "path": "src/core/shared/schemas.ts",
+          "line": 131,
+          "detail": "شاهد مقایسه‌ای: اتم‌های زنده در ترکیب درونی مصرف می‌شوند (IsoDateTimeSchema در 131/132/190/195/446/447/849/850) — معیار تفکیک اسکیمای مرده از اتم ترکیب‌شونده."
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": ""
+      },
+      "remediation": {
+        "observable_effect": "سطح export barrel با ۶ نام گمراه‌کننده بزرگ‌تر از مصرف واقعی است؛ حدود ۲۰ خط تعریف مرده.",
+        "change_boundary": "حذف ۶ تعریف از schemas.ts و ۶ سطر از barrel src/core/shared/index.ts در یک تغییر واحد.",
+        "done_when": "جستجوی شش شناسه فقط تاریخچهٔ git را نشان ندهد و typecheck/test پاس شود.",
+        "uncertainties": [
+          "هیچ شواهدی از مصرف آیندهٔ برنامه‌ریزی‌شده (docs/ADR) برای این شش پیدا نشد."
+        ]
+      }
+    },
+    {
+      "id": "bloat-004",
+      "kind": "dead-code",
+      "title": "یازده ثابت صادرشده در src/core/shared/constants.ts هیچ مصرف‌نده‌ای ندارند (FORM_* و REFERRAL_*)",
+      "severity": "low",
+      "confidence": "high",
+      "identity": {
+        "path": "src/core/shared/constants.ts",
+        "symbol": "FORM_BLOCK_KINDS",
+        "assertion": "ثبت‌های REFERRAL_ROLES/REFERRAL_CHANNELS/REFERRAL_STATUSES و هشت سقف فرم‌ساز (FORM_BLOCK_KINDS، FORM_TITLE_MAX، FORM_DESCRIPTION_MAX، FORM_BLOCKS_MAX، FORM_BLOCK_LABEL_MAX، FORM_BLOCK_OPTIONS_MAX، FORM_OPTION_MAX، FORM_NOTE_MAX) فقط در barrel بازنشر می‌شوند و هیچ مصرف‌کننده‌ای ندارند"
+      },
+      "evidence": [
+        {
+          "path": "src/core/shared/constants.ts",
+          "line": 434,
+          "detail": "REFERRAL_ROLES (434)، REFERRAL_CHANNELS (435)، REFERRAL_STATUSES (436): فقط تعریف؛ ویو referral-inbox و دامنهٔ document-requests از این نام‌ها استفاده نمی‌کنند."
+        },
+        {
+          "path": "src/core/shared/constants.ts",
+          "line": 461,
+          "detail": "FORM_BLOCK_KINDS (461) و سقف‌های 471-477: هر یک فقط یک ذکر درون‌فایلی (تعریف)؛ فرم‌ساز دامنه/ویو سقف‌های خودش را دارد."
+        },
+        {
+          "path": "src/core/shared/index.ts",
+          "line": 354,
+          "detail": "echoهای barrel در 354-356 و 364-371 — تنها ظهور دیگر این نام‌ها در کل مخزن."
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": ""
+      },
+      "remediation": {
+        "observable_effect": "حدود ۲۰ خط ثابت مرده؛ خطر واگرایی قرارداد فرم‌ساز بین constants.ts و دامنهٔ واقعی.",
+        "change_boundary": "حذف یازده تعریف از constants.ts و سطرهای متناظر barrel در یک تغییر واحد.",
+        "done_when": "جستجوی FORM_ و REFERRAL_ (این یازده نام) در src فقط تعریف حذف‌شده را نشان ندهد و typecheck/test پاس شود.",
+        "uncertainties": [
+          "اگر فرم‌ساز سرور قرار است به این سقف‌ها مهاجرت کند، حذف پیش از آن انتقال را سخت می‌کند؛ هیچ ADR/نقشه‌ای برای این مهاجرت یافت نشد."
+        ]
+      }
+    },
+    {
+      "id": "bloat-005",
+      "kind": "dead-code",
+      "title": "۸۰ کلاس تعریف‌شده در views.css هیچ ارجاعی در JS/TS/HTML ندارند (شامل بلوک کامل صفحهٔ help)",
+      "severity": "medium",
+      "confidence": "high",
+      "identity": {
+        "path": "public/assets/css/views.css",
+        "assertion": "۸۰ کلاس از ۱۳۱۶ کلاس تعریف‌شده در views.css هیچ مصرفی در کلاینت ندارند؛ کلاس‌های هم‌خانوادهٔ پویا (chart__dot--*، att-seg__btn--*، wd-mark--*، cb-status--*، hue-1..8 و …) با کنترل الگوی template-literal جدا و به‌عنوان زنده رد شدند"
+      },
+      "evidence": [
+        {
+          "path": "public/assets/css/views.css",
+          "line": 2187,
+          "detail": "بلوک 2187-2305: استایل کامل صفحهٔ help (۲۵ کلاس help-*: help-hero، help-toc، help-step*، help-table، help-tip، help-bot*، help-flow، help-points) + موکاپ تلفن (.phone و ۶ کلاس phone__*) + chip--btn؛ هیچ route/view/TS معادلی وجود ندارد."
+        },
+        {
+          "path": "public/assets/css/views.css",
+          "line": 480,
+          "detail": "قطعه‌های حضور و غیاب: att-day/__hint/__label (480)، att-summary (495)، بلوک att-chip--* شش‌گانه (501-521)، att-row__month (536)، att-month__cap (542) — هیچ تولیدی در JS برای att-chip پیدا نشد (att-seg__btn--* زنده است و از الگوی پویا می‌آید)."
+        },
+        {
+          "path": "public/assets/css/views.css",
+          "line": 2516,
+          "detail": "appt-card (2516)، appt-card__bar (2517)، appt-card__time؛ هیچ ارجاعی در views/appointments.js یا بقیهٔ کلاینت."
+        },
+        {
+          "path": "public/assets/css/views.css",
+          "line": 2652,
+          "detail": "خانوادهٔ exb مرده: exb-pillars و exb-pillar__icon (2652-2668)، exb-attrib، exb-cat، exb-check، exb-crumb، exb-selchips و expick-focussel؛ بقیهٔ exb-* زنده‌اند."
+        },
+        {
+          "path": "public/assets/css/views.css",
+          "line": 453,
+          "detail": "تک‌کلاس‌های پراکنده: grid-inner--day (453، پایهٔ grid-inner زنده در appointments.js:360)، btn--warn-ghost (596-601)، wl-board-card__title (1491)، tpl-list-row (3295)، staff-score-card (3363)، pb-explain__loading (3800)، pr-domain-row (3873)، docs-file__spacer (4011)، fin-headrow/fin-report__sums (4743/4776)، clx-layer/clx-layers/clx-syn__conflicts/clx-syn__flags، cbp-grid، jdate__btn، path-head، path-session__items، has-file (ترکیبی .exb-drop.has-file در 1986)، is-weekend، staff-mini__nums/__total، wd-appt__ops."
+        },
+        {
+          "path": "docs/fish-crab/RISK_REGISTER.md",
+          "line": 9,
+          "detail": "زمینهٔ اثر: رatchet بودجهٔ کارایی در ۹۹٪ سقف critical_css_gz ثبت شده؛ views.css به‌صورت سراسری ارسال می‌شود (4869 خط) و وزن مرده مستقیماً در این بودجه می‌نشیند."
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": ""
+      },
+      "remediation": {
+        "observable_effect": "حدود ۷٪ حجم views.css مرده است؛ با بودجهٔ CSS در آستانهٔ اشباع، هر بایت مرده فضای موج‌های بعدی (G2) را می‌گیرد.",
+        "change_boundary": "حذف بلوک 2187-2305 و قطعه‌های فهرست‌شده؛ پس از حذف، بودجهٔ perf-budget و چک کنتراست باید دوباره اجرا شوند (گیت‌های موجود CI).",
+        "done_when": "فهرست ۸۰ کلاس از views.css حذف شده و اسکن دوباره صفر کاندید هم‌سطح برگرداند؛ perf-budget.mjs پاس شود.",
+        "uncertainties": [
+          "برخی کلاس‌ها ممکن است برای موج‌های آیندهٔ UX رزرو شده باشند؛ هیچ نشانه‌ای (docs/ADR/wave-plan) برای رزرو help-* و phone__* پیدا نشد اما تصمیم نهایی با نگهدارنده است."
+        ]
+      }
+    },
+    {
+      "id": "bloat-006",
+      "kind": "dead-code",
+      "title": "شانزده اسکریپت scripts/ هیچ اشاره‌ای در package.json، CI، docs یا اسکریپت‌های دیگر ندارند",
+      "severity": "low",
+      "confidence": "high",
+      "identity": {
+        "path": "scripts/qa-simon-live.mjs",
+        "assertion": "۱۶ اسکریپت یک‌بارمصرف (پچ نسخه‌ای، QA دستی مرورگری، تولیدکنندهٔ seed بازی‌ها) هیچ نقطهٔ اتصال خودکاری ندارند و فقط دستی اجرا می‌شدند"
+      },
+      "evidence": [
+        {
+          "path": "scripts/theme-retune-12749.py",
+          "line": 1,
+          "detail": "پچ یک‌بارمصرف ۱.۲۷.۴۹؛ صفر ارجاع. هم‌گروه: scripts/fix-copy-week-contract.py:3 (پچ ۱.۲۷.۴۸) و scripts/resolve-drift-redo.py:2 (حل تعارض drift)."
+        },
+        {
+          "path": "scripts/qa-simon-live.mjs",
+          "line": 1,
+          "detail": "QA زندهٔ دستی روی 8787؛ صفر ارجاع. هم‌گروه: qa-simon-landscape.mjs، qa-stroop-12551.mjs (ops)، shots-phases-audit.mjs:1، shots-phases-pixelcheck.py:2، seed-probeonly-audit.mjs:1، check-probe-flow.mjs:2، cp-correlation-test.mjs:2."
+        },
+        {
+          "path": "scripts/make-gonogo-seed-sql.mjs",
+          "line": 2,
+          "detail": "تولیدکننده‌های seed بازی‌ها بدون اتصال (gonogo، nback، numline، simon، span) و make-corsi-seed-sql.mjs با تنها ارجاع در کامنت make-simon؛ محتوای authored همین بانک‌ها از طریق مایگریشن‌های games (0087-0096) در D1 ثبت شده و seed:games package.json فقط scan/stroop/flanker را می‌سازد."
+        },
+        {
+          "path": "docs/research/cognitive-games-critique.md",
+          "line": 7,
+          "detail": "ذکر نثر خانوادهٔ scripts/make-*-seed-sql.mjs به‌عنوان روش نقد — نثر مانع حذف نیست و به‌عنوان ویرایش پس از حذف ثبت می‌شود."
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": ""
+      },
+      "remediation": {
+        "observable_effect": "نویز ابزاری در scripts/؛ نگهدارندهٔ تازه نمی‌تواند ابزار رسمی را از بقایای نسخه‌ای تشخیص دهد؛ هیچ آسیب رانتی ندارد چون اجرا نمی‌شوند.",
+        "change_boundary": "حذف یا انتقال به docs/legacy با یک ADR؛ ویرایش ذکر نثر در cognitive-games-critique.md و کامنت متقابل make-simon/make-gonogo در همان PR.",
+        "done_when": "فهرست ۱۶ اسکریپت از درخت حذف یا در REPO-TIDY/FILES با نقش رسمی مستند شده باشد.",
+        "uncertainties": [
+          "قانون نانوشتهٔ مخزن حفظ اسکریپت‌های نسخه‌ای ممکن است عمدی باشد؛ حذف تصمیم نگهدارنده است نه الزام این یافته."
+        ]
+      }
+    },
+    {
+      "id": "bloat-007",
+      "kind": "copy-paste-duplicate",
+      "title": "حلقهٔ dispatch اعلان در api-routing دو بار عیناً و یک بار نزدیک به هم کپی شده",
+      "severity": "low",
+      "confidence": "high",
+      "identity": {
+        "path": "src/application/api-routing/index.ts",
+        "symbol": "setSendObserver dispatch loop",
+        "assertion": "توالی انتخاب کانال bale/internal + getClinicName + حلقهٔ enqueue + شمارش outcome.duplicate + dispatchPending(50) در سه observer تکرار شده است"
+      },
+      "evidence": [
+        {
+          "path": "src/application/api-routing/index.ts",
+          "line": 366,
+          "detail": "caseEvents.setSendObserver (366-383) و exerciseBank.setSendObserver (423-440): بدنه عیناً یکسان است."
+        },
+        {
+          "path": "src/application/api-routing/index.ts",
+          "line": 386,
+          "detail": "caseEvents.setFillObserver (386-421): واریانت نزدیک با واکشی staff_bot_links و قالب bot_checklist_result."
+        },
+        {
+          "path": "docs/rust/roadmap-audit-taste-sdt153.md",
+          "line": 52,
+          "detail": "مستند نقشهٔ راه همین تکرار را («حلقهٔ اعلان سه‌بار کپی‌شده») ثبت کرده؛ یافته با منبع مستقل کد تأیید می‌شود."
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": ""
+      },
+      "remediation": {
+        "observable_effect": "هر تغییر در قرارداد enqueue/dispatch باید سه‌جا اعمال شود؛ خطر واگرایی رفتار اعلان بین مسیرها.",
+        "change_boundary": "استخراج یک helper مشترک در api-routing (مثلاً dispatchNotifyBatch(chats, template, vars, dedupBase)) و مصرف در هر سه observer؛ تغییری در هستهٔ notify لازم نیست.",
+        "done_when": "هر سه observer از یک implementation واحد استفاده کنند و تست‌های notify موجود پاس شوند.",
+        "uncertainties": []
+      }
+    },
+    {
+      "id": "bloat-008",
+      "kind": "dead-code",
+      "title": "فرضیهٔ «countUp بی‌مصرف است» رد شد — تابع در ui.js مصرف درونی و پشتوانهٔ تست دارد",
+      "severity": "low",
+      "confidence": "high",
+      "identity": {
+        "path": "public/assets/js/ui.js",
+        "symbol": "countUp",
+        "assertion": "countUp پس از انتقال عمدی از charts.js (۱.۲۵.۰۵) زنده است؛ صفر شدن import بیرونی به معنای مرگ آن نیست"
+      },
+      "evidence": [
+        {
+          "path": "public/assets/js/ui.js",
+          "line": 11,
+          "detail": "تعریف؛ مصرف درونی در ui.js:915 (عدد → countUp با ارقام فارسی)."
+        },
+        {
+          "path": "public/assets/js/ui.js",
+          "line": 5,
+          "detail": "کامنت انتقال عمدی از charts.js برای kpi مشترک و پرهیز از چرخهٔ import؛ charts.js:1 نیز همین را تأیید می‌کند."
+        },
+        {
+          "path": "src/__tests__/front-hygiene-12505.test.ts",
+          "line": 39,
+          "detail": "تست گیت صریح: charts.js دیگر countUp صادر نکند و ui.js صادر کند."
+        }
+      ],
+      "status": "refuted",
+      "verification": {
+        "status": "refuted",
+        "counterevidence": [
+          {
+            "path": "public/assets/js/ui.js",
+            "line": 915,
+            "detail": "مصرف درونی فعال."
+          }
+        ],
+        "note": "رد با سه کانال: اسکن شناسه، خواندن مستقیم، تست مخزن."
+      },
+      "remediation": {
+        "change_boundary": "پیش‌نویس پیش از Decide: برطرف‌کردن وضعیت توصیف‌شده در عنوان یافته (فرضیهٔ «countUp بی‌مصرف است» رد شد — تابع در ui.js مصرف درونی و پشتوانهٔ تست دارد) با کمترین تغییر، پس از تأیید رقیب و تصمیم کارفرما",
+        "done_when": "اصلاح اعمال شود و تست/گیت پوشانندهٔ رفتار اصلاح‌شده در سوئیت سبز شود",
+        "observable_effect": "رفتار توصیف‌شده در عنوان یافته (فرضیهٔ «countUp بی‌مصرف است» رد شد — تابع در ui.js مصرف درونی و پشتوانهٔ تست دارد) دیگر در سنجش یا اجرا مشاهده نشود",
+        "uncertainties": []
+      }
+    },
+    {
+      "id": "bloat-009",
+      "kind": "dead-code",
+      "title": "فرضیهٔ «ماژول‌های tutorial بی‌مصرف‌اند» رد شد — با dynamic import فعال‌اند",
+      "severity": "low",
+      "confidence": "high",
+      "identity": {
+        "path": "src/tutorial/index.ts",
+        "assertion": "شش زیرماژول tutorial (dom-build، flags، overlay، run، state، steps) همگی زنده‌اند"
+      },
+      "evidence": [
+        {
+          "path": "public/assets/js/app.js",
+          "line": 651,
+          "detail": "dynamic import('../../../src/tutorial/index.ts') در وب تولیدی (چانک tutorial.CYFFDKED.js در build-manifest)."
+        },
+        {
+          "path": "src/cloud-setup/run.ts",
+          "line": 67,
+          "detail": "dynamic import('../tutorial/index.js') در جادوگراند cloud-setup."
+        },
+        {
+          "path": "src/tutorial/index.ts",
+          "line": 52,
+          "detail": "import همهٔ زیرماژول‌ها (52-57): dom-build، overlay، steps، state، run."
+        }
+      ],
+      "status": "refuted",
+      "verification": {
+        "status": "refuted",
+        "counterevidence": [
+          {
+            "path": "src/tutorial/index.ts",
+            "line": 52,
+            "detail": "زنجیرهٔ import کامل زیرماژول‌ها."
+          }
+        ],
+        "note": "رد با اسکن import و خواندن مستقیم index.ts."
+      },
+      "remediation": {
+        "change_boundary": "پیش‌نویس پیش از Decide: برطرف‌کردن وضعیت توصیف‌شده در عنوان یافته (فرضیهٔ «ماژول‌های tutorial بی‌مصرف‌اند» رد شد — با dynamic import فعال‌اند) با کمترین تغییر، پس از تأیید رقیب و تصمیم کارفرما",
+        "done_when": "اصلاح اعمال شود و تست/گیت پوشانندهٔ رفتار اصلاح‌شده در سوئیت سبز شود",
+        "observable_effect": "رفتار توصیف‌شده در عنوان یافته (فرضیهٔ «ماژول‌های tutorial بی‌مصرف‌اند» رد شد — با dynamic import فعال‌اند) دیگر در سنجش یا اجرا مشاهده نشود",
+        "uncertainties": []
+      }
+    },
+    {
+      "id": "bloat-010",
+      "kind": "dead-code",
+      "title": "فرضیهٔ «وابستگی qrcode-generator بدون import است» رد شد",
+      "severity": "low",
+      "confidence": "high",
+      "identity": {
+        "path": "package.json",
+        "symbol": "qrcode-generator",
+        "assertion": "وابستگی تولیدی qrcode-generator در کلاینت مصرف می‌شود"
+      },
+      "evidence": [
+        {
+          "path": "public/assets/js/games-console.js",
+          "line": 11,
+          "detail": "import qrcode from 'qrcode-generator' و استفاده در سطر 393 (qrcode(0,'M') برای QR کنسول والد)."
+        }
+      ],
+      "status": "refuted",
+      "verification": {
+        "status": "refuted",
+        "counterevidence": [
+          {
+            "path": "public/assets/js/games-console.js",
+            "line": 393,
+            "detail": "فراخوانی واقعی کتابخانه."
+          }
+        ],
+        "note": "رد با اسکن import-specifier و خواندن مستقیم."
+      },
+      "remediation": {
+        "change_boundary": "پیش‌نویس پیش از Decide: برطرف‌کردن وضعیت توصیف‌شده در عنوان یافته (فرضیهٔ «وابستگی qrcode-generator بدون import است» رد شد) با کمترین تغییر، پس از تأیید رقیب و تصمیم کارفرما",
+        "done_when": "اصلاح اعمال شود و تست/گیت پوشانندهٔ رفتار اصلاح‌شده در سوئیت سبز شود",
+        "observable_effect": "رفتار توصیف‌شده در عنوان یافته (فرضیهٔ «وابستگی qrcode-generator بدون import است» رد شد) دیگر در سنجش یا اجرا مشاهده نشود",
+        "uncertainties": []
+      }
+    },
+    {
+      "id": "bloat-011",
+      "kind": "dead-code",
+      "title": "فرضیهٔ «helperهای format.js بدون مصرف‌نده‌اند» رد شد — همهٔ exportها مصرف دارند",
+      "severity": "low",
+      "confidence": "high",
+      "identity": {
+        "path": "public/assets/js/format.js",
+        "assertion": "۳۰ export فایل format.js همگی بیرونی یا درونی مصرف می‌شوند؛ فایل با ۵۷ فایل مصرف‌نده پرمصرف‌ترین helper کلاینت است"
+      },
+      "evidence": [
+        {
+          "path": "public/assets/js/format.js",
+          "line": 15,
+          "detail": "حتی PLACEHOLDER_NID_PREFIX که هیچ مصرف بیرونی ندارد، در isPlaceholderNid (سطر 17-18) به‌صورت درونی مصرف می‌شود."
+        },
+        {
+          "path": "public/assets/js",
+          "detail": "۵۷ فایل در public/assets/js با import از format.js (اسکن module-reference)؛ اسکن شناسهٔ ۳۰ export هیچ zero-external دیگری جز PLACEHOLDER_NID_PREFIX نشان نداد که درونی‌مصرف است."
+        }
+      ],
+      "status": "refuted",
+      "verification": {
+        "status": "refuted",
+        "counterevidence": [
+          {
+            "path": "public/assets/js/app.js",
+            "detail": "نمونهٔ مصرف‌نده؛ مجموعاً ۵۷ فایل."
+          }
+        ],
+        "note": "رد با اسکن شناسهٔ نمادبه‌نماد و شمارش importکننده‌ها."
+      },
+      "remediation": {
+        "change_boundary": "پیش‌نویس پیش از Decide: برطرف‌کردن وضعیت توصیف‌شده در عنوان یافته (فرضیهٔ «helperهای format.js بدون مصرف‌نده‌اند» رد شد — همهٔ exportها مصرف دارند) با کمترین تغییر، پس از تأیید رقیب و تصمیم کارفرما",
+        "done_when": "اصلاح اعمال شود و تست/گیت پوشانندهٔ رفتار اصلاح‌شده در سوئیت سبز شود",
+        "observable_effect": "رفتار توصیف‌شده در عنوان یافته (فرضیهٔ «helperهای format.js بدون مصرف‌نده‌اند» رد شد — همهٔ exportها مصرف دارند) دیگر در سنجش یا اجرا مشاهده نشود",
+        "uncertainties": []
+      }
+    }
+  ]
+}

@@ -1,0 +1,341 @@
+{
+  "schema_version": 3,
+  "run_id": "aud-20261124-8ca4227",
+  "auditor": "performance",
+  "scanned_at": "2026-11-24T00:00:00Z",
+  "scope": {
+    "included": [
+      "src",
+      "migrations",
+      "public/assets/css",
+      "public/assets/js",
+      "scripts/perf-budget.json",
+      "wrangler.toml"
+    ],
+    "excluded": [
+      "node_modules",
+      "worker/bundle.js",
+      "dist",
+      "public/downloads"
+    ],
+    "unscanned": [
+      "desktop",
+      "server",
+      "worker",
+      "docs",
+      "scripts"
+    ],
+    "limitations": [
+      "ممیزی ایستا فقط‌خواندنی؛ هیچ کد/تست/بیلد/پروفایل/EXPLAIN/شبکه اجرا نشد — همهٔ برآورد هزینهٔ منابع کیفی و استنتاجی است، بدون هیچ اندازه‌گیری",
+      "src/application/notify/digest.ts و سرویس growth فقط در سطح کوئری‌های اصلی بازبینی شدند، نه trace کامل",
+      "worker/bundle.js مصنوع بیلد است و ممیزی نشد؛ public/assets/js و public/assets/css منبع دست‌نویس‌اند و ممیزی شدند",
+      "هم‌پوشانی ایندکس‌ها فقط با خواندن migrations و مقایسهٔ WHERE/JOIN کوئری‌های کد سنجیده شد، بدون اجرای پلن"
+    ]
+  },
+  "findings": [
+    {
+      "id": "performance-001",
+      "kind": "io-fanout",
+      "title": "ذخیره‌ساز پیوست D1 تکه‌شده: خواندن با پرس‌وجوهای متوالی OFFSET-صفحه‌بندی‌شده و کدگشایی base64 کاراکتربه‌کاراکتر در هر بار؛ نوشتن با INSERTهای متوالی تک‌تکه‌ای",
+      "severity": "high",
+      "confidence": "high",
+      "identity": {
+        "path": "src/core/storage/chunked-d1-store.ts",
+        "symbol": "createChunkedD1ObjectStore",
+        "assertion": "خواندن هر پیوست در ذخیره‌ساز D1 به‌جای یک کوئری، یک COUNT به‌علاوهٔ ⌈K/6⌉ رفت‌وبرگشت متوالی D1 با OFFSET و کدگشایی base64 در هر خواندن انجام می‌شود و با حجم فایل (سقف ۵۰MB ⇒ K تا ۳۴ تکه) و تعداد دفعات خواندن خطی (و روی اسکن OFFSET درجه‌دو کوچک) رشد می‌کند؛ نوشتن هم K رفت‌وبرگشت متوالی INSERT است و ذخیرهٔ base64 تورم ~۴/۳ حجم دارد"
+      },
+      "evidence": [
+        {
+          "path": "src/core/storage/chunked-d1-store.ts",
+          "line": 73,
+          "detail": "get(): ابتدا SELECT COUNT(*) و سپس حلقهٔ متوالی LIMIT 6 OFFSET n — تعداد کوئری‌ها با تعداد تکه‌ها رشد می‌کند و هر OFFSET صفحات قبلی را دوباره می‌پیماید"
+        },
+        {
+          "path": "src/core/storage/chunked-d1-store.ts",
+          "line": 83,
+          "detail": "حلقهٔ صفحه‌بندی با درون‌ریزی رشته‌ای OFFSET؛ هر صفحه تا ۶ ردیف × ~۲MB (base64 تکهٔ ۱.۵MB) ≈ تا ~۹MB بار هر کوئری"
+        },
+        {
+          "path": "src/core/storage/chunked-d1-store.ts",
+          "line": 13,
+          "detail": "chunkToBytes: atob به‌علاوهٔ حلقهٔ کاراکتربه‌کاراکتر charCodeAt (≈۲ میلیون تکرار در هر تکهٔ کامل) که در هر خواندن تکرار می‌شود"
+        },
+        {
+          "path": "src/core/storage/chunked-d1-store.ts",
+          "line": 33,
+          "detail": "writeSegments: DELETE کل تکه‌ها و سپس await تک‌تک INSERTها در حلقه — K رفت‌وبرگشت متوالی DB در هر نوشتن/بازنویسی"
+        },
+        {
+          "path": "src/core/storage/chunked-d1-store.ts",
+          "line": 5,
+          "detail": "CHUNK_BYTES = 1_500_000 با ذخیرهٔ base64 → ردیف‌های ~۲MB (نزدیک سقف ردیف D1) و تورم ذخیره‌سازی ~۴/۳ روی کل جدول exercise_file_chunks"
+        },
+        {
+          "path": "src/core/shared/constants.ts",
+          "line": 308,
+          "detail": "MAX_EXERCISE_PANEL_FILE_BYTES = 50MB — بیشینهٔ مجاز شیء؛ ۵۰MB ⇒ ۳۴ تکه، ۶۷MB base64 ذخیره‌شده و بازسازی ~۵۰MB بایت + رشتهٔ base64 در حافظهٔ Worker (استنتاجی؛ نزدیک سقف ۱۲۸MB ایزولیت)"
+        },
+        {
+          "path": "src/application/api-routing/index.ts",
+          "line": 220,
+          "detail": "وقتی R2 بسته نشده باشد همین ذخیره‌ساز پیش‌فرض پیوست‌های exercise-bank، docs، knowledge، clearbook و document-requests است — مسیر تولیدی واقعی در استقرار بدون R2"
+        },
+        {
+          "path": "migrations/0036_exercise_attachments.sql",
+          "line": 13,
+          "detail": "جدول exercise_file_chunks با PK (key, seq) — جست‌وجو بر key ایندکس‌شده است اما OFFSET همچنان پیمایش اضافه دارد و کلید جدول هیچ فشرده‌سازی باینری ندارد"
+        },
+        {
+          "path": "src/domain/docs/service.ts",
+          "line": 466,
+          "detail": "پیاده‌سازی موازی همین الگو داخل سرویس docs (خواندن همهٔ تکه‌ها با یک SELECT بدون صفحه‌بندی — الگوی درست‌تر) به‌علاوهٔ نسخه‌های مشابه در src/domain/exercise-bank/service.ts:1084، src/domain/clearbook/service.ts:508 و src/domain/knowledge/service.ts:345 — چهار نسخهٔ تکراری منطق تکه‌گذاری"
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "confirmed",
+        "counterevidence": [
+          {
+            "path": "repodocs/audit/notes/verdicts-arch-perf-data.md",
+            "line": 1,
+            "detail": "تأیید رقیب: خواندن واقعاً متوالی (COUNT :74 + حلقهٔ await LIMIT 6 OFFSET n :83-87)، نوشتن DELETE+INSERT تک‌تکه (:33-58)، decode کاراکتربه‌کاراکتر (:13-22)؛ حجم واقعی تولید در مخزن شواهدی ندارد (بکاپ گزارش‌شده محلی seed با ۰ ردیف بود)؛ wrangler.prod.toml وجود ندارد و بدون binding R2، مسیر D1 تکه‌ای پیش‌فرض تولید است (src/index.ts:82)."
+          }
+        ],
+        "note": "تأیید مستقل کور در 2026-11-24 (verifier: independent-blind-verifier)"
+      },
+      "remediation": {
+        "observable_effect": "خواندن هر پیوست به‌جای یک کوئری، ۱+⌈K/6⌉ رفت‌وبرگشت متوالی D1 و K عملیات atob با حلقهٔ کاراکتری است؛ نوشتن K رفت‌وبرگشت INSERT متوالی است؛ جدول تا ۴/۳ حجم واقعی فایل‌ها رشد می‌کند",
+        "change_boundary": "در chunked-d1-store.ts: خواندن با یک SELECT ... WHERE key = ? ORDER BY seq بدون OFFSET (الگوی موجود در docs/service.ts:466)، حذف COUNT، کدگشایی یکجا پس از هم‌پیوندی، و batch INSERT چندردیفی در نوشتن؛ در بلندمدت انتقال کامل به R2 یا ستون BLOB باینری",
+        "done_when": "هر get() حداکثر یک کوئری و عملیات کدگشایی برابر تعداد تکه‌ها بدون حلقهٔ کاراکتری باشد و عملیات نوشتن مستقل از تعداد تکه‌ها در یک batch انجام شود بدون تغییر معنای StoredObject",
+        "uncertainties": [
+          "توزیع واقعی اندازهٔ پیوست‌ها و فراوانی خواندن در تولید نامعلوم است؛ اگر استقرار هدف همیشه R2 بسته می‌کند، اثر محدود به استقرارهای بدون R2 و محیط تست است"
+        ]
+      }
+    },
+    {
+      "id": "performance-002",
+      "kind": "n-plus-one-query",
+      "title": "حلقهٔ enqueue اعلان به‌ازای هر گیرنده با دو رفت‌وبرگشت متوالی DB (SELECT dedup + INSERT) در سه ناظر تکراری، به‌علاوهٔ خواندن getClinicName در هر رویداد",
+      "severity": "medium",
+      "confidence": "high",
+      "identity": {
+        "path": "src/application/api-routing/index.ts",
+        "symbol": "caseEvents.setSendObserver / setFillObserver / exerciseBank.setSendObserver",
+        "assertion": "ارسال اعلان به چت‌های متعدد با حلقهٔ await enqueue تک‌تک انجام می‌شود؛ هر enqueue با dedupKey دو رفت‌وبرگشت متوالی D1 است، پس تعداد عملیات با تعداد گیرنده‌ها خطی رشد می‌کند و سه ناظر همین الگو را کپی کرده‌اند"
+      },
+      "evidence": [
+        {
+          "path": "src/application/api-routing/index.ts",
+          "line": 370,
+          "detail": "حلقهٔ for با await notifyCore.enqueue به‌ازای هر chat در ناظر ارسال رویدادها (۱۲۱:379 dispatchPending پس از حلقه)"
+        },
+        {
+          "path": "src/application/api-routing/index.ts",
+          "line": 400,
+          "detail": "همان حلقه در fill observer؛ کوئری inline staff_bot_links در 389-392 تک‌کوئری و با idx_staff_bot_links_staff ایندکس‌شده است (خودِ کوئری سالم، مشکل حلقهٔ enqueue است)"
+        },
+        {
+          "path": "src/application/api-routing/index.ts",
+          "line": 427,
+          "detail": "نسخهٔ سوم — کپی حرف‌به‌حرف همان حلقه برای exerciseBank؛ سه نسخهٔ تکراری نگه‌داری و هزینهٔ مشترک"
+        },
+        {
+          "path": "src/core/notify/service.ts",
+          "line": 75,
+          "detail": "enqueue با dedupKey: SELECT id FROM notifications WHERE dedup_key = ? سپس INSERT — ۲ رفت‌وبرگشت متوالی به‌ازای هر گیرنده (ایندکس یکتای dedup موجود و سالم)"
+        },
+        {
+          "path": "src/application/settings/service.ts",
+          "line": 322,
+          "detail": "getClinicName در هر رویداد یک SELECT روی settings می‌زند بدون کش بدون کش؛ ده‌ها نقطهٔ فراخوانی در src/application/notify/senders.ts و ناظرهای بالا"
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": "کاردینالیتهٔ گیرنده‌ها در اعلان کلاسی معمولاً ده‌ها چت است؛ تأخیر خطی اما در محدودهٔ قابل‌تحمل — لذا medium"
+      },
+      "remediation": {
+        "observable_effect": "برای N گیرنده 2N+1 رفت‌وبرگشت متوالی D1 به‌علاوهٔ ۱-۲ کوئری settings در هر رویداد اعلان شکل می‌گیرد",
+        "change_boundary": "در سه ناظر api-routing و هستهٔ notify: INSERT چندردیفی batch و بررسی dedup با یک کوئری IN (...)؛ کش درون‌ایزولیت کوتاه‌عمر برای getClinicName؛ ادغام سه ناظر تکراری در یک سازندهٔ مشترک",
+        "done_when": "تعداد رفت‌وبرگشت DB در یک رویداد اعلان مستقل از تعداد گیرنده‌ها باشد (حداکثر ثابت + یک batch) و خروجی همان رکوردها با همان dedupKey تولید شود",
+        "uncertainties": [
+          "تعداد واقعی گیرنده‌های هر اعلان در تولید نامعلوم؛ تغییر batch باید معنای شمارش duplicate در outcome را حفظ کند"
+        ]
+      }
+    },
+    {
+      "id": "performance-003",
+      "kind": "large-payload",
+      "title": "بودجهٔ مسیر بحرانی فرانت در سقف گات نشسته (حاشیهٔ ~۲۳۶ بایت boot JS و ~۲۲۳ بایت CSS بحرانی) و CSS یکپارچهٔ ~۹,۹۶۰ خطی در همهٔ صفحات بار می‌شود",
+      "severity": "medium",
+      "confidence": "high",
+      "identity": {
+        "path": "scripts/perf-budget.json",
+        "symbol": "boot_js_gz / critical_css_gz",
+        "assertion": "اندازهٔ اندازه‌گیری‌شدهٔ boot JS (۵۰,۱۶۴ بایت gzip از سقف ۵۰,۴۰۰) و CSS بحرانی (۷۲,۱۷۷ از ۷۲,۴۰۰) در فاصلهٔ کمتر از نیم‌درصد از سقف است و کل CSS اپ (views.css ۴,۸۶۹ + components.css ۱,۸۱۳ + base.css ۹۱۲ خط) یکجا در مسیر بحرانی همهٔ صفحات حمل می‌شود"
+      },
+      "evidence": [
+        {
+          "path": "scripts/perf-budget.json",
+          "line": 5,
+          "detail": "boot_js_gz=50400 (اندازه‌گیری ۵۰,۱۶۴ — «حاشیهٔ ۲۳۶ بایت» به‌قول خود فایل)، critical_css_gz=72400 (اندازه‌گیری ۷۲,۱۷۷)، eager_modules=7؛ نامزد مایلستون ثبت‌شدهٔ خود فایل: «لاغرسازی بوت برای بازگشت به ۶» و «لاغرسازی CSS بحرانی»"
+        },
+        {
+          "path": "public/assets/css/views.css",
+          "line": 1,
+          "detail": "۴,۸۶۹ خط — بزرگ‌ترین مولفهٔ CSS بحرانی مشترک همهٔ صفحات (علاوه بر components.css ۱,۸۱۳ و base.css ۹۱۲ خط؛ مجموع ~۹,۹۶۰ خط)؛ play.css جداست و بیرون مسیر بحرانی است — الگوی درست موجود"
+        },
+        {
+          "path": "public/assets/js/api.js",
+          "line": 42,
+          "detail": "کش SWR نشست‌محور با TTL ۲۴۰ثانیه برای مراجع کم‌تغییر — بررسی شد: مشکل کارایی نیست (اقلام بازبینی‌شده در notes)"
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": "مبتنی بر اندازه‌گیری‌های ثبت‌شدهٔ خود گات در perf-budget.json (zlib level 9) نه اندازه‌گیری تازه؛ اگرچه اعداد با wc خطی منابع CSS هم‌خوان است"
+      },
+      "remediation": {
+        "observable_effect": "هر بارگذاری صفحه ~۱۲۲KB gzip JS+CSS مسیر بحرانی قبل از اولین رندر می‌گیرد؛ هر ویژگی کوچک جدید گات را می‌شکند یا سقف را عادت‌وار بالا می‌برد و سپر رگرسیون کارایی بی‌اثر می‌شود",
+        "change_boundary": "حذف بلوک‌های کهنهٔ نامزد در خود perf-budget.json (refitem/nextappt پس از موج ۴ پروفایل) و جداسازی CSS نقش‌محور (الگوی موجود play.css)؛ پس از هر انتشار بازگشت حاشیه به ≥۲KB",
+        "done_when": "boot_js_gz و critical_css_gz هر دو با حاشیهٔ ≥۲KB زیر سقف باشند و eager_modules به ≤۶ بازگردد",
+        "uncertainties": [
+          "اثر بر کارایی واقعی اولین رندر اندازه‌گیری نشد (ممنوعیت اجرا)؛ حاشیهٔ ذکرشده در درخواست ممیزی (۴۷.۸KB / ۲.۶KB) کهنه است — revision جاری ۸ca4227 حاشیهٔ ~۲۳۶B دارد"
+        ]
+      }
+    },
+    {
+      "id": "performance-004",
+      "kind": "inefficient-query-shape",
+      "title": "جست‌وجوی سراسری با LIKE %q% (حرف آغازین wildcard) روی پنج جدول بدون بهرهٔ ایندکس اسکن کامل می‌زند — هرچند خروجی با LIMIT و اجرای موازی محدود است",
+      "severity": "low",
+      "confidence": "high",
+      "identity": {
+        "path": "src/application/search/service.ts",
+        "symbol": "globalSearch",
+        "assertion": "هر فراخوانی جست‌وجو شش کوئری LIKE با الگوی %q% روی students، staff، schools، tags، waitlist و docs (شامل description و tags متنی) اجرا می‌کند که هیچ‌کدام ایندکس را به کار نمی‌گیرند و اسکن کامل جدول‌اند؛ هزینهٔ اسکن با حجم جدول‌ها خطی رشد می‌کند هرچند تعداد نتایج با LIMIT سقف‌دار است"
+      },
+      "evidence": [
+        {
+          "path": "src/application/search/service.ts",
+          "line": 41,
+          "detail": "students: LIKE روی first_name، last_name، national_id و (first_name || ' ' || last_name) — الگوی %q% حرف آغازین wildcard دارد"
+        },
+        {
+          "path": "src/application/search/service.ts",
+          "line": 86,
+          "detail": "docs: LIKE روی title، description و tags — ستون‌های متنی بلند؛ فقط برای مدیر/منشی"
+        },
+        {
+          "path": "src/application/search/pure.ts",
+          "line": 22,
+          "detail": "likePattern = `%${value}%` — wildcard پیشوندی؛ ایندکس‌های B-tree موجود (last_name و غیره) بی‌اثر می‌شوند"
+        },
+        {
+          "path": "src/application/search/service.ts",
+          "line": 33,
+          "detail": "شش کوئری با Promise.all موازی و LIMITهای ۶/۴/۳/۴/۴/۴ — سقف نتیجه مشخص اما اسکن ورودی نامحدود نسبی به جدول"
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": "در مقیاس کلینیک (صدها تا چند هزار ردیف) اسکن کامل عملاً ارزان است — لذا low؛ اگر جدول docs یا waitlist بزرگ شود الگو به medium میرود"
+      },
+      "remediation": {
+        "observable_effect": "هر ضربهٔ جست‌وجو (per-keystroke از global-search) اسکن کامل پنج-شش جدول؛ در جدول‌های بزرگ، تأخیر و مصرف CPU D1 خطی با حجم جدول",
+        "change_boundary": "در application/search: مهاجرت به FTS5 یا محدودکردن جست‌وجوی پیش‌فرض به wildcard انتهایی (q%) با گزینهٔ جست‌وجوی کامل اختیاری",
+        "done_when": "کوئری‌های جست‌وجو یا از ایندکس FTS استفاده کنند یا با فلگ تنظیمی فقط اسکن prefix کنند بدون تغییر خروجی گروه‌ها",
+        "uncertainties": [
+          "کاردینالیتهٔ واقعی جداول در تولید نامعلوم؛ نرخ فراخوانی جست‌وجو (debounce سمت کلاینت) بررسی نشد"
+        ]
+      }
+    },
+    {
+      "id": "performance-005",
+      "kind": "ineffective-control",
+      "title": "rate-limit درون‌حافظهٔ per-isolate برای /api/*: بودجهٔ مؤثر = سقف × تعداد ایزولیت و ری‌استارت ایزولیت پنجره را صفر می‌کند — محدودیت خودِ کد مستند است؛ اثر اصلی امنیتی است نه کارایی",
+      "severity": "low",
+      "confidence": "high",
+      "identity": {
+        "path": "src/application/http/rate-limit.ts",
+        "symbol": "makeKeyedRateLimiter",
+        "assertion": "شمارندهٔ نرخ per-IP در Map درون‌حافظهٔ ایزولیت نگه‌داری می‌شود؛ با چند ایزولیت هم‌زمان هر یک سهمیهٔ کامل مستقل می‌شمارد و پنجره با ری‌استارت صفر می‌شود، پس کنترل فقط کاهش‌دهندهٔ ریسک است؛ رشد حافظه با سقف ۴۰۹۶ کلید و evict بسته است"
+      },
+      "evidence": [
+        {
+          "path": "src/application/http/rate-limit.ts",
+          "line": 6,
+          "detail": "مستندسازی صادقانهٔ خود کد: «شمارنده per-isolate و درون‌حافظه است — بودجهٔ مؤثر = سقف × تعداد isolate» و ارجاع به WAF کلادفلر برای محدودسازی قطعی"
+        },
+        {
+          "path": "src/application/http/rate-limit.ts",
+          "line": 52,
+          "detail": "makeKeyedRateLimiter با maxKeys=4096: در سرریز، اسکن کامل Map (دو بار) برای evict — O(4096) در هر کلید جدید هنگام اشباع؛ هزینهٔ CPU ناچیز و رشد حافظه بسته است"
+        },
+        {
+          "path": "src/application/http/rate-limit.ts",
+          "line": 18,
+          "detail": "پیش‌فرض ۲۴۰ نوشتنی در دقیقه بر IP — برای کاربرد عادی کلینیک بی‌اثر (طراحی عمدی)، پس هزینهٔ مسیر عادی صفر"
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": "اثر واقعی روی کارایی مسیر عادی صفر است؛ پیامد اصلی (دورزدن سهمیه در چند ایزولیت) به ممیز امنیتی ارجاع داده شد"
+      },
+      "remediation": {
+        "observable_effect": "کنترل نرخ در استقرار چندایزولیتی هم‌مقیاس نیست؛ فقط هجوم ماشینی روی یک ایزولیت را می‌بندد",
+        "change_boundary": "محدودسازی لبه‌ای با WAF rate-limit کلادفلر روی دامنهٔ zone اختصاصی (مسیر خودِ کد) یا شمارندهٔ مبتنی بر Durable Object در صورت نیاز سخت‌گیرانه",
+        "done_when": "سهمیهٔ مؤثر مستقل از تعداد ایزولیت‌ها قابل بیان و تست باشد",
+        "uncertainties": [
+          "تعداد ایزولیت‌های هم‌زمان واقعی در تولید نامعلوم؛ روی workers.dev دامنهٔ zone وجود ندارد (به‌قول کد)"
+        ]
+      }
+    },
+    {
+      "id": "performance-006",
+      "kind": "n-plus-one-query",
+      "title": "دیجست شبانه به‌ازای هر chat یک SELECT روی notification_prefs می‌زند (حلقهٔ per-chat) — یک‌بار در شب با N کوچک؛ الگوی N+1 ولی هزینهٔ کم",
+      "severity": "low",
+      "confidence": "medium",
+      "identity": {
+        "path": "src/application/notify/digest.ts",
+        "symbol": "runDigestCycle",
+        "assertion": "جمع‌آوری گیرنده‌های دیجست از سه جدول لینک و سپس SELECT student_id FROM notification_prefs WHERE chat_id = ? در حلقهٔ per-chat — تعداد کوئری‌ها با تعداد چت‌های متصل خطی رشد می‌کند"
+      },
+      "evidence": [
+        {
+          "path": "src/application/notify/digest.ts",
+          "line": 141,
+          "detail": "SELECT student_id FROM notification_prefs WHERE chat_id = ? داخل حلقهٔ گیرنده‌ها؛ chatها از staff_bot_links/bot_links/notification_prefs (خطوط ۱۱۷-۱۸۰) جمع می‌شوند"
+        },
+        {
+          "path": "src/index.ts",
+          "line": 385,
+          "detail": "scheduled: DIGEST_CRON هم‌زمان runDigestCycle و runBackupAutoSendCycle را waitUntil موازی می‌کند — رقابت منابع همان شب؛ backup خواندن صفحه‌ای ۴۰۰تایی (۴تایی برای chunks) دارد و بدون include_files جدول سنگین را کنار می‌گذارد"
+        }
+      ],
+      "status": "new",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": "trace کامل digest انجام نشد (محدودیت ثبت‌شده در scope)؛ فقط الگوی per-chat در کوئری‌های سطح بالا تأیید شد — لذا confidence medium"
+      },
+      "remediation": {
+        "observable_effect": "در شبانه یک اجرا، N کوئری اضافی به‌ازای N چت متصل — در مقیاس کلینیک هزینهٔ جزئی",
+        "change_boundary": "در digest.ts: جایگزینی حلقه با یک SELECT ... WHERE chat_id IN (...) و گروه‌بندی سمت کد",
+        "done_when": "تعداد کوئری گیرنده‌های دیجست مستقل از تعداد چت‌ها باشد با همان نگاشت chat→studentها",
+        "uncertainties": [
+          "تعداد چت‌های متصل واقعی و کل بدنهٔ digest cycle کامل trace نشد"
+        ]
+      }
+    }
+  ]
+}
