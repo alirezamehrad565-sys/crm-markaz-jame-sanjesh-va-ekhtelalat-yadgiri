@@ -444,6 +444,30 @@ export function populateModalShell(shell, { title, body, actions = [], wide }) {
   if (first) setTimeout(() => first.focus(), 60);
 }
 
+/* ۱.۲۷.۷۲ — لنگر مشترک پاپ‌اور: در موبایل fixed بدون top از دکمه جدا می‌افتاد؛
+   ddOpen زیر دکمه لنگر می‌کند (فلیپ بالا اگر جا نشد) و با اسکرول دنبال می‌ماند. */
+export function ddOpen(btn, panel) {
+  panel.style.display = 'block';
+  btn.setAttribute('aria-expanded', 'true');
+  const anchor = () => {
+    panel.style.top = '';
+    if (getComputedStyle(panel).position !== 'fixed') return; /* دسکتاپ: لنگر مطلق CSS */
+    const b = btn.getBoundingClientRect(), m = 12, gap = 6;
+    panel.style.top = '0px';
+    const p = panel.getBoundingClientRect(); /* top:0 → بالای ظرفِ واقعی + ارتفاع */
+    const below = b.bottom + gap;
+    const vy = below + p.height > innerHeight - m && b.top - gap - p.height >= m /* جا نشد → فلیپ بالا */ ? b.top - gap - p.height : Math.min(below, Math.max(m, innerHeight - m - p.height));
+    panel.style.top = `${Math.round(vy - p.top)}px`; /* مختصات ظرف = دید − بالای ظرف */
+  };
+  anchor();
+  const follow = () => {
+    if (panel.style.display === 'none' || !panel.isConnected) { removeEventListener('resize', follow); document.removeEventListener('scroll', follow, true); return; }
+    anchor();
+  };
+  document.addEventListener('scroll', follow, true);
+  addEventListener('resize', follow);
+}
+
 export function openModalAsync({ title, loadingText = 'در حال بارگذاری…', wide = false, load }) {
   const shell = openModal({ title, wide, body: loadingState(loadingText), actions: [] });
   void Promise.resolve()

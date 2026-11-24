@@ -1,6 +1,6 @@
 import { api, qs } from '../api.js';
 import { fa, gradeLabel, isPlaceholderNid } from '../format.js';
-import { el, icon, confirmModal, toast, toastError, loadingState, emptyState, phoneCell, collapseRemove, flashNode, lockBtn } from '../ui.js';
+import { el, icon, confirmModal, toast, toastError, loadingState, emptyState, phoneCell, collapseRemove, flashNode, lockBtn, ddOpen } from '../ui.js';
 import { fetchTags, tagChipsPreview, openTagEditor } from '../tagging.js';
 import { openArchiveStudentForm, openEducationHistory } from '../archive-form.js';
 import { session } from '../state.js';
@@ -407,7 +407,7 @@ function buildTagDropdown(ctl) {
   function toggle() {
     const open = panel.style.display !== 'none';
     if (open) { panel.style.display = 'none'; document.removeEventListener('mousedown', outside, true); }
-    else { drawPanel(); panel.style.display = 'block'; document.addEventListener('mousedown', outside, true); }
+    else { drawPanel(); ddOpen(btn, panel); document.addEventListener('mousedown', outside, true); }
   }
 
   function outside(e) {

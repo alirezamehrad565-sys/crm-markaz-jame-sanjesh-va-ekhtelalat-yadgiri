@@ -20,7 +20,7 @@ import {
   WEEKDAY_NAMES,
   gradeLabel
 } from '../format.js';
-import { el, icon, openModal, confirmModal, formModal, toast, toastError, statusBadge, emptyState, skeletonState, lockBtn, collapseRemove } from '../ui.js'; /* ۱.۲۵.۰۲ — collapseRemove از جعبه‌ابزار مشترک (نسخهٔ محلی با ui یکسان بود) */
+import { el, icon, openModal, confirmModal, formModal, toast, toastError, statusBadge, emptyState, skeletonState, lockBtn, collapseRemove, ddOpen } from '../ui.js'; /* ۱.۲۵.۰۲ — collapseRemove از جعبه‌ابزار مشترک (نسخهٔ محلی با ui یکسان بود) */
 import { hueClass, hueDot } from '../staff-hue.js'; // — رنگ ثابت هر درمانگر
 import { sessionTypeOf, sessionTypeChip, sessionTypeOptions } from '../session-type.js'; // — نوع جلسه (جدول ۴)
 import { openCaseEventForm, openCaseEventDetail, canCreateCaseEvents } from '../case-events.js';
@@ -267,7 +267,7 @@ export async function renderAppointments(container, ctx = {}) {
     function toggle() {
       const open = panel.style.display !== 'none';
       if (open) { panel.style.display = 'none'; btn.setAttribute('aria-expanded', 'false'); document.removeEventListener('mousedown', outside, true); } /* S2-02 */
-      else { drawPanel(); panel.style.display = 'block'; btn.setAttribute('aria-expanded', 'true'); document.addEventListener('mousedown', outside, true); }
+      else { drawPanel(); ddOpen(btn, panel); document.addEventListener('mousedown', outside, true); }
     }
 
     function outside(e) {

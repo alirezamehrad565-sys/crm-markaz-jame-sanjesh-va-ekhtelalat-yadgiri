@@ -1,6 +1,6 @@
 import { api, qs } from '../api.js';
 import { fa, gradeLabel, isPlaceholderNid } from '../format.js';
-import { el, icon, confirmModal, toast, toastError, statusBadge, skeletonState, emptyState, callBadge, collapseRemove, flashNode, lockBtn } from '../ui.js';
+import { el, icon, confirmModal, toast, toastError, statusBadge, skeletonState, emptyState, callBadge, collapseRemove, flashNode, lockBtn, ddOpen } from '../ui.js';
 import { illoStudents } from '../illustrations.js'; /* ۱.۲۵.۰۵ — نگارهٔ حالت خالی */
 import { fetchTags, tagChipsPreview, openTagEditor } from '../tagging.js';
 import { openFocusEditor } from '../student-focus.js'; // درخت هدف در پروفایل
@@ -490,7 +490,7 @@ export async function renderStudents(container, ctx) {
     function toggle() {
       const open = panel.style.display !== 'none';
       if (open) { panel.style.display = 'none'; btn.setAttribute('aria-expanded', 'false'); document.removeEventListener('mousedown', outside, true); document.removeEventListener('keydown', ddEsc, true); }
-      else { drawPanel(); panel.style.display = 'block'; btn.setAttribute('aria-expanded', 'true'); document.addEventListener('mousedown', outside, true); document.addEventListener('keydown', ddEsc, true); }
+      else { drawPanel(); ddOpen(btn, panel); document.addEventListener('mousedown', outside, true); document.addEventListener('keydown', ddEsc, true); }
     }
 
     function outside(e) {
@@ -567,7 +567,7 @@ export async function renderStudents(container, ctx) {
     function toggle() {
       const open = panel.style.display !== 'none';
       if (open) { panel.style.display = 'none'; btn.setAttribute('aria-expanded', 'false'); document.removeEventListener('mousedown', outside, true); document.removeEventListener('keydown', ddEsc, true); }
-      else { drawPanel(); panel.style.display = 'block'; btn.setAttribute('aria-expanded', 'true'); document.addEventListener('mousedown', outside, true); document.addEventListener('keydown', ddEsc, true); }
+      else { drawPanel(); ddOpen(btn, panel); document.addEventListener('mousedown', outside, true); document.addEventListener('keydown', ddEsc, true); }
     }
 
     function outside(e) {

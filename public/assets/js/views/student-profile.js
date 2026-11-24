@@ -1,6 +1,6 @@
 import { api, qs } from '../api.js';
 import { fa, enDigits, formatJalaliDateTime, formatJalaliNumeric, formatStoredJalaliNumeric, STUDENT_GRADES, gradeLabel, isPlaceholderNid } from '../format.js';
-import { el, icon, formModal, openModal, confirmModal, toast, toastError, statusBadge, dataTable, skeletonState, emptyState, errorState, tabs, callBadge, lockBtn } from '../ui.js';
+import { el, icon, formModal, openModal, confirmModal, toast, toastError, statusBadge, dataTable, skeletonState, emptyState, errorState, tabs, callBadge, lockBtn, ddOpen } from '../ui.js';
 import { openStudentDelete } from '../student-delete.js'; // — حذف کامل پرونده (جریان واحد با فهرست دانش‌آموزان)
 import { SPECIAL_NEED_TYPE_LABELS, SPECIAL_NEED_SEVERITY_LABELS, SPECIAL_NEED_SEVERITY_TONES } from '../taxonomy.js'; /* ۱.۲۵.۰۲ — واژه‌نامهٔ مشترک نیاز ویژه */
 import { openTeacherManager } from '../student-teachers.js'; // — مدیریت معلم‌ها: افزودن/حذف (APIهای POST/DELETE معلم)
@@ -436,8 +436,7 @@ export async function renderStudentProfile(container, ctx) {
         el('button', { class: 'dd__item', onclick: () => { close(); openChecklistSendModal({ student, onSent: onCaseEventSaved }); } }, icon('checklist', 14), el('span', {}, 'چک‌لیست جلسه')), 
         el('button', { class: 'dd__item', onclick: () => { close(); openExerciseSendModal({ student, onSent: onBaleSent }); } }, icon('file', 14), el('span', {}, 'تمرین‌های دانش‌آموز'))
       );
-      panel.style.display = 'block';
-      btn.setAttribute('aria-expanded', 'true');
+      ddOpen(btn, panel); /* ۱.۲۷.۷۲ — منو زیر دکمه لنگر می‌شود؛ دیگر در اسکرول موبایل جدا نمی‌افتد */
       document.addEventListener('mousedown', outside, true);
       document.addEventListener('keydown', esc, true);
     });

@@ -6,6 +6,15 @@ const routes = [];
 // نمای ۴۰۴ برای مسیرهای ناشناخته (پوسته/app.js آن را ثبت می‌کند؛ روتر از ماژول نماها بی‌خبر می‌ماند)
 let notFoundRoute = null;
 
+/* ۱.۲۷.۷۲ — view-enter فقط در مدت فید: fill:both ماتریس همانی را پایدار نگه می‌داشت
+   و ظرفِ موقعیت fixedهای داخل نما را عوض می‌کرد (منوی dd در موبایل سر جاش باز نمی‌شد). */
+function enterFade(host) {
+  host.classList.add('view-enter');
+  const done = () => host.classList.remove('view-enter');
+  host.addEventListener('animationend', done, { once: true });
+  setTimeout(done, 340); // گارد همیشه‌سبز: اگر animationend گم شد
+}
+
 export function registerNotFound(route) {
   notFoundRoute = route;
 }
@@ -87,7 +96,7 @@ export async function render(outlet) {
       }
       if (seq !== renderSeq) return route.view;
       // A8 → : انیمیشن ورود روی پوستهٔ نمای جاری (همان زبان opacity+translateY)
-      host.classList.add('view-enter');
+      enterFade(host);
       document.dispatchEvent(new CustomEvent('routechange', { detail: { path, view: route.view } }));
       return route.view;
     }
@@ -115,7 +124,7 @@ export async function render(outlet) {
   }
   if (seq !== renderSeq) return notFoundRoute;
   // A8 → 
-  host.classList.add('view-enter');
+  enterFade(host);
   document.dispatchEvent(new CustomEvent('routechange', { detail: { path, view: notFoundRoute, notFound: true } }));
   return notFoundRoute;
 }
