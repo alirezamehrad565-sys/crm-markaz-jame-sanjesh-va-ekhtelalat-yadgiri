@@ -17,36 +17,31 @@ describe('پوستهٔ «میز پرونده» — ۱.۲۷.۶۹ (بررسی من
   const view = read('public/assets/js/views/student-profile.js');
   const css = read('public/assets/css/views.css');
 
-  it('پوستهٔ واحد — فلگ برگشت و پوستهٔ کلاسیک از قبل حذف؛ هیچ ابزارک کارگاهی باقی نیست', () => {
+  it('پوستهٔ کلاسیک — هیچ فلگ برگشت و ابزارک کارگاهی باقی نیست (۱.۲۷.۷۱)', () => {
     expect(view).not.toContain("localStorage.getItem('cs.profile.shell')");
     expect(view).not.toContain("const isWorkshop = shellMode === 'workshop';");
-    expect(view).toContain('تنها پوستهٔ پروفایل است');
+    expect(view).toContain('function buildStatusCard()');
     for (const sym of ['buildHubSticky', 'hubStickyEl', 'hub__sticky', 'hub-today', 'hub-flash', 'workbar'])
       expect(view).not.toContain(sym);
   });
 
-  it('تب کلاسیک ui.tabs: بالینی هم تب است — بدون شاخهٔ فلش؛ setActive با openRef همگام است', () => {
-    expect(view).toMatch(/function buildTabBar\(\)/);
-    expect(view).toMatch(/\{ key: 'info', label: RAIL_SHORT_LABEL\.info, icon: 'user' \}/);
-    expect(view).not.toContain("key === 'clinical') {"); // شاخهٔ اسکرول/فلش حذف شد
+  it('تب کلاسیک ui.tabs: بالینی هم تب است — setActive در selectTab صریح است (۱.۲۷.۷۱)', () => {
+    expect(view).toContain("let tabBar = tabs(tabItems(), 'info');");
+    expect(view).toContain("{ key: 'info', label: 'اطلاعات پایه', icon: 'user', onSelect: selectTab },");
+    expect(view).not.toContain("key === 'clinical') {"); // شاخهٔ اسکرول/فلش وجود ندارد
     expect(view).not.toContain('hub-flash');
-    expect(view).toMatch(/dispatchTab\(key, tabMount\);\s*\n\s*tabBar\.setActive\(key\);/);
+    expect(view).toMatch(/selectTab\(key[^)]*\)\s*\{[\s\S]*?tabBar\.setActive\(key\);/);
   });
 
-  it('«امروز» برای نقش‌های غیربالینی = فقط برگهٔ جلسه', () => {
-    expect(view).toMatch(/function renderTodayHub\(box\)/);
-    expect(view).toMatch(/today: renderTodayHub/);
-    const todayIdx = view.indexOf('function renderTodayHub(box)');
-    const body = view.slice(todayIdx, todayIdx + 400);
-    expect(body).toContain('buildSessionSheet()');
-    expect(body).not.toContain('buildStationPanel');
-    expect(view).not.toContain("dispatchTab('today', tabMount); // امروز به ایستگاه فعال وابسته است");
+  it('برگهٔ جلسه در قرارداد کلاسیک داخل کارت اطلاعات پایه است (بدون تب «امروز»)', () => {
+    expect(view).not.toContain('renderTodayHub');
+    expect(view).not.toContain('buildStationPanel');
+    expect(view).toContain('function buildSessionSheet()');
   });
 
-  it('۱.۲۷.۶۹ — نماها بدون ریل لبه و کشو — کارت اول «اطلاعات پایه»، mount در tabMount، ?section= از نشانی', () => {
-    expect(view).toMatch(/openRef\(landing\.drawer\s*\?\? \(\(ctx\.query\?\.tab \?\? ctx\.query\?\.section\) === 'clinical'/);
-    expect(view).toMatch(/activeSectionKey = key;\s*syncSectionUrl\(key\);/);
-    expect(view).not.toContain('refdrawer'); // کشوی کناری حذف شد — بدون لیست کشویی
+  it('کلاسیک — بدون ریل لبه و کشو؛ دیپ‌لینک ?tab= از نشانی (۱.۲۷.۷۱)', () => {
+    expect(view).toContain('const requestedTab = ctx.query?.tab;');
+    expect(view).not.toContain('refdrawer'); // کشوی کناری وجود ندارد
     expect(view).not.toContain("class: 'edge");
     expect(css).not.toMatch(/\.refdrawer|\.edge__btn|\.infopanel|\.ptabs/);
     expect(css).not.toMatch(/\.workshop/);
@@ -54,12 +49,11 @@ describe('پوستهٔ «میز پرونده» — ۱.۲۷.۶۹ (بررسی من
     expect(css).toMatch(/\.tabs \{/); // قرارداد مشترک سایت
   });
 
-  it('dispatchTab مقصد صریح دارد — ظرف پیش‌فرض tabMount', () => {
-    expect(view).toContain('function dispatchTab(key, box = tabMount)');
-    expect(view).toContain('if (desc) { desc.mount(box, ctx); return; }');
-    expect(view).toContain('dispatchTab(activeSectionKey, tabMount)');
-    expect(view).not.toContain('const refRoot ='); // آکاردئون کلاسیک حذف شد
-    expect(view).toContain("import { resolveWorkshopLanding } from '../profile/landing.js'");
-    expect(view).toContain('resolveWorkshopLanding({ canSeeClinical: Boolean(canSeeClinical), canSeeGames: Boolean(canSeeGames), query: ctx.query ?? {} })');
+  it('selectTab مقصد صریح دارد — ظرف مشترک content با fallback کامل (۱.۲۷.۷۱)', () => {
+    expect(view).toContain('const desc = profileTabs.resolve(key, ctx);');
+    expect(view).toContain('if (desc) { desc.mount(content, ctx); return; }');
+    expect(view).toContain('(renderer ?? renderInfoTab)(content);');
+    expect(view).not.toContain('const refRoot =');
+    expect(view).not.toContain('resolveWorkshopLanding'); // لندینگ کلاسیک درون‌نماست
   });
 });

@@ -99,14 +99,14 @@ export function openPalette() {
     if (!m) return [];
     const base = `#/students/${m[1]}`;
     return [
-      { type: 'profile-section', icon: 'brain', title: 'تفسیر بالینی و طرح درمان', hash: base },
-      { type: 'profile-section', icon: 'user', title: 'اطلاعات پایه — نوار بالا', hash: `${base}?section=info` },
-      { type: 'profile-section', icon: 'bell', title: 'پیگیری‌ها', hash: `${base}?section=followups` },
-      { type: 'profile-section', icon: 'clock', title: 'تاریخچهٔ پرونده', hash: `${base}?section=timeline` },
-      { type: 'profile-section', icon: 'file', title: 'گزارش‌های قطعی', hash: `${base}?section=snapshot` },
-      { type: 'profile-section', icon: 'calendar', title: 'جلسات و حضور', hash: `${base}?section=sessions` },
-      { type: 'profile-section', icon: 'clip', title: 'تمرین‌ها', hash: `${base}?section=exercises` },
-      { type: 'profile-section', icon: 'bot', title: 'ارتباطات', hash: `${base}?section=comms` }
+      { type: 'profile-section', icon: 'brain', title: 'تفسیر بالینی', hash: `${base}?tab=clinical` }, // ۱.۲۷.۷۱ — دیپ‌لینک کلاسیک
+      { type: 'profile-section', icon: 'user', title: 'اطلاعات پایه', hash: `${base}?tab=info` },
+      { type: 'profile-section', icon: 'bell', title: 'پیگیری‌ها', hash: `${base}?tab=timeline&filter=followups` },
+      { type: 'profile-section', icon: 'clock', title: 'تاریخچهٔ پرونده', hash: `${base}?tab=timeline` },
+      { type: 'profile-section', icon: 'file', title: 'گزارش‌های خروجی', hash: `${base}?tab=timeline&filter=reports` },
+      { type: 'profile-section', icon: 'calendar', title: 'جلسات', hash: `${base}?tab=sessions` },
+      { type: 'profile-section', icon: 'clip', title: 'تمرین‌ها', hash: `${base}?tab=exercises` },
+      { type: 'profile-section', icon: 'bot', title: 'ارتباطات', hash: `${base}?tab=comms` }
     ];
   }
 

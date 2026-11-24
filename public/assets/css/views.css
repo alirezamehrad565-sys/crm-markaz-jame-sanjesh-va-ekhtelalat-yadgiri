@@ -4674,53 +4674,11 @@ body.cb-printing #cb-print-root { display: block; }
    جای‌گذاری: قبل از بلوک ممیزی لمس — پنجرهٔ tail قرارداد تست front-ux-pro-max دست‌نخورده می‌ماند. */
 
 /* نوار هویت فشرده — جایگزین کارت سربرگِ نیم‌صفحه‌ای */
-.idbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--sp-2) var(--sp-3);
-  padding: var(--sp-2) var(--sp-4);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  margin-top: var(--sp-4);
-}
-.idbar__main { flex: 1 1 240px; min-width: 0; }
-.idbar__name { font-weight: 800; font-size: 16px; line-height: 1.5; }
-.idbar__badges { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-2); align-items: center; }
-.idbar__side { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
-/* ردیف فشردهٔ «همه‌چیز» نوار بالا */
-.idbar__facts {
-  flex-basis: 100%;
-  display: flex; flex-wrap: wrap; align-items: center;
-  gap: var(--sp-1) var(--sp-3);
-  padding-top: var(--sp-2);
-  border-top: 1px dashed var(--border);
-  font-size: var(--fs-xs);
-  color: var(--text-2);
-  line-height: 1.9;
-}
-.idfact { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; min-width: 0; }
-.idfact svg { flex: 0 0 auto; opacity: .8; }
-.idbar__facts .call-badge { flex: 0 0 auto; }
-.idbar .avatar-lg { border-radius: var(--radius-full); }
-/* ۱.۲۷.۷۰ — کنش‌های سرصفه وزن تایپوگرافی یکسان و خوانا دارند؛ روی لمسی هدف بلندتر */
-.idbar__side .btn { font-weight: 600; }
-@media (pointer: coarse) {
-  .idbar__side .btn { min-height: 40px; }
-}
 
 /* ۱.۲۷.۶۹ — تب نماها از ui.tabs() کلاسیک (components.css) می‌آید؛ فلوی آماده‌سازی/برگزاری،
    نوار کار، هاب sticky و ptabs سفارشی حذف شدند — ابزارکِ بی‌فایده نیست، نماها هست. */
-.profile-tabs { margin-top: var(--sp-3); } /* ۱.۲۷.۷۰ — تب‌ها به نوار هویت چسبیده بودند (گپ ۰) */
 .tabmount { min-width: 0; display: flex; flex-direction: column; gap: var(--sp-3); margin-top: var(--sp-2); }
 
-/* ۱.۲۷.۶۸ — ویرایشگر مسئول/وضعیت داخل کارت «اطلاعات پایه» (تب اول)؛ ردیف facts همیشه زیر نوار */
-.tabowner {
-  display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap;
-  padding-top: var(--sp-2);
-  border-top: 1px dashed var(--border);
-}
 
 @media (max-width: 640px) {
   /* منو (اقدامات/ارسال با بله/…) — پنل fixed با مهار افقی؛ از لبهٔ صفحه بریده نمی‌شود */
@@ -4733,10 +4691,6 @@ body.cb-printing #cb-print-root { display: block; }
 }
 
 @media (max-width: 980px) {
-  .idbar { margin-top: var(--sp-3); padding: var(--sp-2) var(--sp-3); }
-  .idbar__side { flex-basis: 100%; justify-content: flex-start; }
-  /* ۱.۲۷.۶۹ — ردیف facts نوار هویت در موبایل می‌شکند (کلاس فشرده) */
-  .idbar__facts { gap: var(--sp-1) var(--sp-2); }
 }
 
 /* ══════════ ممیزی UX با skill «UI/UX Pro Max» (uupm.cc) — نسخهٔ ۱.۰۹.۰ ══════════

@@ -31,42 +31,39 @@ describe('ساختار sdt144 — بررسی منبع', () => {
   const css = read('public/assets/css/views.css');
   const gsearch = read('public/assets/js/global-search.js');
 
-  it('۲) ریل: پیگیری‌ها خانهٔ ۳ است و اطلاعات پایه از ریل حذف شده', () => {
-    const sections = view.slice(view.indexOf('function refSections()'), view.indexOf('function buildTabBar'));
-    const keys = [...sections.matchAll(/key: '([a-z]+)'/g)].map((m) => m[1]);
-    expect(keys).toEqual(['timeline', 'clinical', 'followups', 'narrative', 'snapshot', 'sessions', 'exercises', 'games', 'comms']);
+  it('۲) تب‌های کلاسیک به‌ترتیب RTL — برچسب کوتاه (۱.۲۷.۷۱)', () => {
+    const items = view.slice(view.indexOf('function tabItems()'), view.indexOf('let tabBar = tabs('));
+    const keys = [...items.matchAll(/key: '([a-z]+)'/g)].map((m) => m[1]);
+    expect(keys).toEqual(['info', 'clinical', 'narrative', 'timeline', 'sessions', 'exercises', 'games', 'comms']);
   });
 
-  it('۳) کارت پیگیری تک‌منبع: ایستگاه follow و نمای تب پیگیری‌ها هر دو از buildFollowupsCard می‌خوانند', () => {
-    expect(view).toContain('function buildFollowupsCard()');
-    expect(view).toContain('box.replaceChildren(buildFollowupsCard());');
-    expect(view).toContain('function renderFollowupsSection(box)');
-    expect(view).toContain('followups: renderFollowupsSection,');
-    expect(view).not.toContain('buildNextApptCard'); // کارت مردهٔ پوستهٔ کلاسیک حذف شد
+  it('۳) پیگیری‌ها در قرارداد کلاسیک: صف اکشن‌محور تاریخچه + بلوک اقدام بعدی (۱.۲۷.۷۱)', () => {
+    expect(view).toContain("const queueMode = state.filter === 'followups';");
+    expect(view).toContain('function buildNextActionBlock(nextAction)');
+    expect(view).not.toContain('buildFollowupsCard');
   });
 
-  it('۴) کارت اول «اطلاعات پایه»: ویرایشگر مسئول داخل کارت — بدون پنل و سوییچ فشرده/کامل', () => {
-    expect(view).toContain('function renderInfoTabWithOwner(box)');
-    expect(view).toContain('info: renderInfoTabWithOwner,');
-    expect(view).toContain("box.append(el('div', { class: 'tabowner' }, buildOwnerEditor(student, onOwnerSaved)))");
+  it('۴) ویرایشگر مسئول/وضعیت در قرارداد کلاسیک داخل کارت وضعیت است (۱.۲۷.۷۱)', () => {
+    expect(view).toContain('function buildOwnerEditor(student, onSaved)');
+    expect(view).toContain('canManageCase ? buildOwnerEditor(student, onOwnerSaved) : null');
     expect(view).not.toContain('idbar__detail-btn');
     expect(view).not.toContain('toggleInfoDetail');
+    expect(view).not.toContain('tabowner');
   });
 
   it('۵) موبایل: منوی تمام‌عرض + sticky تک‌ردیفه + مسئول فقط در حالت کامل', () => {
     const base = read('public/assets/css/base.css');
     expect(css).toMatch(/\.dd__panel \{\s*position: fixed;\s*inset-inline: 12px;/);
-    expect(css).toMatch(/\.idbar__facts \{ gap: var\(--sp-1\) var\(--sp-2\); \}/);
-    expect(css).toMatch(/\.tabowner \{/);
     /* ۱.۲۷.۶۹ — نوار تب کلاسیک ui.tabs (تک‌ردیفهٔ اسکرول با markScrollable) */
     expect(css).toMatch(/\.tabs \{/);
     /* سرریز افقی سند از کشوی بیرون‌صفحه — clip روی body (روی html کنار overflow-y:scroll به auto تبدیل می‌شد) */
     expect(base).toMatch(/body \{\s*overflow-x: clip;\s*\}/);
   });
 
-  it('۶) پالت: پیگیری‌ها و اطلاعات پایهٔ نوار بالا', () => {
+  it('۶) پالت ⌘K: بخش‌های پرونده با دیپ‌لینک کلاسیک ?tab= (۱.۲۷.۷۱)', () => {
     expect(gsearch).toContain("title: 'پیگیری‌ها'");
-    expect(gsearch).toContain("title: 'اطلاعات پایه — نوار بالا'");
+    expect(gsearch).toContain("title: 'اطلاعات پایه'");
+    expect(gsearch).toContain('?tab=timeline&filter=followups');
   });
 });
 
@@ -76,15 +73,11 @@ describe('۱.۲۷.۶۷ (sdt145) — ردیف فشردهٔ «همه‌چیز» ن
   const comp = read('public/assets/css/components.css');
   const base = read('public/assets/css/base.css');
 
-  it('۷) نوار فشرده همهٔ داده‌ها را یک‌جا دارد — تماس ولی/معلم کلیک‌پذیر، ولی، نسبت، معلم، مدرسه/کلاس، تولد، کد ملی، ثبت', () => {
-    expect(view).toContain("class: 'idbar__facts'");
+  it('۷) داده‌های هویتی در قرارداد کلاسیک: تماس ولی/معلم کلیک‌پذیر در کارت اطلاعات پایه (۱.۲۷.۷۱)', () => {
     expect(view).toContain('callBadge(student.guardianPhone');
     expect(view).toContain('callBadge(student.teacherPhone');
-    expect(view).toContain('icon(\'school\', 12)');
     expect(view).toContain('relationLabel(student.guardianRelation)');
-    expect(css).toMatch(/\.idbar__facts \{/);
-    /* در حالت کامل، پنل زیر نوار همان فیلدها را می‌دهد — ردیف فشرده تکرار نمی‌شود */
-    expect(css).not.toMatch(/\.idbar--detailed/); // facts همیشه زیر نوار است — حالت کامل حذف شد
+    expect(css).not.toMatch(/\.idbar__facts \{/); // نوار هویت ۱.۲۷.۶۷ با پوستهٔ کلاسیک کنار رفت
   });
 
   it('۸) بلور پس‌زمینه یکدست و حرفه‌ای: مودال و سایدبار ۱۲px + اشباع ۱٫۲۵ — کشو کلاً حذف شد', () => {

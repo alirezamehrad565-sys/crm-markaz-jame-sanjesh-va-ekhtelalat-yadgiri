@@ -98,8 +98,9 @@ describe('ساختار ۱.۲۷.۶۴/۶۹ — پوستهٔ میز پرونده (�
     expect(css).not.toContain('.hub-flash');
   });
 
-  it('۹) کشوی دیپ‌لینک فوری باز می‌شود (بدون انتظار دادهٔ موازی)', () => {
-    expect(view).toMatch(/openRef\(landing\.drawer\s*\?\? \(\(ctx\.query\?\.tab \?\? ctx\.query\?\.section\) === 'clinical'/);
+  it('۹) دیپ‌لینک کلاسیک فوری باز می‌شود (بدون انتظار دادهٔ موازی — pendingTab پس از رسیدن داده رندر می‌شود)', () => {
+    expect(view).toContain("const requestedTab = ctx.query?.tab;");
+    expect(view).toContain('if (!auxDone) { pendingTab = key; return; }');
   });
 
   it('۱۰) پالت ⌘K: بخش‌های پروندهٔ باز بالای نتایج سراسری', () => {

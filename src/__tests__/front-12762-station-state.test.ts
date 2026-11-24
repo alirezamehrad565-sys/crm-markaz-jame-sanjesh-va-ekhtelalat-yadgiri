@@ -35,9 +35,11 @@ describe('حذف ماژول فلوی آماده‌سازی/برگزاری — ۱
   it('③ پروفایل هیچ UI ایستگاهی ندارد؛ قابلیت‌های واقعی تب مستقل‌شان می‌ماند', () => {
     for (const sym of ['stationBadge', 'STATION_LABEL', 'STATION_ORDER', 'stbadge'])
       expect(view).not.toContain(sym);
-    expect(view).toContain('followups: renderFollowupsSection'); // پیگیری‌ها = تب مستقل
-    expect(view).toContain('function buildFollowupsCard()');
     expect(view).toContain('sessions: renderSessionsTab'); // بایگانی جلسات = تب مستقل
+    /* ۱.۲۷.۷۱ — قرارداد کلاسیک ۱.۲۷.۵۷: پیگیری‌ها = فیلتر اکشن‌محور تاریخچه (صف باز + ثبت نتیجه) */
+    expect(view).toContain("const queueMode = state.filter === 'followups';");
+    expect(view).toContain('function buildNextActionBlock(nextAction)');
+    expect(view).not.toContain('buildFollowupsCard');
     for (const sym of ['.stbadge', '.workbar', '.flowstep'])
       expect(css).not.toContain(sym);
   });

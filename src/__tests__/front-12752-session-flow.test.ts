@@ -41,7 +41,7 @@ describe('موج ۲ — کلاینت', () => {
   it('صف پیگیری: ترتیب سررسیدی + بج سررسیده/باز + ثبت نتیجه با PATCH موجود', () => {
     expect(view).toContain('const queueMode = state.filter === \'followups\';');
     expect(view).toContain("'عقب‌افتاده'"); // ۱.۲۷.۵۵ — واژهٔ روزمره جای «سررسیده‌گذشته»
-    expect(view).toContain("api.patch(`/api/followups/${e.ref?.id ?? e.id}`");
+    expect(view).toContain("api.patch(`/api/followups/${e.ref?.id}`"); // ۱.۲۷.۷۱ — قرارداد کلاسیک: ارجاع سند کافی است
     expect(view).toContain("'ثبت نتیجه'");
   });
 
@@ -54,11 +54,13 @@ describe('موج ۲ — کلاینت', () => {
     expect(view).toContain('el(\'div\', { class: \'card__body\' },\n          buildSessionSheet(),');
   });
 
-  it('لندینگ از نگاشت خالص landing.js — دیپ‌لینک ?tab=/?section= محترم؛ ایستگاه دیگر ناوبری ندارد (۱.۲۷.۶۹)', () => {
+  it('لندینگ نقش‌محور کلاسیک — دیپ‌لینک ?tab=/?filter= محترم؛ followups به فیلتر تاریخچه می‌رود (۱.۲۷.۷۱ — بازگشت به قرارداد ۱.۲۷.۵۷)', () => {
     expect(view).toContain('const isProfileOwner = () =>');
-    expect(view).toContain('openRef(landing.drawer');
+    expect(view).toContain("const requestedTab = ctx.query?.tab;");
+    expect(view).toContain("selectTab(requestedTab === 'followups' ? 'timeline' : (knownTabs.includes(requestedTab) ? requestedTab : 'info'));");
     expect(view).not.toContain('computeDeskState');
     expect(view).not.toContain('STATION_ORDER');
+    expect(view).not.toContain('landing.drawer');
   });
 
   it('جدیدها با seen-at محلی و بدون جدول/endpoint', () => {

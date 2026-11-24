@@ -28,9 +28,8 @@ describe('موج B — فلوی جلسه', () => {
     expect(ce).toContain('در گزارش قبلی پاسخی ثبت نشده بود.');
   });
 
-  it('فرم مستقیم از خانهٔ جلسات؛ انتخاب‌گر ثانویه با defaultTypeId/pickerTitle در خود فرم (نقد §۶ + ۱.۲۷.۶۹)', () => {
-    expect((view.match(/previousEventRef: previousSessionEvent\(/g) ?? []).length).toBe(1);
-    expect((view.match(/defaultTypeKey: 'intervention'/g) ?? []).length).toBe(2);
+  it('فرم مستقیم از خانهٔ جلسات؛ انتخاب‌گر ثانویه در خود فرم (نقد §۶ — قرارداد کلاسیک ۱.۲۷.۵۷ — ۱.۲۷.۷۱)', () => {
+    expect((view.match(/previousEventRef: previousSessionEvent\(/g) ?? []).length).toBe(2);
     const form = read('public/assets/js/case-events.js');
     expect(form).toContain('defaultTypeId = null, defaultTypeKey = null');
     expect(form).toContain('pickerTitle = null');
