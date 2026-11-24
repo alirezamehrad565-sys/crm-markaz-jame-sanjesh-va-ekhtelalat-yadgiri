@@ -1040,12 +1040,18 @@ body.is-login { background: var(--bg); }
   to { opacity: 1; transform: scale(1); }
 }
 
-.login__title { text-align: center; font-size: var(--fs-lg); font-weight: 700; line-height: var(--lh-heading, 1.4); color: var(--text-1); }
-.login__sub { text-align: center; font-size: var(--fs-sm); line-height: var(--lh-snug, 1.6); color: var(--text-3); margin-top: -6px; }
+/* ۱.۲۷.۷۴ — تایپوگرافی با اسکیل UI/UX: عنوان از 16px (تقریباً هم‌اندازهٔ بدنه) به مقیاس شناور
+   ۱۸–۲۲px رفت (سلسله‌مراتب با کنتراست سایز)؛ ورودی‌ها 16px (حداقل خوانایی + جلوگیری از
+   زوم‌جهش iOS)؛ هک margin-top منفی حذف و ریتم فرم با توکن‌های فاصله برقرار شد. */
+.login__title { text-align: center; font-size: clamp(1.125rem, 1rem + 0.55vw, 1.375rem); font-weight: 700; line-height: var(--lh-heading, 1.4); color: var(--text-1); }
+.login__sub { text-align: center; font-size: var(--fs-sm); line-height: var(--lh-snug, 1.6); color: var(--text-3); }
 
-.login__form { display: flex; flex-direction: column; gap: 6px; margin-top: var(--sp-2); }
-.login__form .field-label { font-size: var(--fs-sm); font-weight: 600; color: var(--text-2); margin-top: 6px; }
-.login__form .input { width: 100%; }
+.login__form { display: flex; flex-direction: column; gap: var(--sp-1); margin-top: var(--sp-2); }
+.login__form .field-label { font-size: var(--fs-sm); font-weight: 600; color: var(--text-2); margin-top: var(--sp-2); }
+.login__form .input { width: 100%; font-size: var(--fs-lg); }
+
+/* ۱.۲۷.۷۴ — دکمهٔ روشن/تاریک شناور صفحهٔ ورود؛ هدف لمس ≥۴۴px */
+.login__theme { position: fixed; top: var(--sp-4); inset-inline-start: var(--sp-4); z-index: 90; width: 44px; height: 44px; }
 
 .login__error {
   background: color-mix(in srgb, var(--error) 12%, transparent);

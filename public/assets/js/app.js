@@ -1,5 +1,5 @@
 import { api, clearSession } from './api.js';
-import { el, icon, confirmModal, toast, toastError, emptyState, skeletonState } from './ui.js';
+import { bindThemeBtn, confirmModal, el, emptyState, icon, initTheme, skeletonState, toast, toastError } from './ui.js';
 import { register, start, render, registerNotFound } from './router.js';
 import { renderLoginPage, showApp } from './login.js';
 
@@ -61,53 +61,6 @@ import { serverStateView, installServerStatusFeed, subscribeServerStatus } from 
 
 // ثبت ناظرهای CWV در نخستین فرصت؛ گزارشگرها buffered هستند و رویدادهای پیش از این هم می‌گیرند
 initRum();
-
-const THEME_KEY = 'cs.theme';
-const THEME_COLORS = { light: '#F7F3EA', dark: '#191C22' }; // — دارک نرم‌شده
-
-function currentTheme() {
-  return document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
-}
-
-function initTheme() {
-  let saved = null;
-  try { saved = localStorage.getItem(THEME_KEY); } catch { /* حالت خصوصی مرورگر */ }
-  const system = window.matchMedia?.('(prefers-color-scheme: dark)')?.matches ? 'dark' : 'light';
-  applyTheme(saved === 'dark' || saved === 'light' ? saved : system, false);
-}
-
-function applyTheme(next, persist = true) {
-  const theme = next === 'dark' ? 'dark' : 'light';
-  const set = () => {
-    document.documentElement.dataset.theme = theme;
-    const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', THEME_COLORS[theme]);
-  };
-  // A15: گذار تم یکدست با View Transitions — قبلاً body fade می‌شد و بقیهٔ سطوح snap (دو سرعته)
-  const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
-  if (!reduce && typeof document.startViewTransition === 'function') {
-    document.startViewTransition(set);
-  } else {
-    set();
-  }
-  if (persist) { try { localStorage.setItem(THEME_KEY, theme); } catch { /* noop */ } }
-  updateThemeBtn();
-}
-
-function toggleTheme() {
-  applyTheme(currentTheme() === 'dark' ? 'light' : 'dark');
-}
-
-let themeBtn;
-
-function updateThemeBtn() {
-  const dark = currentTheme() === 'dark';
-  const label = dark ? 'حالت روشن' : 'حالت تاریک';
-  if (!themeBtn) return;
-  themeBtn.replaceChildren(icon(dark ? 'sun' : 'moon', 18));
-  themeBtn.title = label;
-  themeBtn.setAttribute('aria-label', label);
-}
 
 const NAV = [
   { hash: '#/dashboard', label: 'داشبورد', icon: 'dashboard', group: 'امروز' },
@@ -647,6 +600,11 @@ document.addEventListener('keydown', (e) => {
 });
 
 installServerStatusPill(); // فاز A — نشانگر سربرگ «سرور محلی» (فقط پوستهٔ میز؛ حالت وب مخفی)
+
+/* ۱.۲۷.۷۴ — wiring تم بازگشت (در sdt151 ناخواسته حذف شده بود — دکمهٔ روشن/تاریک مرده بود):
+   تم اولیه + اتصال دکمهٔ سربرگ با paint آیکون */
+initTheme();
+bindThemeBtn(document.getElementById('theme-btn'));
 
 document.getElementById('menu-btn').addEventListener('click', () => {
   const sidebar = document.getElementById('sidebar');

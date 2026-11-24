@@ -1,5 +1,5 @@
 import { api, setToken, setDevStaffId } from './api.js';
-import { el, icon } from './ui.js';
+import { el, icon, bindThemeBtn } from './ui.js';
 
 const SESSION_KEY = 'cs.loginOk';
 
@@ -71,6 +71,13 @@ export function renderLoginPage(onSuccess) {
   }
   root.style.display = '';
   document.body.classList.add('is-login');
+
+  /* ۱.۲۷.۷۴ — دکمهٔ روشن/تاریک صفحهٔ ورود: پیش از ورود هم تم قابل تغییر است؛
+     همان منطق مشترک ui.js — پس از ورود دکمهٔ سربرگ همان را ادامه می‌دهد */
+  const loginThemeBtn = el('button', {
+    class: 'btn btn--ghost btn--icon login__theme theme-toggle',
+    type: 'button'
+  });
 
   const userInput = el('input', {
     class: 'input',
@@ -150,6 +157,10 @@ export function renderLoginPage(onSuccess) {
       annBox
     )
   );
+
+  /* ۱.۲۷.۷۴ — append پس از replaceChildren (فرزندان قبلی پاک می‌شوند) */
+  bindThemeBtn(loginThemeBtn);
+  root.append(loginThemeBtn);
 
   drawPublicAnnouncements(annBox);
   drawFirstRunHint(hintBox);

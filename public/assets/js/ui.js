@@ -1160,6 +1160,62 @@ export function phoneCell(phone, title) {
     callBadge(phone, title));
 }
 
+/* ۱.۲۷.۷۴ — منطق تم از app.js به اینجا آمد (ساختار مشترک): دکمهٔ سربرگ و دکمهٔ صفحهٔ ورود
+   هر دو از یک مسیر می‌روند؛ هر applyTheme همهٔ دکمه‌های theme-toggle را paint می‌کند. */
+const THEME_KEY = 'cs.theme';
+const THEME_COLORS = { light: '#F7F3EA', dark: '#191C22' }; // — دارک نرم‌شده
+
+function currentTheme() {
+  return document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
+}
+
+export function initTheme() {
+  let saved = null;
+  try { saved = localStorage.getItem(THEME_KEY); } catch { /* حالت خصوصی مرورگر */ }
+  const system = window.matchMedia?.('(prefers-color-scheme: dark)')?.matches ? 'dark' : 'light';
+  applyTheme(saved === 'dark' || saved === 'light' ? saved : system, false);
+}
+
+export function applyTheme(next, persist = true) {
+  const theme = next === 'dark' ? 'dark' : 'light';
+  const set = () => {
+    document.documentElement.dataset.theme = theme;
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', THEME_COLORS[theme]);
+  };
+  // A15: گذار تم یکدست با View Transitions — قبلاً body fade می‌شد و بقیهٔ سطوح snap (دو سرعته)
+  const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+  if (!reduce && typeof document.startViewTransition === 'function') {
+    document.startViewTransition(set);
+  } else {
+    set();
+  }
+  if (persist) { try { localStorage.setItem(THEME_KEY, theme); } catch { /* noop */ } }
+  document.querySelectorAll('.theme-toggle').forEach(paintThemeBtn);
+}
+
+export function toggleTheme() {
+  applyTheme(currentTheme() === 'dark' ? 'light' : 'dark');
+}
+
+export function paintThemeBtn(btn) {
+  const dark = currentTheme() === 'dark';
+  const label = dark ? 'حالت روشن' : 'حالت تاریک';
+  if (!btn) return;
+  btn.replaceChildren(icon(dark ? 'sun' : 'moon', 18));
+  btn.title = label;
+  btn.setAttribute('aria-label', label);
+}
+
+/* اتصال دکمهٔ تم (سربرگ یا صفحهٔ ورود) — idempotent: listener تکراری نمی‌چسبد */
+export function bindThemeBtn(btn) {
+  if (!btn || btn.dataset.themeBound === '1') return;
+  btn.dataset.themeBound = '1';
+  btn.classList.add('theme-toggle');
+  btn.addEventListener('click', toggleTheme);
+  paintThemeBtn(btn);
+}
+
 // — : بلوک تاشوی «پشتوانهٔ علمی و نحوهٔ استفاده» — عمومی‌شدهٔ rehabFxScienceNote؛ داده از TOOL_GUIDES
 export function scienceNote(guide) {
   if (!guide || !Array.isArray(guide.items) || guide.items.length === 0) return null;
