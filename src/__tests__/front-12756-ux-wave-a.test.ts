@@ -14,7 +14,8 @@ describe('موج A — هر عمل یک خانهٔ ثابت', () => {
   const view = read('public/assets/js/views/student-profile.js');
 
   it('ثبت رویداد از خانه‌های خودش — برگهٔ جلسه + ردیف اقدام کارت وضعیت (قرارداد کلاسیک ۱.۲۷.۵۷ — ۱.۲۷.۷۱)', () => {
-    expect((view.match(/openCaseEventForm\(/g) ?? []).length).toBe(4);
+    /* ۱.۲۷.۷۳ — +۱: دیپ‌لینک پالت ⌘K (?action=event) همان خانهٔ ثابت را باز می‌کند */
+    expect((view.match(/openCaseEventForm\(/g) ?? []).length).toBe(5);
     expect(view).not.toContain('buildStationPanel');
     expect(view).not.toContain("el('div', { class: 'card__title' }, 'تاریخچهٔ پرونده'),\n        canCreateCaseEvents()");
     expect(view).not.toContain("'نوبت‌ها و حضور'),\n          canReport");
@@ -27,7 +28,8 @@ describe('موج A — هر عمل یک خانهٔ ثابت', () => {
   });
 
   it('صدور گزارش قطعی خانهٔ ثابتش ردیف اقدام کارت وضعیت است (قرارداد کلاسیک ۱.۲۷.۵۷ — ۱.۲۷.۷۱)', () => {
-    expect((view.match(/openSnapshotBuilder\(/g) ?? []).length).toBe(2); // دکمهٔ ردیف اقدام + تعریف تابع
+    /* ۱.۲۷.۷۳ — +۱: دیپ‌لینک پالت ⌘K (?action=definite) همان خانهٔ ثابت را باز می‌کند */
+    expect((view.match(/openSnapshotBuilder\(/g) ?? []).length).toBe(3); // دکمهٔ ردیف اقدام + تعریف تابع + دیپ‌لینک پالت
     expect(view).toContain("}, icon('file', 15), 'صدور گزارش قطعی')");
     expect(view).toContain("'بازگشت به فهرست'"); // page-head فقط ناوبری
   });

@@ -6,8 +6,6 @@ import { renderLoginPage, showApp } from './login.js';
 // فقط داشبورد و ۴۰۴ eager می‌مانند؛
 // بقیهٔ نماها با ورود به مسیر بار می‌شوند (lazyView پایین) — الگوی موجود «روز کاری → سنجش»
 import { renderDashboard } from './views/dashboard.js';
-import { renderNotFound } from './views/not-found.js'; // نمای ۴۰۴ برای مسیرهای ناشناخته
-import { initGlobalSearch } from './global-search.js';
 import { initAnnouncementBanners } from './announcements.js';
 import { fa } from './format.js'; // badge لیست انتظار
 
@@ -621,7 +619,7 @@ register('#/special-needs', { title: 'نیازهای ویژه', render: roleOnly
 register('#/bug-report', { title: 'گزارش به پشتیبانی', render: lazyView(() => import('./views/bug-report.js'), 'renderBugReport', '#/bug-report') }); // ۱.۲۵.۵۷ — همهٔ همکاران؛ نام تازه
 
 // مسیر ناشناخته به‌جای ریدایرکت بی‌صدا، نمای ۴۰۴ را رندر می‌کند (hash دست‌نخورده می‌ماند)
-registerNotFound({ title: 'صفحه پیدا نشد', render: renderNotFound });
+registerNotFound({ title: 'صفحه پیدا نشد', render: lazyView(() => import('./views/not-found.js'), 'renderNotFound', '#/404') }); /* ۱.۲۷.۷۳ — تنبل: global-search از بوت خارج ماند */
 
 document.addEventListener('routechange', (e) => syncNav(e.detail.path, e.detail.notFound === true));
 
@@ -631,13 +629,22 @@ window.addEventListener('hashchange', () => {
   syncNav(location.hash.replace(/^#\//, '') || 'dashboard');
 });
 
-themeBtn = document.getElementById('theme-btn');
-themeBtn?.addEventListener('click', toggleTheme);
-
-initTheme();
-buildSidebar();
-
-initGlobalSearch();
+/* ۱.۲۷.۷۳ — پالت سرچ تنبل: global-search از بوت خارج شد (سقف boot)؛ اولین ⌘K/کلیک/«/»
+   ماژول را همان لحظه می‌آورد و پالت را باز می‌کند — دفعات بعد همان ماژول کش‌شده باز می‌کند. */
+let gsPromise = null;
+const lazySearch = () => {
+  gsPromise = gsPromise ?? import('./global-search.js').then((m) => { m.initGlobalSearch(); return m; });
+  return gsPromise.then((m) => m.openPalette());
+};
+document.getElementById('global-search-btn')?.addEventListener('click', lazySearch);
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && String(e.key).toLowerCase() === 'k') { e.preventDefault(); lazySearch(); return; }
+  if (e.key === '/') {
+    const t = e.target;
+    const tag = t && t.tagName ? t.tagName.toLowerCase() : '';
+    if (tag !== 'input' && tag !== 'select' && tag !== 'textarea' && !(t && t.isContentEditable)) { e.preventDefault(); lazySearch(); }
+  }
+});
 
 installServerStatusPill(); // فاز A — نشانگر سربرگ «سرور محلی» (فقط پوستهٔ میز؛ حالت وب مخفی)
 

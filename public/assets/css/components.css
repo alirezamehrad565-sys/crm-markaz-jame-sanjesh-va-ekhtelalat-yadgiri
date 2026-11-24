@@ -982,6 +982,21 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
 .gsearch__item.is-active .gsearch__item-icon { background: var(--surface); color: var(--primary); }
 .gsearch__item-main { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 .gsearch__item-title { font-weight: 500; }
+/* ۱.۲۷.۷۳ — اکشن مستقیم روی نتیجهٔ پالت (پرینت خام سند / اقدام دانش‌آموز) */
+.gsearch__act {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  color: var(--text-3);
+  cursor: pointer;
+  transition: background var(--fast), color var(--fast);
+}
+.gsearch__act:hover { background: var(--surface-3); color: var(--primary); }
+.gsearch__item.is-active .gsearch__act { color: var(--on-primary-soft); }
 .gsearch__item-sub {
   font-size: var(--fs-xs);
   color: var(--text-3);

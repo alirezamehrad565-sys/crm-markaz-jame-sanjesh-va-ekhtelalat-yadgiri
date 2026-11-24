@@ -481,6 +481,12 @@ export async function renderStudentProfile(container, ctx) {
   if (canSeeClinical) knownTabs.splice(1, 0, 'clinical', 'narrative');
   selectTab(requestedTab === 'followups' ? 'timeline' : (knownTabs.includes(requestedTab) ? requestedTab : 'info'));
 
+  /* ۱.۲۷.۷۳ — سرچ هوشمند: اقدام مستقیم از پالت ⌘K با دیپ‌لینک ?action= — همان مودال ردیف وضعیت */
+  const deepAction = ctx.query?.action;
+  if (deepAction === 'event' && canManageCase) openCaseEventForm({ student, onSaved: onCaseEventSaved });
+  else if (deepAction === 'teacher-report' && canSendReport) openTeacherReportModal(student);
+  else if (deepAction === 'definite' && canSendReport) openSnapshotBuilder();
+
   /* رسیدن دادهٔ پس‌زمینه: کارت وضعیت و نوار تب‌ها درجا تازه می‌شوند و تب در انتظار (یا تب فعال)
      با دادهٔ کامل رندر می‌شود. */
   auxPromise.then(() => {
