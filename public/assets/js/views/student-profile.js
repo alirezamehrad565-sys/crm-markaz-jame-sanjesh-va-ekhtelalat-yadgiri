@@ -393,19 +393,9 @@ export async function renderStudentProfile(container, ctx) {
               onclick: (e) => lockBtn(e.currentTarget, openSnapshotBuilder)
             }, icon('file', 15), 'صدور گزارش قطعی')
           : null,
-        /* ۱.۲۷.۶۶ — سوییچ فشرده/کامل: «اطلاعات پایه» خانه‌اش همین نوار است */
-        el('button', {
-          class: 'btn btn--soft btn--sm idbar__detail-btn', type: 'button',
-          'aria-expanded': String(infoDetailOpen),
-          'aria-controls': 'info-detail-panel',
-          title: 'نمایش کامل اطلاعات پایه زیر همین نوار — همان رندرر تب اطلاعات پایه',
-          onclick: () => toggleInfoDetail()
-        }, icon(infoDetailOpen ? 'chevU' : 'chevD', 14), infoDetailOpen ? 'بستن جزئیات' : 'اطلاعات کامل'),
         buildIdentityMenu()
       ),
-      /* ۱.۲۷.۶۷ — ردیف فشردهٔ «همه‌چیز» نوار بالا: تماس با ولی/معلم، ولی، نسبت، معلم، مدرسه/کلاس،
-         تولد، کد ملی و تاریخ ثبت — در یک نگاه و بدون باز کردن پنل؛ در حالت کامل پنهان می‌شود
-         (پنل زیر نوار همان‌ها را با جزئیات و اقدام می‌دهد). داده: همان فیلدهای renderInfoTab — تک‌منبع. */
+      /* ردیف فشردهٔ «همه‌چیز» — داده: فیلدهای renderInfoTab (تک‌منبع)؛ همیشه زیر نوار */
       el('div', { class: 'idbar__facts' },
         student.guardianPhone
           ? callBadge(student.guardianPhone, `تماس با ولیّ ${student.firstName} ${student.lastName} — ${fa(student.guardianPhone)}`)
@@ -430,9 +420,6 @@ export async function renderStudentProfile(container, ctx) {
           ? el('span', { class: 'idfact' }, `ثبت: ${formatJalaliNumeric((student.createdAt || '').slice(0, 10))}`)
           : null
       ),
-      canManageCase
-        ? el('div', { class: 'idbar__owner' }, buildOwnerEditor(student, onOwnerSaved))
-        : null
     );
   }
 
@@ -456,11 +443,11 @@ export async function renderStudentProfile(container, ctx) {
     { key: 'games', when: () => canSeeGames, mount: (box) => renderGamesTabContent(box) } // ۱.۲۵.۲۴ — chunk داینامیک حفظ می‌شود
   ]);
 
-  function dispatchTab(key, box = hubMount) {
+  function dispatchTab(key, box = tabMount) {
     const desc = profileTabs.resolve(key, ctx);
     if (desc) { desc.mount(box, ctx); return; }
     const renderer = {
-      info: renderInfoTab,
+      info: renderInfoTabWithOwner, // ۱.۲۷.۶۸ — کارت اول + ویرایشگر مسئول/وضعیت
       clinical: renderClinicalTabContent, //
       timeline: renderTimelineTab,
       followups: renderFollowupsSection, // ۱.۲۷.۶۶ — کارت مشترک پیگیری (تک‌منبع با ایستگاه پیگیری)
@@ -599,16 +586,15 @@ export async function renderStudentProfile(container, ctx) {
      ریل لبه: ۹ بخش مرجع با برچسب کوتاه؛ کلیک = کشوی لغزنده با همان رندررهای قدیمی.
      در پوستهٔ کلاسیک (فلگ desk) هیچ‌کدام ساخته نمی‌شود — رفتار ۱.۲۷.۵۸ عیناً می‌ماند. */
   const hubStickyEl = el('div', { class: 'hub__sticky' });
-  const hubMount = el('div', { class: 'hub__mount' });
-  const hubBody = el('div', { class: 'hub__body' }, hubMount);
   let workbarCollapsed = true; // ۱.۲۷.۶۵ — موج ۴: پوستهٔ کارگاه تنها پوسته است؛ نوار کار پیش‌فرض جمع
-  const hub = el('div', { class: 'hub' }, hubStickyEl, hubBody);
-  const edge = el('div', { class: 'edge', role: 'navigation', 'aria-label': 'پروندهٔ مرجع — ریل بخش‌ها' });
-  const workshop = el('div', { class: 'workshop' }, hub, edge);
+  /* ۱.۲۷.۶۸ — ری‌ورک به الگوی قدیمی پروفایل (خواست کارفرما): بدون ریل لبه و کشوی کناری —
+     نماها با نوار تب RTL عوض می‌شوند و کارت فعال inline زیر میز می‌نشیند؛ کارت اول «اطلاعات پایه». */
+  /* ۱.۲۷.۶۸ موج ۲ — هاب از جریان صفحه خارج شد؛ همهٔ نماها (شامل تفسیر بالینی) تب اند و
+     کارت فعال inline زیر میز می‌نشیند — کارت اول «اطلاعات پایه». */
+  const ptabs = el('div', { class: 'ptabs', role: 'tablist', 'aria-label': 'نماهای پرونده' });
+  const tabMount = el('div', { class: 'tabmount' });
   const workbarHolder = el('div', { class: 'workbar-holder' });
-  let hubMountedKey = null; // محتوای درحال‌نمایش هاب — repaint نباید دوباره mount کند (جریان پیوستهٔ ۱.۲۰.۰)
   let therapySteps = null; // ۱.۲۷.۶۴ — گام‌های واقعی از رندرر بالینی (onTherapyLine)؛ sticky با آن جان می‌گیرد
-  let hubDefaultKey = null;
 
   const RAIL_SHORT_LABEL = {
     info: 'اطلاعات پایه',
@@ -620,26 +606,31 @@ export async function renderStudentProfile(container, ctx) {
     sessions: 'جلسات و حضور',
     exercises: 'تمرین‌ها',
     games: 'بازی‌ها',
-    comms: 'ارتباطات'
+    comms: 'ارتباطات',
+    today: 'امروز'
   };
   const railMetaOf = (key) => refSections().find((s) => s.key === key) ?? null;
 
-  function buildEdgeRail() {
-    const items = refSections().filter((s) => s.when()).map((s) =>
+  function buildProfileTabs() {
+    /* ۱.۲۷.۶۸ — کارت اول «اطلاعات پایه»؛ بعد نماها. بالینی خانه‌اش هاب میز است و تب نمی‌شود. */
+    const views = [
+      { key: 'info', label: 'اطلاعات پایه', icon: 'user', when: () => true },
+      ...(canSeeClinical
+        ? [{ key: 'clinical', label: 'تفسیر و طرح درمان', icon: 'brain', when: () => true }]
+        : [{ key: 'today', label: 'امروز', icon: 'calendar', when: () => true }]),
+      ...refSections().filter((s) => s.key !== 'clinical')
+    ];
+    return views.filter((s) => s.when()).map((s) =>
       el('button', {
-        class: 'edge__btn', type: 'button', 'data-edge': s.key,
+        class: 'ptab', type: 'button', role: 'tab', 'data-tab': s.key,
+        'aria-selected': 'false',
         title: s.label,
         onclick: () => openRef(s.key)
       },
-        icon(s.icon, 15),
-        el('span', {}, RAIL_SHORT_LABEL[s.key] ?? s.label),
-        /* بالینی خانه‌اش هاب است — روی ریل به‌جای دکمهٔ بازکننده، نشانگر «در هاب» */
-        s.key === 'clinical'
-          ? el('span', { class: 'edge__hint' }, 'در هاب')
-          : null
+        icon(s.icon, 14),
+        el('span', {}, RAIL_SHORT_LABEL[s.key] ?? s.label)
       )
     );
-    return [el('div', { class: 'edge__head' }, 'پروندهٔ مرجع'), ...items];
   }
 
   /* نوار sticky هاب: گام‌های واقعی درمان (از رندرر بالینی) + فصل‌های تاریخچه + جلسهٔ بعدی — صفر fetch تازه */
@@ -660,11 +651,7 @@ export async function renderStudentProfile(container, ctx) {
             : st.doneCount > 0
               ? `${st.label} — ${fa(st.doneCount)} از ${fa(st.total)} ثبت شده؛ کلیک: تفسیر و طرح درمان`
               : `${st.label} — هنوز ثبت نشده؛ کلیک: تفسیر و طرح درمان`,
-          onclick: () => {
-            hubBody.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            hubBody.classList.add('hub-flash');
-            setTimeout(() => hubBody.classList.remove('hub-flash'), 1200);
-          }
+          onclick: () => openRef('clinical') // ۱.۲۷.۶۸ — کلیک گام = پرش به تب تفسیر و طرح درمان
         }, icon(st.done ? 'check' : 'chevL', 12), label));
       }
     }
@@ -695,53 +682,12 @@ export async function renderStudentProfile(container, ctx) {
     return chips;
   }
 
-  /* کشوی مرجع — مقصد ریل لبه؛ همان رندررهای قدیمی با ظرف اختصاصی (هاب دست‌نخورده می‌ماند) */
-  const drawerTitle = el('div', { class: 'refdrawer__title' });
-  const drawerMount = el('div', { class: 'refdrawer__mount' });
-  const drawerCloseBtn = el('button', {
-    class: 'btn btn--ghost btn--sm', type: 'button', 'aria-label': 'بستن کشوی مرجع',
-    onclick: () => closeRef(activeSectionKey)
-  }, icon('x', 15), 'بستن');
-  const drawerBackdrop = el('div', { class: 'refdrawer__backdrop' });
-  const drawer = el('div', { class: 'refdrawer', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'پروندهٔ مرجع' },
-    el('div', { class: 'refdrawer__head' }, drawerTitle, drawerCloseBtn),
-    drawerMount
-  );
-  const drawerEsc = (e) => { if (e.key === 'Escape' && activeSectionKey) closeRef(activeSectionKey); };
-  drawerBackdrop.addEventListener('click', () => { if (activeSectionKey) closeRef(activeSectionKey); });
-
-  /* ═══ ۱.۲۷.۶۶ — ادغام «اطلاعات پایه» با نوار بالا: حالت فشرده/کامل ═══
-     فشرده (پیش‌فرض): نوار هویت جمع — مسئول/وضعیت پنهان؛ کامل: پنل زیر نوار با همان رندرر
-     «اطلاعات پایه» (تک‌منبع، mount تنبل ۱.۲۰.۰) باز می‌شود. دیپ‌لینک ?section=info و
-     ?tab=info همین پنل را باز می‌کنند و دکمهٔ ریل «اطلاعات پایه» هم حذف شد. */
-  const infoDetailMount = el('div', { class: 'infopanel__mount' });
-  const infoPanel = el('div', { class: 'infopanel', id: 'info-detail-panel', hidden: true }, infoDetailMount);
-  let infoDetailOpen = false;
-  let infoDetailMounted = false;
-  const infoEsc = (e) => { if (e.key === 'Escape' && infoDetailOpen) toggleInfoDetail(false); };
-  function toggleInfoDetail(force) {
-    const next = typeof force === 'boolean' ? force : !infoDetailOpen;
-    if (next === infoDetailOpen) return;
-    infoDetailOpen = next;
-    if (infoDetailOpen && !infoDetailMounted) {
-      infoDetailMounted = true;
-      dispatchTab('info', infoDetailMount);
-    }
-    infoPanel.hidden = !infoDetailOpen;
-    idbarHolder.classList.toggle('idbar--detailed', infoDetailOpen);
-    const detailBtn = idbarHolder.querySelector('.idbar__detail-btn');
-    if (detailBtn) {
-      detailBtn.setAttribute('aria-expanded', String(infoDetailOpen));
-      detailBtn.replaceChildren(icon(infoDetailOpen ? 'chevU' : 'chevD', 14), infoDetailOpen ? 'بستن جزئیات' : 'اطلاعات کامل');
-    }
-    if (infoDetailOpen) {
-      document.addEventListener('keydown', infoEsc, true);
-      idbarHolder.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      if (!activeSectionKey) syncSectionUrl('info');
-    } else {
-      document.removeEventListener('keydown', infoEsc, true);
-      if (!activeSectionKey) syncSectionUrl(null);
-    }
+  /* ۱.۲۷.۶۸ — «اطلاعات پایه» کارت اول نوار تب است (نه پنل زیر نوار و نه کشو)؛
+     ویرایشگر مسئول/وضعیت هم داخل همان کارت می‌نشیند — حالت فشرده/کامل نوار حذف شد
+     (ردیف facts همهٔ داده‌ها همیشه زیر نوار است). دیپ‌لینک ?section=info / ?tab=info به همین تب می‌رسد. */
+  function renderInfoTabWithOwner(box) {
+    renderInfoTab(box);
+    if (canManageCase) box.append(el('div', { class: 'tabowner' }, buildOwnerEditor(student, onOwnerSaved)));
   }
 
   /* جریان پیوستهٔ ۱.۲۰.۰ — callbackهای mutation پیش از mount تعریف می‌شوند چون نوار هویت/پنل‌های میز
@@ -902,8 +848,8 @@ export async function renderStudentProfile(container, ctx) {
   }
 
   function refSections() {
-    /* ۱.۲۷.۶۶ — «اطلاعات پایه» از ریل خارج شد (خانه‌اش نوار بالاست — فشرده/کامل) و
-       «پیگیری‌ها» که فقط در ایستگاه پیگیری زندگی می‌کرد به ۴ خانهٔ بالای ریل آمد. */
+    /* ۱.۲۷.۶۸ — نماهای نوار تب: «اطلاعات پایه» کارت اول (در buildProfileTabs پیش‌فرض است) و
+       «پیگیری‌ها» که فقط در ایستگاه پیگیری زندگی می‌کرد به ۴ خانهٔ بالای میز هم آمده است. */
     return [
       { key: 'timeline', label: 'تاریخچه با فصل‌ها و نقطه‌های کلیدی', icon: 'clock', when: () => true },
       { key: 'clinical', label: 'تفسیر بالینی و طرح درمان', icon: 'brain', when: () => canSeeClinical },
@@ -927,48 +873,26 @@ export async function renderStudentProfile(container, ctx) {
     } catch { /* نشانی غیراستاندارد — بی‌صدا رد شود */ }
   }
 
-  function openRef(key, { node, body } = {}) {
-    /* ۱.۲۷.۶۵ — موج ۴: بالینی خانه‌اش هاب است؛ ۱.۲۷.۶۶ — اطلاعات پایه خانه‌اش نوار بالاست
-       (پنل فشرده/کامل) — بقیهٔ بخش‌ها کشوی لغزنده با همان رندررهای قدیمی. */
-    {
-      if (key === 'clinical') {
-        hubBody.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        hubBody.classList.add('hub-flash');
-        setTimeout(() => hubBody.classList.remove('hub-flash'), 1200);
-        return;
-      }
-      if (key === 'info') {
-        toggleInfoDetail(true);
-        return;
-      }
-      if (activeSectionKey === key) return;
-      activeSectionKey = key;
-      syncSectionUrl(key);
-      const meta = railMetaOf(key);
-      drawerTitle.replaceChildren(icon(meta?.icon ?? 'file', 15), el('b', {}, meta?.label ?? RAIL_SHORT_LABEL[key] ?? key));
-      drawerMount.replaceChildren();
-      dispatchTab(key, drawerMount);
-      edge.querySelectorAll('.edge__btn.is-active').forEach((b) => b.classList.remove('is-active'));
-      edge.querySelector(`button[data-edge="${key}"]`)?.classList.add('is-active'); // ۱.۲۷.۶۴ — بخش باز روی ریل پیدا است
-      drawer.classList.add('is-open');
-      drawerBackdrop.classList.add('is-open');
-      document.addEventListener('keydown', drawerEsc, true);
-      drawerCloseBtn.focus();
+  function openRef(key) {
+    /* ۱.۲۷.۶۸ — بالینی خانه‌اش هاب میز است؛ بقیهٔ نماها = تب فعال با mount در tabMount (بدون کشو).
+       اطلاعات پایه هم مثل بقیه یک تب است — کارت اول، بدون هیچ فهرست کشویی. */
+    if (key === 'clinical') {
+      tabMount.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      tabMount.classList.add('hub-flash');
+      setTimeout(() => tabMount.classList.remove('hub-flash'), 1200);
       return;
     }
-  }
-
-  function closeRef(key) {
-    if (activeSectionKey !== key) return;
-    activeSectionKey = null;
-    syncSectionUrl(null);
-    drawer.classList.remove('is-open');
-    drawerBackdrop.classList.remove('is-open');
-    drawerMount.replaceChildren();
-    document.removeEventListener('keydown', drawerEsc, true);
-    edge.querySelectorAll('.edge__btn.is-active').forEach((b) => b.classList.remove('is-active'));
-    const railBtn = edge.querySelector(`button[data-edge="${key}"]`);
-    if (railBtn) railBtn.focus(); // فوکوس به دکمهٔ ریل — پیمایش کیبورد قطع نمی‌شود
+    if (activeSectionKey === key) return;
+    activeSectionKey = key;
+    syncSectionUrl(key);
+    tabMount.replaceChildren();
+    dispatchTab(key, tabMount);
+    ptabs.querySelectorAll('.ptab').forEach((b) => {
+      const on = b.dataset.tab === key;
+      b.classList.toggle('is-active', on);
+      b.setAttribute('aria-selected', String(on));
+    });
+    ptabs.querySelector(`.ptab[data-tab="${key}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
   }
 
   /* ۱.۲۷.۵۸ — آ-۵: خانهٔ دائمی «گزارش‌های قطعی» — صدور + آرشیو نسخه‌های صادرشده (رفع «گزارش قطعی بی‌خانه») */
@@ -1034,16 +958,10 @@ export async function renderStudentProfile(container, ctx) {
   }
 
   function renderDesk() {
-    /* ۱.۲۷.۶۵ — موج ۴: «میز» یعنی نوار ابزار + نوار کار جمع‌شده + نوار sticky هاب؛
-       بدنهٔ هاب فقط یک‌بار mount می‌شود (تفسیر بالینی/امروز) و repaintها دستش نمی‌زنند. */
+    /* ۱.۲۷.۶۸ — «میز» یعنی نوار ابزار + نوار کار جمع‌شده + نوار sticky؛ بدنهٔ نماها در tabMount است. */
     workbarHolder.replaceChildren(buildWorkbar(activeStation));
     hubStickyEl.replaceChildren(...buildHubSticky());
-    if (!hubMountedKey) {
-      hubMountedKey = hubDefaultKey ?? (canSeeClinical ? 'clinical' : 'today');
-      dispatchTab(hubMountedKey, hubMount);
-    } else if (hubMountedKey === 'today') {
-      dispatchTab('today', hubMount); // هاب امروز به ایستگاه فعال وابسته است — با تعویض ایستگاه تازه می‌شود
-    }
+    if (activeSectionKey === 'today') dispatchTab('today', tabMount); // امروز به ایستگاه فعال وابسته است
   }
 
   function buildFlowCta() {
@@ -1098,15 +1016,14 @@ export async function renderStudentProfile(container, ctx) {
   container.replaceChildren(
     pageHead,
     idbarHolder,
-    infoPanel,
     flowHolder,
     workbarHolder,
-    workshop,
-    drawerBackdrop,
-    drawer,
+    hubStickyEl,
+    ptabs,
+    tabMount,
     flowCtaHolder
   );
-  edge.replaceChildren(...buildEdgeRail());
+  ptabs.replaceChildren(...buildProfileTabs());
   idbarHolder.replaceChildren(buildIdentityBar());
   flowHolder.replaceChildren(buildFlowBar());
   flowCtaHolder.replaceChildren(buildFlowCta());
@@ -1114,21 +1031,19 @@ export async function renderStudentProfile(container, ctx) {
 
   const requestedTab = ctx.query?.tab;
   const timelineDeepFilter = ctx.query?.filter ?? (requestedTab === 'followups' ? 'followups' : null);
-  /* ۱.۲۷.۶۳ — فرود کارگاه از تابع خالص resolveWorkshopLanding (یک منبع با آزمون گیت):
-     دیپ‌لینک‌های قدیمی (?tab=…) محترم می‌مانند — تب‌های مرجع → کشو؛ clinical → هاب؛
-     sessions → ایستگاه ثبت؛ followups → تاریخچه با فیلتر. */
+  /* ۱.۲۷.۶۳ — فرود از تابع خالص resolveWorkshopLanding (یک منبع با آزمون گیت):
+     دیپ‌لینک‌های قدیمی (?tab=…) محترم می‌مانند — نماها → تب؛ sessions → ایستگاه ثبت؛
+     followups → تاریخچه با فیلتر؛ ۱.۲۷.۶۸: clinical/today هم تب‌اند. */
   const landing = resolveWorkshopLanding({ canSeeClinical: Boolean(canSeeClinical), canSeeGames: Boolean(canSeeGames), query: ctx.query ?? {} });
   /* ۱.۲۷.۵۹ — ایستگاه از نشانی (?station=…)؛ ۱.۲۷.۶۰ — بخش مرجع از نشانی (?section=…) برمی‌گردد */
   if (landing.station) activeStation = landing.station;
   if (STATION_ORDER.includes(ctx.query?.station)) activeStation = ctx.query.station;
-  hubDefaultKey = landing.hub;
-  if (hubMountedKey && hubMountedKey !== hubDefaultKey) { // فرود دیپ‌لینک متفاوت با mount اولیه — هاب عوض می‌شود
-    hubMountedKey = hubDefaultKey;
-    dispatchTab(hubMountedKey, hubMount);
-  }
-  /* ۱.۲۷.۶۴ — نقد فلوی: کشوی دیپ‌لینک فوری باز می‌شود نه بعد از رسیدن دادهٔ موازی؛
-     رندررها mount تنبل و اسکلت خودشان را دارند (قرارداد ۱.۲۰.۰) */
-  if (landing.drawer) openRef(landing.drawer);
+  /* ۱.۲۷.۶۴ — نقد فلوی: دیپ‌لینک فوری فعال می‌شود نه بعد از رسیدن دادهٔ موازی؛
+     رندررها mount تنبل و اسکلت خودشان را دارند (قرارداد ۱.۲۰.۰).
+     ۱.۲۷.۶۸ — کارت اول «اطلاعات پایه»؛ ?tab/?section=clinical → تب بالینی؛ بی‌نقش بالینی → تب امروز. */
+  openRef(landing.drawer
+    ?? ((ctx.query?.tab ?? ctx.query?.section) === 'clinical' && canSeeClinical ? 'clinical'
+        : canSeeClinical ? 'info' : 'today'));
 
   /* رسیدن دادهٔ پس‌زمینه: نوار هویت/ابزار و نوار کار و sticky هاب درجا تازه می‌شوند و
      بخشِ بازِ کشو (در صورت بازبودن) با دادهٔ کامل دوباره mount می‌شود. */
@@ -1146,7 +1061,7 @@ export async function renderStudentProfile(container, ctx) {
     }
     repaintChrome();
     if (activeSectionKey) {
-      dispatchTab(activeSectionKey, drawerMount); // بخشی که کاربر پیش از رسیدن داده باز کرده بود — با دادهٔ کامل
+      dispatchTab(activeSectionKey, tabMount); // نمای فعال با دادهٔ کامل دوباره mount می‌شود
     }
   });
 
@@ -1167,9 +1082,8 @@ export async function renderStudentProfile(container, ctx) {
   /* بخشِ بازِ کشو فقط وقتی دوباره رندر می‌شود که دادهٔ آن واقعاً عوض شده — صفحه‌بندی/فیلتر محلی بقیه می‌ماند.
      هاب همیشه‌نما هم با تغییر دادهٔ همان کلید بی‌صدا تازه می‌شود (۱.۲۷.۶۴). */
   function rerenderTabIf(keys) {
-    if (activeSectionKey && keys.includes(activeSectionKey)) dispatchTab(activeSectionKey, drawerMount);
-    if (infoDetailMounted && keys.includes('info')) dispatchTab('info', infoDetailMount); // ۱.۲۷.۶۶ — پنل کامل اطلاعات هم تازه می‌شود
-    if (hubMountedKey && keys.includes(hubMountedKey)) dispatchTab(hubMountedKey, hubMount);
+    if (activeSectionKey && keys.includes(activeSectionKey)) dispatchTab(activeSectionKey, tabMount);
+    if (activeSectionKey === 'today' && keys.includes('today')) dispatchTab('today', tabMount);
   }
 
   async function refreshCore() {

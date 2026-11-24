@@ -25,13 +25,14 @@ describe('پوستهٔ «کارگاه درمان» — ۱.۲۷.۶۳ (بررسی 
     expect(view).toContain('تنها پوستهٔ پروفایل است');
   });
 
-  it('هاب درمان: sticky + mount همیشه‌نما با گارد یک‌بار-mount و واریانت هاب امروز', () => {
+  it('۱.۲۷.۶۸ موج ۲ — sticky بدون هاب: گام‌ها/فصل‌ها سر جایش و کلیکش تعویض تب؛ بالینی/امروز تب‌اند', () => {
     expect(view).toMatch(/function buildHubSticky\(\)/);
     expect(view).toMatch(/hubStickyEl\.replaceChildren\(\.\.\.buildHubSticky\(\)\)/);
-    expect(view).toMatch(/if \(!hubMountedKey\) \{/);
+    expect(view).toMatch(/onclick: \(\) => openRef\('clinical'\)/); // چیپ گام → تب بالینی
     expect(view).toMatch(/function renderTodayHub\(box\)/);
     expect(view).toMatch(/today: renderTodayHub/);
-    expect(view).toMatch(/hubMountedKey = hubDefaultKey \?\? \(canSeeClinical \? 'clinical' : 'today'\);/);
+    expect(view).not.toContain('hubMountedKey'); // گارد یک‌بار-mount هاب حذف شد — تب‌ها هر بار mount تنبل
+    expect(view).toMatch(/if \(activeSectionKey === 'today'\) dispatchTab\('today', tabMount\);/);
   });
 
   it('خط درمان از فصل‌های واقعی تاریخچه می‌آید (بدون placeholder) و کلیکش تاریخچه را باز می‌کند', () => {
@@ -42,21 +43,23 @@ describe('پوستهٔ «کارگاه درمان» — ۱.۲۷.۶۳ (بررسی 
     expect(css).toMatch(/\.hub__sticky:empty \{ display: none; \}/);
   });
 
-  it('ریل لبه + کشو: Esc، بک‌دراپ، فوکوس‌برگشت، ?section= از نشانی', () => {
-    expect(view).toMatch(/function buildEdgeRail\(\)/);
-    expect(view).toMatch(/const drawerEsc = \(e\) => \{ if \(e\.key === 'Escape' && activeSectionKey\) closeRef\(activeSectionKey\); \};/);
-    expect(view).toMatch(/drawerBackdrop\.addEventListener\('click'/);
-    expect(view).toMatch(/if \(railBtn\) railBtn\.focus\(\);/);
-    expect(view).toMatch(/drawer\.classList\.add\('is-open'\)/);
-    expect(css).toMatch(/\.refdrawer\.is-open \{ transform: none; \}/);
-    expect(css).toMatch(/\.workshop \{/);
-    expect(css).toMatch(/@media \(max-width: 1080px\)/);
+  it('۱.۲۷.۶۸ — نوار تب نماها: بدون ریل لبه و کشو — کارت اول «اطلاعات پایه»، mount در tabMount، ?section= از نشانی', () => {
+    expect(view).toMatch(/function buildProfileTabs\(\)/);
+    expect(view).toMatch(/\{ key: 'info', label: 'اطلاعات پایه', icon: 'user', when: \(\) => true \}/);
+    expect(view).toMatch(/openRef\(landing\.drawer\s*\?\? \(\(ctx\.query\?\.tab \?\? ctx\.query\?\.section\) === 'clinical'/);
+    expect(view).toMatch(/activeSectionKey = key;\s*syncSectionUrl\(key\);/);
+    expect(view).not.toContain('refdrawer'); // کشوی کناری حذف شد — بدون لیست کشویی
+    expect(view).not.toContain("class: 'edge");
+    expect(css).not.toMatch(/\.refdrawer|\.edge__btn|\.infopanel/);
+    expect(css).toMatch(/\.ptabs \{/);
+    expect(css).not.toMatch(/\.workshop/); // هاب از جریان صفحه حذف شد
+    expect(css).toMatch(/\.tabmount \{/);
   });
 
-  it('dispatchTab مقصد صریح دارد — هاب mount پیش‌فرض و کشو ظرف اختصاصی (موج ۴)', () => {
-    expect(view).toContain('function dispatchTab(key, box = hubMount)');
+  it('dispatchTab مقصد صریح دارد — ظرف پیش‌فرض tabMount (موج ۴ + ری‌ورک ۱.۲۷.۶۸)', () => {
+    expect(view).toContain('function dispatchTab(key, box = tabMount)');
     expect(view).toContain('if (desc) { desc.mount(box, ctx); return; }');
-    expect(view).toContain('dispatchTab(activeSectionKey, drawerMount)');
+    expect(view).toContain('dispatchTab(activeSectionKey, tabMount)');
     expect(view).not.toContain('const refRoot ='); // آکاردئون کلاسیک حذف شد
     expect(view).toContain("import { resolveWorkshopLanding } from '../profile/landing.js'");
     expect(view).toContain('resolveWorkshopLanding({ canSeeClinical: Boolean(canSeeClinical), canSeeGames: Boolean(canSeeGames), query: ctx.query ?? {} })');

@@ -37,7 +37,7 @@ describe('ساختار sdt144 — بررسی منبع', () => {
     expect(keys).toEqual(['timeline', 'clinical', 'followups', 'narrative', 'snapshot', 'sessions', 'exercises', 'games', 'comms']);
   });
 
-  it('۳) کارت پیگیری تک‌منبع: ایستگاه follow و بخش کشو هر دو از buildFollowupsCard می‌خوانند', () => {
+  it('۳) کارت پیگیری تک‌منبع: ایستگاه follow و نمای تب پیگیری‌ها هر دو از buildFollowupsCard می‌خوانند', () => {
     expect(view).toContain('function buildFollowupsCard()');
     expect(view).toContain('return buildFollowupsCard();');
     expect(view).toContain('function renderFollowupsSection(box)');
@@ -45,21 +45,20 @@ describe('ساختار sdt144 — بررسی منبع', () => {
     expect(view).not.toContain('buildNextApptCard'); // کارت مردهٔ پوستهٔ کلاسیک حذف شد
   });
 
-  it('۴) پنل فشرده/کامل: mount همان renderInfoTab + Esc + سوییچ در نوار هویت', () => {
-    expect(view).toContain("dispatchTab('info', infoDetailMount)");
-    expect(view).toContain("const infoEsc = (e) => { if (e.key === 'Escape' && infoDetailOpen) toggleInfoDetail(false); };");
-    expect(view).toContain("class: 'btn btn--soft btn--sm idbar__detail-btn'");
-    expect(view).toContain("'اطلاعات کامل'");
-    expect(view).toMatch(/if \(infoDetailMounted && keys\.includes\('info'\)\) dispatchTab\('info', infoDetailMount\);/);
+  it('۴) کارت اول «اطلاعات پایه»: ویرایشگر مسئول داخل کارت — بدون پنل و سوییچ فشرده/کامل', () => {
+    expect(view).toContain('function renderInfoTabWithOwner(box)');
+    expect(view).toContain('info: renderInfoTabWithOwner,');
+    expect(view).toContain("box.append(el('div', { class: 'tabowner' }, buildOwnerEditor(student, onOwnerSaved)))");
+    expect(view).not.toContain('idbar__detail-btn');
+    expect(view).not.toContain('toggleInfoDetail');
   });
 
   it('۵) موبایل: منوی تمام‌عرض + sticky تک‌ردیفه + مسئول فقط در حالت کامل', () => {
     const base = read('public/assets/css/base.css');
     expect(css).toMatch(/\.dd__panel \{\s*position: fixed;\s*inset-inline: 12px;/);
     expect(css).toMatch(/\.hub__sticky \{ flex-wrap: nowrap; overflow-x: auto; \}/);
-    expect(css).toMatch(/\.idbar__owner \{ display: none; \}/);
-    expect(css).toMatch(/\.idbar--detailed \.idbar__owner \{ display: flex; flex-wrap: wrap; \}/);
-    expect(css).toMatch(/\.infopanel \{/);
+    expect(css).toMatch(/\.tabowner \{/);
+    expect(css).toMatch(/\.ptabs \{/);
     /* سرریز افقی سند از کشوی بیرون‌صفحه — clip روی body (روی html کنار overflow-y:scroll به auto تبدیل می‌شد) */
     expect(base).toMatch(/body \{\s*overflow-x: clip;\s*\}/);
   });
@@ -84,11 +83,11 @@ describe('۱.۲۷.۶۷ (sdt145) — ردیف فشردهٔ «همه‌چیز» ن
     expect(view).toContain('relationLabel(student.guardianRelation)');
     expect(css).toMatch(/\.idbar__facts \{/);
     /* در حالت کامل، پنل زیر نوار همان فیلدها را می‌دهد — ردیف فشرده تکرار نمی‌شود */
-    expect(css).toMatch(/\.idbar--detailed \.idbar__facts \{ display: none; \}/);
+    expect(css).not.toMatch(/\.idbar--detailed/); // facts همیشه زیر نوار است — حالت کامل حذف شد
   });
 
-  it('۸) بلور پس‌زمینه یکدست و حرفه‌ای: کشو، مودال و سایدبار همه ۱۲px + اشباع ۱٫۲۵', () => {
-    expect(css).toMatch(/\.refdrawer__backdrop \{[\s\S]*?backdrop-filter: blur\(12px\) saturate\(1\.25\);/);
+  it('۸) بلور پس‌زمینه یکدست و حرفه‌ای: مودال و سایدبار ۱۲px + اشباع ۱٫۲۵ — کشو کلاً حذف شد', () => {
+    expect(css).not.toMatch(/\.refdrawer/);
     expect(comp).toMatch(/\.modal-overlay \{[\s\S]*?backdrop-filter: blur\(12px\) saturate\(1\.25\);/);
     expect(base).toMatch(/\.sidebar-backdrop \{[\s\S]*?backdrop-filter: blur\(12px\) saturate\(1\.25\);/);
     expect(css).not.toMatch(/rgb\(0 0 0 \/ \.38\)/); // پردهٔ میراثی جایش را توکن تم داد

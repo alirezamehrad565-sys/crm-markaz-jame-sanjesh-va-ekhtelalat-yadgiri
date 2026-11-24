@@ -47,11 +47,11 @@ describe('پوستهٔ «میز جلسه + پروندهٔ مرجع» — ۱.۲۷
     expect(view).not.toContain("const desk = el('div', { class: 'desk' }"); // گرید دوستونهٔ کلاسیک حذف شد
   });
 
-  it('پروندهٔ مرجع: ریل لبهٔ ۹بخشی + کشوی لغزنده با mount تنبل (آکاردئون کلاسیک حذف شد — موج ۴)', () => {
+  it('پروندهٔ مرجع: نوار تب نماها (۱.۲۷.۶۸ — بدون ریل/کشو) با mount تنبل در tabMount (آکاردئون کلاسیک حذف شد — موج ۴)', () => {
     expect(view).toContain('function refSections()');
     expect(view).toContain("{ key: 'snapshot', label: 'گزارش‌های قطعی — واریانت متخصص/خانواده/مدرسه + چاپ A4', icon: 'file', when: () => true }");
-    expect(view).toContain('function buildEdgeRail()');
-    expect(view).toContain('dispatchTab(key, drawerMount)'); // ظرف اختصاصی کشو — هاب دست‌نخورده
+    expect(view).toContain('function buildProfileTabs()');
+    expect(view).toContain('dispatchTab(key, tabMount)'); // ظرف اختصاصی کارت فعال — هاب دست‌نخورده
     expect(view).not.toContain('function buildReference()'); // آکاردئون کلاسیک حذف شد
     expect(view).not.toContain('body.replaceChildren(content)'); // ظرف مشترک قدیمی حذف شد
     expect(view).toContain('snapshot: renderSnapshotSection'); // آ-۵ در dispatch
@@ -74,7 +74,7 @@ describe('پوستهٔ «میز جلسه + پروندهٔ مرجع» — ۱.۲۷
   });
 
   it('CSS کارگاه با رسپانسیو موبایل؛ بلوک‌های مردهٔ پوستهٔ کلاسیک پاک شده‌اند (موج ۴)', () => {
-    expect(viewsCss).toMatch(/\.workshop \{/);
+    expect(viewsCss).not.toMatch(/\.workshop/); // ۱.۲۷.۶۸ — هاب حذف شد؛ نماها تب‌اند
     expect(viewsCss).toMatch(/\.flow-cta-mobile \{/);
     expect(viewsCss).not.toMatch(/^\.desk \{/m);
     expect(viewsCss).not.toMatch(/^\.refitem \{/m);

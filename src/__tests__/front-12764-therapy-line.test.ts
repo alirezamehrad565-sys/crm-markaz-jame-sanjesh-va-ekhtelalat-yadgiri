@@ -103,15 +103,15 @@ describe('ساختار موج ۳ — پوسته (بررسی منبع)', () => {
     expect(view).toMatch(/st && st\.tone !== 'neutral' \? el\('span', \{ class: 'stbadge stbadge--ok'/);
   });
 
-  it('۸) ریل: is-active بخش باز + اسکرول/فلش هاب برای «تفسیر و طرح درمان»', () => {
-    expect(view).toMatch(/edge\.querySelectorAll\('\.edge__btn\.is-active'\)\.forEach\(\(b\) => b\.classList\.remove\('is-active'\)\);/);
-    expect(view).toMatch(/if \(key === 'clinical'\) \{\s*\n\s*hubBody\.scrollIntoView\(/);
+  it('۸) تب‌ها: is-active نمای فعال + اسکرول/فلش کارت فعال برای «تفسیر و طرح درمان» (۱.۲۷.۶۸)', () => {
+    expect(view).toMatch(/ptabs\.querySelectorAll\('\.ptab'\)\.forEach\(\(b\) => \{/);
+    expect(view).toMatch(/if \(key === 'clinical'\) \{\s*\n\s*tabMount\.scrollIntoView\(/);
     expect(css).toMatch(/\.hub-flash \{ animation: hub-flash 1\.2s ease; \}/);
     expect(css).toMatch(/\.chip--ok \{ background: var\(--success-soft\)/);
   });
 
   it('۹) کشوی دیپ‌لینک فوری باز می‌شود (بدون انتظار دادهٔ موازی)', () => {
-    expect(view).toMatch(/if \(landing\.drawer\) openRef\(landing\.drawer\);/);
+    expect(view).toMatch(/openRef\(landing\.drawer\s*\?\? \(\(ctx\.query\?\.tab \?\? ctx\.query\?\.section\) === 'clinical'/);
   });
 
   it('۱۰) پالت ⌘K: بخش‌های پروندهٔ باز بالای نتایج سراسری', () => {
