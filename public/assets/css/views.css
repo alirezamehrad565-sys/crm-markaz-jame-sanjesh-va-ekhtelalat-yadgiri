@@ -375,8 +375,8 @@
    آیتم فعال مثل nav__item.is-active (primary-soft) — هماهنگ با زبان «گرد و شناور» */
 .tabs {
   display: inline-flex;
-  gap: 2px;
-  padding: 3px;
+  gap: 4px; /* ۱.۲۷.۷۰ — پلهٔ ۴pt (Impeccable: مقیاس ۴) */
+  padding: 4px;
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-full);
@@ -401,21 +401,22 @@
   background: transparent;
   padding: var(--sp-2) var(--sp-4);
   font-size: var(--fs-md);
-  font-weight: 500;
+  font-weight: 600; /* ۱.۲۷.۷۰ — تب غیرفعال هم خوانا (نقد کارفرما: خوانایی ناکافی بود) */
   line-height: var(--lh-ui, 1.5); /* -e — از مقیاس تایپ */
-  color: var(--text-2);
+  color: var(--text); /* به‌جای text-2 مات روی سطح ۲ — Impeccable: خوانایی قبل از زیبایی */
   cursor: pointer;
   border-radius: var(--radius-full);
   transition: background var(--fast), color var(--fast), box-shadow var(--fast), transform var(--fast);
   white-space: nowrap;
 }
-.tab:hover { color: var(--text); }
+.tab:not(.is-active):hover { background: var(--surface-3); } /* ۱.۲۷.۷۰ — بازخورد لمسی واضح */
 .tab:active { transform: scale(0.985); }
 .tab:focus-visible { box-shadow: var(--focus-ring); }
 .tab.is-active {
   background: var(--primary-soft);
   color: var(--on-primary-soft);
-  font-weight: 600;
+  font-weight: 700; /* سلسله‌مراتب: فعال از غیرفعال سبک‌تر دیده نمی‌شود */
+  box-shadow: var(--shadow-1); /* عمق متعادل — Impeccable: اگر سایه واضح است، زیاد است */
 }
 .tab.is-active .ico { color: var(--on-primary-soft); }
 
@@ -4703,9 +4704,15 @@ body.cb-printing #cb-print-root { display: block; }
 .idfact svg { flex: 0 0 auto; opacity: .8; }
 .idbar__facts .call-badge { flex: 0 0 auto; }
 .idbar .avatar-lg { border-radius: var(--radius-full); }
+/* ۱.۲۷.۷۰ — کنش‌های سرصفه وزن تایپوگرافی یکسان و خوانا دارند؛ روی لمسی هدف بلندتر */
+.idbar__side .btn { font-weight: 600; }
+@media (pointer: coarse) {
+  .idbar__side .btn { min-height: 40px; }
+}
 
 /* ۱.۲۷.۶۹ — تب نماها از ui.tabs() کلاسیک (components.css) می‌آید؛ فلوی آماده‌سازی/برگزاری،
    نوار کار، هاب sticky و ptabs سفارشی حذف شدند — ابزارکِ بی‌فایده نیست، نماها هست. */
+.profile-tabs { margin-top: var(--sp-3); } /* ۱.۲۷.۷۰ — تب‌ها به نوار هویت چسبیده بودند (گپ ۰) */
 .tabmount { min-width: 0; display: flex; flex-direction: column; gap: var(--sp-3); margin-top: var(--sp-2); }
 
 /* ۱.۲۷.۶۸ — ویرایشگر مسئول/وضعیت داخل کارت «اطلاعات پایه» (تب اول)؛ ردیف facts همیشه زیر نوار */

@@ -42,7 +42,8 @@ describe('پوستهٔ «میز پرونده» — ۱.۲۷.۶۹', () => {
   it('③ تب کلاسیک ui.tabs() — قرارداد مشترک سایت؛ کارت اول «اطلاعات پایه»', () => {
     expect(view).toContain('function buildTabBar()');
     expect(view).toContain("{ key: 'info', label: RAIL_SHORT_LABEL.info, icon: 'user' }");
-    expect(view).toContain("return tabs(views.map((s) => ({ key: s.key, label: s.label, icon: s.icon, onSelect: (k) => openRef(k) })), activeSectionKey ?? 'info');");
+    expect(view).toContain("const bar = tabs(views.map((s) => ({ key: s.key, label: s.label, icon: s.icon, onSelect: (k) => openRef(k) })), activeSectionKey ?? 'info');"); // ۱.۲۷.۷۰ — کلاس profile-tabs برای فاصلهٔ استاندارد
+    expect(view).toContain("bar.root.classList.add('profile-tabs')");
     expect(view).toContain('const tabBar = buildTabBar();');
     expect(view).toContain('idbarHolder,\n    tabBar.root,\n    tabMount');
     expect(view).not.toContain('function buildProfileTabs()');

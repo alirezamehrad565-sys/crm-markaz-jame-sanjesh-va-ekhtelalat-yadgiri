@@ -577,7 +577,9 @@ export async function renderStudentProfile(container, ctx) {
         : [{ key: 'today', label: RAIL_SHORT_LABEL.today, icon: 'calendar' }]),
       ...refSections().filter((s) => s.key !== 'clinical')
     ];
-    return tabs(views.map((s) => ({ key: s.key, label: s.label, icon: s.icon, onSelect: (k) => openRef(k) })), activeSectionKey ?? 'info');
+    const bar = tabs(views.map((s) => ({ key: s.key, label: s.label, icon: s.icon, onSelect: (k) => openRef(k) })), activeSectionKey ?? 'info');
+    bar.root.classList.add('profile-tabs'); /* ۱.۲۷.۷۰ — فاصلهٔ استاندارد تا نوار هویت */
+    return bar;
   }
   const tabBar = buildTabBar();
 
