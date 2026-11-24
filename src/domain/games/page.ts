@@ -11,7 +11,18 @@ function faNum(n: number): string {
 }
 
 function esc(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+/* SEC-12775 (security-001 ممیزی): embed امن JSON داخل <script> درون‌خطی — < > و جداکننده‌های
+   خط به فرار یونی‌کد می‌روند تا خروج از بلاک اسکریپت با </script> ناممکن شود، حتی وقتی
+   CSP صفحه `unsafe-inline` است. توکن از مسیر URL می‌آید و باید هرگز خام نشیند. */
+function safeJson(v: unknown): string {
+  return JSON.stringify(v ?? null)
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
 }
 
 /* پوستهٔ اختصاصی نوع‌بازی (G7/۱.۲۵.۴۳) — هر بازی فایل CSS خودش را می‌گیرد؛
@@ -85,7 +96,7 @@ function page(model: PublicStateView, token: string, body: string): string {
 <div class="wrap">${body}</div>
 <script>
 (function () {
-  var TOKEN = ${JSON.stringify(token)};
+  var TOKEN = ${safeJson(token)};
   function post(path, body) {
     return fetch('/api/m/' + TOKEN + path, {
       method: 'POST',

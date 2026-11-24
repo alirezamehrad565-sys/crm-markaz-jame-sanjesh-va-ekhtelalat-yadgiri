@@ -103,7 +103,7 @@ function faNum(s: string | number): string {
   return String(s).replace(/\d/g, (d) => FA_DIGITS[Number(d)]);
 }
 function esc(s: string | null | undefined): string {
-  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 function fmtNum(v: number | null): string {
   if (v == null) return '—';

@@ -178,7 +178,7 @@ export function renderPreviewPage(def: CaseEventTypeInput, token: string): strin
   var TOTAL = ${total};
   var FA = '۰۱۲۳۴۵۶۷۸۹';
   function fa(n) { return String(n).replace(/[0-9]/g, function (d) { return FA[Number(d)]; }); }
-  function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
 
   function updateProgress() {
     var answered = {};

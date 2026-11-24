@@ -423,7 +423,11 @@ export function openModal({ title, body, actions = [], wide = false, onClose }) 
   modalStack.push(overlay);
   document.body.style.overflow = 'hidden'; /* S11-03: بدنهٔ پشت مودال اسکرول نکند */
 
-  const first = modal.querySelector('input, select, textarea, button.btn--primary');
+  /* UX-ممیزی ui-004: فوکوس اولیه فقط روی عنصر واقعاً رندرشده — همان صافی getClientRects
+     تلهٔ فوکوس؛ querySelector خام می‌توانست input مخفی (مثل چک‌باکس switch) را فوکوس کند */
+  const first = ['input', 'select', 'textarea', 'button.btn--primary']
+    .map((sel) => focusablesOf().find((n) => n.matches(sel)))
+    .find(Boolean);
   if (first) setTimeout(() => first.focus(), 60);
 
   return { close, root: modal };
