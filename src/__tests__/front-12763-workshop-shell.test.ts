@@ -5,7 +5,7 @@
  *  ② هاب: نوار sticky (خط درمان از فصل‌های تاریخچه + جلسهٔ بعدی) + بدنهٔ همیشه‌نما (تفسیر بالینی
  *     برای نقش بالینی، هاب امروز برای بقیه) — فقط یک‌بار mount؛ repaint دوباره mount نمی‌کند.
  *  ③ ریل لبه = همان ۹ بخش refSections با برچسب کوتاه؛ کلیک = کشوی لغزنده با Esc/بک‌دراپ/فوکوس‌برگشت.
- *  ④ پوستهٔ کلاسیک دست‌نخورده: desk دوستونه + آکاردئون + ظرف مشترک content — dispatchTab مقصد صریح دارد.
+ *  ④ موج ۴: پوستهٔ کلاسیک حذف شد — کارگاه تنها پوسته است؛ dispatchTab مقصد صریح دارد (هاب/کشو).
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -18,12 +18,11 @@ describe('پوستهٔ «کارگاه درمان» — ۱.۲۷.۶۳ (بررسی 
   const view = read('public/assets/js/views/student-profile.js');
   const css = read('public/assets/css/views.css');
 
-  it('فلگ پوسته: پیش‌فرض کارگاه، برگشت با ?shell=desk یا localStorage', () => {
-    expect(view).toContain("localStorage.getItem('cs.profile.shell') === 'desk'");
-    expect(view).toMatch(/if \(q === 'desk' \|\| q === 'workshop'\) return q;/);
-    expect(view).toMatch(/return 'workshop';/);
-    expect(view).toMatch(/const isWorkshop = shellMode === 'workshop';/);
-    expect(view).toContain("'پوستهٔ کلاسیک میز جلسه — برگشت به چیدمان قبلی'");
+  it('کارگاه درمان تنها پوسته است — فلگ برگشت و پوستهٔ کلاسیک حذف شدند (موج ۴)', () => {
+    expect(view).not.toContain("localStorage.getItem('cs.profile.shell')");
+    expect(view).not.toContain("const isWorkshop = shellMode === 'workshop';");
+    expect(view).not.toContain('پوستهٔ کلاسیک میز جلسه — برگشت به چیدمان قبلی');
+    expect(view).toContain('تنها پوستهٔ پروفایل است');
   });
 
   it('هاب درمان: sticky + mount همیشه‌نما با گارد یک‌بار-mount و واریانت هاب امروز', () => {
@@ -54,17 +53,16 @@ describe('پوستهٔ «کارگاه درمان» — ۱.۲۷.۶۳ (بررسی 
     expect(css).toMatch(/@media \(max-width: 1080px\)/);
   });
 
-  it('dispatchTab مقصد صریح دارد و پوستهٔ کلاسیک با همان ظرف content می‌ماند', () => {
-    expect(view).toMatch(/function dispatchTab\(key, box = content\)/);
-    expect(view).toMatch(/dispatchTab\(activeSectionKey, isWorkshop \? drawerMount : content\)/);
-    expect(view).toMatch(/const refRoot = isWorkshop \? null : buildReference\(\);/);
-    expect(view).toMatch(/deskMain\.replaceChildren\(buildWorkbar\(activeStation\)\)/);
-    expect(view).toMatch(/deskRef\.replaceChildren\(buildNextApptCard\(\), refRoot\)/);
-    expect(view).toMatch(/import \{ resolveWorkshopLanding \} from '\.\.\/profile\/landing\.js'/);
-    expect(view).toMatch(/resolveWorkshopLanding\(\{ canSeeClinical: Boolean\(canSeeClinical\), canSeeGames: Boolean\(canSeeGames\), query: ctx\.query \?\? \{\} \}\)/);
+  it('dispatchTab مقصد صریح دارد — هاب mount پیش‌فرض و کشو ظرف اختصاصی (موج ۴)', () => {
+    expect(view).toContain('function dispatchTab(key, box = hubMount)');
+    expect(view).toContain('if (desc) { desc.mount(box, ctx); return; }');
+    expect(view).toContain('dispatchTab(activeSectionKey, drawerMount)');
+    expect(view).not.toContain('const refRoot ='); // آکاردئون کلاسیک حذف شد
+    expect(view).toContain("import { resolveWorkshopLanding } from '../profile/landing.js'");
+    expect(view).toContain('resolveWorkshopLanding({ canSeeClinical: Boolean(canSeeClinical), canSeeGames: Boolean(canSeeGames), query: ctx.query ?? {} })');
   });
 
-  it('نوار کار در کارگاه پیش‌فرض جمع است — تفسیر بالینی قهرمان فولد اول', () => {
-    expect(view).toMatch(/let workbarCollapsed = isWorkshop;/);
+  it('نوار کار پیش‌فرض جمع است — تفسیر بالینی قهرمان فولد اول', () => {
+    expect(view).toMatch(/let workbarCollapsed = true;/);
   });
 });

@@ -122,7 +122,6 @@ export async function renderStudentProfile(container, ctx) {
      رفتند؛ کروم صفحه (کارت وضعیت + نوار تب‌ها) بلافاصله با دادهٔ خود دانش‌آموز رندر می‌شود و
      وقتی پاسخ‌ها رسید، کارت و تب‌ها درجا تازه و تب درخواستی با دادهٔ کامل رندر می‌شود. */
   let auxDone = false;
-  let pendingTab = null;
   const auxPromise = (async () => {
     try {
       const [schoolsRes, apptRes, tagsRes, allTagsRes, evRes, notesRes, staffRes, tlRes, focusKeysRes, focusLabelMap, fuRes] = await Promise.all([
@@ -167,20 +166,9 @@ export async function renderStudentProfile(container, ctx) {
      chunk مخصوص خودش دارد (import داینامیک در renderGamesTabContent) تا از بار پروفایل سبک بماند */
   const canSeeGames = session.user && ['manager', 'therapist'].includes(session.user.role);
 
-  /* ۱.۲۷.۶۳ — موج ۲ «کارگاه درمان» (برندهٔ مسابقهٔ بازطراحی — طرح C، برنامهٔ docs/PROFILE-REDESIGN-PROGRAM.md):
-     هاب درمان چسبان قهرمان صفحه است (تفسیر بالینی و طرح درمان همیشه در بدنهٔ هاب)؛ ایستگاه‌های جلسه
-     نوار ابزار + نوار کار تاشو؛ ۹ بخش مرجع به ریل لبه + کشوی لغزنده می‌روند. فلگ برگشت:
-     localStorage 'cs.profile.shell' = 'desk' یا ?shell=desk — پوستهٔ کلاسیک میز جلسه دست‌نخورده می‌ماند. */
-  const shellMode = (() => {
-    try {
-      const u = new URL(location.hash.slice(1), location.origin);
-      const q = u.searchParams.get('shell');
-      if (q === 'desk' || q === 'workshop') return q;
-      if (localStorage.getItem('cs.profile.shell') === 'desk') return 'desk';
-    } catch { /* نشانی غیراستاندارد یا حالت خصوصی مرورگر */ }
-    return 'workshop';
-  })();
-  const isWorkshop = shellMode === 'workshop';
+  /* ۱.۲۷.۶۵ — موج ۴: پوستهٔ «کارگاه درمان» (برندهٔ مسابقهٔ بازطراحی — طرح C، برنامهٔ
+     docs/PROFILE-REDESIGN-PROGRAM.md) تنها پوستهٔ پروفایل است — پوستهٔ کلاسیک میز جلسه با
+     آکاردئون و فلگ برگشت حذف شد؛ هاب درمان قهرمان صفحه است و ۹ بخش مرجع در ریل لبه + کشو. */
 
   /* موج ۲ — ابزارهای جلسه/پیگیری در سطح نما: هم برگهٔ جلسه (طرح B)، هم تب جلسات و خط زمانی از همین می‌خوانند */
   const eventsOfAppt = (apptId) => caseEvents.filter((e) => e.appointmentId === apptId && e.status !== 'cancelled');
@@ -344,13 +332,8 @@ export async function renderStudentProfile(container, ctx) {
           ? item('refresh', 'تغییر مسیر پرونده — تفسیر بالینی بر همین اساس شاخه می‌خورد', () =>
               openPathwayModal(student, onPathwaySaved))
           : null,
-        /* ۱.۲۷.۶۳ — موج ۲: فلگ برگشت پوسته — کارگاه درمان ↔ میز جلسهٔ کلاسیک؛ بدون مهاجرت داده */
-        item(isWorkshop ? 'calendar' : 'target',
-          isWorkshop ? 'پوستهٔ کلاسیک میز جلسه — برگشت به چیدمان قبلی' : 'بازگشت به کارگاه درمان',
-          () => {
-            try { localStorage.setItem('cs.profile.shell', isWorkshop ? 'desk' : 'workshop'); } catch { /* حالت خصوصی */ }
-            location.reload(); // کل پوسته عوض می‌شود — reload ساده و بی‌ابهام (فلگ از localStorage می‌آید)
-          }),
+        /* ۱.۲۷.۶۵ — موج ۴: برگهٔ چاپی خانواده/مدرسه — خلاصهٔ بی‌تفسیر برای ولیّ و معلم */
+        item('printer', 'چاپ برگهٔ خانواده/مدرسه — خلاصهٔ بی‌تفسیر', () => printFamilySheet()),
         canManageCase
           ? item('trash', 'حذف کامل پرونده — تأیید دومرحله‌ای', () =>
               openStudentDelete(student, { onDeleted: () => { location.hash = '#/students'; } }), true)
@@ -424,21 +407,21 @@ export async function renderStudentProfile(container, ctx) {
      در ستون «پروندهٔ مرجع» آکاردئونی زندگی می‌کنند. تب‌های تخت حذف شدند ولی رندررهای محتوایی
      (info/timeline/sessions/clinical/narrative/exercises/games/comms) عیناً همان‌های قبلی‌اند و
      در خانه‌های تازه سرو می‌شوند — هیچ قابلیتی بی‌خانه نمانده (docs/PROFILE-UI-TOURNAMENT.md). */
-  const content = el('div', {});
-  let activeSectionKey = null; // بخشِ بازِ پروندهٔ مرجع (کلید refSections) یا null — میز جلسهٔ خالص
-  let activeStation = 'ready'; // ایستگاه فعال میز جلسه
-  let workbarCollapsed = isWorkshop; // ۱.۲۷.۶۲ — نوار کار تاشو (موج ۲: در کارگاه، پیش‌فرض جمع — تفسیر بالینی قهرمان است)
+  /* ۱.۲۷.۶۵ — موج ۴: ظرف مشترک content و پوستهٔ کلاسیک حذف شد — کارگاه درمان تنها پوسته است.
+     dispatch مقصد صریح می‌گیرد (هاب درمان/کشوی مرجع) تا mount تنبل و جریان پیوستهٔ ۱.۲۰.۰
+     (هیچ اکشنی کل نما را rebuild نمی‌کند) عیناً برقرار بماند. */
+  let activeSectionKey = null; // بخشِ باز در کشوی مرجع (کلید refSections) یا null
+  let activeStation = 'ready'; // ایستگاه فعال نوار ابزار
 
-  /* موج ۰ طرح ارتقای پرونده — رجیستری همان است؛ dispatch به ظرف مقصد می‌رود (موج ۲: مقصد
-     صریح می‌شود — هاب درمان/کشوی مرجع در پوستهٔ کارگاه، ظرف مشترک content در پوستهٔ کلاسیک)
-     تا mount تنبل و جریان پیوستهٔ ۱.۲۰.۰ (هیچ اکشنی کل نما را rebuild نمی‌کند) عیناً برقرار بماند. */
+  /* موج ۰ طرح ارتقای پرونده — رجیستری همان است؛ dispatch به ظرف مقصد می‌رود
+     تا mount تنبل و جریان پیوستهٔ ۱.۲۰.۰ عیناً برقرار بماند. */
   const profileTabs = createProfileRegistry([
     { key: 'clinical', when: () => canSeeClinical, mount: (box) => renderClinicalTabContent(box) },
     { key: 'narrative', when: () => canSeeClinical, mount: (box) => renderNarrativeTabContent(box) },
     { key: 'games', when: () => canSeeGames, mount: (box) => renderGamesTabContent(box) } // ۱.۲۵.۲۴ — chunk داینامیک حفظ می‌شود
   ]);
 
-  function dispatchTab(key, box = content) {
+  function dispatchTab(key, box = hubMount) {
     const desc = profileTabs.resolve(key, ctx);
     if (desc) { desc.mount(box, ctx); return; }
     const renderer = {
@@ -568,10 +551,7 @@ export async function renderStudentProfile(container, ctx) {
     renderDesk();
   }
 
-  /* ─── میز جلسه: فقط ایستگاه فعال رندر می‌شود (ناحیهٔ ۳ نقشه) — setStation در بالا ─── */
-  const deskMain = el('div', { class: 'desk__main' });
-  const deskRef = el('div', { class: 'desk__ref' });
-  const desk = el('div', { class: 'desk' }, deskMain, deskRef);
+  /* ─── میز جلسه: نوار ابزار + نوار کار تاشو (۱.۲۷.۶۲) — setStation در بالا ─── */
   const idbarHolder = el('div', {});
   const flowHolder = el('div', {});
   /* CTA چسبان پایین موبایل — جایگزین ناوبری تب‌های بریدهٔ وضع قبل؛ روی دسکتاپ مخفی است */
@@ -585,6 +565,7 @@ export async function renderStudentProfile(container, ctx) {
   const hubStickyEl = el('div', { class: 'hub__sticky' });
   const hubMount = el('div', { class: 'hub__mount' });
   const hubBody = el('div', { class: 'hub__body' }, hubMount);
+  let workbarCollapsed = true; // ۱.۲۷.۶۵ — موج ۴: پوستهٔ کارگاه تنها پوسته است؛ نوار کار پیش‌فرض جمع
   const hub = el('div', { class: 'hub' }, hubStickyEl, hubBody);
   const edge = el('div', { class: 'edge', role: 'navigation', 'aria-label': 'پروندهٔ مرجع — ریل بخش‌ها' });
   const workshop = el('div', { class: 'workshop' }, hub, edge);
@@ -662,6 +643,12 @@ export async function renderStudentProfile(container, ctx) {
           onclick: () => openRef('timeline')
         }, icon(isCurrent ? 'target' : 'check', 12), chapterLabelOf(ch)));
       }
+      /* ۱.۲۷.۶۵ — موج ۴: چاپ A4 خلاصهٔ فصل جاری — جلسات و رویدادهای همین بازه، از دادهٔ زندهٔ نما */
+      chips.push(el('button', {
+        class: 'chip hub__next', type: 'button',
+        title: 'چاپ A4 خلاصهٔ فصل جاری — جلسات و رویدادهای همین بازه',
+        onclick: () => printCurrentChapter()
+      }, icon('printer', 12), 'چاپ فصل جاری'));
     }
     const up = auxDone ? upcomingAppt() : null;
     if (up) {
@@ -863,23 +850,6 @@ export async function renderStudentProfile(container, ctx) {
     ];
   }
 
-  function buildReference() {
-    const items = refSections().filter((s) => s.when()).map((s) => {
-      const body = el('div', { class: 'refitem__body' });
-      const node = el('details', { class: 'refitem', 'data-ref': s.key },
-        el('summary', {}, icon(s.icon, 15), el('span', {}, s.label)),
-        body
-      );
-      node.addEventListener('toggle', () => {
-        if (node.open) openRef(s.key, { node, body });
-        else closeRef(s.key);
-      });
-      return node;
-    });
-    return el('div', { class: 'reflist' }, items);
-  }
-  const refRoot = isWorkshop ? null : buildReference(); // پوستهٔ کلاسیک؛ در کارگاه ریل لبه + کشو جای آن را می‌گیرد
-
   /* ۱.۲۷.۶۰ — نقد §۹ هفتهٔ ۲: بخش بازِ پروندهٔ مرجع هم در نشانی می‌ماند (نقص ۱۴ کامل —
      نقص ایستگاه در ۱.۲۷.۵۹ بسته شد؛ این نیمهٔ «بخش» آن است) */
   function syncSectionUrl(key) {
@@ -891,9 +861,9 @@ export async function renderStudentProfile(container, ctx) {
   }
 
   function openRef(key, { node, body } = {}) {
-    /* ۱.۲۷.۶۳ — موج ۲: در کارگاه، بالینی خانه‌اش هاب است؛ ۱.۲۷.۶۴ نقد فلوی: کلیک «تفسیر و طرح
-       درمان» روی ریل دیگر کلیک مرده نیست — به هاب اسکرول و فلش می‌کند. بقیهٔ بخش‌ها کشوی لغزنده. */
-    if (isWorkshop) {
+    /* ۱.۲۷.۶۵ — موج ۴: بالینی خانه‌اش هاب است — کلیک «تفسیر و طرح درمان» ریل به هاب اسکرول و
+       فلش می‌کند؛ بقیهٔ بخش‌ها کشوی لغزنده با همان رندررهای قدیمی. */
+    {
       if (key === 'clinical') {
         hubBody.scrollIntoView({ behavior: 'smooth', block: 'start' });
         hubBody.classList.add('hub-flash');
@@ -915,38 +885,19 @@ export async function renderStudentProfile(container, ctx) {
       drawerCloseBtn.focus();
       return;
     }
-    if (!node || !body) {
-      const found = refRoot.querySelector(`details[data-ref="${key}"]`);
-      if (!found) return;
-      found.open = true; // toggle → openRef دوباره با node/body می‌آید
-      return;
-    }
-    if (activeSectionKey === key) return;
-    if (activeSectionKey) {
-      const prev = refRoot.querySelector(`details[data-ref="${activeSectionKey}"]`);
-      if (prev && prev !== node) prev.open = false; // toggle → closeRef قبلی
-    }
-    activeSectionKey = key;
-    syncSectionUrl(key);
-    body.replaceChildren(content);
-    dispatchTab(key);
   }
 
   function closeRef(key) {
     if (activeSectionKey !== key) return;
     activeSectionKey = null;
     syncSectionUrl(null);
-    if (isWorkshop) {
-      drawer.classList.remove('is-open');
-      drawerBackdrop.classList.remove('is-open');
-      drawerMount.replaceChildren();
-      document.removeEventListener('keydown', drawerEsc, true);
-      edge.querySelectorAll('.edge__btn.is-active').forEach((b) => b.classList.remove('is-active'));
-      const railBtn = edge.querySelector(`button[data-edge="${key}"]`);
-      if (railBtn) railBtn.focus(); // فوکوس به دکمهٔ ریل — پیمایش کیبورد قطع نمی‌شود
-      return;
-    }
-    content.replaceChildren(); // رندرر فعال رها می‌شود؛ بازکردن دوباره، تازه mount می‌کند
+    drawer.classList.remove('is-open');
+    drawerBackdrop.classList.remove('is-open');
+    drawerMount.replaceChildren();
+    document.removeEventListener('keydown', drawerEsc, true);
+    edge.querySelectorAll('.edge__btn.is-active').forEach((b) => b.classList.remove('is-active'));
+    const railBtn = edge.querySelector(`button[data-edge="${key}"]`);
+    if (railBtn) railBtn.focus(); // فوکوس به دکمهٔ ریل — پیمایش کیبورد قطع نمی‌شود
   }
 
   /* ۱.۲۷.۵۸ — آ-۵: خانهٔ دائمی «گزارش‌های قطعی» — صدور + آرشیو نسخه‌های صادرشده (رفع «گزارش قطعی بی‌خانه») */
@@ -1012,21 +963,16 @@ export async function renderStudentProfile(container, ctx) {
   }
 
   function renderDesk() {
-    /* ۱.۲۷.۶۳ — موج ۲: در کارگاه، «میز» یعنی نوار ابزار + نوار کار جمع‌شده + نوار sticky هاب؛
+    /* ۱.۲۷.۶۵ — موج ۴: «میز» یعنی نوار ابزار + نوار کار جمع‌شده + نوار sticky هاب؛
        بدنهٔ هاب فقط یک‌بار mount می‌شود (تفسیر بالینی/امروز) و repaintها دستش نمی‌زنند. */
-    if (isWorkshop) {
-      workbarHolder.replaceChildren(buildWorkbar(activeStation));
-      hubStickyEl.replaceChildren(...buildHubSticky());
-      if (!hubMountedKey) {
-        hubMountedKey = hubDefaultKey ?? (canSeeClinical ? 'clinical' : 'today');
-        dispatchTab(hubMountedKey, hubMount);
-      } else if (hubMountedKey === 'today') {
-        dispatchTab('today', hubMount); // هاب امروز به ایستگاه فعال وابسته است — با تعویض ایستگاه تازه می‌شود
-      }
-      return;
+    workbarHolder.replaceChildren(buildWorkbar(activeStation));
+    hubStickyEl.replaceChildren(...buildHubSticky());
+    if (!hubMountedKey) {
+      hubMountedKey = hubDefaultKey ?? (canSeeClinical ? 'clinical' : 'today');
+      dispatchTab(hubMountedKey, hubMount);
+    } else if (hubMountedKey === 'today') {
+      dispatchTab('today', hubMount); // هاب امروز به ایستگاه فعال وابسته است — با تعویض ایستگاه تازه می‌شود
     }
-    deskMain.replaceChildren(buildWorkbar(activeStation));
-    deskRef.replaceChildren(buildNextApptCard(), refRoot);
   }
 
   function buildFlowCta() {
@@ -1078,27 +1024,17 @@ export async function renderStudentProfile(container, ctx) {
       el('button', { class: 'btn btn--ghost btn--sm', onclick: () => { location.hash = '#/students'; } }, icon('chevR', 16), 'بازگشت به فهرست')
     )
   );
-  if (isWorkshop) {
-    container.replaceChildren(
-      pageHead,
-      idbarHolder,
-      flowHolder,
-      workbarHolder,
-      workshop,
-      drawerBackdrop,
-      drawer,
-      flowCtaHolder
-    );
-    edge.replaceChildren(...buildEdgeRail());
-  } else {
-    container.replaceChildren(
-      pageHead,
-      idbarHolder,
-      flowHolder,
-      desk,
-      flowCtaHolder
-    );
-  }
+  container.replaceChildren(
+    pageHead,
+    idbarHolder,
+    flowHolder,
+    workbarHolder,
+    workshop,
+    drawerBackdrop,
+    drawer,
+    flowCtaHolder
+  );
+  edge.replaceChildren(...buildEdgeRail());
   idbarHolder.replaceChildren(buildIdentityBar());
   flowHolder.replaceChildren(buildFlowBar());
   flowCtaHolder.replaceChildren(buildFlowCta());
@@ -1106,43 +1042,30 @@ export async function renderStudentProfile(container, ctx) {
 
   const requestedTab = ctx.query?.tab;
   const timelineDeepFilter = ctx.query?.filter ?? (requestedTab === 'followups' ? 'followups' : null);
-  /* ۱.۲۷.۶۳ — موج ۲: فرود کارگاه از تابع خالص resolveWorkshopLanding (یک منبع با آزمون گیت)؛
-     پوستهٔ کلاسیک همان نگاشت REF_OF_TAB قبلی را دارد. */
-  const landing = isWorkshop
-    ? resolveWorkshopLanding({ canSeeClinical: Boolean(canSeeClinical), canSeeGames: Boolean(canSeeGames), query: ctx.query ?? {} })
-    : null;
-  /* ۱.۲۷.۵۸ — دیپ‌لینک‌های قدیمی (?tab=…) محترم می‌مانند: هر کلید تبِ قدیم به خانهٔ تازه‌اش
-     می‌رود (تب‌های مرجع → همان بخش؛ sessions → ایستگاه ثبت میز؛ followups → تاریخچه با فیلتر).
-     ترتیب knownTabs قدیمی برای سازگاری نگه داشته شد. */
-  const knownTabs = ['info', 'timeline', 'sessions', 'comms', 'exercises'];
-  if (canSeeClinical) knownTabs.splice(1, 0, 'clinical', 'narrative');
-  const REF_OF_TAB = { info: 'info', timeline: 'timeline', clinical: 'clinical', narrative: 'narrative', exercises: 'exercises', games: 'games', comms: 'comms' };
-  const requestedRef = !isWorkshop ? (REF_OF_TAB[requestedTab === 'followups' ? 'timeline' : requestedTab] ?? null) : null;
-  if (!isWorkshop && requestedTab === 'sessions') activeStation = 'log';
+  /* ۱.۲۷.۶۳ — فرود کارگاه از تابع خالص resolveWorkshopLanding (یک منبع با آزمون گیت):
+     دیپ‌لینک‌های قدیمی (?tab=…) محترم می‌مانند — تب‌های مرجع → کشو؛ clinical → هاب؛
+     sessions → ایستگاه ثبت؛ followups → تاریخچه با فیلتر. */
+  const landing = resolveWorkshopLanding({ canSeeClinical: Boolean(canSeeClinical), canSeeGames: Boolean(canSeeGames), query: ctx.query ?? {} });
   /* ۱.۲۷.۵۹ — ایستگاه از نشانی (?station=…)؛ ۱.۲۷.۶۰ — بخش مرجع از نشانی (?section=…) برمی‌گردد */
-  if (landing?.station) activeStation = landing.station;
+  if (landing.station) activeStation = landing.station;
   if (STATION_ORDER.includes(ctx.query?.station)) activeStation = ctx.query.station;
-  if (isWorkshop) {
-    hubDefaultKey = landing.hub;
-    if (hubMountedKey && hubMountedKey !== hubDefaultKey) { // فرود دیپ‌لینک متفاوت با mount اولیه — هاب عوض می‌شود
-      hubMountedKey = hubDefaultKey;
-      dispatchTab(hubMountedKey, hubMount);
-    }
-    /* ۱.۲۷.۶۴ — نقد فلوی: کشوی دیپ‌لینک فوری باز می‌شود نه بعد از رسیدن دادهٔ موازی؛
-       رندررها mount تنبل و اسکلت خودشان را دارند (قرارداد ۱.۲۰.۰) */
-    if (landing.drawer) openRef(landing.drawer);
-  } else {
-    if (!requestedRef && ctx.query?.section) pendingTab = String(ctx.query.section);
-    if (requestedRef) pendingTab = requestedRef; // دادهٔ موازی هنوز نرسیده — بعد از رسیدن، بخش باز می‌شود
+  hubDefaultKey = landing.hub;
+  if (hubMountedKey && hubMountedKey !== hubDefaultKey) { // فرود دیپ‌لینک متفاوت با mount اولیه — هاب عوض می‌شود
+    hubMountedKey = hubDefaultKey;
+    dispatchTab(hubMountedKey, hubMount);
   }
+  /* ۱.۲۷.۶۴ — نقد فلوی: کشوی دیپ‌لینک فوری باز می‌شود نه بعد از رسیدن دادهٔ موازی؛
+     رندررها mount تنبل و اسکلت خودشان را دارند (قرارداد ۱.۲۰.۰) */
+  if (landing.drawer) openRef(landing.drawer);
 
-  /* رسیدن دادهٔ پس‌زمینه: نوار هویت/فلو و میز درجا تازه می‌شوند و بخش در انتظار باز می‌شود. */
+  /* رسیدن دادهٔ پس‌زمینه: نوار هویت/ابزار و نوار کار و sticky هاب درجا تازه می‌شوند و
+     بخشِ بازِ کشو (در صورت بازبودن) با دادهٔ کامل دوباره mount می‌شود. */
   auxPromise.then(() => {
     auxDone = true;
     /* ۱.۲۷.۶۰ — نقد §۹: فرود از قاعدهٔ واحد «وضعیت میز» (جدول ۵) — جای قاعدهٔ نقش‌محور جدا؛
-       نشانگر نوار فلو و فرودگاه دیگر دو حرف نمی‌زنند (ریشهٔ نقص‌های ۳/۵/۷ و شکایت §۷ از فرود درمانگر).
+       نشانگر نوار ابزار و فرودگاه دیگر دو حرف نمی‌زنند.
        جلسهٔ فردای درمانگر دیگر ایستگاه «برگزاری» را باز نمی‌کند — سرور هم حضور آینده را می‌بندد. */
-    if (!requestedTab && !pendingTab && !STATION_ORDER.includes(ctx.query?.station)) {
+    if (!requestedTab && !STATION_ORDER.includes(ctx.query?.station)) {
       activeStation = computeDeskState({
         appointments,
         openFollowups,
@@ -1150,12 +1073,8 @@ export async function renderStudentProfile(container, ctx) {
       }).station;
     }
     repaintChrome();
-    if (pendingTab) {
-      const target = pendingTab;
-      pendingTab = null;
-      openRef(target);
-    } else if (activeSectionKey) {
-      dispatchTab(activeSectionKey); // بخشی که کاربر پیش از رسیدن داده باز کرده بود — با دادهٔ کامل
+    if (activeSectionKey) {
+      dispatchTab(activeSectionKey, drawerMount); // بخشی که کاربر پیش از رسیدن داده باز کرده بود — با دادهٔ کامل
     }
   });
 
@@ -1173,11 +1092,11 @@ export async function renderStudentProfile(container, ctx) {
     renderDesk();
   }
 
-  /* بخش مرجعِ باز فقط وقتی دوباره رندر می‌شود که دادهٔ آن واقعاً عوض شده — صفحه‌بندی/فیلتر محلی بقیه می‌ماند.
-     ۱.۲۷.۶۳ — در کارگاه، کشو به ظرف خودش mount می‌شود و هاب همیشه‌نما هم با تغییر دادهٔ همان کلید تازه می‌شود. */
+  /* بخشِ بازِ کشو فقط وقتی دوباره رندر می‌شود که دادهٔ آن واقعاً عوض شده — صفحه‌بندی/فیلتر محلی بقیه می‌ماند.
+     هاب همیشه‌نما هم با تغییر دادهٔ همان کلید بی‌صدا تازه می‌شود (۱.۲۷.۶۴). */
   function rerenderTabIf(keys) {
-    if (activeSectionKey && keys.includes(activeSectionKey)) dispatchTab(activeSectionKey, isWorkshop ? drawerMount : content);
-    if (isWorkshop && hubMountedKey && keys.includes(hubMountedKey)) dispatchTab(hubMountedKey, hubMount);
+    if (activeSectionKey && keys.includes(activeSectionKey)) dispatchTab(activeSectionKey, drawerMount);
+    if (hubMountedKey && keys.includes(hubMountedKey)) dispatchTab(hubMountedKey, hubMount);
   }
 
   async function refreshCore() {
@@ -1258,7 +1177,7 @@ export async function renderStudentProfile(container, ctx) {
          و نوار sticky هاب را درجا تازه می‌کند — تک‌منبع، صفر fetch تازه */
       onTherapyLine: (steps) => {
         therapySteps = Array.isArray(steps) && steps.length > 0 ? steps : null;
-        if (isWorkshop) hubStickyEl.replaceChildren(...buildHubSticky());
+        hubStickyEl.replaceChildren(...buildHubSticky());
       }
     });
   }
@@ -1762,6 +1681,112 @@ export async function renderStudentProfile(container, ctx) {
     const cleanup = () => { root.replaceChildren(); window.removeEventListener('afterprint', cleanup); };
     window.addEventListener('afterprint', cleanup);
     window.print();
+  }
+
+  /* ═══ ۱.۲۷.۶۵ — موج ۴: چاپ فصل جاری + برگهٔ خانواده/مدرسه ═══
+     هر دو از دادهٔ زندهٔ همین نما ساخته می‌شوند (صفر fetch تازه) و سند نسخه‌دار نیستند —
+     سند قطعیِ امضاشده فقط از بخش «گزارش‌های قطعی» صادر می‌شود؛ روی این برگه‌ها صریح گفته می‌شود. */
+  function printDocSkeleton(title, sublines, bodyNode) {
+    let root = document.getElementById('print-root');
+    if (!root) { root = el('div', { id: 'print-root' }); document.body.appendChild(root); }
+    root.replaceChildren(
+      el('div', { class: 'print-doc' },
+        el('div', { class: 'print-doc__head' },
+          el('div', { class: 'print-doc__title' }, title),
+          ...sublines
+        ),
+        bodyNode
+      )
+    );
+    const cleanup = () => { root.replaceChildren(); window.removeEventListener('afterprint', cleanup); };
+    window.addEventListener('afterprint', cleanup);
+    window.print();
+  }
+
+  function printCurrentChapter() {
+    const chs = timeline?.meta?.chapters;
+    if (!chs || chs.length === 0) return;
+    const ch = chs.at(-1);
+    const fromMs = Date.parse(String(ch.from).slice(0, 10));
+    const toMs = Date.parse(String(ch.to).slice(0, 10)) + 86_400_000;
+    const inRange = (iso) => { const t = Date.parse(iso); return Number.isFinite(t) && t >= fromMs && t <= toMs; };
+    const appts = appointments
+      .filter((a) => a.status === 'scheduled' && inRange(a.startAt))
+      .sort((x, y) => (x.startAt < y.startAt ? -1 : 1));
+    const evts = (caseEvents ?? []).filter((e) => e.status !== 'cancelled' && inRange(e.occurredAt ?? e.createdAt));
+    printDocSkeleton(
+      'گزارش فصل جاری پرونده',
+      [
+        el('div', {}, `${student.firstName} ${student.lastName} — کد ملی: ${fa(student.nationalId ?? '—')}${student.grade ? ` — پایهٔ ${gradeLabel(student.grade)}` : ''}`),
+        el('div', {}, `${chapterLabelOf(ch)} — از ${formatJalaliNumeric(String(ch.from).slice(0, 10))} تا ${formatJalaliNumeric(String(ch.to).slice(0, 10))}`),
+        el('div', {}, `تاریخ چاپ: ${formatJalaliDateTime(new Date().toISOString())}`)
+      ],
+      el('div', { class: 'print-doc__body' },
+        el('div', { class: 'card' },
+          el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, `جلسات این فصل (${fa(appts.length)})`)),
+          el('div', { class: 'card__body' },
+            appts.length === 0
+              ? el('div', { class: 'cell-sub' }, 'جلسه‌ای در بازهٔ این فصل ثبت نشده است.')
+              : dataTable({
+                  columns: [
+                    { key: 'd', label: 'زمان', render: (a) => formatJalaliDateTime(a.startAt) },
+                    { key: 'at', label: 'حضور', render: (a) => statusBadge(a.myAttendance) }
+                  ],
+                  rows: appts
+                })
+          )
+        ),
+        el('div', { class: 'card', style: { marginTop: 'var(--sp-3)' } },
+          el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, `رویدادهای پرونده (${fa(evts.length)})`)),
+          el('div', { class: 'card__body' },
+            evts.length === 0
+              ? el('div', { class: 'cell-sub' }, 'رویدادی در بازهٔ این فصل ثبت نشده است.')
+              : dataTable({
+                  columns: [
+                    { key: 'd', label: 'زمان', render: (e) => formatJalaliDateTime(e.occurredAt ?? e.createdAt) },
+                    { key: 't', label: 'رویداد', render: (e) => e.title ?? e.typeTitle ?? 'رویداد پرونده' }
+                  ],
+                  rows: evts
+                })
+          )
+        ),
+        el('p', { class: 'cell-sub', style: { marginTop: 'var(--sp-3)', lineHeight: '1.9' } },
+          'این برگه از دادهٔ زندهٔ پرونده در لحظهٔ چاپ ساخته شده است — گزارش قطعیِ امضاشدهٔ دوره، فقط از بخش «گزارش‌های قطعی» صادر می‌شود.')
+      )
+    );
+  }
+
+  function printFamilySheet() {
+    const fus = (openFollowups ?? []).filter(Boolean);
+    printDocSkeleton(
+      'برگهٔ خانواده و مدرسه',
+      [
+        el('div', {}, `${student.firstName} ${student.lastName} — پایهٔ ${gradeLabel(student.grade)}`),
+        el('div', {}, `مدرسه: ${schoolName(student.schoolId) ?? '—'}${student.className ? ` — کلاس ${student.className}${student.teacherName ? ` — معلم: ${student.teacherName}` : ''}` : ''}`),
+        el('div', {}, `تاریخ چاپ: ${formatJalaliDateTime(new Date().toISOString())}`)
+      ],
+      el('div', { class: 'print-doc__body' },
+        el('div', { class: 'card' },
+          el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, 'شناسنامهٔ پرونده')),
+          el('div', { class: 'card__body' }, dataTable({
+            columns: [
+              { key: 'k', label: '', render: (r) => r.k },
+              { key: 'v', label: '', render: (r) => r.v }
+            ],
+            rows: [
+              { k: 'کد ملی', v: fa(student.nationalId ?? '—') },
+              { k: 'تاریخ تولد', v: student.birthDate ? formatStoredJalaliNumeric(student.birthDate) : '—' },
+              { k: 'مسئول پرونده', v: student.ownerName ?? '—' },
+              { k: 'هدف‌های شناختی', v: studentFocus.length > 0 ? studentFocus.map((f) => f.fa).join('، ') : '—' },
+              { k: 'جلسهٔ بعدی', v: upcomingAppt() ? formatJalaliDateTime(upcomingAppt().startAt) : 'ثبت نشده' },
+              { k: 'پیگیری‌های باز', v: fus.length > 0 ? `${fa(fus.length)} مورد` : 'باز نیست' }
+            ]
+          }))
+        ),
+        el('p', { class: 'cell-sub', style: { marginTop: 'var(--sp-3)', lineHeight: '1.9' } },
+          'این برگه خلاصهٔ بی‌تفسیر برای خانواده و مدرسه است؛ تفسیر بالینی، نیم‌رخ سنجش‌ها و طرح درمان در نشست حضوری یا گزارش قطعی ارائه می‌شود.')
+      )
+    );
   }
 
   async function openSnapshotModal(sid) {

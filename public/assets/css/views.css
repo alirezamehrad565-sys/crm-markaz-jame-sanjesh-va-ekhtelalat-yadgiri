@@ -4734,16 +4734,6 @@ body.cb-printing #cb-print-root { display: block; }
 .flowstep.is-active .flowstep__rem { color: var(--primary); }
 .flowbar__cta { align-self: center; white-space: nowrap; }
 
-/* میز دوستونه: میز جلسه (۲/۳) + پروندهٔ مرجع (۱/۳) */
-.desk {
-  display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
-  gap: var(--sp-4);
-  align-items: start;
-  margin-top: var(--sp-4);
-}
-.desk__main, .desk__ref { min-width: 0; }
-.desk__main .card__body { display: flex; flex-direction: column; gap: var(--sp-2); }
 .missrow {
   display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2);
   border: 1px dashed var(--border);
@@ -4751,35 +4741,6 @@ body.cb-printing #cb-print-root { display: block; }
   padding: var(--sp-2) var(--sp-3);
   font-size: 13.5px;
 }
-.nextappt { margin-bottom: var(--sp-3); }
-.nextappt__when {
-  display: flex; align-items: center; gap: var(--sp-2);
-  font-weight: 700; margin-bottom: var(--sp-2);
-}
-.nextappt__row { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
-
-/* پروندهٔ مرجع — آکاردئون نه‌بخشی */
-.reflist { display: flex; flex-direction: column; gap: var(--sp-2); }
-.refitem {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-}
-.refitem > summary {
-  list-style: none;
-  display: flex; align-items: center; gap: var(--sp-2);
-  padding: var(--sp-3);
-  cursor: pointer;
-  font-weight: 700; font-size: 14px;
-  user-select: none;
-}
-.refitem > summary::-webkit-details-marker { display: none; }
-.refitem > summary:hover { color: var(--primary); }
-.refitem[open] > summary { border-bottom: 1px dashed var(--border); color: var(--primary); }
-.refitem__body { padding: var(--sp-3); max-height: 72vh; overflow: auto; }
-.refitem__body .card { margin-bottom: var(--sp-3); }
-.refitem__body .card:last-child { margin-bottom: 0; }
 
 /* ۱.۲۷.۶۲ موج ۱ «کارگاه درمان»: نوار ابزار تک‌خطی + بج شمارشی + نوار کار تاشو — گیت کروم ≤۱۶۰px */
 .flowbar { margin-top: var(--sp-2); }
@@ -4963,7 +4924,6 @@ body.cb-printing #cb-print-root { display: block; }
 .flow-cta-mobile { display: none; }
 
 @media (max-width: 980px) {
-  .desk { grid-template-columns: 1fr; }
   .idbar { margin-top: var(--sp-3); padding: var(--sp-2) var(--sp-3); }
   .idbar__side { flex-basis: 100%; justify-content: flex-start; }
   .idbar__owner { flex-basis: 100%; }
@@ -4985,7 +4945,6 @@ body.cb-printing #cb-print-root { display: block; }
     background: linear-gradient(to top, var(--surface-2) 70%, transparent);
   }
   .flow-cta-mobile .btn { flex: 1; }
-  .refitem__body { max-height: none; }
 }
 
 /* ══════════ ممیزی UX با skill «UI/UX Pro Max» (uupm.cc) — نسخهٔ ۱.۰۹.۰ ══════════

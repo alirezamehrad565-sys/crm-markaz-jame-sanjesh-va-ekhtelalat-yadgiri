@@ -4,7 +4,7 @@
  * قراردادها:
  *  ① بج شمارشی هر ایستگاه از تابع خالص stationBadge می‌آید — نوار ابزار و پنل ایستگاه دو حرف نمی‌زنند.
  *  ② ایستگاه «آماده‌سازی» بج شمارشی ندارد (خط مانده‌اش از نما می‌آید) — شمارشِ بی‌معنا نمی‌گیرد.
- *  ③ نوار کار تاشو: پیش‌فرض باز؛ بستن = فقط نوار ابزار (کروم حداقلی، گیت ≤۱۶۰px).
+ *  ③ نوار کار تاشو: در کارگاه پیش‌فرض جمع است (موج ۴) — بستن = فقط نوار ابزار (کروم حداقلی، گیت ≤۱۶۰px).
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -74,12 +74,12 @@ describe('ساختار موج ۱ — نوار ابزار + نوار کار در 
     expect(view).not.toMatch(/flowstep__rem/); // خط مانده دیگر در DOM نیست — فقط tooltip
   });
 
-  it('نوار کار تاشو: پیش‌فرض باز، toggling با aria-expanded، renderDesk از آن عبور می‌کند', () => {
-    /* ۱.۲۷.۶۳ — موج ۲: در کارگاه نوار کار پیش‌فرض جمع است (تفسیر بالینی قهرمان فولد اول)؛ پوستهٔ کلاسیک باز */
-    expect(view).toContain('let workbarCollapsed = isWorkshop;');
+  it('نوار کار تاشو: aria-expanded با toggle، renderDesk از workbarHolder عبور می‌کند (موج ۴)', () => {
+    /* ۱.۲۷.۶۵ — موج ۴: کارگاه تنها پوسته است؛ نوار کار پیش‌فرض جمع (تفسیر بالینی قهرمان فولد اول) */
+    expect(view).toContain('let workbarCollapsed = true;');
     expect(view).toMatch(/function buildWorkbar\(key\)/);
     expect(view).toMatch(/'aria-expanded': String\(!workbarCollapsed\)/);
-    expect(view).toMatch(/deskMain\.replaceChildren\(buildWorkbar\(activeStation\)\)/);
+    expect(view).toMatch(/workbarHolder\.replaceChildren\(buildWorkbar\(activeStation\)\)/);
   });
 
   it('CSS: استایل stbadge/workbar با توکن‌های تم (روشن/تیره) ثبت شده است', () => {

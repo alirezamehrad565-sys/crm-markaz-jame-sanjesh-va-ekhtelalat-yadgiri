@@ -43,8 +43,10 @@ describe('POLISH-3 M3 — روایت بالینی', () => {
 
   test('پروفایل: بخش روایت هم‌تراز تفسیر بالینی در مرجع + دیپ‌لینک + chunk تنبل (۱.۲۷.۵۸)', () => {
     const profile = read('public/assets/js/views/student-profile.js');
+    /* ۱.۲۷.۶۵ — موج ۴: نگاشت دیپ‌لینک به landing.js رفت (knownTabs حذف)؛ روایت در ریل/کشو هم‌تراز تفسیر است */
     expect(profile).toContain("{ key: 'narrative', label: 'روایت بالینی (سه فصل)', icon: 'book', when: () => canSeeClinical }");
-    expect(profile).toContain("knownTabs.splice(1, 0, 'clinical', 'narrative')");
+    const landing = read('public/assets/js/profile/landing.js');
+    expect(landing).toContain("narrative: 'drawer'");
     expect(profile).toContain('narrative: renderNarrativeTabContent');
     expect(profile).toContain("import('../student-narrative.js')");
   });

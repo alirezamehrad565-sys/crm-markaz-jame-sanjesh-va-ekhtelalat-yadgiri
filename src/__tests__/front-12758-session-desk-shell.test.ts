@@ -38,30 +38,31 @@ describe('پوستهٔ «میز جلسه + پروندهٔ مرجع» — ۱.۲۷
     expect(view).toContain("const target = missingReportAppts()[0] ?? upcomingAppt();"); // یک منبع با موج A
   });
 
-  it('میز جلسه: فقط ایستگاه فعال؛ حضور با چهار وضعیت؛ بایگانی جلسات در مرجع', () => {
+  it('نوار ابزار + نوار کار تاشو: ایستگاه فعال در نوار کار؛ بایگانی جلسات در کشوی مرجع (موج ۴)', () => {
     expect(view).toContain('function buildStationPanel(key)');
-    expect(view).toContain("const desk = el('div', { class: 'desk' }, deskMain, deskRef);");
-    expect(view).toContain("deskRef.replaceChildren(buildNextApptCard(), refRoot)");
-    expect(view).toContain("openRef('sessions')"); // لینک بایگانی از کارت نوبت
+    expect(view).toContain('workbarHolder.replaceChildren(buildWorkbar(activeStation))');
+    expect(view).toContain("onclick: () => openRef('sessions')"); // لینک بایگانی از کارت نوبت
+    expect(view).not.toContain("const desk = el('div', { class: 'desk' }"); // گرید دوستونهٔ کلاسیک حذف شد
   });
 
-  it('پروندهٔ مرجع: آکاردئون ۹‌بخشی با mount تنبل و ظرف مشترک content', () => {
+  it('پروندهٔ مرجع: ریل لبهٔ ۹بخشی + کشوی لغزنده با mount تنبل (آکاردئون کلاسیک حذف شد — موج ۴)', () => {
     expect(view).toContain('function refSections()');
     expect(view).toContain("{ key: 'snapshot', label: 'گزارش‌های قطعی — واریانت متخصص/خانواده/مدرسه + چاپ A4', icon: 'file', when: () => true }");
-    expect(view).toContain("addEventListener('toggle'");
-    expect(view).toContain('body.replaceChildren(content)'); // ظرف مشترک ۱.۲۰.۰ جابه‌جا می‌شود
+    expect(view).toContain('function buildEdgeRail()');
+    expect(view).toContain('dispatchTab(key, drawerMount)'); // ظرف اختصاصی کشو — هاب دست‌نخورده
+    expect(view).not.toContain('function buildReference()'); // آکاردئون کلاسیک حذف شد
+    expect(view).not.toContain('body.replaceChildren(content)'); // ظرف مشترک قدیمی حذف شد
     expect(view).toContain('snapshot: renderSnapshotSection'); // آ-۵ در dispatch
     expect(view).toContain('openSnapshotModal(String(e.ref.id))'); // آرشیو نسخه‌ها از همان قرارداد موج ۳
   });
 
-  it('دیپ‌لینک ?tab= محترم: نقشهٔ REF_OF_TAB + جلسهٔ قدیمی → ایستگاه ثبت + followups → تاریخچه', () => {
-    expect(view).toContain("const REF_OF_TAB = { info: 'info', timeline: 'timeline', clinical: 'clinical', narrative: 'narrative', exercises: 'exercises', games: 'games', comms: 'comms' }");
-    /* ۱.۲۷.۶۳ — موج ۲: نگاشت دیپ‌لینک کارگاه به تابع خالص landing.js رفت؛ پوستهٔ کلاسیک همان گارد را دارد */
-    expect(view).toContain("if (!isWorkshop && requestedTab === 'sessions') activeStation = 'log'");
+  it('دیپ‌لینک ?tab=/?section= محترم: نگاشت یک‌منبع در landing.js — بدون مسیر کلاسیک (موج ۴)', () => {
     const landing = read('public/assets/js/profile/landing.js');
-    expect(landing).toContain("if (where === 'station') return { hub, drawer: null, station: stationParam ?? 'log' };");
-    expect(view).toContain("requestedTab === 'followups' ? 'timeline' : requestedTab");
-    expect(view).toContain('if (requestedRef) pendingTab = requestedRef'); // بافر دادهٔ موازی حفظ
+    expect(landing).toContain("sessions: 'station'");
+    expect(landing).toContain("rawTab === 'followups' ? 'timeline' : rawTab");
+    expect(view).toContain('resolveWorkshopLanding({ canSeeClinical: Boolean(canSeeClinical), canSeeGames: Boolean(canSeeGames), query: ctx.query ?? {} })');
+    expect(view).not.toContain('REF_OF_TAB'); // نگاشت دوگانه حذف شد
+    expect(view).toContain('if (landing.station) activeStation = landing.station;');
   });
 
   it('لندینگ از قاعدهٔ واحد «وضعیت میز» (جدول ۵ نقد، ۱.۲۷.۶۰) — جلسهٔ نزدیک → آماده‌سازی نه برگزاری', () => {
@@ -70,13 +71,13 @@ describe('پوستهٔ «میز جلسه + پروندهٔ مرجع» — ۱.۲۷
     expect(view).toContain("import { computeDeskState } from '../profile/desk-state.js'");
   });
 
-  it('CTA چسبان موبایل + گرید دوستونه: CSS پوسته با رسپانسیو ≤980px', () => {
-    expect(viewsCss).toMatch(/\.idbar\s*\{/);
-    expect(viewsCss).toMatch(/\.flowstep\.is-active/);
-    expect(viewsCss).toMatch(/\.desk\s*\{\s*[^}]*grid-template-columns:\s*minmax\(0,\s*1\.6fr\)\s*minmax\(0,\s*1fr\)/);
-    expect(viewsCss).toMatch(/\.flow-cta-mobile\s*\{\s*display:\s*none/); // دسکتاپ مخفی
-    expect(viewsCss).toMatch(/@media \(max-width: 980px\)\s*\{[^@]*\.flow-cta-mobile\s*\{[^}]*position:\s*sticky/);
-    expect(viewsCss).toMatch(/\.refitem\s*\{/);
+  it('CSS کارگاه با رسپانسیو موبایل؛ بلوک‌های مردهٔ پوستهٔ کلاسیک پاک شده‌اند (موج ۴)', () => {
+    expect(viewsCss).toMatch(/\.workshop \{/);
+    expect(viewsCss).toMatch(/\.flow-cta-mobile \{/);
+    expect(viewsCss).not.toMatch(/^\.desk \{/m);
+    expect(viewsCss).not.toMatch(/^\.refitem \{/m);
+    expect(viewsCss).not.toMatch(/^\.nextappt \{/m);
+    expect(viewsCss).not.toContain('.refitem__body');
   });
 
   it('callbackهای mutation پیش از mount تعریف می‌شوند (TDZ-safe) و جریان پیوستهٔ ۱.۲۰.۰ حفظ است', () => {
