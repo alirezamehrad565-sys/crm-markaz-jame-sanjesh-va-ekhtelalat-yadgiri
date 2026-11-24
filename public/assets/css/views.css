@@ -4824,14 +4824,15 @@ body.cb-printing #cb-print-root { display: block; }
 }
 .workbar__head {
   display: flex; align-items: center; justify-content: space-between;
-  gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); flex-wrap: wrap;
+  gap: var(--sp-2); padding: var(--sp-1) var(--sp-3); flex-wrap: wrap;
 }
 .workbar__title { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+.workbar__title .cell-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } /* ۱.۲۷.۶۴ — خط بلند نمی‌شکند */
 .workbar__body { border-top: 1px dashed var(--border); padding: var(--sp-3); }
-.workbar--collapsed .workbar__head { padding-block: var(--sp-2); }
+.workbar--collapsed .workbar__head { padding-block: var(--sp-1); }
 .workbar__body .card { border: none; padding: 0; background: transparent; }
 .workbar__body .card__head { padding-top: 0; }
-.workbar-holder { margin-top: var(--sp-2); }
+.workbar-holder { margin-top: var(--sp-1); }
 
 /* ۱.۲۷.۶۳ موج ۲ «کارگاه درمان»: هاب چسبان + ریل لبه + کشوی مرجع */
 .workshop {
@@ -4839,12 +4840,12 @@ body.cb-printing #cb-print-root { display: block; }
   grid-template-columns: minmax(0, 1fr) 236px; /* RTL: راست=هاب، چپ=ریل */
   gap: var(--sp-4);
   align-items: start;
-  margin-top: var(--sp-3);
+  margin-top: var(--sp-2);
 }
-.hub { min-width: 0; display: flex; flex-direction: column; gap: var(--sp-3); }
+.hub { min-width: 0; display: flex; flex-direction: column; gap: var(--sp-2); }
 .hub__sticky {
   position: sticky;
-  top: 8px;
+  top: 6px;
   z-index: 24;
   display: flex;
   flex-wrap: wrap;
@@ -4862,6 +4863,16 @@ body.cb-printing #cb-print-root { display: block; }
 .hub__body { min-height: 420px; }
 .hub__mount { min-width: 0; }
 .hub-today { display: flex; flex-direction: column; gap: var(--sp-3); }
+/* ۱.۲۷.۶۴ — فلش هنگام پرش به هاب (کلیک «تفسیر و طرح درمان» ریل یا چیپ گام) */
+.hub-flash { animation: hub-flash 1.2s ease; }
+@keyframes hub-flash {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary) 40%, transparent); }
+  100% { box-shadow: 0 0 0 16px transparent; }
+}
+/* ۱.۲۷.۶۴ — تُن چیپ‌های گام درمان (تمام/در جریان/در انتظار) */
+.chip--ok { background: var(--success-soft); color: var(--on-success-soft); border-color: transparent; }
+.chip--warn { background: var(--warning-soft); color: var(--on-warning-soft); border-color: transparent; }
+.chip--ghost { border-style: dashed; color: var(--text-2); }
 
 /* ریل لبه — ۹ بخش مرجع با برچسب کوتاه؛ چسبان تا انتهای اسکرول */
 .edge {

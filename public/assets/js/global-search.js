@@ -80,10 +80,33 @@ export function openPalette() {
   let closePalette = null;
 
   function go(item) {
+    /* ۱.۲۷.۶۴ — موج ۳: بخش‌های پروندهٔ باز در پالت (گروه محلی) با hash مستقیم می‌روند */
+    if (item.hash) {
+      location.hash = item.hash;
+      if (closePalette) closePalette();
+      return;
+    }
     const meta = ENTITY_META[item.type];
     if (!meta) return;
     location.hash = meta.href(item);
     if (closePalette) closePalette();
+  }
+
+  /* ۱.۲۷.۶۴ — موج ۳: وقتی پالت از درون یک پرونده باز می‌شود، بخش‌های همان پرونده بالای
+     نتایج سراسری می‌آیند — ناوبری بدون خروج از پرونده */
+  function localProfileSections() {
+    const m = location.hash.match(/#\/students\/([0-9a-f-]{36})(?:\?.*)?$/);
+    if (!m) return [];
+    const base = `#/students/${m[1]}`;
+    return [
+      { type: 'profile-section', icon: 'brain', title: 'تفسیر بالینی و طرح درمان', hash: base },
+      { type: 'profile-section', icon: 'user', title: 'اطلاعات پایه', hash: `${base}?section=info` },
+      { type: 'profile-section', icon: 'clock', title: 'تاریخچهٔ پرونده', hash: `${base}?section=timeline` },
+      { type: 'profile-section', icon: 'file', title: 'گزارش‌های قطعی', hash: `${base}?section=snapshot` },
+      { type: 'profile-section', icon: 'calendar', title: 'جلسات و حضور', hash: `${base}?section=sessions` },
+      { type: 'profile-section', icon: 'clip', title: 'تمرین‌ها', hash: `${base}?section=exercises` },
+      { type: 'profile-section', icon: 'bot', title: 'ارتباطات', hash: `${base}?section=comms` }
+    ];
   }
 
   function renderEmpty(text) {
@@ -96,6 +119,28 @@ export function openPalette() {
     flatItems = [];
     activeIndex = -1;
     const nodes = [];
+    const local = localProfileSections();
+    if (local.length > 0) {
+      nodes.push(el('div', { class: 'gsearch__group-label' }, icon('compass', 14), 'همین پرونده'));
+      for (const item of local) {
+        flatItems.push(item);
+        nodes.push(
+          el('button', {
+            type: 'button',
+            class: 'gsearch__item',
+            dataset: { index: String(flatItems.length - 1) },
+            onmousedown: (e) => { e.preventDefault(); go(item); },
+            onmousemove: (e) => setActive(Number(e.currentTarget.dataset.index))
+          },
+            el('span', { class: 'gsearch__item-icon' }, icon(item.icon, 16)),
+            el('span', { class: 'gsearch__item-main' },
+              el('span', { class: 'gsearch__item-title' }, item.title)
+            ),
+            icon('chevL', 14)
+          )
+        );
+      }
+    }
     for (const group of data.groups ?? []) {
       const meta = ENTITY_META[group.type];
       if (!meta) continue;
@@ -184,6 +229,8 @@ export function openPalette() {
   closePalette = modal.close;
   modal.root.classList.add('modal--gsearch');
 
-  renderEmpty('برای جستجو حداقل ۲ نویسه بنویسید…');
+  /* ۱.۲۷.۶۴ — موج ۳: در پروندهٔ باز، بخش‌های «همین پرونده» بی‌درنگ و بدون تایپ دیده می‌شوند */
+  if (localProfileSections().length > 0) renderGroups({ groups: [] });
+  else renderEmpty('برای جستجو حداقل ۲ نویسه بنویسید…');
   setTimeout(() => input.focus(), 60);
 }

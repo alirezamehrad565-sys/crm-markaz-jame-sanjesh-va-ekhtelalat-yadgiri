@@ -40,7 +40,9 @@ describe('موج A — هر عمل یک خانهٔ ثابت', () => {
   it('چیپ جلسه‌های بی‌گزارش کنار اقدام بعدی — از منبع واحد با برگهٔ جلسه', () => {
     expect(view).toContain('missingReportAppts()');
     expect(view).toContain('const missingReports = missingReportAppts();');
-    expect(view).toContain('جلسهٔ بی‌گزارش`');
+    /* ۱.۲۷.۶۴ — خط ایستگاه به ماژول خالص station-state منتقل شد (تک‌منبع با بج نوار ابزار) */
+    const stationStateSrc = read('public/assets/js/profile/station-state.js');
+    expect(stationStateSrc).toContain('جلسهٔ بی‌گزارش');
   });
 
   it('حضور از خود پرونده ثبت‌شدنی است — PATCH موجود، گیت سرور محترم', () => {

@@ -31,7 +31,9 @@ describe('پوستهٔ «میز جلسه + پروندهٔ مرجع» — ۱.۲۷
   it('نوار فلو: چهار ایستگاه با مانده‌های واقعی و CTA اصلی «ادامه از جلسهٔ قبل»', () => {
     expect(view).toContain("const STATION_ORDER = ['ready', 'hold', 'log', 'follow']");
     expect(view).toContain("ready: 'آماده‌سازی', hold: 'برگزاری', log: 'ثبت گزارش', follow: 'پیگیری'");
-    expect(view).toContain('حضور ثبت‌نشده`');
+    /* ۱.۲۷.۶۴ — خط ایستگاه به ماژول خالص station-state منتقل شد (تک‌منبع با بج نوار ابزار) */
+    const stationStateSrc = read('public/assets/js/profile/station-state.js');
+    expect(stationStateSrc).toContain('حضور ثبت‌نشده');
     expect(view).toContain('ادامه از جلسهٔ قبل'); // CTA نوار فلو + پنل آماده‌سازی + CTA موبایل
     expect(view).toContain("const target = missingReportAppts()[0] ?? upcomingAppt();"); // یک منبع با موج A
   });

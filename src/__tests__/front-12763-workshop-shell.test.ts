@@ -36,7 +36,9 @@ describe('پوستهٔ «کارگاه درمان» — ۱.۲۷.۶۳ (بررسی 
   });
 
   it('خط درمان از فصل‌های واقعی تاریخچه می‌آید (بدون placeholder) و کلیکش تاریخچه را باز می‌کند', () => {
-    expect(view).toMatch(/chips\.push\(el\('span', \{ class: 'hub__stitle' \}, 'خط درمان:'\)\)/);
+    /* ۱.۲۷.۶۴ — موج ۳: sticky دو گروه دارد — «گام‌های درمان» (از onTherapyLine) و «فصل‌ها» */
+    expect(view).toMatch(/chips\.push\(el\('span', \{ class: 'hub__stitle' \}, 'گام‌های درمان:'\)\)/);
+    expect(view).toMatch(/chips\.push\(el\('span', \{ class: 'hub__stitle' \}, 'فصل‌ها:'\)\)/);
     expect(view).toMatch(/onclick: \(\) => openRef\('timeline'\)/);
     expect(css).toMatch(/\.hub__sticky:empty \{ display: none; \}/);
   });

@@ -483,22 +483,15 @@ export async function renderStudentProfile(container, ctx) {
         : 'از جلسهٔ قبل رویدادی برای بردن نیست';
     }
     if (key === 'hold') {
-      if (appointments.length === 0) return 'نوبتی ثبت نشده — از «تقویم نوبت‌ها» نوبت بسازید';
-      const nowMs = Date.now();
-      const pending = appointments.filter((a) => a.status === 'scheduled' && Date.parse(a.startAt) <= nowMs && a.myAttendance === 'pending').length;
-      return pending > 0 ? `${fa(pending)} حضور ثبت‌نشده` : 'حضور جلسات به‌روز است';
+      /* ۱.۲۷.۶۴ — نقد فلوی موج ۲: خط برگزاری/ثبت گزارش از تابع خالص stationBadge می‌آید —
+         یک منبع با بج نوار ابزار تا دیگر خطِ سرصفه با پنل ایستگاه دو حرف نزند */
+      return stationBadge('hold', { appointments, reportedApptIds: reportedApptIds(), openFollowups, nowMs: Date.now() }).line;
     }
     if (key === 'log') {
-      if (appointments.length === 0) return 'نوبتی ثبت نشده — گزارشی در کار نیست';
-      const n = missingReportAppts().length;
-      return n > 0 ? `${fa(n)} جلسهٔ بی‌گزارش` : 'گزارش جلسات به‌روز است';
+      return stationBadge('log', { appointments, reportedApptIds: reportedApptIds(), openFollowups, nowMs: Date.now() }).line;
     }
     /* ۱.۲۷.۵۹ — نقد پرونده: پیگیری‌های بازِ همین دانش‌آموز، نه فقط nextAction سرور (نقص ۶) */
-    const fus = openFollowups ?? [];
-    const overdue = fus.filter((f) => f.dueAt && Date.parse(f.dueAt) < Date.now()).length;
-    if (overdue > 0) return `${fa(overdue)} پیگیری عقب‌افتاده`;
-    if (fus.length > 0) return `${fa(fus.length)} پیگیری باز`;
-    return 'پیگیری باز نیست — پیگیری را از «اقدامات» بسازید';
+    return stationBadge('follow', { appointments, reportedApptIds: reportedApptIds(), openFollowups, nowMs: Date.now() }).line;
   }
 
   function continueFromPrevious(e) {
@@ -544,9 +537,10 @@ export async function renderStudentProfile(container, ctx) {
           }
         },
           el('span', { class: 'flowstep__label' }, icon(STATION_ICON[key], 14), STATION_LABEL[key]),
+          /* ۱.۲۷.۶۴ — حالت تهی (tone=neutral) بج نمی‌گیرد: نه ✓ سبزِ دروغین، نه شمارش بی‌معنا */
           st && st.n > 0
             ? el('span', { class: `stbadge stbadge--${st.tone}`, 'aria-label': st.line }, fa(st.n))
-            : (st ? el('span', { class: 'stbadge stbadge--ok', 'aria-label': st.line }, icon('check', 11)) : null)
+            : (st && st.tone !== 'neutral' ? el('span', { class: 'stbadge stbadge--ok', 'aria-label': st.line }, icon('check', 11)) : null)
         );
       })
     );
@@ -596,6 +590,7 @@ export async function renderStudentProfile(container, ctx) {
   const workshop = el('div', { class: 'workshop' }, hub, edge);
   const workbarHolder = el('div', { class: 'workbar-holder' });
   let hubMountedKey = null; // محتوای درحال‌نمایش هاب — repaint نباید دوباره mount کند (جریان پیوستهٔ ۱.۲۰.۰)
+  let therapySteps = null; // ۱.۲۷.۶۴ — گام‌های واقعی از رندرر بالینی (onTherapyLine)؛ sticky با آن جان می‌گیرد
   let hubDefaultKey = null;
 
   const RAIL_SHORT_LABEL = {
@@ -629,13 +624,36 @@ export async function renderStudentProfile(container, ctx) {
     return [el('div', { class: 'edge__head' }, 'پروندهٔ مرجع'), ...items];
   }
 
-  /* نوار sticky هاب: خط درمان (فصل‌های واقعی تاریخچه) + جلسهٔ بعدی — صفر fetch تازه */
+  /* نوار sticky هاب: گام‌های واقعی درمان (از رندرر بالینی) + فصل‌های تاریخچه + جلسهٔ بعدی — صفر fetch تازه */
   function buildHubSticky() {
     const chips = [];
+    if (auxDone && Array.isArray(therapySteps) && therapySteps.length > 0) {
+      chips.push(el('span', { class: 'hub__stitle' }, 'گام‌های درمان:'));
+      for (const st of therapySteps) {
+        const tone = st.done ? 'ok' : st.doneCount > 0 ? 'warn' : 'ghost';
+        const label = st.done
+          ? st.label
+          : (st.total > 1 ? `${st.label} ${fa(st.doneCount)}/${fa(st.total)}` : st.label);
+        chips.push(el('button', {
+          class: `chip chip--${tone}`, type: 'button',
+          'aria-label': `گام ${st.label} — ${st.done ? 'تمام' : st.doneCount > 0 ? `${st.doneCount} از ${st.total}` : 'در انتظار'}`,
+          title: st.done
+            ? `${st.label} — انجام شده؛ کلیک: نگاه به تفسیر و طرح درمان`
+            : st.doneCount > 0
+              ? `${st.label} — ${fa(st.doneCount)} از ${fa(st.total)} ثبت شده؛ کلیک: تفسیر و طرح درمان`
+              : `${st.label} — هنوز ثبت نشده؛ کلیک: تفسیر و طرح درمان`,
+          onclick: () => {
+            hubBody.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            hubBody.classList.add('hub-flash');
+            setTimeout(() => hubBody.classList.remove('hub-flash'), 1200);
+          }
+        }, icon(st.done ? 'check' : 'chevL', 12), label));
+      }
+    }
     if (auxDone && Array.isArray(timeline?.meta?.chapters) && timeline.meta.chapters.length > 0) {
       const chs = timeline.meta.chapters;
       const current = chs.at(-1);
-      chips.push(el('span', { class: 'hub__stitle' }, 'خط درمان:'));
+      chips.push(el('span', { class: 'hub__stitle' }, 'فصل‌ها:'));
       for (const ch of chs.slice(-6)) {
         const isCurrent = ch === current;
         chips.push(el('button', {
@@ -873,10 +891,15 @@ export async function renderStudentProfile(container, ctx) {
   }
 
   function openRef(key, { node, body } = {}) {
-    /* ۱.۲۷.۶۳ — موج ۲: در کارگاه، بالینی خانه‌اش هاب است (کلیک چیپ خط درمان → تاریخچه در کشو)؛
-       بقیهٔ بخش‌ها کشوی لغزنده با همان رندررهای قدیمی — هاب دست‌نخورده می‌ماند. */
+    /* ۱.۲۷.۶۳ — موج ۲: در کارگاه، بالینی خانه‌اش هاب است؛ ۱.۲۷.۶۴ نقد فلوی: کلیک «تفسیر و طرح
+       درمان» روی ریل دیگر کلیک مرده نیست — به هاب اسکرول و فلش می‌کند. بقیهٔ بخش‌ها کشوی لغزنده. */
     if (isWorkshop) {
-      if (key === 'clinical') return;
+      if (key === 'clinical') {
+        hubBody.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        hubBody.classList.add('hub-flash');
+        setTimeout(() => hubBody.classList.remove('hub-flash'), 1200);
+        return;
+      }
       if (activeSectionKey === key) return;
       activeSectionKey = key;
       syncSectionUrl(key);
@@ -884,6 +907,8 @@ export async function renderStudentProfile(container, ctx) {
       drawerTitle.replaceChildren(icon(meta?.icon ?? 'file', 15), el('b', {}, meta?.label ?? RAIL_SHORT_LABEL[key] ?? key));
       drawerMount.replaceChildren();
       dispatchTab(key, drawerMount);
+      edge.querySelectorAll('.edge__btn.is-active').forEach((b) => b.classList.remove('is-active'));
+      edge.querySelector(`button[data-edge="${key}"]`)?.classList.add('is-active'); // ۱.۲۷.۶۴ — بخش باز روی ریل پیدا است
       drawer.classList.add('is-open');
       drawerBackdrop.classList.add('is-open');
       document.addEventListener('keydown', drawerEsc, true);
@@ -916,6 +941,7 @@ export async function renderStudentProfile(container, ctx) {
       drawerBackdrop.classList.remove('is-open');
       drawerMount.replaceChildren();
       document.removeEventListener('keydown', drawerEsc, true);
+      edge.querySelectorAll('.edge__btn.is-active').forEach((b) => b.classList.remove('is-active'));
       const railBtn = edge.querySelector(`button[data-edge="${key}"]`);
       if (railBtn) railBtn.focus(); // فوکوس به دکمهٔ ریل — پیمایش کیبورد قطع نمی‌شود
       return;
@@ -1102,7 +1128,9 @@ export async function renderStudentProfile(container, ctx) {
       hubMountedKey = hubDefaultKey;
       dispatchTab(hubMountedKey, hubMount);
     }
-    if (landing.drawer) pendingTab = landing.drawer;
+    /* ۱.۲۷.۶۴ — نقد فلوی: کشوی دیپ‌لینک فوری باز می‌شود نه بعد از رسیدن دادهٔ موازی؛
+       رندررها mount تنبل و اسکلت خودشان را دارند (قرارداد ۱.۲۰.۰) */
+    if (landing.drawer) openRef(landing.drawer);
   } else {
     if (!requestedRef && ctx.query?.section) pendingTab = String(ctx.query.section);
     if (requestedRef) pendingTab = requestedRef; // دادهٔ موازی هنوز نرسیده — بعد از رسیدن، بخش باز می‌شود
@@ -1224,7 +1252,15 @@ export async function renderStudentProfile(container, ctx) {
   }
 
   function renderClinicalTabContent(box) {
-    renderClinicalTab(box, { student });
+    renderClinicalTab(box, {
+      student,
+      /* ۱.۲۷.۶۴ — موج ۳ «گزارش از دل گام»: گام‌های واقعی همین پرونده را از رندرر بالینی می‌گیرد
+         و نوار sticky هاب را درجا تازه می‌کند — تک‌منبع، صفر fetch تازه */
+      onTherapyLine: (steps) => {
+        therapySteps = Array.isArray(steps) && steps.length > 0 ? steps : null;
+        if (isWorkshop) hubStickyEl.replaceChildren(...buildHubSticky());
+      }
+    });
   }
 
   function renderInfoTab(box) {

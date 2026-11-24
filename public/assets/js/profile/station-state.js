@@ -1,8 +1,9 @@
 /* ۱.۲۷.۶۲ — موج ۱ بازطراحی «کارگاه درمان» (برنامهٔ بازطراحی پروفایل — docs/PROFILE-REDESIGN-PROGRAM.md):
    حالت شمارشی هر ایستگاه به‌صورت تابع خالص. نوار ابزار فقط بج/عنوان را از همین می‌خواند و
-   آزمون گیت روی همین تابع می‌دود — تا بج نوار ابزار با پنل ایستگاه دو حرف نزنند
-   (درس نقص‌های ۳ تا ۸ نقد پرونده). خالص و بدون وابستگی؛ اعداد خام برمی‌گردد و
-   فارسی‌سازی با fa() در لایهٔ نما انجام می‌شود. */
+   آزمون گیت روی همین تابع می‌دود — تا بج نوار ابزار با پنل ایستگاه دو حرف نزنند.
+   ۱.۲۷.۶۴ نقد فلوی موج ۲: پروندهٔ بدون هیچ نوبتی دیگر «به‌روز ✓» نمی‌گیرد (دروغ سبز) —
+   حالت تهی خنثی است و خطش همان خطِ پنل ایستگاه؛ hold/log در نما به همین تابع delegate
+   می‌شوند تا یک منبع بماند. اعداد خام برمی‌گردد و فارسی‌سازی با fa() در لایهٔ نما انجام می‌شود. */
 
 export function stationBadge(key, {
   appointments = [],
@@ -11,8 +12,10 @@ export function stationBadge(key, {
   nowMs = Date.now()
 } = {}) {
   const scheduled = (appointments ?? []).filter((a) => a && a.status === 'scheduled');
+  const hasAnyAppt = (appointments ?? []).length > 0;
 
   if (key === 'hold') {
+    if (!hasAnyAppt) return { n: null, tone: 'neutral', line: 'نوبتی ثبت نشده — از «تقویم نوبت‌ها» نوبت بسازید' };
     const n = scheduled
       .filter((a) => Date.parse(a.startAt) <= nowMs && a.myAttendance === 'pending')
       .length;
@@ -20,6 +23,7 @@ export function stationBadge(key, {
   }
 
   if (key === 'log') {
+    if (!hasAnyAppt) return { n: null, tone: 'neutral', line: 'نوبتی ثبت نشده — گزارشی در کار نیست' };
     const n = scheduled
       .filter((a) => Date.parse(a.startAt) <= nowMs
         && (a.myAttendance === 'present' || a.myAttendance === 'late')

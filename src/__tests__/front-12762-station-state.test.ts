@@ -85,6 +85,6 @@ describe('ساختار موج ۱ — نوار ابزار + نوار کار در 
   it('CSS: استایل stbadge/workbar با توکن‌های تم (روشن/تیره) ثبت شده است', () => {
     expect(css).toMatch(/\.stbadge--error \{ background: var\(--error-soft\); color: var\(--on-error-soft\); \}/);
     expect(css).toMatch(/\.workbar__body \{ border-top: 1px dashed var\(--border\)/);
-    expect(css).toMatch(/۱\.۲۷\.۶۲ — موج ۱ «کارگاه درمان»/);
+    expect(css).toMatch(/۱\.۲۷\.۶۲ موج ۱ «کارگاه درمان»/);
   });
 });
