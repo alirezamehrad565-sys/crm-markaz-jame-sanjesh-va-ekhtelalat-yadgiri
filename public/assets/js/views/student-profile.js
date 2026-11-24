@@ -403,6 +403,33 @@ export async function renderStudentProfile(container, ctx) {
         }, icon(infoDetailOpen ? 'chevU' : 'chevD', 14), infoDetailOpen ? 'بستن جزئیات' : 'اطلاعات کامل'),
         buildIdentityMenu()
       ),
+      /* ۱.۲۷.۶۷ — ردیف فشردهٔ «همه‌چیز» نوار بالا: تماس با ولی/معلم، ولی، نسبت، معلم، مدرسه/کلاس،
+         تولد، کد ملی و تاریخ ثبت — در یک نگاه و بدون باز کردن پنل؛ در حالت کامل پنهان می‌شود
+         (پنل زیر نوار همان‌ها را با جزئیات و اقدام می‌دهد). داده: همان فیلدهای renderInfoTab — تک‌منبع. */
+      el('div', { class: 'idbar__facts' },
+        student.guardianPhone
+          ? callBadge(student.guardianPhone, `تماس با ولیّ ${student.firstName} ${student.lastName} — ${fa(student.guardianPhone)}`)
+          : null,
+        student.guardianName
+          ? el('span', { class: 'idfact' }, icon('user', 12), `ولی: ${student.guardianName}${student.guardianRelation ? ` (${relationLabel(student.guardianRelation)})` : ''}`)
+          : null,
+        student.teacherName
+          ? el('span', { class: 'idfact' }, icon('book', 12), `معلم: ${student.teacherName}`)
+          : null,
+        student.teacherPhone
+          ? callBadge(student.teacherPhone, `تماس با معلم ${student.teacherName} — ${fa(student.teacherPhone)}`)
+          : null,
+        el('span', { class: 'idfact' }, icon('school', 12), `${schoolName(student.schoolId) ?? '—'}${student.className ? ` — ${student.className}` : ''}`),
+        student.birthDate
+          ? el('span', { class: 'idfact' }, icon('calendar', 12), `تولد: ${formatStoredJalaliNumeric(student.birthDate)}`)
+          : null,
+        student.nationalId && !isPlaceholderNid(student.nationalId)
+          ? el('span', { class: 'idfact', dir: 'auto' }, `کد ملی: ${fa(student.nationalId)}`)
+          : null,
+        student.createdAt
+          ? el('span', { class: 'idfact' }, `ثبت: ${formatJalaliNumeric((student.createdAt || '').slice(0, 10))}`)
+          : null
+      ),
       canManageCase
         ? el('div', { class: 'idbar__owner' }, buildOwnerEditor(student, onOwnerSaved))
         : null

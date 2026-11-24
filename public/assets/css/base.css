@@ -900,7 +900,9 @@ html[lang='fa'] .nav__label { letter-spacing: 0; }
   }
   .sidebar-backdrop {
     background: var(--backdrop); /* از #0F1113 میراثی به توکن تم */
-    backdrop-filter: blur(2px);
+    /* ۱.۲۷.۶۷ — یکدست با کشو/مودال */
+    backdrop-filter: blur(12px) saturate(1.25);
+    -webkit-backdrop-filter: blur(12px) saturate(1.25);
   }
   .sidebar::after {
     content: ''; position: absolute; top: 6px; inset-inline-start: 50%;

@@ -69,3 +69,28 @@ describe('ساختار sdt144 — بررسی منبع', () => {
     expect(gsearch).toContain("title: 'اطلاعات پایه — نوار بالا'");
   });
 });
+
+describe('۱.۲۷.۶۷ (sdt145) — ردیف فشردهٔ «همه‌چیز» نوار بالا + بلور یکدست', () => {
+  const view = read('public/assets/js/views/student-profile.js');
+  const css = read('public/assets/css/views.css');
+  const comp = read('public/assets/css/components.css');
+  const base = read('public/assets/css/base.css');
+
+  it('۷) نوار فشرده همهٔ داده‌ها را یک‌جا دارد — تماس ولی/معلم کلیک‌پذیر، ولی، نسبت، معلم، مدرسه/کلاس، تولد، کد ملی، ثبت', () => {
+    expect(view).toContain("class: 'idbar__facts'");
+    expect(view).toContain('callBadge(student.guardianPhone');
+    expect(view).toContain('callBadge(student.teacherPhone');
+    expect(view).toContain('icon(\'school\', 12)');
+    expect(view).toContain('relationLabel(student.guardianRelation)');
+    expect(css).toMatch(/\.idbar__facts \{/);
+    /* در حالت کامل، پنل زیر نوار همان فیلدها را می‌دهد — ردیف فشرده تکرار نمی‌شود */
+    expect(css).toMatch(/\.idbar--detailed \.idbar__facts \{ display: none; \}/);
+  });
+
+  it('۸) بلور پس‌زمینه یکدست و حرفه‌ای: کشو، مودال و سایدبار همه ۱۲px + اشباع ۱٫۲۵', () => {
+    expect(css).toMatch(/\.refdrawer__backdrop \{[\s\S]*?backdrop-filter: blur\(12px\) saturate\(1\.25\);/);
+    expect(comp).toMatch(/\.modal-overlay \{[\s\S]*?backdrop-filter: blur\(12px\) saturate\(1\.25\);/);
+    expect(base).toMatch(/\.sidebar-backdrop \{[\s\S]*?backdrop-filter: blur\(12px\) saturate\(1\.25\);/);
+    expect(css).not.toMatch(/rgb\(0 0 0 \/ \.38\)/); // پردهٔ میراثی جایش را توکن تم داد
+  });
+});

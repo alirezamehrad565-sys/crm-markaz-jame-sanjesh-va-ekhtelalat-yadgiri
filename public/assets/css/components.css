@@ -457,8 +457,9 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   position: fixed;
   inset: 0;
   background: var(--backdrop); /* پردهٔ مودال از rgba ثابت به توکن تم (در تیره عمیق‌تر) */
-  backdrop-filter: blur(8px) saturate(1.15);
-  -webkit-backdrop-filter: blur(8px) saturate(1.15);
+  /* ۱.۲۷.۶۷ — هماهنگ با کشو/سایدبار: تاری ۱۲px + اشباع ۱٫۲۵ */
+  backdrop-filter: blur(12px) saturate(1.25);
+  -webkit-backdrop-filter: blur(12px) saturate(1.25);
   display: grid;
   place-items: center;
   padding: var(--sp-4);

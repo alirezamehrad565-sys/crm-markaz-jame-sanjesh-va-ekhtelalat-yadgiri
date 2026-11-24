@@ -4694,6 +4694,20 @@ body.cb-printing #cb-print-root { display: block; }
   padding-top: var(--sp-2);
   border-top: 1px dashed var(--border);
 }
+/* ردیف فشردهٔ «همه‌چیز» نوار بالا */
+.idbar__facts {
+  flex-basis: 100%;
+  display: flex; flex-wrap: wrap; align-items: center;
+  gap: var(--sp-1) var(--sp-3);
+  padding-top: var(--sp-2);
+  border-top: 1px dashed var(--border);
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+  line-height: 1.9;
+}
+.idfact { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; min-width: 0; }
+.idfact svg { flex: 0 0 auto; opacity: .8; }
+.idbar__facts .call-badge { flex: 0 0 auto; }
 .idbar .avatar-lg { border-radius: var(--radius-full); }
 
 /* نوار فلو — ایستگاه‌ها با مانده‌های واقعی؛ روی دسکتاپ چسبان زیر سربرگ */
@@ -4891,10 +4905,13 @@ body.cb-printing #cb-print-root { display: block; }
 .refdrawer__mount .card { margin-bottom: var(--sp-3); }
 .refdrawer__backdrop {
   position: fixed; inset: 0;
-  background: rgb(0 0 0 / .38);
+  background: var(--backdrop);
+  /* ۱.۲۷.۶۷ — بلور یکدست با مودال/سایدبار */
+  backdrop-filter: blur(12px) saturate(1.25);
+  -webkit-backdrop-filter: blur(12px) saturate(1.25);
   z-index: 55;
   opacity: 0; pointer-events: none;
-  transition: opacity .2s ease;
+  transition: opacity .28s cubic-bezier(.4, 0, .2, 1);
 }
 .refdrawer__backdrop.is-open { opacity: 1; pointer-events: auto; }
 
@@ -4920,7 +4937,7 @@ body.cb-printing #cb-print-root { display: block; }
   }
   .refdrawer.is-open { transform: none; }
 }
-/* ۱.۲۷.۶۶ (sdt144) — اطلاعات پایه با نوار بالا: پنل «کامل» زیر نوار (همان رندرر تب، mount تنبل، Esc)؛ فشرده: ویرایشگر مسئول/وضعیت پنهان؛ منوهای بازشو در موبایل تمام‌عرضِ مهارشده؛ چیپ‌های sticky زیر دسکتاپ تک‌ردیفهٔ اسکرول‌شونده */
+/* ۱.۲۷.۶۶/۶۷ — نوار بالا فشرده/کامل (پنل=رندرر تب، mount تنبل، Esc)؛ فشرده: مسئول/وضعیت پنهان + facts همهٔ داده‌ها؛ کامل: facts پنهان؛ منو ≤640px تمام‌عرض؛ sticky زیر دسکتاپ تک‌ردیفهٔ اسکرول */
 .infopanel {
   margin-top: var(--sp-2);
   border: 1px solid var(--border);
@@ -4933,6 +4950,8 @@ body.cb-printing #cb-print-root { display: block; }
 .infopanel__mount .card:last-child { margin-bottom: 0; }
 .idbar__owner { display: none; } /* حالت فشرده — با .idbar--detailed برمی‌گردد */
 .idbar--detailed .idbar__owner { display: flex; flex-wrap: wrap; }
+/* در حالت کامل پنل زیر نوار همان فیلدها را می‌دهد — ردیف فشرده تکرار نمی‌شود */
+.idbar--detailed .idbar__facts { display: none; }
 
 @media (max-width: 1080px) {
   .hub__sticky { flex-wrap: nowrap; overflow-x: auto; }
