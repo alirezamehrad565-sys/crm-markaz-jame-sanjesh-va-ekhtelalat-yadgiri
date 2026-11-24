@@ -28,11 +28,13 @@ describe('موج B — فلوی جلسه', () => {
     expect(ce).toContain('در گزارش قبلی پاسخی ثبت نشده بود.');
   });
 
-  it('فرم مستقیم از هر سه CTA + انتخاب‌گر ثانویهٔ «نوع دیگری» (نقد §۶، ۱.۲۷.۶۰)', () => {
-    expect((view.match(/previousEventRef: previousSessionEvent\(/g) ?? []).length).toBe(2);
-    expect((view.match(/defaultTypeKey: 'intervention'/g) ?? []).length).toBe(3);
-    expect(view).toContain('defaultTypeId: prev?.eventTypeId ?? null');
-    expect(view).toContain("'نوع دیگری از رویداد'");
+  it('فرم مستقیم از خانهٔ جلسات؛ انتخاب‌گر ثانویه با defaultTypeId/pickerTitle در خود فرم (نقد §۶ + ۱.۲۷.۶۹)', () => {
+    expect((view.match(/previousEventRef: previousSessionEvent\(/g) ?? []).length).toBe(1);
+    expect((view.match(/defaultTypeKey: 'intervention'/g) ?? []).length).toBe(2);
+    const form = read('public/assets/js/case-events.js');
+    expect(form).toContain('defaultTypeId = null, defaultTypeKey = null');
+    expect(form).toContain('pickerTitle = null');
+    expect(form).toContain('defaultTypeId'); // مسیر «نوع جلسهٔ قبل» در فرم زنده است
   });
 
   it('فصل جاری در کارت وضعیت — یک منبع با فصل‌بندی تاریخچه، بعد از رسیدن داده', () => {

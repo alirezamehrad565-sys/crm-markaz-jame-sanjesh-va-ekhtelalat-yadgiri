@@ -1,6 +1,6 @@
 import { api, qs } from '../api.js';
 import { fa, enDigits, formatJalaliDateTime, formatJalaliNumeric, formatStoredJalaliNumeric, STUDENT_GRADES, gradeLabel, isPlaceholderNid, tehranYmdOfIso } from '../format.js';
-import { el, icon, formModal, openModal, confirmModal, toast, toastError, statusBadge, dataTable, skeletonState, emptyState, errorState, callBadge, lockBtn } from '../ui.js';
+import { el, icon, tabs, formModal, openModal, confirmModal, toast, toastError, statusBadge, dataTable, skeletonState, emptyState, errorState, callBadge, lockBtn } from '../ui.js';
 import { openStudentDelete } from '../student-delete.js'; // — حذف کامل پرونده (جریان واحد با فهرست دانش‌آموزان)
 import { SPECIAL_NEED_TYPE_LABELS, SPECIAL_NEED_SEVERITY_LABELS, SPECIAL_NEED_SEVERITY_TONES } from '../taxonomy.js'; /* ۱.۲۵.۰۲ — واژه‌نامهٔ مشترک نیاز ویژه */
 import { openTeacherManager } from '../student-teachers.js'; // — مدیریت معلم‌ها: افزودن/حذف (APIهای POST/DELETE معلم)
@@ -8,8 +8,6 @@ import { session } from '../state.js';
 import { fetchTags, fetchStudentTags, tagChip, openTagEditor } from '../tagging.js';
 import { fetchStudentFocus, focusLabels, openFocusEditor } from '../student-focus.js'; // درخت هدف در پروفایل
 import { openCaseEventForm, openCaseEventDetail, canCreateCaseEvents, openChecklistSendModal, fillTargetOf } from '../case-events.js'; // — رویدادهای پرونده + ارسال چک‌لیست + سه‌هدف
-import { computeDeskState } from '../profile/desk-state.js'; // — ۱.۲۷.۶۰: قاعدهٔ واحد «وضعیت میز» (جدول ۵ نقد)
-import { stationBadge } from '../profile/station-state.js'; // — ۱.۲۷.۶۲ موج ۱: بج/خط شمارشی ایستگاه (تابع خالص، یک منبع با آزمون گیت)
 import { resolveWorkshopLanding } from '../profile/landing.js'; // — ۱.۲۷.۶۳ موج ۲: فرود پوستهٔ «کارگاه درمان» (تابع خالص)
 import { openExerciseSendModal, renderExercisesTab } from '../exercise-send.js'; // — ارسال تمرین با بله + تب تمرین‌ها
 import { renderClinicalTab } from '../clinical-insights.js'; // — تب تفسیر بالینی + پروتکل قضاوت
@@ -423,17 +421,14 @@ export async function renderStudentProfile(container, ctx) {
     );
   }
 
-  /* ═══ ۱.۲۷.۵۸ — پوستهٔ «میز جلسه + پروندهٔ مرجع» (برندهٔ مسابقهٔ بازطراحی — طرح ۴) ═══
-     هر بازِکردن پرونده یک «شیفت جلسه» است: نوار فلو می‌گوید کجای آماده‌سازی←برگزاری←ثبت←پیگیری
-     هستیم و دقیقاً چه مانده؛ میز جلسه فقط ایستگاه فعال را نشان می‌دهد؛ همهٔ چیزهای قطعی و تاریخی
-     در ستون «پروندهٔ مرجع» آکاردئونی زندگی می‌کنند. تب‌های تخت حذف شدند ولی رندررهای محتوایی
+  /* ═══ ۱.۲۷.۶۹ — پوستهٔ «میز پرونده»: نوار هویت + تب کلاسیک + mount نماها ═══
+     همهٔ چیزهای قطعی و تاریخی تب‌های تخت‌اند و رندررهای محتوایی
      (info/timeline/sessions/clinical/narrative/exercises/games/comms) عیناً همان‌های قبلی‌اند و
      در خانه‌های تازه سرو می‌شوند — هیچ قابلیتی بی‌خانه نمانده (docs/PROFILE-UI-TOURNAMENT.md). */
   /* ۱.۲۷.۶۵ — موج ۴: ظرف مشترک content و پوستهٔ کلاسیک حذف شد — کارگاه درمان تنها پوسته است.
      dispatch مقصد صریح می‌گیرد (هاب درمان/کشوی مرجع) تا mount تنبل و جریان پیوستهٔ ۱.۲۰.۰
      (هیچ اکشنی کل نما را rebuild نمی‌کند) عیناً برقرار بماند. */
   let activeSectionKey = null; // بخشِ باز در کشوی مرجع (کلید refSections) یا null
-  let activeStation = 'ready'; // ایستگاه فعال نوار ابزار
 
   /* موج ۰ طرح ارتقای پرونده — رجیستری همان است؛ dispatch به ظرف مقصد می‌رود
      تا mount تنبل و جریان پیوستهٔ ۱.۲۰.۰ عیناً برقرار بماند. */
@@ -465,136 +460,16 @@ export async function renderStudentProfile(container, ctx) {
   /* ۱.۲۷.۶۳ — هاب امروز: واریانت هاب پیگیری برای منشی/ناظر — برگهٔ جلسه + پنل ایستگاه فعال
      از همان سازنده‌های موجود؛ هیچ رندر تازه‌ای ساخته نمی‌شود. */
   function renderTodayHub(box) {
-    box.replaceChildren(
-      el('div', { class: 'hub-today' },
-        buildSessionSheet(),
-        buildStationPanel(activeStation)
-      )
-    );
+    /* ۱.۲۷.۶۹ — هاب امروز برای نقش‌های غیربالینی: برگهٔ جلسه (پنل ایستگاه با فلوی حذف‌شده معنا ندارد) */
+    box.replaceChildren(buildSessionSheet());
   }
 
-  /* ─── نوار فلو: چهار ایستگاه با «مانده‌های واقعی» — یک منبع با برگهٔ جلسه (معلق‌های موج A) ─── */
-  const STATION_ORDER = ['ready', 'hold', 'log', 'follow'];
-  const STATION_LABEL = { ready: 'آماده‌سازی', hold: 'برگزاری', log: 'ثبت گزارش', follow: 'پیگیری' };
-  const STATION_ICON = { ready: 'checklist', hold: 'user', log: 'file', follow: 'bell' };
-  const openFollowupAction = () => (timeline.nextAction?.type === 'followup' ? timeline.nextAction : null);
 
-  function stationRemLine(key) {
-    if (!auxDone) return 'در حال آماده‌سازی داده‌ها…';
-    if (key === 'ready') {
-      const target = missingReportAppts()[0] ?? upcomingAppt();
-      if (!target) return 'جلسهٔ پیش‌رو ثبت نشده — از «تقویم نوبت‌ها» نوبت بسازید';
-      return previousSessionEvent(target.appointmentId)
-        ? 'موضوع جلسهٔ قبل در فرم گزارش می‌آید'
-        : 'از جلسهٔ قبل رویدادی برای بردن نیست';
-    }
-    if (key === 'hold') {
-      /* ۱.۲۷.۶۴ — نقد فلوی موج ۲: خط برگزاری/ثبت گزارش از تابع خالص stationBadge می‌آید —
-         یک منبع با بج نوار ابزار تا دیگر خطِ سرصفه با پنل ایستگاه دو حرف نزند */
-      return stationBadge('hold', { appointments, reportedApptIds: reportedApptIds(), openFollowups, nowMs: Date.now() }).line;
-    }
-    if (key === 'log') {
-      return stationBadge('log', { appointments, reportedApptIds: reportedApptIds(), openFollowups, nowMs: Date.now() }).line;
-    }
-    /* ۱.۲۷.۵۹ — نقد پرونده: پیگیری‌های بازِ همین دانش‌آموز، نه فقط nextAction سرور (نقص ۶) */
-    return stationBadge('follow', { appointments, reportedApptIds: reportedApptIds(), openFollowups, nowMs: Date.now() }).line;
-  }
-
-  function continueFromPrevious(e) {
-    const t = missingReportAppts()[0] ?? upcomingAppt();
-    if (!t) { toast('نوبتی برای گزارش نیست — از «تقویم نوبت‌ها» نوبت بسازید'); return; }
-    /* ۱.۲۷.۵۹ — تاریخ پیش‌فرض فرم = تاریخ همان جلسه (نقص ۸)؛ ۱.۲۷.۶۰ — §۶: فرم «همان نوع
-       جلسهٔ قبل» مستقیم باز می‌شود، نه انتخاب‌گر ۳۳نوعه */
-    const prev = previousSessionEvent(t.appointmentId);
-    lockBtn(e.currentTarget, () => openCaseEventForm({ student, appointmentId: t.appointmentId, occurredYmd: tehranYmdOfIso(t.startAt), previousEventRef: prev, defaultTypeId: prev?.eventTypeId ?? null, onSaved: onCaseEventSaved }));
-  }
-
-  /* ۱.۲۷.۶۲ — موج ۱ «کارگاه درمان»: نوار ابزار فشرده تک‌خطی — هر ایستگاه یک چیپ با بج شمارشیِ
-     واقعی (از stationBadge خالص) و خط مانده فقط در tooltip؛ ارتفاع کروم ≤۱۶۰px گیت موج ۱ است.
-     همان قرارداد قبلی: tablist + پیمایش کیبورد + ?station= + CTA «ادامه از جلسهٔ قبل». */
-  function reportedApptIds() {
-    return [...noteApptIdSet(), ...caseEvents.filter((e) => e.appointmentId && e.status !== 'cancelled').map((e) => e.appointmentId)];
-  }
-
-  function buildFlowBar() {
-    const badgeData = () => ({
-      appointments,
-      reportedApptIds: reportedApptIds(),
-      openFollowups,
-      nowMs: Date.now()
-    });
-    const steps = el('div', { class: 'flowbar__steps', role: 'tablist', 'aria-label': 'فلوی جلسه' },
-      STATION_ORDER.map((key) => {
-        const st = auxDone ? stationBadge(key, badgeData()) : null;
-        return el('button', {
-          class: `flowstep${activeStation === key ? ' is-active' : ''}${st && st.n > 0 ? ' has-pending' : ''}`,
-          type: 'button', role: 'tab', 'aria-selected': activeStation === key ? 'true' : 'false',
-          title: `${STATION_LABEL[key]} — ${stationRemLine(key)}`,
-          onclick: () => setStation(key),
-          /* ۱.۲۷.۵۹ — نقد پرونده: پیمایش tablist با کلیدهای جهت/Home/End (نقص ۱۶) */
-          onkeydown: (ev) => {
-            if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(ev.key)) return;
-            ev.preventDefault();
-            const i = STATION_ORDER.indexOf(key);
-            const j = ev.key === 'ArrowLeft' ? i + 1 : ev.key === 'ArrowRight' ? i - 1 : ev.key === 'Home' ? 0 : STATION_ORDER.length - 1;
-            const n = Math.min(STATION_ORDER.length - 1, Math.max(0, j));
-            setStation(STATION_ORDER[n]);
-            ev.currentTarget.parentElement.querySelectorAll('.flowstep')[n].focus();
-          }
-        },
-          el('span', { class: 'flowstep__label' }, icon(STATION_ICON[key], 14), STATION_LABEL[key]),
-          /* ۱.۲۷.۶۴ — حالت تهی (tone=neutral) بج نمی‌گیرد: نه ✓ سبزِ دروغین، نه شمارش بی‌معنا */
-          st && st.n > 0
-            ? el('span', { class: `stbadge stbadge--${st.tone}`, 'aria-label': st.line }, fa(st.n))
-            : (st && st.tone !== 'neutral' ? el('span', { class: 'stbadge stbadge--ok', 'aria-label': st.line }, icon('check', 11)) : null)
-        );
-      })
-    );
-    /* ۱.۲۷.۵۹ — نقد پرونده: «ادامه از جلسهٔ قبل» فقط با جلسهٔ گذشتهٔ بی‌گزارش معنا دارد (نقص ۸) */
-    const cta = canCreateCaseEvents() && missingReportAppts().length > 0
-      ? el('button', {
-          class: 'btn btn--primary btn--sm flowbar__cta', type: 'button',
-          title: 'اقدام اصلی: گزارش جلسه با بردن مقادیر جلسهٔ قبل — قدیمی‌ترین جلسهٔ بی‌گزارش',
-          onclick: continueFromPrevious
-        }, icon('send', 15), 'ادامه از جلسهٔ قبل')
-      : null;
-    return el('div', { class: 'flowbar' }, steps, cta);
-  }
-
-  /* ۱.۲۷.۵۹ — نقد پرونده: تعویض ایستگاه، نشانگر نوار فلو را هم درجا تازه می‌کند (نقص ۳)
-     و ایستگاه در نشانی صفحه می‌نشیند تا بارگذاری دوباره همان‌جا فرود بیاید (نقص ۱۴) */
-  function setStation(key) {
-    activeStation = key;
-    try {
-      const u = new URL(location.hash.slice(1), location.origin);
-      u.searchParams.set('station', key);
-      history.replaceState(null, '', `#${u.pathname}${u.search}`);
-    } catch { /* نشانی غیراستاندارد — بی‌صدا رد شود */ }
-    flowHolder.replaceChildren(buildFlowBar());
-    renderDesk();
-  }
-
-  /* ─── میز جلسه: نوار ابزار + نوار کار تاشو (۱.۲۷.۶۲) — setStation در بالا ─── */
+  /* ─── میز پرونده: نوار هویت + تب‌های کلاسیک سایت + mount نماها (۱.۲۷.۶۹) ───
+     خواست کارفرما: زبان طراحی هماهنگ با بقیهٔ سایت — همان ui.tabs() مالی/بازی‌ها/غربالگری؛
+     فلوی آماده‌سازی←برگزاری←ثبت←پیگیری، نوار کار و هاب sticky حذف شدند. */
   const idbarHolder = el('div', {});
-  const flowHolder = el('div', {});
-  /* CTA چسبان پایین موبایل — جایگزین ناوبری تب‌های بریدهٔ وضع قبل؛ روی دسکتاپ مخفی است */
-  const flowCtaHolder = el('div', { class: 'flow-cta-mobile' });
-
-  /* ═══ ۱.۲۷.۶۳ — موج ۲: پوستهٔ «کارگاه درمان» — هاب درمان + ریل لبه + کشوی مرجع ═══
-     هاب: نوار sticky (خط درمان از فصل‌بندی تاریخچه + جلسهٔ بعدی) روی بدنه‌ای که تفسیر بالینی و
-     طرح درمان را همیشه نشان می‌دهد (ز-۱/۲/۳ درون همان رندرر بالینی موجود — صفر fetch تازه).
-     ریل لبه: ۹ بخش مرجع با برچسب کوتاه؛ کلیک = کشوی لغزنده با همان رندررهای قدیمی.
-     در پوستهٔ کلاسیک (فلگ desk) هیچ‌کدام ساخته نمی‌شود — رفتار ۱.۲۷.۵۸ عیناً می‌ماند. */
-  const hubStickyEl = el('div', { class: 'hub__sticky' });
-  let workbarCollapsed = true; // ۱.۲۷.۶۵ — موج ۴: پوستهٔ کارگاه تنها پوسته است؛ نوار کار پیش‌فرض جمع
-  /* ۱.۲۷.۶۸ — ری‌ورک به الگوی قدیمی پروفایل (خواست کارفرما): بدون ریل لبه و کشوی کناری —
-     نماها با نوار تب RTL عوض می‌شوند و کارت فعال inline زیر میز می‌نشیند؛ کارت اول «اطلاعات پایه». */
-  /* ۱.۲۷.۶۸ موج ۲ — هاب از جریان صفحه خارج شد؛ همهٔ نماها (شامل تفسیر بالینی) تب اند و
-     کارت فعال inline زیر میز می‌نشیند — کارت اول «اطلاعات پایه». */
-  const ptabs = el('div', { class: 'ptabs', role: 'tablist', 'aria-label': 'نماهای پرونده' });
   const tabMount = el('div', { class: 'tabmount' });
-  const workbarHolder = el('div', { class: 'workbar-holder' });
-  let therapySteps = null; // ۱.۲۷.۶۴ — گام‌های واقعی از رندرر بالینی (onTherapyLine)؛ sticky با آن جان می‌گیرد
 
   const RAIL_SHORT_LABEL = {
     info: 'اطلاعات پایه',
@@ -609,82 +484,7 @@ export async function renderStudentProfile(container, ctx) {
     comms: 'ارتباطات',
     today: 'امروز'
   };
-  const railMetaOf = (key) => refSections().find((s) => s.key === key) ?? null;
 
-  function buildProfileTabs() {
-    /* ۱.۲۷.۶۸ — کارت اول «اطلاعات پایه»؛ بعد نماها. بالینی خانه‌اش هاب میز است و تب نمی‌شود. */
-    const views = [
-      { key: 'info', label: 'اطلاعات پایه', icon: 'user', when: () => true },
-      ...(canSeeClinical
-        ? [{ key: 'clinical', label: 'تفسیر و طرح درمان', icon: 'brain', when: () => true }]
-        : [{ key: 'today', label: 'امروز', icon: 'calendar', when: () => true }]),
-      ...refSections().filter((s) => s.key !== 'clinical')
-    ];
-    return views.filter((s) => s.when()).map((s) =>
-      el('button', {
-        class: 'ptab', type: 'button', role: 'tab', 'data-tab': s.key,
-        'aria-selected': 'false',
-        title: s.label,
-        onclick: () => openRef(s.key)
-      },
-        icon(s.icon, 14),
-        el('span', {}, RAIL_SHORT_LABEL[s.key] ?? s.label)
-      )
-    );
-  }
-
-  /* نوار sticky هاب: گام‌های واقعی درمان (از رندرر بالینی) + فصل‌های تاریخچه + جلسهٔ بعدی — صفر fetch تازه */
-  function buildHubSticky() {
-    const chips = [];
-    if (auxDone && Array.isArray(therapySteps) && therapySteps.length > 0) {
-      chips.push(el('span', { class: 'hub__stitle' }, 'گام‌های درمان:'));
-      for (const st of therapySteps) {
-        const tone = st.done ? 'ok' : st.doneCount > 0 ? 'warn' : 'ghost';
-        const label = st.done
-          ? st.label
-          : (st.total > 1 ? `${st.label} ${fa(st.doneCount)}/${fa(st.total)}` : st.label);
-        chips.push(el('button', {
-          class: `chip chip--${tone}`, type: 'button',
-          'aria-label': `گام ${st.label} — ${st.done ? 'تمام' : st.doneCount > 0 ? `${st.doneCount} از ${st.total}` : 'در انتظار'}`,
-          title: st.done
-            ? `${st.label} — انجام شده؛ کلیک: نگاه به تفسیر و طرح درمان`
-            : st.doneCount > 0
-              ? `${st.label} — ${fa(st.doneCount)} از ${fa(st.total)} ثبت شده؛ کلیک: تفسیر و طرح درمان`
-              : `${st.label} — هنوز ثبت نشده؛ کلیک: تفسیر و طرح درمان`,
-          onclick: () => openRef('clinical') // ۱.۲۷.۶۸ — کلیک گام = پرش به تب تفسیر و طرح درمان
-        }, icon(st.done ? 'check' : 'chevL', 12), label));
-      }
-    }
-    if (auxDone && Array.isArray(timeline?.meta?.chapters) && timeline.meta.chapters.length > 0) {
-      const chs = timeline.meta.chapters;
-      const current = chs.at(-1);
-      chips.push(el('span', { class: 'hub__stitle' }, 'فصل‌ها:'));
-      for (const ch of chs.slice(-6)) {
-        const isCurrent = ch === current;
-        chips.push(el('button', {
-          class: `chip${isCurrent ? ' is-active' : ''}`, type: 'button',
-          title: `${chapterLabelOf(ch)} — از ${formatJalaliNumeric(String(ch.from).slice(0, 10))} تا ${formatJalaliNumeric(String(ch.to).slice(0, 10))}؛ کلیک: تاریخچهٔ پرونده`,
-          onclick: () => openRef('timeline')
-        }, icon(isCurrent ? 'target' : 'check', 12), chapterLabelOf(ch)));
-      }
-      /* ۱.۲۷.۶۵ — موج ۴: چاپ A4 خلاصهٔ فصل جاری — جلسات و رویدادهای همین بازه، از دادهٔ زندهٔ نما */
-      chips.push(el('button', {
-        class: 'chip hub__next', type: 'button',
-        title: 'چاپ A4 خلاصهٔ فصل جاری — جلسات و رویدادهای همین بازه',
-        onclick: () => printCurrentChapter()
-      }, icon('printer', 12), 'چاپ فصل جاری'));
-    }
-    const up = auxDone ? upcomingAppt() : null;
-    if (up) {
-      chips.push(el('span', { class: 'chip hub__next', title: 'نزدیک‌ترین نوبت scheduled این دانش‌آموز — تغییر از «تقویم نوبت‌ها»' },
-        icon('calendar', 12), `جلسهٔ بعدی: ${formatJalaliDateTime(up.startAt)}`));
-    }
-    return chips;
-  }
-
-  /* ۱.۲۷.۶۸ — «اطلاعات پایه» کارت اول نوار تب است (نه پنل زیر نوار و نه کشو)؛
-     ویرایشگر مسئول/وضعیت هم داخل همان کارت می‌نشیند — حالت فشرده/کامل نوار حذف شد
-     (ردیف facts همهٔ داده‌ها همیشه زیر نوار است). دیپ‌لینک ?section=info / ?tab=info به همین تب می‌رسد. */
   function renderInfoTabWithOwner(box) {
     renderInfoTab(box);
     if (canManageCase) box.append(el('div', { class: 'tabowner' }, buildOwnerEditor(student, onOwnerSaved)));
@@ -701,104 +501,9 @@ export async function renderStudentProfile(container, ctx) {
   const onSpecialNeedSaved = async () => { if (await refreshCore()) { repaintChrome(); rerenderTabIf(['info']); } };
   const onCaseEventSaved = async () => { if (await refreshEventsData()) { repaintChrome(); rerenderTabIf(['timeline', 'sessions']); } };
   const onBaleSent = async () => { if (await refreshEventsData()) { repaintChrome(); rerenderTabIf(['timeline', 'sessions', 'exercises']); } };
-  const docsMount = el('div', {}); // کارت خودگردان مدارک (۱.۲۰.۰) — یک‌بار fetch، در ایستگاه آماده‌سازی جابه‌جا می‌شود
+  const docsMount = el('div', {}); // کارت خودگردان مدارک (۱.۲۰.۰) — یک‌بار fetch
   renderDocsQuickCard(docsMount, student);
 
-  function buildStationPanel(key) {
-    if (key === 'ready') {
-      const target = auxDone ? (missingReportAppts()[0] ?? upcomingAppt()) : null;
-      const prev = target ? previousSessionEvent(target.appointmentId) : null;
-      return el('div', { class: 'card' },
-        el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, 'آماده‌سازی — ادامه از جلسهٔ قبل')),
-        el('div', { class: 'card__body' },
-          target
-            ? el('div', { class: 'cell-sub' }, `جلسهٔ هدف: ${formatJalaliDateTime(target.startAt)}${target.staffName ? ` — ${target.staffName}` : ''}`)
-            : el('div', { class: 'cell-sub' }, 'جلسهٔ هدفی برای آماده‌سازی نیست'),
-          prev
-            ? el('div', { class: 'cell-sub' }, 'موضوع جلسهٔ قبل هنگام بازشدن فرم گزارش خودکار برمی‌گردد.')
-            : el('div', { class: 'cell-sub' }, 'از جلسات قبل رویداد قطعی‌ای نیست — فرم از صفر شروع می‌شود.'),
-          canCreateCaseEvents() && missingReportAppts().length > 0
-            ? null /* ۱.۲۷.۶۰ — نقد §۵: دکمهٔ تکراری حذف شد؛ «ادامه از جلسهٔ قبل» فقط در نوار فلو و CTA موبایل است */
-            : null,
-          docsMount /* کارت مدارک تازهٔ بله — خانهٔ تازه‌اش ایستگاه آماده‌سازی است (نقشه: ۳-الف) */
-        )
-      );
-    }
-    if (key === 'hold') {
-      const nowMs = Date.now();
-      /* ۱.۲۷.۵۹ — نقد پرونده: نخست قدیمی‌ترین جلسهٔ گذشتهٔ بدون ثبت حضور هدف می‌شود؛
-         اگر نبود، نزدیک‌ترین نوبت پیش رو (نقص ۵: هدف اشتباه ایستگاه برگزاری) */
-      const target = appointments
-        .filter((a) => a.status === 'scheduled' && Date.parse(a.startAt) <= nowMs && a.myAttendance === 'pending')
-        .sort((a, b) => (a.startAt < b.startAt ? -1 : 1))[0] // قدیمی‌ترین اول
-        ?? upcomingAppt()
-        ?? null;
-      const counts = { present: 0, absent: 0, pending: 0, cancelled: 0 };
-      for (const a of appointments) counts[a.myAttendance] = (counts[a.myAttendance] ?? 0) + 1;
-      return el('div', { class: 'card' },
-        el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, 'برگزاری — ثبت حضور')),
-        el('div', { class: 'card__body' },
-          target
-            ? el('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-2)' } },
-                el('div', { class: 'cell-sub' }, `جلسهٔ ${formatJalaliDateTime(target.startAt)}${target.staffName ? ` — ${target.staffName}` : ''}`),
-                el('div', { style: { display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap' } },
-                  [['present', 'حاضر'], ['late', 'حضور با تأخیر'], ['absent', 'غایب'], ['cancelled', 'لغو جلسه']].map(([st, lbl]) =>
-                    el('button', {
-                      class: 'btn btn--soft btn--sm', type: 'button',
-                      onclick: (e) => lockBtn(e.currentTarget, async () => { await markAttendance(target, st); renderDesk(); })
-                    }, lbl))
-                ),
-                el('div', { class: 'cell-sub' }, 'ثبت همان لحظه انجام می‌شود؛ حضور از دو ساعت پیش از شروع قابل ثبت است و برای جلسهٔ برگزارنشده بسته است.')
-              )
-            : emptyState({ iconName: 'calendar', title: 'حضور فعالی برای ثبت نیست', hint: 'نوبت امروز/پیش رو و نوبت‌های گذشتهٔ بدون حضور این‌جا می‌نشینند.' }),
-          el('div', { style: { display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap', marginTop: 'var(--sp-3)' } },
-            el('span', { class: 'badge badge--success' }, `${fa(counts.present)} حاضر`),
-            el('span', { class: 'badge badge--error' }, `${fa(counts.absent)} غایب`),
-            el('span', { class: 'badge badge--warning' }, `${fa(counts.pending)} در انتظار`)
-          )
-        )
-      );
-    }
-    if (key === 'log') {
-      const missing = auxDone ? missingReportAppts() : [];
-      return el('div', { class: 'card' },
-        el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, 'ثبت گزارش جلسه')),
-        el('div', { class: 'card__body' },
-          canCreateCaseEvents()
-            ? el('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-2)' } },
-                el('button', {
-                  class: 'btn btn--primary btn--sm', type: 'button', style: { alignSelf: 'flex-start' },
-                  onclick: (e) => lockBtn(e.currentTarget, () => openCaseEventForm({ student, onSaved: onCaseEventSaved }))
-                }, icon('plus', 15), 'ثبت رویداد پرونده'),
-                missing.length > 0
-                  ? el('div', { class: 'cell-sub' }, `${fa(missing.length)} جلسهٔ بی‌گزارش — قدیمی‌ترین اول؛ «جلسهٔ بی‌گزارش» یعنی جلسهٔ گذشته بدون رویداد ثبت‌شده:`)
-                  : el('div', { class: 'cell-sub' }, 'جلسهٔ بی‌گزارش ندارید — گزارش جلسات به‌روز است.'),
-                missing.slice(0, 5).map((a) =>
-                  el('div', { class: 'missrow' },
-                    el('span', {}, formatJalaliDateTime(a.startAt)),
-                    el('button', {
-                      class: 'btn btn--soft btn--sm', type: 'button',
-                      onclick: (e) => lockBtn(e.currentTarget, () => openCaseEventForm({ student, appointmentId: a.appointmentId, occurredYmd: tehranYmdOfIso(a.startAt), previousEventRef: previousSessionEvent(a.appointmentId), defaultTypeKey: 'intervention', onSaved: onCaseEventSaved }))
-                    }, icon('file', 13), 'ثبت گزارش همین جلسه'),
-                    /* ۱.۲۷.۶۰ — نقد §۶: انتخاب‌گر ۳۳نوعه به دکمهٔ ثانویه منتقل شد؛ فرم گزارش مستقیم باز می‌شود */
-                    el('button', {
-                      class: 'btn btn--ghost btn--sm', type: 'button',
-                      onclick: () => openCaseEventForm({ student, appointmentId: a.appointmentId, occurredYmd: tehranYmdOfIso(a.startAt), onSaved: onCaseEventSaved })
-                    }, 'نوع دیگری از رویداد')
-                  ))
-              )
-            : el('div', { class: 'cell-sub' }, session.user?.role === 'secretary'
-                ? 'ثبت گزارش در اختیار درمانگر است — برای یادآوری به او، پیگیری بسازید یا پیام بله بفرستید.'
-                : 'ثبت گزارش در اختیار درمانگر/مدیر است.')
-        )
-      );
-    }
-    // follow — ۱.۲۷.۶۶: کارت پیگیری به تابع مشترک رفت — هم ایستگاه «پیگیری» و هم بخش «پیگیری‌ها»ی ریل از همین می‌خوانند
-    return buildFollowupsCard();
-  }
-
-  /* ═══ ۱.۲۷.۶۶ — کارت مشترک پیگیری: ابزارهای بله + صف پیگیری‌های باز با «ثبت نتیجه» ═══
-     تک‌منبع: ایستگاه پیگیری نوار کار و بخش «پیگیری‌ها»ی کشو (ریل، خانهٔ ۳) هر دو همین را رندر می‌کنند. */
   function buildFollowupsCard() {
     const fus = auxDone ? (openFollowups ?? []).slice().sort((a, b) => ((a.dueAt ?? '9999') < (b.dueAt ?? '9999') ? -1 : 1)) : [];
     const fu = auxDone ? openFollowupAction() : null;
@@ -848,8 +553,7 @@ export async function renderStudentProfile(container, ctx) {
   }
 
   function refSections() {
-    /* ۱.۲۷.۶۸ — نماهای نوار تب: «اطلاعات پایه» کارت اول (در buildProfileTabs پیش‌فرض است) و
-       «پیگیری‌ها» که فقط در ایستگاه پیگیری زندگی می‌کرد به ۴ خانهٔ بالای میز هم آمده است. */
+    /* ۱.۲۷.۶۹ — نماهای نوار تب: «اطلاعات پایه» کارت اول؛ بقیه نماها به‌ترتیب ارزش عملی. */
     return [
       { key: 'timeline', label: 'تاریخچه با فصل‌ها و نقطه‌های کلیدی', icon: 'clock', when: () => true },
       { key: 'clinical', label: 'تفسیر بالینی و طرح درمان', icon: 'brain', when: () => canSeeClinical },
@@ -863,6 +567,20 @@ export async function renderStudentProfile(container, ctx) {
     ];
   }
 
+  /* ۱.۲۷.۶۹ — تب کلاسیک سایت: role=tab + پیمایش RTL با کلیدهای جهت + نگه‌داشتن تب فعال در دید —
+     قرارداد مشترک با مالی/بازی‌ها/غربالگری. کارت اول «اطلاعات پایه»؛ بالینی هم مثل بقیه تب است (بدون هاب/فلش). */
+  function buildTabBar() {
+    const views = [
+      { key: 'info', label: RAIL_SHORT_LABEL.info, icon: 'user' },
+      ...(canSeeClinical
+        ? [{ key: 'clinical', label: RAIL_SHORT_LABEL.clinical, icon: 'brain' }]
+        : [{ key: 'today', label: RAIL_SHORT_LABEL.today, icon: 'calendar' }]),
+      ...refSections().filter((s) => s.key !== 'clinical')
+    ];
+    return tabs(views.map((s) => ({ key: s.key, label: s.label, icon: s.icon, onSelect: (k) => openRef(k) })), activeSectionKey ?? 'info');
+  }
+  const tabBar = buildTabBar();
+
   /* ۱.۲۷.۶۰ — نقد §۹ هفتهٔ ۲: بخش بازِ پروندهٔ مرجع هم در نشانی می‌ماند (نقص ۱۴ کامل —
      نقص ایستگاه در ۱.۲۷.۵۹ بسته شد؛ این نیمهٔ «بخش» آن است) */
   function syncSectionUrl(key) {
@@ -874,25 +592,13 @@ export async function renderStudentProfile(container, ctx) {
   }
 
   function openRef(key) {
-    /* ۱.۲۷.۶۸ — بالینی خانه‌اش هاب میز است؛ بقیهٔ نماها = تب فعال با mount در tabMount (بدون کشو).
-       اطلاعات پایه هم مثل بقیه یک تب است — کارت اول، بدون هیچ فهرست کشویی. */
-    if (key === 'clinical') {
-      tabMount.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      tabMount.classList.add('hub-flash');
-      setTimeout(() => tabMount.classList.remove('hub-flash'), 1200);
-      return;
-    }
+    /* ۱.۲۷.۶۹ — همهٔ نماها تب اند: تعویض inline در tabMount + همگام نشانی (?section=). */
     if (activeSectionKey === key) return;
     activeSectionKey = key;
     syncSectionUrl(key);
     tabMount.replaceChildren();
     dispatchTab(key, tabMount);
-    ptabs.querySelectorAll('.ptab').forEach((b) => {
-      const on = b.dataset.tab === key;
-      b.classList.toggle('is-active', on);
-      b.setAttribute('aria-selected', String(on));
-    });
-    ptabs.querySelector(`.ptab[data-tab="${key}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    tabBar.setActive(key);
   }
 
   /* ۱.۲۷.۵۸ — آ-۵: خانهٔ دائمی «گزارش‌های قطعی» — صدور + آرشیو نسخه‌های صادرشده (رفع «گزارش قطعی بی‌خانه») */
@@ -937,46 +643,6 @@ export async function renderStudentProfile(container, ctx) {
     );
   }
 
-  /* ۱.۲۷.۶۲ — موج ۱: نوار کار تاشو — پنل ایستگاه فعال زیر سرصفهٔ نازکِ خودش می‌نشیند؛
-     بستنش یعنی درمانگر فقط نوار ابزار را بالا می‌خواهد (کروم حداقلی). */
-  function buildWorkbar(key) {
-    const head = el('div', { class: 'workbar__head' },
-      el('div', { class: 'workbar__title' },
-        icon(STATION_ICON[key], 15),
-        el('b', {}, STATION_LABEL[key]),
-        el('span', { class: 'cell-sub' }, stationRemLine(key))
-      ),
-      el('button', {
-        class: 'btn btn--ghost btn--sm workbar__toggle', type: 'button',
-        'aria-expanded': String(!workbarCollapsed),
-        title: workbarCollapsed ? 'بازکردن نوار کار ایستگاه فعال' : 'بستن نوار کار — فقط نوار ابزار بماند',
-        onclick: () => { workbarCollapsed = !workbarCollapsed; renderDesk(); }
-      }, icon(workbarCollapsed ? 'chevD' : 'chevU', 14), workbarCollapsed ? 'بازکردن نوار کار' : 'بستن نوار کار')
-    );
-    const body = workbarCollapsed ? null : el('div', { class: 'workbar__body' }, buildStationPanel(key));
-    return el('div', { class: `workbar${workbarCollapsed ? ' workbar--collapsed' : ''}` }, head, body);
-  }
-
-  function renderDesk() {
-    /* ۱.۲۷.۶۸ — «میز» یعنی نوار ابزار + نوار کار جمع‌شده + نوار sticky؛ بدنهٔ نماها در tabMount است. */
-    workbarHolder.replaceChildren(buildWorkbar(activeStation));
-    hubStickyEl.replaceChildren(...buildHubSticky());
-    if (activeSectionKey === 'today') dispatchTab('today', tabMount); // امروز به ایستگاه فعال وابسته است
-  }
-
-  function buildFlowCta() {
-    /* ۱.۲۷.۵۹ — نقد پرونده: برای پروندهٔ تازه/بی‌جلسهٔ گذشته، CTA موبایل هم معنا ندارد (نقص ۸) */
-    if (!canCreateCaseEvents() || missingReportAppts().length === 0) return el('div', { class: 'flow-cta-mobile' });
-    return el('div', { class: 'flow-cta-mobile' },
-      el('button', {
-        class: 'btn btn--primary', type: 'button',
-        title: 'اقدام اصلی: گزارش جلسه با بردن مقادیر جلسهٔ قبل',
-        onclick: continueFromPrevious
-      }, icon('send', 15), 'اقدام بعدی: ادامه از جلسهٔ قبل')
-    );
-  }
-
-  /* UX-ممیزی: منوی «ارسال با بله» — جای دو دکمهٔ دوقلو */
   function baleSendMenu() {
     const panel = el('div', { class: 'dd__panel', style: { display: 'none' } });
     const btn = el('button', { class: 'btn btn--soft btn--sm', type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false' },
@@ -1016,18 +682,10 @@ export async function renderStudentProfile(container, ctx) {
   container.replaceChildren(
     pageHead,
     idbarHolder,
-    flowHolder,
-    workbarHolder,
-    hubStickyEl,
-    ptabs,
-    tabMount,
-    flowCtaHolder
+    tabBar.root,
+    tabMount
   );
-  ptabs.replaceChildren(...buildProfileTabs());
   idbarHolder.replaceChildren(buildIdentityBar());
-  flowHolder.replaceChildren(buildFlowBar());
-  flowCtaHolder.replaceChildren(buildFlowCta());
-  renderDesk();
 
   const requestedTab = ctx.query?.tab;
   const timelineDeepFilter = ctx.query?.filter ?? (requestedTab === 'followups' ? 'followups' : null);
@@ -1036,8 +694,6 @@ export async function renderStudentProfile(container, ctx) {
      followups → تاریخچه با فیلتر؛ ۱.۲۷.۶۸: clinical/today هم تب‌اند. */
   const landing = resolveWorkshopLanding({ canSeeClinical: Boolean(canSeeClinical), canSeeGames: Boolean(canSeeGames), query: ctx.query ?? {} });
   /* ۱.۲۷.۵۹ — ایستگاه از نشانی (?station=…)؛ ۱.۲۷.۶۰ — بخش مرجع از نشانی (?section=…) برمی‌گردد */
-  if (landing.station) activeStation = landing.station;
-  if (STATION_ORDER.includes(ctx.query?.station)) activeStation = ctx.query.station;
   /* ۱.۲۷.۶۴ — نقد فلوی: دیپ‌لینک فوری فعال می‌شود نه بعد از رسیدن دادهٔ موازی؛
      رندررها mount تنبل و اسکلت خودشان را دارند (قرارداد ۱.۲۰.۰).
      ۱.۲۷.۶۸ — کارت اول «اطلاعات پایه»؛ ?tab/?section=clinical → تب بالینی؛ بی‌نقش بالینی → تب امروز. */
@@ -1045,20 +701,12 @@ export async function renderStudentProfile(container, ctx) {
     ?? ((ctx.query?.tab ?? ctx.query?.section) === 'clinical' && canSeeClinical ? 'clinical'
         : canSeeClinical ? 'info' : 'today'));
 
-  /* رسیدن دادهٔ پس‌زمینه: نوار هویت/ابزار و نوار کار و sticky هاب درجا تازه می‌شوند و
-     بخشِ بازِ کشو (در صورت بازبودن) با دادهٔ کامل دوباره mount می‌شود. */
+  /* رسیدن دادهٔ پس‌زمینه: نوار هویت درجا تازه می‌شود و نمایِ فعال با دادهٔ کامل دوباره mount می‌شود. */
   auxPromise.then(() => {
     auxDone = true;
     /* ۱.۲۷.۶۰ — نقد §۹: فرود از قاعدهٔ واحد «وضعیت میز» (جدول ۵) — جای قاعدهٔ نقش‌محور جدا؛
        نشانگر نوار ابزار و فرودگاه دیگر دو حرف نمی‌زنند.
        جلسهٔ فردای درمانگر دیگر ایستگاه «برگزاری» را باز نمی‌کند — سرور هم حضور آینده را می‌بندد. */
-    if (!requestedTab && !STATION_ORDER.includes(ctx.query?.station)) {
-      activeStation = computeDeskState({
-        appointments,
-        openFollowups,
-        reportApptIds: [...noteApptIdSet(), ...caseEvents.filter((e) => e.appointmentId && e.status !== 'cancelled').map((e) => e.appointmentId)]
-      }).station;
-    }
     repaintChrome();
     if (activeSectionKey) {
       dispatchTab(activeSectionKey, tabMount); // نمای فعال با دادهٔ کامل دوباره mount می‌شود
@@ -1074,9 +722,6 @@ export async function renderStudentProfile(container, ctx) {
   /* تعویض درجای نوار هویت + نوار فلو + میز (همان الگوی رسیدن دادهٔ پس‌زمینه؛ ۱.۲۰.۰ دست‌نخورده) */
   function repaintChrome() {
     idbarHolder.replaceChildren(buildIdentityBar());
-    flowHolder.replaceChildren(buildFlowBar());
-    flowCtaHolder.replaceChildren(buildFlowCta());
-    renderDesk();
   }
 
   /* بخشِ بازِ کشو فقط وقتی دوباره رندر می‌شود که دادهٔ آن واقعاً عوض شده — صفحه‌بندی/فیلتر محلی بقیه می‌ماند.
@@ -1158,15 +803,7 @@ export async function renderStudentProfile(container, ctx) {
   }
 
   function renderClinicalTabContent(box) {
-    renderClinicalTab(box, {
-      student,
-      /* ۱.۲۷.۶۴ — موج ۳ «گزارش از دل گام»: گام‌های واقعی همین پرونده را از رندرر بالینی می‌گیرد
-         و نوار sticky هاب را درجا تازه می‌کند — تک‌منبع، صفر fetch تازه */
-      onTherapyLine: (steps) => {
-        therapySteps = Array.isArray(steps) && steps.length > 0 ? steps : null;
-        hubStickyEl.replaceChildren(...buildHubSticky());
-      }
-    });
+    renderClinicalTab(box, { student });
   }
 
   function renderInfoTab(box) {

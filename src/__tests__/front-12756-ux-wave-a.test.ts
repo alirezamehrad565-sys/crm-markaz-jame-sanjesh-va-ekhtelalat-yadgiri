@@ -4,7 +4,7 @@
  * اعتبارسنجی مرورگری واقعی روی سرور محلی انجام شد (snapshotهای accessibility قبل/بعد).
  */
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const ROOT = join(__dirname, '../..');
@@ -13,8 +13,9 @@ const read = (p: string) => readFileSync(join(ROOT, p), 'utf8');
 describe('موج A — هر عمل یک خانهٔ ثابت', () => {
   const view = read('public/assets/js/views/student-profile.js');
 
-  it('ثبت رویداد فقط یک خانه دارد (ردیف اقدام کارت وضعیت) — سرصفه‌های تاریخچه و جلسات خالی‌اند', () => {
-    expect((view.match(/ثبت رویداد پرونده/g) ?? []).length).toBe(1);
+  it('ثبت رویداد فقط از خانهٔ جلسات باز می‌شود — برگهٔ جلسه + ردیف بایگانی؛ بدون پنل ایستگاه (۱.۲۷.۶۹)', () => {
+    expect((view.match(/openCaseEventForm\(/g) ?? []).length).toBe(2);
+    expect(view).not.toContain('buildStationPanel');
     expect(view).not.toContain("el('div', { class: 'card__title' }, 'تاریخچهٔ پرونده'),\n        canCreateCaseEvents()");
     expect(view).not.toContain("'نوبت‌ها و حضور'),\n          canReport");
   });
@@ -40,9 +41,9 @@ describe('موج A — هر عمل یک خانهٔ ثابت', () => {
   it('چیپ جلسه‌های بی‌گزارش کنار اقدام بعدی — از منبع واحد با برگهٔ جلسه', () => {
     expect(view).toContain('missingReportAppts()');
     expect(view).toContain('const missingReports = missingReportAppts();');
-    /* ۱.۲۷.۶۴ — خط ایستگاه به ماژول خالص station-state منتقل شد (تک‌منبع با بج نوار ابزار) */
-    const stationStateSrc = read('public/assets/js/profile/station-state.js');
-    expect(stationStateSrc).toContain('جلسهٔ بی‌گزارش');
+    /* ۱.۲۷.۶۹ — ماژول خالص station-state با حذف فلوی ایستگاه‌ها کنار رفت؛ چیپ مانده‌ها تک‌منبع با برگهٔ جلسه */
+    expect(existsSync(join(ROOT, 'public/assets/js/profile/station-state.js'))).toBe(false);
+    expect(view).toContain('const missingReports = missingReportAppts();');
   });
 
   it('حضور از خود پرونده ثبت‌شدنی است — PATCH موجود، گیت سرور محترم', () => {

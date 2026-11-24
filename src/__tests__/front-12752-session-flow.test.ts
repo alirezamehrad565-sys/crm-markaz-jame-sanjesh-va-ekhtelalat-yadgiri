@@ -54,10 +54,11 @@ describe('موج ۲ — کلاینت', () => {
     expect(view).toContain('el(\'div\', { class: \'card__body\' },\n          buildSessionSheet(),');
   });
 
-  it('لندینگ از قاعدهٔ واحد «وضعیت میز» (جدول ۵ نقد، ۱.۲۷.۶۰) — نه قاعدهٔ نقش‌محور جدا', () => {
+  it('لندینگ از نگاشت خالص landing.js — دیپ‌لینک ?tab=/?section= محترم؛ ایستگاه دیگر ناوبری ندارد (۱.۲۷.۶۹)', () => {
     expect(view).toContain('const isProfileOwner = () =>');
-    expect(view).toContain('activeStation = computeDeskState({');
-    expect(view).toContain('!STATION_ORDER.includes(ctx.query?.station)');
+    expect(view).toContain('openRef(landing.drawer');
+    expect(view).not.toContain('computeDeskState');
+    expect(view).not.toContain('STATION_ORDER');
   });
 
   it('جدیدها با seen-at محلی و بدون جدول/endpoint', () => {

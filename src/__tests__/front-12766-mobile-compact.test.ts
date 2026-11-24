@@ -32,14 +32,14 @@ describe('ساختار sdt144 — بررسی منبع', () => {
   const gsearch = read('public/assets/js/global-search.js');
 
   it('۲) ریل: پیگیری‌ها خانهٔ ۳ است و اطلاعات پایه از ریل حذف شده', () => {
-    const sections = view.slice(view.indexOf('function refSections()'), view.indexOf('function syncSectionUrl'));
+    const sections = view.slice(view.indexOf('function refSections()'), view.indexOf('function buildTabBar'));
     const keys = [...sections.matchAll(/key: '([a-z]+)'/g)].map((m) => m[1]);
     expect(keys).toEqual(['timeline', 'clinical', 'followups', 'narrative', 'snapshot', 'sessions', 'exercises', 'games', 'comms']);
   });
 
   it('۳) کارت پیگیری تک‌منبع: ایستگاه follow و نمای تب پیگیری‌ها هر دو از buildFollowupsCard می‌خوانند', () => {
     expect(view).toContain('function buildFollowupsCard()');
-    expect(view).toContain('return buildFollowupsCard();');
+    expect(view).toContain('box.replaceChildren(buildFollowupsCard());');
     expect(view).toContain('function renderFollowupsSection(box)');
     expect(view).toContain('followups: renderFollowupsSection,');
     expect(view).not.toContain('buildNextApptCard'); // کارت مردهٔ پوستهٔ کلاسیک حذف شد
@@ -56,9 +56,10 @@ describe('ساختار sdt144 — بررسی منبع', () => {
   it('۵) موبایل: منوی تمام‌عرض + sticky تک‌ردیفه + مسئول فقط در حالت کامل', () => {
     const base = read('public/assets/css/base.css');
     expect(css).toMatch(/\.dd__panel \{\s*position: fixed;\s*inset-inline: 12px;/);
-    expect(css).toMatch(/\.hub__sticky \{ flex-wrap: nowrap; overflow-x: auto; \}/);
+    expect(css).toMatch(/\.idbar__facts \{ gap: var\(--sp-1\) var\(--sp-2\); \}/);
     expect(css).toMatch(/\.tabowner \{/);
-    expect(css).toMatch(/\.ptabs \{/);
+    /* ۱.۲۷.۶۹ — نوار تب کلاسیک ui.tabs (تک‌ردیفهٔ اسکرول با markScrollable) */
+    expect(css).toMatch(/\.tabs \{/);
     /* سرریز افقی سند از کشوی بیرون‌صفحه — clip روی body (روی html کنار overflow-y:scroll به auto تبدیل می‌شد) */
     expect(base).toMatch(/body \{\s*overflow-x: clip;\s*\}/);
   });
