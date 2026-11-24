@@ -393,6 +393,14 @@ export async function renderStudentProfile(container, ctx) {
               onclick: (e) => lockBtn(e.currentTarget, openSnapshotBuilder)
             }, icon('file', 15), 'صدور گزارش قطعی')
           : null,
+        /* ۱.۲۷.۶۶ — سوییچ فشرده/کامل: «اطلاعات پایه» خانه‌اش همین نوار است */
+        el('button', {
+          class: 'btn btn--soft btn--sm idbar__detail-btn', type: 'button',
+          'aria-expanded': String(infoDetailOpen),
+          'aria-controls': 'info-detail-panel',
+          title: 'نمایش کامل اطلاعات پایه زیر همین نوار — همان رندرر تب اطلاعات پایه',
+          onclick: () => toggleInfoDetail()
+        }, icon(infoDetailOpen ? 'chevU' : 'chevD', 14), infoDetailOpen ? 'بستن جزئیات' : 'اطلاعات کامل'),
         buildIdentityMenu()
       ),
       canManageCase
@@ -428,6 +436,7 @@ export async function renderStudentProfile(container, ctx) {
       info: renderInfoTab,
       clinical: renderClinicalTabContent, //
       timeline: renderTimelineTab,
+      followups: renderFollowupsSection, // ۱.۲۷.۶۶ — کارت مشترک پیگیری (تک‌منبع با ایستگاه پیگیری)
       sessions: renderSessionsTab,
       comms: renderCommsTab,
       exercises: renderExercisesTabContent,
@@ -578,6 +587,7 @@ export async function renderStudentProfile(container, ctx) {
     info: 'اطلاعات پایه',
     timeline: 'تاریخچه',
     clinical: 'تفسیر و طرح درمان',
+    followups: 'پیگیری‌ها',
     narrative: 'روایت بالینی',
     snapshot: 'گزارش‌های قطعی',
     sessions: 'جلسات و حضور',
@@ -672,6 +682,40 @@ export async function renderStudentProfile(container, ctx) {
   );
   const drawerEsc = (e) => { if (e.key === 'Escape' && activeSectionKey) closeRef(activeSectionKey); };
   drawerBackdrop.addEventListener('click', () => { if (activeSectionKey) closeRef(activeSectionKey); });
+
+  /* ═══ ۱.۲۷.۶۶ — ادغام «اطلاعات پایه» با نوار بالا: حالت فشرده/کامل ═══
+     فشرده (پیش‌فرض): نوار هویت جمع — مسئول/وضعیت پنهان؛ کامل: پنل زیر نوار با همان رندرر
+     «اطلاعات پایه» (تک‌منبع، mount تنبل ۱.۲۰.۰) باز می‌شود. دیپ‌لینک ?section=info و
+     ?tab=info همین پنل را باز می‌کنند و دکمهٔ ریل «اطلاعات پایه» هم حذف شد. */
+  const infoDetailMount = el('div', { class: 'infopanel__mount' });
+  const infoPanel = el('div', { class: 'infopanel', id: 'info-detail-panel', hidden: true }, infoDetailMount);
+  let infoDetailOpen = false;
+  let infoDetailMounted = false;
+  const infoEsc = (e) => { if (e.key === 'Escape' && infoDetailOpen) toggleInfoDetail(false); };
+  function toggleInfoDetail(force) {
+    const next = typeof force === 'boolean' ? force : !infoDetailOpen;
+    if (next === infoDetailOpen) return;
+    infoDetailOpen = next;
+    if (infoDetailOpen && !infoDetailMounted) {
+      infoDetailMounted = true;
+      dispatchTab('info', infoDetailMount);
+    }
+    infoPanel.hidden = !infoDetailOpen;
+    idbarHolder.classList.toggle('idbar--detailed', infoDetailOpen);
+    const detailBtn = idbarHolder.querySelector('.idbar__detail-btn');
+    if (detailBtn) {
+      detailBtn.setAttribute('aria-expanded', String(infoDetailOpen));
+      detailBtn.replaceChildren(icon(infoDetailOpen ? 'chevU' : 'chevD', 14), infoDetailOpen ? 'بستن جزئیات' : 'اطلاعات کامل');
+    }
+    if (infoDetailOpen) {
+      document.addEventListener('keydown', infoEsc, true);
+      idbarHolder.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (!activeSectionKey) syncSectionUrl('info');
+    } else {
+      document.removeEventListener('keydown', infoEsc, true);
+      if (!activeSectionKey) syncSectionUrl(null);
+    }
+  }
 
   /* جریان پیوستهٔ ۱.۲۰.۰ — callbackهای mutation پیش از mount تعریف می‌شوند چون نوار هویت/پنل‌های میز
      هنگام ساخت به آن‌ها ارجاع می‌دهند (const پیش از استفاده — الگوی TDZ-safe). خود توابع
@@ -776,7 +820,13 @@ export async function renderStudentProfile(container, ctx) {
         )
       );
     }
-    // follow — پیگیری با بله + فهرست پیگیری‌های باز همین دانش‌آموز (۱.۲۷.۵۹ — نقص ۶)
+    // follow — ۱.۲۷.۶۶: کارت پیگیری به تابع مشترک رفت — هم ایستگاه «پیگیری» و هم بخش «پیگیری‌ها»ی ریل از همین می‌خوانند
+    return buildFollowupsCard();
+  }
+
+  /* ═══ ۱.۲۷.۶۶ — کارت مشترک پیگیری: ابزارهای بله + صف پیگیری‌های باز با «ثبت نتیجه» ═══
+     تک‌منبع: ایستگاه پیگیری نوار کار و بخش «پیگیری‌ها»ی کشو (ریل، خانهٔ ۳) هر دو همین را رندر می‌کنند. */
+  function buildFollowupsCard() {
     const fus = auxDone ? (openFollowups ?? []).slice().sort((a, b) => ((a.dueAt ?? '9999') < (b.dueAt ?? '9999') ? -1 : 1)) : [];
     const fu = auxDone ? openFollowupAction() : null;
     return el('div', { class: 'card' },
@@ -819,28 +869,18 @@ export async function renderStudentProfile(container, ctx) {
     );
   }
 
-  /* ─── کارت «جلسهٔ بعدی و نوبت‌ها» (ناحیهٔ ۵ نقشه) + ستون «پروندهٔ مرجع» (ناحیهٔ ۴) ─── */
-  function buildNextApptCard() {
-    const upcoming = auxDone ? upcomingAppt() : null;
-    return el('div', { class: 'card nextappt' },
-      el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, 'جلسهٔ بعدی و نوبت‌ها')),
-      el('div', { class: 'card__body' },
-        upcoming
-          ? el('div', { class: 'nextappt__when' }, icon('calendar', 15), el('span', {}, formatJalaliDateTime(upcoming.startAt)), upcoming.staffName ? el('span', { class: 'cell-sub' }, `— ${upcoming.staffName}`) : null)
-          : el('div', { class: 'cell-sub' }, 'نوبت پیش‌رویی ثبت نشده — دفتر از «تقویم نوبت‌ها» نوبت می‌سازد.'),
-        el('div', { class: 'nextappt__row' },
-          el('button', { class: 'btn btn--soft btn--sm', type: 'button', onclick: () => { location.hash = '#/appointments'; } }, icon('calendar', 14), 'تغییر/ثبت نوبت'),
-          el('button', { class: 'btn btn--ghost btn--sm', type: 'button', onclick: () => openRef('sessions') }, icon('clock', 14), 'بایگانی جلسات و حضور')
-        )
-      )
-    );
+  /* ۱.۲۷.۶۶ — بخش «پیگیری‌ها»ی کشو: همان کارت مشترک، بدون fetch تازه */
+  function renderFollowupsSection(box) {
+    box.replaceChildren(buildFollowupsCard());
   }
 
   function refSections() {
+    /* ۱.۲۷.۶۶ — «اطلاعات پایه» از ریل خارج شد (خانه‌اش نوار بالاست — فشرده/کامل) و
+       «پیگیری‌ها» که فقط در ایستگاه پیگیری زندگی می‌کرد به ۴ خانهٔ بالای ریل آمد. */
     return [
-      { key: 'info', label: 'اطلاعات پایه', icon: 'user', when: () => true },
       { key: 'timeline', label: 'تاریخچه با فصل‌ها و نقطه‌های کلیدی', icon: 'clock', when: () => true },
       { key: 'clinical', label: 'تفسیر بالینی و طرح درمان', icon: 'brain', when: () => canSeeClinical },
+      { key: 'followups', label: 'پیگیری‌ها — صف باز، ثبت نتیجه و ابزارهای بله', icon: 'bell', when: () => true },
       { key: 'narrative', label: 'روایت بالینی (سه فصل)', icon: 'book', when: () => canSeeClinical },
       { key: 'snapshot', label: 'گزارش‌های قطعی — واریانت متخصص/خانواده/مدرسه + چاپ A4', icon: 'file', when: () => true },
       { key: 'sessions', label: 'بایگانی جلسات، حضور و نوبت‌ها', icon: 'calendar', when: () => true },
@@ -861,13 +901,17 @@ export async function renderStudentProfile(container, ctx) {
   }
 
   function openRef(key, { node, body } = {}) {
-    /* ۱.۲۷.۶۵ — موج ۴: بالینی خانه‌اش هاب است — کلیک «تفسیر و طرح درمان» ریل به هاب اسکرول و
-       فلش می‌کند؛ بقیهٔ بخش‌ها کشوی لغزنده با همان رندررهای قدیمی. */
+    /* ۱.۲۷.۶۵ — موج ۴: بالینی خانه‌اش هاب است؛ ۱.۲۷.۶۶ — اطلاعات پایه خانه‌اش نوار بالاست
+       (پنل فشرده/کامل) — بقیهٔ بخش‌ها کشوی لغزنده با همان رندررهای قدیمی. */
     {
       if (key === 'clinical') {
         hubBody.scrollIntoView({ behavior: 'smooth', block: 'start' });
         hubBody.classList.add('hub-flash');
         setTimeout(() => hubBody.classList.remove('hub-flash'), 1200);
+        return;
+      }
+      if (key === 'info') {
+        toggleInfoDetail(true);
         return;
       }
       if (activeSectionKey === key) return;
@@ -1027,6 +1071,7 @@ export async function renderStudentProfile(container, ctx) {
   container.replaceChildren(
     pageHead,
     idbarHolder,
+    infoPanel,
     flowHolder,
     workbarHolder,
     workshop,
@@ -1096,6 +1141,7 @@ export async function renderStudentProfile(container, ctx) {
      هاب همیشه‌نما هم با تغییر دادهٔ همان کلید بی‌صدا تازه می‌شود (۱.۲۷.۶۴). */
   function rerenderTabIf(keys) {
     if (activeSectionKey && keys.includes(activeSectionKey)) dispatchTab(activeSectionKey, drawerMount);
+    if (infoDetailMounted && keys.includes('info')) dispatchTab('info', infoDetailMount); // ۱.۲۷.۶۶ — پنل کامل اطلاعات هم تازه می‌شود
     if (hubMountedKey && keys.includes(hubMountedKey)) dispatchTab(hubMountedKey, hubMount);
   }
 

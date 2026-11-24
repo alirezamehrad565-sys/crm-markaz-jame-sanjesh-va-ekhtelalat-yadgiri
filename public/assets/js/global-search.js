@@ -100,7 +100,8 @@ export function openPalette() {
     const base = `#/students/${m[1]}`;
     return [
       { type: 'profile-section', icon: 'brain', title: 'تفسیر بالینی و طرح درمان', hash: base },
-      { type: 'profile-section', icon: 'user', title: 'اطلاعات پایه', hash: `${base}?section=info` },
+      { type: 'profile-section', icon: 'user', title: 'اطلاعات پایه — نوار بالا', hash: `${base}?section=info` },
+      { type: 'profile-section', icon: 'bell', title: 'پیگیری‌ها', hash: `${base}?section=followups` },
       { type: 'profile-section', icon: 'clock', title: 'تاریخچهٔ پرونده', hash: `${base}?section=timeline` },
       { type: 'profile-section', icon: 'file', title: 'گزارش‌های قطعی', hash: `${base}?section=snapshot` },
       { type: 'profile-section', icon: 'calendar', title: 'جلسات و حضور', hash: `${base}?section=sessions` },

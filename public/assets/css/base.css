@@ -354,6 +354,10 @@ html {
   scrollbar-gutter: stable;
 }
 
+/* ۱.۲۷.۶۶ (sdt144) — کشوی بیرون‌صفحه به اسکرول افقی سند سرریز می‌شد؛ clip روی body است نه html
+   (کنار overflow-y:scroll روی html، clip به auto تبدیل می‌شد). clip ظرف اسکرول نمی‌سازد — sticky سالم؛ fixed بریده نمی‌شود. */
+body { overflow-x: clip; }
+
 body {
   margin: 0;
   font-family: var(--font);

@@ -41,7 +41,9 @@ describe('پوستهٔ «میز جلسه + پروندهٔ مرجع» — ۱.۲۷
   it('نوار ابزار + نوار کار تاشو: ایستگاه فعال در نوار کار؛ بایگانی جلسات در کشوی مرجع (موج ۴)', () => {
     expect(view).toContain('function buildStationPanel(key)');
     expect(view).toContain('workbarHolder.replaceChildren(buildWorkbar(activeStation))');
-    expect(view).toContain("onclick: () => openRef('sessions')"); // لینک بایگانی از کارت نوبت
+    /* ۱.۲۷.۶۶ — کارت مردهٔ «جلسهٔ بعدی و نوبت‌ها» حذف شد؛ بایگانی جلسات خانهٔ ریلش را دارد */
+    expect(view).toContain("{ key: 'sessions', label: 'بایگانی جلسات، حضور و نوبت‌ها', icon: 'calendar', when: () => true }");
+    expect(view).not.toContain('buildNextApptCard');
     expect(view).not.toContain("const desk = el('div', { class: 'desk' }"); // گرید دوستونهٔ کلاسیک حذف شد
   });
 

@@ -4,7 +4,9 @@
    خالص و بدون وابستگی؛ آزمون گیت front-12763-landing.test.ts روی همین تابع می‌دود. */
 
 const STATIONS = ['ready', 'hold', 'log', 'follow'];
-const RAIL_KEYS = ['info', 'timeline', 'clinical', 'narrative', 'snapshot', 'sessions', 'exercises', 'games', 'comms'];
+/* ۱.۲۷.۶۶ — «پیگیری‌ها» خانهٔ ریل شد و «اطلاعات پایه» به نوار بالا رفت؛ info برای سازگاری
+   دیپ‌لینک‌های قدیمی (?section=info/?tab=info) در فهرست می‌ماند — نما آن را به پنل کامل نوار می‌فرستد. */
+const RAIL_KEYS = ['timeline', 'clinical', 'followups', 'narrative', 'snapshot', 'sessions', 'exercises', 'games', 'comms', 'info'];
 
 /* نگاشت تب‌های قدیمی به خانهٔ تازه — قرارداد ۱.۲۷.۵۸ حفظ شد:
    clinical → هاب (قهرمان)؛ sessions → ایستگاه «ثبت گزارش» (رفتار کلاسیک)؛ بقیه → کشوی مرجع. */

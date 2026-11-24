@@ -4920,6 +4920,35 @@ body.cb-printing #cb-print-root { display: block; }
   }
   .refdrawer.is-open { transform: none; }
 }
+/* ۱.۲۷.۶۶ (sdt144) — اطلاعات پایه با نوار بالا: پنل «کامل» زیر نوار (همان رندرر تب، mount تنبل، Esc)؛ فشرده: ویرایشگر مسئول/وضعیت پنهان؛ منوهای بازشو در موبایل تمام‌عرضِ مهارشده؛ چیپ‌های sticky زیر دسکتاپ تک‌ردیفهٔ اسکرول‌شونده */
+.infopanel {
+  margin-top: var(--sp-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  padding: var(--sp-3);
+}
+.infopanel[hidden] { display: none; }
+.infopanel__mount { min-width: 0; }
+.infopanel__mount .card:last-child { margin-bottom: 0; }
+.idbar__owner { display: none; } /* حالت فشرده — با .idbar--detailed برمی‌گردد */
+.idbar--detailed .idbar__owner { display: flex; flex-wrap: wrap; }
+
+@media (max-width: 1080px) {
+  .hub__sticky { flex-wrap: nowrap; overflow-x: auto; }
+  .hub__sticky .chip, .hub__stitle { flex: 0 0 auto; }
+  .hub__sticky .chip { max-width: none; }
+}
+@media (max-width: 640px) {
+  /* منو (اقدامات/ارسال با بله/…) — پنل fixed با مهار افقی؛ از لبهٔ صفحه بریده نمی‌شود */
+  .dd__panel {
+    position: fixed;
+    inset-inline: 12px;
+    min-width: 0;
+    max-width: none;
+  }
+}
+
 /* CTA چسبان موبایل — نسخهٔ پایین‌صفحه‌ای «ادامه از جلسهٔ قبل» */
 .flow-cta-mobile { display: none; }
 
