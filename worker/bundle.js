@@ -1822,10 +1822,6 @@ var Hono3 = class extends Hono {
   }
 };
 
-// src/core/version.ts
-var APP_VERSION = "1.27.79";
-var NODE_MIN_VERSION = "1.26.0";
-
 // node_modules/zod/v4/classic/external.js
 var external_exports = {};
 __export(external_exports, {
@@ -24166,88 +24162,149 @@ function findStaffByUsername(db, username) {
 }
 __name(findStaffByUsername, "findStaffByUsername");
 
-// src/core/audit/writer.ts
-var AUDIT_RETENTION_DAYS_DEFAULT = 180;
-function parseAuditRetentionDays(raw2) {
-  if (raw2 === null || raw2 === void 0 || typeof raw2 === "string" && raw2.trim() === "") {
-    return AUDIT_RETENTION_DAYS_DEFAULT;
-  }
-  const n = typeof raw2 === "string" ? Number(raw2.trim()) : Number(raw2);
-  if (!Number.isFinite(n) || n < 0) return AUDIT_RETENTION_DAYS_DEFAULT;
-  return Math.trunc(n);
-}
-__name(parseAuditRetentionDays, "parseAuditRetentionDays");
-function pickAsyncLocalStorage() {
-  try {
-    const probe = globalThis.process?.getBuiltinModule?.("node:async_hooks");
-    const ALS = probe?.AsyncLocalStorage;
-    return ALS ? new ALS() : null;
-  } catch {
-    return null;
-  }
-}
-__name(pickAsyncLocalStorage, "pickAsyncLocalStorage");
-var requestIdALS = pickAsyncLocalStorage();
-function runWithRequestId(requestId, fn) {
-  if (!requestIdALS) return fn();
-  return requestIdALS.run({ requestId }, fn);
-}
-__name(runWithRequestId, "runWithRequestId");
-function currentRequestId() {
-  return requestIdALS?.getStore()?.requestId ?? null;
-}
-__name(currentRequestId, "currentRequestId");
-function buildInsert(entry) {
+// src/application/http/responses.ts
+function pageParams(query) {
   return {
-    sql: `INSERT INTO audit_log (id, actor_id, action, resource_type, resource_id, changes, request_id)
-          VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    params: [
-      crypto.randomUUID(),
-      entry.actorId,
-      entry.action,
-      entry.resourceType,
-      entry.resourceId,
-      entry.changes ? JSON.stringify(entry.changes) : null,
-      // صراحتِ صدا زننده همیشه برندهٔ زمینهٔ درخواست است (مثلاً میدل‌ور ناظر که بعد از پاسخ می‌نویسد)
-      entry.requestId ?? currentRequestId()
-    ]
+    page: Number.parseInt(query.page ?? "1", 10) || 1,
+    pageSize: Number.parseInt(query.page_size ?? String(DEFAULT_PAGE_SIZE), 10) || DEFAULT_PAGE_SIZE
   };
 }
-__name(buildInsert, "buildInsert");
-function createAuditWriter(db, opts) {
-  const retentionDays = opts?.retentionDays !== void 0 ? parseAuditRetentionDays(opts.retentionDays) : AUDIT_RETENTION_DAYS_DEFAULT;
+__name(pageParams, "pageParams");
+
+// src/application/http/error-handler.ts
+function requestIdOf(c) {
+  return c.get("requestId");
+}
+__name(requestIdOf, "requestIdOf");
+function errorHandler2(err, c) {
+  const requestId = requestIdOf(c);
+  const withRequestId = /* @__PURE__ */ __name((body) => requestId ? { ...body, request_id: requestId } : body, "withRequestId");
+  if (err instanceof ZodError) {
+    return c.json(
+      withRequestId({
+        error: "VALIDATION_ERROR",
+        message: "\u0648\u0631\u0648\u062F\u06CC \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A",
+        details: err.issues.map((i) => ({ path: i.path.join("."), message: i.message }))
+      }),
+      400
+    );
+  }
+  if (err instanceof ConflictError) {
+    return c.json(
+      withRequestId({
+        error: "CONFLICT",
+        message: err.message,
+        ...err.currentVersion !== void 0 ? { current_version: err.currentVersion } : {}
+      }),
+      409
+    );
+  }
+  if (err instanceof AppError) {
+    return c.json(
+      withRequestId({
+        error: err.code,
+        message: err.message,
+        ...err.details ? { details: err.details } : {}
+      }),
+      err.status
+    );
+  }
+  if (err instanceof SyntaxError) {
+    return c.json(withRequestId({ error: "INVALID_JSON", message: "\u0628\u062F\u0646\u0647 \u062F\u0631\u062E\u0648\u0627\u0633\u062A JSON \u0645\u0639\u062A\u0628\u0631 \u0646\u06CC\u0633\u062A" }), 400);
+  }
+  c.get("logger")?.error("unhandled.error", {
+    error: err instanceof Error ? err.message : "unknown",
+    path: c.req.path,
+    ...requestId ? { request_id: requestId } : {}
+  });
+  return c.json(withRequestId({ error: "INTERNAL_ERROR", message: "\u062E\u0637\u0627\u06CC \u062F\u0627\u062E\u0644\u06CC \u0633\u0631\u0648\u0631" }), 500);
+}
+__name(errorHandler2, "errorHandler");
+
+// src/application/rum/pure.ts
+function percentile(sorted, p) {
+  if (sorted.length === 0) return 0;
+  const clamped = Math.min(Math.max(p, 0), 1);
+  const idx = (sorted.length - 1) * clamped;
+  const lo = Math.floor(idx);
+  const hi = Math.ceil(idx);
+  if (lo === hi) return sorted[lo];
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
+}
+__name(percentile, "percentile");
+function makeRateLimiter(max, windowMs) {
+  let windowStart = 0;
+  let count = 0;
   return {
-    async log(entry) {
-      const { sql, params } = buildInsert(entry);
-      await db.execute(sql, params);
-    },
-    async logInTransaction(tx, entry) {
-      const { sql, params } = buildInsert(entry);
-      await tx.execute(sql, params);
-    },
-    async pruneOld() {
-      if (retentionDays === 0) return 0;
-      const cutoff = new Date(Date.now() - retentionDays * 24 * 3600 * 1e3).toISOString().slice(0, 19).replace("T", " ");
-      const res = await db.execute(`DELETE FROM audit_log WHERE created_at < ?`, [cutoff]);
-      return typeof res?.meta?.changes === "number" ? res.meta.changes : 0;
+    allow() {
+      const now = Date.now();
+      if (now - windowStart >= windowMs) {
+        windowStart = now;
+        count = 0;
+      }
+      if (count >= max) return false;
+      count += 1;
+      return true;
     }
   };
 }
-__name(createAuditWriter, "createAuditWriter");
+__name(makeRateLimiter, "makeRateLimiter");
 
-// src/core/shared/log-mask.ts
-var MASKED = ":masked";
-var PAGE_TOKEN = /^(\/m\/)[^/?]+/;
-var API_TOKEN = /^(\/api\/m\/)[^/?]+/;
-var WEBHOOK_SECRET = /^(\/webhook\/bale\/)[^/?]+/;
-function maskSensitivePath(path) {
-  let out = String(path ?? "");
-  out = out.replace(PAGE_TOKEN, `$1${MASKED}`);
-  out = out.replace(API_TOKEN, `$1${MASKED}`);
-  out = out.replace(WEBHOOK_SECRET, `$1${MASKED}`);
-  return out;
+// src/application/http/rate-limit.ts
+var API_RATE_LIMIT_PER_MIN_DEFAULT = 240;
+var API_RATE_LIMIT_PER_MIN_MAX = 1e4;
+var API_RATE_LIMIT_WINDOW_MS = 6e4;
+function parsePerMinWithDefault(raw2, fallback) {
+  if (raw2 === null || raw2 === void 0 || typeof raw2 === "string" && raw2.trim() === "") {
+    return fallback;
+  }
+  const n = typeof raw2 === "string" ? Number(raw2.trim()) : Number(raw2);
+  if (!Number.isFinite(n) || n < 0) return fallback;
+  if (n === 0) return 0;
+  return Math.min(Math.trunc(n), API_RATE_LIMIT_PER_MIN_MAX);
 }
-__name(maskSensitivePath, "maskSensitivePath");
+__name(parsePerMinWithDefault, "parsePerMinWithDefault");
+function parseApiRateLimitPerMin(raw2) {
+  return parsePerMinWithDefault(raw2, API_RATE_LIMIT_PER_MIN_DEFAULT);
+}
+__name(parseApiRateLimitPerMin, "parseApiRateLimitPerMin");
+var API_TOKEN_GET_RATE_LIMIT_PER_MIN_DEFAULT = 120;
+function parseTokenGetRateLimitPerMin(raw2) {
+  return parsePerMinWithDefault(raw2, API_TOKEN_GET_RATE_LIMIT_PER_MIN_DEFAULT);
+}
+__name(parseTokenGetRateLimitPerMin, "parseTokenGetRateLimitPerMin");
+function makeKeyedRateLimiter(windowMs, maxKeys = 4096) {
+  const buckets = /* @__PURE__ */ new Map();
+  return {
+    allow(key, max) {
+      const now = Date.now();
+      if (!buckets.has(key) && buckets.size >= maxKeys) {
+        for (const [k, b] of buckets) {
+          if (now - b.lastSeen >= windowMs) buckets.delete(k);
+        }
+        if (buckets.size >= maxKeys) {
+          let oldestKey = null;
+          let oldestAt = Number.POSITIVE_INFINITY;
+          for (const [k, b] of buckets) {
+            if (b.lastSeen < oldestAt) {
+              oldestAt = b.lastSeen;
+              oldestKey = k;
+            }
+          }
+          if (oldestKey !== null) buckets.delete(oldestKey);
+        }
+      }
+      let bucket = buckets.get(key);
+      if (!bucket) {
+        bucket = { limiter: makeRateLimiter(max, windowMs), lastSeen: now };
+        buckets.set(key, bucket);
+      }
+      bucket.lastSeen = now;
+      return bucket.limiter.allow();
+    }
+  };
+}
+__name(makeKeyedRateLimiter, "makeKeyedRateLimiter");
 
 // src/core/notify/templates.ts
 var UNKNOWN_TEMPLATE_FALLBACK = "\u0627\u0637\u0644\u0627\u0639\u200C\u0631\u0633\u0627\u0646\u06CC \u0633\u0627\u0645\u0627\u0646\u0647 \u0645\u0631\u06A9\u0632";
@@ -26241,6 +26298,137 @@ function generateLinkCode(length) {
   return out;
 }
 __name(generateLinkCode, "generateLinkCode");
+
+// src/core/storage/r2-store.ts
+function createR2ObjectStore(bucket) {
+  return {
+    name: "r2",
+    maxObjectBytes: MAX_EXERCISE_PANEL_FILE_BYTES,
+    async put(key, bytes, _mime2) {
+      await bucket.put(key, bytes);
+    },
+    async putSegments(key, segments) {
+      const blob = new Blob(segments);
+      await bucket.put(key, blob);
+    },
+    async get(key) {
+      const obj = await bucket.get(key);
+      if (!obj) return null;
+      const buf = await obj.arrayBuffer();
+      const bytes = new Uint8Array(buf);
+      return { bytes, mime: "application/octet-stream", size: bytes.length };
+    },
+    async delete(key) {
+      await bucket.delete(key);
+    }
+  };
+}
+__name(createR2ObjectStore, "createR2ObjectStore");
+
+// src/core/storage/chunked-d1-store.ts
+var CHUNK_BYTES = 15e5;
+var PAGE_CHUNKS = 6;
+var PAGES_PER_BATCH = 3;
+function chunkToBytes(row) {
+  const c = row.content;
+  if (typeof c === "string") {
+    const bin = atob(c);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i += 1) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+  return new Uint8Array(c);
+}
+__name(chunkToBytes, "chunkToBytes");
+function bytesToBase64(bytes) {
+  let bin = "";
+  const CHUNK = 32768;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(bin);
+}
+__name(bytesToBase64, "bytesToBase64");
+async function writeSegments(db, key, segments) {
+  await db.transaction(async (tx) => {
+    await tx.execute(`DELETE FROM exercise_file_chunks WHERE key = ?`, [key]);
+    const chunk = new Uint8Array(CHUNK_BYTES);
+    let fill = 0;
+    let seq = 0;
+    const flushChunk = /* @__PURE__ */ __name(async () => {
+      if (fill === 0) return;
+      await tx.execute(
+        `INSERT INTO exercise_file_chunks (key, seq, content) VALUES (?, ?, ?)`,
+        [key, seq, bytesToBase64(chunk.subarray(0, fill))]
+      );
+      seq += 1;
+      fill = 0;
+    }, "flushChunk");
+    for (const seg of segments) {
+      let off = 0;
+      while (off < seg.length) {
+        const n = Math.min(CHUNK_BYTES - fill, seg.length - off);
+        chunk.set(seg.subarray(off, off + n), fill);
+        fill += n;
+        off += n;
+        if (fill === CHUNK_BYTES) await flushChunk();
+      }
+    }
+    await flushChunk();
+  });
+}
+__name(writeSegments, "writeSegments");
+function createChunkedD1ObjectStore(db) {
+  return {
+    name: "d1",
+    maxObjectBytes: MAX_EXERCISE_PANEL_FILE_BYTES,
+    async put(key, bytes) {
+      await writeSegments(db, key, [bytes]);
+    },
+    async putSegments(key, segments) {
+      await writeSegments(db, key, segments);
+    },
+    async get(key) {
+      const countRow = await db.queryOne(
+        `SELECT COUNT(*) AS n FROM exercise_file_chunks WHERE key = ?`,
+        [key]
+      );
+      const total = countRow?.n ?? 0;
+      if (total === 0) return null;
+      const pages = Math.ceil(total / PAGE_CHUNKS);
+      const parts = [];
+      let size = 0;
+      for (let firstPage = 0; firstPage < pages; firstPage += PAGES_PER_BATCH) {
+        const stmts = [];
+        for (let p = firstPage; p < Math.min(firstPage + PAGES_PER_BATCH, pages); p += 1) {
+          stmts.push(db.prepare(
+            `SELECT seq, content FROM exercise_file_chunks WHERE key = ? ORDER BY seq LIMIT ${PAGE_CHUNKS} OFFSET ?`,
+            [key, p * PAGE_CHUNKS]
+          ));
+        }
+        const results = await db.batch(stmts);
+        for (const res of results) {
+          for (const r of res.results ?? []) {
+            const b = chunkToBytes(r);
+            parts.push(b);
+            size += b.length;
+          }
+        }
+      }
+      const out = new Uint8Array(size);
+      let cursor = 0;
+      for (const p of parts) {
+        out.set(p, cursor);
+        cursor += p.length;
+      }
+      return { bytes: out, mime: "application/octet-stream", size };
+    },
+    async delete(key) {
+      await db.execute(`DELETE FROM exercise_file_chunks WHERE key = ?`, [key]);
+    }
+  };
+}
+__name(createChunkedD1ObjectStore, "createChunkedD1ObjectStore");
 
 // src/domain/conflict-engine/engine.ts
 function findOverlaps(existing, proposed) {
@@ -29464,150 +29652,6 @@ function createStudentProfileService(deps) {
   return service;
 }
 __name(createStudentProfileService, "createStudentProfileService");
-
-// src/application/http/responses.ts
-function pageParams(query) {
-  return {
-    page: Number.parseInt(query.page ?? "1", 10) || 1,
-    pageSize: Number.parseInt(query.page_size ?? String(DEFAULT_PAGE_SIZE), 10) || DEFAULT_PAGE_SIZE
-  };
-}
-__name(pageParams, "pageParams");
-
-// src/application/http/error-handler.ts
-function requestIdOf(c) {
-  return c.get("requestId");
-}
-__name(requestIdOf, "requestIdOf");
-function errorHandler2(err, c) {
-  const requestId = requestIdOf(c);
-  const withRequestId = /* @__PURE__ */ __name((body) => requestId ? { ...body, request_id: requestId } : body, "withRequestId");
-  if (err instanceof ZodError) {
-    return c.json(
-      withRequestId({
-        error: "VALIDATION_ERROR",
-        message: "\u0648\u0631\u0648\u062F\u06CC \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A",
-        details: err.issues.map((i) => ({ path: i.path.join("."), message: i.message }))
-      }),
-      400
-    );
-  }
-  if (err instanceof ConflictError) {
-    return c.json(
-      withRequestId({
-        error: "CONFLICT",
-        message: err.message,
-        ...err.currentVersion !== void 0 ? { current_version: err.currentVersion } : {}
-      }),
-      409
-    );
-  }
-  if (err instanceof AppError) {
-    return c.json(
-      withRequestId({
-        error: err.code,
-        message: err.message,
-        ...err.details ? { details: err.details } : {}
-      }),
-      err.status
-    );
-  }
-  if (err instanceof SyntaxError) {
-    return c.json(withRequestId({ error: "INVALID_JSON", message: "\u0628\u062F\u0646\u0647 \u062F\u0631\u062E\u0648\u0627\u0633\u062A JSON \u0645\u0639\u062A\u0628\u0631 \u0646\u06CC\u0633\u062A" }), 400);
-  }
-  c.get("logger")?.error("unhandled.error", {
-    error: err instanceof Error ? err.message : "unknown",
-    path: c.req.path,
-    ...requestId ? { request_id: requestId } : {}
-  });
-  return c.json(withRequestId({ error: "INTERNAL_ERROR", message: "\u062E\u0637\u0627\u06CC \u062F\u0627\u062E\u0644\u06CC \u0633\u0631\u0648\u0631" }), 500);
-}
-__name(errorHandler2, "errorHandler");
-
-// src/application/rum/pure.ts
-function percentile(sorted, p) {
-  if (sorted.length === 0) return 0;
-  const clamped = Math.min(Math.max(p, 0), 1);
-  const idx = (sorted.length - 1) * clamped;
-  const lo = Math.floor(idx);
-  const hi = Math.ceil(idx);
-  if (lo === hi) return sorted[lo];
-  return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
-}
-__name(percentile, "percentile");
-function makeRateLimiter(max, windowMs) {
-  let windowStart = 0;
-  let count = 0;
-  return {
-    allow() {
-      const now = Date.now();
-      if (now - windowStart >= windowMs) {
-        windowStart = now;
-        count = 0;
-      }
-      if (count >= max) return false;
-      count += 1;
-      return true;
-    }
-  };
-}
-__name(makeRateLimiter, "makeRateLimiter");
-
-// src/application/http/rate-limit.ts
-var API_RATE_LIMIT_PER_MIN_DEFAULT = 240;
-var API_RATE_LIMIT_PER_MIN_MAX = 1e4;
-var API_RATE_LIMIT_WINDOW_MS = 6e4;
-function parsePerMinWithDefault(raw2, fallback) {
-  if (raw2 === null || raw2 === void 0 || typeof raw2 === "string" && raw2.trim() === "") {
-    return fallback;
-  }
-  const n = typeof raw2 === "string" ? Number(raw2.trim()) : Number(raw2);
-  if (!Number.isFinite(n) || n < 0) return fallback;
-  if (n === 0) return 0;
-  return Math.min(Math.trunc(n), API_RATE_LIMIT_PER_MIN_MAX);
-}
-__name(parsePerMinWithDefault, "parsePerMinWithDefault");
-function parseApiRateLimitPerMin(raw2) {
-  return parsePerMinWithDefault(raw2, API_RATE_LIMIT_PER_MIN_DEFAULT);
-}
-__name(parseApiRateLimitPerMin, "parseApiRateLimitPerMin");
-var API_TOKEN_GET_RATE_LIMIT_PER_MIN_DEFAULT = 120;
-function parseTokenGetRateLimitPerMin(raw2) {
-  return parsePerMinWithDefault(raw2, API_TOKEN_GET_RATE_LIMIT_PER_MIN_DEFAULT);
-}
-__name(parseTokenGetRateLimitPerMin, "parseTokenGetRateLimitPerMin");
-function makeKeyedRateLimiter(windowMs, maxKeys = 4096) {
-  const buckets = /* @__PURE__ */ new Map();
-  return {
-    allow(key, max) {
-      const now = Date.now();
-      if (!buckets.has(key) && buckets.size >= maxKeys) {
-        for (const [k, b] of buckets) {
-          if (now - b.lastSeen >= windowMs) buckets.delete(k);
-        }
-        if (buckets.size >= maxKeys) {
-          let oldestKey = null;
-          let oldestAt = Number.POSITIVE_INFINITY;
-          for (const [k, b] of buckets) {
-            if (b.lastSeen < oldestAt) {
-              oldestAt = b.lastSeen;
-              oldestKey = k;
-            }
-          }
-          if (oldestKey !== null) buckets.delete(oldestKey);
-        }
-      }
-      let bucket = buckets.get(key);
-      if (!bucket) {
-        bucket = { limiter: makeRateLimiter(max, windowMs), lastSeen: now };
-        buckets.set(key, bucket);
-      }
-      bucket.lastSeen = now;
-      return bucket.limiter.allow();
-    }
-  };
-}
-__name(makeKeyedRateLimiter, "makeKeyedRateLimiter");
 
 // src/domain/student-profile/routes.ts
 var StudentTeacherSchema = external_exports.object({
@@ -47721,6 +47765,10 @@ function createGamesService(deps) {
 }
 __name(createGamesService, "createGamesService");
 
+// src/core/version.ts
+var APP_VERSION = "1.27.80";
+var NODE_MIN_VERSION = "1.26.0";
+
 // src/domain/games/page.ts
 var FA_DIGITS3 = "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9";
 function faNum6(n) {
@@ -61291,137 +61339,6 @@ function registerOtEngineRoutes(app, service) {
 }
 __name(registerOtEngineRoutes, "registerOtEngineRoutes");
 
-// src/core/storage/r2-store.ts
-function createR2ObjectStore(bucket) {
-  return {
-    name: "r2",
-    maxObjectBytes: MAX_EXERCISE_PANEL_FILE_BYTES,
-    async put(key, bytes, _mime2) {
-      await bucket.put(key, bytes);
-    },
-    async putSegments(key, segments) {
-      const blob = new Blob(segments);
-      await bucket.put(key, blob);
-    },
-    async get(key) {
-      const obj = await bucket.get(key);
-      if (!obj) return null;
-      const buf = await obj.arrayBuffer();
-      const bytes = new Uint8Array(buf);
-      return { bytes, mime: "application/octet-stream", size: bytes.length };
-    },
-    async delete(key) {
-      await bucket.delete(key);
-    }
-  };
-}
-__name(createR2ObjectStore, "createR2ObjectStore");
-
-// src/core/storage/chunked-d1-store.ts
-var CHUNK_BYTES = 15e5;
-var PAGE_CHUNKS = 6;
-var PAGES_PER_BATCH = 3;
-function chunkToBytes(row) {
-  const c = row.content;
-  if (typeof c === "string") {
-    const bin = atob(c);
-    const out = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i += 1) out[i] = bin.charCodeAt(i);
-    return out;
-  }
-  return new Uint8Array(c);
-}
-__name(chunkToBytes, "chunkToBytes");
-function bytesToBase64(bytes) {
-  let bin = "";
-  const CHUNK = 32768;
-  for (let i = 0; i < bytes.length; i += CHUNK) {
-    bin += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
-  }
-  return btoa(bin);
-}
-__name(bytesToBase64, "bytesToBase64");
-async function writeSegments(db, key, segments) {
-  await db.transaction(async (tx) => {
-    await tx.execute(`DELETE FROM exercise_file_chunks WHERE key = ?`, [key]);
-    const chunk = new Uint8Array(CHUNK_BYTES);
-    let fill = 0;
-    let seq = 0;
-    const flushChunk = /* @__PURE__ */ __name(async () => {
-      if (fill === 0) return;
-      await tx.execute(
-        `INSERT INTO exercise_file_chunks (key, seq, content) VALUES (?, ?, ?)`,
-        [key, seq, bytesToBase64(chunk.subarray(0, fill))]
-      );
-      seq += 1;
-      fill = 0;
-    }, "flushChunk");
-    for (const seg of segments) {
-      let off = 0;
-      while (off < seg.length) {
-        const n = Math.min(CHUNK_BYTES - fill, seg.length - off);
-        chunk.set(seg.subarray(off, off + n), fill);
-        fill += n;
-        off += n;
-        if (fill === CHUNK_BYTES) await flushChunk();
-      }
-    }
-    await flushChunk();
-  });
-}
-__name(writeSegments, "writeSegments");
-function createChunkedD1ObjectStore(db) {
-  return {
-    name: "d1",
-    maxObjectBytes: MAX_EXERCISE_PANEL_FILE_BYTES,
-    async put(key, bytes) {
-      await writeSegments(db, key, [bytes]);
-    },
-    async putSegments(key, segments) {
-      await writeSegments(db, key, segments);
-    },
-    async get(key) {
-      const countRow = await db.queryOne(
-        `SELECT COUNT(*) AS n FROM exercise_file_chunks WHERE key = ?`,
-        [key]
-      );
-      const total = countRow?.n ?? 0;
-      if (total === 0) return null;
-      const pages = Math.ceil(total / PAGE_CHUNKS);
-      const parts = [];
-      let size = 0;
-      for (let firstPage = 0; firstPage < pages; firstPage += PAGES_PER_BATCH) {
-        const stmts = [];
-        for (let p = firstPage; p < Math.min(firstPage + PAGES_PER_BATCH, pages); p += 1) {
-          stmts.push(db.prepare(
-            `SELECT seq, content FROM exercise_file_chunks WHERE key = ? ORDER BY seq LIMIT ${PAGE_CHUNKS} OFFSET ?`,
-            [key, p * PAGE_CHUNKS]
-          ));
-        }
-        const results = await db.batch(stmts);
-        for (const res of results) {
-          for (const r of res.results ?? []) {
-            const b = chunkToBytes(r);
-            parts.push(b);
-            size += b.length;
-          }
-        }
-      }
-      const out = new Uint8Array(size);
-      let cursor = 0;
-      for (const p of parts) {
-        out.set(p, cursor);
-        cursor += p.length;
-      }
-      return { bytes: out, mime: "application/octet-stream", size };
-    },
-    async delete(key) {
-      await db.execute(`DELETE FROM exercise_file_chunks WHERE key = ?`, [key]);
-    }
-  };
-}
-__name(createChunkedD1ObjectStore, "createChunkedD1ObjectStore");
-
 // src/domain/tags/pure.ts
 function normalizeTagName(raw2) {
   return raw2.replace(/\s+/g, " ").trim();
@@ -65983,6 +65900,75 @@ async function syncCpAnnouncements(deps) {
 }
 __name(syncCpAnnouncements, "syncCpAnnouncements");
 
+// src/core/audit/writer.ts
+var AUDIT_RETENTION_DAYS_DEFAULT = 180;
+function parseAuditRetentionDays(raw2) {
+  if (raw2 === null || raw2 === void 0 || typeof raw2 === "string" && raw2.trim() === "") {
+    return AUDIT_RETENTION_DAYS_DEFAULT;
+  }
+  const n = typeof raw2 === "string" ? Number(raw2.trim()) : Number(raw2);
+  if (!Number.isFinite(n) || n < 0) return AUDIT_RETENTION_DAYS_DEFAULT;
+  return Math.trunc(n);
+}
+__name(parseAuditRetentionDays, "parseAuditRetentionDays");
+function pickAsyncLocalStorage() {
+  try {
+    const probe = globalThis.process?.getBuiltinModule?.("node:async_hooks");
+    const ALS = probe?.AsyncLocalStorage;
+    return ALS ? new ALS() : null;
+  } catch {
+    return null;
+  }
+}
+__name(pickAsyncLocalStorage, "pickAsyncLocalStorage");
+var requestIdALS = pickAsyncLocalStorage();
+function runWithRequestId(requestId, fn) {
+  if (!requestIdALS) return fn();
+  return requestIdALS.run({ requestId }, fn);
+}
+__name(runWithRequestId, "runWithRequestId");
+function currentRequestId() {
+  return requestIdALS?.getStore()?.requestId ?? null;
+}
+__name(currentRequestId, "currentRequestId");
+function buildInsert(entry) {
+  return {
+    sql: `INSERT INTO audit_log (id, actor_id, action, resource_type, resource_id, changes, request_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    params: [
+      crypto.randomUUID(),
+      entry.actorId,
+      entry.action,
+      entry.resourceType,
+      entry.resourceId,
+      entry.changes ? JSON.stringify(entry.changes) : null,
+      // صراحتِ صدا زننده همیشه برندهٔ زمینهٔ درخواست است (مثلاً میدل‌ور ناظر که بعد از پاسخ می‌نویسد)
+      entry.requestId ?? currentRequestId()
+    ]
+  };
+}
+__name(buildInsert, "buildInsert");
+function createAuditWriter(db, opts) {
+  const retentionDays = opts?.retentionDays !== void 0 ? parseAuditRetentionDays(opts.retentionDays) : AUDIT_RETENTION_DAYS_DEFAULT;
+  return {
+    async log(entry) {
+      const { sql, params } = buildInsert(entry);
+      await db.execute(sql, params);
+    },
+    async logInTransaction(tx, entry) {
+      const { sql, params } = buildInsert(entry);
+      await tx.execute(sql, params);
+    },
+    async pruneOld() {
+      if (retentionDays === 0) return 0;
+      const cutoff = new Date(Date.now() - retentionDays * 24 * 3600 * 1e3).toISOString().slice(0, 19).replace("T", " ");
+      const res = await db.execute(`DELETE FROM audit_log WHERE created_at < ?`, [cutoff]);
+      return typeof res?.meta?.changes === "number" ? res.meta.changes : 0;
+    }
+  };
+}
+__name(createAuditWriter, "createAuditWriter");
+
 // src/domain/content-score/pure.ts
 var SCORE_FORMULA_VERSION = 1;
 var SCORE_SOURCES = ["exercises", "pathway_templates"];
@@ -67134,571 +67120,6 @@ function registerHealthRoutes(app, service) {
 }
 __name(registerHealthRoutes, "registerHealthRoutes");
 
-// src/core/human-events/index.ts
-var HUMAN_EVENTS_QUEUE_KEY = "sys_human_events";
-var HUMAN_EVENTS_MAX = 200;
-async function pushHumanEvent(db, msg, source) {
-  try {
-    let list = [];
-    const row = await db.queryOne(`SELECT value FROM settings WHERE key = ?`, [
-      HUMAN_EVENTS_QUEUE_KEY
-    ]);
-    if (row?.value) {
-      const parsed = JSON.parse(row.value);
-      if (Array.isArray(parsed)) list = parsed;
-    }
-    list.push({ ts: (/* @__PURE__ */ new Date()).toISOString(), source, msg });
-    while (list.length > HUMAN_EVENTS_MAX) list.shift();
-    await db.execute(
-      `INSERT INTO settings (key, value, updated_by) VALUES (?, ?, 'system')
-       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = 'system', updated_at = datetime('now')`,
-      [HUMAN_EVENTS_QUEUE_KEY, JSON.stringify(list)]
-    );
-  } catch {
-  }
-}
-__name(pushHumanEvent, "pushHumanEvent");
-async function readHumanEvents(db, limit = HUMAN_EVENTS_MAX) {
-  try {
-    const row = await db.queryOne(`SELECT value FROM settings WHERE key = ?`, [
-      HUMAN_EVENTS_QUEUE_KEY
-    ]);
-    if (!row?.value) return [];
-    const parsed = JSON.parse(row.value);
-    return Array.isArray(parsed) ? parsed.slice(-limit) : [];
-  } catch {
-    return [];
-  }
-}
-__name(readHumanEvents, "readHumanEvents");
-
-// src/node-sync-runner/status.ts
-var NODE_SYNC_STATUS_MIRROR_KEY = "nodesync:status-mirror-v1";
-var SYNC_MODES = ["auto", "quarantined", "paused_version"];
-var SYNC_STATES = ["idle", "catching_up", "synced", "error", "offline"];
-var FAILURE_KINDS = ["none", "network", "server", "throttled", "auth", "version", "ingest", "unconfigured"];
-var NodeSyncStatusMirrorSchema = external_exports.object({
-  v: external_exports.literal(1),
-  mode: external_exports.enum(SYNC_MODES),
-  state: external_exports.enum(SYNC_STATES),
-  last_pull_cursor_at: external_exports.iso.datetime().nullable(),
-  last_push_ok_at: external_exports.iso.datetime().nullable(),
-  last_pull_ok_at: external_exports.iso.datetime().nullable(),
-  last_error_kind: external_exports.enum(FAILURE_KINDS).nullable(),
-  last_error_at: external_exports.iso.datetime().nullable(),
-  push_watermark: external_exports.iso.datetime().nullable(),
-  client_version: external_exports.string().max(50).nullable(),
-  // ─── موج ۱ — هندشیک نسخه (۱-۴)، ساعت مرجع مرکز (۱-۳)، خلاصهٔ جبران کامل ───
-  version: external_exports.object({
-    client: external_exports.string().min(1).max(50),
-    center: external_exports.string().min(1).max(50),
-    compatible: external_exports.boolean()
-  }).nullable().optional(),
-  clock_drift_minutes: external_exports.number().int().min(0).max(525600).nullable().optional(),
-  clock_warning: external_exports.boolean().optional(),
-  last_catchup: external_exports.object({
-    at: external_exports.iso.datetime(),
-    pulled: external_exports.number().int().min(0),
-    pushed: external_exports.number().int().min(0)
-  }).nullable().optional(),
-  // ─── EXP-1 (نسخهٔ ۳) — نتیجهٔ آخرین آشتی‌ساز؛ آینهٔ قدیمیِ بدونِ آن هم پذیرفته می‌شود ───
-  reconciliation: external_exports.object({
-    at: external_exports.iso.datetime(),
-    ok: external_exports.boolean(),
-    differences: external_exports.number().int().min(0),
-    // سقف ۵ ردیف ناهم‌خوانی — آینهٔ RECONCILE_MAX_DETAIL سمت runner
-    detail: external_exports.array(
-      external_exports.object({
-        domain: external_exports.string().min(1).max(40),
-        center: external_exports.number().int().min(0),
-        local: external_exports.number().int().min(0)
-      })
-    ).max(5).nullable()
-  }).nullable().optional(),
-  updated_at: external_exports.iso.datetime()
-});
-function requireDesktopEngine(c) {
-  if (c.env?.CENTER_DESKTOP_ENGINE !== "1") {
-    throw new NotFoundError("\u0645\u0633\u06CC\u0631 \u06CC\u0627\u0641\u062A \u0646\u0634\u062F");
-  }
-}
-__name(requireDesktopEngine, "requireDesktopEngine");
-async function readMirror(db) {
-  try {
-    const row = await db.queryOne(
-      "SELECT value FROM settings WHERE key = ?",
-      [NODE_SYNC_STATUS_MIRROR_KEY]
-    );
-    if (!row) return null;
-    const parsed = NodeSyncStatusMirrorSchema.safeParse(JSON.parse(row.value));
-    return parsed.success ? parsed.data : null;
-  } catch {
-    return null;
-  }
-}
-__name(readMirror, "readMirror");
-async function writeMirror(db, mirror) {
-  await db.execute(
-    `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))
-     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')`,
-    [NODE_SYNC_STATUS_MIRROR_KEY, JSON.stringify(mirror)]
-  );
-}
-__name(writeMirror, "writeMirror");
-async function pendingPushCount(db, watermark) {
-  let count = 0;
-  try {
-    if (watermark) {
-      const cutoff = watermark.slice(0, 19).replace("T", " ");
-      const row = await db.queryOne(
-        "SELECT COUNT(*) AS n FROM client_errors WHERE occurred_at > ?",
-        [cutoff]
-      );
-      count += Number(row?.n ?? 0);
-    } else {
-      const row = await db.queryOne("SELECT COUNT(*) AS n FROM client_errors");
-      count += Number(row?.n ?? 0);
-    }
-  } catch {
-  }
-  try {
-    const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
-    const hourBucket = `${nowIso2.slice(0, 13)}:00:00Z`;
-    const dayBucket = `${nowIso2.slice(0, 10)}T00:00:00Z`;
-    const ahead = /* @__PURE__ */ __name((at) => !watermark || Date.parse(at) > Date.parse(watermark), "ahead");
-    if (ahead(hourBucket)) count += 1;
-    if (ahead(dayBucket)) count += 1;
-  } catch {
-  }
-  return count;
-}
-__name(pendingPushCount, "pendingPushCount");
-function cursorAgeDays(cursorAt, nowMs) {
-  const t = Date.parse(cursorAt);
-  if (Number.isNaN(t)) return null;
-  return Math.max(0, Math.round((nowMs - t) / 864e5 * 10) / 10);
-}
-__name(cursorAgeDays, "cursorAgeDays");
-function registerNodeSyncStatusRoute(app, deps) {
-  const log = deps.logger.child("node-sync-status");
-  app.post("/api/node-sync/status", async (c) => {
-    requireDesktopEngine(c);
-    getAuthContext(c);
-    const parsed = NodeSyncStatusMirrorSchema.safeParse(await c.req.json().catch(() => null));
-    if (!parsed.success) throw new ValidationError("\u0627\u0633\u0646\u067E\u200C\u0634\u0627\u062A \u0648\u0636\u0639\u06CC\u062A \u0633\u06CC\u0646\u06A9 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A");
-    await writeMirror(deps.db, parsed.data);
-    log.info("status_mirror.ok", { state: parsed.data.state, mode: parsed.data.mode });
-    return c.json({ data: { ok: true } }, 200);
-  });
-  app.get("/api/node-sync/status", async (c) => {
-    requireDesktopEngine(c);
-    getAuthContext(c);
-    const mirror = await readMirror(deps.db);
-    const nowMs = Date.now();
-    const errorKind = mirror?.last_error_kind ?? null;
-    const payload = {
-      mode: mirror?.mode ?? "auto",
-      state: mirror?.state ?? "idle",
-      pending_push: await pendingPushCount(deps.db, mirror?.push_watermark ?? null),
-      last_pull_cursor_age_days: mirror?.last_pull_cursor_at ? cursorAgeDays(mirror.last_pull_cursor_at, nowMs) : null,
-      last_push_ok_at: mirror?.last_push_ok_at ?? null,
-      last_pull_ok_at: mirror?.last_pull_ok_at ?? null,
-      last_error: errorKind && errorKind !== "none" && mirror?.last_error_at ? { kind: errorKind, at: mirror.last_error_at } : null,
-      // ─── موج ۱ — آینهٔ غایب/قدیمی = پیش‌فرض نرم (اسنپ‌شات تازه از runner می‌آید) ───
-      version: mirror?.version ?? null,
-      clock_drift_minutes: mirror?.clock_drift_minutes ?? null,
-      clock_warning: mirror?.clock_warning === true,
-      last_catchup: mirror?.last_catchup ?? null,
-      // ─── EXP-1 (نسخهٔ ۳) — آشتی‌ساز؛ آینهٔ قدیمی بدونِ این فیلد = null نرم ───
-      reconciliation: mirror?.reconciliation ?? null
-    };
-    return c.json(payload, 200);
-  });
-}
-__name(registerNodeSyncStatusRoute, "registerNodeSyncStatusRoute");
-
-// src/application/system/zip.ts
-var CRC_TABLE = (() => {
-  const table = new Uint32Array(256);
-  for (let n = 0; n < 256; n += 1) {
-    let c = n;
-    for (let k = 0; k < 8; k += 1) {
-      c = c & 1 ? 3988292384 ^ c >>> 1 : c >>> 1;
-    }
-    table[n] = c >>> 0;
-  }
-  return table;
-})();
-function crc32(bytes) {
-  let crc = 4294967295;
-  for (let i = 0; i < bytes.length; i += 1) {
-    crc = CRC_TABLE[(crc ^ bytes[i]) & 255] ^ crc >>> 8;
-  }
-  return (crc ^ 4294967295) >>> 0;
-}
-__name(crc32, "crc32");
-function dosDateTime(d) {
-  const date5 = (Math.max(0, d.getUTCFullYear() - 1980) & 127) << 9 | d.getUTCMonth() + 1 << 5 | d.getUTCDate();
-  const time3 = d.getUTCHours() << 11 | d.getUTCMinutes() << 5 | Math.floor(d.getUTCSeconds() / 2);
-  return { date: date5, time: time3 };
-}
-__name(dosDateTime, "dosDateTime");
-function zipText(text) {
-  return new TextEncoder().encode(text);
-}
-__name(zipText, "zipText");
-var U16 = /* @__PURE__ */ __name((v) => [v & 255, v >>> 8 & 255], "U16");
-var U32 = /* @__PURE__ */ __name((v) => [v & 255, v >>> 8 & 255, v >>> 16 & 255, v >>> 24 & 255], "U32");
-function buildStoreZip(entries, now = /* @__PURE__ */ new Date()) {
-  const { date: dosDate, time: dosTime } = dosDateTime(now);
-  const chunks = [];
-  const central = [];
-  let offset = 0;
-  for (const entry of entries) {
-    const nameBytes = zipText(entry.name);
-    const crc = crc32(entry.data);
-    const size = entry.data.length;
-    const lfh = [
-      80,
-      75,
-      3,
-      4,
-      // امضای PK\x03\x04
-      ...U16(20),
-      // نسخهٔ لازم برای استخراج
-      ...U16(2048),
-      // پرچم: نام UTF-8
-      ...U16(0),
-      // روش ذخیره = STORE
-      ...U16(dosTime),
-      ...U16(dosDate),
-      ...U32(crc),
-      ...U32(size),
-      // حجم فشرده‌شده (= خودش در STORE)
-      ...U32(size),
-      // حجم اصلی
-      ...U16(nameBytes.length),
-      ...U16(0)
-      // طول فیلد اضافی
-    ];
-    const lfhBytes = new Uint8Array(lfh);
-    chunks.push(lfhBytes, nameBytes, entry.data);
-    const cd = [
-      80,
-      75,
-      1,
-      2,
-      // امضای PK\x01\x02
-      ...U16(20),
-      ...U16(20),
-      // نسخهٔ ساخت / نسخهٔ لازم
-      ...U16(2048),
-      ...U16(0),
-      ...U16(dosTime),
-      ...U16(dosDate),
-      ...U32(crc),
-      ...U32(size),
-      ...U32(size),
-      ...U16(nameBytes.length),
-      ...U16(0),
-      ...U16(0),
-      // فیلد اضافی / توضیح
-      ...U16(0),
-      ...U16(0),
-      // شماره دیسک / ویژگی‌های درونی
-      ...U32(0),
-      // ویژگی‌های بیرونی
-      ...U32(offset)
-      // آفست local header
-    ];
-    central.push(new Uint8Array(cd), nameBytes);
-    offset += lfhBytes.length + nameBytes.length + size;
-  }
-  const centralStart = offset;
-  let centralSize = 0;
-  for (const c of central) centralSize += c.length;
-  const eocd = [
-    80,
-    75,
-    5,
-    6,
-    // امضای PK\x05\x06
-    ...U16(0),
-    ...U16(0),
-    // شماره دیسک
-    ...U16(entries.length),
-    ...U16(entries.length),
-    ...U32(centralSize),
-    ...U32(centralStart),
-    ...U16(0)
-    // طول توضیح
-  ];
-  const total = centralStart + centralSize + eocd.length;
-  const out = new Uint8Array(total);
-  let pos = 0;
-  for (const c of [...chunks, ...central, new Uint8Array(eocd)]) {
-    out.set(c, pos);
-    pos += c.length;
-  }
-  return out;
-}
-__name(buildStoreZip, "buildStoreZip");
-
-// src/application/system/error-package.ts
-var AUDIT_TAIL = 100;
-var CLIENT_ERRORS_TAIL = 50;
-var HUMAN_EVENTS_TAIL = 200;
-async function readSyncMirrorSoft(db) {
-  try {
-    const row = await db.queryOne("SELECT value FROM settings WHERE key = ?", [
-      NODE_SYNC_STATUS_MIRROR_KEY
-    ]);
-    if (!row?.value) return null;
-    const parsed = JSON.parse(row.value);
-    if (!parsed || typeof parsed !== "object") return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-__name(readSyncMirrorSoft, "readSyncMirrorSoft");
-async function pendingPushSoft(db, watermark) {
-  try {
-    let count = 0;
-    if (watermark) {
-      const cutoff = watermark.slice(0, 19).replace("T", " ");
-      const row = await db.queryOne("SELECT COUNT(*) AS n FROM client_errors WHERE occurred_at > ?", [cutoff]);
-      count += Number(row?.n ?? 0);
-    } else {
-      const row = await db.queryOne("SELECT COUNT(*) AS n FROM client_errors");
-      count += Number(row?.n ?? 0);
-    }
-    const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
-    const ahead = /* @__PURE__ */ __name((at) => !watermark || Date.parse(at) > Date.parse(watermark), "ahead");
-    if (ahead(`${nowIso2.slice(0, 13)}:00:00Z`)) count += 1;
-    if (ahead(`${nowIso2.slice(0, 10)}T00:00:00Z`)) count += 1;
-    return count;
-  } catch {
-    return null;
-  }
-}
-__name(pendingPushSoft, "pendingPushSoft");
-function readmeText(status) {
-  return [
-    "\u0628\u0633\u062A\u0647\u0654 \u06AF\u0632\u0627\u0631\u0634 \u062E\u0637\u0627 \u2014 \u0633\u0627\u0645\u0627\u0646\u0647\u0654 \u0645\u0631\u06A9\u0632 \u062C\u0627\u0645\u0639",
-    "===================================",
-    "",
-    "\u0627\u06CC\u0646 \u0628\u0633\u062A\u0647 \u0628\u0631\u0627\u06CC \u0627\u0631\u0633\u0627\u0644 \u0628\u0647 \u067E\u0634\u062A\u06CC\u0628\u0627\u0646\u06CC \u0633\u0627\u062E\u062A\u0647 \u0634\u062F\u0647 \u0627\u0633\u062A \u0648 \u0634\u0627\u0645\u0644 \u0645\u0648\u0627\u0631\u062F \u0632\u06CC\u0631 \u0627\u0633\u062A:",
-    "  \u2022 status.json \u2014 \u0648\u0636\u0639\u06CC\u062A \u0641\u0646\u06CC \u0644\u062D\u0638\u0647\u0654 \u0633\u0627\u062E\u062A: \u0646\u0633\u062E\u0647\u0654 \u0628\u0631\u0646\u0627\u0645\u0647 \u0648 \u0645\u0648\u062A\u0648\u0631\u060C \u0646\u0633\u062E\u0647\u0654 \u0645\u0631\u06A9\u0632 (\u0627\u06AF\u0631 \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0628\u0627\u0634\u062F)\u060C",
-    "    \u0634\u0645\u0627\u0631 \u0631\u06A9\u0648\u0631\u062F\u0647\u0627\u06CC \u062F\u0631 \u0627\u0646\u062A\u0638\u0627\u0631 \u0647\u0645\u200C\u06AF\u0627\u0645\u200C\u0633\u0627\u0632\u06CC\u060C \u0648 \u0645\u062D\u06CC\u0637 \u0627\u062C\u0631\u0627.",
-    "  \u2022 human-events.txt \u2014 \u06AF\u0632\u0627\u0631\u0634 \u0631\u0648\u06CC\u062F\u0627\u062F\u0647\u0627\u06CC \u0645\u0647\u0645 \u0633\u0627\u0645\u0627\u0646\u0647 \u0628\u0647 \u0641\u0627\u0631\u0633\u06CC \u0633\u0627\u062F\u0647 (\u0631\u06CC\u200C\u0627\u0633\u062A\u0627\u0631\u062A\u060C \u067E\u0634\u062A\u06CC\u0628\u0627\u0646\u060C \u0628\u0627\u0632\u0633\u0627\u0632\u06CC\u060C \u0633\u06CC\u0646\u06A9).",
-    "  \u2022 audit-tail.txt \u2014 \u0622\u062E\u0631\u06CC\u0646 \u0631\u0648\u06CC\u062F\u0627\u062F\u0647\u0627\u06CC \u0645\u0645\u06CC\u0632\u06CC \u0633\u0627\u0645\u0627\u0646\u0647 (\u06F1\u06F0\u06F0 \u0631\u0648\u06CC\u062F\u0627\u062F \u0622\u062E\u0631).",
-    "  \u2022 client-errors-tail.txt \u2014 \u0622\u062E\u0631\u06CC\u0646 \u062E\u0637\u0627\u0647\u0627\u06CC \u06AF\u0632\u0627\u0631\u0634\u200C\u0634\u062F\u0647 \u0627\u0632 \u0645\u0631\u0648\u0631\u06AF\u0631.",
-    "",
-    "\u0646\u06A9\u062A\u0647: \u0644\u0627\u06AF \u062E\u0627\u0645 \u0645\u0648\u062A\u0648\u0631 (workerd.log) \u0631\u0648\u06CC \u062F\u06CC\u0633\u06A9\u0650 \u062F\u0633\u062A\u06AF\u0627\u0647 \u0646\u0632\u062F \u0646\u0627\u0638\u0631 \u0628\u0631\u0646\u0627\u0645\u0647 \u0646\u06AF\u0647\u200C\u062F\u0627\u0631\u06CC \u0645\u06CC\u200C\u0634\u0648\u062F \u0648 \u0627\u0632",
-    "\u062F\u0627\u062E\u0644 \u0633\u0646\u062F\u0628\u0627\u06A9\u0633 \u0627\u0645\u0646 \u0628\u0631\u0646\u0627\u0645\u0647 \u062E\u0648\u0627\u0646\u062F\u0646\u06CC \u0646\u06CC\u0633\u062A\u061B \u062F\u0631 \u0635\u0648\u0631\u062A \u0646\u06CC\u0627\u0632\u060C \u067E\u0634\u062A\u06CC\u0628\u0627\u0646\u06CC \u0647\u0645\u0627\u0646 \u0641\u0627\u06CC\u0644 \u0631\u0627 \u0627\u0632 \u067E\u0648\u0634\u0647\u0654 \u062F\u0627\u062F\u0647",
-    "\u0645\u0637\u0627\u0644\u0628\u0647 \u0645\u06CC\u200C\u06A9\u0646\u062F. \u0647\u06CC\u0686\u200C\u06CC\u06A9 \u0627\u0632 \u0645\u062D\u062A\u0648\u0627\u06CC \u0627\u06CC\u0646 \u0628\u0633\u062A\u0647 \u0631\u0645\u0632 \u06CC\u0627 \u062A\u0648\u06A9\u0646 \u0646\u06CC\u0633\u062A \u0648 \u0627\u0631\u0633\u0627\u0644 \u0622\u0646 \u0628\u0647 \u067E\u0634\u062A\u06CC\u0628\u0627\u0646\u06CC \u0628\u06CC\u200C\u062E\u0637\u0631 \u0627\u0633\u062A.",
-    "",
-    `\u0646\u0633\u062E\u0647\u0654 \u0628\u0631\u0646\u0627\u0645\u0647: ${status.app_version} \u2014 \u0644\u062D\u0638\u0647\u0654 \u0633\u0627\u062E\u062A: ${status.generated_at}`,
-    ""
-  ].join("\n");
-}
-__name(readmeText, "readmeText");
-async function auditTailText(db) {
-  try {
-    const rows = await db.query(
-      `SELECT id, created_at, actor_id, action, resource_type, resource_id FROM audit_log
-       ORDER BY created_at DESC, id DESC LIMIT ${AUDIT_TAIL}`
-    );
-    return rows.map((r) => `[${r.created_at}] ${r.actor_id} \u2014 ${r.action} (${r.resource_type}/${r.resource_id})`).join("\n") + "\n";
-  } catch {
-    return "audit_log \u062E\u0648\u0627\u0646\u062F\u0647 \u0646\u0634\u062F\n";
-  }
-}
-__name(auditTailText, "auditTailText");
-async function clientErrorsTailText(db) {
-  try {
-    const rows = await db.query(
-      `SELECT occurred_at, kind, message FROM client_errors
-       ORDER BY occurred_at DESC, id DESC LIMIT ${CLIENT_ERRORS_TAIL}`
-    );
-    return rows.map((r) => `[${r.occurred_at}] ${r.kind}: ${String(r.message ?? "").slice(0, 200)}`).join("\n") + "\n";
-  } catch {
-    return "client_errors \u062E\u0648\u0627\u0646\u062F\u0647 \u0646\u0634\u062F\n";
-  }
-}
-__name(clientErrorsTailText, "clientErrorsTailText");
-function errorPackageStamp(d = /* @__PURE__ */ new Date()) {
-  const p = /* @__PURE__ */ __name((n) => String(n).padStart(2, "0"), "p");
-  return `${d.getUTCFullYear()}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}-${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}`;
-}
-__name(errorPackageStamp, "errorPackageStamp");
-async function buildErrorPackage(db, opts = {}) {
-  const mirror = await readSyncMirrorSoft(db);
-  const status = {
-    generated_at: (/* @__PURE__ */ new Date()).toISOString(),
-    app_version: APP_VERSION,
-    engine_version: APP_VERSION,
-    env: opts.envName ?? null,
-    center_version: typeof mirror?.version?.center === "string" ? mirror.version.center : null,
-    pending_push: await pendingPushSoft(db, mirror?.push_watermark ?? null),
-    // سینک pull بر پایهٔ cursor است و «شمار رکورد در انتظار دریافتی» سمت مرکز شمرده می‌شود؛
-    // از نود برآورد قابل‌اعتمادی ندارد — صادقانه null (طرح: «مشخص نبودن خودش خطاست» ولی
-    // عددِ دروغین بدتر است؛ ردیف سینک پنل همین را با state نشان می‌دهد)
-    pending_pull: null
-  };
-  const events = await readHumanEvents(db, HUMAN_EVENTS_TAIL);
-  const humanEventsText = events.map((e) => `[${e.ts}] ${e.msg} (\u0645\u0646\u0628\u0639: ${e.source})`).join("\n") + "\n";
-  const entries = [
-    { name: "status.json", data: zipText(JSON.stringify(status, null, 2)) },
-    { name: "human-events.txt", data: zipText(humanEventsText) },
-    { name: "audit-tail.txt", data: zipText(await auditTailText(db)) },
-    { name: "client-errors-tail.txt", data: zipText(await clientErrorsTailText(db)) },
-    { name: "readme.txt", data: zipText(readmeText(status)) }
-  ];
-  return {
-    bytes: buildStoreZip(entries),
-    filename: `error-package-${errorPackageStamp()}.zip`,
-    status
-  };
-}
-__name(buildErrorPackage, "buildErrorPackage");
-
-// src/application/system/routes.ts
-var RESTART_MARKER_KEY = "sys_restart_scheduled";
-var restartFlag = false;
-function isRestartScheduled() {
-  return restartFlag;
-}
-__name(isRestartScheduled, "isRestartScheduled");
-function parseLanInfo(raw2) {
-  if (typeof raw2 !== "string" || !raw2) return null;
-  let p = null;
-  try {
-    p = JSON.parse(raw2);
-  } catch {
-    return null;
-  }
-  if (!p || typeof p !== "object") return null;
-  const o = p;
-  const port = Number(o.port);
-  const gamesPort = Number(o.games_port);
-  if (!Number.isFinite(port) || port <= 0) return null;
-  const ips = Array.isArray(o.lan_ips) ? o.lan_ips.filter((x) => typeof x === "string" && !!x) : [];
-  const urls = Array.isArray(o.main_urls) ? o.main_urls.filter((x) => typeof x === "string" && !!x) : [];
-  const gameUrls = Array.isArray(o.games_urls) ? o.games_urls.filter((x) => typeof x === "string" && !!x) : [];
-  return {
-    host: typeof o.host === "string" && o.host ? o.host : "0.0.0.0",
-    port,
-    games_port: Number.isFinite(gamesPort) && gamesPort > 0 ? gamesPort : 0,
-    lan_ips: ips,
-    main_urls: urls,
-    local_url: typeof o.local_url === "string" && o.local_url ? o.local_url : `http://127.0.0.1:${port}`,
-    games_urls: gameUrls,
-    games_local_url: typeof o.games_local_url === "string" && o.games_local_url ? o.games_local_url : "",
-    boot_at: typeof o.boot_at === "string" && o.boot_at ? o.boot_at : null
-  };
-}
-__name(parseLanInfo, "parseLanInfo");
-function registerSystemPublicRoutes(app, deps) {
-  app.get("/api/system/restart-status", async (c) => {
-    let scheduled = false;
-    try {
-      const row = await deps.db.queryOne("SELECT value FROM settings WHERE key = ?", [
-        RESTART_MARKER_KEY
-      ]);
-      scheduled = Boolean(row?.value);
-    } catch {
-      scheduled = isRestartScheduled();
-    }
-    return c.json({ ok: true, scheduled }, 200, { "Cache-Control": "no-store" });
-  });
-}
-__name(registerSystemPublicRoutes, "registerSystemPublicRoutes");
-function registerSystemRoutes(app, deps) {
-  app.post("/api/system/restart", requireRole("manager"), async (c) => {
-    const actor = getAuthContext(c);
-    const already = restartFlag;
-    restartFlag = true;
-    try {
-      await deps.db.execute(
-        `INSERT INTO settings (key, value, updated_by, updated_at)
-         VALUES (?, ?, ?, datetime('now'))
-         ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = excluded.updated_by, updated_at = datetime('now')`,
-        [RESTART_MARKER_KEY, JSON.stringify({ ts: (/* @__PURE__ */ new Date()).toISOString(), actor_id: actor.staffId }), actor.staffId]
-      );
-    } catch (err) {
-      deps.logger.warn("system.restart.marker_failed", { error: err instanceof Error ? err.message : String(err) });
-    }
-    try {
-      await deps.audit.log({
-        actorId: actor.staffId,
-        action: "system.restart_request",
-        resourceType: "system",
-        resourceId: "engine",
-        changes: { scheduled: { from: null, to: true }, already: { from: null, to: already } }
-      });
-    } catch (err) {
-      deps.logger.warn("system.restart.audit_failed", { error: err instanceof Error ? err.message : String(err) });
-    }
-    await pushHumanEvent(deps.db, "\u0631\u0627\u0647\u200C\u0627\u0646\u062F\u0627\u0632\u06CC \u062F\u0648\u0628\u0627\u0631\u0647\u0654 \u0633\u0627\u0645\u0627\u0646\u0647 \u0627\u0632 \u067E\u0646\u0644", "panel");
-    return c.json(already ? { ok: true, scheduled: true, already: true } : { ok: true, scheduled: true }, 200, {
-      "Cache-Control": "no-store"
-    });
-  });
-  app.get("/api/support/error-package", requireRole("manager"), async (c) => {
-    const pkg = await buildErrorPackage(deps.db, { envName: deps.envName ?? null });
-    try {
-      await deps.audit.log({
-        actorId: getAuthContext(c).staffId,
-        action: "system.error_package",
-        resourceType: "support",
-        resourceId: pkg.filename
-      });
-    } catch (err) {
-      deps.logger.warn("system.error_package.audit_failed", { error: err instanceof Error ? err.message : String(err) });
-    }
-    return new Response(pkg.bytes, {
-      status: 200,
-      headers: {
-        "Content-Type": "application/zip",
-        "Content-Disposition": `attachment; filename="${pkg.filename}"`,
-        "Cache-Control": "no-store"
-      }
-    });
-  });
-  app.get("/api/system/lan", requireRole("manager"), async (c) => {
-    const lan = parseLanInfo(c.env?.LAN_INFO);
-    return c.json({ ok: true, lan }, 200, { "Cache-Control": "no-store" });
-  });
-}
-__name(registerSystemRoutes, "registerSystemRoutes");
-
-// src/application/engine-capabilities/routes.ts
-var ENGINE_PUBLIC_API_MAP = {
-  health: "/health",
-  restartStatus: "/api/system/restart-status",
-  instanceSync: "/api/instance-sync",
-  healthPanel: "/api/health/panel",
-  nodeSyncStatus: "/api/node-sync/status"
-};
-function registerEngineCapabilitiesRoutes(app) {
-  app.get(
-    "/api/engine/capabilities",
-    (c) => c.json(
-      {
-        ok: true,
-        version: APP_VERSION,
-        server_ts: (/* @__PURE__ */ new Date()).toISOString(),
-        api: ENGINE_PUBLIC_API_MAP
-      },
-      200,
-      { "Cache-Control": "no-store" }
-    )
-  );
-}
-__name(registerEngineCapabilitiesRoutes, "registerEngineCapabilitiesRoutes");
-
 // src/application/growth/service.ts
 var GROWTH_SNAPSHOT_SEAL_KEY = "growth.last_snapshot_at";
 var GROWTH_SEAL_HOURS = 24;
@@ -68762,891 +68183,6 @@ function registerFinanceRoutes(app, service) {
 }
 __name(registerFinanceRoutes, "registerFinanceRoutes");
 
-// src/application/excel-import/registry.ts
-var IMPORT_ROWS_MAX = 500;
-var SCHOOL_KIND_OPTIONS = [
-  { value: "school", label: "\u0645\u062F\u0631\u0633\u0647" },
-  { value: "kindergarten", label: "\u0645\u0647\u062F\u06A9\u0648\u062F\u06A9" }
-];
-var GENDER_OPTIONS = [
-  { value: "mixed", label: "\u0645\u062E\u062A\u0644\u0637", aliases: ["\u0645\u062E\u0644\u0648\u0637", "\u0647\u0631 \u062F\u0648"] },
-  { value: "male", label: "\u067E\u0633\u0631\u0627\u0646\u0647", aliases: ["\u067E\u0633\u0631"] },
-  { value: "female", label: "\u062F\u062E\u062A\u0631\u0627\u0646\u0647", aliases: ["\u062F\u062E\u062A\u0631"] }
-];
-var PLAN_STATUS_OPTIONS = [
-  { value: "planned", label: CLEARBOOK_PLAN_STATUS_LABELS.planned, aliases: ["\u0628\u0631\u0646\u0627\u0645\u0647 \u0631\u06CC\u0632\u06CC \u0634\u062F\u0647", "planned"] },
-  { value: "active", label: CLEARBOOK_PLAN_STATUS_LABELS.active, aliases: ["\u062F\u0631\u062C\u0631\u06CC\u0627\u0646", "\u062C\u0627\u0631\u06CC", "active"] },
-  { value: "done", label: CLEARBOOK_PLAN_STATUS_LABELS.done, aliases: ["\u062A\u06A9\u0645\u06CC\u0644 \u0634\u062F\u0647", "\u062A\u06A9\u0645\u06CC\u0644\u0634\u062F\u0647", "\u0627\u0646\u062C\u0627\u0645 \u0634\u062F\u0647", "\u067E\u0627\u06CC\u0627\u0646 \u06CC\u0627\u0641\u062A\u0647", "done"] }
-];
-var IMPORT_ENTITIES = [
-  {
-    key: "schools",
-    title: "\u0627\u0637\u0644\u0627\u0639\u0627\u062A \u0645\u062F\u0627\u0631\u0633",
-    hint: "\u0645\u062F\u0627\u0631\u0633 \u0648 \u0645\u0647\u062F\u06A9\u0648\u062F\u06A9\u200C\u0647\u0627\u06CC \u0647\u0645\u06A9\u0627\u0631 \u0645\u0631\u06A9\u0632 \u0631\u0627 \u06CC\u06A9\u200C\u062C\u0627 \u0648\u0627\u0631\u062F \u06A9\u0646\u06CC\u062F. \u0631\u062F\u06CC\u0641\u06CC \u06A9\u0647 \xAB\u0646\u0627\u0645 \u0645\u062F\u0631\u0633\u0647\xBB \u0622\u0646 \u0642\u0628\u0644\u0627\u064B \u062B\u0628\u062A \u0634\u062F\u0647 \u0628\u0627\u0634\u062F \u0648\u06CC\u0631\u0627\u06CC\u0634 \u0645\u06CC\u200C\u0634\u0648\u062F \u0648 \u0631\u062F\u06CC\u0641 \u062A\u0627\u0632\u0647 \u0627\u0636\u0627\u0641\u0647 \u0645\u06CC\u200C\u0634\u0648\u062F.",
-    roles: ["manager"],
-    listUrl: "/api/schools",
-    keyLabel: "\u0646\u0627\u0645 \u0645\u062F\u0631\u0633\u0647",
-    columns: [
-      {
-        key: "name",
-        recordKey: "name",
-        label: "\u0646\u0627\u0645 \u0645\u062F\u0631\u0633\u0647",
-        type: "text",
-        required: true,
-        maxLength: 200,
-        width: 32,
-        help: "\u0646\u0627\u0645 \u06A9\u0627\u0645\u0644 \u0645\u062F\u0631\u0633\u0647 \u06CC\u0627 \u0645\u0647\u062F\u06A9\u0648\u062F\u06A9 \u2014 \u06A9\u0644\u06CC\u062F \u062A\u0634\u062E\u06CC\u0635 \u0648\u06CC\u0631\u0627\u06CC\u0634\u061B \u0627\u06AF\u0631 \u0647\u0645\u06CC\u0646 \u0646\u0627\u0645 \u0642\u0628\u0644\u0627\u064B \u062B\u0628\u062A \u0634\u062F\u0647 \u0628\u0627\u0634\u062F \u0622\u0646 \u0631\u062F\u06CC\u0641 \u0648\u06CC\u0631\u0627\u06CC\u0634 \u0645\u06CC\u200C\u0634\u0648\u062F",
-        example: "\u062F\u0628\u0633\u062A\u0627\u0646 \u0634\u0647\u06CC\u062F \u0645\u0637\u0647\u0631\u06CC"
-      },
-      {
-        key: "kind",
-        recordKey: "kind",
-        label: "\u0646\u0648\u0639",
-        type: "enum",
-        options: SCHOOL_KIND_OPTIONS,
-        width: 12,
-        help: "\u062E\u0627\u0644\u06CC = \u0645\u062F\u0631\u0633\u0647 (\u062F\u0631 \u0627\u0641\u0632\u0648\u062F\u0646) / \u0628\u062F\u0648\u0646 \u062A\u063A\u06CC\u06CC\u0631 (\u062F\u0631 \u0648\u06CC\u0631\u0627\u06CC\u0634)",
-        example: "\u0645\u062F\u0631\u0633\u0647"
-      },
-      {
-        key: "gender_type",
-        recordKey: "genderType",
-        label: "\u062C\u0646\u0633\u06CC\u062A",
-        type: "enum",
-        options: GENDER_OPTIONS,
-        width: 12,
-        help: "\u062E\u0627\u0644\u06CC = \u0628\u062F\u0648\u0646 \u062A\u063A\u06CC\u06CC\u0631 (\u062F\u0631 \u0648\u06CC\u0631\u0627\u06CC\u0634) \u0648 \u062E\u0627\u0644\u06CC \u062B\u0628\u062A \u0645\u06CC\u200C\u0634\u0648\u062F (\u062F\u0631 \u0627\u0641\u0632\u0648\u062F\u0646)",
-        example: "\u0645\u062E\u062A\u0644\u0637"
-      },
-      {
-        key: "code",
-        recordKey: "code",
-        label: "\u06A9\u062F \u0645\u062F\u0631\u0633\u0647",
-        type: "code",
-        maxLength: 20,
-        width: 14,
-        help: "\u06A9\u062F \u06CC\u06A9\u062A\u0627\u06CC \u0622\u0645\u0648\u0632\u0634\u200C\u0648\u067E\u0631\u0648\u0631\u0634\u061B \u0627\u06AF\u0631 \u0647\u0645\u06CC\u0646 \u06A9\u062F \u0628\u0631\u0627\u06CC \u0645\u062F\u0631\u0633\u0647\u0654 \u062F\u06CC\u06AF\u0631\u06CC \u062B\u0628\u062A \u0628\u0627\u0634\u062F \u0622\u0646 \u0631\u062F\u06CC\u0641 \u062E\u0637\u0627 \u0645\u06CC\u200C\u06AF\u06CC\u0631\u062F",
-        example: "44990002"
-      },
-      {
-        key: "phone",
-        recordKey: "phone",
-        label: "\u062A\u0644\u0641\u0646",
-        type: "phone",
-        maxLength: 20,
-        width: 16,
-        help: "\u062A\u0644\u0641\u0646 \u0645\u062F\u0631\u0633\u0647 \u2014 \u0628\u0647\u062A\u0631 \u0627\u0633\u062A \u0633\u0644\u0648\u0644 \xAB\u0645\u062A\u0646\xBB \u0628\u0627\u0634\u062F \u062A\u0627 \u0635\u0641\u0631 \u0627\u0648\u0644 \u062D\u0630\u0641 \u0646\u0634\u0648\u062F",
-        example: "021-12345678"
-      },
-      {
-        key: "principal_name",
-        recordKey: "principalName",
-        label: "\u0646\u0627\u0645 \u0645\u062F\u06CC\u0631",
-        type: "text",
-        maxLength: 120,
-        width: 18,
-        help: "\u0646\u0627\u0645 \u0645\u062F\u06CC\u0631 \u0645\u062F\u0631\u0633\u0647 \u0628\u0631\u0627\u06CC \u0627\u0631\u062A\u0628\u0627\u0637 \u0645\u0631\u06A9\u0632 \u0628\u0627 \u0645\u062F\u0631\u0633\u0647",
-        example: "\u0622\u0642\u0627\u06CC \u0627\u062D\u0645\u062F\u06CC"
-      },
-      {
-        key: "principal_phone",
-        recordKey: "principalPhone",
-        label: "\u062A\u0644\u0641\u0646 \u0645\u062F\u06CC\u0631",
-        type: "phone",
-        maxLength: 20,
-        width: 16,
-        help: "\u0634\u0645\u0627\u0631\u0647\u0654 \u0647\u0645\u0631\u0627\u0647 \u0645\u062F\u06CC\u0631 \u0645\u062F\u0631\u0633\u0647",
-        example: "09121234567"
-      },
-      {
-        key: "address",
-        recordKey: "address",
-        label: "\u0646\u0634\u0627\u0646\u06CC",
-        type: "longtext",
-        maxLength: 500,
-        width: 44,
-        help: "\u0646\u0634\u0627\u0646\u06CC \u06A9\u0627\u0645\u0644 \u0645\u062F\u0631\u0633\u0647"
-      },
-      {
-        key: "notes",
-        recordKey: "notes",
-        label: "\u06CC\u0627\u062F\u062F\u0627\u0634\u062A",
-        type: "longtext",
-        maxLength: 500,
-        width: 44,
-        help: "\u0646\u06A9\u0627\u062A \u062F\u0627\u062F\u0647\u060C \u0634\u0645\u0627\u0631\u0647\u200C\u0647\u0627\u06CC \u062C\u0627\u06CC\u06AF\u0632\u06CC\u0646 \u0648\u2026"
-      }
-    ]
-  },
-  {
-    key: "school-classes",
-    title: "\u06A9\u0644\u0627\u0633\u200C\u0647\u0627 \u0648 \u0645\u0639\u0644\u0645\u0627\u0646 \u0645\u062F\u0627\u0631\u0633",
-    hint: "\u0647\u0631 \u0633\u0637\u0631 \u06CC\u06A9 \u06A9\u0644\u0627\u0633 \u0627\u0633\u062A: \u0646\u0627\u0645 \u0645\u062F\u0631\u0633\u0647 (\u0628\u0627\u06CC\u062F \u0642\u0628\u0644\u0627\u064B \u062B\u0628\u062A \u0634\u062F\u0647 \u0628\u0627\u0634\u062F) + \u0646\u0627\u0645 \u06A9\u0644\u0627\u0633 + \u0646\u0627\u0645 \u0645\u0639\u0644\u0645 \u0648 \u062A\u0644\u0641\u0646 \u0627\u0648. \u0627\u06AF\u0631 \xAB\u0646\u0627\u0645 \u0645\u062F\u0631\u0633\u0647 + \u0646\u0627\u0645 \u06A9\u0644\u0627\u0633\xBB \u0642\u0628\u0644\u0627\u064B \u062B\u0628\u062A \u0634\u062F\u0647 \u0628\u0627\u0634\u062F \u0647\u0645\u0627\u0646 \u06A9\u0644\u0627\u0633 \u0648\u06CC\u0631\u0627\u06CC\u0634 \u0645\u06CC\u200C\u0634\u0648\u062F\u061B \u06A9\u0644\u0627\u0633 \u063A\u06CC\u0631\u0641\u0639\u0627\u0644\u0650 \u0647\u0645\u200C\u0646\u0627\u0645 \u062F\u0648\u0628\u0627\u0631\u0647 \u0641\u0639\u0627\u0644 \u0645\u06CC\u200C\u0634\u0648\u062F.",
-    roles: ["manager"],
-    listUrl: "/api/classes",
-    keyLabel: "\u0646\u0627\u0645 \u0645\u062F\u0631\u0633\u0647 + \u0646\u0627\u0645 \u06A9\u0644\u0627\u0633",
-    columns: [
-      {
-        key: "school",
-        recordKey: "schoolName",
-        label: "\u0646\u0627\u0645 \u0645\u062F\u0631\u0633\u0647",
-        type: "text",
-        required: true,
-        maxLength: 200,
-        width: 30,
-        help: "\u062F\u0642\u06CC\u0642\u0627\u064B \u0647\u0645\u0627\u0646 \u0646\u0627\u0645 \u0645\u062F\u0631\u0633\u0647\u0654 \u062B\u0628\u062A\u200C\u0634\u062F\u0647 \u062F\u0631 \u0628\u062E\u0634 \u0645\u062F\u0627\u0631\u0633 \u2014 \u06A9\u0644\u0627\u0633 \u0628\u0647 \u0622\u0646 \u0648\u0635\u0644 \u0645\u06CC\u200C\u0634\u0648\u062F\u061B \u0645\u062F\u0631\u0633\u0647\u0654 \u0646\u0627\u0634\u0646\u0627\u062E\u062A\u0647 \u062E\u0637\u0627 \u0645\u06CC\u200C\u06AF\u06CC\u0631\u062F",
-        example: "\u062F\u0628\u0633\u062A\u0627\u0646 \u0634\u0647\u06CC\u062F \u0645\u0637\u0647\u0631\u06CC"
-      },
-      {
-        key: "class_name",
-        recordKey: "name",
-        label: "\u0646\u0627\u0645 \u06A9\u0644\u0627\u0633",
-        type: "text",
-        required: true,
-        maxLength: 120,
-        width: 18,
-        help: "\u06A9\u0644\u06CC\u062F \u062A\u0634\u062E\u06CC\u0635 \u0648\u06CC\u0631\u0627\u06CC\u0634 \u0647\u0645\u0631\u0627\u0647 \u0646\u0627\u0645 \u0645\u062F\u0631\u0633\u0647 \u2014 \u0645\u062B\u0644 \xAB\u067E\u0646\u062C\u0645 \u0627\u0644\u0641\xBB \u06CC\u0627 \xAB\u0645\u0647\u0631 \u06F1\u06F4\u06F0\u06F5\xBB",
-        example: "\u067E\u0646\u062C\u0645 \u0627\u0644\u0641"
-      },
-      {
-        key: "teacher_name",
-        recordKey: "teacherName",
-        label: "\u0646\u0627\u0645 \u0645\u0639\u0644\u0645 \u06A9\u0644\u0627\u0633",
-        type: "text",
-        maxLength: 120,
-        width: 22,
-        help: "\u0646\u0627\u0645 \u0648 \u0646\u0627\u0645\u200C\u062E\u0627\u0646\u0648\u0627\u062F\u06AF\u06CC \u0645\u0639\u0644\u0645\u0650 \u0647\u0645\u0627\u0646 \u06A9\u0644\u0627\u0633 \u2014 \u062E\u0627\u0644\u06CC = \u0628\u062F\u0648\u0646 \u062A\u063A\u06CC\u06CC\u0631 (\u062F\u0631 \u0648\u06CC\u0631\u0627\u06CC\u0634)",
-        example: "\u062E\u0627\u0646\u0645 \u0631\u0636\u0627\u06CC\u06CC"
-      },
-      {
-        key: "teacher_phone",
-        recordKey: "teacherPhone",
-        label: "\u062A\u0644\u0641\u0646 \u0645\u0639\u0644\u0645",
-        type: "phone",
-        maxLength: 20,
-        width: 18,
-        help: "\u0634\u0645\u0627\u0631\u0647\u0654 \u0647\u0645\u0631\u0627\u0647 \u0645\u0639\u0644\u0645 \u06A9\u0644\u0627\u0633 \u2014 \u0633\u0644\u0648\u0644 \xAB\u0645\u062A\u0646\xBB \u0628\u0627\u0634\u062F \u062A\u0627 \u0635\u0641\u0631 \u0627\u0648\u0644 \u062D\u0630\u0641 \u0646\u0634\u0648\u062F\u061B \u062E\u0627\u0644\u06CC = \u0628\u062F\u0648\u0646 \u062A\u063A\u06CC\u06CC\u0631",
-        example: "09131234567"
-      }
-    ]
-  },
-  {
-    key: "clearbook-plans",
-    title: "\u062A\u0642\u0648\u06CC\u0645 \u0627\u062C\u0631\u0627\u06CC\u06CC \u06A9\u0644\u0631 \u0628\u0648\u06A9",
-    hint: "\u0641\u0627\u0632\u0647\u0627\u06CC \u062A\u0642\u0648\u06CC\u0645 \u0627\u062C\u0631\u0627\u06CC\u06CC \u0633\u0627\u0644\u0627\u0646\u0647\u0654 \u0645\u0631\u06A9\u0632 \u0631\u0627 \u06CC\u06A9\u200C\u062C\u0627 \u0648\u0627\u0631\u062F \u06A9\u0646\u06CC\u062F. \u0641\u0627\u0632\u06CC \u06A9\u0647 \xAB\u0639\u0646\u0648\u0627\u0646 \u0641\u0627\u0632\xBB \u0622\u0646 \u0642\u0628\u0644\u0627\u064B \u062B\u0628\u062A \u0634\u062F\u0647 \u0628\u0627\u0634\u062F \u0648\u06CC\u0631\u0627\u06CC\u0634 \u0645\u06CC\u200C\u0634\u0648\u062F \u0648 \u0641\u0627\u0632 \u062A\u0627\u0632\u0647 \u062F\u0631 \u0627\u0646\u062A\u0647\u0627\u06CC \u062A\u0642\u0648\u06CC\u0645 \u0627\u0636\u0627\u0641\u0647 \u0645\u06CC\u200C\u0634\u0648\u062F. \u062A\u0627\u0631\u06CC\u062E\u200C\u0647\u0627 \u0634\u0645\u0633\u06CC \u0648\u0627\u0631\u062F \u0634\u0648\u0646\u062F.",
-    roles: ["manager", "secretary"],
-    listUrl: "/api/clearbook/plans",
-    keyLabel: "\u0639\u0646\u0648\u0627\u0646 \u0641\u0627\u0632",
-    columns: [
-      {
-        key: "title",
-        recordKey: "title",
-        label: "\u0639\u0646\u0648\u0627\u0646 \u0641\u0627\u0632 (\u062E\u0637\u06CC\u0647 \u0627\u062C\u0631\u0627\u06CC\u06CC)",
-        type: "text",
-        required: true,
-        maxLength: 150,
-        width: 36,
-        help: "\u06A9\u0644\u06CC\u062F \u062A\u0634\u062E\u06CC\u0635 \u0648\u06CC\u0631\u0627\u06CC\u0634\u061B \u0627\u06AF\u0631 \u0647\u0645\u06CC\u0646 \u0639\u0646\u0648\u0627\u0646 \u0642\u0628\u0644\u0627\u064B \u062B\u0628\u062A \u0634\u062F\u0647 \u0628\u0627\u0634\u062F \u0622\u0646 \u0641\u0627\u0632 \u0648\u06CC\u0631\u0627\u06CC\u0634 \u0645\u06CC\u200C\u0634\u0648\u062F",
-        example: "\u0647\u0641\u062A\u0647\u0654 \u0627\u0648\u0644 \u0645\u0647\u0631 \u2014 \u0622\u0645\u0627\u062F\u0647\u200C\u0633\u0627\u0632\u06CC \u0648 \u062A\u0648\u062C\u06CC\u0647"
-      },
-      {
-        key: "from_date",
-        recordKey: "fromDate",
-        label: "\u0627\u0632 \u062A\u0627\u0631\u06CC\u062E",
-        type: "date",
-        required: true,
-        width: 14,
-        help: "\u0634\u0631\u0648\u0639 \u0628\u0627\u0632\u0647\u0654 \u0627\u062C\u0631\u0627 \u2014 \u0634\u0645\u0633\u06CC \u0645\u062B\u0644 1404/07/01 \u06CC\u0627 1404-7-1 \u06CC\u0627 14040701 (\u0645\u06CC\u0644\u0627\u062F\u06CC 2025-09-23 \u0647\u0645 \u067E\u0630\u06CC\u0631\u0641\u062A\u0647 \u0645\u06CC\u200C\u0634\u0648\u062F)",
-        example: "1404/07/01"
-      },
-      {
-        key: "to_date",
-        recordKey: "toDate",
-        label: "\u062A\u0627 \u062A\u0627\u0631\u06CC\u062E",
-        type: "date",
-        width: 14,
-        help: "\u067E\u0627\u06CC\u0627\u0646 \u0628\u0627\u0632\u0647\u0654 \u0627\u062C\u0631\u0627 \u2014 \u062E\u0627\u0644\u06CC \u06CC\u0639\u0646\u06CC \u0631\u0648\u06CC\u062F\u0627\u062F \u06CC\u06A9\u200C\u0631\u0648\u0632\u0647\u061B \u0646\u0628\u0627\u06CC\u062F \u0642\u0628\u0644 \u0627\u0632 \xAB\u0627\u0632 \u062A\u0627\u0631\u06CC\u062E\xBB \u0628\u0627\u0634\u062F",
-        example: "1404/07/07"
-      },
-      {
-        key: "admin_actions",
-        recordKey: "adminActions",
-        label: "\u0627\u0642\u062F\u0627\u0645\u0627\u062A \u0627\u062F\u0627\u0631\u06CC \u0648 \u062C\u0644\u0633\u0627\u062A",
-        type: "longtext",
-        maxLength: 2e3,
-        width: 46,
-        help: "\u0628\u062E\u0634\u0646\u0627\u0645\u0647\u200C\u0647\u0627\u060C \u062A\u0648\u062C\u06CC\u0647\u06CC\u200C\u0647\u0627\u060C \u062C\u0644\u0633\u0627\u062A \u0627\u062F\u0627\u0631\u06CC \u0627\u06CC\u0646 \u0628\u0627\u0632\u0647"
-      },
-      {
-        key: "center_actions",
-        recordKey: "centerActions",
-        label: "\u062E\u0631\u0648\u062C\u06CC / \u0627\u0642\u062F\u0627\u0645 \u0639\u0645\u0644\u06CC\u0627\u062A\u06CC \u0645\u0631\u06A9\u0632",
-        type: "longtext",
-        maxLength: 2e3,
-        width: 46,
-        help: "\u0627\u0642\u062F\u0627\u0645 \u0639\u0645\u0644\u06CC\u0627\u062A\u06CC \u06A9\u0647 \u0645\u0631\u06A9\u0632 \u062F\u0631 \u0627\u06CC\u0646 \u0628\u0627\u0632\u0647 \u0628\u0627\u06CC\u062F \u0627\u0646\u062C\u0627\u0645 \u062F\u0647\u062F \u0648 \u062E\u0631\u0648\u062C\u06CC \u0622\u0646"
-      },
-      {
-        key: "status",
-        recordKey: "status",
-        label: "\u0648\u0636\u0639\u06CC\u062A",
-        type: "enum",
-        options: PLAN_STATUS_OPTIONS,
-        width: 16,
-        help: "\u062E\u0627\u0644\u06CC = \u0628\u0631\u0646\u0627\u0645\u0647\u200C\u0631\u06CC\u0632\u06CC\u200C\u0634\u062F\u0647 (\u062F\u0631 \u0627\u0641\u0632\u0648\u062F\u0646) / \u0628\u062F\u0648\u0646 \u062A\u063A\u06CC\u06CC\u0631 (\u062F\u0631 \u0648\u06CC\u0631\u0627\u06CC\u0634)",
-        example: "\u0628\u0631\u0646\u0627\u0645\u0647\u200C\u0631\u06CC\u0632\u06CC\u200C\u0634\u062F\u0647"
-      },
-      {
-        key: "tag",
-        recordKey: "tag",
-        label: "\u0628\u0631\u0686\u0633\u0628 \u0641\u0639\u0627\u0644\u06CC\u062A\u200C\u0647\u0627",
-        type: "text",
-        maxLength: 40,
-        width: 22,
-        help: "\u0631\u0648\u06CC\u062F\u0627\u062F\u0647\u0627\u06CC \u062E\u0637 \u0632\u0645\u0627\u0646\u06CC \u06A9\u0647 \u0628\u0627 \u0647\u0645\u06CC\u0646 \u0628\u0631\u0686\u0633\u0628 \u062B\u0628\u062A \u0634\u0648\u0646\u062F \u0628\u0647\u200C\u0639\u0646\u0648\u0627\u0646 \u0634\u0648\u0627\u0647\u062F \u0627\u062C\u0631\u0627\u06CC \u0627\u06CC\u0646 \u0641\u0627\u0632 \u0634\u0645\u0631\u062F\u0647 \u0645\u06CC\u200C\u0634\u0648\u0646\u062F",
-        example: "\u062C\u0644\u0633\u0627\u062A \u0627\u0648\u0644\u06CC\u0627"
-      }
-    ]
-  }
-];
-function findImportEntity(key) {
-  return IMPORT_ENTITIES.find((e) => e.key === key);
-}
-__name(findImportEntity, "findImportEntity");
-
-// src/application/excel-import/pure.ts
-var FA = "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9";
-var AR = "\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669";
-function enDigits(input2) {
-  return String(input2 ?? "").replace(/[۰-۹]/g, (d) => String(FA.indexOf(d))).replace(/[٠-٩]/g, (d) => String(AR.indexOf(d)));
-}
-__name(enDigits, "enDigits");
-function pad22(n) {
-  return n < 10 ? `0${n}` : String(n);
-}
-__name(pad22, "pad2");
-function normalizeCellText(raw2) {
-  return enDigits(raw2).replace(/ي/g, "\u06CC").replace(/ك/g, "\u06A9").replace(/[\u200c\u200f\u200e]/g, "\u200C").replace(/\s+/g, " ").trim();
-}
-__name(normalizeCellText, "normalizeCellText");
-function nameKey(raw2) {
-  return normalizeCellText(raw2).replace(/[\s\u200c\u200f\u200e]/g, "").toLowerCase();
-}
-__name(nameKey, "nameKey");
-function parseFlexibleDate(raw2) {
-  const s = enDigits(raw2).trim();
-  if (!s) return null;
-  let parts = null;
-  const compact = s.match(/^(\d{4})(\d{1,2})(\d{1,2})$/);
-  if (compact) {
-    parts = [compact[1], compact[2], compact[3]];
-  } else {
-    const seg = s.split(/[/\-.، ]+/).filter((p) => p.length > 0);
-    if (seg.length === 3) parts = seg;
-  }
-  if (!parts) return null;
-  const y = Number(parts[0]);
-  const m = Number(parts[1]);
-  const d = Number(parts[2]);
-  if (!Number.isInteger(y) || !Number.isInteger(m) || !Number.isInteger(d)) return null;
-  if (m < 1 || m > 12 || d < 1 || d > 31) return null;
-  if (y >= 1700) {
-    const ms = Date.UTC(y, m - 1, d);
-    const back = new Date(ms);
-    if (back.getUTCFullYear() !== y || back.getUTCMonth() !== m - 1 || back.getUTCDate() !== d) return null;
-    return `${y}-${pad22(m)}-${pad22(d)}`;
-  }
-  if (y < 1300 || y > 1500) return null;
-  const g = jalaliToGregorianYmd(y, m, d);
-  const j = toJalaliParts(Number(g.slice(0, 4)), Number(g.slice(5, 7)), Number(g.slice(8, 10)));
-  if (j.jy !== y || j.jm !== m || j.jd !== d) return null;
-  return g;
-}
-__name(parseFlexibleDate, "parseFlexibleDate");
-function jalaliDisplayOfYmd(ymd) {
-  const [gy, gm, gd] = ymd.split("-").map(Number);
-  const j = toJalaliParts(gy, gm, gd);
-  return `${j.jy}/${pad22(j.jm)}/${pad22(j.jd)}`;
-}
-__name(jalaliDisplayOfYmd, "jalaliDisplayOfYmd");
-function matchEnum(raw2, options) {
-  const needle = nameKey(raw2);
-  if (!needle) return null;
-  for (const o of options) {
-    if (nameKey(o.value) === needle || nameKey(o.label) === needle) return o.value;
-    if (o.aliases?.some((a) => nameKey(a) === needle)) return o.value;
-  }
-  return null;
-}
-__name(matchEnum, "matchEnum");
-function normalizePhone2(raw2) {
-  const s = enDigits(raw2).trim();
-  if (!s) return { ok: true, value: "" };
-  const compact = s.replace(/[\s\u200c]/g, "");
-  if (!/^[0-9+\-()]{3,20}$/.test(compact)) return { ok: false, value: compact };
-  return { ok: true, value: compact };
-}
-__name(normalizePhone2, "normalizePhone");
-function normalizeCode(raw2) {
-  return enDigits(raw2).trim().replace(/[\s\u200c]/g, "");
-}
-__name(normalizeCode, "normalizeCode");
-
-// src/application/excel-import/service.ts
-function coerceRows(rawRows) {
-  if (!Array.isArray(rawRows)) throw new ValidationError("rows \u0628\u0627\u06CC\u062F \u0622\u0631\u0627\u06CC\u0647 \u0628\u0627\u0634\u062F");
-  if (rawRows.length === 0) throw new ValidationError("\u0647\u06CC\u0686 \u0631\u062F\u06CC\u0641\u06CC \u0628\u0631\u0627\u06CC \u062F\u0631\u0648\u0646\u200C\u0631\u06CC\u0632\u06CC \u0627\u0631\u0633\u0627\u0644 \u0646\u0634\u062F\u0647 \u0627\u0633\u062A");
-  if (rawRows.length > IMPORT_ROWS_MAX) {
-    throw new ValidationError(`\u062D\u062F\u0627\u06A9\u062B\u0631 ${faDigits(IMPORT_ROWS_MAX)} \u0631\u062F\u06CC\u0641 \u062F\u0631 \u0647\u0631 \u0628\u0627\u0631 \u062F\u0631\u0648\u0646\u200C\u0631\u06CC\u0632\u06CC \u0645\u062C\u0627\u0632 \u0627\u0633\u062A`);
-  }
-  return rawRows.map((r) => {
-    if (typeof r !== "object" || r === null || Array.isArray(r)) {
-      throw new ValidationError("\u0647\u0631 \u0631\u062F\u06CC\u0641 \u0628\u0627\u06CC\u062F \u0634\u06CC\u0621 \u0645\u0642\u0627\u062F\u06CC\u0631 \u0633\u062A\u0648\u0646\u200C\u0647\u0627 \u0628\u0627\u0634\u062F");
-    }
-    const out = {};
-    for (const [k, v] of Object.entries(r)) {
-      if (v === null || v === void 0) {
-        out[k] = "";
-      } else if (typeof v === "string") {
-        out[k] = v;
-      } else if (typeof v === "number" && Number.isFinite(v)) {
-        out[k] = String(v);
-      } else {
-        out[k] = String(v);
-      }
-    }
-    return out;
-  });
-}
-__name(coerceRows, "coerceRows");
-function labelOf2(col) {
-  return col.label;
-}
-__name(labelOf2, "labelOf");
-function validateSchoolRow(raw2, colByKey) {
-  const errors = [];
-  const display = {};
-  const normalized = {};
-  const name = normalizeCellText(raw2.name ?? "");
-  if (!name) errors.push(`\xAB${labelOf2(colByKey.get("name"))}\xBB \u062E\u0627\u0644\u06CC \u0627\u0633\u062A`);
-  else if (name.length < 2) errors.push("\xAB\u0646\u0627\u0645 \u0645\u062F\u0631\u0633\u0647\xBB \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
-  else if (name.length > 200) errors.push("\xAB\u0646\u0627\u0645 \u0645\u062F\u0631\u0633\u0647\xBB \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F2\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
-  normalized.name = name || null;
-  display.name = name;
-  const kindRaw = normalizeCellText(raw2.kind ?? "");
-  if (!kindRaw) {
-    normalized.kind = null;
-    display.kind = "\u2014";
-  } else {
-    const k = matchEnum(kindRaw, colByKey.get("kind").options);
-    if (!k) errors.push("\xAB\u0646\u0648\u0639\xBB \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A \u2014 \u0645\u062F\u0631\u0633\u0647 \u06CC\u0627 \u0645\u0647\u062F\u06A9\u0648\u062F\u06A9");
-    else {
-      normalized.kind = k;
-      display.kind = colByKey.get("kind").options.find((o) => o.value === k).label;
-    }
-  }
-  const genderRaw = normalizeCellText(raw2.gender_type ?? "");
-  if (!genderRaw) {
-    normalized.gender_type = null;
-    display.gender_type = "\u2014";
-  } else {
-    const g = matchEnum(genderRaw, colByKey.get("gender_type").options);
-    if (!g) errors.push("\xAB\u062C\u0646\u0633\u06CC\u062A\xBB \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A \u2014 \u0645\u062E\u062A\u0644\u0637\u060C \u067E\u0633\u0631\u0627\u0646\u0647 \u06CC\u0627 \u062F\u062E\u062A\u0631\u0627\u0646\u0647");
-    else {
-      normalized.gender_type = g;
-      display.gender_type = colByKey.get("gender_type").options.find((o) => o.value === g).label;
-    }
-  }
-  const codeRaw = normalizeCellText(raw2.code ?? "");
-  if (codeRaw) {
-    const code = normalizeCode(codeRaw);
-    if (code.length > 20) errors.push("\xAB\u06A9\u062F \u0645\u062F\u0631\u0633\u0647\xBB \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F2\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
-    else {
-      normalized.code = code;
-      display.code = code;
-    }
-  } else {
-    normalized.code = null;
-    display.code = "";
-  }
-  for (const key of ["phone", "principal_phone"]) {
-    const rawVal = normalizeCellText(raw2[key] ?? "");
-    if (!rawVal) {
-      normalized[key] = null;
-      display[key] = "";
-      continue;
-    }
-    const p = normalizePhone2(rawVal);
-    if (!p.ok) errors.push(`\xAB${labelOf2(colByKey.get(key))}\xBB \u0645\u0639\u062A\u0628\u0631 \u0646\u06CC\u0633\u062A`);
-    else if (p.value.length > 20) errors.push(`\xAB${labelOf2(colByKey.get(key))}\xBB \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F2\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A`);
-    else {
-      normalized[key] = p.value;
-      display[key] = p.value;
-    }
-  }
-  const principalName = normalizeCellText(raw2.principal_name ?? "");
-  if (principalName.length > 120) errors.push("\xAB\u0646\u0627\u0645 \u0645\u062F\u06CC\u0631\xBB \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F1\u06F2\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
-  normalized.principal_name = principalName || null;
-  display.principal_name = principalName;
-  for (const key of ["address", "notes"]) {
-    const v = normalizeCellText(raw2[key] ?? "");
-    const max = colByKey.get(key).maxLength ?? 500;
-    if (v.length > max) errors.push(`\xAB${labelOf2(colByKey.get(key))}\xBB \u062D\u062F\u0627\u06A9\u062B\u0631 ${faDigits(max)} \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A`);
-    normalized[key] = v || null;
-    display[key] = v;
-  }
-  return { errors, display, normalized };
-}
-__name(validateSchoolRow, "validateSchoolRow");
-function validatePlanRow(raw2, colByKey) {
-  const errors = [];
-  const display = {};
-  const normalized = {};
-  const title = normalizeCellText(raw2.title ?? "");
-  if (!title) errors.push(`\xAB${labelOf2(colByKey.get("title"))}\xBB \u062E\u0627\u0644\u06CC \u0627\u0633\u062A`);
-  else if (title.length < 2) errors.push("\u0639\u0646\u0648\u0627\u0646 \u0641\u0627\u0632 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
-  else if (title.length > 150) errors.push("\u0639\u0646\u0648\u0627\u0646 \u0641\u0627\u0632 \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F1\u06F5\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
-  normalized.title = title || null;
-  display.title = title;
-  const fromRaw = normalizeCellText(raw2.from_date ?? "");
-  if (!fromRaw) {
-    errors.push("\xAB\u0627\u0632 \u062A\u0627\u0631\u06CC\u062E\xBB \u062E\u0627\u0644\u06CC \u0627\u0633\u062A");
-  } else {
-    const g = parseFlexibleDate(fromRaw);
-    if (!g) errors.push("\xAB\u0627\u0632 \u062A\u0627\u0631\u06CC\u062E\xBB \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A \u2014 \u0645\u062B\u0644 1404/07/01");
-    else {
-      normalized.from_date = g;
-      display.from_date = jalaliDisplayOfYmd(g);
-    }
-  }
-  const toRaw = normalizeCellText(raw2.to_date ?? "");
-  if (toRaw) {
-    const g = parseFlexibleDate(toRaw);
-    if (!g) errors.push("\xAB\u062A\u0627 \u062A\u0627\u0631\u06CC\u062E\xBB \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A \u2014 \u0645\u062B\u0644 1404/07/07 \u06CC\u0627 \u062E\u0627\u0644\u06CC");
-    else {
-      normalized.to_date = g;
-      display.to_date = jalaliDisplayOfYmd(g);
-    }
-  } else {
-    normalized.to_date = null;
-    display.to_date = "";
-  }
-  const from = normalized.from_date;
-  const to = normalized.to_date;
-  if (from && to && to < from) errors.push("\xAB\u062A\u0627 \u062A\u0627\u0631\u06CC\u062E\xBB \u0646\u0645\u06CC\u200C\u062A\u0648\u0627\u0646\u062F \u0642\u0628\u0644 \u0627\u0632 \xAB\u0627\u0632 \u062A\u0627\u0631\u06CC\u062E\xBB \u0628\u0627\u0634\u062F");
-  for (const key of ["admin_actions", "center_actions"]) {
-    const v = normalizeCellText(raw2[key] ?? "");
-    if (v.length > 2e3) errors.push(`\xAB${labelOf2(colByKey.get(key))}\xBB \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F2\u06F0\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A`);
-    normalized[key] = v || null;
-    display[key] = v;
-  }
-  const statusRaw = normalizeCellText(raw2.status ?? "");
-  if (!statusRaw) {
-    normalized.status = null;
-    display.status = "\u2014";
-  } else {
-    const s = matchEnum(statusRaw, colByKey.get("status").options);
-    if (!s) errors.push("\xAB\u0648\u0636\u0639\u06CC\u062A\xBB \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A \u2014 \u0628\u0631\u0646\u0627\u0645\u0647\u200C\u0631\u06CC\u0632\u06CC\u200C\u0634\u062F\u0647\u060C \u062F\u0631 \u062C\u0631\u06CC\u0627\u0646 \u06CC\u0627 \u062A\u06A9\u0645\u06CC\u0644");
-    else {
-      normalized.status = s;
-      display.status = colByKey.get("status").options.find((o) => o.value === s).label;
-    }
-  }
-  const tag = normalizeCellText(raw2.tag ?? "");
-  if (tag.length > 40) errors.push("\xAB\u0628\u0631\u0686\u0633\u0628 \u0641\u0639\u0627\u0644\u06CC\u062A\u200C\u0647\u0627\xBB \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F4\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
-  normalized.tag = tag || null;
-  display.tag = tag;
-  return { errors, display, normalized };
-}
-__name(validatePlanRow, "validatePlanRow");
-function validateClassRow(raw2, colByKey) {
-  const errors = [];
-  const display = {};
-  const normalized = {};
-  const school = normalizeCellText(raw2.school ?? "");
-  if (!school) errors.push(`\xAB${labelOf2(colByKey.get("school"))}\xBB \u062E\u0627\u0644\u06CC \u0627\u0633\u062A`);
-  else if (school.length > 200) errors.push("\xAB\u0646\u0627\u0645 \u0645\u062F\u0631\u0633\u0647\xBB \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F2\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
-  normalized.school = school || null;
-  display.school = school;
-  const cls = normalizeCellText(raw2.class_name ?? "");
-  if (!cls) errors.push(`\xAB${labelOf2(colByKey.get("class_name"))}\xBB \u062E\u0627\u0644\u06CC \u0627\u0633\u062A`);
-  else if (cls.length < 2) errors.push("\xAB\u0646\u0627\u0645 \u06A9\u0644\u0627\u0633\xBB \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
-  else if (cls.length > 120) errors.push("\xAB\u0646\u0627\u0645 \u06A9\u0644\u0627\u0633\xBB \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F1\u06F2\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
-  normalized.class_name = cls || null;
-  display.class_name = cls;
-  const teacher = normalizeCellText(raw2.teacher_name ?? "");
-  if (teacher.length > 120) errors.push("\xAB\u0646\u0627\u0645 \u0645\u0639\u0644\u0645 \u06A9\u0644\u0627\u0633\xBB \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F1\u06F2\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
-  normalized.teacher_name = teacher || null;
-  display.teacher_name = teacher;
-  const phoneRaw = normalizeCellText(raw2.teacher_phone ?? "");
-  if (!phoneRaw) {
-    normalized.teacher_phone = null;
-    display.teacher_phone = "";
-  } else {
-    const p = normalizePhone2(phoneRaw);
-    if (!p.ok) errors.push("\xAB\u062A\u0644\u0641\u0646 \u0645\u0639\u0644\u0645\xBB \u0645\u0639\u062A\u0628\u0631 \u0646\u06CC\u0633\u062A");
-    else if (p.value.length > 20) errors.push("\xAB\u062A\u0644\u0641\u0646 \u0645\u0639\u0644\u0645\xBB \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F2\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
-    else {
-      normalized.teacher_phone = p.value;
-      display.teacher_phone = p.value;
-    }
-  }
-  return { errors, display, normalized };
-}
-__name(validateClassRow, "validateClassRow");
-async function finishSchoolRows(db, rows, colByKey) {
-  const dbRows = await db.query(
-    `SELECT id, name, kind, gender_type, phone, address, principal_name, principal_phone, code, notes FROM schools`
-  );
-  const byKey = /* @__PURE__ */ new Map();
-  const codeOwner = /* @__PURE__ */ new Map();
-  for (const s of dbRows) {
-    byKey.set(nameKey(s.name), s);
-    if (s.code) codeOwner.set(normalizeCode(s.code), s);
-  }
-  const seenKeys = /* @__PURE__ */ new Map();
-  const seenCodes = /* @__PURE__ */ new Map();
-  for (const row of rows) {
-    const key = row.result.normalized.name ? nameKey(row.result.normalized.name) : null;
-    row.key = key;
-    if (key && seenKeys.has(key)) {
-      row.result.errors.push(`\u0627\u06CC\u0646 ${colByKey.get("name").label} \u062F\u0631 \u0633\u0637\u0631 ${faDigits(seenKeys.get(key))} \u0647\u0645 \u0622\u0645\u062F\u0647 \u0627\u0633\u062A`);
-    } else if (key) {
-      seenKeys.set(key, row.index);
-    }
-    const code = row.result.normalized.code;
-    if (code) {
-      const owner = codeOwner.get(code);
-      if (owner && key && nameKey(owner.name) !== key) {
-        row.result.errors.push(`\xAB\u06A9\u062F \u0645\u062F\u0631\u0633\u0647\xBB \u0642\u0628\u0644\u0627\u064B \u0628\u0631\u0627\u06CC \xAB${owner.name}\xBB \u062B\u0628\u062A \u0634\u062F\u0647 \u0627\u0633\u062A`);
-      }
-      if (seenCodes.has(code)) {
-        row.result.errors.push(`\xAB\u06A9\u062F \u0645\u062F\u0631\u0633\u0647\xBB \u062F\u0631 \u0633\u0637\u0631 ${faDigits(seenCodes.get(code))} \u0647\u0645 \u0622\u0645\u062F\u0647 \u0627\u0633\u062A`);
-      } else {
-        seenCodes.set(code, row.index);
-      }
-    }
-    if (key && byKey.has(key)) {
-      row.status = "update";
-      row.existingId = byKey.get(key).id;
-    } else if (key) {
-      row.status = "add";
-      row.existingId = null;
-    }
-  }
-}
-__name(finishSchoolRows, "finishSchoolRows");
-async function finishPlanRows(db, rows, colByKey) {
-  const dbRows = await db.query(
-    `SELECT id, title, admin_actions, center_actions, from_date, to_date, status, tag, sort_order FROM clearbook_plans`
-  );
-  const byKey = /* @__PURE__ */ new Map();
-  for (const p of dbRows) byKey.set(nameKey(p.title), p);
-  const seenKeys = /* @__PURE__ */ new Map();
-  for (const row of rows) {
-    const key = row.result.normalized.title ? nameKey(row.result.normalized.title) : null;
-    row.key = key;
-    if (key && seenKeys.has(key)) {
-      row.result.errors.push(`\u0627\u06CC\u0646 ${colByKey.get("title").label} \u062F\u0631 \u0633\u0637\u0631 ${faDigits(seenKeys.get(key))} \u0647\u0645 \u0622\u0645\u062F\u0647 \u0627\u0633\u062A`);
-    } else if (key) {
-      seenKeys.set(key, row.index);
-    }
-    if (key && byKey.has(key)) {
-      row.status = "update";
-      row.existingId = byKey.get(key).id;
-    } else if (key) {
-      row.status = "add";
-      row.existingId = null;
-    }
-  }
-}
-__name(finishPlanRows, "finishPlanRows");
-async function finishClassRows(db, rows, colByKey) {
-  const schoolRows = await db.query(`SELECT id, name FROM schools`);
-  const schoolByKey = /* @__PURE__ */ new Map();
-  for (const s of schoolRows) schoolByKey.set(nameKey(s.name), s);
-  const classRows = await db.query(
-    `SELECT id, school_id, name, teacher_name, teacher_phone, active FROM classes`
-  );
-  const classByPair = /* @__PURE__ */ new Map();
-  for (const c of classRows) classByPair.set(`${c.school_id}::${nameKey(c.name)}`, c);
-  const seenPairs = /* @__PURE__ */ new Map();
-  for (const row of rows) {
-    const schoolName = row.result.normalized.school;
-    const clsName = row.result.normalized.class_name;
-    row.key = null;
-    if (!schoolName || !clsName) continue;
-    const school = schoolByKey.get(nameKey(schoolName));
-    if (!school) {
-      row.result.errors.push(
-        `\u0645\u062F\u0631\u0633\u0647 \u0628\u0627 \u0627\u06CC\u0646 \u0646\u0627\u0645 \u06CC\u0627\u0641\u062A \u0646\u0634\u062F \u2014 \u0627\u0648\u0644 \u0645\u062F\u0631\u0633\u0647 \u0631\u0627 \u062B\u0628\u062A \u06A9\u0646\u06CC\u062F (\u062F\u0631\u0648\u0646\u200C\u0631\u06CC\u0632\u06CC \xAB\u0627\u0637\u0644\u0627\u0639\u0627\u062A \u0645\u062F\u0627\u0631\u0633\xBB \u06CC\u0627 \u062F\u06A9\u0645\u0647\u0654 \xAB\u0645\u062F\u0631\u0633\u0647 \u062C\u062F\u06CC\u062F\xBB)`
-      );
-      continue;
-    }
-    row.result.normalized.school_id = school.id;
-    const pair = `${school.id}::${nameKey(clsName)}`;
-    row.key = pair;
-    if (seenPairs.has(pair)) {
-      row.result.errors.push(
-        `\u0627\u06CC\u0646 \u06A9\u0644\u0627\u0633 (${colByKey.get("school").label} + ${colByKey.get("class_name").label}) \u062F\u0631 \u0633\u0637\u0631 ${faDigits(seenPairs.get(pair))} \u0647\u0645 \u0622\u0645\u062F\u0647 \u0627\u0633\u062A`
-      );
-      continue;
-    }
-    seenPairs.set(pair, row.index);
-    const existing = classByPair.get(pair);
-    if (existing) {
-      row.status = "update";
-      row.existingId = existing.id;
-    } else {
-      row.status = "add";
-      row.existingId = null;
-    }
-  }
-}
-__name(finishClassRows, "finishClassRows");
-function toValidated(rows) {
-  const out = rows.map((r) => ({
-    index: r.index,
-    status: r.result.errors.length > 0 ? "error" : r.status,
-    errors: r.result.errors,
-    display: r.result.display
-  }));
-  return {
-    total: out.length,
-    summary: {
-      add: out.filter((r) => r.status === "add").length,
-      update: out.filter((r) => r.status === "update").length,
-      error: out.filter((r) => r.status === "error").length
-    },
-    rows: out
-  };
-}
-__name(toValidated, "toValidated");
-function createImportService(deps) {
-  const { db, audit, logger } = deps;
-  function entityFor(key, role) {
-    const entity = findImportEntity(key);
-    if (!entity) throw new NotFoundError("\u0645\u0648\u062C\u0648\u062F\u06CC\u062A \u062F\u0631\u0648\u0646\u200C\u0631\u06CC\u0632\u06CC");
-    if (!entity.roles.includes(role)) throw new ForbiddenError();
-    return entity;
-  }
-  __name(entityFor, "entityFor");
-  async function buildInternalRows(entity, rawRows) {
-    const coerced = coerceRows(rawRows);
-    const colByKey = new Map(entity.columns.map((c) => [c.key, c]));
-    const rows = coerced.map((raw2, i) => ({
-      index: i + 1,
-      raw: raw2,
-      result: entity.key === "schools" ? validateSchoolRow(raw2, colByKey) : entity.key === "school-classes" ? validateClassRow(raw2, colByKey) : validatePlanRow(raw2, colByKey),
-      status: "add",
-      key: null,
-      existingId: null
-    }));
-    if (entity.key === "schools") await finishSchoolRows(db, rows, colByKey);
-    else if (entity.key === "school-classes") await finishClassRows(db, rows, colByKey);
-    else await finishPlanRows(db, rows, colByKey);
-    return { rows, colByKey };
-  }
-  __name(buildInternalRows, "buildInternalRows");
-  return {
-    registryFor(role) {
-      return IMPORT_ENTITIES.filter((e) => e.roles.includes(role));
-    },
-    async validate(entityKey, role, rawRows) {
-      const entity = entityFor(entityKey, role);
-      const { rows } = await buildInternalRows(entity, rawRows);
-      return toValidated(rows);
-    },
-    async commit(entityKey, rawRows, actor) {
-      const entity = entityFor(entityKey, actor.role);
-      const { rows } = await buildInternalRows(entity, rawRows);
-      const valid = rows.filter((r) => r.result.errors.length === 0 && (r.status === "add" || r.status === "update"));
-      const skipped = rows.length - valid.length;
-      let added = 0;
-      let updated = 0;
-      if (entity.key === "school-classes") {
-        await db.transaction(async (tx) => {
-          for (const row of valid) {
-            const n = row.result.normalized;
-            if (row.status === "update" && row.existingId) {
-              const cur = await tx.queryOne(
-                `SELECT id, school_id, name, teacher_name, teacher_phone, active FROM classes WHERE id = ?`,
-                [row.existingId]
-              );
-              if (!cur) continue;
-              await tx.execute(
-                `UPDATE classes SET name = ?, teacher_name = ?, teacher_phone = ?, active = 1 WHERE id = ?`,
-                [
-                  n.class_name,
-                  n.teacher_name ?? cur.teacher_name,
-                  n.teacher_phone ?? cur.teacher_phone,
-                  row.existingId
-                ]
-              );
-              updated += 1;
-            } else {
-              await tx.execute(
-                `INSERT INTO classes (id, school_id, name, teacher_name, teacher_phone, active) VALUES (?, ?, ?, ?, ?, 1)`,
-                [
-                  crypto.randomUUID(),
-                  n.school_id,
-                  n.class_name,
-                  n.teacher_name,
-                  n.teacher_phone
-                ]
-              );
-              added += 1;
-            }
-          }
-          await audit.logInTransaction(tx, {
-            actorId: actor.staffId,
-            action: "import.school_classes",
-            resourceType: "school_class",
-            resourceId: "bulk",
-            changes: { added: { from: null, to: added }, updated: { from: null, to: updated }, skipped: { from: null, to: skipped } }
-          });
-        });
-      } else if (entity.key === "schools") {
-        await db.transaction(async (tx) => {
-          for (const row of valid) {
-            const n = row.result.normalized;
-            if (row.status === "update" && row.existingId) {
-              const cur = await tx.queryOne(
-                `SELECT id, name, kind, gender_type, phone, address, principal_name, principal_phone, code, notes FROM schools WHERE id = ?`,
-                [row.existingId]
-              );
-              if (!cur) continue;
-              await tx.execute(
-                `UPDATE schools SET name = ?, kind = ?, gender_type = ?, phone = ?, address = ?, principal_name = ?, principal_phone = ?, code = ?, notes = ? WHERE id = ?`,
-                [
-                  n.name,
-                  n.kind ?? cur.kind,
-                  n.gender_type ?? cur.gender_type,
-                  n.phone ?? cur.phone,
-                  n.address ?? cur.address,
-                  n.principal_name ?? cur.principal_name,
-                  n.principal_phone ?? cur.principal_phone,
-                  n.code ?? cur.code,
-                  n.notes ?? cur.notes,
-                  row.existingId
-                ]
-              );
-              updated += 1;
-            } else {
-              await tx.execute(
-                `INSERT INTO schools (id, name, kind, gender_type, phone, address, principal_name, principal_phone, code, notes, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-                [
-                  crypto.randomUUID(),
-                  n.name,
-                  n.kind ?? "school",
-                  n.gender_type,
-                  n.phone,
-                  n.address,
-                  n.principal_name,
-                  n.principal_phone,
-                  n.code,
-                  n.notes
-                ]
-              );
-              added += 1;
-            }
-          }
-          await audit.logInTransaction(tx, {
-            actorId: actor.staffId,
-            action: "import.schools",
-            resourceType: "school",
-            resourceId: "bulk",
-            changes: { added: { from: null, to: added }, updated: { from: null, to: updated }, skipped: { from: null, to: skipped } }
-          });
-        });
-      } else {
-        await db.transaction(async (tx) => {
-          const maxRow = await tx.queryOne(`SELECT MAX(sort_order) AS m FROM clearbook_plans`);
-          let seq = maxRow?.m ?? 0;
-          for (const row of valid) {
-            const n = row.result.normalized;
-            if (row.status === "update" && row.existingId) {
-              const cur = await tx.queryOne(
-                `SELECT id, title, admin_actions, center_actions, from_date, to_date, status, tag, sort_order FROM clearbook_plans WHERE id = ?`,
-                [row.existingId]
-              );
-              if (!cur) continue;
-              await tx.execute(
-                `UPDATE clearbook_plans SET title = ?, admin_actions = ?, center_actions = ?, from_date = ?, to_date = ?, status = ?, tag = ?, updated_at = datetime('now') WHERE id = ?`,
-                [
-                  n.title,
-                  n.admin_actions ?? cur.admin_actions,
-                  n.center_actions ?? cur.center_actions,
-                  n.from_date,
-                  n.to_date ?? cur.to_date,
-                  n.status ?? cur.status,
-                  n.tag ?? cur.tag,
-                  row.existingId
-                ]
-              );
-              updated += 1;
-            } else {
-              seq += 1;
-              await tx.execute(
-                `INSERT INTO clearbook_plans (id, title, admin_actions, center_actions, from_date, to_date, status, tag, sort_order, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                [
-                  crypto.randomUUID(),
-                  n.title,
-                  n.admin_actions ?? "",
-                  n.center_actions ?? "",
-                  n.from_date,
-                  n.to_date,
-                  n.status ?? "planned",
-                  n.tag,
-                  seq,
-                  actor.staffId
-                ]
-              );
-              added += 1;
-            }
-          }
-          await audit.logInTransaction(tx, {
-            actorId: actor.staffId,
-            action: "import.clearbook_plans",
-            resourceType: "clearbook_plan",
-            resourceId: "bulk",
-            changes: { added: { from: null, to: added }, updated: { from: null, to: updated }, skipped: { from: null, to: skipped } }
-          });
-        });
-      }
-      logger.child("excel-import").info("commit.done", { entity: entity.key, added, updated, skipped, actor: actor.staffId });
-      return { added, updated, skipped };
-    }
-  };
-}
-__name(createImportService, "createImportService");
-
-// src/application/excel-import/routes.ts
-var ImportRowsSchema = external_exports.object({
-  rows: external_exports.array(external_exports.record(external_exports.string(), external_exports.unknown())).min(1, "\u0647\u06CC\u0686 \u0631\u062F\u06CC\u0641\u06CC \u0628\u0631\u0627\u06CC \u062F\u0631\u0648\u0646\u200C\u0631\u06CC\u0632\u06CC \u0627\u0631\u0633\u0627\u0644 \u0646\u0634\u062F\u0647 \u0627\u0633\u062A").max(IMPORT_ROWS_MAX, `\u062D\u062F\u0627\u06A9\u062B\u0631 ${faDigits(IMPORT_ROWS_MAX)} \u0631\u062F\u06CC\u0641 \u062F\u0631 \u0647\u0631 \u0628\u0627\u0631 \u062F\u0631\u0648\u0646\u200C\u0631\u06CC\u0632\u06CC \u0645\u062C\u0627\u0632 \u0627\u0633\u062A`)
-});
-function registerImportRoutes(app, deps) {
-  const service = createImportService(deps);
-  const gate = requireRole("manager", "secretary");
-  app.get("/api/import/registry", gate, async (c) => {
-    const actor = getAuthContext(c);
-    return c.json({ data: service.registryFor(actor.role) }, 200);
-  });
-  app.post("/api/import/:entity/validate", gate, async (c) => {
-    const actor = getAuthContext(c);
-    const body = ImportRowsSchema.parse(await c.req.json());
-    const result = await service.validate(c.req.param("entity"), actor.role, body.rows);
-    return c.json({ data: result }, 200);
-  });
-  app.post("/api/import/:entity/commit", gate, async (c) => {
-    const actor = getAuthContext(c);
-    const body = ImportRowsSchema.parse(await c.req.json());
-    const result = await service.commit(c.req.param("entity"), body.rows, actor);
-    return c.json({ data: result }, 200);
-  });
-}
-__name(registerImportRoutes, "registerImportRoutes");
-
 // src/domain/staff/service.ts
 var STAFF_COLS2 = "id, email, full_name, COALESCE(role_ext, role) AS role, active, notify_enabled, phone, national_id, username, role_ext, created_at";
 function roleToColumns(role) {
@@ -70130,11 +68666,11 @@ function registerRoutes7(app, service) {
 __name(registerRoutes7, "registerRoutes");
 
 // src/application/dashboard/screening-goal.ts
-var pad23 = /* @__PURE__ */ __name((n) => String(n).padStart(2, "0"), "pad2");
+var pad22 = /* @__PURE__ */ __name((n) => String(n).padStart(2, "0"), "pad2");
 function faJalaliYmd(gYmd) {
   const [gy, gm, gd] = gYmd.split("-").map(Number);
   const j = toJalaliParts(gy, gm, gd);
-  return faDigits(`${j.jy}/${pad23(j.jm)}/${pad23(j.jd)}`);
+  return faDigits(`${j.jy}/${pad22(j.jm)}/${pad22(j.jd)}`);
 }
 __name(faJalaliYmd, "faJalaliYmd");
 function jalaliMonthEndYmd(jy, jm) {
@@ -71170,6 +69706,58 @@ async function handleScoring(request, env) {
   return json2({ error: "NOT_FOUND", message: "\u0645\u0633\u06CC\u0631 \u062F\u0631\u062E\u0648\u0627\u0633\u062A\u06CC \u06CC\u0627\u0641\u062A \u0646\u0634\u062F" }, 404);
 }
 __name(handleScoring, "handleScoring");
+
+// src/application/dashboard/kpi-source.ts
+function createDashboardKpiService(deps) {
+  const { dashboard } = deps;
+  async function getKpis(actor, query, call) {
+    const role = actor.role;
+    const isTherapist = role === "therapist";
+    const isOffice = role === "manager" || role === "secretary";
+    const isManager = role === "manager";
+    const date5 = DashboardTodayQuerySchema.parse({ date: query.date || void 0 }).date;
+    const range = DashboardSummaryQuerySchema.parse({
+      from: query.from || "",
+      to: query.to || ""
+    });
+    const part = /* @__PURE__ */ __name((p) => p.catch(() => null), "part");
+    const scoringP = part(
+      handleScoring(
+        new Request(new URL("/api/scoring/board?period=month", call.url), { headers: call.headers }),
+        call.env
+      ).then(async (res) => {
+        if (!res.ok) return null;
+        const body = await res.json().catch(() => null);
+        return body?.data ?? null;
+      })
+    );
+    const [today, summary, goal, scoring, me, knowledge, announcements, waitlist, dayAppts, followups, validation] = await Promise.all([
+      isTherapist ? Promise.resolve(null) : part(dashboard.getTodayCards(date5)),
+      isTherapist ? Promise.resolve(null) : part(dashboard.getPeriodSummary(range.from, range.to)),
+      isOffice ? part(dashboard.getScreeningGoal()) : Promise.resolve(null),
+      scoringP,
+      part(dashboard.getMyStats(actor.staffId)),
+      part(deps.knowledge.listPublished()),
+      part(deps.announcements.listPanel()),
+      isOffice ? part(deps.waitlist.list({})) : Promise.resolve(null),
+      isOffice ? part(deps.appointments.list({ from: query.apptFrom || void 0, to: query.apptTo || void 0 })) : Promise.resolve(null),
+      isOffice ? part(deps.followups.list({ group: "open" }, actor)) : Promise.resolve(null),
+      isManager ? part(
+        Promise.all([
+          part(deps.clinicalEngine.getValidationKpis(actor)),
+          part(deps.clinicalEngine.listCaseAudits(actor, null))
+        ]).then(([k, a]) => k ? { kpis: k, audits: a ?? [] } : null)
+      ) : actor.role === "therapist" ? (
+        /* M6 POLISH-3 (۱.۲۷.۲۹) — نمای فقط‌خواندنی درمانگر: حسابرسی پرونده‌های خودش (KPIهای دفتر نمی‌آید) */
+        part(deps.clinicalEngine.listCaseAudits(actor, null).then((a) => ({ kpis: null, audits: a ?? [] })))
+      ) : Promise.resolve(null)
+    ]);
+    return { today, summary, goal, scoring, me, knowledge, announcements, waitlist, dayAppts, followups, validation };
+  }
+  __name(getKpis, "getKpis");
+  return { getKpis };
+}
+__name(createDashboardKpiService, "createDashboardKpiService");
 
 // src/core/security/timing.ts
 async function timingSafeEqualStr(a, b) {
@@ -77206,6 +75794,1868 @@ function registerRumRoutes(app, service) {
 }
 __name(registerRumRoutes, "registerRumRoutes");
 
+// src/application/api-routing/composition.ts
+function createServices(deps) {
+  const { db, audit, logger } = deps;
+  const conflictEngine = createConflictEngine({ db });
+  const appointments = createAppointmentService({ db, audit, logger });
+  appointments.setConflictEngine(conflictEngine);
+  const attendance = createAttendanceService({ db, audit, logger });
+  const staffAttendance = createStaffAttendanceService({ db, audit, logger });
+  const workingDay = createWorkingDayService({ db, audit, logger, staffAttendance });
+  const studentProfile = createStudentProfileService({ db, audit, logger });
+  const studentTimeline = createStudentTimelineService(db);
+  const specialNeeds = createSpecialNeedsService({ db });
+  const followups = createFollowUpsService({ db, audit, logger });
+  const todos = createTodosService({ db, audit, logger });
+  const exerciseStorage = deps.exerciseBucket ? createR2ObjectStore(deps.exerciseBucket) : createChunkedD1ObjectStore(db);
+  const exerciseFileSender = deps.exerciseFileSender !== void 0 ? deps.exerciseFileSender : deps.baleToken ? async (chatId, file2) => {
+    const result = await sendBaleDocument({
+      token: deps.baleToken,
+      chatId,
+      filename: file2.filename,
+      bytes: file2.bytes,
+      mime: file2.mime,
+      caption: file2.caption ?? void 0
+    });
+    if (!result.ok) logger.warn("exercise.file.send_failed", { chatId, error: result.error });
+    return result.ok;
+  } : null;
+  const exerciseBank = createExerciseBankService({
+    db,
+    audit,
+    logger,
+    storage: exerciseStorage,
+    /* ۱.۲۷.۴۳ — راز دانلود هرگز رشتهٔ ثابت نیست: اگر AUTH/WEBHOOK تنظیم نشده باشد،
+       تصادفیِ هر بوت می‌شود (توکن‌های دانلود TTL کوتاه دارند؛ تاثیر ری‌استارت پذیرفته است) */
+    downloadSecret: deps.downloadSecret ?? deps.webhookSecret ?? crypto.randomUUID() + crypto.randomUUID(),
+    publicBaseUrl: deps.publicBaseUrl ?? null,
+    fileSender: exerciseFileSender
+  });
+  const caseEvents = createCaseEventsService({
+    db,
+    audit,
+    logger,
+    fillExpiryHours: CASE_EVENT_FILL_EXPIRY_HOURS,
+    followups,
+    publicBaseUrl: deps.publicBaseUrl ?? null,
+    studentNameOf: /* @__PURE__ */ __name(async (studentId) => {
+      const row = await db.queryOne(
+        `SELECT first_name || ' ' || last_name AS name FROM students WHERE id = ?`,
+        [studentId]
+      );
+      return row?.name ?? null;
+    }, "studentNameOf")
+  });
+  const waitlist = createWaitlistService({
+    db,
+    audit,
+    logger,
+    appointments,
+    students: studentProfile,
+    followups
+  });
+  const tags = createTagService({ db, audit, logger });
+  const search = createSearchService({ db, logger });
+  const screening = createScreeningService({ db, audit, logger });
+  const staff = createStaffService({ db, audit, logger });
+  const workingHours = createWorkingHoursService({ db, audit, logger });
+  const settings = createSettingsService({
+    db,
+    audit,
+    logger,
+    workingHours,
+    envClinicName: deps.clinicName,
+    baleConfigured: Boolean(deps.baleToken),
+    webhookEnabled: Boolean(deps.webhookSecret)
+  });
+  const keys = createKeysService({ db, audit, logger });
+  const notifyCore = createNotifyService({ db, logger });
+  notifyCore.registerChannel(createInternalChannel(logger));
+  const docMediaFetcher = deps.mediaFetcher !== void 0 ? deps.mediaFetcher : deps.baleToken ? createBaleMediaFetcher({ token: deps.baleToken }) : null;
+  const documentRequests = createDocumentRequestService({
+    db,
+    audit,
+    logger,
+    storage: exerciseStorage,
+    mediaFetcher: docMediaFetcher,
+    notify: notifyCore,
+    settings
+  });
+  const notify = createNotifyAppService({
+    db,
+    audit,
+    logger,
+    notify: notifyCore,
+    appointments,
+    students: studentProfile,
+    followups,
+    settings,
+    baleToken: deps.baleToken ?? null,
+    webhookSecret: deps.webhookSecret ?? null,
+    clinicName: deps.clinicName,
+    exerciseBank,
+    documentRequests,
+    publicBaseUrl: deps.publicBaseUrl ?? null,
+    fileSender: exerciseFileSender,
+    caseEvents,
+    mediaFetcher: deps.mediaFetcher !== void 0 ? deps.mediaFetcher : deps.baleToken ? createBaleMediaFetcher({ token: deps.baleToken }) : null
+  });
+  appointments.setLifecycleObserver({
+    onCreated: /* @__PURE__ */ __name((a) => notify.notifyAppointmentCreated(a), "onCreated"),
+    onMoved: /* @__PURE__ */ __name((a, prev) => notify.notifyAppointmentMoved(a, prev), "onMoved"),
+    onCancelled: /* @__PURE__ */ __name((a) => notify.notifyAppointmentCancelled(a).then(() => notify.notifyWaitlistSlotFreed(a)), "onCancelled")
+  });
+  attendance.setObserver({
+    onMarked: /* @__PURE__ */ __name(async (apptId, studentId, status) => {
+      await notify.notifyAttendanceMarked(apptId, studentId, status);
+      await waitlist.onAttendanceMarked(apptId, studentId, status);
+    }, "onMarked")
+  });
+  todos.setNotifier((todo) => notify.notifyTodoAssigned(todo));
+  exerciseBank.setGradeObserver(async (record2) => {
+    await notify.notifyHomeworkGraded({
+      studentId: record2.studentId,
+      studentName: record2.studentName,
+      exerciseTitle: record2.exerciseTitle,
+      feedback: record2.feedback ?? "",
+      gradedByName: record2.gradedByName
+    });
+  });
+  caseEvents.setSendObserver(async (input2) => {
+    const channel = notifyCore.getChannel("bale") ? "bale" : "internal";
+    const clinicName = await settings.getClinicName();
+    let sent = 0;
+    for (const chat of input2.chats) {
+      const outcome = await notifyCore.enqueue({
+        channel,
+        template: input2.template,
+        recipient: chat,
+        studentId: input2.studentId,
+        payload: { ...input2.vars, clinicName },
+        dedupKey: `${input2.dedupBase}:${chat}`
+      });
+      if (!outcome.duplicate) sent += 1;
+    }
+    if (sent > 0) await notifyCore.dispatchPending(50);
+    return sent;
+  });
+  caseEvents.setFillObserver(async (input2) => {
+    try {
+      if (!input2.staffId) return;
+      const linkRows = await db.query(
+        `SELECT chat_id FROM staff_bot_links WHERE staff_id = ? AND status = 'linked' AND chat_id IS NOT NULL`,
+        [input2.staffId]
+      );
+      const chats = linkRows.map((r) => r.chat_id).filter(Boolean);
+      if (!chats.length) return;
+      const student = await studentProfile.getStudentById(input2.studentId);
+      const studentName = student ? `${student.firstName} ${student.lastName}` : null;
+      const channel = notifyCore.getChannel("bale") ? "bale" : "internal";
+      const clinicName = await settings.getClinicName();
+      let sent = 0;
+      for (const chat of chats) {
+        const outcome = await notifyCore.enqueue({
+          channel,
+          template: "bot_checklist_result",
+          recipient: chat,
+          studentId: input2.studentId,
+          payload: {
+            studentName: studentName ?? void 0,
+            formTitle: input2.teacherName ? `${input2.formTitle} (\u067E\u0627\u0633\u062E \u0645\u0639\u0644\u0645: ${input2.teacherName})` : input2.formTitle,
+            score: input2.score != null ? faDigits(String(input2.score)) : void 0,
+            band: input2.band ?? void 0,
+            clinicName
+          },
+          dedupKey: `ce-result:${input2.eventId}:${chat}`
+        });
+        if (!outcome.duplicate) sent += 1;
+      }
+      if (sent > 0) await notifyCore.dispatchPending(50);
+    } catch (err) {
+      logger.warn("case-events.fill_observer_failed", { err: err instanceof Error ? err.message : String(err) });
+    }
+  });
+  exerciseBank.setSendObserver(async (input2) => {
+    const channel = notifyCore.getChannel("bale") ? "bale" : "internal";
+    const clinicName = await settings.getClinicName();
+    let sent = 0;
+    for (const chat of input2.chats) {
+      const outcome = await notifyCore.enqueue({
+        channel,
+        template: input2.template,
+        recipient: chat,
+        studentId: input2.studentId,
+        payload: { ...input2.vars, clinicName },
+        dedupKey: `${input2.dedupBase}:${chat}`
+      });
+      if (!outcome.duplicate) sent += 1;
+    }
+    if (sent > 0) await notifyCore.dispatchPending(50);
+    return sent;
+  });
+  const reports = createReportService({ db, logger });
+  const sessionNotes = createSessionNotesService({ db, audit, logger, followups });
+  const announcements = createAnnouncementService({
+    db,
+    audit,
+    logger,
+    notify: notifyCore,
+    baleEnabled: Boolean(deps.baleToken),
+    clinicName: deps.clinicName
+  });
+  const knowledge = createKnowledgeService({ db, audit, logger, storage: exerciseStorage });
+  const clearbook = createClearbookService({ db, audit, logger, storage: exerciseStorage });
+  const docs = createDocsService({ db, audit, logger, storage: exerciseStorage });
+  const finance = createFinanceService({ db, audit, logger, storage: exerciseStorage });
+  const otEngine = createOtEngineService({ db, audit, logger });
+  const clinicalEngine = createClinicalEngineService({
+    db,
+    audit,
+    logger,
+    publicBaseUrl: deps.publicBaseUrl ?? null,
+    // ۱.۲۷.۲۷ — M4: پیوند برگهٔ پیشرفت خانواده
+    exerciseIdsExist: /* @__PURE__ */ __name((ids) => exerciseBank.idsExist(ids), "exerciseIdsExist"),
+    formulationOt: {
+      gatesOf: /* @__PURE__ */ __name((studentId, actor) => otEngine.getGates(studentId, actor), "gatesOf"),
+      otProfileOf: /* @__PURE__ */ __name((studentId, actor) => otEngine.getOtProfile(studentId, actor), "otProfileOf")
+    }
+  });
+  caseEvents.setMonitorFocusProvider((studentId, actor) => clinicalEngine.homeMonitorFocusOf(studentId, actor));
+  const games = createGamesService({
+    db,
+    audit,
+    logger,
+    publicBaseUrl: deps.publicBaseUrl ?? null,
+    injectPathProbe: /* @__PURE__ */ __name((pathId, input2, actor) => clinicalEngine.addPathProbe(pathId, input2, actor), "injectPathProbe")
+  });
+  const reportExport = createReportExportService({
+    db,
+    audit,
+    buildReport: /* @__PURE__ */ __name((pathId, actor) => clinicalEngine.getPathwayReport(pathId, { from: null, to: null }, actor), "buildReport")
+  });
+  const backup = createBackupService({ db, audit, logger, baleToken: deps.baleToken ?? null, sender: deps.backupDocumentSender ?? null });
+  const rum = createRumService({ db, logger });
+  const clientErrors = createClientErrorsService({ db, logger });
+  const health = createHealthService({
+    db,
+    cpConfigured: Boolean(deps.cpSyncUrl && deps.cpNodeCode && deps.cpNodeKey),
+    envName: deps.envName ?? null,
+    clientErrorsMax: deps.clientErrorsMax ?? null,
+    gamesHealthUrl: deps.gamesHealthUrl ?? null
+  });
+  const growth = createGrowthService({ db, logger });
+  const centerKpi = createCenterKpiService({ db });
+  const networkContent = createNetworkContentService({
+    db,
+    audit,
+    // m6 — دانلود فقط-خواندنی فایل برگزیده‌ها با کلید نود (خاموش اگر env سینک خالی است)
+    fetchCpFile: deps.cpSyncUrl ? (itemId) => {
+      let origin = null;
+      try {
+        origin = new URL(deps.cpSyncUrl).origin;
+      } catch {
+        origin = null;
+      }
+      return fetchCpContentFile({
+        config: { cpOrigin: origin, cpNodeCode: deps.cpNodeCode ?? null, cpNodeKey: deps.cpNodeKey ?? null, cpSyncStaffId: null },
+        networkItemId: itemId
+      }).catch(() => null);
+    } : void 0
+  });
+  const contentScore = createContentScoreService(db, audit);
+  const bugReports = createBugReportService(db, audit);
+  const dashboard = createDashboardService({
+    appointments,
+    attendance,
+    conflicts: conflictEngine,
+    students: studentProfile,
+    db,
+    screening,
+    settings
+  });
+  const assessmentBlocks = createAssessmentBlockService({ db, audit, logger });
+  const formBuilder = createFormBuilderService({ db, audit, logger });
+  const dashboardKpi = createDashboardKpiService({
+    dashboard,
+    knowledge,
+    announcements,
+    waitlist,
+    appointments,
+    followups,
+    clinicalEngine
+  });
+  return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, clearbook, docs, finance, reports, waitlist, followups, sessionNotes, todos, exerciseBank, documentRequests, caseEvents, clinicalEngine, reportExport, otEngine, games, backup, rum, centerKpi, networkContent, bugReports, clientErrors, health, growth, contentScore, dashboard, assessmentBlocks, formBuilder, dashboardKpi };
+}
+__name(createServices, "createServices");
+
+// src/core/shared/log-mask.ts
+var MASKED = ":masked";
+var PAGE_TOKEN = /^(\/m\/)[^/?]+/;
+var API_TOKEN = /^(\/api\/m\/)[^/?]+/;
+var WEBHOOK_SECRET = /^(\/webhook\/bale\/)[^/?]+/;
+function maskSensitivePath(path) {
+  let out = String(path ?? "");
+  out = out.replace(PAGE_TOKEN, `$1${MASKED}`);
+  out = out.replace(API_TOKEN, `$1${MASKED}`);
+  out = out.replace(WEBHOOK_SECRET, `$1${MASKED}`);
+  return out;
+}
+__name(maskSensitivePath, "maskSensitivePath");
+
+// src/application/api-routing/middleware.ts
+function installGlobalMiddleware(app, services) {
+  app.use("*", async (c, next) => {
+    c.set("logger", services.logger);
+    return next();
+  });
+  app.use("/api/*", async (c, next) => {
+    const requestId = `req-${crypto.randomUUID()}`;
+    c.set("requestId", requestId);
+    try {
+      return await runWithRequestId(requestId, () => next());
+    } finally {
+      c.header("X-Request-Id", requestId);
+    }
+  });
+  const apiRateLimiter = makeKeyedRateLimiter(API_RATE_LIMIT_WINDOW_MS);
+  let rateLimitDisabledLogged = false;
+  app.use("/api/*", async (c, next) => {
+    if (c.req.method !== "POST" && c.req.method !== "PUT" && c.req.method !== "PATCH" && c.req.method !== "DELETE") {
+      return next();
+    }
+    if (c.req.path === "/api/auth/login") return next();
+    const perMin = parseApiRateLimitPerMin(c.env?.API_RATE_LIMIT_PER_MIN);
+    if (perMin <= 0) {
+      if (!rateLimitDisabledLogged) {
+        rateLimitDisabledLogged = true;
+        services.logger.child("http").warn("api_rate_limit.disabled", {
+          reason: "API_RATE_LIMIT_PER_MIN=0"
+        });
+      }
+      return next();
+    }
+    const ip = (c.req.header("cf-connecting-ip") ?? "unknown").slice(0, 64);
+    if (!apiRateLimiter.allow(`${perMin}:${ip}`, perMin)) {
+      c.header("Retry-After", String(Math.ceil(API_RATE_LIMIT_WINDOW_MS / 1e3)));
+      throw new RateLimitError(
+        Math.ceil(API_RATE_LIMIT_WINDOW_MS / 1e3),
+        "\u062F\u0631\u062E\u0648\u0627\u0633\u062A\u200C\u0647\u0627\u06CC \u0646\u0648\u0634\u062A\u0646\u06CC \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0645\u062C\u0627\u0632 \u0627\u0633\u062A \u2014 \u06A9\u0645\u06CC \u0628\u0639\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F"
+      );
+    }
+    return next();
+  });
+  const tokenGetLimiter = makeKeyedRateLimiter(API_RATE_LIMIT_WINDOW_MS);
+  let tokenGetDisabledLogged = false;
+  app.use("*", async (c, next) => {
+    if (c.req.method !== "GET") return next();
+    const p = c.req.path;
+    if (!/^\/m\/[^/]+/.test(p) && !p.startsWith("/api/m/")) return next();
+    const perMin = parseTokenGetRateLimitPerMin(c.env?.API_TOKEN_GET_RATE_LIMIT_PER_MIN);
+    if (perMin <= 0) {
+      if (!tokenGetDisabledLogged) {
+        tokenGetDisabledLogged = true;
+        services.logger.child("http").warn("api_token_get_rate_limit.disabled", {
+          reason: "API_TOKEN_GET_RATE_LIMIT_PER_MIN=0"
+        });
+      }
+      return next();
+    }
+    const ip = (c.req.header("cf-connecting-ip") ?? "unknown").slice(0, 64);
+    if (!tokenGetLimiter.allow(`tg:${perMin}:${ip}`, perMin)) {
+      c.header("Retry-After", String(Math.ceil(API_RATE_LIMIT_WINDOW_MS / 1e3)));
+      throw new RateLimitError(
+        Math.ceil(API_RATE_LIMIT_WINDOW_MS / 1e3),
+        "\u062F\u0631\u062E\u0648\u0627\u0633\u062A\u200C\u0647\u0627\u06CC \u0644\u06CC\u0646\u06A9 \u0639\u0645\u0648\u0645\u06CC \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0645\u062C\u0627\u0632 \u0627\u0633\u062A \u2014 \u06A9\u0645\u06CC \u0628\u0639\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F"
+      );
+    }
+    return next();
+  });
+  app.use("*", async (c, next) => {
+    await next();
+    c.header("X-Content-Type-Options", "nosniff");
+    c.header("Referrer-Policy", "strict-origin-when-cross-origin");
+    c.header("X-Frame-Options", "DENY");
+    c.header("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+    c.header("Cross-Origin-Opener-Policy", "same-origin");
+    c.header("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  });
+  app.use("/api/*", async (c, next) => {
+    await next();
+    c.header("Cache-Control", "no-store");
+  });
+  app.use("/public/exercise-files/*", async (c, next) => {
+    await next();
+    c.header("Cache-Control", "private, no-store");
+  });
+  app.use("/public/announcements", async (c, next) => {
+    await next();
+    c.header("Cache-Control", "public, max-age=60");
+  });
+  app.use("*", async (c, next) => {
+    const start = Date.now();
+    await next();
+    services.logger.child("http").info("request", {
+      method: c.req.method,
+      path: maskSensitivePath(c.req.path),
+      // security-005 (۱.۲۷.۷۸) — توکن لینک عمومی و سکرت وب‌هوک به لاگ نمی‌روند
+      status: c.res.status,
+      ms: Date.now() - start
+    });
+  });
+}
+__name(installGlobalMiddleware, "installGlobalMiddleware");
+
+// src/core/human-events/index.ts
+var HUMAN_EVENTS_QUEUE_KEY = "sys_human_events";
+var HUMAN_EVENTS_MAX = 200;
+async function pushHumanEvent(db, msg, source) {
+  try {
+    let list = [];
+    const row = await db.queryOne(`SELECT value FROM settings WHERE key = ?`, [
+      HUMAN_EVENTS_QUEUE_KEY
+    ]);
+    if (row?.value) {
+      const parsed = JSON.parse(row.value);
+      if (Array.isArray(parsed)) list = parsed;
+    }
+    list.push({ ts: (/* @__PURE__ */ new Date()).toISOString(), source, msg });
+    while (list.length > HUMAN_EVENTS_MAX) list.shift();
+    await db.execute(
+      `INSERT INTO settings (key, value, updated_by) VALUES (?, ?, 'system')
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = 'system', updated_at = datetime('now')`,
+      [HUMAN_EVENTS_QUEUE_KEY, JSON.stringify(list)]
+    );
+  } catch {
+  }
+}
+__name(pushHumanEvent, "pushHumanEvent");
+async function readHumanEvents(db, limit = HUMAN_EVENTS_MAX) {
+  try {
+    const row = await db.queryOne(`SELECT value FROM settings WHERE key = ?`, [
+      HUMAN_EVENTS_QUEUE_KEY
+    ]);
+    if (!row?.value) return [];
+    const parsed = JSON.parse(row.value);
+    return Array.isArray(parsed) ? parsed.slice(-limit) : [];
+  } catch {
+    return [];
+  }
+}
+__name(readHumanEvents, "readHumanEvents");
+
+// src/node-sync-runner/status.ts
+var NODE_SYNC_STATUS_MIRROR_KEY = "nodesync:status-mirror-v1";
+var SYNC_MODES = ["auto", "quarantined", "paused_version"];
+var SYNC_STATES = ["idle", "catching_up", "synced", "error", "offline"];
+var FAILURE_KINDS = ["none", "network", "server", "throttled", "auth", "version", "ingest", "unconfigured"];
+var NodeSyncStatusMirrorSchema = external_exports.object({
+  v: external_exports.literal(1),
+  mode: external_exports.enum(SYNC_MODES),
+  state: external_exports.enum(SYNC_STATES),
+  last_pull_cursor_at: external_exports.iso.datetime().nullable(),
+  last_push_ok_at: external_exports.iso.datetime().nullable(),
+  last_pull_ok_at: external_exports.iso.datetime().nullable(),
+  last_error_kind: external_exports.enum(FAILURE_KINDS).nullable(),
+  last_error_at: external_exports.iso.datetime().nullable(),
+  push_watermark: external_exports.iso.datetime().nullable(),
+  client_version: external_exports.string().max(50).nullable(),
+  // ─── موج ۱ — هندشیک نسخه (۱-۴)، ساعت مرجع مرکز (۱-۳)، خلاصهٔ جبران کامل ───
+  version: external_exports.object({
+    client: external_exports.string().min(1).max(50),
+    center: external_exports.string().min(1).max(50),
+    compatible: external_exports.boolean()
+  }).nullable().optional(),
+  clock_drift_minutes: external_exports.number().int().min(0).max(525600).nullable().optional(),
+  clock_warning: external_exports.boolean().optional(),
+  last_catchup: external_exports.object({
+    at: external_exports.iso.datetime(),
+    pulled: external_exports.number().int().min(0),
+    pushed: external_exports.number().int().min(0)
+  }).nullable().optional(),
+  // ─── EXP-1 (نسخهٔ ۳) — نتیجهٔ آخرین آشتی‌ساز؛ آینهٔ قدیمیِ بدونِ آن هم پذیرفته می‌شود ───
+  reconciliation: external_exports.object({
+    at: external_exports.iso.datetime(),
+    ok: external_exports.boolean(),
+    differences: external_exports.number().int().min(0),
+    // سقف ۵ ردیف ناهم‌خوانی — آینهٔ RECONCILE_MAX_DETAIL سمت runner
+    detail: external_exports.array(
+      external_exports.object({
+        domain: external_exports.string().min(1).max(40),
+        center: external_exports.number().int().min(0),
+        local: external_exports.number().int().min(0)
+      })
+    ).max(5).nullable()
+  }).nullable().optional(),
+  updated_at: external_exports.iso.datetime()
+});
+function requireDesktopEngine(c) {
+  if (c.env?.CENTER_DESKTOP_ENGINE !== "1") {
+    throw new NotFoundError("\u0645\u0633\u06CC\u0631 \u06CC\u0627\u0641\u062A \u0646\u0634\u062F");
+  }
+}
+__name(requireDesktopEngine, "requireDesktopEngine");
+async function readMirror(db) {
+  try {
+    const row = await db.queryOne(
+      "SELECT value FROM settings WHERE key = ?",
+      [NODE_SYNC_STATUS_MIRROR_KEY]
+    );
+    if (!row) return null;
+    const parsed = NodeSyncStatusMirrorSchema.safeParse(JSON.parse(row.value));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+__name(readMirror, "readMirror");
+async function writeMirror(db, mirror) {
+  await db.execute(
+    `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')`,
+    [NODE_SYNC_STATUS_MIRROR_KEY, JSON.stringify(mirror)]
+  );
+}
+__name(writeMirror, "writeMirror");
+async function pendingPushCount(db, watermark) {
+  let count = 0;
+  try {
+    if (watermark) {
+      const cutoff = watermark.slice(0, 19).replace("T", " ");
+      const row = await db.queryOne(
+        "SELECT COUNT(*) AS n FROM client_errors WHERE occurred_at > ?",
+        [cutoff]
+      );
+      count += Number(row?.n ?? 0);
+    } else {
+      const row = await db.queryOne("SELECT COUNT(*) AS n FROM client_errors");
+      count += Number(row?.n ?? 0);
+    }
+  } catch {
+  }
+  try {
+    const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
+    const hourBucket = `${nowIso2.slice(0, 13)}:00:00Z`;
+    const dayBucket = `${nowIso2.slice(0, 10)}T00:00:00Z`;
+    const ahead = /* @__PURE__ */ __name((at) => !watermark || Date.parse(at) > Date.parse(watermark), "ahead");
+    if (ahead(hourBucket)) count += 1;
+    if (ahead(dayBucket)) count += 1;
+  } catch {
+  }
+  return count;
+}
+__name(pendingPushCount, "pendingPushCount");
+function cursorAgeDays(cursorAt, nowMs) {
+  const t = Date.parse(cursorAt);
+  if (Number.isNaN(t)) return null;
+  return Math.max(0, Math.round((nowMs - t) / 864e5 * 10) / 10);
+}
+__name(cursorAgeDays, "cursorAgeDays");
+function registerNodeSyncStatusRoute(app, deps) {
+  const log = deps.logger.child("node-sync-status");
+  app.post("/api/node-sync/status", async (c) => {
+    requireDesktopEngine(c);
+    getAuthContext(c);
+    const parsed = NodeSyncStatusMirrorSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) throw new ValidationError("\u0627\u0633\u0646\u067E\u200C\u0634\u0627\u062A \u0648\u0636\u0639\u06CC\u062A \u0633\u06CC\u0646\u06A9 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A");
+    await writeMirror(deps.db, parsed.data);
+    log.info("status_mirror.ok", { state: parsed.data.state, mode: parsed.data.mode });
+    return c.json({ data: { ok: true } }, 200);
+  });
+  app.get("/api/node-sync/status", async (c) => {
+    requireDesktopEngine(c);
+    getAuthContext(c);
+    const mirror = await readMirror(deps.db);
+    const nowMs = Date.now();
+    const errorKind = mirror?.last_error_kind ?? null;
+    const payload = {
+      mode: mirror?.mode ?? "auto",
+      state: mirror?.state ?? "idle",
+      pending_push: await pendingPushCount(deps.db, mirror?.push_watermark ?? null),
+      last_pull_cursor_age_days: mirror?.last_pull_cursor_at ? cursorAgeDays(mirror.last_pull_cursor_at, nowMs) : null,
+      last_push_ok_at: mirror?.last_push_ok_at ?? null,
+      last_pull_ok_at: mirror?.last_pull_ok_at ?? null,
+      last_error: errorKind && errorKind !== "none" && mirror?.last_error_at ? { kind: errorKind, at: mirror.last_error_at } : null,
+      // ─── موج ۱ — آینهٔ غایب/قدیمی = پیش‌فرض نرم (اسنپ‌شات تازه از runner می‌آید) ───
+      version: mirror?.version ?? null,
+      clock_drift_minutes: mirror?.clock_drift_minutes ?? null,
+      clock_warning: mirror?.clock_warning === true,
+      last_catchup: mirror?.last_catchup ?? null,
+      // ─── EXP-1 (نسخهٔ ۳) — آشتی‌ساز؛ آینهٔ قدیمی بدونِ این فیلد = null نرم ───
+      reconciliation: mirror?.reconciliation ?? null
+    };
+    return c.json(payload, 200);
+  });
+}
+__name(registerNodeSyncStatusRoute, "registerNodeSyncStatusRoute");
+
+// src/application/system/zip.ts
+var CRC_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let n = 0; n < 256; n += 1) {
+    let c = n;
+    for (let k = 0; k < 8; k += 1) {
+      c = c & 1 ? 3988292384 ^ c >>> 1 : c >>> 1;
+    }
+    table[n] = c >>> 0;
+  }
+  return table;
+})();
+function crc32(bytes) {
+  let crc = 4294967295;
+  for (let i = 0; i < bytes.length; i += 1) {
+    crc = CRC_TABLE[(crc ^ bytes[i]) & 255] ^ crc >>> 8;
+  }
+  return (crc ^ 4294967295) >>> 0;
+}
+__name(crc32, "crc32");
+function dosDateTime(d) {
+  const date5 = (Math.max(0, d.getUTCFullYear() - 1980) & 127) << 9 | d.getUTCMonth() + 1 << 5 | d.getUTCDate();
+  const time3 = d.getUTCHours() << 11 | d.getUTCMinutes() << 5 | Math.floor(d.getUTCSeconds() / 2);
+  return { date: date5, time: time3 };
+}
+__name(dosDateTime, "dosDateTime");
+function zipText(text) {
+  return new TextEncoder().encode(text);
+}
+__name(zipText, "zipText");
+var U16 = /* @__PURE__ */ __name((v) => [v & 255, v >>> 8 & 255], "U16");
+var U32 = /* @__PURE__ */ __name((v) => [v & 255, v >>> 8 & 255, v >>> 16 & 255, v >>> 24 & 255], "U32");
+function buildStoreZip(entries, now = /* @__PURE__ */ new Date()) {
+  const { date: dosDate, time: dosTime } = dosDateTime(now);
+  const chunks = [];
+  const central = [];
+  let offset = 0;
+  for (const entry of entries) {
+    const nameBytes = zipText(entry.name);
+    const crc = crc32(entry.data);
+    const size = entry.data.length;
+    const lfh = [
+      80,
+      75,
+      3,
+      4,
+      // امضای PK\x03\x04
+      ...U16(20),
+      // نسخهٔ لازم برای استخراج
+      ...U16(2048),
+      // پرچم: نام UTF-8
+      ...U16(0),
+      // روش ذخیره = STORE
+      ...U16(dosTime),
+      ...U16(dosDate),
+      ...U32(crc),
+      ...U32(size),
+      // حجم فشرده‌شده (= خودش در STORE)
+      ...U32(size),
+      // حجم اصلی
+      ...U16(nameBytes.length),
+      ...U16(0)
+      // طول فیلد اضافی
+    ];
+    const lfhBytes = new Uint8Array(lfh);
+    chunks.push(lfhBytes, nameBytes, entry.data);
+    const cd = [
+      80,
+      75,
+      1,
+      2,
+      // امضای PK\x01\x02
+      ...U16(20),
+      ...U16(20),
+      // نسخهٔ ساخت / نسخهٔ لازم
+      ...U16(2048),
+      ...U16(0),
+      ...U16(dosTime),
+      ...U16(dosDate),
+      ...U32(crc),
+      ...U32(size),
+      ...U32(size),
+      ...U16(nameBytes.length),
+      ...U16(0),
+      ...U16(0),
+      // فیلد اضافی / توضیح
+      ...U16(0),
+      ...U16(0),
+      // شماره دیسک / ویژگی‌های درونی
+      ...U32(0),
+      // ویژگی‌های بیرونی
+      ...U32(offset)
+      // آفست local header
+    ];
+    central.push(new Uint8Array(cd), nameBytes);
+    offset += lfhBytes.length + nameBytes.length + size;
+  }
+  const centralStart = offset;
+  let centralSize = 0;
+  for (const c of central) centralSize += c.length;
+  const eocd = [
+    80,
+    75,
+    5,
+    6,
+    // امضای PK\x05\x06
+    ...U16(0),
+    ...U16(0),
+    // شماره دیسک
+    ...U16(entries.length),
+    ...U16(entries.length),
+    ...U32(centralSize),
+    ...U32(centralStart),
+    ...U16(0)
+    // طول توضیح
+  ];
+  const total = centralStart + centralSize + eocd.length;
+  const out = new Uint8Array(total);
+  let pos = 0;
+  for (const c of [...chunks, ...central, new Uint8Array(eocd)]) {
+    out.set(c, pos);
+    pos += c.length;
+  }
+  return out;
+}
+__name(buildStoreZip, "buildStoreZip");
+
+// src/application/system/error-package.ts
+var AUDIT_TAIL = 100;
+var CLIENT_ERRORS_TAIL = 50;
+var HUMAN_EVENTS_TAIL = 200;
+async function readSyncMirrorSoft(db) {
+  try {
+    const row = await db.queryOne("SELECT value FROM settings WHERE key = ?", [
+      NODE_SYNC_STATUS_MIRROR_KEY
+    ]);
+    if (!row?.value) return null;
+    const parsed = JSON.parse(row.value);
+    if (!parsed || typeof parsed !== "object") return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+__name(readSyncMirrorSoft, "readSyncMirrorSoft");
+async function pendingPushSoft(db, watermark) {
+  try {
+    let count = 0;
+    if (watermark) {
+      const cutoff = watermark.slice(0, 19).replace("T", " ");
+      const row = await db.queryOne("SELECT COUNT(*) AS n FROM client_errors WHERE occurred_at > ?", [cutoff]);
+      count += Number(row?.n ?? 0);
+    } else {
+      const row = await db.queryOne("SELECT COUNT(*) AS n FROM client_errors");
+      count += Number(row?.n ?? 0);
+    }
+    const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
+    const ahead = /* @__PURE__ */ __name((at) => !watermark || Date.parse(at) > Date.parse(watermark), "ahead");
+    if (ahead(`${nowIso2.slice(0, 13)}:00:00Z`)) count += 1;
+    if (ahead(`${nowIso2.slice(0, 10)}T00:00:00Z`)) count += 1;
+    return count;
+  } catch {
+    return null;
+  }
+}
+__name(pendingPushSoft, "pendingPushSoft");
+function readmeText(status) {
+  return [
+    "\u0628\u0633\u062A\u0647\u0654 \u06AF\u0632\u0627\u0631\u0634 \u062E\u0637\u0627 \u2014 \u0633\u0627\u0645\u0627\u0646\u0647\u0654 \u0645\u0631\u06A9\u0632 \u062C\u0627\u0645\u0639",
+    "===================================",
+    "",
+    "\u0627\u06CC\u0646 \u0628\u0633\u062A\u0647 \u0628\u0631\u0627\u06CC \u0627\u0631\u0633\u0627\u0644 \u0628\u0647 \u067E\u0634\u062A\u06CC\u0628\u0627\u0646\u06CC \u0633\u0627\u062E\u062A\u0647 \u0634\u062F\u0647 \u0627\u0633\u062A \u0648 \u0634\u0627\u0645\u0644 \u0645\u0648\u0627\u0631\u062F \u0632\u06CC\u0631 \u0627\u0633\u062A:",
+    "  \u2022 status.json \u2014 \u0648\u0636\u0639\u06CC\u062A \u0641\u0646\u06CC \u0644\u062D\u0638\u0647\u0654 \u0633\u0627\u062E\u062A: \u0646\u0633\u062E\u0647\u0654 \u0628\u0631\u0646\u0627\u0645\u0647 \u0648 \u0645\u0648\u062A\u0648\u0631\u060C \u0646\u0633\u062E\u0647\u0654 \u0645\u0631\u06A9\u0632 (\u0627\u06AF\u0631 \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0628\u0627\u0634\u062F)\u060C",
+    "    \u0634\u0645\u0627\u0631 \u0631\u06A9\u0648\u0631\u062F\u0647\u0627\u06CC \u062F\u0631 \u0627\u0646\u062A\u0638\u0627\u0631 \u0647\u0645\u200C\u06AF\u0627\u0645\u200C\u0633\u0627\u0632\u06CC\u060C \u0648 \u0645\u062D\u06CC\u0637 \u0627\u062C\u0631\u0627.",
+    "  \u2022 human-events.txt \u2014 \u06AF\u0632\u0627\u0631\u0634 \u0631\u0648\u06CC\u062F\u0627\u062F\u0647\u0627\u06CC \u0645\u0647\u0645 \u0633\u0627\u0645\u0627\u0646\u0647 \u0628\u0647 \u0641\u0627\u0631\u0633\u06CC \u0633\u0627\u062F\u0647 (\u0631\u06CC\u200C\u0627\u0633\u062A\u0627\u0631\u062A\u060C \u067E\u0634\u062A\u06CC\u0628\u0627\u0646\u060C \u0628\u0627\u0632\u0633\u0627\u0632\u06CC\u060C \u0633\u06CC\u0646\u06A9).",
+    "  \u2022 audit-tail.txt \u2014 \u0622\u062E\u0631\u06CC\u0646 \u0631\u0648\u06CC\u062F\u0627\u062F\u0647\u0627\u06CC \u0645\u0645\u06CC\u0632\u06CC \u0633\u0627\u0645\u0627\u0646\u0647 (\u06F1\u06F0\u06F0 \u0631\u0648\u06CC\u062F\u0627\u062F \u0622\u062E\u0631).",
+    "  \u2022 client-errors-tail.txt \u2014 \u0622\u062E\u0631\u06CC\u0646 \u062E\u0637\u0627\u0647\u0627\u06CC \u06AF\u0632\u0627\u0631\u0634\u200C\u0634\u062F\u0647 \u0627\u0632 \u0645\u0631\u0648\u0631\u06AF\u0631.",
+    "",
+    "\u0646\u06A9\u062A\u0647: \u0644\u0627\u06AF \u062E\u0627\u0645 \u0645\u0648\u062A\u0648\u0631 (workerd.log) \u0631\u0648\u06CC \u062F\u06CC\u0633\u06A9\u0650 \u062F\u0633\u062A\u06AF\u0627\u0647 \u0646\u0632\u062F \u0646\u0627\u0638\u0631 \u0628\u0631\u0646\u0627\u0645\u0647 \u0646\u06AF\u0647\u200C\u062F\u0627\u0631\u06CC \u0645\u06CC\u200C\u0634\u0648\u062F \u0648 \u0627\u0632",
+    "\u062F\u0627\u062E\u0644 \u0633\u0646\u062F\u0628\u0627\u06A9\u0633 \u0627\u0645\u0646 \u0628\u0631\u0646\u0627\u0645\u0647 \u062E\u0648\u0627\u0646\u062F\u0646\u06CC \u0646\u06CC\u0633\u062A\u061B \u062F\u0631 \u0635\u0648\u0631\u062A \u0646\u06CC\u0627\u0632\u060C \u067E\u0634\u062A\u06CC\u0628\u0627\u0646\u06CC \u0647\u0645\u0627\u0646 \u0641\u0627\u06CC\u0644 \u0631\u0627 \u0627\u0632 \u067E\u0648\u0634\u0647\u0654 \u062F\u0627\u062F\u0647",
+    "\u0645\u0637\u0627\u0644\u0628\u0647 \u0645\u06CC\u200C\u06A9\u0646\u062F. \u0647\u06CC\u0686\u200C\u06CC\u06A9 \u0627\u0632 \u0645\u062D\u062A\u0648\u0627\u06CC \u0627\u06CC\u0646 \u0628\u0633\u062A\u0647 \u0631\u0645\u0632 \u06CC\u0627 \u062A\u0648\u06A9\u0646 \u0646\u06CC\u0633\u062A \u0648 \u0627\u0631\u0633\u0627\u0644 \u0622\u0646 \u0628\u0647 \u067E\u0634\u062A\u06CC\u0628\u0627\u0646\u06CC \u0628\u06CC\u200C\u062E\u0637\u0631 \u0627\u0633\u062A.",
+    "",
+    `\u0646\u0633\u062E\u0647\u0654 \u0628\u0631\u0646\u0627\u0645\u0647: ${status.app_version} \u2014 \u0644\u062D\u0638\u0647\u0654 \u0633\u0627\u062E\u062A: ${status.generated_at}`,
+    ""
+  ].join("\n");
+}
+__name(readmeText, "readmeText");
+async function auditTailText(db) {
+  try {
+    const rows = await db.query(
+      `SELECT id, created_at, actor_id, action, resource_type, resource_id FROM audit_log
+       ORDER BY created_at DESC, id DESC LIMIT ${AUDIT_TAIL}`
+    );
+    return rows.map((r) => `[${r.created_at}] ${r.actor_id} \u2014 ${r.action} (${r.resource_type}/${r.resource_id})`).join("\n") + "\n";
+  } catch {
+    return "audit_log \u062E\u0648\u0627\u0646\u062F\u0647 \u0646\u0634\u062F\n";
+  }
+}
+__name(auditTailText, "auditTailText");
+async function clientErrorsTailText(db) {
+  try {
+    const rows = await db.query(
+      `SELECT occurred_at, kind, message FROM client_errors
+       ORDER BY occurred_at DESC, id DESC LIMIT ${CLIENT_ERRORS_TAIL}`
+    );
+    return rows.map((r) => `[${r.occurred_at}] ${r.kind}: ${String(r.message ?? "").slice(0, 200)}`).join("\n") + "\n";
+  } catch {
+    return "client_errors \u062E\u0648\u0627\u0646\u062F\u0647 \u0646\u0634\u062F\n";
+  }
+}
+__name(clientErrorsTailText, "clientErrorsTailText");
+function errorPackageStamp(d = /* @__PURE__ */ new Date()) {
+  const p = /* @__PURE__ */ __name((n) => String(n).padStart(2, "0"), "p");
+  return `${d.getUTCFullYear()}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}-${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}`;
+}
+__name(errorPackageStamp, "errorPackageStamp");
+async function buildErrorPackage(db, opts = {}) {
+  const mirror = await readSyncMirrorSoft(db);
+  const status = {
+    generated_at: (/* @__PURE__ */ new Date()).toISOString(),
+    app_version: APP_VERSION,
+    engine_version: APP_VERSION,
+    env: opts.envName ?? null,
+    center_version: typeof mirror?.version?.center === "string" ? mirror.version.center : null,
+    pending_push: await pendingPushSoft(db, mirror?.push_watermark ?? null),
+    // سینک pull بر پایهٔ cursor است و «شمار رکورد در انتظار دریافتی» سمت مرکز شمرده می‌شود؛
+    // از نود برآورد قابل‌اعتمادی ندارد — صادقانه null (طرح: «مشخص نبودن خودش خطاست» ولی
+    // عددِ دروغین بدتر است؛ ردیف سینک پنل همین را با state نشان می‌دهد)
+    pending_pull: null
+  };
+  const events = await readHumanEvents(db, HUMAN_EVENTS_TAIL);
+  const humanEventsText = events.map((e) => `[${e.ts}] ${e.msg} (\u0645\u0646\u0628\u0639: ${e.source})`).join("\n") + "\n";
+  const entries = [
+    { name: "status.json", data: zipText(JSON.stringify(status, null, 2)) },
+    { name: "human-events.txt", data: zipText(humanEventsText) },
+    { name: "audit-tail.txt", data: zipText(await auditTailText(db)) },
+    { name: "client-errors-tail.txt", data: zipText(await clientErrorsTailText(db)) },
+    { name: "readme.txt", data: zipText(readmeText(status)) }
+  ];
+  return {
+    bytes: buildStoreZip(entries),
+    filename: `error-package-${errorPackageStamp()}.zip`,
+    status
+  };
+}
+__name(buildErrorPackage, "buildErrorPackage");
+
+// src/application/system/routes.ts
+var RESTART_MARKER_KEY = "sys_restart_scheduled";
+var restartFlag = false;
+function isRestartScheduled() {
+  return restartFlag;
+}
+__name(isRestartScheduled, "isRestartScheduled");
+function parseLanInfo(raw2) {
+  if (typeof raw2 !== "string" || !raw2) return null;
+  let p = null;
+  try {
+    p = JSON.parse(raw2);
+  } catch {
+    return null;
+  }
+  if (!p || typeof p !== "object") return null;
+  const o = p;
+  const port = Number(o.port);
+  const gamesPort = Number(o.games_port);
+  if (!Number.isFinite(port) || port <= 0) return null;
+  const ips = Array.isArray(o.lan_ips) ? o.lan_ips.filter((x) => typeof x === "string" && !!x) : [];
+  const urls = Array.isArray(o.main_urls) ? o.main_urls.filter((x) => typeof x === "string" && !!x) : [];
+  const gameUrls = Array.isArray(o.games_urls) ? o.games_urls.filter((x) => typeof x === "string" && !!x) : [];
+  return {
+    host: typeof o.host === "string" && o.host ? o.host : "0.0.0.0",
+    port,
+    games_port: Number.isFinite(gamesPort) && gamesPort > 0 ? gamesPort : 0,
+    lan_ips: ips,
+    main_urls: urls,
+    local_url: typeof o.local_url === "string" && o.local_url ? o.local_url : `http://127.0.0.1:${port}`,
+    games_urls: gameUrls,
+    games_local_url: typeof o.games_local_url === "string" && o.games_local_url ? o.games_local_url : "",
+    boot_at: typeof o.boot_at === "string" && o.boot_at ? o.boot_at : null
+  };
+}
+__name(parseLanInfo, "parseLanInfo");
+function registerSystemPublicRoutes(app, deps) {
+  app.get("/api/system/restart-status", async (c) => {
+    let scheduled = false;
+    try {
+      const row = await deps.db.queryOne("SELECT value FROM settings WHERE key = ?", [
+        RESTART_MARKER_KEY
+      ]);
+      scheduled = Boolean(row?.value);
+    } catch {
+      scheduled = isRestartScheduled();
+    }
+    return c.json({ ok: true, scheduled }, 200, { "Cache-Control": "no-store" });
+  });
+}
+__name(registerSystemPublicRoutes, "registerSystemPublicRoutes");
+function registerSystemRoutes(app, deps) {
+  app.post("/api/system/restart", requireRole("manager"), async (c) => {
+    const actor = getAuthContext(c);
+    const already = restartFlag;
+    restartFlag = true;
+    try {
+      await deps.db.execute(
+        `INSERT INTO settings (key, value, updated_by, updated_at)
+         VALUES (?, ?, ?, datetime('now'))
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = excluded.updated_by, updated_at = datetime('now')`,
+        [RESTART_MARKER_KEY, JSON.stringify({ ts: (/* @__PURE__ */ new Date()).toISOString(), actor_id: actor.staffId }), actor.staffId]
+      );
+    } catch (err) {
+      deps.logger.warn("system.restart.marker_failed", { error: err instanceof Error ? err.message : String(err) });
+    }
+    try {
+      await deps.audit.log({
+        actorId: actor.staffId,
+        action: "system.restart_request",
+        resourceType: "system",
+        resourceId: "engine",
+        changes: { scheduled: { from: null, to: true }, already: { from: null, to: already } }
+      });
+    } catch (err) {
+      deps.logger.warn("system.restart.audit_failed", { error: err instanceof Error ? err.message : String(err) });
+    }
+    await pushHumanEvent(deps.db, "\u0631\u0627\u0647\u200C\u0627\u0646\u062F\u0627\u0632\u06CC \u062F\u0648\u0628\u0627\u0631\u0647\u0654 \u0633\u0627\u0645\u0627\u0646\u0647 \u0627\u0632 \u067E\u0646\u0644", "panel");
+    return c.json(already ? { ok: true, scheduled: true, already: true } : { ok: true, scheduled: true }, 200, {
+      "Cache-Control": "no-store"
+    });
+  });
+  app.get("/api/support/error-package", requireRole("manager"), async (c) => {
+    const pkg = await buildErrorPackage(deps.db, { envName: deps.envName ?? null });
+    try {
+      await deps.audit.log({
+        actorId: getAuthContext(c).staffId,
+        action: "system.error_package",
+        resourceType: "support",
+        resourceId: pkg.filename
+      });
+    } catch (err) {
+      deps.logger.warn("system.error_package.audit_failed", { error: err instanceof Error ? err.message : String(err) });
+    }
+    return new Response(pkg.bytes, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/zip",
+        "Content-Disposition": `attachment; filename="${pkg.filename}"`,
+        "Cache-Control": "no-store"
+      }
+    });
+  });
+  app.get("/api/system/lan", requireRole("manager"), async (c) => {
+    const lan = parseLanInfo(c.env?.LAN_INFO);
+    return c.json({ ok: true, lan }, 200, { "Cache-Control": "no-store" });
+  });
+}
+__name(registerSystemRoutes, "registerSystemRoutes");
+
+// src/application/engine-capabilities/routes.ts
+var ENGINE_PUBLIC_API_MAP = {
+  health: "/health",
+  restartStatus: "/api/system/restart-status",
+  instanceSync: "/api/instance-sync",
+  healthPanel: "/api/health/panel",
+  nodeSyncStatus: "/api/node-sync/status"
+};
+function registerEngineCapabilitiesRoutes(app) {
+  app.get(
+    "/api/engine/capabilities",
+    (c) => c.json(
+      {
+        ok: true,
+        version: APP_VERSION,
+        server_ts: (/* @__PURE__ */ new Date()).toISOString(),
+        api: ENGINE_PUBLIC_API_MAP
+      },
+      200,
+      { "Cache-Control": "no-store" }
+    )
+  );
+}
+__name(registerEngineCapabilitiesRoutes, "registerEngineCapabilitiesRoutes");
+
+// src/application/excel-import/registry.ts
+var IMPORT_ROWS_MAX = 500;
+var SCHOOL_KIND_OPTIONS = [
+  { value: "school", label: "\u0645\u062F\u0631\u0633\u0647" },
+  { value: "kindergarten", label: "\u0645\u0647\u062F\u06A9\u0648\u062F\u06A9" }
+];
+var GENDER_OPTIONS = [
+  { value: "mixed", label: "\u0645\u062E\u062A\u0644\u0637", aliases: ["\u0645\u062E\u0644\u0648\u0637", "\u0647\u0631 \u062F\u0648"] },
+  { value: "male", label: "\u067E\u0633\u0631\u0627\u0646\u0647", aliases: ["\u067E\u0633\u0631"] },
+  { value: "female", label: "\u062F\u062E\u062A\u0631\u0627\u0646\u0647", aliases: ["\u062F\u062E\u062A\u0631"] }
+];
+var PLAN_STATUS_OPTIONS = [
+  { value: "planned", label: CLEARBOOK_PLAN_STATUS_LABELS.planned, aliases: ["\u0628\u0631\u0646\u0627\u0645\u0647 \u0631\u06CC\u0632\u06CC \u0634\u062F\u0647", "planned"] },
+  { value: "active", label: CLEARBOOK_PLAN_STATUS_LABELS.active, aliases: ["\u062F\u0631\u062C\u0631\u06CC\u0627\u0646", "\u062C\u0627\u0631\u06CC", "active"] },
+  { value: "done", label: CLEARBOOK_PLAN_STATUS_LABELS.done, aliases: ["\u062A\u06A9\u0645\u06CC\u0644 \u0634\u062F\u0647", "\u062A\u06A9\u0645\u06CC\u0644\u0634\u062F\u0647", "\u0627\u0646\u062C\u0627\u0645 \u0634\u062F\u0647", "\u067E\u0627\u06CC\u0627\u0646 \u06CC\u0627\u0641\u062A\u0647", "done"] }
+];
+var IMPORT_ENTITIES = [
+  {
+    key: "schools",
+    title: "\u0627\u0637\u0644\u0627\u0639\u0627\u062A \u0645\u062F\u0627\u0631\u0633",
+    hint: "\u0645\u062F\u0627\u0631\u0633 \u0648 \u0645\u0647\u062F\u06A9\u0648\u062F\u06A9\u200C\u0647\u0627\u06CC \u0647\u0645\u06A9\u0627\u0631 \u0645\u0631\u06A9\u0632 \u0631\u0627 \u06CC\u06A9\u200C\u062C\u0627 \u0648\u0627\u0631\u062F \u06A9\u0646\u06CC\u062F. \u0631\u062F\u06CC\u0641\u06CC \u06A9\u0647 \xAB\u0646\u0627\u0645 \u0645\u062F\u0631\u0633\u0647\xBB \u0622\u0646 \u0642\u0628\u0644\u0627\u064B \u062B\u0628\u062A \u0634\u062F\u0647 \u0628\u0627\u0634\u062F \u0648\u06CC\u0631\u0627\u06CC\u0634 \u0645\u06CC\u200C\u0634\u0648\u062F \u0648 \u0631\u062F\u06CC\u0641 \u062A\u0627\u0632\u0647 \u0627\u0636\u0627\u0641\u0647 \u0645\u06CC\u200C\u0634\u0648\u062F.",
+    roles: ["manager"],
+    listUrl: "/api/schools",
+    keyLabel: "\u0646\u0627\u0645 \u0645\u062F\u0631\u0633\u0647",
+    columns: [
+      {
+        key: "name",
+        recordKey: "name",
+        label: "\u0646\u0627\u0645 \u0645\u062F\u0631\u0633\u0647",
+        type: "text",
+        required: true,
+        maxLength: 200,
+        width: 32,
+        help: "\u0646\u0627\u0645 \u06A9\u0627\u0645\u0644 \u0645\u062F\u0631\u0633\u0647 \u06CC\u0627 \u0645\u0647\u062F\u06A9\u0648\u062F\u06A9 \u2014 \u06A9\u0644\u06CC\u062F \u062A\u0634\u062E\u06CC\u0635 \u0648\u06CC\u0631\u0627\u06CC\u0634\u061B \u0627\u06AF\u0631 \u0647\u0645\u06CC\u0646 \u0646\u0627\u0645 \u0642\u0628\u0644\u0627\u064B \u062B\u0628\u062A \u0634\u062F\u0647 \u0628\u0627\u0634\u062F \u0622\u0646 \u0631\u062F\u06CC\u0641 \u0648\u06CC\u0631\u0627\u06CC\u0634 \u0645\u06CC\u200C\u0634\u0648\u062F",
+        example: "\u062F\u0628\u0633\u062A\u0627\u0646 \u0634\u0647\u06CC\u062F \u0645\u0637\u0647\u0631\u06CC"
+      },
+      {
+        key: "kind",
+        recordKey: "kind",
+        label: "\u0646\u0648\u0639",
+        type: "enum",
+        options: SCHOOL_KIND_OPTIONS,
+        width: 12,
+        help: "\u062E\u0627\u0644\u06CC = \u0645\u062F\u0631\u0633\u0647 (\u062F\u0631 \u0627\u0641\u0632\u0648\u062F\u0646) / \u0628\u062F\u0648\u0646 \u062A\u063A\u06CC\u06CC\u0631 (\u062F\u0631 \u0648\u06CC\u0631\u0627\u06CC\u0634)",
+        example: "\u0645\u062F\u0631\u0633\u0647"
+      },
+      {
+        key: "gender_type",
+        recordKey: "genderType",
+        label: "\u062C\u0646\u0633\u06CC\u062A",
+        type: "enum",
+        options: GENDER_OPTIONS,
+        width: 12,
+        help: "\u062E\u0627\u0644\u06CC = \u0628\u062F\u0648\u0646 \u062A\u063A\u06CC\u06CC\u0631 (\u062F\u0631 \u0648\u06CC\u0631\u0627\u06CC\u0634) \u0648 \u062E\u0627\u0644\u06CC \u062B\u0628\u062A \u0645\u06CC\u200C\u0634\u0648\u062F (\u062F\u0631 \u0627\u0641\u0632\u0648\u062F\u0646)",
+        example: "\u0645\u062E\u062A\u0644\u0637"
+      },
+      {
+        key: "code",
+        recordKey: "code",
+        label: "\u06A9\u062F \u0645\u062F\u0631\u0633\u0647",
+        type: "code",
+        maxLength: 20,
+        width: 14,
+        help: "\u06A9\u062F \u06CC\u06A9\u062A\u0627\u06CC \u0622\u0645\u0648\u0632\u0634\u200C\u0648\u067E\u0631\u0648\u0631\u0634\u061B \u0627\u06AF\u0631 \u0647\u0645\u06CC\u0646 \u06A9\u062F \u0628\u0631\u0627\u06CC \u0645\u062F\u0631\u0633\u0647\u0654 \u062F\u06CC\u06AF\u0631\u06CC \u062B\u0628\u062A \u0628\u0627\u0634\u062F \u0622\u0646 \u0631\u062F\u06CC\u0641 \u062E\u0637\u0627 \u0645\u06CC\u200C\u06AF\u06CC\u0631\u062F",
+        example: "44990002"
+      },
+      {
+        key: "phone",
+        recordKey: "phone",
+        label: "\u062A\u0644\u0641\u0646",
+        type: "phone",
+        maxLength: 20,
+        width: 16,
+        help: "\u062A\u0644\u0641\u0646 \u0645\u062F\u0631\u0633\u0647 \u2014 \u0628\u0647\u062A\u0631 \u0627\u0633\u062A \u0633\u0644\u0648\u0644 \xAB\u0645\u062A\u0646\xBB \u0628\u0627\u0634\u062F \u062A\u0627 \u0635\u0641\u0631 \u0627\u0648\u0644 \u062D\u0630\u0641 \u0646\u0634\u0648\u062F",
+        example: "021-12345678"
+      },
+      {
+        key: "principal_name",
+        recordKey: "principalName",
+        label: "\u0646\u0627\u0645 \u0645\u062F\u06CC\u0631",
+        type: "text",
+        maxLength: 120,
+        width: 18,
+        help: "\u0646\u0627\u0645 \u0645\u062F\u06CC\u0631 \u0645\u062F\u0631\u0633\u0647 \u0628\u0631\u0627\u06CC \u0627\u0631\u062A\u0628\u0627\u0637 \u0645\u0631\u06A9\u0632 \u0628\u0627 \u0645\u062F\u0631\u0633\u0647",
+        example: "\u0622\u0642\u0627\u06CC \u0627\u062D\u0645\u062F\u06CC"
+      },
+      {
+        key: "principal_phone",
+        recordKey: "principalPhone",
+        label: "\u062A\u0644\u0641\u0646 \u0645\u062F\u06CC\u0631",
+        type: "phone",
+        maxLength: 20,
+        width: 16,
+        help: "\u0634\u0645\u0627\u0631\u0647\u0654 \u0647\u0645\u0631\u0627\u0647 \u0645\u062F\u06CC\u0631 \u0645\u062F\u0631\u0633\u0647",
+        example: "09121234567"
+      },
+      {
+        key: "address",
+        recordKey: "address",
+        label: "\u0646\u0634\u0627\u0646\u06CC",
+        type: "longtext",
+        maxLength: 500,
+        width: 44,
+        help: "\u0646\u0634\u0627\u0646\u06CC \u06A9\u0627\u0645\u0644 \u0645\u062F\u0631\u0633\u0647"
+      },
+      {
+        key: "notes",
+        recordKey: "notes",
+        label: "\u06CC\u0627\u062F\u062F\u0627\u0634\u062A",
+        type: "longtext",
+        maxLength: 500,
+        width: 44,
+        help: "\u0646\u06A9\u0627\u062A \u062F\u0627\u062F\u0647\u060C \u0634\u0645\u0627\u0631\u0647\u200C\u0647\u0627\u06CC \u062C\u0627\u06CC\u06AF\u0632\u06CC\u0646 \u0648\u2026"
+      }
+    ]
+  },
+  {
+    key: "school-classes",
+    title: "\u06A9\u0644\u0627\u0633\u200C\u0647\u0627 \u0648 \u0645\u0639\u0644\u0645\u0627\u0646 \u0645\u062F\u0627\u0631\u0633",
+    hint: "\u0647\u0631 \u0633\u0637\u0631 \u06CC\u06A9 \u06A9\u0644\u0627\u0633 \u0627\u0633\u062A: \u0646\u0627\u0645 \u0645\u062F\u0631\u0633\u0647 (\u0628\u0627\u06CC\u062F \u0642\u0628\u0644\u0627\u064B \u062B\u0628\u062A \u0634\u062F\u0647 \u0628\u0627\u0634\u062F) + \u0646\u0627\u0645 \u06A9\u0644\u0627\u0633 + \u0646\u0627\u0645 \u0645\u0639\u0644\u0645 \u0648 \u062A\u0644\u0641\u0646 \u0627\u0648. \u0627\u06AF\u0631 \xAB\u0646\u0627\u0645 \u0645\u062F\u0631\u0633\u0647 + \u0646\u0627\u0645 \u06A9\u0644\u0627\u0633\xBB \u0642\u0628\u0644\u0627\u064B \u062B\u0628\u062A \u0634\u062F\u0647 \u0628\u0627\u0634\u062F \u0647\u0645\u0627\u0646 \u06A9\u0644\u0627\u0633 \u0648\u06CC\u0631\u0627\u06CC\u0634 \u0645\u06CC\u200C\u0634\u0648\u062F\u061B \u06A9\u0644\u0627\u0633 \u063A\u06CC\u0631\u0641\u0639\u0627\u0644\u0650 \u0647\u0645\u200C\u0646\u0627\u0645 \u062F\u0648\u0628\u0627\u0631\u0647 \u0641\u0639\u0627\u0644 \u0645\u06CC\u200C\u0634\u0648\u062F.",
+    roles: ["manager"],
+    listUrl: "/api/classes",
+    keyLabel: "\u0646\u0627\u0645 \u0645\u062F\u0631\u0633\u0647 + \u0646\u0627\u0645 \u06A9\u0644\u0627\u0633",
+    columns: [
+      {
+        key: "school",
+        recordKey: "schoolName",
+        label: "\u0646\u0627\u0645 \u0645\u062F\u0631\u0633\u0647",
+        type: "text",
+        required: true,
+        maxLength: 200,
+        width: 30,
+        help: "\u062F\u0642\u06CC\u0642\u0627\u064B \u0647\u0645\u0627\u0646 \u0646\u0627\u0645 \u0645\u062F\u0631\u0633\u0647\u0654 \u062B\u0628\u062A\u200C\u0634\u062F\u0647 \u062F\u0631 \u0628\u062E\u0634 \u0645\u062F\u0627\u0631\u0633 \u2014 \u06A9\u0644\u0627\u0633 \u0628\u0647 \u0622\u0646 \u0648\u0635\u0644 \u0645\u06CC\u200C\u0634\u0648\u062F\u061B \u0645\u062F\u0631\u0633\u0647\u0654 \u0646\u0627\u0634\u0646\u0627\u062E\u062A\u0647 \u062E\u0637\u0627 \u0645\u06CC\u200C\u06AF\u06CC\u0631\u062F",
+        example: "\u062F\u0628\u0633\u062A\u0627\u0646 \u0634\u0647\u06CC\u062F \u0645\u0637\u0647\u0631\u06CC"
+      },
+      {
+        key: "class_name",
+        recordKey: "name",
+        label: "\u0646\u0627\u0645 \u06A9\u0644\u0627\u0633",
+        type: "text",
+        required: true,
+        maxLength: 120,
+        width: 18,
+        help: "\u06A9\u0644\u06CC\u062F \u062A\u0634\u062E\u06CC\u0635 \u0648\u06CC\u0631\u0627\u06CC\u0634 \u0647\u0645\u0631\u0627\u0647 \u0646\u0627\u0645 \u0645\u062F\u0631\u0633\u0647 \u2014 \u0645\u062B\u0644 \xAB\u067E\u0646\u062C\u0645 \u0627\u0644\u0641\xBB \u06CC\u0627 \xAB\u0645\u0647\u0631 \u06F1\u06F4\u06F0\u06F5\xBB",
+        example: "\u067E\u0646\u062C\u0645 \u0627\u0644\u0641"
+      },
+      {
+        key: "teacher_name",
+        recordKey: "teacherName",
+        label: "\u0646\u0627\u0645 \u0645\u0639\u0644\u0645 \u06A9\u0644\u0627\u0633",
+        type: "text",
+        maxLength: 120,
+        width: 22,
+        help: "\u0646\u0627\u0645 \u0648 \u0646\u0627\u0645\u200C\u062E\u0627\u0646\u0648\u0627\u062F\u06AF\u06CC \u0645\u0639\u0644\u0645\u0650 \u0647\u0645\u0627\u0646 \u06A9\u0644\u0627\u0633 \u2014 \u062E\u0627\u0644\u06CC = \u0628\u062F\u0648\u0646 \u062A\u063A\u06CC\u06CC\u0631 (\u062F\u0631 \u0648\u06CC\u0631\u0627\u06CC\u0634)",
+        example: "\u062E\u0627\u0646\u0645 \u0631\u0636\u0627\u06CC\u06CC"
+      },
+      {
+        key: "teacher_phone",
+        recordKey: "teacherPhone",
+        label: "\u062A\u0644\u0641\u0646 \u0645\u0639\u0644\u0645",
+        type: "phone",
+        maxLength: 20,
+        width: 18,
+        help: "\u0634\u0645\u0627\u0631\u0647\u0654 \u0647\u0645\u0631\u0627\u0647 \u0645\u0639\u0644\u0645 \u06A9\u0644\u0627\u0633 \u2014 \u0633\u0644\u0648\u0644 \xAB\u0645\u062A\u0646\xBB \u0628\u0627\u0634\u062F \u062A\u0627 \u0635\u0641\u0631 \u0627\u0648\u0644 \u062D\u0630\u0641 \u0646\u0634\u0648\u062F\u061B \u062E\u0627\u0644\u06CC = \u0628\u062F\u0648\u0646 \u062A\u063A\u06CC\u06CC\u0631",
+        example: "09131234567"
+      }
+    ]
+  },
+  {
+    key: "clearbook-plans",
+    title: "\u062A\u0642\u0648\u06CC\u0645 \u0627\u062C\u0631\u0627\u06CC\u06CC \u06A9\u0644\u0631 \u0628\u0648\u06A9",
+    hint: "\u0641\u0627\u0632\u0647\u0627\u06CC \u062A\u0642\u0648\u06CC\u0645 \u0627\u062C\u0631\u0627\u06CC\u06CC \u0633\u0627\u0644\u0627\u0646\u0647\u0654 \u0645\u0631\u06A9\u0632 \u0631\u0627 \u06CC\u06A9\u200C\u062C\u0627 \u0648\u0627\u0631\u062F \u06A9\u0646\u06CC\u062F. \u0641\u0627\u0632\u06CC \u06A9\u0647 \xAB\u0639\u0646\u0648\u0627\u0646 \u0641\u0627\u0632\xBB \u0622\u0646 \u0642\u0628\u0644\u0627\u064B \u062B\u0628\u062A \u0634\u062F\u0647 \u0628\u0627\u0634\u062F \u0648\u06CC\u0631\u0627\u06CC\u0634 \u0645\u06CC\u200C\u0634\u0648\u062F \u0648 \u0641\u0627\u0632 \u062A\u0627\u0632\u0647 \u062F\u0631 \u0627\u0646\u062A\u0647\u0627\u06CC \u062A\u0642\u0648\u06CC\u0645 \u0627\u0636\u0627\u0641\u0647 \u0645\u06CC\u200C\u0634\u0648\u062F. \u062A\u0627\u0631\u06CC\u062E\u200C\u0647\u0627 \u0634\u0645\u0633\u06CC \u0648\u0627\u0631\u062F \u0634\u0648\u0646\u062F.",
+    roles: ["manager", "secretary"],
+    listUrl: "/api/clearbook/plans",
+    keyLabel: "\u0639\u0646\u0648\u0627\u0646 \u0641\u0627\u0632",
+    columns: [
+      {
+        key: "title",
+        recordKey: "title",
+        label: "\u0639\u0646\u0648\u0627\u0646 \u0641\u0627\u0632 (\u062E\u0637\u06CC\u0647 \u0627\u062C\u0631\u0627\u06CC\u06CC)",
+        type: "text",
+        required: true,
+        maxLength: 150,
+        width: 36,
+        help: "\u06A9\u0644\u06CC\u062F \u062A\u0634\u062E\u06CC\u0635 \u0648\u06CC\u0631\u0627\u06CC\u0634\u061B \u0627\u06AF\u0631 \u0647\u0645\u06CC\u0646 \u0639\u0646\u0648\u0627\u0646 \u0642\u0628\u0644\u0627\u064B \u062B\u0628\u062A \u0634\u062F\u0647 \u0628\u0627\u0634\u062F \u0622\u0646 \u0641\u0627\u0632 \u0648\u06CC\u0631\u0627\u06CC\u0634 \u0645\u06CC\u200C\u0634\u0648\u062F",
+        example: "\u0647\u0641\u062A\u0647\u0654 \u0627\u0648\u0644 \u0645\u0647\u0631 \u2014 \u0622\u0645\u0627\u062F\u0647\u200C\u0633\u0627\u0632\u06CC \u0648 \u062A\u0648\u062C\u06CC\u0647"
+      },
+      {
+        key: "from_date",
+        recordKey: "fromDate",
+        label: "\u0627\u0632 \u062A\u0627\u0631\u06CC\u062E",
+        type: "date",
+        required: true,
+        width: 14,
+        help: "\u0634\u0631\u0648\u0639 \u0628\u0627\u0632\u0647\u0654 \u0627\u062C\u0631\u0627 \u2014 \u0634\u0645\u0633\u06CC \u0645\u062B\u0644 1404/07/01 \u06CC\u0627 1404-7-1 \u06CC\u0627 14040701 (\u0645\u06CC\u0644\u0627\u062F\u06CC 2025-09-23 \u0647\u0645 \u067E\u0630\u06CC\u0631\u0641\u062A\u0647 \u0645\u06CC\u200C\u0634\u0648\u062F)",
+        example: "1404/07/01"
+      },
+      {
+        key: "to_date",
+        recordKey: "toDate",
+        label: "\u062A\u0627 \u062A\u0627\u0631\u06CC\u062E",
+        type: "date",
+        width: 14,
+        help: "\u067E\u0627\u06CC\u0627\u0646 \u0628\u0627\u0632\u0647\u0654 \u0627\u062C\u0631\u0627 \u2014 \u062E\u0627\u0644\u06CC \u06CC\u0639\u0646\u06CC \u0631\u0648\u06CC\u062F\u0627\u062F \u06CC\u06A9\u200C\u0631\u0648\u0632\u0647\u061B \u0646\u0628\u0627\u06CC\u062F \u0642\u0628\u0644 \u0627\u0632 \xAB\u0627\u0632 \u062A\u0627\u0631\u06CC\u062E\xBB \u0628\u0627\u0634\u062F",
+        example: "1404/07/07"
+      },
+      {
+        key: "admin_actions",
+        recordKey: "adminActions",
+        label: "\u0627\u0642\u062F\u0627\u0645\u0627\u062A \u0627\u062F\u0627\u0631\u06CC \u0648 \u062C\u0644\u0633\u0627\u062A",
+        type: "longtext",
+        maxLength: 2e3,
+        width: 46,
+        help: "\u0628\u062E\u0634\u0646\u0627\u0645\u0647\u200C\u0647\u0627\u060C \u062A\u0648\u062C\u06CC\u0647\u06CC\u200C\u0647\u0627\u060C \u062C\u0644\u0633\u0627\u062A \u0627\u062F\u0627\u0631\u06CC \u0627\u06CC\u0646 \u0628\u0627\u0632\u0647"
+      },
+      {
+        key: "center_actions",
+        recordKey: "centerActions",
+        label: "\u062E\u0631\u0648\u062C\u06CC / \u0627\u0642\u062F\u0627\u0645 \u0639\u0645\u0644\u06CC\u0627\u062A\u06CC \u0645\u0631\u06A9\u0632",
+        type: "longtext",
+        maxLength: 2e3,
+        width: 46,
+        help: "\u0627\u0642\u062F\u0627\u0645 \u0639\u0645\u0644\u06CC\u0627\u062A\u06CC \u06A9\u0647 \u0645\u0631\u06A9\u0632 \u062F\u0631 \u0627\u06CC\u0646 \u0628\u0627\u0632\u0647 \u0628\u0627\u06CC\u062F \u0627\u0646\u062C\u0627\u0645 \u062F\u0647\u062F \u0648 \u062E\u0631\u0648\u062C\u06CC \u0622\u0646"
+      },
+      {
+        key: "status",
+        recordKey: "status",
+        label: "\u0648\u0636\u0639\u06CC\u062A",
+        type: "enum",
+        options: PLAN_STATUS_OPTIONS,
+        width: 16,
+        help: "\u062E\u0627\u0644\u06CC = \u0628\u0631\u0646\u0627\u0645\u0647\u200C\u0631\u06CC\u0632\u06CC\u200C\u0634\u062F\u0647 (\u062F\u0631 \u0627\u0641\u0632\u0648\u062F\u0646) / \u0628\u062F\u0648\u0646 \u062A\u063A\u06CC\u06CC\u0631 (\u062F\u0631 \u0648\u06CC\u0631\u0627\u06CC\u0634)",
+        example: "\u0628\u0631\u0646\u0627\u0645\u0647\u200C\u0631\u06CC\u0632\u06CC\u200C\u0634\u062F\u0647"
+      },
+      {
+        key: "tag",
+        recordKey: "tag",
+        label: "\u0628\u0631\u0686\u0633\u0628 \u0641\u0639\u0627\u0644\u06CC\u062A\u200C\u0647\u0627",
+        type: "text",
+        maxLength: 40,
+        width: 22,
+        help: "\u0631\u0648\u06CC\u062F\u0627\u062F\u0647\u0627\u06CC \u062E\u0637 \u0632\u0645\u0627\u0646\u06CC \u06A9\u0647 \u0628\u0627 \u0647\u0645\u06CC\u0646 \u0628\u0631\u0686\u0633\u0628 \u062B\u0628\u062A \u0634\u0648\u0646\u062F \u0628\u0647\u200C\u0639\u0646\u0648\u0627\u0646 \u0634\u0648\u0627\u0647\u062F \u0627\u062C\u0631\u0627\u06CC \u0627\u06CC\u0646 \u0641\u0627\u0632 \u0634\u0645\u0631\u062F\u0647 \u0645\u06CC\u200C\u0634\u0648\u0646\u062F",
+        example: "\u062C\u0644\u0633\u0627\u062A \u0627\u0648\u0644\u06CC\u0627"
+      }
+    ]
+  }
+];
+function findImportEntity(key) {
+  return IMPORT_ENTITIES.find((e) => e.key === key);
+}
+__name(findImportEntity, "findImportEntity");
+
+// src/application/excel-import/pure.ts
+var FA = "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9";
+var AR = "\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669";
+function enDigits(input2) {
+  return String(input2 ?? "").replace(/[۰-۹]/g, (d) => String(FA.indexOf(d))).replace(/[٠-٩]/g, (d) => String(AR.indexOf(d)));
+}
+__name(enDigits, "enDigits");
+function pad23(n) {
+  return n < 10 ? `0${n}` : String(n);
+}
+__name(pad23, "pad2");
+function normalizeCellText(raw2) {
+  return enDigits(raw2).replace(/ي/g, "\u06CC").replace(/ك/g, "\u06A9").replace(/[\u200c\u200f\u200e]/g, "\u200C").replace(/\s+/g, " ").trim();
+}
+__name(normalizeCellText, "normalizeCellText");
+function nameKey(raw2) {
+  return normalizeCellText(raw2).replace(/[\s\u200c\u200f\u200e]/g, "").toLowerCase();
+}
+__name(nameKey, "nameKey");
+function parseFlexibleDate(raw2) {
+  const s = enDigits(raw2).trim();
+  if (!s) return null;
+  let parts = null;
+  const compact = s.match(/^(\d{4})(\d{1,2})(\d{1,2})$/);
+  if (compact) {
+    parts = [compact[1], compact[2], compact[3]];
+  } else {
+    const seg = s.split(/[/\-.، ]+/).filter((p) => p.length > 0);
+    if (seg.length === 3) parts = seg;
+  }
+  if (!parts) return null;
+  const y = Number(parts[0]);
+  const m = Number(parts[1]);
+  const d = Number(parts[2]);
+  if (!Number.isInteger(y) || !Number.isInteger(m) || !Number.isInteger(d)) return null;
+  if (m < 1 || m > 12 || d < 1 || d > 31) return null;
+  if (y >= 1700) {
+    const ms = Date.UTC(y, m - 1, d);
+    const back = new Date(ms);
+    if (back.getUTCFullYear() !== y || back.getUTCMonth() !== m - 1 || back.getUTCDate() !== d) return null;
+    return `${y}-${pad23(m)}-${pad23(d)}`;
+  }
+  if (y < 1300 || y > 1500) return null;
+  const g = jalaliToGregorianYmd(y, m, d);
+  const j = toJalaliParts(Number(g.slice(0, 4)), Number(g.slice(5, 7)), Number(g.slice(8, 10)));
+  if (j.jy !== y || j.jm !== m || j.jd !== d) return null;
+  return g;
+}
+__name(parseFlexibleDate, "parseFlexibleDate");
+function jalaliDisplayOfYmd(ymd) {
+  const [gy, gm, gd] = ymd.split("-").map(Number);
+  const j = toJalaliParts(gy, gm, gd);
+  return `${j.jy}/${pad23(j.jm)}/${pad23(j.jd)}`;
+}
+__name(jalaliDisplayOfYmd, "jalaliDisplayOfYmd");
+function matchEnum(raw2, options) {
+  const needle = nameKey(raw2);
+  if (!needle) return null;
+  for (const o of options) {
+    if (nameKey(o.value) === needle || nameKey(o.label) === needle) return o.value;
+    if (o.aliases?.some((a) => nameKey(a) === needle)) return o.value;
+  }
+  return null;
+}
+__name(matchEnum, "matchEnum");
+function normalizePhone2(raw2) {
+  const s = enDigits(raw2).trim();
+  if (!s) return { ok: true, value: "" };
+  const compact = s.replace(/[\s\u200c]/g, "");
+  if (!/^[0-9+\-()]{3,20}$/.test(compact)) return { ok: false, value: compact };
+  return { ok: true, value: compact };
+}
+__name(normalizePhone2, "normalizePhone");
+function normalizeCode(raw2) {
+  return enDigits(raw2).trim().replace(/[\s\u200c]/g, "");
+}
+__name(normalizeCode, "normalizeCode");
+
+// src/application/excel-import/service.ts
+function coerceRows(rawRows) {
+  if (!Array.isArray(rawRows)) throw new ValidationError("rows \u0628\u0627\u06CC\u062F \u0622\u0631\u0627\u06CC\u0647 \u0628\u0627\u0634\u062F");
+  if (rawRows.length === 0) throw new ValidationError("\u0647\u06CC\u0686 \u0631\u062F\u06CC\u0641\u06CC \u0628\u0631\u0627\u06CC \u062F\u0631\u0648\u0646\u200C\u0631\u06CC\u0632\u06CC \u0627\u0631\u0633\u0627\u0644 \u0646\u0634\u062F\u0647 \u0627\u0633\u062A");
+  if (rawRows.length > IMPORT_ROWS_MAX) {
+    throw new ValidationError(`\u062D\u062F\u0627\u06A9\u062B\u0631 ${faDigits(IMPORT_ROWS_MAX)} \u0631\u062F\u06CC\u0641 \u062F\u0631 \u0647\u0631 \u0628\u0627\u0631 \u062F\u0631\u0648\u0646\u200C\u0631\u06CC\u0632\u06CC \u0645\u062C\u0627\u0632 \u0627\u0633\u062A`);
+  }
+  return rawRows.map((r) => {
+    if (typeof r !== "object" || r === null || Array.isArray(r)) {
+      throw new ValidationError("\u0647\u0631 \u0631\u062F\u06CC\u0641 \u0628\u0627\u06CC\u062F \u0634\u06CC\u0621 \u0645\u0642\u0627\u062F\u06CC\u0631 \u0633\u062A\u0648\u0646\u200C\u0647\u0627 \u0628\u0627\u0634\u062F");
+    }
+    const out = {};
+    for (const [k, v] of Object.entries(r)) {
+      if (v === null || v === void 0) {
+        out[k] = "";
+      } else if (typeof v === "string") {
+        out[k] = v;
+      } else if (typeof v === "number" && Number.isFinite(v)) {
+        out[k] = String(v);
+      } else {
+        out[k] = String(v);
+      }
+    }
+    return out;
+  });
+}
+__name(coerceRows, "coerceRows");
+function labelOf2(col) {
+  return col.label;
+}
+__name(labelOf2, "labelOf");
+function validateSchoolRow(raw2, colByKey) {
+  const errors = [];
+  const display = {};
+  const normalized = {};
+  const name = normalizeCellText(raw2.name ?? "");
+  if (!name) errors.push(`\xAB${labelOf2(colByKey.get("name"))}\xBB \u062E\u0627\u0644\u06CC \u0627\u0633\u062A`);
+  else if (name.length < 2) errors.push("\xAB\u0646\u0627\u0645 \u0645\u062F\u0631\u0633\u0647\xBB \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
+  else if (name.length > 200) errors.push("\xAB\u0646\u0627\u0645 \u0645\u062F\u0631\u0633\u0647\xBB \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F2\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
+  normalized.name = name || null;
+  display.name = name;
+  const kindRaw = normalizeCellText(raw2.kind ?? "");
+  if (!kindRaw) {
+    normalized.kind = null;
+    display.kind = "\u2014";
+  } else {
+    const k = matchEnum(kindRaw, colByKey.get("kind").options);
+    if (!k) errors.push("\xAB\u0646\u0648\u0639\xBB \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A \u2014 \u0645\u062F\u0631\u0633\u0647 \u06CC\u0627 \u0645\u0647\u062F\u06A9\u0648\u062F\u06A9");
+    else {
+      normalized.kind = k;
+      display.kind = colByKey.get("kind").options.find((o) => o.value === k).label;
+    }
+  }
+  const genderRaw = normalizeCellText(raw2.gender_type ?? "");
+  if (!genderRaw) {
+    normalized.gender_type = null;
+    display.gender_type = "\u2014";
+  } else {
+    const g = matchEnum(genderRaw, colByKey.get("gender_type").options);
+    if (!g) errors.push("\xAB\u062C\u0646\u0633\u06CC\u062A\xBB \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A \u2014 \u0645\u062E\u062A\u0644\u0637\u060C \u067E\u0633\u0631\u0627\u0646\u0647 \u06CC\u0627 \u062F\u062E\u062A\u0631\u0627\u0646\u0647");
+    else {
+      normalized.gender_type = g;
+      display.gender_type = colByKey.get("gender_type").options.find((o) => o.value === g).label;
+    }
+  }
+  const codeRaw = normalizeCellText(raw2.code ?? "");
+  if (codeRaw) {
+    const code = normalizeCode(codeRaw);
+    if (code.length > 20) errors.push("\xAB\u06A9\u062F \u0645\u062F\u0631\u0633\u0647\xBB \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F2\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
+    else {
+      normalized.code = code;
+      display.code = code;
+    }
+  } else {
+    normalized.code = null;
+    display.code = "";
+  }
+  for (const key of ["phone", "principal_phone"]) {
+    const rawVal = normalizeCellText(raw2[key] ?? "");
+    if (!rawVal) {
+      normalized[key] = null;
+      display[key] = "";
+      continue;
+    }
+    const p = normalizePhone2(rawVal);
+    if (!p.ok) errors.push(`\xAB${labelOf2(colByKey.get(key))}\xBB \u0645\u0639\u062A\u0628\u0631 \u0646\u06CC\u0633\u062A`);
+    else if (p.value.length > 20) errors.push(`\xAB${labelOf2(colByKey.get(key))}\xBB \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F2\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A`);
+    else {
+      normalized[key] = p.value;
+      display[key] = p.value;
+    }
+  }
+  const principalName = normalizeCellText(raw2.principal_name ?? "");
+  if (principalName.length > 120) errors.push("\xAB\u0646\u0627\u0645 \u0645\u062F\u06CC\u0631\xBB \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F1\u06F2\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
+  normalized.principal_name = principalName || null;
+  display.principal_name = principalName;
+  for (const key of ["address", "notes"]) {
+    const v = normalizeCellText(raw2[key] ?? "");
+    const max = colByKey.get(key).maxLength ?? 500;
+    if (v.length > max) errors.push(`\xAB${labelOf2(colByKey.get(key))}\xBB \u062D\u062F\u0627\u06A9\u062B\u0631 ${faDigits(max)} \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A`);
+    normalized[key] = v || null;
+    display[key] = v;
+  }
+  return { errors, display, normalized };
+}
+__name(validateSchoolRow, "validateSchoolRow");
+function validatePlanRow(raw2, colByKey) {
+  const errors = [];
+  const display = {};
+  const normalized = {};
+  const title = normalizeCellText(raw2.title ?? "");
+  if (!title) errors.push(`\xAB${labelOf2(colByKey.get("title"))}\xBB \u062E\u0627\u0644\u06CC \u0627\u0633\u062A`);
+  else if (title.length < 2) errors.push("\u0639\u0646\u0648\u0627\u0646 \u0641\u0627\u0632 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
+  else if (title.length > 150) errors.push("\u0639\u0646\u0648\u0627\u0646 \u0641\u0627\u0632 \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F1\u06F5\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
+  normalized.title = title || null;
+  display.title = title;
+  const fromRaw = normalizeCellText(raw2.from_date ?? "");
+  if (!fromRaw) {
+    errors.push("\xAB\u0627\u0632 \u062A\u0627\u0631\u06CC\u062E\xBB \u062E\u0627\u0644\u06CC \u0627\u0633\u062A");
+  } else {
+    const g = parseFlexibleDate(fromRaw);
+    if (!g) errors.push("\xAB\u0627\u0632 \u062A\u0627\u0631\u06CC\u062E\xBB \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A \u2014 \u0645\u062B\u0644 1404/07/01");
+    else {
+      normalized.from_date = g;
+      display.from_date = jalaliDisplayOfYmd(g);
+    }
+  }
+  const toRaw = normalizeCellText(raw2.to_date ?? "");
+  if (toRaw) {
+    const g = parseFlexibleDate(toRaw);
+    if (!g) errors.push("\xAB\u062A\u0627 \u062A\u0627\u0631\u06CC\u062E\xBB \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A \u2014 \u0645\u062B\u0644 1404/07/07 \u06CC\u0627 \u062E\u0627\u0644\u06CC");
+    else {
+      normalized.to_date = g;
+      display.to_date = jalaliDisplayOfYmd(g);
+    }
+  } else {
+    normalized.to_date = null;
+    display.to_date = "";
+  }
+  const from = normalized.from_date;
+  const to = normalized.to_date;
+  if (from && to && to < from) errors.push("\xAB\u062A\u0627 \u062A\u0627\u0631\u06CC\u062E\xBB \u0646\u0645\u06CC\u200C\u062A\u0648\u0627\u0646\u062F \u0642\u0628\u0644 \u0627\u0632 \xAB\u0627\u0632 \u062A\u0627\u0631\u06CC\u062E\xBB \u0628\u0627\u0634\u062F");
+  for (const key of ["admin_actions", "center_actions"]) {
+    const v = normalizeCellText(raw2[key] ?? "");
+    if (v.length > 2e3) errors.push(`\xAB${labelOf2(colByKey.get(key))}\xBB \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F2\u06F0\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A`);
+    normalized[key] = v || null;
+    display[key] = v;
+  }
+  const statusRaw = normalizeCellText(raw2.status ?? "");
+  if (!statusRaw) {
+    normalized.status = null;
+    display.status = "\u2014";
+  } else {
+    const s = matchEnum(statusRaw, colByKey.get("status").options);
+    if (!s) errors.push("\xAB\u0648\u0636\u0639\u06CC\u062A\xBB \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A \u2014 \u0628\u0631\u0646\u0627\u0645\u0647\u200C\u0631\u06CC\u0632\u06CC\u200C\u0634\u062F\u0647\u060C \u062F\u0631 \u062C\u0631\u06CC\u0627\u0646 \u06CC\u0627 \u062A\u06A9\u0645\u06CC\u0644");
+    else {
+      normalized.status = s;
+      display.status = colByKey.get("status").options.find((o) => o.value === s).label;
+    }
+  }
+  const tag = normalizeCellText(raw2.tag ?? "");
+  if (tag.length > 40) errors.push("\xAB\u0628\u0631\u0686\u0633\u0628 \u0641\u0639\u0627\u0644\u06CC\u062A\u200C\u0647\u0627\xBB \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F4\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
+  normalized.tag = tag || null;
+  display.tag = tag;
+  return { errors, display, normalized };
+}
+__name(validatePlanRow, "validatePlanRow");
+function validateClassRow(raw2, colByKey) {
+  const errors = [];
+  const display = {};
+  const normalized = {};
+  const school = normalizeCellText(raw2.school ?? "");
+  if (!school) errors.push(`\xAB${labelOf2(colByKey.get("school"))}\xBB \u062E\u0627\u0644\u06CC \u0627\u0633\u062A`);
+  else if (school.length > 200) errors.push("\xAB\u0646\u0627\u0645 \u0645\u062F\u0631\u0633\u0647\xBB \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F2\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
+  normalized.school = school || null;
+  display.school = school;
+  const cls = normalizeCellText(raw2.class_name ?? "");
+  if (!cls) errors.push(`\xAB${labelOf2(colByKey.get("class_name"))}\xBB \u062E\u0627\u0644\u06CC \u0627\u0633\u062A`);
+  else if (cls.length < 2) errors.push("\xAB\u0646\u0627\u0645 \u06A9\u0644\u0627\u0633\xBB \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
+  else if (cls.length > 120) errors.push("\xAB\u0646\u0627\u0645 \u06A9\u0644\u0627\u0633\xBB \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F1\u06F2\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
+  normalized.class_name = cls || null;
+  display.class_name = cls;
+  const teacher = normalizeCellText(raw2.teacher_name ?? "");
+  if (teacher.length > 120) errors.push("\xAB\u0646\u0627\u0645 \u0645\u0639\u0644\u0645 \u06A9\u0644\u0627\u0633\xBB \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F1\u06F2\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
+  normalized.teacher_name = teacher || null;
+  display.teacher_name = teacher;
+  const phoneRaw = normalizeCellText(raw2.teacher_phone ?? "");
+  if (!phoneRaw) {
+    normalized.teacher_phone = null;
+    display.teacher_phone = "";
+  } else {
+    const p = normalizePhone2(phoneRaw);
+    if (!p.ok) errors.push("\xAB\u062A\u0644\u0641\u0646 \u0645\u0639\u0644\u0645\xBB \u0645\u0639\u062A\u0628\u0631 \u0646\u06CC\u0633\u062A");
+    else if (p.value.length > 20) errors.push("\xAB\u062A\u0644\u0641\u0646 \u0645\u0639\u0644\u0645\xBB \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F2\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A");
+    else {
+      normalized.teacher_phone = p.value;
+      display.teacher_phone = p.value;
+    }
+  }
+  return { errors, display, normalized };
+}
+__name(validateClassRow, "validateClassRow");
+async function finishSchoolRows(db, rows, colByKey) {
+  const dbRows = await db.query(
+    `SELECT id, name, kind, gender_type, phone, address, principal_name, principal_phone, code, notes FROM schools`
+  );
+  const byKey = /* @__PURE__ */ new Map();
+  const codeOwner = /* @__PURE__ */ new Map();
+  for (const s of dbRows) {
+    byKey.set(nameKey(s.name), s);
+    if (s.code) codeOwner.set(normalizeCode(s.code), s);
+  }
+  const seenKeys = /* @__PURE__ */ new Map();
+  const seenCodes = /* @__PURE__ */ new Map();
+  for (const row of rows) {
+    const key = row.result.normalized.name ? nameKey(row.result.normalized.name) : null;
+    row.key = key;
+    if (key && seenKeys.has(key)) {
+      row.result.errors.push(`\u0627\u06CC\u0646 ${colByKey.get("name").label} \u062F\u0631 \u0633\u0637\u0631 ${faDigits(seenKeys.get(key))} \u0647\u0645 \u0622\u0645\u062F\u0647 \u0627\u0633\u062A`);
+    } else if (key) {
+      seenKeys.set(key, row.index);
+    }
+    const code = row.result.normalized.code;
+    if (code) {
+      const owner = codeOwner.get(code);
+      if (owner && key && nameKey(owner.name) !== key) {
+        row.result.errors.push(`\xAB\u06A9\u062F \u0645\u062F\u0631\u0633\u0647\xBB \u0642\u0628\u0644\u0627\u064B \u0628\u0631\u0627\u06CC \xAB${owner.name}\xBB \u062B\u0628\u062A \u0634\u062F\u0647 \u0627\u0633\u062A`);
+      }
+      if (seenCodes.has(code)) {
+        row.result.errors.push(`\xAB\u06A9\u062F \u0645\u062F\u0631\u0633\u0647\xBB \u062F\u0631 \u0633\u0637\u0631 ${faDigits(seenCodes.get(code))} \u0647\u0645 \u0622\u0645\u062F\u0647 \u0627\u0633\u062A`);
+      } else {
+        seenCodes.set(code, row.index);
+      }
+    }
+    if (key && byKey.has(key)) {
+      row.status = "update";
+      row.existingId = byKey.get(key).id;
+    } else if (key) {
+      row.status = "add";
+      row.existingId = null;
+    }
+  }
+}
+__name(finishSchoolRows, "finishSchoolRows");
+async function finishPlanRows(db, rows, colByKey) {
+  const dbRows = await db.query(
+    `SELECT id, title, admin_actions, center_actions, from_date, to_date, status, tag, sort_order FROM clearbook_plans`
+  );
+  const byKey = /* @__PURE__ */ new Map();
+  for (const p of dbRows) byKey.set(nameKey(p.title), p);
+  const seenKeys = /* @__PURE__ */ new Map();
+  for (const row of rows) {
+    const key = row.result.normalized.title ? nameKey(row.result.normalized.title) : null;
+    row.key = key;
+    if (key && seenKeys.has(key)) {
+      row.result.errors.push(`\u0627\u06CC\u0646 ${colByKey.get("title").label} \u062F\u0631 \u0633\u0637\u0631 ${faDigits(seenKeys.get(key))} \u0647\u0645 \u0622\u0645\u062F\u0647 \u0627\u0633\u062A`);
+    } else if (key) {
+      seenKeys.set(key, row.index);
+    }
+    if (key && byKey.has(key)) {
+      row.status = "update";
+      row.existingId = byKey.get(key).id;
+    } else if (key) {
+      row.status = "add";
+      row.existingId = null;
+    }
+  }
+}
+__name(finishPlanRows, "finishPlanRows");
+async function finishClassRows(db, rows, colByKey) {
+  const schoolRows = await db.query(`SELECT id, name FROM schools`);
+  const schoolByKey = /* @__PURE__ */ new Map();
+  for (const s of schoolRows) schoolByKey.set(nameKey(s.name), s);
+  const classRows = await db.query(
+    `SELECT id, school_id, name, teacher_name, teacher_phone, active FROM classes`
+  );
+  const classByPair = /* @__PURE__ */ new Map();
+  for (const c of classRows) classByPair.set(`${c.school_id}::${nameKey(c.name)}`, c);
+  const seenPairs = /* @__PURE__ */ new Map();
+  for (const row of rows) {
+    const schoolName = row.result.normalized.school;
+    const clsName = row.result.normalized.class_name;
+    row.key = null;
+    if (!schoolName || !clsName) continue;
+    const school = schoolByKey.get(nameKey(schoolName));
+    if (!school) {
+      row.result.errors.push(
+        `\u0645\u062F\u0631\u0633\u0647 \u0628\u0627 \u0627\u06CC\u0646 \u0646\u0627\u0645 \u06CC\u0627\u0641\u062A \u0646\u0634\u062F \u2014 \u0627\u0648\u0644 \u0645\u062F\u0631\u0633\u0647 \u0631\u0627 \u062B\u0628\u062A \u06A9\u0646\u06CC\u062F (\u062F\u0631\u0648\u0646\u200C\u0631\u06CC\u0632\u06CC \xAB\u0627\u0637\u0644\u0627\u0639\u0627\u062A \u0645\u062F\u0627\u0631\u0633\xBB \u06CC\u0627 \u062F\u06A9\u0645\u0647\u0654 \xAB\u0645\u062F\u0631\u0633\u0647 \u062C\u062F\u06CC\u062F\xBB)`
+      );
+      continue;
+    }
+    row.result.normalized.school_id = school.id;
+    const pair = `${school.id}::${nameKey(clsName)}`;
+    row.key = pair;
+    if (seenPairs.has(pair)) {
+      row.result.errors.push(
+        `\u0627\u06CC\u0646 \u06A9\u0644\u0627\u0633 (${colByKey.get("school").label} + ${colByKey.get("class_name").label}) \u062F\u0631 \u0633\u0637\u0631 ${faDigits(seenPairs.get(pair))} \u0647\u0645 \u0622\u0645\u062F\u0647 \u0627\u0633\u062A`
+      );
+      continue;
+    }
+    seenPairs.set(pair, row.index);
+    const existing = classByPair.get(pair);
+    if (existing) {
+      row.status = "update";
+      row.existingId = existing.id;
+    } else {
+      row.status = "add";
+      row.existingId = null;
+    }
+  }
+}
+__name(finishClassRows, "finishClassRows");
+function toValidated(rows) {
+  const out = rows.map((r) => ({
+    index: r.index,
+    status: r.result.errors.length > 0 ? "error" : r.status,
+    errors: r.result.errors,
+    display: r.result.display
+  }));
+  return {
+    total: out.length,
+    summary: {
+      add: out.filter((r) => r.status === "add").length,
+      update: out.filter((r) => r.status === "update").length,
+      error: out.filter((r) => r.status === "error").length
+    },
+    rows: out
+  };
+}
+__name(toValidated, "toValidated");
+function createImportService(deps) {
+  const { db, audit, logger } = deps;
+  function entityFor(key, role) {
+    const entity = findImportEntity(key);
+    if (!entity) throw new NotFoundError("\u0645\u0648\u062C\u0648\u062F\u06CC\u062A \u062F\u0631\u0648\u0646\u200C\u0631\u06CC\u0632\u06CC");
+    if (!entity.roles.includes(role)) throw new ForbiddenError();
+    return entity;
+  }
+  __name(entityFor, "entityFor");
+  async function buildInternalRows(entity, rawRows) {
+    const coerced = coerceRows(rawRows);
+    const colByKey = new Map(entity.columns.map((c) => [c.key, c]));
+    const rows = coerced.map((raw2, i) => ({
+      index: i + 1,
+      raw: raw2,
+      result: entity.key === "schools" ? validateSchoolRow(raw2, colByKey) : entity.key === "school-classes" ? validateClassRow(raw2, colByKey) : validatePlanRow(raw2, colByKey),
+      status: "add",
+      key: null,
+      existingId: null
+    }));
+    if (entity.key === "schools") await finishSchoolRows(db, rows, colByKey);
+    else if (entity.key === "school-classes") await finishClassRows(db, rows, colByKey);
+    else await finishPlanRows(db, rows, colByKey);
+    return { rows, colByKey };
+  }
+  __name(buildInternalRows, "buildInternalRows");
+  return {
+    registryFor(role) {
+      return IMPORT_ENTITIES.filter((e) => e.roles.includes(role));
+    },
+    async validate(entityKey, role, rawRows) {
+      const entity = entityFor(entityKey, role);
+      const { rows } = await buildInternalRows(entity, rawRows);
+      return toValidated(rows);
+    },
+    async commit(entityKey, rawRows, actor) {
+      const entity = entityFor(entityKey, actor.role);
+      const { rows } = await buildInternalRows(entity, rawRows);
+      const valid = rows.filter((r) => r.result.errors.length === 0 && (r.status === "add" || r.status === "update"));
+      const skipped = rows.length - valid.length;
+      let added = 0;
+      let updated = 0;
+      if (entity.key === "school-classes") {
+        await db.transaction(async (tx) => {
+          for (const row of valid) {
+            const n = row.result.normalized;
+            if (row.status === "update" && row.existingId) {
+              const cur = await tx.queryOne(
+                `SELECT id, school_id, name, teacher_name, teacher_phone, active FROM classes WHERE id = ?`,
+                [row.existingId]
+              );
+              if (!cur) continue;
+              await tx.execute(
+                `UPDATE classes SET name = ?, teacher_name = ?, teacher_phone = ?, active = 1 WHERE id = ?`,
+                [
+                  n.class_name,
+                  n.teacher_name ?? cur.teacher_name,
+                  n.teacher_phone ?? cur.teacher_phone,
+                  row.existingId
+                ]
+              );
+              updated += 1;
+            } else {
+              await tx.execute(
+                `INSERT INTO classes (id, school_id, name, teacher_name, teacher_phone, active) VALUES (?, ?, ?, ?, ?, 1)`,
+                [
+                  crypto.randomUUID(),
+                  n.school_id,
+                  n.class_name,
+                  n.teacher_name,
+                  n.teacher_phone
+                ]
+              );
+              added += 1;
+            }
+          }
+          await audit.logInTransaction(tx, {
+            actorId: actor.staffId,
+            action: "import.school_classes",
+            resourceType: "school_class",
+            resourceId: "bulk",
+            changes: { added: { from: null, to: added }, updated: { from: null, to: updated }, skipped: { from: null, to: skipped } }
+          });
+        });
+      } else if (entity.key === "schools") {
+        await db.transaction(async (tx) => {
+          for (const row of valid) {
+            const n = row.result.normalized;
+            if (row.status === "update" && row.existingId) {
+              const cur = await tx.queryOne(
+                `SELECT id, name, kind, gender_type, phone, address, principal_name, principal_phone, code, notes FROM schools WHERE id = ?`,
+                [row.existingId]
+              );
+              if (!cur) continue;
+              await tx.execute(
+                `UPDATE schools SET name = ?, kind = ?, gender_type = ?, phone = ?, address = ?, principal_name = ?, principal_phone = ?, code = ?, notes = ? WHERE id = ?`,
+                [
+                  n.name,
+                  n.kind ?? cur.kind,
+                  n.gender_type ?? cur.gender_type,
+                  n.phone ?? cur.phone,
+                  n.address ?? cur.address,
+                  n.principal_name ?? cur.principal_name,
+                  n.principal_phone ?? cur.principal_phone,
+                  n.code ?? cur.code,
+                  n.notes ?? cur.notes,
+                  row.existingId
+                ]
+              );
+              updated += 1;
+            } else {
+              await tx.execute(
+                `INSERT INTO schools (id, name, kind, gender_type, phone, address, principal_name, principal_phone, code, notes, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+                [
+                  crypto.randomUUID(),
+                  n.name,
+                  n.kind ?? "school",
+                  n.gender_type,
+                  n.phone,
+                  n.address,
+                  n.principal_name,
+                  n.principal_phone,
+                  n.code,
+                  n.notes
+                ]
+              );
+              added += 1;
+            }
+          }
+          await audit.logInTransaction(tx, {
+            actorId: actor.staffId,
+            action: "import.schools",
+            resourceType: "school",
+            resourceId: "bulk",
+            changes: { added: { from: null, to: added }, updated: { from: null, to: updated }, skipped: { from: null, to: skipped } }
+          });
+        });
+      } else {
+        await db.transaction(async (tx) => {
+          const maxRow = await tx.queryOne(`SELECT MAX(sort_order) AS m FROM clearbook_plans`);
+          let seq = maxRow?.m ?? 0;
+          for (const row of valid) {
+            const n = row.result.normalized;
+            if (row.status === "update" && row.existingId) {
+              const cur = await tx.queryOne(
+                `SELECT id, title, admin_actions, center_actions, from_date, to_date, status, tag, sort_order FROM clearbook_plans WHERE id = ?`,
+                [row.existingId]
+              );
+              if (!cur) continue;
+              await tx.execute(
+                `UPDATE clearbook_plans SET title = ?, admin_actions = ?, center_actions = ?, from_date = ?, to_date = ?, status = ?, tag = ?, updated_at = datetime('now') WHERE id = ?`,
+                [
+                  n.title,
+                  n.admin_actions ?? cur.admin_actions,
+                  n.center_actions ?? cur.center_actions,
+                  n.from_date,
+                  n.to_date ?? cur.to_date,
+                  n.status ?? cur.status,
+                  n.tag ?? cur.tag,
+                  row.existingId
+                ]
+              );
+              updated += 1;
+            } else {
+              seq += 1;
+              await tx.execute(
+                `INSERT INTO clearbook_plans (id, title, admin_actions, center_actions, from_date, to_date, status, tag, sort_order, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [
+                  crypto.randomUUID(),
+                  n.title,
+                  n.admin_actions ?? "",
+                  n.center_actions ?? "",
+                  n.from_date,
+                  n.to_date,
+                  n.status ?? "planned",
+                  n.tag,
+                  seq,
+                  actor.staffId
+                ]
+              );
+              added += 1;
+            }
+          }
+          await audit.logInTransaction(tx, {
+            actorId: actor.staffId,
+            action: "import.clearbook_plans",
+            resourceType: "clearbook_plan",
+            resourceId: "bulk",
+            changes: { added: { from: null, to: added }, updated: { from: null, to: updated }, skipped: { from: null, to: skipped } }
+          });
+        });
+      }
+      logger.child("excel-import").info("commit.done", { entity: entity.key, added, updated, skipped, actor: actor.staffId });
+      return { added, updated, skipped };
+    }
+  };
+}
+__name(createImportService, "createImportService");
+
+// src/application/excel-import/routes.ts
+var ImportRowsSchema = external_exports.object({
+  rows: external_exports.array(external_exports.record(external_exports.string(), external_exports.unknown())).min(1, "\u0647\u06CC\u0686 \u0631\u062F\u06CC\u0641\u06CC \u0628\u0631\u0627\u06CC \u062F\u0631\u0648\u0646\u200C\u0631\u06CC\u0632\u06CC \u0627\u0631\u0633\u0627\u0644 \u0646\u0634\u062F\u0647 \u0627\u0633\u062A").max(IMPORT_ROWS_MAX, `\u062D\u062F\u0627\u06A9\u062B\u0631 ${faDigits(IMPORT_ROWS_MAX)} \u0631\u062F\u06CC\u0641 \u062F\u0631 \u0647\u0631 \u0628\u0627\u0631 \u062F\u0631\u0648\u0646\u200C\u0631\u06CC\u0632\u06CC \u0645\u062C\u0627\u0632 \u0627\u0633\u062A`)
+});
+function registerImportRoutes(app, deps) {
+  const service = createImportService(deps);
+  const gate = requireRole("manager", "secretary");
+  app.get("/api/import/registry", gate, async (c) => {
+    const actor = getAuthContext(c);
+    return c.json({ data: service.registryFor(actor.role) }, 200);
+  });
+  app.post("/api/import/:entity/validate", gate, async (c) => {
+    const actor = getAuthContext(c);
+    const body = ImportRowsSchema.parse(await c.req.json());
+    const result = await service.validate(c.req.param("entity"), actor.role, body.rows);
+    return c.json({ data: result }, 200);
+  });
+  app.post("/api/import/:entity/commit", gate, async (c) => {
+    const actor = getAuthContext(c);
+    const body = ImportRowsSchema.parse(await c.req.json());
+    const result = await service.commit(c.req.param("entity"), body.rows, actor);
+    return c.json({ data: result }, 200);
+  });
+}
+__name(registerImportRoutes, "registerImportRoutes");
+
 // src/core/db/client.ts
 function createDb(d1, logger) {
   const base = {
@@ -81062,382 +81512,8 @@ function registerDesktopRoutes(app, deps) {
 }
 __name(registerDesktopRoutes, "registerDesktopRoutes");
 
-// src/application/api-routing/index.ts
-function createServices(deps) {
-  const { db, audit, logger } = deps;
-  const conflictEngine = createConflictEngine({ db });
-  const appointments = createAppointmentService({ db, audit, logger });
-  appointments.setConflictEngine(conflictEngine);
-  const attendance = createAttendanceService({ db, audit, logger });
-  const staffAttendance = createStaffAttendanceService({ db, audit, logger });
-  const workingDay = createWorkingDayService({ db, audit, logger, staffAttendance });
-  const studentProfile = createStudentProfileService({ db, audit, logger });
-  const studentTimeline = createStudentTimelineService(db);
-  const specialNeeds = createSpecialNeedsService({ db });
-  const followups = createFollowUpsService({ db, audit, logger });
-  const todos = createTodosService({ db, audit, logger });
-  const exerciseStorage = deps.exerciseBucket ? createR2ObjectStore(deps.exerciseBucket) : createChunkedD1ObjectStore(db);
-  const exerciseFileSender = deps.exerciseFileSender !== void 0 ? deps.exerciseFileSender : deps.baleToken ? async (chatId, file2) => {
-    const result = await sendBaleDocument({
-      token: deps.baleToken,
-      chatId,
-      filename: file2.filename,
-      bytes: file2.bytes,
-      mime: file2.mime,
-      caption: file2.caption ?? void 0
-    });
-    if (!result.ok) logger.warn("exercise.file.send_failed", { chatId, error: result.error });
-    return result.ok;
-  } : null;
-  const exerciseBank = createExerciseBankService({
-    db,
-    audit,
-    logger,
-    storage: exerciseStorage,
-    /* ۱.۲۷.۴۳ — راز دانلود هرگز رشتهٔ ثابت نیست: اگر AUTH/WEBHOOK تنظیم نشده باشد،
-       تصادفیِ هر بوت می‌شود (توکن‌های دانلود TTL کوتاه دارند؛ تاثیر ری‌استارت پذیرفته است) */
-    downloadSecret: deps.downloadSecret ?? deps.webhookSecret ?? crypto.randomUUID() + crypto.randomUUID(),
-    publicBaseUrl: deps.publicBaseUrl ?? null,
-    fileSender: exerciseFileSender
-  });
-  const caseEvents = createCaseEventsService({
-    db,
-    audit,
-    logger,
-    fillExpiryHours: CASE_EVENT_FILL_EXPIRY_HOURS,
-    followups,
-    publicBaseUrl: deps.publicBaseUrl ?? null,
-    studentNameOf: /* @__PURE__ */ __name(async (studentId) => {
-      const row = await db.queryOne(
-        `SELECT first_name || ' ' || last_name AS name FROM students WHERE id = ?`,
-        [studentId]
-      );
-      return row?.name ?? null;
-    }, "studentNameOf")
-  });
-  const waitlist = createWaitlistService({
-    db,
-    audit,
-    logger,
-    appointments,
-    students: studentProfile,
-    followups
-  });
-  const tags = createTagService({ db, audit, logger });
-  const search = createSearchService({ db, logger });
-  const screening = createScreeningService({ db, audit, logger });
-  const staff = createStaffService({ db, audit, logger });
-  const workingHours = createWorkingHoursService({ db, audit, logger });
-  const settings = createSettingsService({
-    db,
-    audit,
-    logger,
-    workingHours,
-    envClinicName: deps.clinicName,
-    baleConfigured: Boolean(deps.baleToken),
-    webhookEnabled: Boolean(deps.webhookSecret)
-  });
-  const keys = createKeysService({ db, audit, logger });
-  const notifyCore = createNotifyService({ db, logger });
-  notifyCore.registerChannel(createInternalChannel(logger));
-  const docMediaFetcher = deps.mediaFetcher !== void 0 ? deps.mediaFetcher : deps.baleToken ? createBaleMediaFetcher({ token: deps.baleToken }) : null;
-  const documentRequests = createDocumentRequestService({
-    db,
-    audit,
-    logger,
-    storage: exerciseStorage,
-    mediaFetcher: docMediaFetcher,
-    notify: notifyCore,
-    settings
-  });
-  const notify = createNotifyAppService({
-    db,
-    audit,
-    logger,
-    notify: notifyCore,
-    appointments,
-    students: studentProfile,
-    followups,
-    settings,
-    baleToken: deps.baleToken ?? null,
-    webhookSecret: deps.webhookSecret ?? null,
-    clinicName: deps.clinicName,
-    exerciseBank,
-    documentRequests,
-    publicBaseUrl: deps.publicBaseUrl ?? null,
-    fileSender: exerciseFileSender,
-    caseEvents,
-    mediaFetcher: deps.mediaFetcher !== void 0 ? deps.mediaFetcher : deps.baleToken ? createBaleMediaFetcher({ token: deps.baleToken }) : null
-  });
-  appointments.setLifecycleObserver({
-    onCreated: /* @__PURE__ */ __name((a) => notify.notifyAppointmentCreated(a), "onCreated"),
-    onMoved: /* @__PURE__ */ __name((a, prev) => notify.notifyAppointmentMoved(a, prev), "onMoved"),
-    onCancelled: /* @__PURE__ */ __name((a) => notify.notifyAppointmentCancelled(a).then(() => notify.notifyWaitlistSlotFreed(a)), "onCancelled")
-  });
-  attendance.setObserver({
-    onMarked: /* @__PURE__ */ __name(async (apptId, studentId, status) => {
-      await notify.notifyAttendanceMarked(apptId, studentId, status);
-      await waitlist.onAttendanceMarked(apptId, studentId, status);
-    }, "onMarked")
-  });
-  todos.setNotifier((todo) => notify.notifyTodoAssigned(todo));
-  exerciseBank.setGradeObserver(async (record2) => {
-    await notify.notifyHomeworkGraded({
-      studentId: record2.studentId,
-      studentName: record2.studentName,
-      exerciseTitle: record2.exerciseTitle,
-      feedback: record2.feedback ?? "",
-      gradedByName: record2.gradedByName
-    });
-  });
-  caseEvents.setSendObserver(async (input2) => {
-    const channel = notifyCore.getChannel("bale") ? "bale" : "internal";
-    const clinicName = await settings.getClinicName();
-    let sent = 0;
-    for (const chat of input2.chats) {
-      const outcome = await notifyCore.enqueue({
-        channel,
-        template: input2.template,
-        recipient: chat,
-        studentId: input2.studentId,
-        payload: { ...input2.vars, clinicName },
-        dedupKey: `${input2.dedupBase}:${chat}`
-      });
-      if (!outcome.duplicate) sent += 1;
-    }
-    if (sent > 0) await notifyCore.dispatchPending(50);
-    return sent;
-  });
-  caseEvents.setFillObserver(async (input2) => {
-    try {
-      if (!input2.staffId) return;
-      const linkRows = await db.query(
-        `SELECT chat_id FROM staff_bot_links WHERE staff_id = ? AND status = 'linked' AND chat_id IS NOT NULL`,
-        [input2.staffId]
-      );
-      const chats = linkRows.map((r) => r.chat_id).filter(Boolean);
-      if (!chats.length) return;
-      const student = await studentProfile.getStudentById(input2.studentId);
-      const studentName = student ? `${student.firstName} ${student.lastName}` : null;
-      const channel = notifyCore.getChannel("bale") ? "bale" : "internal";
-      const clinicName = await settings.getClinicName();
-      let sent = 0;
-      for (const chat of chats) {
-        const outcome = await notifyCore.enqueue({
-          channel,
-          template: "bot_checklist_result",
-          recipient: chat,
-          studentId: input2.studentId,
-          payload: {
-            studentName: studentName ?? void 0,
-            formTitle: input2.teacherName ? `${input2.formTitle} (\u067E\u0627\u0633\u062E \u0645\u0639\u0644\u0645: ${input2.teacherName})` : input2.formTitle,
-            score: input2.score != null ? faDigits(String(input2.score)) : void 0,
-            band: input2.band ?? void 0,
-            clinicName
-          },
-          dedupKey: `ce-result:${input2.eventId}:${chat}`
-        });
-        if (!outcome.duplicate) sent += 1;
-      }
-      if (sent > 0) await notifyCore.dispatchPending(50);
-    } catch (err) {
-      logger.warn("case-events.fill_observer_failed", { err: err instanceof Error ? err.message : String(err) });
-    }
-  });
-  exerciseBank.setSendObserver(async (input2) => {
-    const channel = notifyCore.getChannel("bale") ? "bale" : "internal";
-    const clinicName = await settings.getClinicName();
-    let sent = 0;
-    for (const chat of input2.chats) {
-      const outcome = await notifyCore.enqueue({
-        channel,
-        template: input2.template,
-        recipient: chat,
-        studentId: input2.studentId,
-        payload: { ...input2.vars, clinicName },
-        dedupKey: `${input2.dedupBase}:${chat}`
-      });
-      if (!outcome.duplicate) sent += 1;
-    }
-    if (sent > 0) await notifyCore.dispatchPending(50);
-    return sent;
-  });
-  const reports = createReportService({ db, logger });
-  const sessionNotes = createSessionNotesService({ db, audit, logger, followups });
-  const announcements = createAnnouncementService({
-    db,
-    audit,
-    logger,
-    notify: notifyCore,
-    baleEnabled: Boolean(deps.baleToken),
-    clinicName: deps.clinicName
-  });
-  const knowledge = createKnowledgeService({ db, audit, logger, storage: exerciseStorage });
-  const clearbook = createClearbookService({ db, audit, logger, storage: exerciseStorage });
-  const docs = createDocsService({ db, audit, logger, storage: exerciseStorage });
-  const finance = createFinanceService({ db, audit, logger, storage: exerciseStorage });
-  const otEngine = createOtEngineService({ db, audit, logger });
-  const clinicalEngine = createClinicalEngineService({
-    db,
-    audit,
-    logger,
-    publicBaseUrl: deps.publicBaseUrl ?? null,
-    // ۱.۲۷.۲۷ — M4: پیوند برگهٔ پیشرفت خانواده
-    exerciseIdsExist: /* @__PURE__ */ __name((ids) => exerciseBank.idsExist(ids), "exerciseIdsExist"),
-    formulationOt: {
-      gatesOf: /* @__PURE__ */ __name((studentId, actor) => otEngine.getGates(studentId, actor), "gatesOf"),
-      otProfileOf: /* @__PURE__ */ __name((studentId, actor) => otEngine.getOtProfile(studentId, actor), "otProfileOf")
-    }
-  });
-  caseEvents.setMonitorFocusProvider((studentId, actor) => clinicalEngine.homeMonitorFocusOf(studentId, actor));
-  const games = createGamesService({
-    db,
-    audit,
-    logger,
-    publicBaseUrl: deps.publicBaseUrl ?? null,
-    injectPathProbe: /* @__PURE__ */ __name((pathId, input2, actor) => clinicalEngine.addPathProbe(pathId, input2, actor), "injectPathProbe")
-  });
-  const reportExport = createReportExportService({
-    db,
-    audit,
-    buildReport: /* @__PURE__ */ __name((pathId, actor) => clinicalEngine.getPathwayReport(pathId, { from: null, to: null }, actor), "buildReport")
-  });
-  const backup = createBackupService({ db, audit, logger, baleToken: deps.baleToken ?? null, sender: deps.backupDocumentSender ?? null });
-  const rum = createRumService({ db, logger });
-  const clientErrors = createClientErrorsService({ db, logger });
-  const health = createHealthService({
-    db,
-    cpConfigured: Boolean(deps.cpSyncUrl && deps.cpNodeCode && deps.cpNodeKey),
-    envName: deps.envName ?? null,
-    clientErrorsMax: deps.clientErrorsMax ?? null,
-    gamesHealthUrl: deps.gamesHealthUrl ?? null
-  });
-  const growth = createGrowthService({ db, logger });
-  const centerKpi = createCenterKpiService({ db });
-  const networkContent = createNetworkContentService({
-    db,
-    audit,
-    // m6 — دانلود فقط-خواندنی فایل برگزیده‌ها با کلید نود (خاموش اگر env سینک خالی است)
-    fetchCpFile: deps.cpSyncUrl ? (itemId) => {
-      let origin = null;
-      try {
-        origin = new URL(deps.cpSyncUrl).origin;
-      } catch {
-        origin = null;
-      }
-      return fetchCpContentFile({
-        config: { cpOrigin: origin, cpNodeCode: deps.cpNodeCode ?? null, cpNodeKey: deps.cpNodeKey ?? null, cpSyncStaffId: null },
-        networkItemId: itemId
-      }).catch(() => null);
-    } : void 0
-  });
-  const contentScore = createContentScoreService(db, audit);
-  const bugReports = createBugReportService(db, audit);
-  return { db, audit, logger, conflictEngine, appointments, attendance, staffAttendance, workingDay, studentProfile, studentTimeline, specialNeeds, staff, workingHours, settings, keys, tags, screening, search, notify, announcements, knowledge, clearbook, docs, finance, reports, waitlist, followups, sessionNotes, todos, exerciseBank, documentRequests, caseEvents, clinicalEngine, reportExport, otEngine, games, backup, rum, centerKpi, networkContent, bugReports, clientErrors, health, growth, contentScore };
-}
-__name(createServices, "createServices");
-function createApp(deps) {
-  const services = createServices(deps);
-  const app = new Hono3();
-  app.__services = services;
-  app.use("*", async (c, next) => {
-    c.set("logger", services.logger);
-    return next();
-  });
-  app.use("/api/*", async (c, next) => {
-    const requestId = `req-${crypto.randomUUID()}`;
-    c.set("requestId", requestId);
-    try {
-      return await runWithRequestId(requestId, () => next());
-    } finally {
-      c.header("X-Request-Id", requestId);
-    }
-  });
-  const apiRateLimiter = makeKeyedRateLimiter(API_RATE_LIMIT_WINDOW_MS);
-  let rateLimitDisabledLogged = false;
-  app.use("/api/*", async (c, next) => {
-    if (c.req.method !== "POST" && c.req.method !== "PUT" && c.req.method !== "PATCH" && c.req.method !== "DELETE") {
-      return next();
-    }
-    if (c.req.path === "/api/auth/login") return next();
-    const perMin = parseApiRateLimitPerMin(c.env?.API_RATE_LIMIT_PER_MIN);
-    if (perMin <= 0) {
-      if (!rateLimitDisabledLogged) {
-        rateLimitDisabledLogged = true;
-        services.logger.child("http").warn("api_rate_limit.disabled", {
-          reason: "API_RATE_LIMIT_PER_MIN=0"
-        });
-      }
-      return next();
-    }
-    const ip = (c.req.header("cf-connecting-ip") ?? "unknown").slice(0, 64);
-    if (!apiRateLimiter.allow(`${perMin}:${ip}`, perMin)) {
-      c.header("Retry-After", String(Math.ceil(API_RATE_LIMIT_WINDOW_MS / 1e3)));
-      throw new RateLimitError(
-        Math.ceil(API_RATE_LIMIT_WINDOW_MS / 1e3),
-        "\u062F\u0631\u062E\u0648\u0627\u0633\u062A\u200C\u0647\u0627\u06CC \u0646\u0648\u0634\u062A\u0646\u06CC \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0645\u062C\u0627\u0632 \u0627\u0633\u062A \u2014 \u06A9\u0645\u06CC \u0628\u0639\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F"
-      );
-    }
-    return next();
-  });
-  const tokenGetLimiter = makeKeyedRateLimiter(API_RATE_LIMIT_WINDOW_MS);
-  let tokenGetDisabledLogged = false;
-  app.use("*", async (c, next) => {
-    if (c.req.method !== "GET") return next();
-    const p = c.req.path;
-    if (!/^\/m\/[^/]+/.test(p) && !p.startsWith("/api/m/")) return next();
-    const perMin = parseTokenGetRateLimitPerMin(c.env?.API_TOKEN_GET_RATE_LIMIT_PER_MIN);
-    if (perMin <= 0) {
-      if (!tokenGetDisabledLogged) {
-        tokenGetDisabledLogged = true;
-        services.logger.child("http").warn("api_token_get_rate_limit.disabled", {
-          reason: "API_TOKEN_GET_RATE_LIMIT_PER_MIN=0"
-        });
-      }
-      return next();
-    }
-    const ip = (c.req.header("cf-connecting-ip") ?? "unknown").slice(0, 64);
-    if (!tokenGetLimiter.allow(`tg:${perMin}:${ip}`, perMin)) {
-      c.header("Retry-After", String(Math.ceil(API_RATE_LIMIT_WINDOW_MS / 1e3)));
-      throw new RateLimitError(
-        Math.ceil(API_RATE_LIMIT_WINDOW_MS / 1e3),
-        "\u062F\u0631\u062E\u0648\u0627\u0633\u062A\u200C\u0647\u0627\u06CC \u0644\u06CC\u0646\u06A9 \u0639\u0645\u0648\u0645\u06CC \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0645\u062C\u0627\u0632 \u0627\u0633\u062A \u2014 \u06A9\u0645\u06CC \u0628\u0639\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F"
-      );
-    }
-    return next();
-  });
-  app.use("*", async (c, next) => {
-    await next();
-    c.header("X-Content-Type-Options", "nosniff");
-    c.header("Referrer-Policy", "strict-origin-when-cross-origin");
-    c.header("X-Frame-Options", "DENY");
-    c.header("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
-    c.header("Cross-Origin-Opener-Policy", "same-origin");
-    c.header("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
-  });
-  app.use("/api/*", async (c, next) => {
-    await next();
-    c.header("Cache-Control", "no-store");
-  });
-  app.use("/public/exercise-files/*", async (c, next) => {
-    await next();
-    c.header("Cache-Control", "private, no-store");
-  });
-  app.use("/public/announcements", async (c, next) => {
-    await next();
-    c.header("Cache-Control", "public, max-age=60");
-  });
-  app.use("*", async (c, next) => {
-    const start = Date.now();
-    await next();
-    services.logger.child("http").info("request", {
-      method: c.req.method,
-      path: maskSensitivePath(c.req.path),
-      // security-005 (۱.۲۷.۷۸) — توکن لینک عمومی و سکرت وب‌هوک به لاگ نمی‌روند
-      status: c.res.status,
-      ms: Date.now() - start
-    });
-  });
+// src/application/api-routing/routes.ts
+function registerPublicRoutes(app, services, deps) {
   app.get("/health", async (c) => {
     let dbOk = true;
     try {
@@ -81482,8 +81558,9 @@ function createApp(deps) {
   registerEngineCapabilitiesRoutes(app);
   app.route("/node", createNodeSyncApp({ db: services.db, audit: services.audit, logger: services.logger }));
   app.route("/api/instance-sync", createInstanceSyncApp({ db: services.db, logger: services.logger }));
-  app.use("/api/*", authMiddleware());
-  app.use("/api/*", supervisorGate(services.audit));
+}
+__name(registerPublicRoutes, "registerPublicRoutes");
+function registerProtectedRoutes(app, services, deps) {
   registerLogoutRoute(app, { audit: services.audit, logger: services.logger });
   registerSetupCompleteRoutes(app, { db: services.db, audit: services.audit, logger: services.logger });
   registerInternalSyncRoutes(app, { db: services.db, logger: services.logger });
@@ -81498,7 +81575,7 @@ function createApp(deps) {
   registerCentralNodesMapRoutes(app, { db: services.db });
   app.get("/api/me", (c) => c.json({ data: c.get("authContext") }, 200));
   registerRoutes(app, services.appointments);
-  registerAssessmentBlockRoutes(app, createAssessmentBlockService({ db: services.db, audit: services.audit, logger: services.logger }));
+  registerAssessmentBlockRoutes(app, services.assessmentBlocks);
   registerRoutes2(app, services.attendance);
   registerStaffAttendanceRoutes(app, services.staffAttendance);
   registerWorkingDayRoutes(app, services.workingDay);
@@ -81506,7 +81583,7 @@ function createApp(deps) {
   registerStudentTimelineRoutes(app, services.studentTimeline);
   registerSpecialNeedsRoutes(app, services.specialNeeds);
   registerWaitlistRoutes(app, services.waitlist, { publicBaseUrl: deps.publicBaseUrl ?? null });
-  registerFormBuilderRoutes(app, createFormBuilderService({ db: services.db, audit: services.audit, logger: services.logger }));
+  registerFormBuilderRoutes(app, services.formBuilder);
   registerFollowUpRoutes(app, services.followups);
   registerTodoRoutes(app, services.todos);
   registerExerciseBankRoutes(app, services.exerciseBank);
@@ -81569,62 +81646,35 @@ function createApp(deps) {
     });
     return c.json({ data }, 200);
   });
-  const dashboard = createDashboardService({
-    appointments: services.appointments,
-    attendance: services.attendance,
-    conflicts: services.conflictEngine,
-    students: services.studentProfile,
-    db: services.db,
-    screening: services.screening,
-    settings: services.settings
-  });
-  registerRoutes8(app, dashboard);
+  registerRoutes8(app, services.dashboard);
   app.get("/api/dashboard/kpis", async (c) => {
-    const actor = getAuthContext(c);
-    const role = actor.role;
-    const isTherapist = role === "therapist";
-    const isOffice = role === "manager" || role === "secretary";
-    const isManager = role === "manager";
-    const date5 = DashboardTodayQuerySchema.parse({ date: c.req.query("date") || void 0 }).date;
-    const range = DashboardSummaryQuerySchema.parse({
-      from: c.req.query("from") || "",
-      to: c.req.query("to") || ""
-    });
-    const part = /* @__PURE__ */ __name((p) => p.catch(() => null), "part");
-    const scoringP = part(
-      handleScoring(
-        new Request(new URL("/api/scoring/board?period=month", c.req.url), { headers: c.req.raw.headers }),
-        c.env
-      ).then(async (res) => {
-        if (!res.ok) return null;
-        const body = await res.json().catch(() => null);
-        return body?.data ?? null;
-      })
+    const data = await services.dashboardKpi.getKpis(
+      getAuthContext(c),
+      {
+        date: c.req.query("date") || void 0,
+        from: c.req.query("from") || "",
+        to: c.req.query("to") || "",
+        apptFrom: c.req.query("appt_from") || void 0,
+        apptTo: c.req.query("appt_to") || void 0
+      },
+      { url: c.req.url, headers: c.req.raw.headers, env: c.env }
     );
-    const [today, summary, goal, scoring, me, knowledge, announcements, waitlist, dayAppts, followups, validation] = await Promise.all([
-      isTherapist ? Promise.resolve(null) : part(dashboard.getTodayCards(date5)),
-      isTherapist ? Promise.resolve(null) : part(dashboard.getPeriodSummary(range.from, range.to)),
-      isOffice ? part(dashboard.getScreeningGoal()) : Promise.resolve(null),
-      scoringP,
-      part(dashboard.getMyStats(actor.staffId)),
-      part(services.knowledge.listPublished()),
-      part(services.announcements.listPanel()),
-      isOffice ? part(services.waitlist.list({})) : Promise.resolve(null),
-      isOffice ? part(services.appointments.list({ from: c.req.query("appt_from") || void 0, to: c.req.query("appt_to") || void 0 })) : Promise.resolve(null),
-      isOffice ? part(services.followups.list({ group: "open" }, actor)) : Promise.resolve(null),
-      isManager ? part(
-        Promise.all([
-          part(services.clinicalEngine.getValidationKpis(actor)),
-          part(services.clinicalEngine.listCaseAudits(actor, null))
-        ]).then(([k, a]) => k ? { kpis: k, audits: a ?? [] } : null)
-      ) : actor.role === "therapist" ? (
-        /* M6 POLISH-3 (۱.۲۷.۲۹) — نمای فقط‌خواندنی درمانگر: حسابرسی پرونده‌های خودش (KPIهای دفتر نمی‌آید) */
-        part(services.clinicalEngine.listCaseAudits(actor, null).then((a) => ({ kpis: null, audits: a ?? [] })))
-      ) : Promise.resolve(null)
-    ]);
-    return c.json({ data: { today, summary, goal, scoring, me, knowledge, announcements, waitlist, dayAppts, followups, validation } }, 200);
+    return c.json({ data }, 200);
   });
   registerRoutes9(app, services.notify);
+}
+__name(registerProtectedRoutes, "registerProtectedRoutes");
+
+// src/application/api-routing/index.ts
+function createApp(deps) {
+  const services = createServices(deps);
+  const app = new Hono3();
+  app.__services = services;
+  installGlobalMiddleware(app, services);
+  registerPublicRoutes(app, services, deps);
+  app.use("/api/*", authMiddleware());
+  app.use("/api/*", supervisorGate(services.audit));
+  registerProtectedRoutes(app, services, deps);
   app.onError(errorHandler2);
   app.notFound((c) => c.json({ error: "NOT_FOUND", message: "\u0645\u0633\u06CC\u0631 \u062F\u0631\u062E\u0648\u0627\u0633\u062A\u06CC \u06CC\u0627\u0641\u062A \u0646\u0634\u062F" }, 404));
   return app;
