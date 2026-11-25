@@ -46,13 +46,16 @@
 
 تصمیم: اصلاح در موج B1 نشست sdt157 (release 1.27.80). uncertainty ثبت‌شدهٔ یافته («شکل رجیستری: آرایهٔ declarative یا تابع register») با گزینهٔ دوم پاس شد: **دو تابع مرزی `registerPublicRoutes`/`registerProtectedRoutes`** — چون مرزِ گیتِ auth «میانِ» روت‌هاست و آرایهٔ declarative یک‌مرحله‌ای نمی‌تواند همان ترتیبِ میان‌روت را ابراز کند؛ ترتیبِ قطعی چیدمان در index.ts باریک پین شده است. فایل ۹۹۰خطی به composition.ts (ریشهٔ ترکیب + AppDeps/Services)، middleware.ts (installGlobalMiddleware — state سطل‌های per-isolate در هر فراخوانی)، routes.ts (رجیستری دو-مرزی) و index.ts (فقط ترتیب چیدمان + قرارداد __services + re-export چهار نماد) شکسته شد. سه سرویسِ دو-ناقله (assessment-blocks/form-builder/dashboard) به ریشهٔ ترکیب منتقل و به Services افزوده شدند و هندلر ۵۵خطی تجمیع KPI فاز F به سرویس تازهٔ `@app/dashboard/kpi-source` رفت (import scoring هم از لایهٔ مسیریابی بیرون کشیده شد). گیت ساختاری تازهٔ شش‌سناریویی (api-routing-structure) مرزها و ترتیب را پین می‌کند و مسیر خواندن شش گیت قرارداد-متن (referral-inbox، 12571، validation-m6، 12778-sec-hardening، 12743، 12753-report-export) در همان کامیت به ماژول تازه سواپ شد. رفتار runtime با سوئیت کامل e2e (۳٬۲۶۷ آزمون از هارنس createTestApp) ثابت ماند.
 
+## ADR-012 — architecture-004 (لایهٔ HTTP در ماژول‌های domain؛ ۲۸ فایل routes.ts) → fixed با گزینهٔ الف
+
+تصمیم: نشست sdt158 (release 1.27.81). ممیز رقیب severity را high→medium تخفیف داده بود (resulting_severity=medium): الگوی register قرارداد رسمیِ مستندشدهٔ §4.3 است و AppHono عامدانه در @core/shared تعریف شده — «نقض مرز» نیست؛ هزینهٔ واقعیِ باقی‌مانده، جفت‌شدگی به Hono و نبود نقطهٔ واحد کشف مسیرها بود. uncertainty ثبت‌شدهٔ یافته («گزینهٔ ب بازنویسی گسترده است و فقط با تصمیم Decide») با انتخاب **گزینهٔ الف** پاس شد: تثبیت صریح قرارداد + رجیستری سبک مرکزی. بند دوم done_when (حذف مصرف AppHono از domain) صراحتاً محدود به گزینهٔ ب است و اجرا نشد — اگر روزی تغییر فریم‌ورک HTTP یا میزبان دوم مطرح شود، گزینهٔ ب با همین رجیستری به‌عنوان نقشهٔ مهاجرت ماشین‌خوان به‌مراتب ارزان‌تر از امروز می‌شود. پیاده‌سازی: `scripts/check-route-registry.mjs` سورس را اسکن می‌کند (حذف خطوط کامنت، گشودن ثابت‌های لفظی مثل FILL_PATH، مشتق zone از محل فراخوانی register شامل barrel دامنه/alias/mount زیراپ) و `docs/route-registry.json` را می‌سازد/می‌سنجد: ۴۴۱ ثبت در ۵۶ ماژول (domain ۳۳۱ · application ۹۵ · other ۱۵) با zone صادق (router/public/public+protected/protected/games-worker — صفر standalone). گیت در سه‌سطح سیم شد: `check:route-registry` (package.json)، step مستقل CI کنار مانیفست مایگریشن‌ها و آزمون vitest در سوئیت؛ §4.3 تثبیت و §9 به فهرست زنده اشاره شد.
+
 ## وضعیت نهایی رجیستری پس از این نشست
 
-۶۳ یافتهٔ فعال ثبت‌شده (به‌علاوهٔ ۴ refuted درون‌ران): **fixed ۱۷ · accepted ۴ · new ۴۲ — بازِ واقعی ۴۶ (high ۲ · medium ۲۴ · low ۲۰)** (به‌روز sdt157). یادداشت اعتبار داده: ردیف lifecycle یافتهٔ data-005 در ec6fe08 (sdt156) به‌دلیل باگ «نوشتن درون‌حلقه‌ای» اسکریپت هم‌گام جامان بود و در همین نشست ترمیم شد — شمارش‌های sdt156 در سند پیشین یک واحد بیش‌شمرده شده بود.
+۶۳ یافتهٔ فعال ثبت‌شده (به‌علاوهٔ ۴ refuted درون‌ران): **fixed ۱۸ · accepted ۴ · new ۴۱ — بازِ واقعی ۴۵ (high ۱ · medium ۲۴ · low ۲۰)** (به‌روز sdt158).
 
 ## صف high باز — ترتیب پیشنهادی موج‌های بعدی
 
-1. **architecture-004** — خروج لایهٔ HTTP از ماژول‌های domain (۲۸ فایل): بزرگ‌ترین رفاکس صف — پس از تثبیت composition تازه.
-2. **testing-002** — شکنندگی گیت‌های regex-محور: هم‌راستا با مسیر گیت رندر واقعی (لایهٔ playwright در صورت تصویب).
+1. **testing-002** — شکنندگی گیت‌های regex-محور: هم‌راستا با مسیر گیت رندر واقعی (لایهٔ playwright در صورت تصویب)؛ تنها قلم باقی‌ماندهٔ high.
 
 جزئیات صف کامل (medium/low و پذیرش‌ها): `repodocs/migration-backlog.md`.

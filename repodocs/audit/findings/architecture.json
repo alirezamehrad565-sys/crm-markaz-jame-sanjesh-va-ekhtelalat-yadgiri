@@ -244,7 +244,7 @@
           "detail": "نمونهٔ نماینده: امضای registerCaseEventsRoutes(app: AppHono, ...) (خط ۱۰) با import نوع AppHono از @core/shared (خط ۱) و گیت‌های احراز/نقش @core/auth (خط ۲)؛ یک نمونه: app.post('/api/case-events/types', requireRole('manager','secretary','therapist'), ...) در خط ۲۰ — ۳۳ ثبت مسیر در همین یک فایل؛ پارس query، کد وضعیت و پیام خطای فارسی در خود routes.ts نوشته می‌شود؛ فقط import مستقیم پکیج hono در src/domain صفر است (نوع‌ها از @core/shared می‌آیند)."
         }
       ],
-      "status": "new",
+      "status": "fixed",
       "verification": {
         "status": "downgraded",
         "counterevidence": [
@@ -255,7 +255,8 @@
           }
         ],
         "note": "تأیید مستقل کور در 2026-11-24 (verifier: independent-blind-verifier)",
-        "resulting_severity": "medium"
+        "resulting_severity": "medium",
+        "lifecycle_note": "release 1.27.81 (sdt158) — گزینهٔ الف Decide (ADR-012): قرارداد «routes.ts در دامنه» تثبیت شد و رجیستری سبک مرکزی مسیرها ساخته شد (scripts/check-route-registry.mjs + docs/route-registry.json — ۴۴۱ ثبت در ۵۶ ماژول با zone مشتق‌شده؛ گیت در CI و سوئیت)؛ بند دوم done_when (حذف AppHono از domain) محدود به گزینهٔ ب است و اجرا نشد — برابر نتیجهٔ تخفیف ممیز رقیب (resulting_severity=medium)"
       },
       "remediation": {
         "observable_effect": "جابه‌جایی فریم‌ورک HTTP یا افزودن میزبان جدید مستلزم دست‌زدن به ۲۸ ماژول دامنه است؛ یافتن «همهٔ مسیرهای یک منبع» فقط با جستجوی پراکنده ممکن است و ترتیب ثبت (عمومی قبل از گیت auth) به ترتیب دستی خطوط در createApp گره خورده است.",
