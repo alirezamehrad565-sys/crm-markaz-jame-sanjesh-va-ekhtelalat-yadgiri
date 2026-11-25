@@ -47766,7 +47766,7 @@ function createGamesService(deps) {
 __name(createGamesService, "createGamesService");
 
 // src/core/version.ts
-var APP_VERSION = "1.27.80";
+var APP_VERSION = "1.27.81";
 var NODE_MIN_VERSION = "1.26.0";
 
 // src/domain/games/page.ts
@@ -76104,11 +76104,14 @@ function maskSensitivePath(path) {
 __name(maskSensitivePath, "maskSensitivePath");
 
 // src/application/api-routing/middleware.ts
-function installGlobalMiddleware(app, services) {
+function installLoggerContext(app, services) {
   app.use("*", async (c, next) => {
     c.set("logger", services.logger);
     return next();
   });
+}
+__name(installLoggerContext, "installLoggerContext");
+function installRequestId(app) {
   app.use("/api/*", async (c, next) => {
     const requestId = `req-${crypto.randomUUID()}`;
     c.set("requestId", requestId);
@@ -76118,6 +76121,9 @@ function installGlobalMiddleware(app, services) {
       c.header("X-Request-Id", requestId);
     }
   });
+}
+__name(installRequestId, "installRequestId");
+function installWriteRateLimit(app, services) {
   const apiRateLimiter = makeKeyedRateLimiter(API_RATE_LIMIT_WINDOW_MS);
   let rateLimitDisabledLogged = false;
   app.use("/api/*", async (c, next) => {
@@ -76145,6 +76151,9 @@ function installGlobalMiddleware(app, services) {
     }
     return next();
   });
+}
+__name(installWriteRateLimit, "installWriteRateLimit");
+function installTokenGetRateLimit(app, services) {
   const tokenGetLimiter = makeKeyedRateLimiter(API_RATE_LIMIT_WINDOW_MS);
   let tokenGetDisabledLogged = false;
   app.use("*", async (c, next) => {
@@ -76171,6 +76180,9 @@ function installGlobalMiddleware(app, services) {
     }
     return next();
   });
+}
+__name(installTokenGetRateLimit, "installTokenGetRateLimit");
+function installSecurityAndCacheHeaders(app) {
   app.use("*", async (c, next) => {
     await next();
     c.header("X-Content-Type-Options", "nosniff");
@@ -76192,6 +76204,9 @@ function installGlobalMiddleware(app, services) {
     await next();
     c.header("Cache-Control", "public, max-age=60");
   });
+}
+__name(installSecurityAndCacheHeaders, "installSecurityAndCacheHeaders");
+function installRequestLogger(app, services) {
   app.use("*", async (c, next) => {
     const start = Date.now();
     await next();
@@ -76203,6 +76218,15 @@ function installGlobalMiddleware(app, services) {
       ms: Date.now() - start
     });
   });
+}
+__name(installRequestLogger, "installRequestLogger");
+function installGlobalMiddleware(app, services) {
+  installLoggerContext(app, services);
+  installRequestId(app);
+  installWriteRateLimit(app, services);
+  installTokenGetRateLimit(app, services);
+  installSecurityAndCacheHeaders(app);
+  installRequestLogger(app, services);
 }
 __name(installGlobalMiddleware, "installGlobalMiddleware");
 
@@ -81513,7 +81537,7 @@ function registerDesktopRoutes(app, deps) {
 __name(registerDesktopRoutes, "registerDesktopRoutes");
 
 // src/application/api-routing/routes.ts
-function registerPublicRoutes(app, services, deps) {
+function registerPublicInlineRoutes(app, services) {
   app.get("/health", async (c) => {
     let dbOk = true;
     try {
@@ -81551,6 +81575,9 @@ function registerPublicRoutes(app, services, deps) {
       }
     });
   });
+}
+__name(registerPublicInlineRoutes, "registerPublicInlineRoutes");
+function registerPublicModules(app, services) {
   registerGamesPublicRoutes(app, services.games);
   registerAuthRoutes(app, { audit: services.audit, logger: services.logger });
   registerSetupStatusRoutes(app, { logger: services.logger });
@@ -81559,8 +81586,13 @@ function registerPublicRoutes(app, services, deps) {
   app.route("/node", createNodeSyncApp({ db: services.db, audit: services.audit, logger: services.logger }));
   app.route("/api/instance-sync", createInstanceSyncApp({ db: services.db, logger: services.logger }));
 }
+__name(registerPublicModules, "registerPublicModules");
+function registerPublicRoutes(app, services, deps) {
+  registerPublicInlineRoutes(app, services);
+  registerPublicModules(app, services);
+}
 __name(registerPublicRoutes, "registerPublicRoutes");
-function registerProtectedRoutes(app, services, deps) {
+function registerPostGateSystemRoutes(app, services, deps) {
   registerLogoutRoute(app, { audit: services.audit, logger: services.logger });
   registerSetupCompleteRoutes(app, { db: services.db, audit: services.audit, logger: services.logger });
   registerInternalSyncRoutes(app, { db: services.db, logger: services.logger });
@@ -81574,6 +81606,9 @@ function registerProtectedRoutes(app, services, deps) {
   registerCentralQuotaRoutes(app, { db: services.db });
   registerCentralNodesMapRoutes(app, { db: services.db });
   app.get("/api/me", (c) => c.json({ data: c.get("authContext") }, 200));
+}
+__name(registerPostGateSystemRoutes, "registerPostGateSystemRoutes");
+function registerClinicalDomainRoutes(app, services, deps) {
   registerRoutes(app, services.appointments);
   registerAssessmentBlockRoutes(app, services.assessmentBlocks);
   registerRoutes2(app, services.attendance);
@@ -81599,6 +81634,9 @@ function registerProtectedRoutes(app, services, deps) {
       return st ? `${st.firstName} ${st.lastName}` : null;
     }, "studentNameOf")
   });
+}
+__name(registerClinicalDomainRoutes, "registerClinicalDomainRoutes");
+function registerContentDomainRoutes(app, services, deps) {
   registerRoutes5(app, services.tags);
   registerSearchRoutes(app, services.search);
   registerScreeningRoutes(app, services.screening);
@@ -81629,6 +81667,9 @@ function registerProtectedRoutes(app, services, deps) {
   registerGrowthRoutes(app, services.growth);
   registerContentScoreRoutes(app, { contentScore: services.contentScore });
   if (FEATURES.apiKeys) registerKeysRoutes(app, services.keys);
+}
+__name(registerContentDomainRoutes, "registerContentDomainRoutes");
+function registerConflictRoutes(app, services) {
   app.get("/api/conflicts", async (c) => {
     const staffId = c.req.query("staff_id") ?? "";
     const from = c.req.query("from") ?? "1970-01-01T00:00:00.000Z";
@@ -81646,6 +81687,9 @@ function registerProtectedRoutes(app, services, deps) {
     });
     return c.json({ data }, 200);
   });
+}
+__name(registerConflictRoutes, "registerConflictRoutes");
+function registerDashboardTailRoutes(app, services) {
   registerRoutes8(app, services.dashboard);
   app.get("/api/dashboard/kpis", async (c) => {
     const data = await services.dashboardKpi.getKpis(
@@ -81662,6 +81706,14 @@ function registerProtectedRoutes(app, services, deps) {
     return c.json({ data }, 200);
   });
   registerRoutes9(app, services.notify);
+}
+__name(registerDashboardTailRoutes, "registerDashboardTailRoutes");
+function registerProtectedRoutes(app, services, deps) {
+  registerPostGateSystemRoutes(app, services, deps);
+  registerClinicalDomainRoutes(app, services, deps);
+  registerContentDomainRoutes(app, services, deps);
+  registerConflictRoutes(app, services);
+  registerDashboardTailRoutes(app, services);
 }
 __name(registerProtectedRoutes, "registerProtectedRoutes");
 
