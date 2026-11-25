@@ -91,6 +91,7 @@ html {
   --on-sick-soft: #5B21B6; /* متن روی sick-soft — لایت ۷٫۲۶ */
   --warn: #8F6408; /* هم‌مقدار --warning-strong؛ برچسب آستانهٔ نمودار (۵٫۱۳ روی کرم) */
   --danger: #B8403A;        /* مترادف --error — برخی viewها از این نام استفاده می‌کنند */
+  --on-danger: #FFFFFF;     /* ui-006 ۱.۲۷.۸۳: متن/آیکن روی fill خطر — #fff روی #B8403A = ۵٫۴۸ */
   --brand: #0D72A8;         /* مترادف --primary */
   --focus: #0D72A8; /* حلقهٔ فوکوس بدون color-mix (۴٫۵۶ — WCAG 2.2 §2.4.11) */
   --backdrop: rgba(20, 23, 29, 0.5); /* پردهٔ مودال؛ جانشین #0F1113 میراثی */
@@ -179,6 +180,7 @@ html {
   --on-sick-soft: #D4C5F9; /* ۷٫۶۹ */
   --warn: #EDC063; /* هم‌مقدار --warning-strong تیره */
   --danger: #E97971;        /* مترادف --error */
+  --on-danger: #153E50;     /* ui-006 ۱.۲۷.۸۳: در تم تیره #fff روی #E97971 فقط ۲٫۸۲ بود → نیوی ۴٫۰۵ */
   --brand: #45B7F0;         /* مترادف --primary */
   --focus: #6CC6F5; /* ۹٫۴۳ روی surface */
   --backdrop: rgba(0, 0, 0, 0.62); /* */
@@ -877,7 +879,7 @@ html[lang='fa'] .nav__label { letter-spacing: 0; }
   width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
   background: var(--primary); color: var(--on-primary);
   display: grid; place-items: center;
-  font-size: 12px; font-weight: 700; line-height: 1;
+  font-size: var(--fs-2xs); font-weight: 700; line-height: 1; /* ui-003: px خام خارج از مقیاس نباشد */
 }
 .topbar__user { padding-inline: 8px 14px; }
 .topbar__user .badge { font-size: var(--fs-2xs); padding: 1px 8px; } /* S11-12: بج نقش کاربر، کف ۱۲px */

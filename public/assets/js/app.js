@@ -283,6 +283,8 @@ function installServerStatusPill() {
     if (themeBtnEl) topbar.insertBefore(pill, themeBtnEl); else topbar.appendChild(pill);
     const paint = (status) => {
       const view = serverStateView(status?.state, status?.degradedReason);
+      pill.setAttribute('role', 'status'); /* ui-005 ۱.۲۷.۸۳ — تغییر وضعیت سرور اعلام می‌شود */
+      pill.setAttribute('aria-live', 'polite');
       pill.className = `badge ${view.badge}`;
       const dotEl = pill.querySelector('.dot');
       if (dotEl) dotEl.className = `dot ${view.dot}`;

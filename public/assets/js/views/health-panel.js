@@ -803,6 +803,8 @@ export function makeServerCardPaint(body, ctx = {}) {
       return;
     }
     const view = serverStateView(status?.state, status?.degradedReason);
+    body.setAttribute('role', 'status'); /* ui-005 ۱.۲۷.۸۳ — کارت سرور محلی منطقهٔ زندهٔ اعلام وضعیت است */
+    body.setAttribute('aria-live', 'polite');
     // فاز D1 — توضیح انسانی پورت‌ها (خواست کارفرما: «سرور محلی روشن است روی پورت …»)
     const portLine = status?.state === 'Ready' ? `سرور محلی روشن است — ${serverPortsView(status)}` : serverPortsView(status);
     body.replaceChildren(

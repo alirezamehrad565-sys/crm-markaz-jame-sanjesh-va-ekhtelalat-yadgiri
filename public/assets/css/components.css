@@ -203,7 +203,7 @@ button.search-row:active { background: color-mix(in srgb, var(--primary-soft) 70
   border-radius: 50%;
   background: var(--surface-2, color-mix(in srgb, var(--text) 8%, transparent));
   color: var(--text-2);
-  font-size: 14px;
+  font-size: var(--fs-sm);
   line-height: 1;
   cursor: pointer;
   display: grid;
@@ -1745,7 +1745,7 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   cursor: pointer;
   border-radius: var(--radius-xs); /* توکن‌شد */
   font: inherit;
-  font-size: 13px;
+  font-size: var(--fs-xs);
   color: var(--text);
   text-align: start;
   white-space: nowrap;

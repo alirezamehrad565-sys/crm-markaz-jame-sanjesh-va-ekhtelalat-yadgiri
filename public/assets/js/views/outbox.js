@@ -54,11 +54,13 @@ function recordRow(n, actionButton) {
 }
 
 export async function renderOutbox(outlet) {
+  outlet.setAttribute('aria-busy', 'true'); /* ui-005 ۱.۲۷.۸۳ — اعلام بارگذاری به فناوری یاری‌رسان (الگوی reports.js) */
   outlet.replaceChildren(skeletonState('list', 6));
   let data;
   try {
     data = (await api.get('/api/notifications/outbox')).data;
   } catch (err) {
+    outlet.setAttribute('aria-busy', 'false');
     outlet.replaceChildren(emptyState({
       iconName: 'alert',
       title: 'بارگذاری صندوق اعلان‌ها ناموفق بود',

@@ -1289,9 +1289,13 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
 
       if (filters.publishedOnly) conds.push('p.published = 1');
       if (filters.q && filters.q.trim().length > 0) {
-        const like = `%${escapeLike(filters.q.trim())}%`;
-        conds.push("(p.title LIKE ? ESCAPE '\\' OR p.description LIKE ? ESCAPE '\\')");
-        params.push(like, like);
+        // ۱.۲۷.۸۳ (ADR-007 دنباله) — آینهٔ B2 روی فهرست طرح‌های درمان: هستهٔ مشترک fa-search
+        // (ي/ك عربی، أ إ آ، ة، نیم‌فاصله، ارقام؛ بی‌اثرسازی wildcard) با haystack چسبیدهٔ
+        // title+description — همان حکم فهرست کارت‌ها؛ لیست و شمارش از یک where مشترک می‌خوانند.
+        const like = likePattern(sanitizeFaQuery(filters.q));
+        const hay = faHaystackExpr("(p.title || ' ' || COALESCE(p.description, ''))");
+        conds.push(`(${hay} LIKE ? ESCAPE '\\')`);
+        params.push(like);
       }
       if (filters.tagId) {
         conds.push('EXISTS (SELECT 1 FROM exercise_package_tags pt WHERE pt.package_id = p.id AND pt.tag_id = ?)');

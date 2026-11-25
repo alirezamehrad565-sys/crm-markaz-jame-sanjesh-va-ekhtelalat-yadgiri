@@ -101,6 +101,31 @@ describe('گیت کف ۱۲px متن فارسی (فاز ۳ ممیزی کیفیت 
     expect(tokens).toMatch(/--fs-2xs:\s*0\.75rem/); /* ۱.۲۷.۴۹ — بازتنظیم یک پله پایین به خواست کارفرما؛ کف گیت همان ۱۲px */
   });
 
+  /* ui-003 ۱.۲۷.۸۳ (sdt160) — کورگوتِ «اندازهٔ خام ≥۱۲px خارج از مقیاس توکنی» بسته شد:
+     همهٔ font-size عددیِ ≥۱۲ فقط در دو سند ایزوله مجاز است (خروجی چاپ A4 و برگهٔ بازخورد —
+     توکن مقیاس در آن اسناد در دسترس نیست)؛ در صفحهٔ اپ اندازه باید var(--fs-*) باشد. */
+  const RAW_PX_EXEMPT_FILES = ['js/views/progress-report.js', 'js/feedback-sheet.js'];
+
+  it('ratchet ui-003: شمار font-size خام ≥۱۲px در صفحهٔ اپ فقط کاهشی است — مبنا ۱۲۷ پس از اصلاح دوازده موضع ممیز', () => {
+    const n = HITS.filter((h) => h.size >= 12 && !RAW_PX_EXEMPT_FILES.includes(h.file)).length;
+    expect(
+      n,
+      'پین خام تازه؟ توکن مقیاس (--fs-*) را ترجیح دهید؛ اگر سقف را عمداً پایین آورده‌اید همین ثابت را به عدد تازه تغییر دهید'
+    ).toBeLessThanOrEqual(127);
+  });
+
+  it('موقعیت‌های اصلاح‌شدهٔ ui-003 به توکن مقیاس وصل‌اند', () => {
+    const base = readFileSync(join(ASSETS, 'css/base.css'), 'utf8');
+    const components = readFileSync(join(ASSETS, 'css/components.css'), 'utf8');
+    const views = readFileSync(join(ASSETS, 'css/views.css'), 'utf8');
+    expect(base).toMatch(/\.avatar \{[^}]*font-size: var\(--fs-2xs\)/);
+    expect(components).toMatch(/\.combo__clear \{[\s\S]{0,400}?font-size: var\(--fs-sm\)/);
+    expect(components).toMatch(/\.row-menu__item \{[\s\S]{0,400}?font-size: var\(--fs-xs\)/);
+    expect(views).toMatch(/\.lb-score b \{[^}]*font-size: var\(--fs-2xl\)/);
+    expect(views).toMatch(/\.wl-board-card__counts \{[^}]*font-size: var\(--fs-xs\)/);
+    expect(views).not.toMatch(/^\.wl-board-card__title\s*[,{]/m); /* کلاس مرده در bloat-005 حذف شد */
+  });
+
   it('S1-10 — کلاس مردهٔ hero-score__value حذف و --fs-display به هیروی واقعی وصل شده', () => {
     const views = readFileSync(join(ASSETS, 'css/views.css'), 'utf8');
     expect(views).not.toMatch(/\.hero-score__value\s*[,{]/);

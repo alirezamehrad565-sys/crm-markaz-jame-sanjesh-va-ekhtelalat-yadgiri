@@ -162,7 +162,7 @@ function printFeedbackSheet(sheet) {
   body { margin: 0; background: #fff; color: #12384f; font-family: Vazirmatn, Tahoma, sans-serif; }
   .sheet { max-width: 720px; margin: 0 auto; padding: 28px 32px; line-height: 2; }
   .head { text-align: center; border-bottom: 2px solid #12384f; padding-bottom: 12px; margin-bottom: 14px; }
-  .head .center { font-size: 17px; font-weight: 700; }
+  .head .center { font-size: 16px; font-weight: 700; } /* ui-003 ۱.۲۷.۸۳: ۱۷→۱۶ هم‌مقیاس تایپ — سند ایزوله، توکن در دسترس نیست */
   .head .title { font-size: 14px; margin-top: 2px; }
   .meta { font-size: 13px; margin-top: 6px; }
   .intro { font-size: 12.5px; color: #444; margin: 0 0 16px; }
