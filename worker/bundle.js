@@ -23938,6 +23938,27 @@ async function touchApiKeyLastUsed(db, id) {
 }
 __name(touchApiKeyLastUsed, "touchApiKeyLastUsed");
 
+// src/core/auth/session-cookie.ts
+var SESSION_COOKIE_NAME = "cs_session";
+function buildSessionCookie(token) {
+  return `${SESSION_COOKIE_NAME}=${token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${SESSION_TTL_SECONDS}`;
+}
+__name(buildSessionCookie, "buildSessionCookie");
+function clearSessionCookie() {
+  return `${SESSION_COOKIE_NAME}=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0`;
+}
+__name(clearSessionCookie, "clearSessionCookie");
+function readSessionCookie(cookieHeader) {
+  if (!cookieHeader) return void 0;
+  for (const part of cookieHeader.split(";")) {
+    const idx = part.indexOf("=");
+    if (idx === -1) continue;
+    if (part.slice(0, idx).trim() === SESSION_COOKIE_NAME) return part.slice(idx + 1).trim();
+  }
+  return void 0;
+}
+__name(readSessionCookie, "readSessionCookie");
+
 // src/core/auth/middleware.ts
 var DEV_STAFF_HEADER = "X-Dev-Staff-Id";
 var ACCESS_JWT_HEADER = "Cf-Access-Jwt-Assertion";
@@ -23986,8 +24007,19 @@ function authMiddleware() {
       return next();
     }
     const authHeader = c.req.header("Authorization");
-    if (authHeader?.startsWith("Bearer ")) {
-      const sessionToken = authHeader.slice(7).trim();
+    const bearerToken3 = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : void 0;
+    const fromCookie = !bearerToken3;
+    const sessionToken = fromCookie ? readSessionCookie(c.req.header("Cookie")) : bearerToken3;
+    if (sessionToken) {
+      if (fromCookie) {
+        const method = c.req.method.toUpperCase();
+        const origin = c.req.header("Origin");
+        if (method !== "GET" && method !== "HEAD" && method !== "OPTIONS" && origin) {
+          if (origin !== new URL(c.req.url).origin) {
+            throw new ForbiddenError("\u062F\u0631\u062E\u0648\u0627\u0633\u062A \u0628\u06CC\u0646\u200C\u0645\u0628\u062F\u0623 \u0628\u0627 \u06A9\u0648\u06A9\u06CC \u0646\u0634\u0633\u062A \u0645\u062C\u0627\u0632 \u0646\u06CC\u0633\u062A");
+          }
+        }
+      }
       const payload2 = await verifySessionJwt(sessionToken, await resolveSessionSecret(env));
       if (payload2) {
         if (!payload2.sid) {
@@ -42899,6 +42931,18 @@ function createCaseEventsService(deps) {
 }
 __name(createCaseEventsService, "createCaseEventsService");
 
+// src/core/shared/csp.ts
+var PUBLIC_PAGE_CSP = "default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
+var JSON_API_CSP = "default-src 'none'; frame-ancestors 'none'";
+function safeJsonEmbed2(v) {
+  return JSON.stringify(v ?? null).replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
+}
+__name(safeJsonEmbed2, "safeJsonEmbed");
+
+// src/core/version.ts
+var APP_VERSION = "1.27.82";
+var NODE_MIN_VERSION = "1.26.0";
+
 // src/domain/case-events/public-form.ts
 var FA_DIGITS = "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9";
 function faNum4(n) {
@@ -43068,78 +43112,8 @@ function renderFillFormPage(model, token) {
   </form>
   <div class="foot">\u0645\u0631\u06A9\u0632 \u062C\u0627\u0645\u0639 \u0633\u0646\u062C\u0634 \u0648 \u062A\u0648\u0627\u0646\u200C\u0628\u062E\u0634\u06CC \u2014 \u0627\u06CC\u0646 \u067E\u06CC\u0627\u0645\u200C\u06A9\u0648\u062A\u0627\u0647 \u06CC\u06A9\u200C\u0628\u0627\u0631 \u0645\u0635\u0631\u0641 \u0627\u0633\u062A.</div>
 </div>
-<script>
-(function () {
-  var f = document.getElementById('f');
-  var msg = document.getElementById('msg');
-  var progText = document.getElementById('progText');
-  var progFill = document.getElementById('progFill');
-  var TOTAL = ${total};
-
-  function updateProgress() {
-    var answered = {};
-    f.querySelectorAll('.item input[type=radio]:checked').forEach(function (r) { answered[r.name] = true; });
-    var n = Object.keys(answered).length;
-    progText.textContent = '\u067E\u0627\u0633\u062E \u062F\u0627\u062F\u0647\u200C\u0634\u062F\u0647: ' + String(n).replace(/[0-9]/g, function (d) { return '\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9'[Number(d)]; })
-      + ' \u0627\u0632 ' + String(TOTAL).replace(/[0-9]/g, function (d) { return '\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9'[Number(d)]; });
-    progFill.style.width = (TOTAL ? Math.round(n * 100 / TOTAL) : 0) + '%';
-    return n;
-  }
-  f.addEventListener('change', function () { updateProgress(); });
-
-  f.addEventListener('submit', function (ev) {
-    ev.preventDefault();
-    var data = new FormData(f);
-    var answers = {};
-    document.querySelectorAll('#f .item input[type=radio]').forEach(function (radio) {
-      var name = radio.name;
-      if (data.get(name)) answers[name] = Number(data.get(name));
-    });
-    document.querySelectorAll('#f textarea.free').forEach(function (ta) {
-      var v = (ta.value || '').trim();
-      if (v) answers[ta.name] = v;
-    });
-    var missing = 0;
-    document.querySelectorAll('#f .item').forEach(function (item) {
-      if (item.classList.contains('item--free')) return; /* \u06F1.\u06F2\u06F5.\u06F5\u06F9 \u2014 \u0641\u06CC\u0644\u062F \u0622\u0632\u0627\u062F \u0627\u062E\u062A\u06CC\u0627\u0631\u06CC \u0627\u0633\u062A */
-      var has = item.querySelector('input[type=radio]:checked');
-      item.classList.toggle('is-missing', !has);
-      if (!has) missing += 1;
-    });
-    if (missing > 0) {
-      var m = String(missing).replace(/[0-9]/g, function (d) { return '\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9'[Number(d)]; });
-      msg.className = 'msg err';
-      msg.textContent = '\u0628\u0647 ' + m + ' \u0633\u0624\u0627\u0644 \u067E\u0627\u0633\u062E \u0646\u062F\u0627\u062F\u0647\u200C\u0627\u06CC\u062F \u2014 \u0633\u0624\u0627\u0644\u200C\u0647\u0627\u06CC \u062C\u0627\u0645\u0627\u0646\u062F\u0647 \u0628\u0627 \u0631\u0646\u06AF \u0633\u0631\u062E \u0645\u0634\u062E\u0635 \u0634\u062F\u0647\u200C\u0627\u0646\u062F.';
-      var first = document.querySelector('#f .item.is-missing');
-      if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      return;
-    }
-    var btn = f.querySelector('.btn');
-    btn.disabled = true;
-    fetch(location.pathname, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: ${JSON.stringify(token)}, answers: answers })
-    }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
-      .then(function (res) {
-        if (res.ok) {
-          msg.className = 'msg ok';
-          msg.textContent = '\u067E\u0627\u0633\u062E\u200C\u0647\u0627\u06CC \u0634\u0645\u0627 \u062B\u0628\u062A \u0634\u062F. \u0628\u0627 \u062A\u0634\u06A9\u0631 \u0627\u0632 \u0647\u0645\u0631\u0627\u0647\u06CC \u0634\u0645\u0627.';
-          f.querySelectorAll('input, button').forEach(function (x) { x.disabled = true; });
-          var p = document.getElementById('prog');
-          if (p) p.style.display = 'none';
-        } else {
-          msg.className = 'msg err';
-          msg.textContent = (res.j && res.j.error && res.j.error.message) || '\u062B\u0628\u062A \u0627\u0646\u062C\u0627\u0645 \u0646\u0634\u062F.';
-          btn.disabled = false;
-        }
-      })
-      .catch(function () { msg.className = 'msg err'; msg.textContent = '\u062E\u0637\u0627\u06CC \u0634\u0628\u06A9\u0647 \u2014 \u062F\u0648\u0628\u0627\u0631\u0647 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F.'; btn.disabled = false; });
-  });
-
-  updateProgress();
-})();
-</script>
+<script type="application/json" id="fill-boot">${safeJsonEmbed2({ total, token })}</script>
+<script src="/assets/public/fill-form.js?v=${APP_VERSION}" defer></script>
 </body>
 </html>`;
 }
@@ -43297,131 +43271,12 @@ function renderPreviewPage(def, token) {
       <div id="resultBody"></div>
     </div>
     <button class="btn btn--ghost" type="button" id="againBtn">\u067E\u0631 \u06A9\u0631\u062F\u0646 \u062F\u0648\u0628\u0627\u0631\u0647</button>
-    <button class="btn btn--ghost" type="button" onclick="window.close()">\u0628\u0633\u062A\u0646 \u067E\u06CC\u0634\u200C\u0646\u0645\u0627\u06CC\u0634</button>
+    <button class="btn btn--ghost" type="button" id="closeBtn">\u0628\u0633\u062A\u0646 \u067E\u06CC\u0634\u200C\u0646\u0645\u0627\u06CC\u0634</button>
   </div>
   <div class="foot">\u067E\u06CC\u0634\u200C\u0646\u0645\u0627\u06CC\u0634 \u0641\u0631\u0645\u200C\u0633\u0627\u0632 \xAB\u0641\u0631\u0645\u200C\u0647\u0627 \u0648 \u067E\u0631\u0633\u0634\u200C\u0646\u0627\u0645\u0647\u200C\u0647\u0627\xBB \u2014 \u067E\u0627\u0633\u062E\u200C\u0647\u0627\u06CC \u0627\u06CC\u0646 \u0635\u0641\u062D\u0647 \u0647\u06CC\u0686\u200C\u062C\u0627 \u0630\u062E\u06CC\u0631\u0647 \u0646\u0645\u06CC\u200C\u0634\u0648\u0646\u062F.</div>
 </div>
-<script>
-(function () {
-  /* \u06F1.\u06F2\u06F7.\u06F4\u06F3 \u2014 \u062C\u0627\u0633\u0627\u0632\u06CC \u0627\u0645\u0646 JSON \u062F\u0631 <script>: \u06AF\u0631\u06CC\u0632 </ \u0648 U+2028/2029 (\u0627\u0644\u06AF\u0648\u06CC safeJsonEmbed \u0641\u0631\u0645\u200C\u0633\u0627\u0632) */
-  var TOKEN = ${JSON.stringify(token).replace(/</g, "\\u003c").replace(/>/g, "\\u003e")};
-  var DEFINITION = ${JSON.stringify(JSON.stringify(def)).replace(/</g, "\\u003c").replace(/>/g, "\\u003e")};
-  var f = document.getElementById('f');
-  var msg = document.getElementById('msg');
-  var progText = document.getElementById('progText');
-  var progFill = document.getElementById('progFill');
-  var TOTAL = ${total};
-  var FA = '\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9';
-  function fa(n) { return String(n).replace(/[0-9]/g, function (d) { return FA[Number(d)]; }); }
-  function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
-
-  function updateProgress() {
-    var answered = {};
-    f.querySelectorAll('.item input[type=radio]:checked').forEach(function (r) { answered[r.name] = true; });
-    var n = Object.keys(answered).length;
-    progText.textContent = '\u067E\u0627\u0633\u062E \u062F\u0627\u062F\u0647\u200C\u0634\u062F\u0647: ' + fa(n) + ' \u0627\u0632 ' + fa(TOTAL);
-    progFill.style.width = (TOTAL ? Math.round(n * 100 / TOTAL) : 0) + '%';
-  }
-  f.addEventListener('change', updateProgress);
-
-  f.addEventListener('submit', function (ev) {
-    ev.preventDefault();
-    var data = new FormData(f);
-    var answers = {};
-    document.querySelectorAll('#f .item input[type=radio]').forEach(function (radio) {
-      if (data.get(radio.name)) answers[radio.name] = Number(data.get(radio.name));
-    });
-    document.querySelectorAll('#f textarea.free').forEach(function (ta) {
-      var v = (ta.value || '').trim();
-      if (v) answers[ta.name] = v;
-    });
-    var missing = 0;
-    document.querySelectorAll('#f .item').forEach(function (item) {
-      if (item.classList.contains('item--free')) return;
-      var has = item.querySelector('input[type=radio]:checked');
-      item.classList.toggle('is-missing', !has);
-      if (!has) missing += 1;
-    });
-    if (missing > 0) {
-      msg.className = 'msg err';
-      msg.textContent = '\u0628\u0647 ' + fa(missing) + ' \u0633\u0624\u0627\u0644 \u067E\u0627\u0633\u062E \u0646\u062F\u0627\u062F\u0647\u200C\u0627\u06CC\u062F \u2014 \u0633\u0624\u0627\u0644\u200C\u0647\u0627\u06CC \u062C\u0627\u0645\u0627\u0646\u062F\u0647 \u0628\u0627 \u0631\u0646\u06AF \u0633\u0631\u062E \u0645\u0634\u062E\u0635 \u0634\u062F\u0647\u200C\u0627\u0646\u062F.';
-      var first = document.querySelector('#f .item.is-missing');
-      if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      return;
-    }
-    var btn = document.getElementById('submitBtn');
-    btn.disabled = true;
-    fetch('/public/case-events/preview/analyze', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: TOKEN, definition: JSON.parse(DEFINITION), answers: answers }) /* __SEC_ACCEPT__: DEFINITION \u062E\u0631\u0648\u062C\u06CC JSON.stringify \u0633\u0631\u0648\u0631 \u0627\u0633\u062A \u2014 \u067E\u0627\u0631\u0633 \u0647\u0645\u06CC\u0634\u0647 \u0645\u0639\u062A\u0628\u0631 */
-    }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
-      .then(function (res) {
-        if (!res.ok) {
-          msg.className = 'msg err';
-          msg.textContent = (res.j && res.j.error && res.j.error.message) || '\u062A\u062D\u0644\u06CC\u0644 \u0627\u0646\u062C\u0627\u0645 \u0646\u0634\u062F.';
-          btn.disabled = false;
-          return;
-        }
-        showResult(res.j);
-      })
-      .catch(function () { msg.className = 'msg err'; msg.textContent = '\u062E\u0637\u0627\u06CC \u0634\u0628\u06A9\u0647 \u2014 \u062F\u0648\u0628\u0627\u0631\u0647 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F.'; btn.disabled = false; });
-  });
-
-  function bandChip(band, color) {
-    var cls = color === 'ok' || color === 'warn' || color === 'danger' ? color : 'none';
-    return band ? '<span class="band ' + cls + '">' + esc(band) + '</span>' : '';
-  }
-
-  function showResult(j) {
-    var parts = [];
-    var a = j.analysis;
-    if (a) {
-      parts.push('<div class="result__score">\u0646\u0645\u0631\u0647\u0654 \u06A9\u0644: ' + fa(a.score) + ' \u0627\u0632 ' + fa(a.maxScore ?? (a.total * 3)) + '</div>');
-      parts.push('<div style="margin-bottom:12px">' + (bandChip(a.band, null) || '<span class="band none">\u0628\u062F\u0648\u0646 \u0628\u0627\u0646\u062F \u062A\u062D\u0644\u06CC\u0644</span>') + '</div>');
-      if (a.subscaleScores && a.subscaleScores.length > 0) {
-        parts.push('<div style="margin-bottom:6px;font-size:13px;font-weight:700">\u0632\u06CC\u0631\u0645\u0642\u06CC\u0627\u0633\u200C\u0647\u0627</div>');
-        a.subscaleScores.forEach(function (s) {
-          parts.push('<div class="sub-row"><span class="name">' + esc(s.name) + '</span><span>' + fa(s.score) + ' \u0627\u0632 ' + fa(s.max) + '</span>' + bandChip(s.band, s.color) + '</div>');
-        });
-      }
-      if (a.flags && a.flags.length > 0) {
-        parts.push('<div style="margin:10px 0 6px;font-size:13px;font-weight:700;color:#A12622">\u0622\u06CC\u062A\u0645 \u0628\u062D\u0631\u0627\u0646\u06CC (' + fa(a.flags.length) + ' \u0645\u0648\u0631\u062F)</div>');
-        a.flags.forEach(function (fl) {
-          parts.push('<div style="font-size:13px;padding:3px 0">\u2022 ' + esc(fl.label) + '</div>');
-        });
-      }
-      parts.push('<div style="margin-top:12px" class="interp">' + esc(a.interpretation) + '</div>');
-      parts.push('<div style="margin-top:8px;font-size:12.5px;color:#5A5347">\u062C\u0645\u0639\u200C\u0628\u0646\u062F\u06CC \u062B\u0628\u062A\u200C\u0634\u062F\u0647 \u062F\u0631 \u067E\u0631\u0648\u0646\u062F\u0647: ' + esc(j.summary ?? '') + '</div>');
-    } else {
-      parts.push('<div class="band none">\u0627\u06CC\u0646 \u0642\u0627\u0644\u0628 \u062E\u0627\u0646\u0648\u0627\u062F\u0647\u200C\u067E\u0631\u06A9\u0646 \u0646\u06CC\u0633\u062A \u2014 \u0646\u0645\u0631\u0647\u0654 \u062E\u0648\u062F\u06A9\u0627\u0631 \u0641\u0642\u0637 \u0628\u0631\u0627\u06CC \u0686\u06A9\u200C\u0644\u06CC\u0633\u062A \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u0633\u0627\u062E\u062A\u0647 \u0645\u06CC\u200C\u0634\u0648\u062F.</div>');
-    }
-    var pairs = [];
-    var payload = j.payload ?? {};
-    Object.keys(payload).forEach(function (k) {
-      pairs.push('<div class="pair"><b>' + esc(payload[k].label) + ':</b><span>' + esc(payload[k].value) + '</span></div>');
-    });
-    parts.push('<div class="raw"><details><summary>\u062F\u06CC\u062A\u0627\u06CC \u062E\u0627\u0645 \u0641\u0631\u0645 (' + fa(pairs.length) + ' \u0641\u06CC\u0644\u062F)</summary>' + pairs.join('') + '</details></div>');
-    document.getElementById('resultBody').innerHTML = parts.join('');
-    f.style.display = 'none';
-    document.getElementById('prog').style.display = 'none';
-    var r = document.getElementById('result');
-    r.classList.add('show');
-    r.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
-
-  document.getElementById('againBtn').addEventListener('click', function () {
-    fetch('/public/case-events/preview', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: TOKEN, definition: JSON.parse(DEFINITION) }) /* __SEC_ACCEPT__: \u0647\u0645\u0627\u0646 \u0642\u0631\u0627\u0631\u062F\u0627\u062F \u0628\u0627\u0644\u0627 */
-    }).then(function (r) { return r.text(); })
-      .then(function (html) { document.open(); document.write(html); document.close(); });
-  });
-
-  updateProgress();
-})();
-</script>
+<script type="application/json" id="preview-boot">${safeJsonEmbed2({ token, def, total })}</script>
+<script src="/assets/public/preview-form.js?v=${APP_VERSION}" defer></script>
 </body>
 </html>`;
 }
@@ -43690,7 +43545,8 @@ function registerCaseEventPublicRoutes(app, service, helpers) {
       headers: {
         "Content-Type": "text/html; charset=utf-8",
         "Cache-Control": "no-store",
-        "X-Robots-Tag": "noindex, nofollow"
+        "X-Robots-Tag": "noindex, nofollow",
+        "Content-Security-Policy": PUBLIC_PAGE_CSP
       }
     });
   });
@@ -43752,19 +43608,24 @@ function registerCaseEventPublicRoutes(app, service, helpers) {
         definition = null;
       }
     }
-    await previewStaffOf(c.env, token);
+    await previewStaffOf(c.env, token || readSessionCookie(c.req.header("Cookie")) || "");
     const parsed = CaseEventTypeInputSchema.safeParse(definition);
     if (!parsed.success) {
       const issue2 = parsed.error.issues[0];
       const where = issue2.path.length > 0 ? ` (\u0641\u06CC\u0644\u062F: ${issue2.path.join(".")})` : "";
-      return c.html(renderPreviewErrorPage("\u062A\u0639\u0631\u06CC\u0641 \u0642\u0627\u0644\u0628 \u0647\u0646\u0648\u0632 \u06A9\u0627\u0645\u0644 \u0646\u06CC\u0633\u062A", `${issue2.message}${where} \u2014 \u067E\u06CC\u0634\u200C\u0646\u0645\u0627\u06CC\u0634 \u0641\u0642\u0637 \u0628\u0631\u0627\u06CC \u062A\u0639\u0631\u06CC\u0641 \u06A9\u0627\u0645\u0644 \u0645\u0639\u0646\u0627 \u062F\u0627\u0631\u062F.`), 400);
+      return c.html(
+        renderPreviewErrorPage("\u062A\u0639\u0631\u06CC\u0641 \u0642\u0627\u0644\u0628 \u0647\u0646\u0648\u0632 \u06A9\u0627\u0645\u0644 \u0646\u06CC\u0633\u062A", `${issue2.message}${where} \u2014 \u067E\u06CC\u0634\u200C\u0646\u0645\u0627\u06CC\u0634 \u0641\u0642\u0637 \u0628\u0631\u0627\u06CC \u062A\u0639\u0631\u06CC\u0641 \u06A9\u0627\u0645\u0644 \u0645\u0639\u0646\u0627 \u062F\u0627\u0631\u062F.`),
+        400,
+        { "Content-Security-Policy": PUBLIC_PAGE_CSP }
+      );
     }
     return new Response(renderPreviewPage(parsed.data, token), {
       status: 200,
       headers: {
         "Content-Type": "text/html; charset=utf-8",
         "Cache-Control": "no-store",
-        "X-Robots-Tag": "noindex, nofollow"
+        "X-Robots-Tag": "noindex, nofollow",
+        "Content-Security-Policy": PUBLIC_PAGE_CSP
       }
     });
   });
@@ -43782,7 +43643,7 @@ function registerCaseEventPublicRoutes(app, service, helpers) {
     if (!body) {
       return c.json({ error: { code: "BAD_REQUEST", message: "\u062F\u0631\u062E\u0648\u0627\u0633\u062A \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A" } }, 400);
     }
-    await previewStaffOf(c.env, String(body.token ?? ""));
+    await previewStaffOf(c.env, String(body.token ?? "") || readSessionCookie(c.req.header("Cookie")) || "");
     const parsed = CaseEventTypeInputSchema.safeParse(body.definition);
     if (!parsed.success) {
       const issue2 = parsed.error.issues[0];
@@ -47765,10 +47626,6 @@ function createGamesService(deps) {
 }
 __name(createGamesService, "createGamesService");
 
-// src/core/version.ts
-var APP_VERSION = "1.27.81";
-var NODE_MIN_VERSION = "1.26.0";
-
 // src/domain/games/page.ts
 var FA_DIGITS3 = "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9";
 function faNum6(n) {
@@ -47779,10 +47636,6 @@ function esc2(s) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 __name(esc2, "esc");
-function safeJson(v) {
-  return JSON.stringify(v ?? null).replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
-}
-__name(safeJson, "safeJson");
 function skinLink(kind) {
   const k = String(kind ?? "");
   return GAME_KIND_IDS.includes(k) ? `<link rel="stylesheet" href="/assets/play/skins/${k}.css?v=${APP_VERSION}" />` : "";
@@ -47845,28 +47698,8 @@ function page(model, token, body) {
 </head>
 <body>
 <div class="wrap">${body}</div>
-<script>
-(function () {
-  var TOKEN = ${safeJson(token)};
-  function post(path, body) {
-    return fetch('/api/m/' + TOKEN + path, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body || {})
-    }).then(function (r) { return r.json(); }).then(function () { location.reload(); })
-      .catch(function () { location.reload(); });
-  }
-  var bind = function (id, path, body) {
-    var el = document.getElementById(id);
-    if (el) el.addEventListener('click', function () { el.disabled = true; post(path, body); });
-  };
-  bind('btn-start', '/start');
-  bind('btn-gate-open', '/parent-gate', {});
-  bind('btn-gate-solve', '/parent-gate', { solve: true });
-  var c1 = document.getElementById('btn-confirm1');
-  if (c1) c1.addEventListener('click', function () { c1.disabled = true; post('/confirm'); });
-})();
-</script>
+<script type="application/json" id="page-boot">${safeJsonEmbed2(token)}</script>
+<script src="/assets/play/page-boot.js?v=${APP_VERSION}" defer></script>
 </body>
 </html>`;
 }
@@ -48262,7 +48095,7 @@ function registerGamesPublicRoutes(app, service) {
         "Content-Type": "text/html; charset=utf-8",
         "Cache-Control": "no-store",
         "X-Robots-Tag": "noindex, nofollow",
-        "Content-Security-Policy": "default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+        "Content-Security-Policy": PUBLIC_PAGE_CSP
       }
     });
   });
@@ -48276,7 +48109,7 @@ function registerGamesPublicRoutes(app, service) {
         "Content-Type": "text/html; charset=utf-8",
         "Cache-Control": "no-store",
         "X-Robots-Tag": "noindex, nofollow",
-        "Content-Security-Policy": "default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+        "Content-Security-Policy": PUBLIC_PAGE_CSP
       }
     });
   });
@@ -76191,6 +76024,9 @@ function installSecurityAndCacheHeaders(app) {
     c.header("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
     c.header("Cross-Origin-Opener-Policy", "same-origin");
     c.header("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+    if (!c.res.headers.get("Content-Security-Policy") && (c.res.headers.get("Content-Type") ?? "").includes("application/json")) {
+      c.header("Content-Security-Policy", JSON_API_CSP);
+    }
   });
   app.use("/api/*", async (c, next) => {
     await next();
@@ -78468,6 +78304,7 @@ function registerAuthRoutes(app, deps) {
       resourceId: staff.id
     });
     deps.logger.child("auth").info("login.ok", { role: staff.role });
+    c.header("Set-Cookie", buildSessionCookie(token));
     return c.json(
       {
         data: {
@@ -78502,6 +78339,7 @@ function registerLogoutRoute(app, deps) {
       resourceId: ctx.staffId
     });
     deps.logger.child("auth").info("logout.ok", { role: ctx.role });
+    c.header("Set-Cookie", clearSessionCookie());
     return c.json({ data: { ok: true } }, 200);
   });
 }
