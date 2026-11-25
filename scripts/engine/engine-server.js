@@ -15,16 +15,21 @@ var __export = (target, all) => {
 
 // scripts/engine/engine-paths.mjs
 import path3 from "node:path";
+import fs2 from "node:fs";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 function d1DiskPath(dataDir) {
   return path3.join(dataDir, "d1");
 }
 function d1SqlitePath(dataDir) {
-  return path3.join(
-    d1DiskPath(dataDir),
-    D1_UNIQUE_KEY2,
-    "1ef2f391686e9f4a0ebc89b6b39d804aa83ca44ebdd90d82e5b605c183c4fa6c.sqlite"
-  );
+  const dir = path3.join(d1DiskPath(dataDir), D1_UNIQUE_KEY2);
+  const legacy = path3.join(dir, "1ef2f391686e9f4a0ebc89b6b39d804aa83ca44ebdd90d82e5b605c183c4fa6c.sqlite");
+  if (fs2.existsSync(legacy)) return legacy;
+  try {
+    const real = fs2.readdirSync(dir).filter((f) => f.endsWith(".sqlite") && !f.endsWith("-shm") && !f.endsWith("-wal"));
+    if (real.length === 1) return path3.join(dir, real[0]);
+  } catch {
+  }
+  return legacy;
 }
 var REPO_ROOT2, D1_OBJECT_CLASS2, D1_UNIQUE_KEY2;
 var init_engine_paths = __esm({
@@ -2638,6 +2643,7 @@ async function runEngine(opts2) {
   drainQueueToLog(walDb, eventsLogPath);
   const port = await resolvePort(opts2.port, "", opts2.bind);
   const gamesPort = await resolvePort(opts2.gamesPort, "بازی‌ها", opts2.bind);
+  const base = `http://127.0.0.1:${port}`;
   const lanList = opts2.bind === "127.0.0.1" ? [] : lanUrls(port);
   const publicBase = lanList[0] ?? base;
   const authSecret = resolveAuthSecret(dbPath);
@@ -2660,7 +2666,6 @@ async function runEngine(opts2) {
     const configText = await buildEngineConfig({ port, gamesPort, dataDir: opts2.dataDir, authSecret, bind: opts2.bind, publicBase });
     writeFileSync3(path6.join(opts2.dataDir, "workerd.capnp"), configText);
   }
-  const base = `http://127.0.0.1:${port}`;
   const gamesBase = `http://127.0.0.1:${gamesPort}`;
   let child = null;
   let handle = null;

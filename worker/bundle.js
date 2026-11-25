@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.27.77";
+var APP_VERSION = "1.27.78";
 var NODE_MIN_VERSION = "1.26.0";
 
 // node_modules/zod/v4/classic/external.js
@@ -24235,6 +24235,20 @@ function createAuditWriter(db, opts) {
 }
 __name(createAuditWriter, "createAuditWriter");
 
+// src/core/shared/log-mask.ts
+var MASKED = ":masked";
+var PAGE_TOKEN = /^(\/m\/)[^/?]+/;
+var API_TOKEN = /^(\/api\/m\/)[^/?]+/;
+var WEBHOOK_SECRET = /^(\/webhook\/bale\/)[^/?]+/;
+function maskSensitivePath(path) {
+  let out = String(path ?? "");
+  out = out.replace(PAGE_TOKEN, `$1${MASKED}`);
+  out = out.replace(API_TOKEN, `$1${MASKED}`);
+  out = out.replace(WEBHOOK_SECRET, `$1${MASKED}`);
+  return out;
+}
+__name(maskSensitivePath, "maskSensitivePath");
+
 // src/core/notify/templates.ts
 var UNKNOWN_TEMPLATE_FALLBACK = "\u0627\u0637\u0644\u0627\u0639\u200C\u0631\u0633\u0627\u0646\u06CC \u0633\u0627\u0645\u0627\u0646\u0647 \u0645\u0631\u06A9\u0632";
 function line(parts, separator = " ") {
@@ -29543,16 +29557,25 @@ __name(makeRateLimiter, "makeRateLimiter");
 var API_RATE_LIMIT_PER_MIN_DEFAULT = 240;
 var API_RATE_LIMIT_PER_MIN_MAX = 1e4;
 var API_RATE_LIMIT_WINDOW_MS = 6e4;
-function parseApiRateLimitPerMin(raw2) {
+function parsePerMinWithDefault(raw2, fallback) {
   if (raw2 === null || raw2 === void 0 || typeof raw2 === "string" && raw2.trim() === "") {
-    return API_RATE_LIMIT_PER_MIN_DEFAULT;
+    return fallback;
   }
   const n = typeof raw2 === "string" ? Number(raw2.trim()) : Number(raw2);
-  if (!Number.isFinite(n) || n < 0) return API_RATE_LIMIT_PER_MIN_DEFAULT;
+  if (!Number.isFinite(n) || n < 0) return fallback;
   if (n === 0) return 0;
   return Math.min(Math.trunc(n), API_RATE_LIMIT_PER_MIN_MAX);
 }
+__name(parsePerMinWithDefault, "parsePerMinWithDefault");
+function parseApiRateLimitPerMin(raw2) {
+  return parsePerMinWithDefault(raw2, API_RATE_LIMIT_PER_MIN_DEFAULT);
+}
 __name(parseApiRateLimitPerMin, "parseApiRateLimitPerMin");
+var API_TOKEN_GET_RATE_LIMIT_PER_MIN_DEFAULT = 120;
+function parseTokenGetRateLimitPerMin(raw2) {
+  return parsePerMinWithDefault(raw2, API_TOKEN_GET_RATE_LIMIT_PER_MIN_DEFAULT);
+}
+__name(parseTokenGetRateLimitPerMin, "parseTokenGetRateLimitPerMin");
 function makeKeyedRateLimiter(windowMs, maxKeys = 4096) {
   const buckets = /* @__PURE__ */ new Map();
   return {
@@ -35756,9 +35779,10 @@ function createExerciseBankService(deps) {
         params.push(filters.format);
       }
       if (filters.q && filters.q.trim().length > 0) {
-        const like = `%${escapeLike(filters.q.trim())}%`;
-        conds.push("(e.title LIKE ? ESCAPE '\\' OR e.description LIKE ? ESCAPE '\\')");
-        params.push(like, like);
+        const like = likePattern(sanitizeFaQuery(filters.q));
+        const hay = faHaystackExpr("(e.title || ' ' || COALESCE(e.description, ''))");
+        conds.push(`(${hay} LIKE ? ESCAPE '\\')`);
+        params.push(like);
       }
       if (filters.tagId) {
         conds.push("EXISTS (SELECT 1 FROM exercise_tags et WHERE et.exercise_id = e.id AND et.tag_id = ?)");
@@ -81346,6 +81370,32 @@ function createApp(deps) {
     }
     return next();
   });
+  const tokenGetLimiter = makeKeyedRateLimiter(API_RATE_LIMIT_WINDOW_MS);
+  let tokenGetDisabledLogged = false;
+  app.use("*", async (c, next) => {
+    if (c.req.method !== "GET") return next();
+    const p = c.req.path;
+    if (!/^\/m\/[^/]+/.test(p) && !p.startsWith("/api/m/")) return next();
+    const perMin = parseTokenGetRateLimitPerMin(c.env?.API_TOKEN_GET_RATE_LIMIT_PER_MIN);
+    if (perMin <= 0) {
+      if (!tokenGetDisabledLogged) {
+        tokenGetDisabledLogged = true;
+        services.logger.child("http").warn("api_token_get_rate_limit.disabled", {
+          reason: "API_TOKEN_GET_RATE_LIMIT_PER_MIN=0"
+        });
+      }
+      return next();
+    }
+    const ip = (c.req.header("cf-connecting-ip") ?? "unknown").slice(0, 64);
+    if (!tokenGetLimiter.allow(`tg:${perMin}:${ip}`, perMin)) {
+      c.header("Retry-After", String(Math.ceil(API_RATE_LIMIT_WINDOW_MS / 1e3)));
+      throw new RateLimitError(
+        Math.ceil(API_RATE_LIMIT_WINDOW_MS / 1e3),
+        "\u062F\u0631\u062E\u0648\u0627\u0633\u062A\u200C\u0647\u0627\u06CC \u0644\u06CC\u0646\u06A9 \u0639\u0645\u0648\u0645\u06CC \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0645\u062C\u0627\u0632 \u0627\u0633\u062A \u2014 \u06A9\u0645\u06CC \u0628\u0639\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F"
+      );
+    }
+    return next();
+  });
   app.use("*", async (c, next) => {
     await next();
     c.header("X-Content-Type-Options", "nosniff");
@@ -81372,7 +81422,8 @@ function createApp(deps) {
     await next();
     services.logger.child("http").info("request", {
       method: c.req.method,
-      path: c.req.path,
+      path: maskSensitivePath(c.req.path),
+      // security-005 (۱.۲۷.۷۸) — توکن لینک عمومی و سکرت وب‌هوک به لاگ نمی‌روند
       status: c.res.status,
       ms: Date.now() - start
     });
