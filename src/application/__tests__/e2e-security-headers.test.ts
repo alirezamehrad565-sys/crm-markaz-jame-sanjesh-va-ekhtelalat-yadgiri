@@ -27,6 +27,14 @@ describe('هدرهای امنیتی سراسری (Worker)', () => {
     expect(res.headers.get('Strict-Transport-Security')).toBe('max-age=31536000; includeSubDomains');
   });
 
+  it('پاسخ JSON بدون CSP صفحه‌ای — CSP حداقلی بسته می‌گیرد (security-007/ADR-004 — ۱.۲۷.۸۲)', async () => {
+    const res = await rawRequest(A, '/api/me'); // ۴۰۱ با بدنهٔ JSON
+    expect(res.headers.get('Content-Type') ?? '').toContain('application/json');
+    const csp = res.headers.get('Content-Security-Policy') ?? '';
+    expect(csp).toContain("default-src 'none'");
+    expect(csp).toContain("frame-ancestors 'none'");
+  });
+
   it('پاسخ /api/* موفق (۲۰۰) — Cache-Control: no-store روی مسیر لاگین', async () => {
     const api = new Api(A);
     const login = await api.post('/api/auth/login', { username: 'manager', password: '1234' });

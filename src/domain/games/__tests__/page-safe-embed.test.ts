@@ -13,11 +13,12 @@ function minimalModel(state = 'closed'): any {
   return { state, missionRef: '', missionTitle: 'بازی تمرینی', packageTitle: '', expiresAt: '' };
 }
 
-describe('embed امن توکن در صفحهٔ بازی عمومی — ۱.۲۷.۷۵', () => {
-  it('① توکن مخرب در بلاک <script> هرگز خام نمی‌نشیند (فرار \u003c)', () => {
+describe('embed امن توکن در صفحهٔ بازی عمومی — ۱.۲۷.۷۵ (به‌روزشده برای ADR-004 در ۱.۲۷.۸۲)', () => {
+  it('① توکن مخرب در بلاک دادهٔ JSON هرگز خام نمی‌نشیند (فرار \u003c — safeJsonEmbed)', () => {
     const out = renderGamesPage(minimalModel('closed'), EVIL);
-    expect(out).toContain('var TOKEN = "\\u003c/script\\u003e');
-    expect(out).not.toContain('</script><script>alert');
+    expect(out).toContain('<script type="application/json" id="page-boot">');
+    expect(out).toContain('"\\u003c/script\\u003e'); // فرار یونی‌کد داخل بلاک داده
+    expect(out).not.toContain('</script><script>alert'); // خروج از بلاک داده ناممکن
     // توکن مخرب نباید در هیچ جای خروجی به‌صورت اجراپذیر ظاهر شود
     expect(out).not.toContain('<script>alert(1)</script>');
   });
@@ -38,7 +39,7 @@ describe('embed امن توکن در صفحهٔ بازی عمومی — ۱.۲۷.
 
   it('④ توکن با U+2028 (جداکنندهٔ خط JS) هم فرار می‌شود', () => {
     const out = renderGamesPage(minimalModel('closed'), 'a\u2028b');
-    expect(out).not.toContain('var TOKEN = "a\u2028b"');
+    expect(out).not.toContain('a\u2028b'); // کاراکتر خام در خروجی نیست — فرار یونی‌کد
     expect(out).toContain('a\\u2028b');
   });
 });

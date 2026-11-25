@@ -93,7 +93,8 @@ describe('گیت ۱.۲۵.۰۸ — اتصال صفحه به پخش‌کننده',
     const occurrences = pageSrc.match(/assets\/play\//g) ?? [];
     // هر شاخه یک link + یک script (کودک: play.js · پیش‌نمایش: preview.js — ۱.۲۵.۲۰)
     // + یک رخداد الگوی پوستهٔ اختصاصی در helper مشترک skinLink (G7/۱.۲۵.۴۳)
-    expect(occurrences.length).toBe(5);
+    // + ۱.۲۷.۸۲ (ADR-004): page-boot.js بیرونی در هر دو شاخه (کودک + پیش‌نمایش)
+    expect(occurrences.length).toBe(7);
     const childBranch = pageSrc.slice(
       pageSrc.indexOf("state === 'child_active'"),
       pageSrc.indexOf("state === 'child_done'")
@@ -114,11 +115,17 @@ describe('گیت ۱.۲۵.۰۸ — اتصال صفحه به پخش‌کننده',
     expect(previewBranch).not.toContain('play.js?');
   });
 
-  it('CSP صفحهٔ کودک مبدأ خودی را برای ماژول بازی اجازه می‌دهد و همچنان بسته است', () => {
-    expect(routesSrc).toContain("script-src 'self' 'unsafe-inline'");
-    expect(routesSrc).toContain("style-src 'self' 'unsafe-inline'");
-    expect(routesSrc).toContain("default-src 'none'");
-    expect(routesSrc).toContain("frame-ancestors 'none'");
+  it('CSP صفحهٔ کودک/پیش‌نمایش بدون unsafe-inline اسکریپت است و از ثابت مشترک می‌آید (ADR-004 — ۱.۲۷.۸۲)', () => {
+    const cspSrc = read('src/core/shared/csp.ts');
+    expect(cspSrc).toContain("script-src 'self'");
+    expect(cspSrc).not.toMatch(/script-src[^;\n]*'unsafe-inline'/); // اسکریپت درون‌خطی اجرایی ممنوع
+    expect(cspSrc).toContain("style-src 'self' 'unsafe-inline'"); // فقط استایل — عمد ثبت‌شده در ADR
+    expect(cspSrc).toContain("default-src 'none'");
+    expect(cspSrc).toContain("frame-ancestors 'none'");
+    expect(routesSrc).toContain('PUBLIC_PAGE_CSP'); // منبع یگانهٔ سیاست — @core/shared/csp
+    expect(routesSrc).not.toContain("'unsafe-inline'"); // رشتهٔ CSP دیگر در routes تکرار نمی‌شود
+    expect(pageSrc).toContain('application/json" id="page-boot"'); // داده در بلاک JSON
+    expect(pageSrc).toContain('/assets/play/page-boot.js'); // اسکریپت اجرایی بیرونی
   });
 });
 
@@ -258,7 +265,7 @@ describe('گیت فاز ۲ بازطراحی — پالت/فونت/پنج‌شِ�
     expect(playCss).toContain("font-family: 'Vazirmatn Play'");
     expect(playCss).toContain('/assets/fonts/vazirmatn-fa-regular.woff2');
     expect(playCss).toContain('/assets/fonts/vazirmatn-fa-bold.woff2');
-    expect(routesSrc).toContain("font-src 'self'");
+    expect(read('src/core/shared/csp.ts')).toContain("font-src 'self'"); // ۱.۲۷.۸۲: سیاست به ثابت مشترک منتقل شد
   });
 
   it('پنج‌شِمال: شِمال‌های آموزش/اجرای اصلی/پایان جدا دارند؛ اجرای اصلی بی‌چرم است', () => {

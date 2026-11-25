@@ -49,10 +49,13 @@ describe('گیت امنیتی ۱.۲۷.۴۳ — نشتی راز', () => {
 });
 
 describe('گیت امنیتی ۱.۲۷.۴۳ — جاسازی اسکریپت و بدنهٔ عمومی', () => {
-  it('صفحهٔ پیش‌نمایش فرم‌ساز JSON را با گریز </ جاسازی می‌کند', () => {
+  it('صفحهٔ پیش‌نمایش فرم‌ساز JSON را با گریز </ جاسازی می‌کند (بلاک دادهٔ ADR-004 — ۱.۲۷.۸۲)', () => {
+    const csp = read('src/core/shared/csp.ts');
+    expect(csp).toContain('export function safeJsonEmbed'); // helper امن مشترک
+    expect(csp).toMatch(/\.replace\(\/</g); // گریز < به \u003c
     const src = read('src/domain/case-events/preview-form.ts');
-    expect(src).toMatch(/JSON\.stringify\(token\)\.replace\(\/</g);
-    expect(src).toMatch(/JSON\.stringify\(JSON\.stringify\(def\)\)\.replace\(\/</g);
+    expect(src).toContain('safeJsonEmbed({ token, def, total })'); // داده در بلاک JSON نشسته است
+    expect(src).not.toMatch(/JSON\.stringify\(token\)\.replace/); // جاسازی خامِ پیشین بازنگشته
   });
 
   it('فرم عمومی منتشرشده هم‌چنان از safeJsonEmbed استفاده می‌کند (رگرسیون XSS نمی‌خورد)', () => {

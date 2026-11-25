@@ -11,6 +11,7 @@ import { runWithRequestId } from '@core/audit';
 import { parseApiRateLimitPerMin, parseTokenGetRateLimitPerMin, makeKeyedRateLimiter, API_RATE_LIMIT_WINDOW_MS } from '@app/http';
 import { RateLimitError } from '@core/errors';
 import { maskSensitivePath } from '@core/shared/log-mask'; // security-005 (۱.۲۷.۷۸) — مسیرِ لاگ ماسک می‌شود
+import { JSON_API_CSP } from '@core/shared/csp'; // ۱.۲۷.۸۲ (security-007/ADR-004) — CSP حداقلی پاسخ‌های JSON
 import type { AppHono } from '@core/shared';
 import type { Services } from './composition';
 
@@ -126,6 +127,11 @@ function installSecurityAndCacheHeaders(app: AppHono): void {
     c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()'); // سنسورها برای اپ لازم نیست
     c.header('Cross-Origin-Opener-Policy', 'same-origin'); // ایزوله‌سازی کانتکست بین‌پنجره‌ای
     c.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains'); // HTTPS اجباری مرورگر
+    /* ۱.۲۷.۸۲ (security-007/ADR-004): پاسخ JSON بدون CSP صفحه‌ای → CSP حداقلی بسته می‌گیرد؛
+       صفحات HTML رندر سرور CSP خودشان را از پیش دارند (PUBLIC_PAGE_CSP) و بازنویسی نمی‌شوند */
+    if (!c.res.headers.get('Content-Security-Policy') && (c.res.headers.get('Content-Type') ?? '').includes('application/json')) {
+      c.header('Content-Security-Policy', JSON_API_CSP);
+    }
   });
 
   app.use('/api/*', async (c, next) => {

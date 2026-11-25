@@ -23,6 +23,7 @@ describe('گیت فرانت ۱.۲۵.۸۱ — پیش‌نمایش از نگاه �
   const routes = read('src/domain/case-events/routes.ts');
   const pure = read('src/domain/case-events/pure.ts');
   const previewPage = read('src/domain/case-events/preview-form.ts');
+  const previewBoot = read('public/assets/public/preview-form.js');
   const publicForm = read('src/domain/case-events/public-form.ts');
   const version = read('src/core/version.ts');
 
@@ -71,7 +72,10 @@ describe('گیت فرانت ۱.۲۵.۸۱ — پیش‌نمایش از نگاه �
   it('⑥ صفحهٔ پیش‌نمایش بنر «ذخیره نمی‌شود» دارد و بخش‌بندی مشترک می‌خواند', () => {
     expect(previewPage).toContain('هیچ پاسخی جایی ذخیره نمی‌شود');
     expect(previewPage).toContain('familySectionsOf');
-    expect(previewPage).toContain('/public/case-events/preview/analyze');
+    /* ۱.۲۷.۸۲ (ADR-004): منطق اجرایی به فایل بیرونی رفت — endpoint تحلیل و fetch آن‌جاست */
+    expect(previewBoot).toContain('/public/case-events/preview/analyze');
+    expect(previewBoot).toContain('document.open(); document.write(html); document.close();');
+    expect(previewPage).toContain('/assets/public/preview-form.js');
     expect(publicForm).toContain('export function familySectionsOf');
     // نسخه
     expect(version).toContain("APP_VERSION = '1.27.81'");

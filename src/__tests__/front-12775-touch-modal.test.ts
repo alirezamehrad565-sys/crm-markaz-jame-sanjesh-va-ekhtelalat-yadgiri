@@ -19,6 +19,7 @@ describe('مودال/لمس/امنیت — ۱.۲۷.۷۵', () => {
   const ui = read('public/assets/js/ui.js');
   const css = read('public/assets/css/components.css');
   const page = read('src/domain/games/page.ts');
+  const cspSrc = read('src/core/shared/csp.ts');
 
   it('① فوکوس اولیهٔ مودال از همان صافی تلهٔ فوکوس می‌گذرد', () => {
     expect(ui).toContain(".map((sel) => focusablesOf().find((n) => n.matches(sel)))");
@@ -41,9 +42,14 @@ describe('مودال/لمس/امنیت — ۱.۲۷.۷۵', () => {
     expect(css).toMatch(/\.toast__close::after\s*\{[^}]*inset:\s*-6px/);
   });
 
-  it('④ embed توکن صفحهٔ بازی از safeJson می‌گذرد (نه JSON.stringify خام)', () => {
-    expect(page).toContain('function safeJson(v: unknown): string {');
-    expect(page).toContain('var TOKEN = ${safeJson(token)};');
-    expect(page).not.toContain('var TOKEN = ${JSON.stringify(token)}');
+  it('④ embed توکن صفحهٔ بازی: بلاک دادهٔ JSON + بوت بیرونی — بدون unsafe-inline (ADR-004، ۱.۲۷.۸۲)', () => {
+    expect(page).toContain('<script type="application/json" id="page-boot">${safeJsonEmbed(token)}</script>');
+    expect(page).not.toMatch(/<script>\s*\(function/); // هیچ اسکریپت اجرایی درون‌خطی در صفحه
+    expect(page).not.toContain('JSON.stringify(token)'); // توکن هرگز خام جاسازی نمی‌شود
+    expect(cspSrc).toContain('export function safeJsonEmbed'); // helper امن مشترک
+    const boot = read('public/assets/play/page-boot.js');
+    expect(boot).toContain("getElementById('page-boot')");
+    expect(boot).toContain('JSON.parse');
+    expect(boot).not.toMatch(/TOKEN\s*=\s*['"]/); // توکن در کد اجرایی نیست — از بلاک داده می‌آید
   });
 });

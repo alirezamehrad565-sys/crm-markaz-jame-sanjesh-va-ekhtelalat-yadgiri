@@ -4,6 +4,7 @@ import { z, ZodError } from 'zod';
 import type { AppHono } from '@core/shared';
 import { getAuthContext, requireRole } from '@core/auth';
 import { AppError, ValidationError } from '@core/errors';
+import { PUBLIC_PAGE_CSP } from '@core/shared/csp'; // ۱.۲۷.۸۲ (security-007/ADR-004): سیاست یگانهٔ صفحات عمومی — بدون unsafe-inline اسکریپت
 import type { GamesService } from './types';
 import { renderGamesPage, renderPreviewPage } from './page';
 import { reportToCsv } from './report';
@@ -304,7 +305,7 @@ export function registerGamesPublicRoutes(app: AppHono, service: GamesService): 
         'Content-Type': 'text/html; charset=utf-8',
         'Cache-Control': 'no-store',
         'X-Robots-Tag': 'noindex, nofollow',
-        'Content-Security-Policy': "default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+        'Content-Security-Policy': PUBLIC_PAGE_CSP
       }
     });
   });
@@ -322,7 +323,7 @@ export function registerGamesPublicRoutes(app: AppHono, service: GamesService): 
         'Content-Type': 'text/html; charset=utf-8',
         'Cache-Control': 'no-store',
         'X-Robots-Tag': 'noindex, nofollow',
-        'Content-Security-Policy': "default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+        'Content-Security-Policy': PUBLIC_PAGE_CSP
       }
     });
   });

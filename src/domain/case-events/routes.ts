@@ -6,6 +6,7 @@ import { CaseEventTypeInputSchema, CaseEventTypeUpdateSchema, SurveyCreateSchema
 import type { CaseEventsService, CaseEventTypeInput } from './types';
 import { renderFillFormPage, familySectionsOf } from './public-form';
 import { renderPreviewPage, renderPreviewErrorPage } from './preview-form';
+import { PUBLIC_PAGE_CSP } from '@core/shared/csp'; // ۱.۲۷.۸۲ (security-007/ADR-004): پرکردن شکاف CSP صفحات عمومی فرم
 
 export function registerCaseEventsRoutes(app: AppHono, service: CaseEventsService): void {
 
@@ -300,7 +301,8 @@ export function registerCaseEventPublicRoutes(
       headers: {
         'Content-Type': 'text/html; charset=utf-8',
         'Cache-Control': 'no-store',
-        'X-Robots-Tag': 'noindex, nofollow'
+        'X-Robots-Tag': 'noindex, nofollow',
+        'Content-Security-Policy': PUBLIC_PAGE_CSP
       }
     });
   });
@@ -375,14 +377,19 @@ export function registerCaseEventPublicRoutes(
     if (!parsed.success) {
       const issue = parsed.error.issues[0];
       const where = issue.path.length > 0 ? ` (فیلد: ${issue.path.join('.')})` : '';
-      return c.html(renderPreviewErrorPage('تعریف قالب هنوز کامل نیست', `${issue.message}${where} — پیش‌نمایش فقط برای تعریف کامل معنا دارد.`), 400);
+      return c.html(
+        renderPreviewErrorPage('تعریف قالب هنوز کامل نیست', `${issue.message}${where} — پیش‌نمایش فقط برای تعریف کامل معنا دارد.`),
+        400,
+        { 'Content-Security-Policy': PUBLIC_PAGE_CSP }
+      );
     }
     return new Response(renderPreviewPage(parsed.data as CaseEventTypeInput, token), {
       status: 200,
       headers: {
         'Content-Type': 'text/html; charset=utf-8',
         'Cache-Control': 'no-store',
-        'X-Robots-Tag': 'noindex, nofollow'
+        'X-Robots-Tag': 'noindex, nofollow',
+        'Content-Security-Policy': PUBLIC_PAGE_CSP
       }
     });
   });

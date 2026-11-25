@@ -217,10 +217,15 @@ describe('بستر بک‌اند بازی — زنجیرهٔ کامل', () => {
     expect(raw.status).toBe(200);
     expect(raw.headers.get('content-type')).toContain('text/html');
     expect(raw.headers.get('content-security-policy')).toContain("default-src 'none'");
+    expect(raw.headers.get('content-security-policy')).toContain("script-src 'self'");
+    expect(raw.headers.get('content-security-policy')).not.toContain("script-src 'self' 'unsafe-inline'"); // ADR-004 (۱.۲۷.۸۲)
     expect(raw.headers.get('x-robots-tag')).toContain('noindex');
     const html = await raw.text();
     expect(html).toContain('آمادهٔ شروع هستیم');
     expect(html).toContain('dir="rtl"');
+    expect(html).toContain('<script type="application/json" id="page-boot">'); // دادهٔ صفحه در بلاک JSON
+    expect(html).toContain('/assets/play/page-boot.js'); // اسکریپت اجرایی از مبدأ خودی
+    expect(html).not.toMatch(/<script>\s*\(function/); // اسکریپت درون‌خطی اجرایی حذف شده
   });
 
   it('حالت اولیه parent_pre است و نام کودک هیچ‌جا لو نمی‌رود', async () => {
