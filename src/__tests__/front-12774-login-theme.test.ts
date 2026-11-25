@@ -44,7 +44,7 @@ describe('صفحهٔ ورود و تم — ۱.۲۷.۷۴', () => {
     expect(css).toContain('.login__title { text-align: center; font-size: clamp(1.125rem, 1rem + 0.55vw, 1.375rem)');
     expect(css).toContain('.login__form .input { width: 100%; font-size: var(--fs-lg); }');
     expect(css).not.toContain('.login__sub { text-align: center; font-size: var(--fs-sm); line-height: var(--lh-snug, 1.6); color: var(--text-3); margin-top: -6px; }');
-    expect(css).toContain('.login__theme { position: fixed; top: var(--sp-4); inset-inline-start: var(--sp-4); z-index: 90; width: 44px; height: 44px; }');
+    expect(css).toContain('.login__theme { position: fixed; top: var(--sp-4); inset-inline-start: var(--sp-4); z-index: var(--z-row-menu); width: 44px; height: 44px; } /* ۱.۲۷.۷۷ — z توکن‌شد */');
     // توکن‌های صفحهٔ ورود همه در مقیاس پایه تعریف‌شده‌اند
     const base = read('public/assets/css/base.css');
     for (const tok of ['--fs-lg', '--fs-sm', '--sp-1', '--sp-2', '--sp-4', '--lh-heading', '--lh-snug']) {

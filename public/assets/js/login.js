@@ -97,7 +97,8 @@ export function renderLoginPage(onSuccess) {
     dir: 'ltr',
     style: { textAlign: 'left' }
   });
-  const errorBox = el('div', { class: 'login__error', style: { display: 'none' } });
+  /* ۱.۲۷.۷۷ — role=alert: اسکرین‌ریدر خطا را بلافاصله اعلام می‌کند (قبلاً فقط تغییر متن بود) */
+  const errorBox = el('div', { class: 'login__error', role: 'alert', style: { display: 'none' } });
   const annBox = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px' } });
   const hintBox = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px' } });
 
