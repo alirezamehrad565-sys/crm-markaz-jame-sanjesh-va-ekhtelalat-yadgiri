@@ -10,6 +10,291 @@ var __export = (target, all) => {
     __defProp(target, name, { get: all[name], enumerable: true });
 };
 
+// src/core/errors/errors.ts
+var AppError = class extends Error {
+  static {
+    __name(this, "AppError");
+  }
+  code;
+  status;
+  details;
+  constructor(code, status, message, details) {
+    super(message);
+    this.name = "AppError";
+    this.code = code;
+    this.status = status;
+    this.details = details;
+  }
+};
+var ValidationError = class extends AppError {
+  static {
+    __name(this, "ValidationError");
+  }
+  constructor(message = "\u0648\u0631\u0648\u062F\u06CC \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A", details) {
+    super("VALIDATION_ERROR", 400, message, details);
+    this.name = "ValidationError";
+  }
+};
+var AuthError = class extends AppError {
+  static {
+    __name(this, "AuthError");
+  }
+  constructor(message = "\u0627\u062D\u0631\u0627\u0632 \u0647\u0648\u06CC\u062A \u0646\u0627\u0645\u0648\u0641\u0642 \u0628\u0648\u062F") {
+    super("AUTH_ERROR", 401, message);
+    this.name = "AuthError";
+  }
+};
+var ForbiddenError = class extends AppError {
+  static {
+    __name(this, "ForbiddenError");
+  }
+  constructor(message = "\u062F\u0633\u062A\u0631\u0633\u06CC \u0645\u062C\u0627\u0632 \u0646\u06CC\u0633\u062A") {
+    super("FORBIDDEN", 403, message);
+    this.name = "ForbiddenError";
+  }
+};
+var NotFoundError = class extends AppError {
+  static {
+    __name(this, "NotFoundError");
+  }
+  constructor(resource = "\u0645\u0646\u0628\u0639", message) {
+    super("NOT_FOUND", 404, message ?? `${resource} \u067E\u06CC\u062F\u0627 \u0646\u0634\u062F`);
+    this.name = "NotFoundError";
+  }
+};
+var ConflictError = class extends AppError {
+  static {
+    __name(this, "ConflictError");
+  }
+  currentVersion;
+  constructor(message = "\u062A\u0639\u0627\u0631\u0636 \u062F\u0631 \u0648\u0636\u0639\u06CC\u062A \u0641\u0639\u0644\u06CC \u0631\u06A9\u0648\u0631\u062F", currentVersion) {
+    super("CONFLICT", 409, message, currentVersion !== void 0 ? { currentVersion } : void 0);
+    this.name = "ConflictError";
+    this.currentVersion = currentVersion;
+  }
+};
+var RateLimitError = class extends AppError {
+  static {
+    __name(this, "RateLimitError");
+  }
+  retryAfterSeconds;
+  constructor(retryAfterSeconds, message = "\u062A\u0644\u0627\u0634\u200C\u0647\u0627\u06CC \u0646\u0627\u0645\u0648\u0641\u0642 \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0645\u062C\u0627\u0632 \u0627\u0633\u062A \u2014 \u06A9\u0645\u06CC \u0628\u0639\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F") {
+    super("RATE_LIMITED", 429, message, { reason: "rate_limited", retryAfterSeconds });
+    this.name = "RateLimitError";
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
+};
+
+// src/core/audit/writer.ts
+var AUDIT_RETENTION_DAYS_DEFAULT = 180;
+function parseAuditRetentionDays(raw2) {
+  if (raw2 === null || raw2 === void 0 || typeof raw2 === "string" && raw2.trim() === "") {
+    return AUDIT_RETENTION_DAYS_DEFAULT;
+  }
+  const n = typeof raw2 === "string" ? Number(raw2.trim()) : Number(raw2);
+  if (!Number.isFinite(n) || n < 0) return AUDIT_RETENTION_DAYS_DEFAULT;
+  return Math.trunc(n);
+}
+__name(parseAuditRetentionDays, "parseAuditRetentionDays");
+function pickAsyncLocalStorage() {
+  try {
+    const probe = globalThis.process?.getBuiltinModule?.("node:async_hooks");
+    const ALS = probe?.AsyncLocalStorage;
+    return ALS ? new ALS() : null;
+  } catch {
+    return null;
+  }
+}
+__name(pickAsyncLocalStorage, "pickAsyncLocalStorage");
+var requestIdALS = pickAsyncLocalStorage();
+function runWithRequestId(requestId, fn) {
+  if (!requestIdALS) return fn();
+  return requestIdALS.run({ requestId }, fn);
+}
+__name(runWithRequestId, "runWithRequestId");
+function currentRequestId() {
+  return requestIdALS?.getStore()?.requestId ?? null;
+}
+__name(currentRequestId, "currentRequestId");
+function buildInsert(entry) {
+  return {
+    sql: `INSERT INTO audit_log (id, actor_id, action, resource_type, resource_id, changes, request_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    params: [
+      crypto.randomUUID(),
+      entry.actorId,
+      entry.action,
+      entry.resourceType,
+      entry.resourceId,
+      entry.changes ? JSON.stringify(entry.changes) : null,
+      // صراحتِ صدا زننده همیشه برندهٔ زمینهٔ درخواست است (مثلاً میدل‌ور ناظر که بعد از پاسخ می‌نویسد)
+      entry.requestId ?? currentRequestId()
+    ]
+  };
+}
+__name(buildInsert, "buildInsert");
+function createAuditWriter(db, opts) {
+  const retentionDays = opts?.retentionDays !== void 0 ? parseAuditRetentionDays(opts.retentionDays) : AUDIT_RETENTION_DAYS_DEFAULT;
+  return {
+    async log(entry) {
+      const { sql, params } = buildInsert(entry);
+      await db.execute(sql, params);
+    },
+    async logInTransaction(tx, entry) {
+      const { sql, params } = buildInsert(entry);
+      await tx.execute(sql, params);
+    },
+    async pruneOld() {
+      if (retentionDays === 0) return 0;
+      const cutoff = new Date(Date.now() - retentionDays * 24 * 3600 * 1e3).toISOString().slice(0, 19).replace("T", " ");
+      const res = await db.execute(`DELETE FROM audit_log WHERE created_at < ?`, [cutoff]);
+      return typeof res?.meta?.changes === "number" ? res.meta.changes : 0;
+    }
+  };
+}
+__name(createAuditWriter, "createAuditWriter");
+
+// src/application/rum/pure.ts
+function percentile(sorted, p) {
+  if (sorted.length === 0) return 0;
+  const clamped = Math.min(Math.max(p, 0), 1);
+  const idx = (sorted.length - 1) * clamped;
+  const lo = Math.floor(idx);
+  const hi = Math.ceil(idx);
+  if (lo === hi) return sorted[lo];
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
+}
+__name(percentile, "percentile");
+function makeRateLimiter(max, windowMs) {
+  let windowStart = 0;
+  let count = 0;
+  return {
+    allow() {
+      const now = Date.now();
+      if (now - windowStart >= windowMs) {
+        windowStart = now;
+        count = 0;
+      }
+      if (count >= max) return false;
+      count += 1;
+      return true;
+    }
+  };
+}
+__name(makeRateLimiter, "makeRateLimiter");
+
+// src/application/http/rate-limit.ts
+var API_RATE_LIMIT_PER_MIN_DEFAULT = 240;
+var API_RATE_LIMIT_PER_MIN_MAX = 1e4;
+var API_RATE_LIMIT_WINDOW_MS = 6e4;
+function parsePerMinWithDefault(raw2, fallback) {
+  if (raw2 === null || raw2 === void 0 || typeof raw2 === "string" && raw2.trim() === "") {
+    return fallback;
+  }
+  const n = typeof raw2 === "string" ? Number(raw2.trim()) : Number(raw2);
+  if (!Number.isFinite(n) || n < 0) return fallback;
+  if (n === 0) return 0;
+  return Math.min(Math.trunc(n), API_RATE_LIMIT_PER_MIN_MAX);
+}
+__name(parsePerMinWithDefault, "parsePerMinWithDefault");
+function parseApiRateLimitPerMin(raw2) {
+  return parsePerMinWithDefault(raw2, API_RATE_LIMIT_PER_MIN_DEFAULT);
+}
+__name(parseApiRateLimitPerMin, "parseApiRateLimitPerMin");
+var API_TOKEN_GET_RATE_LIMIT_PER_MIN_DEFAULT = 120;
+function parseTokenGetRateLimitPerMin(raw2) {
+  return parsePerMinWithDefault(raw2, API_TOKEN_GET_RATE_LIMIT_PER_MIN_DEFAULT);
+}
+__name(parseTokenGetRateLimitPerMin, "parseTokenGetRateLimitPerMin");
+function makeKeyedRateLimiter(windowMs, maxKeys = 4096) {
+  const buckets = /* @__PURE__ */ new Map();
+  return {
+    allow(key, max) {
+      const now = Date.now();
+      if (!buckets.has(key) && buckets.size >= maxKeys) {
+        for (const [k, b] of buckets) {
+          if (now - b.lastSeen >= windowMs) buckets.delete(k);
+        }
+        if (buckets.size >= maxKeys) {
+          let oldestKey = null;
+          let oldestAt = Number.POSITIVE_INFINITY;
+          for (const [k, b] of buckets) {
+            if (b.lastSeen < oldestAt) {
+              oldestAt = b.lastSeen;
+              oldestKey = k;
+            }
+          }
+          if (oldestKey !== null) buckets.delete(oldestKey);
+        }
+      }
+      let bucket = buckets.get(key);
+      if (!bucket) {
+        bucket = { limiter: makeRateLimiter(max, windowMs), lastSeen: now };
+        buckets.set(key, bucket);
+      }
+      bucket.lastSeen = now;
+      return bucket.limiter.allow();
+    }
+  };
+}
+__name(makeKeyedRateLimiter, "makeKeyedRateLimiter");
+
+// src/application/http/chain.ts
+function installRequestId(app, path = "/api/*") {
+  app.use(path, async (c, next) => {
+    const requestId = `req-${crypto.randomUUID()}`;
+    c.set("requestId", requestId);
+    try {
+      return await runWithRequestId(requestId, () => next());
+    } finally {
+      c.header("X-Request-Id", requestId);
+    }
+  });
+}
+__name(installRequestId, "installRequestId");
+function installWriteRateLimit(app, opts = {}) {
+  const path = opts.path ?? "/api/*";
+  const exceptions = opts.exceptionPaths ?? ["/api/auth/login"];
+  const keyPrefix = opts.keyPrefix ?? "";
+  const message = opts.message ?? "\u062F\u0631\u062E\u0648\u0627\u0633\u062A\u200C\u0647\u0627\u06CC \u0646\u0648\u0634\u062A\u0646\u06CC \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0645\u062C\u0627\u0632 \u0627\u0633\u062A \u2014 \u06A9\u0645\u06CC \u0628\u0639\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F";
+  const apiRateLimiter = makeKeyedRateLimiter(API_RATE_LIMIT_WINDOW_MS);
+  let disabledLogged = false;
+  app.use(path, async (c, next) => {
+    if (c.req.method !== "POST" && c.req.method !== "PUT" && c.req.method !== "PATCH" && c.req.method !== "DELETE") {
+      return next();
+    }
+    if (exceptions.includes(c.req.path)) return next();
+    const perMin = parseApiRateLimitPerMin(c.env?.API_RATE_LIMIT_PER_MIN);
+    if (perMin <= 0) {
+      if (opts.onDisabled && !disabledLogged) {
+        disabledLogged = true;
+        opts.onDisabled();
+      }
+      return next();
+    }
+    const ip = (c.req.header("cf-connecting-ip") ?? "unknown").slice(0, 64);
+    if (!apiRateLimiter.allow(`${keyPrefix}${perMin}:${ip}`, perMin)) {
+      c.header("Retry-After", String(Math.ceil(API_RATE_LIMIT_WINDOW_MS / 1e3)));
+      throw new RateLimitError(Math.ceil(API_RATE_LIMIT_WINDOW_MS / 1e3), message);
+    }
+    return next();
+  });
+}
+__name(installWriteRateLimit, "installWriteRateLimit");
+function installNoStore(app, path = "/api/*") {
+  app.use(path, async (c, next) => {
+    await next();
+    c.header("Cache-Control", "no-store");
+  });
+}
+__name(installNoStore, "installNoStore");
+function installNotFound(app, message) {
+  app.notFound(
+    (c) => c.json(message ? { error: "NOT_FOUND", message } : { error: "NOT_FOUND" }, 404)
+  );
+}
+__name(installNotFound, "installNotFound");
+
 // node_modules/hono/dist/request/constants.js
 var GET_MATCH_RESULT = /* @__PURE__ */ Symbol();
 
@@ -23629,82 +23914,7 @@ __name(faHaystackExpr, "faHaystackExpr");
 
 // src/core/shared/features.ts
 var FEATURES = {
-  apiKeys: false
-};
-
-// src/core/errors/errors.ts
-var AppError = class extends Error {
-  static {
-    __name(this, "AppError");
-  }
-  code;
-  status;
-  details;
-  constructor(code, status, message, details) {
-    super(message);
-    this.name = "AppError";
-    this.code = code;
-    this.status = status;
-    this.details = details;
-  }
-};
-var ValidationError = class extends AppError {
-  static {
-    __name(this, "ValidationError");
-  }
-  constructor(message = "\u0648\u0631\u0648\u062F\u06CC \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A", details) {
-    super("VALIDATION_ERROR", 400, message, details);
-    this.name = "ValidationError";
-  }
-};
-var AuthError = class extends AppError {
-  static {
-    __name(this, "AuthError");
-  }
-  constructor(message = "\u0627\u062D\u0631\u0627\u0632 \u0647\u0648\u06CC\u062A \u0646\u0627\u0645\u0648\u0641\u0642 \u0628\u0648\u062F") {
-    super("AUTH_ERROR", 401, message);
-    this.name = "AuthError";
-  }
-};
-var ForbiddenError = class extends AppError {
-  static {
-    __name(this, "ForbiddenError");
-  }
-  constructor(message = "\u062F\u0633\u062A\u0631\u0633\u06CC \u0645\u062C\u0627\u0632 \u0646\u06CC\u0633\u062A") {
-    super("FORBIDDEN", 403, message);
-    this.name = "ForbiddenError";
-  }
-};
-var NotFoundError = class extends AppError {
-  static {
-    __name(this, "NotFoundError");
-  }
-  constructor(resource = "\u0645\u0646\u0628\u0639", message) {
-    super("NOT_FOUND", 404, message ?? `${resource} \u067E\u06CC\u062F\u0627 \u0646\u0634\u062F`);
-    this.name = "NotFoundError";
-  }
-};
-var ConflictError = class extends AppError {
-  static {
-    __name(this, "ConflictError");
-  }
-  currentVersion;
-  constructor(message = "\u062A\u0639\u0627\u0631\u0636 \u062F\u0631 \u0648\u0636\u0639\u06CC\u062A \u0641\u0639\u0644\u06CC \u0631\u06A9\u0648\u0631\u062F", currentVersion) {
-    super("CONFLICT", 409, message, currentVersion !== void 0 ? { currentVersion } : void 0);
-    this.name = "ConflictError";
-    this.currentVersion = currentVersion;
-  }
-};
-var RateLimitError = class extends AppError {
-  static {
-    __name(this, "RateLimitError");
-  }
-  retryAfterSeconds;
-  constructor(retryAfterSeconds, message = "\u062A\u0644\u0627\u0634\u200C\u0647\u0627\u06CC \u0646\u0627\u0645\u0648\u0641\u0642 \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0645\u062C\u0627\u0632 \u0627\u0633\u062A \u2014 \u06A9\u0645\u06CC \u0628\u0639\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F") {
-    super("RATE_LIMITED", 429, message, { reason: "rate_limited", retryAfterSeconds });
-    this.name = "RateLimitError";
-    this.retryAfterSeconds = retryAfterSeconds;
-  }
+  apiKeys: true
 };
 
 // src/core/auth/jwt.ts
@@ -24252,91 +24462,6 @@ function errorHandler2(err, c) {
   return c.json(withRequestId({ error: "INTERNAL_ERROR", message: "\u062E\u0637\u0627\u06CC \u062F\u0627\u062E\u0644\u06CC \u0633\u0631\u0648\u0631" }), 500);
 }
 __name(errorHandler2, "errorHandler");
-
-// src/application/rum/pure.ts
-function percentile(sorted, p) {
-  if (sorted.length === 0) return 0;
-  const clamped = Math.min(Math.max(p, 0), 1);
-  const idx = (sorted.length - 1) * clamped;
-  const lo = Math.floor(idx);
-  const hi = Math.ceil(idx);
-  if (lo === hi) return sorted[lo];
-  return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
-}
-__name(percentile, "percentile");
-function makeRateLimiter(max, windowMs) {
-  let windowStart = 0;
-  let count = 0;
-  return {
-    allow() {
-      const now = Date.now();
-      if (now - windowStart >= windowMs) {
-        windowStart = now;
-        count = 0;
-      }
-      if (count >= max) return false;
-      count += 1;
-      return true;
-    }
-  };
-}
-__name(makeRateLimiter, "makeRateLimiter");
-
-// src/application/http/rate-limit.ts
-var API_RATE_LIMIT_PER_MIN_DEFAULT = 240;
-var API_RATE_LIMIT_PER_MIN_MAX = 1e4;
-var API_RATE_LIMIT_WINDOW_MS = 6e4;
-function parsePerMinWithDefault(raw2, fallback) {
-  if (raw2 === null || raw2 === void 0 || typeof raw2 === "string" && raw2.trim() === "") {
-    return fallback;
-  }
-  const n = typeof raw2 === "string" ? Number(raw2.trim()) : Number(raw2);
-  if (!Number.isFinite(n) || n < 0) return fallback;
-  if (n === 0) return 0;
-  return Math.min(Math.trunc(n), API_RATE_LIMIT_PER_MIN_MAX);
-}
-__name(parsePerMinWithDefault, "parsePerMinWithDefault");
-function parseApiRateLimitPerMin(raw2) {
-  return parsePerMinWithDefault(raw2, API_RATE_LIMIT_PER_MIN_DEFAULT);
-}
-__name(parseApiRateLimitPerMin, "parseApiRateLimitPerMin");
-var API_TOKEN_GET_RATE_LIMIT_PER_MIN_DEFAULT = 120;
-function parseTokenGetRateLimitPerMin(raw2) {
-  return parsePerMinWithDefault(raw2, API_TOKEN_GET_RATE_LIMIT_PER_MIN_DEFAULT);
-}
-__name(parseTokenGetRateLimitPerMin, "parseTokenGetRateLimitPerMin");
-function makeKeyedRateLimiter(windowMs, maxKeys = 4096) {
-  const buckets = /* @__PURE__ */ new Map();
-  return {
-    allow(key, max) {
-      const now = Date.now();
-      if (!buckets.has(key) && buckets.size >= maxKeys) {
-        for (const [k, b] of buckets) {
-          if (now - b.lastSeen >= windowMs) buckets.delete(k);
-        }
-        if (buckets.size >= maxKeys) {
-          let oldestKey = null;
-          let oldestAt = Number.POSITIVE_INFINITY;
-          for (const [k, b] of buckets) {
-            if (b.lastSeen < oldestAt) {
-              oldestAt = b.lastSeen;
-              oldestKey = k;
-            }
-          }
-          if (oldestKey !== null) buckets.delete(oldestKey);
-        }
-      }
-      let bucket = buckets.get(key);
-      if (!bucket) {
-        bucket = { limiter: makeRateLimiter(max, windowMs), lastSeen: now };
-        buckets.set(key, bucket);
-      }
-      bucket.lastSeen = now;
-      return bucket.limiter.allow();
-    }
-  };
-}
-__name(makeKeyedRateLimiter, "makeKeyedRateLimiter");
 
 // src/core/notify/templates.ts
 var UNKNOWN_TEMPLATE_FALLBACK = "\u0627\u0637\u0644\u0627\u0639\u200C\u0631\u0633\u0627\u0646\u06CC \u0633\u0627\u0645\u0627\u0646\u0647 \u0645\u0631\u06A9\u0632";
@@ -25190,6 +25315,20 @@ function renderAttendanceSummary(opts) {
 }
 __name(renderAttendanceSummary, "renderAttendanceSummary");
 
+// src/core/db/in-chunks.ts
+var IN_PARAM_CHUNK = 90;
+function inParamChunks(items, max = IN_PARAM_CHUNK) {
+  if (items.length === 0) return [];
+  const chunks = [];
+  for (let i = 0; i < items.length; i += max) chunks.push(items.slice(i, i + max));
+  return chunks;
+}
+__name(inParamChunks, "inParamChunks");
+function inPlaceholders(count) {
+  return new Array(count).fill("?").join(", ");
+}
+__name(inPlaceholders, "inPlaceholders");
+
 // src/core/notify/repository.ts
 function rowToPrefs(row) {
   return {
@@ -25710,6 +25849,66 @@ function createNotifyService(deps) {
         }
         throw err;
       }
+    },
+    /* performance-002 (۱.۲۷.۸۳) — نسخهٔ batched رفت‌وبرگشتیِ enqueue: تعداد رفت‌وبرگشت DB
+       مستقل از تعداد گیرنده‌ها است — یک SELECT dedup با IN (...) + حداکثر یک INSERT چندردیفی.
+       خروجی همان رکوردهای enqueue تکی با همان dedupKey (قرارداد ADR ثبت‌شده). */
+    async enqueueMany(inputs) {
+      if (inputs.length === 0) return [];
+      const nowIso2 = now().toISOString();
+      const dedupKeys = [...new Set(inputs.map((i) => i.dedupKey).filter((k) => Boolean(k)))];
+      const existing = /* @__PURE__ */ new Set();
+      if (dedupKeys.length > 0) {
+        for (const chunk of inParamChunks(dedupKeys)) {
+          const rows = await db.query(
+            `SELECT dedup_key FROM notifications WHERE dedup_key IN (${inPlaceholders(chunk.length)})`,
+            chunk
+          );
+          for (const r of rows) if (r.dedup_key) existing.add(r.dedup_key);
+        }
+      }
+      const outcomes = [];
+      const values = [];
+      const tuples = [];
+      for (const input2 of inputs) {
+        if (input2.dedupKey && existing.has(input2.dedupKey)) {
+          outcomes.push({ id: null, duplicate: true });
+          continue;
+        }
+        const id = crypto.randomUUID();
+        tuples.push("(?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0, ?, ?, ?, ?)");
+        values.push(
+          id,
+          input2.channel,
+          input2.template,
+          input2.recipient ?? null,
+          input2.studentId ?? null,
+          input2.appointmentId ?? null,
+          input2.staffId ?? null,
+          JSON.stringify(input2.payload ?? {}),
+          input2.dedupKey ?? null,
+          input2.sendAt ?? null,
+          nowIso2,
+          nowIso2
+        );
+        outcomes.push({ id, duplicate: false });
+      }
+      if (tuples.length > 0) {
+        const cols = "(id, channel, template, recipient, student_id, appointment_id, staff_id, payload, status, attempts, dedup_key, send_at, created_at, updated_at)";
+        try {
+          await db.execute(
+            `INSERT INTO notifications ${cols} VALUES ${tuples.join(", ")}`,
+            values
+          );
+        } catch (err) {
+          if (!isUniqueViolation(err)) throw err;
+          for (let i = 0; i < inputs.length; i += 1) {
+            if (outcomes[i].duplicate) continue;
+            outcomes[i] = await this.enqueue(inputs[i]);
+          }
+        }
+      }
+      return outcomes;
     },
     async dispatchPending(limit = 50) {
       const nowIso2 = now().toISOString();
@@ -26554,20 +26753,6 @@ function createConflictEngine(deps) {
   };
 }
 __name(createConflictEngine, "createConflictEngine");
-
-// src/core/db/in-chunks.ts
-var IN_PARAM_CHUNK = 90;
-function inParamChunks(items, max = IN_PARAM_CHUNK) {
-  if (items.length === 0) return [];
-  const chunks = [];
-  for (let i = 0; i < items.length; i += max) chunks.push(items.slice(i, i + max));
-  return chunks;
-}
-__name(inParamChunks, "inParamChunks");
-function inPlaceholders(count) {
-  return new Array(count).fill("?").join(", ");
-}
-__name(inPlaceholders, "inPlaceholders");
 
 // src/domain/assessment-blocks/service.ts
 var newId = /* @__PURE__ */ __name(() => crypto.randomUUID(), "newId");
@@ -29499,6 +29684,7 @@ function createStudentProfileService(deps) {
         await tx.execute(`DELETE FROM student_focus_links WHERE student_id = ?`, [id]);
         await tx.execute(`DELETE FROM case_events WHERE student_id = ?`, [id]);
         await tx.execute(`DELETE FROM intervention_paths WHERE student_id = ?`, [id]);
+        await tx.execute(`DELETE FROM report_snapshots WHERE student_id = ?`, [id]);
         await tx.execute(`DELETE FROM students WHERE id = ?`, [id]);
         await audit.logInTransaction(tx, {
           actorId: actor.staffId,
@@ -35537,10 +35723,6 @@ async function replacePackageTags(tx, packageId, tagIds) {
   }
 }
 __name(replacePackageTags, "replacePackageTags");
-function escapeLike(q) {
-  return q.replace(/[\\%_]/g, (m) => "\\" + m);
-}
-__name(escapeLike, "escapeLike");
 async function disorderTagRows(db) {
   return db.query(`SELECT id, name FROM tags WHERE active = 1 AND category = 'disorder'`);
 }
@@ -36483,9 +36665,10 @@ function createExerciseBankService(deps) {
       const params = [];
       if (filters.publishedOnly) conds.push("p.published = 1");
       if (filters.q && filters.q.trim().length > 0) {
-        const like = `%${escapeLike(filters.q.trim())}%`;
-        conds.push("(p.title LIKE ? ESCAPE '\\' OR p.description LIKE ? ESCAPE '\\')");
-        params.push(like, like);
+        const like = likePattern(sanitizeFaQuery(filters.q));
+        const hay = faHaystackExpr("(p.title || ' ' || COALESCE(p.description, ''))");
+        conds.push(`(${hay} LIKE ? ESCAPE '\\')`);
+        params.push(like);
       }
       if (filters.tagId) {
         conds.push("EXISTS (SELECT 1 FROM exercise_package_tags pt WHERE pt.package_id = p.id AND pt.tag_id = ?)");
@@ -38098,7 +38281,7 @@ var DOC_REQUEST_SELECT = `SELECT r.id, r.student_id, r.templates, r.custom_note,
   FROM document_requests r
   LEFT JOIN staff s ON s.id = r.requested_by`;
 function createDocumentRequestService(deps) {
-  const { db, audit, logger, storage, mediaFetcher, notify, settings } = deps;
+  const { db, audit, logger, storage, mediaFetcher, notify, getClinicName } = deps;
   const log = logger.child("doc-requests");
   const now = deps.now ?? (() => /* @__PURE__ */ new Date());
   async function familyChatsOf(studentId) {
@@ -38199,21 +38382,20 @@ function createDocumentRequestService(deps) {
         [id, studentId, serializeDocPayload(tags, recipients), customNote, now().toISOString(), dueHint, actor.staffId]
       );
       const extra = buildDocRequestBody(tags, customNote, dueHint);
-      const clinicName = await settings.getClinicName();
+      const clinicName = await deps.getClinicName();
       const channel = notify.getChannel("bale") ? "bale" : "internal";
-      let delivered = 0;
-      for (const chatId of chats) {
-        const outcome = await notify.enqueue({
+      const outcomes = await deps.enqueueMany(
+        chats.map((chatId) => ({
           channel,
           template: "doc_request_sent",
           recipient: chatId,
           studentId,
           payload: { studentName, extra, clinicName },
           dedupKey: `docreq:${id}:${chatId}`
-        });
-        if (!outcome.duplicate) delivered += 1;
-      }
-      if (delivered > 0) await notify.dispatchPending(50);
+        }))
+      );
+      const delivered = outcomes.filter((o) => !o.duplicate).length;
+      if (delivered > 0) await deps.flushPending(50);
       if (delivered > 0) {
         await db.execute(`UPDATE document_requests SET delivered_chats = ? WHERE id = ?`, [delivered, id]);
       }
@@ -42940,7 +43122,7 @@ function safeJsonEmbed2(v) {
 __name(safeJsonEmbed2, "safeJsonEmbed");
 
 // src/core/version.ts
-var APP_VERSION = "1.27.82";
+var APP_VERSION = "1.27.83";
 var NODE_MIN_VERSION = "1.26.0";
 
 // src/domain/case-events/public-form.ts
@@ -62691,10 +62873,10 @@ function dedupeTags(tags) {
   return out;
 }
 __name(dedupeTags, "dedupeTags");
-function escapeLike2(raw2) {
+function escapeLike(raw2) {
   return String(raw2 ?? "").replace(/[%_\\]/g, (ch) => `\\${ch}`);
 }
-__name(escapeLike2, "escapeLike");
+__name(escapeLike, "escapeLike");
 function schoolYearOfYmd2(ymd) {
   const [gy, gm, gd] = ymd.split("-").map(Number);
   const j = toJalaliParts(gy, gm, gd);
@@ -63070,7 +63252,7 @@ function createClearbookService(deps) {
         params.push(normalizeTag(opts.tag));
       }
       if (opts.q) {
-        const like = `%${escapeLike2(opts.q)}%`;
+        const like = `%${escapeLike(opts.q)}%`;
         where.push(`(e.title LIKE ? ESCAPE '\\' OR e.body LIKE ? ESCAPE '\\')`);
         params.push(like, like);
       }
@@ -63815,10 +63997,10 @@ function dedupeTags2(tags) {
   return out.slice(0, TAGS_PER_DOC_MAX);
 }
 __name(dedupeTags2, "dedupeTags");
-function escapeLike3(raw2) {
+function escapeLike2(raw2) {
   return String(raw2 ?? "").replace(/[%_\\]/g, (ch) => `\\${ch}`);
 }
-__name(escapeLike3, "escapeLike");
+__name(escapeLike2, "escapeLike");
 function sanitizeFilename3(raw2) {
   const base = String(raw2 ?? "").split(/[/\\]/).pop() ?? "";
   return base.replace(/\s+/g, " ").trim().slice(0, 200);
@@ -63989,7 +64171,7 @@ function createDocsService(deps) {
         params.push(validateCategory(opts.category));
       }
       if (opts.q) {
-        const like = `%${escapeLike3(opts.q)}%`;
+        const like = `%${escapeLike2(opts.q)}%`;
         where.push(`(d.title LIKE ? ESCAPE '\\' OR d.description LIKE ? ESCAPE '\\' OR d.tags LIKE ? ESCAPE '\\')`);
         params.push(like, like, like);
       }
@@ -65733,75 +65915,6 @@ async function syncCpAnnouncements(deps) {
 }
 __name(syncCpAnnouncements, "syncCpAnnouncements");
 
-// src/core/audit/writer.ts
-var AUDIT_RETENTION_DAYS_DEFAULT = 180;
-function parseAuditRetentionDays(raw2) {
-  if (raw2 === null || raw2 === void 0 || typeof raw2 === "string" && raw2.trim() === "") {
-    return AUDIT_RETENTION_DAYS_DEFAULT;
-  }
-  const n = typeof raw2 === "string" ? Number(raw2.trim()) : Number(raw2);
-  if (!Number.isFinite(n) || n < 0) return AUDIT_RETENTION_DAYS_DEFAULT;
-  return Math.trunc(n);
-}
-__name(parseAuditRetentionDays, "parseAuditRetentionDays");
-function pickAsyncLocalStorage() {
-  try {
-    const probe = globalThis.process?.getBuiltinModule?.("node:async_hooks");
-    const ALS = probe?.AsyncLocalStorage;
-    return ALS ? new ALS() : null;
-  } catch {
-    return null;
-  }
-}
-__name(pickAsyncLocalStorage, "pickAsyncLocalStorage");
-var requestIdALS = pickAsyncLocalStorage();
-function runWithRequestId(requestId, fn) {
-  if (!requestIdALS) return fn();
-  return requestIdALS.run({ requestId }, fn);
-}
-__name(runWithRequestId, "runWithRequestId");
-function currentRequestId() {
-  return requestIdALS?.getStore()?.requestId ?? null;
-}
-__name(currentRequestId, "currentRequestId");
-function buildInsert(entry) {
-  return {
-    sql: `INSERT INTO audit_log (id, actor_id, action, resource_type, resource_id, changes, request_id)
-          VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    params: [
-      crypto.randomUUID(),
-      entry.actorId,
-      entry.action,
-      entry.resourceType,
-      entry.resourceId,
-      entry.changes ? JSON.stringify(entry.changes) : null,
-      // صراحتِ صدا زننده همیشه برندهٔ زمینهٔ درخواست است (مثلاً میدل‌ور ناظر که بعد از پاسخ می‌نویسد)
-      entry.requestId ?? currentRequestId()
-    ]
-  };
-}
-__name(buildInsert, "buildInsert");
-function createAuditWriter(db, opts) {
-  const retentionDays = opts?.retentionDays !== void 0 ? parseAuditRetentionDays(opts.retentionDays) : AUDIT_RETENTION_DAYS_DEFAULT;
-  return {
-    async log(entry) {
-      const { sql, params } = buildInsert(entry);
-      await db.execute(sql, params);
-    },
-    async logInTransaction(tx, entry) {
-      const { sql, params } = buildInsert(entry);
-      await tx.execute(sql, params);
-    },
-    async pruneOld() {
-      if (retentionDays === 0) return 0;
-      const cutoff = new Date(Date.now() - retentionDays * 24 * 3600 * 1e3).toISOString().slice(0, 19).replace("T", " ");
-      const res = await db.execute(`DELETE FROM audit_log WHERE created_at < ?`, [cutoff]);
-      return typeof res?.meta?.changes === "number" ? res.meta.changes : 0;
-    }
-  };
-}
-__name(createAuditWriter, "createAuditWriter");
-
 // src/domain/content-score/pure.ts
 var SCORE_FORMULA_VERSION = 1;
 var SCORE_SOURCES = ["exercises", "pathway_templates"];
@@ -66964,6 +67077,16 @@ var TABLE_POLICIES = {
   // نگه‌داری تله‌متری (۱.۲۵.۶۶)
   client_errors: "\u06F9\u06F0 \u0631\u0648\u0632",
   // نگه‌داری تله‌متری (۱.۲۵.۶۶)
+  node_push_events: "\u06F9\u06F0 \u0631\u0648\u0632",
+  // data-004 (۱.۲۷.۸۳) — هرس شبانه روی received_at
+  node_sync_inbox: "\u06F9\u06F0 \u0631\u0648\u0632",
+  // data-004 (۱.۲۷.۸۳) — هرس شبانه روی received_at
+  quota_usage: "\u06F4\u06F0\u06F0 \u0631\u0648\u0632",
+  // data-004 (۱.۲۷.۸۳) — هرس شبانه روی day (یک ردیف در روز)
+  exercise_file_chunks: "\u067E\u0627\u06A9\u0633\u0627\u0632\u06CC \u06CC\u062A\u06CC\u0645\u200C\u0647\u0627 \u0647\u0631 \u0634\u0628",
+  // data-002 (۱.۲۷.۸۳) — سوییپ chunk بدون attachment تمرین
+  report_snapshots: "\u0645\u0627\u0646\u062F\u06AF\u0627\u0631 \u2014 \u0628\u0627 \u062D\u0630\u0641 \u0642\u0637\u0639\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u067E\u0627\u06A9 \u0645\u06CC\u200C\u0634\u0648\u062F",
+  // data-003 (۱.۲۷.۸۳) — سیاست snapshot-first: نسخهٔ قطعی سند؛ در force-delete صریحاً حذف
   network_content: "\u0641\u0642\u0637-\u0627\u0641\u0632\u0648\u062F\u0646\u06CC",
   // حذف فیزیکی ممنوع — بایگانی active=0 (§۳-۱۵)
   game_links: "\u067E\u0627\u06A9\u0633\u0627\u0632\u06CC \u062F\u0648\u0631\u0647\u200C\u0627\u06CC",
@@ -67139,10 +67262,10 @@ __name(registerGrowthRoutes, "registerGrowthRoutes");
 // src/domain/finance/service.ts
 var LIST_LIMIT = 500;
 var YMD_RE2 = /^\d{4}-\d{2}-\d{2}$/;
-function escapeLike4(raw2) {
+function escapeLike3(raw2) {
   return String(raw2 ?? "").replace(/[%_\\]/g, (ch) => `\\${ch}`);
 }
-__name(escapeLike4, "escapeLike");
+__name(escapeLike3, "escapeLike");
 function concatSegments5(segments) {
   if (segments.length === 1) return segments[0];
   const total = segments.reduce((n, s) => n + s.length, 0);
@@ -67161,6 +67284,30 @@ function sizeLimitMessage4(bytes) {
   return `\u062D\u062C\u0645 \u0641\u0627\u06CC\u0644 \u0628\u06CC\u0634 \u0627\u0632 ${label} \u0627\u0633\u062A`;
 }
 __name(sizeLimitMessage4, "sizeLimitMessage");
+function assertAmount(amount) {
+  if (!Number.isInteger(amount) || amount <= 0) {
+    throw new ValidationError("\u0645\u0628\u0644\u063A \u0628\u0627\u06CC\u062F \u0639\u062F\u062F \u0635\u062D\u06CC\u062D \u0628\u0632\u0631\u06AF\u200C\u062A\u0631 \u0627\u0632 \u0635\u0641\u0631 \u0628\u0627\u0634\u062F");
+  }
+}
+__name(assertAmount, "assertAmount");
+function assertYmd(ymd, field) {
+  if (!YMD_RE2.test(ymd)) {
+    throw new ValidationError(`${field} \u0628\u0627\u06CC\u062F \u062A\u0627\u0631\u06CC\u062E \u0645\u06CC\u0644\u0627\u062F\u06CC \u0645\u0639\u062A\u0628\u0631 \u0628\u0647 \u0642\u0627\u0644\u0628 YYYY-MM-DD \u0628\u0627\u0634\u062F`);
+  }
+}
+__name(assertYmd, "assertYmd");
+function assertNonEmpty(value, label) {
+  if (String(value ?? "").trim().length === 0) {
+    throw new ValidationError(`${label} \u0646\u0645\u06CC\u200C\u062A\u0648\u0627\u0646\u062F \u062E\u0627\u0644\u06CC \u0628\u0627\u0634\u062F`);
+  }
+}
+__name(assertNonEmpty, "assertNonEmpty");
+function assertBudgetRange(from, to) {
+  if (from && to && to < from) {
+    throw new ValidationError("\u0628\u0627\u0632\u0647\u0654 \u0628\u0648\u062F\u062C\u0647 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A \u2014 \xAB\u062A\u0627\xBB \u0646\u0628\u0627\u06CC\u062F \u0642\u0628\u0644 \u0627\u0632 \xAB\u0627\u0632\xBB \u0628\u0627\u0634\u062F");
+  }
+}
+__name(assertBudgetRange, "assertBudgetRange");
 function createFinanceService(deps) {
   const { db, audit, logger, storage } = deps;
   const log = logger.child("finance");
@@ -67170,30 +67317,6 @@ function createFinanceService(deps) {
     }
   }
   __name(assertManager, "assertManager");
-  function assertAmount(amount) {
-    if (!Number.isInteger(amount) || amount <= 0) {
-      throw new ValidationError("\u0645\u0628\u0644\u063A \u0628\u0627\u06CC\u062F \u0639\u062F\u062F \u0635\u062D\u06CC\u062D \u0628\u0632\u0631\u06AF\u200C\u062A\u0631 \u0627\u0632 \u0635\u0641\u0631 \u0628\u0627\u0634\u062F");
-    }
-  }
-  __name(assertAmount, "assertAmount");
-  function assertYmd(ymd, field) {
-    if (!YMD_RE2.test(ymd)) {
-      throw new ValidationError(`${field} \u0628\u0627\u06CC\u062F \u062A\u0627\u0631\u06CC\u062E \u0645\u06CC\u0644\u0627\u062F\u06CC \u0645\u0639\u062A\u0628\u0631 \u0628\u0647 \u0642\u0627\u0644\u0628 YYYY-MM-DD \u0628\u0627\u0634\u062F`);
-    }
-  }
-  __name(assertYmd, "assertYmd");
-  function assertNonEmpty(value, label) {
-    if (String(value ?? "").trim().length === 0) {
-      throw new ValidationError(`${label} \u0646\u0645\u06CC\u200C\u062A\u0648\u0627\u0646\u062F \u062E\u0627\u0644\u06CC \u0628\u0627\u0634\u062F`);
-    }
-  }
-  __name(assertNonEmpty, "assertNonEmpty");
-  function assertBudgetRange(from, to) {
-    if (from && to && to < from) {
-      throw new ValidationError("\u0628\u0627\u0632\u0647\u0654 \u0628\u0648\u062F\u062C\u0647 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A \u2014 \xAB\u062A\u0627\xBB \u0646\u0628\u0627\u06CC\u062F \u0642\u0628\u0644 \u0627\u0632 \xAB\u0627\u0632\xBB \u0628\u0627\u0634\u062F");
-    }
-  }
-  __name(assertBudgetRange, "assertBudgetRange");
   function rowToBudget(row) {
     return {
       id: row.id,
@@ -67453,7 +67576,7 @@ function createFinanceService(deps) {
         params.push(opts.to);
       }
       if (opts.q) {
-        const like = `%${escapeLike4(opts.q)}%`;
+        const like = `%${escapeLike3(opts.q)}%`;
         where.push(`(title LIKE ? ESCAPE '\\' OR category LIKE ? ESCAPE '\\' OR description LIKE ? ESCAPE '\\')`);
         params.push(like, like, like);
       }
@@ -67647,7 +67770,7 @@ function createFinanceService(deps) {
         params.push(opts.studentId);
       }
       if (opts.q) {
-        const like = `%${escapeLike4(opts.q)}%`;
+        const like = `%${escapeLike3(opts.q)}%`;
         where.push(`(d.donor_name LIKE ? ESCAPE '\\' OR d.note LIKE ? ESCAPE '\\')`);
         params.push(like, like);
       }
@@ -73312,6 +73435,25 @@ function extractChatId(update) {
 }
 __name(extractChatId, "extractChatId");
 
+// src/application/notify/enqueue-to-many.ts
+async function enqueueToMany(notify, input2) {
+  const outcomes = await notify.enqueueMany(
+    input2.chats.map((chat) => ({
+      channel: input2.channel,
+      template: input2.template,
+      recipient: chat,
+      studentId: input2.studentId ?? null,
+      staffId: input2.staffId ?? null,
+      payload: input2.payloadFor(chat),
+      dedupKey: input2.dedupKeyFor(chat)
+    }))
+  );
+  const sent = outcomes.filter((o) => !o.duplicate).length;
+  if (sent > 0 && input2.flush !== false) await notify.dispatchPending(50);
+  return sent;
+}
+__name(enqueueToMany, "enqueueToMany");
+
 // src/application/settings/service.ts
 function epochUtcOfTehranYmd(ymd) {
   const utcMs = Date.parse(`${ymd}T00:00:00.000Z`) - TEHRAN_OFFSET_MINUTES * 6e4;
@@ -73323,6 +73465,8 @@ function tehranYmdOfEpochUtc(epoch) {
   return new Date(ms).toISOString().slice(0, 10);
 }
 __name(tehranYmdOfEpochUtc, "tehranYmdOfEpochUtc");
+var clinicNameCache = null;
+var CLINIC_NAME_CACHE_TTL_MS = 6e4;
 function sanitizeWeight(v, max = 1e4) {
   const n = Number(v);
   return Number.isInteger(n) && n >= 0 && n <= max ? n : void 0;
@@ -73421,6 +73565,7 @@ function createSettingsService(deps) {
       const before = await this.get();
       if (input2.clinicName !== void 0) {
         await upsertSetting(SETTING_KEYS.CLINIC_NAME, input2.clinicName.trim(), actor);
+        clinicNameCache = null;
       }
       if (input2.defaultReminderHours !== void 0) {
         await upsertSetting(SETTING_KEYS.DEFAULT_REMINDER_HOURS, input2.defaultReminderHours, actor);
@@ -73536,18 +73681,22 @@ function createSettingsService(deps) {
       return { staffCount, ranges: items.length };
     },
     async getClinicName() {
+      const cached2 = clinicNameCache;
+      if (cached2 && Date.now() - cached2.at < CLINIC_NAME_CACHE_TTL_MS) return cached2.value;
       const row = await db.queryOne(
         `SELECT value FROM settings WHERE key = ?`,
         [SETTING_KEYS.CLINIC_NAME]
       );
+      let resolved = deps.envClinicName ?? DEFAULT_SETTINGS[SETTING_KEYS.CLINIC_NAME];
       if (row) {
         try {
           const parsed = JSON.parse(row.value);
-          if (typeof parsed === "string" && parsed.trim().length > 0) return parsed;
+          if (typeof parsed === "string" && parsed.trim().length > 0) resolved = parsed;
         } catch {
         }
       }
-      return deps.envClinicName ?? DEFAULT_SETTINGS[SETTING_KEYS.CLINIC_NAME];
+      clinicNameCache = { value: resolved, at: Date.now() };
+      return resolved;
     },
     async getClinicPhone() {
       const stored = await readAll();
@@ -75713,7 +75862,11 @@ function createServices(deps) {
     storage: exerciseStorage,
     mediaFetcher: docMediaFetcher,
     notify: notifyCore,
-    settings
+    // architecture-002/003 (۱.۲۷.۸۳): به‌جای کل SettingsService از @app — تزریق تابعی همان
+    // helper مشترک (الگوی formulationOt)
+    getClinicName: /* @__PURE__ */ __name(() => settings.getClinicName(), "getClinicName"),
+    enqueueMany: /* @__PURE__ */ __name((inputs) => notifyCore.enqueueMany(inputs), "enqueueMany"),
+    flushPending: /* @__PURE__ */ __name((limit) => notifyCore.dispatchPending(limit), "flushPending")
   });
   const notify = createNotifyAppService({
     db,
@@ -75758,20 +75911,14 @@ function createServices(deps) {
   caseEvents.setSendObserver(async (input2) => {
     const channel = notifyCore.getChannel("bale") ? "bale" : "internal";
     const clinicName = await settings.getClinicName();
-    let sent = 0;
-    for (const chat of input2.chats) {
-      const outcome = await notifyCore.enqueue({
-        channel,
-        template: input2.template,
-        recipient: chat,
-        studentId: input2.studentId,
-        payload: { ...input2.vars, clinicName },
-        dedupKey: `${input2.dedupBase}:${chat}`
-      });
-      if (!outcome.duplicate) sent += 1;
-    }
-    if (sent > 0) await notifyCore.dispatchPending(50);
-    return sent;
+    return enqueueToMany(notifyCore, {
+      channel,
+      template: input2.template,
+      chats: input2.chats,
+      payloadFor: /* @__PURE__ */ __name((chat) => ({ ...input2.vars, clinicName }), "payloadFor"),
+      dedupKeyFor: /* @__PURE__ */ __name((chat) => `${input2.dedupBase}:${chat}`, "dedupKeyFor"),
+      studentId: input2.studentId
+    });
   });
   caseEvents.setFillObserver(async (input2) => {
     try {
@@ -75786,25 +75933,20 @@ function createServices(deps) {
       const studentName = student ? `${student.firstName} ${student.lastName}` : null;
       const channel = notifyCore.getChannel("bale") ? "bale" : "internal";
       const clinicName = await settings.getClinicName();
-      let sent = 0;
-      for (const chat of chats) {
-        const outcome = await notifyCore.enqueue({
-          channel,
-          template: "bot_checklist_result",
-          recipient: chat,
-          studentId: input2.studentId,
-          payload: {
-            studentName: studentName ?? void 0,
-            formTitle: input2.teacherName ? `${input2.formTitle} (\u067E\u0627\u0633\u062E \u0645\u0639\u0644\u0645: ${input2.teacherName})` : input2.formTitle,
-            score: input2.score != null ? faDigits(String(input2.score)) : void 0,
-            band: input2.band ?? void 0,
-            clinicName
-          },
-          dedupKey: `ce-result:${input2.eventId}:${chat}`
-        });
-        if (!outcome.duplicate) sent += 1;
-      }
-      if (sent > 0) await notifyCore.dispatchPending(50);
+      await enqueueToMany(notifyCore, {
+        channel,
+        template: "bot_checklist_result",
+        chats,
+        payloadFor: /* @__PURE__ */ __name((chat) => ({
+          studentName: studentName ?? void 0,
+          formTitle: input2.teacherName ? `${input2.formTitle} (\u067E\u0627\u0633\u062E \u0645\u0639\u0644\u0645: ${input2.teacherName})` : input2.formTitle,
+          score: input2.score != null ? faDigits(String(input2.score)) : void 0,
+          band: input2.band ?? void 0,
+          clinicName
+        }), "payloadFor"),
+        dedupKeyFor: /* @__PURE__ */ __name((chat) => `ce-result:${input2.eventId}:${chat}`, "dedupKeyFor"),
+        studentId: input2.studentId
+      });
     } catch (err) {
       logger.warn("case-events.fill_observer_failed", { err: err instanceof Error ? err.message : String(err) });
     }
@@ -75812,20 +75954,14 @@ function createServices(deps) {
   exerciseBank.setSendObserver(async (input2) => {
     const channel = notifyCore.getChannel("bale") ? "bale" : "internal";
     const clinicName = await settings.getClinicName();
-    let sent = 0;
-    for (const chat of input2.chats) {
-      const outcome = await notifyCore.enqueue({
-        channel,
-        template: input2.template,
-        recipient: chat,
-        studentId: input2.studentId,
-        payload: { ...input2.vars, clinicName },
-        dedupKey: `${input2.dedupBase}:${chat}`
-      });
-      if (!outcome.duplicate) sent += 1;
-    }
-    if (sent > 0) await notifyCore.dispatchPending(50);
-    return sent;
+    return enqueueToMany(notifyCore, {
+      channel,
+      template: input2.template,
+      chats: input2.chats,
+      payloadFor: /* @__PURE__ */ __name((chat) => ({ ...input2.vars, clinicName }), "payloadFor"),
+      dedupKeyFor: /* @__PURE__ */ __name((chat) => `${input2.dedupBase}:${chat}`, "dedupKeyFor"),
+      studentId: input2.studentId
+    });
   });
   const reports = createReportService({ db, logger });
   const sessionNotes = createSessionNotesService({ db, audit, logger, followups });
@@ -75944,48 +76080,16 @@ function installLoggerContext(app, services) {
   });
 }
 __name(installLoggerContext, "installLoggerContext");
-function installRequestId(app) {
-  app.use("/api/*", async (c, next) => {
-    const requestId = `req-${crypto.randomUUID()}`;
-    c.set("requestId", requestId);
-    try {
-      return await runWithRequestId(requestId, () => next());
-    } finally {
-      c.header("X-Request-Id", requestId);
-    }
+function installRequestId2(app) {
+  installRequestId(app);
+}
+__name(installRequestId2, "installRequestId");
+function installWriteRateLimit2(app, services) {
+  installWriteRateLimit(app, {
+    onDisabled: /* @__PURE__ */ __name(() => services.logger.child("http").warn("api_rate_limit.disabled", { reason: "API_RATE_LIMIT_PER_MIN=0" }), "onDisabled")
   });
 }
-__name(installRequestId, "installRequestId");
-function installWriteRateLimit(app, services) {
-  const apiRateLimiter = makeKeyedRateLimiter(API_RATE_LIMIT_WINDOW_MS);
-  let rateLimitDisabledLogged = false;
-  app.use("/api/*", async (c, next) => {
-    if (c.req.method !== "POST" && c.req.method !== "PUT" && c.req.method !== "PATCH" && c.req.method !== "DELETE") {
-      return next();
-    }
-    if (c.req.path === "/api/auth/login") return next();
-    const perMin = parseApiRateLimitPerMin(c.env?.API_RATE_LIMIT_PER_MIN);
-    if (perMin <= 0) {
-      if (!rateLimitDisabledLogged) {
-        rateLimitDisabledLogged = true;
-        services.logger.child("http").warn("api_rate_limit.disabled", {
-          reason: "API_RATE_LIMIT_PER_MIN=0"
-        });
-      }
-      return next();
-    }
-    const ip = (c.req.header("cf-connecting-ip") ?? "unknown").slice(0, 64);
-    if (!apiRateLimiter.allow(`${perMin}:${ip}`, perMin)) {
-      c.header("Retry-After", String(Math.ceil(API_RATE_LIMIT_WINDOW_MS / 1e3)));
-      throw new RateLimitError(
-        Math.ceil(API_RATE_LIMIT_WINDOW_MS / 1e3),
-        "\u062F\u0631\u062E\u0648\u0627\u0633\u062A\u200C\u0647\u0627\u06CC \u0646\u0648\u0634\u062A\u0646\u06CC \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0645\u062C\u0627\u0632 \u0627\u0633\u062A \u2014 \u06A9\u0645\u06CC \u0628\u0639\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F"
-      );
-    }
-    return next();
-  });
-}
-__name(installWriteRateLimit, "installWriteRateLimit");
+__name(installWriteRateLimit2, "installWriteRateLimit");
 function installTokenGetRateLimit(app, services) {
   const tokenGetLimiter = makeKeyedRateLimiter(API_RATE_LIMIT_WINDOW_MS);
   let tokenGetDisabledLogged = false;
@@ -76028,10 +76132,7 @@ function installSecurityAndCacheHeaders(app) {
       c.header("Content-Security-Policy", JSON_API_CSP);
     }
   });
-  app.use("/api/*", async (c, next) => {
-    await next();
-    c.header("Cache-Control", "no-store");
-  });
+  installNoStore(app);
   app.use("/public/exercise-files/*", async (c, next) => {
     await next();
     c.header("Cache-Control", "private, no-store");
@@ -76058,8 +76159,8 @@ function installRequestLogger(app, services) {
 __name(installRequestLogger, "installRequestLogger");
 function installGlobalMiddleware(app, services) {
   installLoggerContext(app, services);
-  installRequestId(app);
-  installWriteRateLimit(app, services);
+  installRequestId2(app);
+  installWriteRateLimit2(app, services);
   installTokenGetRateLimit(app, services);
   installSecurityAndCacheHeaders(app);
   installRequestLogger(app, services);
@@ -78475,15 +78576,7 @@ function createNodeSyncApp(deps) {
   const now = deps.now ?? (() => /* @__PURE__ */ new Date());
   const minIntervalMs = deps.pushMinIntervalMs ?? NODE_PUSH_MIN_INTERVAL_MS;
   const app = new Hono3();
-  app.use("*", async (c, next) => {
-    const requestId = `req-${crypto.randomUUID()}`;
-    c.set("requestId", requestId);
-    try {
-      return await runWithRequestId(requestId, () => next());
-    } finally {
-      c.header("X-Request-Id", requestId);
-    }
-  });
+  installRequestId(app, "*");
   const nodeLimitWindowMs = deps.rateLimitWindowMs ?? NODE_RATE_LIMIT_WINDOW_MS;
   const nodeLimiter = makeNodeSlidingWindowLimiter(nodeLimitWindowMs);
   const nodeRateLimitGuard = /* @__PURE__ */ __name(async (c, next) => {
@@ -78515,27 +78608,13 @@ function createNodeSyncApp(deps) {
   app.use("/pull", nodeRateLimitGuard);
   app.use("/push", nodeRateLimitGuard);
   app.use("/reconcile", nodeRateLimitGuard);
-  const limiter = makeKeyedRateLimiter(API_RATE_LIMIT_WINDOW_MS);
-  app.use("*", async (c, next) => {
-    if (c.req.method !== "POST" && c.req.method !== "PUT" && c.req.method !== "PATCH" && c.req.method !== "DELETE") {
-      return next();
-    }
-    const perMin = parseApiRateLimitPerMin(c.env?.API_RATE_LIMIT_PER_MIN);
-    if (perMin <= 0) return next();
-    const ip = (c.req.header("cf-connecting-ip") ?? "unknown").slice(0, 64);
-    if (!limiter.allow(`nodesync:${perMin}:${ip}`, perMin)) {
-      c.header("Retry-After", String(Math.ceil(API_RATE_LIMIT_WINDOW_MS / 1e3)));
-      throw new RateLimitError(
-        Math.ceil(API_RATE_LIMIT_WINDOW_MS / 1e3),
-        "\u062F\u0631\u062E\u0648\u0627\u0633\u062A\u200C\u0647\u0627\u06CC \u0633\u06CC\u0646\u06A9 \u0646\u0648\u062F \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0645\u062C\u0627\u0632 \u0627\u0633\u062A \u2014 \u06A9\u0645\u06CC \u0628\u0639\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F"
-      );
-    }
-    return next();
+  installWriteRateLimit(app, {
+    path: "*",
+    exceptionPaths: [],
+    keyPrefix: "nodesync:",
+    message: "\u062F\u0631\u062E\u0648\u0627\u0633\u062A\u200C\u0647\u0627\u06CC \u0633\u06CC\u0646\u06A9 \u0646\u0648\u062F \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0645\u062C\u0627\u0632 \u0627\u0633\u062A \u2014 \u06A9\u0645\u06CC \u0628\u0639\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F"
   });
-  app.use("*", async (c, next) => {
-    await next();
-    c.header("Cache-Control", "no-store");
-  });
+  installNoStore(app, "*");
   async function authNode(c) {
     const outcome = await verifyNodeCredentials(db, {
       nodeCode: c.req.header("X-CP-Node-Code"),
@@ -78703,7 +78782,7 @@ function createNodeSyncApp(deps) {
   app.get("/nodes", authMiddleware(), requireRole("manager"), async (c) => {
     return c.json({ data: { nodes: await listNodes(db) } }, 200);
   });
-  app.notFound((c) => c.json({ error: "NOT_FOUND" }, 404));
+  installNotFound(app);
   return app;
 }
 __name(createNodeSyncApp, "createNodeSyncApp");
@@ -81566,10 +81645,41 @@ function createApp(deps) {
   app.use("/api/*", supervisorGate(services.audit));
   registerProtectedRoutes(app, services, deps);
   app.onError(errorHandler2);
-  app.notFound((c) => c.json({ error: "NOT_FOUND", message: "\u0645\u0633\u06CC\u0631 \u062F\u0631\u062E\u0648\u0627\u0633\u062A\u06CC \u06CC\u0627\u0641\u062A \u0646\u0634\u062F" }, 404));
+  installNotFound(app, "\u0645\u0633\u06CC\u0631 \u062F\u0631\u062E\u0648\u0627\u0633\u062A\u06CC \u06CC\u0627\u0641\u062A \u0646\u0634\u062F");
   return app;
 }
 __name(createApp, "createApp");
+
+// src/core/db/retention.ts
+async function pruneRowsOlderThan(db, table, column, cutoff) {
+  if (!/^[a-z_]+$/.test(table) || !/^[a-z_]+$/.test(column)) {
+    throw new Error(`\u0646\u0627\u0645 \u062C\u062F\u0648\u0644/\u0633\u062A\u0648\u0646 \u0646\u06AF\u0647\u200C\u062F\u0627\u0631\u06CC \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A: ${table}.${column}`);
+  }
+  const rows = await db.query(
+    `DELETE FROM ${table} WHERE ${column} < ? RETURNING ${column} AS v`,
+    [cutoff]
+  );
+  return rows.length;
+}
+__name(pruneRowsOlderThan, "pruneRowsOlderThan");
+async function pruneOrphanExerciseChunks(db) {
+  const rows = await db.query(
+    `DELETE FROM exercise_file_chunks
+      WHERE key LIKE 'exercise/%'
+        AND key NOT IN (SELECT file_key FROM exercise_attachments)
+      RETURNING key`
+  );
+  return rows.length;
+}
+__name(pruneOrphanExerciseChunks, "pruneOrphanExerciseChunks");
+function cutoffIso(daysAgo, nowMs = Date.now()) {
+  return new Date(nowMs - daysAgo * 864e5).toISOString().slice(0, 19).replace("T", " ");
+}
+__name(cutoffIso, "cutoffIso");
+function cutoffYmd(daysAgo, nowMs = Date.now()) {
+  return new Date(nowMs - daysAgo * 864e5).toISOString().slice(0, 10);
+}
+__name(cutoffYmd, "cutoffYmd");
 
 // src/index.ts
 var BALE_TOKEN_CACHE_TTL_MS = 6e4;
@@ -81655,15 +81765,23 @@ async function runDigestCycle(env) {
     return null;
   });
   const retention = await (async () => {
-    try {
-      const clientErrors = await services.clientErrors.pruneOld();
-      const rumEvents = await services.rum.pruneOld();
-      const auditLog = await audit.pruneOld();
-      return { client_errors: clientErrors, rum_events: rumEvents, audit_log: auditLog };
-    } catch (err) {
-      logger.error("retention.failed", { error: err instanceof Error ? err.message : String(err) });
-      return null;
-    }
+    const out = {};
+    const step = /* @__PURE__ */ __name(async (name, fn) => {
+      try {
+        out[name] = await fn();
+      } catch (err) {
+        logger.error("retention.failed", { table: name, error: err instanceof Error ? err.message : String(err) });
+        out[name] = null;
+      }
+    }, "step");
+    await step("client_errors", () => services.clientErrors.pruneOld());
+    await step("rum_events", () => services.rum.pruneOld());
+    await step("audit_log", () => audit.pruneOld());
+    await step("node_push_events", () => pruneRowsOlderThan(db, "node_push_events", "received_at", cutoffIso(90, Date.now())));
+    await step("node_sync_inbox", () => pruneRowsOlderThan(db, "node_sync_inbox", "received_at", cutoffIso(90, Date.now())));
+    await step("quota_usage", () => pruneRowsOlderThan(db, "quota_usage", "day", cutoffYmd(400, Date.now())));
+    await step("exercise_file_chunks_orphans", () => pruneOrphanExerciseChunks(db));
+    return out;
   })();
   const growth = await services.growth.captureDaily().catch((err) => {
     logger.error("growth.snapshot.failed", { error: err instanceof Error ? err.message : String(err) });
