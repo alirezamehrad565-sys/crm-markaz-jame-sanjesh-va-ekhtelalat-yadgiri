@@ -1,5 +1,5 @@
 import type { AuthContext, TagCategory, TagRef } from '@core/shared';
-import { EXB_DOWNLOAD_TTL_SECONDS, EXERCISE_FEEDBACK_MAX, EXERCISE_FEEDBACK_MIN, SUBMISSION_ATTACH_WINDOW_HOURS, SUBMISSION_NOTE_MAX } from '@core/shared';
+import { EXB_DOWNLOAD_TTL_SECONDS, EXERCISE_FEEDBACK_MAX, EXERCISE_FEEDBACK_MIN, faHaystackExpr, likePattern, sanitizeFaQuery, SUBMISSION_ATTACH_WINDOW_HOURS, SUBMISSION_NOTE_MAX } from '@core/shared';
 import { EXERCISE_BATCH_NOTE_MAX, MAX_EXB_BATCH_ATTACH, MAX_EXERCISE_ATTACHMENT_COUNT, MAX_EXERCISE_BATCH_LINKS, MAX_EXERCISE_FILES_PER_UPLOAD, MAX_EXERCISE_FILE_BYTES, MAX_EXERCISE_UPLOAD_CHUNK_BYTES } from '@core/shared';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@core/errors';
 import {
@@ -596,9 +596,14 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
         params.push(filters.format);
       }
       if (filters.q && filters.q.trim().length > 0) {
-        const like = `%${escapeLike(filters.q.trim())}%`;
-        conds.push("(e.title LIKE ? ESCAPE '\\' OR e.description LIKE ? ESCAPE '\\')");
-        params.push(like, like);
+        // ۱.۲۷.۷۸-B2 (sdt155) — جستجوی هوشمند بانک کارت‌های آماده (هم‌الگوی B3 پیام ۱۶): سؤال و
+        // ستون‌ها با قواعد فارسی @core/shared هم‌سطح می‌شوند (ي/ك عربی، أ إ آ، ة، نیم‌فاصله، ارقام)
+        // و wildcardهای LIKE بی‌اثرند. یِ haystack: title و description چسبیده (هم‌الگوی نامِ کاملِ
+        // دانش‌آموز) تا سؤال چندواژه‌ای هم به کارت می‌رسد؛ لیست و شمارش از همین شرط مشترک می‌خوانند.
+        const like = likePattern(sanitizeFaQuery(filters.q));
+        const hay = faHaystackExpr("(e.title || ' ' || COALESCE(e.description, ''))");
+        conds.push(`(${hay} LIKE ? ESCAPE '\\')`);
+        params.push(like);
       }
       if (filters.tagId) {
         conds.push('EXISTS (SELECT 1 FROM exercise_tags et WHERE et.exercise_id = e.id AND et.tag_id = ?)');

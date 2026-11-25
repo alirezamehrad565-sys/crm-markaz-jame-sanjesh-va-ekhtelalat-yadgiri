@@ -14,7 +14,7 @@ import {
   lockBtn // — قفل مشغولی دکمه‌های mutation
 } from '../ui.js';
 import { illoExercises } from '../illustrations.js'; /* ۱.۲۵.۰۵ — نگارهٔ حالت خالی بانک کارت */
-import { fa, formatJalaliNumeric, safeExternalHref, sizeLabelEn } from '../format.js'; /* ۱.۲۵.۰۲ — یکسان‌سازی sizeLabel (واریانت لاتین بانک کارت‌ها) */
+import { fa, faNormalize, formatJalaliNumeric, safeExternalHref, sizeLabelEn } from '../format.js'; /* ۱.۲۷.۷۸-B2 — faNormalize آینهٔ فارسی جستجو */
 import { session } from '../state.js';
 import { hueClass, hueDot } from '../staff-hue.js'; // — رنگ ثابت سازندهٔ تمرین (همان پالت درمانگر)
 import { buildTaxonomyPicker } from '../taxonomy.js'; // درخت واحد طبقه‌بندی (یک کامپوننت برای منو/فرم/پیکر)
@@ -820,8 +820,10 @@ export function renderExercises(container) {
     if (state.format && ex.format !== state.format) return false;
     if (state.published !== 'all' && Boolean(ex.published) !== (state.published === 'true')) return false;
     if (state.q) {
-      const hay = `${ex.title ?? ''} ${ex.description ?? ''}`.toLowerCase();
-      if (!hay.includes(state.q.toLowerCase())) return false;
+      /* ۱.۲۷.۷۸-B2 — آینهٔ نرمال‌سازی فارسی سرور (fa-search::faNormalize در format.js) —
+         هم‌الگوی matchesListFilter دانش‌آموزان؛ پچِ درجای ردیف‌ها همان حکم سرور را تکرار می‌کند */
+      const hay = faNormalize(`${ex.title ?? ''} ${ex.description ?? ''}`);
+      if (!hay.includes(faNormalize(state.q))) return false;
     }
     return true;
   }
