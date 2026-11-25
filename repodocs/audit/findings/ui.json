@@ -185,11 +185,12 @@
           "detail": "گیت فقط hit های size < 12 را می‌شمارد؛ مواضع ۱۲px به بالا از دید گوت خارج‌اند."
         }
       ],
-      "status": "new",
+      "status": "fixed",
       "verification": {
         "status": "not-required",
         "counterevidence": [],
-        "note": ""
+        "note": "",
+        "lifecycle_note": "release 1.27.83 (sdt160) — دوازده موضع نام‌بردهٔ ممیز به مقیاس تایپ توکنی وصل شد (avatar/combo__clear/row-menu__item/wl counts/titles/todo-item__meta/exb-picked__x/lb-score→--fs-2xl/feedback-sheet ۱۷→۱۶ هم‌مقیاس در سند ایزوله) + کورگوت «خام ≥۱۲px» با ratchet مبنا ۱۲۷ بسته شد"
       },
       "remediation": {
         "change_boundary": "پیش‌نویس پیش از Decide: برطرف‌کردن وضعیت توصیف‌شده در عنوان یافته (حدود دوازده اندازهٔ فونت px هاردکد خارج از مقیاس تایپ توکنی — و گوت کف فونت فقط زیر ۱۲px را می‌بیند) با کمترین تغییر، پس از تأیید رقیب و تصمیم کارفرما",
@@ -262,11 +263,12 @@
           "detail": "content.setAttribute('aria-busy', 'true') هنگام بارگذاری — الگوی درستِ موجود که در بج سربرگ غایب است."
         }
       ],
-      "status": "new",
+      "status": "fixed",
       "verification": {
         "status": "not-required",
         "counterevidence": [],
-        "note": ""
+        "note": "",
+        "lifecycle_note": "release 1.27.83 (sdt160) — pill سربرگ و کارت سرور محلی role=status+aria-live=polite؛ سه نما aria-busy (الگوی reports.js) + ویزارد ابری نتیجه را اعلام می‌کند + گیت front-a11y-status پنج‌سناریویی"
       },
       "remediation": {
         "change_boundary": "پیش‌نویس پیش از Decide: برطرف‌کردن وضعیت توصیف‌شده در عنوان یافته (بج وضعیت سرور (server-pill) هیچ aria/role ندارد و تغییر وضعیت به فناوری‌های یاری‌رسان اعلام نمی‌شود؛ چهار نما هم صفر aria) با کمترین تغییر، پس از تأیید رقیب و تصمیم کارفرما",
@@ -303,11 +305,12 @@
           "detail": "گوت کنتراست فقط جفت‌های توکنی پین‌شده را می‌سنجد؛ جفت رنگ-هاردکد × توکن در دامنهٔ گوت نیست — کور‌گوتِ همین موضع."
         }
       ],
-      "status": "new",
+      "status": "fixed",
       "verification": {
         "status": "not-required",
         "counterevidence": [],
-        "note": ""
+        "note": "",
+        "lifecycle_note": "release 1.27.83 (sdt160) — توکن --on-danger در هر دو تم (تیره #153E50 روی #E97971=۴٫۰۵≥۳٫۰؛ روشن #fff=۵٫۴۸) جای #fff هاردکد hover دایرهٔ خطر + جفت تازه در contrast-check (۳۴ جفت/۶۸ سنجش سبز) — کورگوت همان موضع بسته شد"
       },
       "remediation": {
         "change_boundary": "پیش‌نویس پیش از Decide: برطرف‌کردن وضعیت توصیف‌شده در عنوان یافته (color: #fff هاردکد روی hover دایرهٔ خطر در تم تیره کنتراست ۲٫۸۲ (زیر ۳٫۰ مؤلفهٔ UI) می‌دهد) با کمترین تغییر، پس از تأیید رقیب و تصمیم کارفرما",

@@ -153,11 +153,12 @@
           "detail": "یک سرویس domain خودش کانال را انتخاب و enqueue/flush می‌کند؛ یعنی سیاست اعلانِ در @app/notify متمرکزنشده به لایهٔ domain هم نشت کرده است."
         }
       ],
-      "status": "new",
+      "status": "fixed",
       "verification": {
         "status": "not-required",
         "counterevidence": [],
-        "note": ""
+        "note": "",
+        "lifecycle_note": "release 1.27.83 (sdt160) — helper مشترک enqueueToMany در @app/notify تازه: عبارت «انتخاب کانال + حلقهٔ enqueue/flush» فقط یک تعریف دارد؛ سه ناظر composition و document-requests (با تزریق تابعی enqueueMany/flushPending — الگوی formulationOt) همه می‌روند"
       },
       "remediation": {
         "observable_effect": "تغییر سیاست اعلان (مثلاً سقف flush، کلید dedup یا منطق کانال) باید در دست‌کم ۵ نقطه اعمال شود؛ ناهم‌گامی تدریجی بین این نقاط در دسترس است.",
@@ -439,11 +440,12 @@
           "detail": "کپی سوم: request-id (۱۳۵-۱۴۰)، makeKeyedRateLimiter (۱۸۵)، no-store (۲۰۶)، notFound (۴۵۰)؛ کامنت خطوط ۹-۱۱: «زنجیرهٔ عمومی درون زیراپ (هم‌الگوی اپ اصلی و games-standalone)»."
         }
       ],
-      "status": "new",
+      "status": "fixed",
       "verification": {
         "status": "not-required",
         "counterevidence": [],
-        "note": ""
+        "note": "",
+        "lifecycle_note": "release 1.27.83 (sdt160) — applyGenericChain در @app/http/chain تازه: تعریف یگانهٔ request-id + محدودساز نوشتنی + no-store + 404؛ سه کپی حذف شدند (اپ اصلی delegate، games-standalone یک صدا، node-sync با '*' و کلید 'nodesync:' و ۴۰۴ کم‌دست) — تست‌های ۴۰۱/۴۰۴/۴۲۹ هر سه زیراپ سبز"
       },
       "remediation": {
         "observable_effect": "اصلاح امنیتی/رفتاری در زنجیرهٔ عمومی باید سه‌جا (و با آیندهٔ زیراپ‌های تازه، بیشتر) اعمال شود؛ واگرایی پنهان بین زیراپ‌ها ممکن است.",

@@ -171,11 +171,12 @@
           "detail": "batch() returns only { success, meta } per statement — per-statement result rows of real D1 batch are discarded; also normalizeParam (line 19) converts booleans to 1/0 whereas real D1 rejects boolean binds, hiding a class of bind bugs"
         }
       ],
-      "status": "new",
+      "status": "fixed",
       "verification": {
         "status": "not-required",
         "counterevidence": [],
-        "note": ""
+        "note": "",
+        "lifecycle_note": "release 1.27.83 (sdt160) — MockD1: پسوند RETURNING سطر برمی‌گرداند (pruneOld در تست حقیقی می‌شمارد) و bind بولی مثل D1 رد می‌شود + قرارداد سه‌سناریویی (mock-d1-contract)"
       },
       "remediation": {
         "observable_effect": "Purge/retention count reporting and any future batch-read or boolean-bind code behave differently in tests than in production without failing the suite",
@@ -209,11 +210,12 @@
           "detail": "Imports only generateApiKey, hashApiKey, looksLikeApiKey — the middleware integration (including revocation and inactive-owner rejection) is unverified"
         }
       ],
-      "status": "new",
+      "status": "fixed",
       "verification": {
         "status": "not-required",
         "counterevidence": [],
-        "note": ""
+        "note": "",
+        "lifecycle_note": "release 1.27.83 (sdt160) — شاخهٔ X-Api-Key e2e کامل گرفت (معتبر/باطل/مالک غیرفعال/بدشکل/بدون کلید) — پرچم FEATURES.apiKeys برای زنده‌شدن شاخهٔ ممیزی‌شده روشن شد (تصمیم ثبت در ADR) — ۱۱۶ فایل e2e دیگر بدون تغییر ماندند (Bearer مسیر اول است)"
       },
       "remediation": {
         "observable_effect": "A regression in key lookup or owner-activity enforcement would allow 401s for valid keys or, worse, accept revoked keys without any test failing",
@@ -247,11 +249,12 @@
           "detail": "Cron matching is unit tested for the node server (server/crons.ts), but the worker's scheduled dispatch order, per-job error isolation, env parsing (AUDIT_LOG_RETENTION_DAYS, ALERTS_DISABLED) and waitUntil usage are unverified"
         }
       ],
-      "status": "new",
+      "status": "fixed",
       "verification": {
         "status": "not-required",
         "counterevidence": [],
-        "note": ""
+        "note": "",
+        "lifecycle_note": "release 1.27.83 (sdt160) — orchestration worker.scheduled e2e گرفت: DIGEST_CRON کامل، failing job (جدول حذف‌شده) چرخه را نمی‌بُرد، BATCH و کرن ناشناخته بی‌کرش"
       },
       "remediation": {
         "observable_effect": "A regression in the orchestration (wrong job order, one job's throw aborting the rest, mis-parsed env) ships silently; nightly digest/reminders could stop without CI noticing",
@@ -331,11 +334,12 @@
           "detail": "1,135-line service (1,476 LOC module), no dedicated tests; only e2e-ot-engine.test.ts via createTestApp; same pattern for finance (1,214 LOC, e2e-finance only) and student-profile (2,189 LOC, e2e students flows only)"
         }
       ],
-      "status": "new",
+      "status": "fixed",
       "verification": {
         "status": "not-required",
         "counterevidence": [],
-        "note": "Confidence medium: indirect e2e coverage demonstrably exists and includes adversarial cases; the claim is about depth (boundary values across IQ tables/cutoff edges) not absence"
+        "note": "Confidence medium: indirect e2e coverage demonstrably exists and includes adversarial cases; the claim is about depth (boundary values across IQ tables/cutoff edges) not absence",
+        "lifecycle_note": "release 1.27.83 (sdt160) — چهار موتور آزمون مرزی گرفتند: وکسلر (scaledFor/convertIndex/fsiqBandOf/descriptiveClass/num/rawRange/validate با مقادیر پین‌شده از اجرای واقعی جدول‌ها)، OT (برش‌های SNAP والد/معلم + SCARED ۳۰/۲۵/۲۰ + SDQ + هم‌گرایی + تازگی ۱۲ماهه)، finance (چهار گارد خالص + پین quirk regex)، صورت‌بندی (wechslerFromEvent سه مسیر + سن + جدول‌های آستانه) — exportهای صفر-رفتار"
       },
       "remediation": {
         "observable_effect": "Off-by-one and boundary regressions in clinical scoring tables (scaled scores, percentile edges, cutoff bands) are caught only if an e2e fixture happens to hit the same boundary",

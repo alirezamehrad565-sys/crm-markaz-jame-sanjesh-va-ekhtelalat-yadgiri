@@ -137,11 +137,12 @@
           "detail": "TABLE_POLICIES has no entry for exercise_file_chunks, so the growth report labels it بی‌سیاست (no policy) — acknowledged detector, but no actual cleanup exists; D1 row growth is therefore unbounded apart from the per-file cap MAX_EXERCISE_PANEL_FILE_BYTES."
         }
       ],
-      "status": "new",
+      "status": "fixed",
       "verification": {
         "status": "not-required",
         "counterevidence": [],
-        "note": ""
+        "note": "",
+        "lifecycle_note": "release 1.27.83 (sdt160) — سوییپ شبانهٔ chunk یتیم تمرین در @core/db/retention تازه (key بدون attachment زنده؛ فقط پیشوند exercise/ — دامنه‌های دیگر جدول خودشان را دارند) سیم به بلوک retention digest؛ آزمون سه‌سناریویی (یتیم/زنده/دامنهٔ دیگر) + TABLE_POLICIES"
       },
       "remediation": {
         "observable_effect": "Any exercise/attachment removal path that misses storage.delete permanently leaks up to file_size/1.5MB chunk rows in D1 with no way to detect them except a manual join against metadata.",
@@ -180,11 +181,12 @@
           "detail": "No retention policy entry exists for report_snapshots, whose sections_json payload (full PathwayReport document) can be large; rows accumulate additively with no cleanup path found in src/."
         }
       ],
-      "status": "new",
+      "status": "fixed",
       "verification": {
         "status": "not-required",
         "counterevidence": [],
-        "note": ""
+        "note": "",
+        "lifecycle_note": "release 1.27.83 (sdt160) — سیاست صریح report_snapshots: حذف با حذف قطعی دانش‌آموز (tx)، ماندگار تا آن هنگام (snapshot-first)؛ e2e سه‌سناریویی (عادی/force/۴۰۹ رد‌شده) + TABLE_POLICIES — یافته دیگر «بی‌سیاست» نیست"
       },
       "remediation": {
         "observable_effect": "After a student is hard-deleted, their report snapshots persist with a dangling student_id — the unique report_no ledger and personal data outlive the subject with no retention or purge rule.",
@@ -228,11 +230,12 @@
           "detail": "node_sync_inbox is a page-by-page transport log with PK (domain, id) idempotency but no retention window; node_push_events (0109) is additive-only telemetry with no cleanup found."
         }
       ],
-      "status": "new",
+      "status": "fixed",
       "verification": {
         "status": "not-required",
         "counterevidence": [],
-        "note": ""
+        "note": "",
+        "lifecycle_note": "release 1.27.83 (sdt160) — هرس شبانهٔ node_push_events/node_sync_inbox (۹۰ روز روی received_at) و quota_usage (۴۰۰ روز روی day) با گاردهای per-job در بلوک retention (خطای یک جدول بقیه را نمی‌بُرد) + TABLE_POLICIES ×۳"
       },
       "remediation": {
         "observable_effect": "Telemetry and bookkeeping tables grow linearly forever on long-lived instances; on the D1 free tier this slowly consumes storage and enlarges every pre-deploy export.",
@@ -310,11 +313,12 @@
           "detail": "Pre-deploy protection is wrangler d1 export --remote --output backups/backup-<stamp>.sql (SQL text format); this is a different artifact from the in-app gh-backup v1 JSON packet, so the drilled format and the deploy-time backup format are two different contracts."
         }
       ],
-      "status": "new",
+      "status": "fixed",
       "verification": {
         "status": "not-required",
         "counterevidence": [],
-        "note": ""
+        "note": "",
+        "lifecycle_note": "release 1.27.83 (sdt160) — دریل بازیابی از اعتبارسنجی صرف به بازپخش واقعی ارتقا یافت: بسته → SQLite موقت با اجرای ۱۲۸ مایگریشن → درج همهٔ ردیف‌ها (defer_foreign_keys) → مقایسهٔ شمارش؛ PASS فقط با بازپخش موفق — راستی‌آزمایی دوطرفه (پاکت سالم PASS / row_count مغایر FAIL خروجی ۱)"
       },
       "remediation": {
         "observable_effect": "A backup can pass the drill yet be unrestorable in practice (e.g., FK cycle ordering, reserved system tables, size limits), because nothing in the pipeline ever performs a real restore before it is needed in an incident.",

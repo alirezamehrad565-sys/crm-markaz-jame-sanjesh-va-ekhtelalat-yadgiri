@@ -245,11 +245,12 @@
           "detail": "node_modules/workerd با نسخهٔ قفل‌شدهٔ 1.20250718.0 به‌عنوان وابستگی ترانزیتیو (درخواست‌شده از مسیر wrangler/miniflare) ثبت شده است."
         }
       ],
-      "status": "new",
+      "status": "fixed",
       "verification": {
         "status": "not-required",
         "counterevidence": [],
-        "note": ""
+        "note": "",
+        "lifecycle_note": "release 1.27.83 (sdt160) — workerd 1.20250718.0 به‌صورت devDependency دقیق اعلان شد (همان نسخهٔ قفل‌شدهٔ ترانزیتیو) — مسیر تأمین ران‌تایم موتور محلی مستند و قابل ارجاع"
       },
       "remediation": {
         "observable_effect": "زیرساخت موتور محلی و مونتاژ نصاب دسکتاپ به نسخهٔ workerدی وابسته است که مالک مستقیمی در مانیفست پروژه ندارد؛ تنها بهانهٔ موجود بودن آن، نصب wrangler است.",

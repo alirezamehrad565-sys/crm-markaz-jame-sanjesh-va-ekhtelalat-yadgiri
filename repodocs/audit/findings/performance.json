@@ -151,11 +151,12 @@
           "detail": "getClinicName در هر رویداد یک SELECT روی settings می‌زند بدون کش بدون کش؛ ده‌ها نقطهٔ فراخوانی در src/application/notify/senders.ts و ناظرهای بالا"
         }
       ],
-      "status": "new",
+      "status": "fixed",
       "verification": {
         "status": "not-required",
         "counterevidence": [],
-        "note": "کاردینالیتهٔ گیرنده‌ها در اعلان کلاسی معمولاً ده‌ها چت است؛ تأخیر خطی اما در محدودهٔ قابل‌تحمل — لذا medium"
+        "note": "کاردینالیتهٔ گیرنده‌ها در اعلان کلاسی معمولاً ده‌ها چت است؛ تأخیر خطی اما در محدودهٔ قابل‌تحمل — لذا medium",
+        "lifecycle_note": "release 1.27.83 (sdt160) — NotifyService.enqueueMany: رفت‌وبرگشت DB مستقل از تعداد گیرنده‌ها (SELECT dedup با دروازهٔ IN-chunks + حداکثر یک INSERT چندردیفی؛ ریس یکتا → سقوط امن به مسیر تکی) + کش ۶۰ثانیه‌ای getClinicName با انحرال در update — خروجی همان رکوردها با همان dedupKey"
       },
       "remediation": {
         "observable_effect": "برای N گیرنده 2N+1 رفت‌وبرگشت متوالی D1 به‌علاوهٔ ۱-۲ کوئری settings در هر رویداد اعلان شکل می‌گیرد",

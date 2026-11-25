@@ -313,11 +313,12 @@
           "detail": "زمینهٔ اثر: رatchet بودجهٔ کارایی در ۹۹٪ سقف critical_css_gz ثبت شده؛ views.css به‌صورت سراسری ارسال می‌شود (4869 خط) و وزن مرده مستقیماً در این بودجه می‌نشیند."
         }
       ],
-      "status": "new",
+      "status": "fixed",
       "verification": {
         "status": "not-required",
         "counterevidence": [],
-        "note": ""
+        "note": "",
+        "lifecycle_note": "release 1.27.83 (sdt160) — ۵۵ کلاس مردهٔ views.css (بلوک کامل help/phone/att-chip/appt-card/exb مرده/تک‌کلاس‌ها ~۱۹۰ خط) با اسکریپت راستی‌آزمایی صفر-ارجاع حذف شد؛ سه قاعدهٔ زندهٔ grid-day/grid-cell (ساخت پویا) که اسکن کلمه‌ای ندیده بود در همان موج بازگردانده و گیت تازهٔ front-bloat-005 سه‌سناریویی همه را پین می‌کند؛ perf-budget سبز ماند"
       },
       "remediation": {
         "observable_effect": "حدود ۷٪ حجم views.css مرده است؛ با بودجهٔ CSS در آستانهٔ اشباع، هر بایت مرده فضای موج‌های بعدی (G2) را می‌گیرد.",
