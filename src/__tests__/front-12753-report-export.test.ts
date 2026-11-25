@@ -6,7 +6,7 @@
  * منطق سرویس خودش در report-export.test.ts پوشش دارد؛ اینجا فقط قرارداد پین می‌شود.
  */
 import { describe, it, expect } from 'vitest';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 const ROOT = join(__dirname, '../..');
@@ -20,7 +20,13 @@ describe('موج ۳ — سند و migration', () => {
     expect(mig).toContain('content_hash TEXT NOT NULL');
     const doc = read('docs/MIGRATIONS.md');
     expect(doc).toContain('| 122 | `0122_report_snapshots.sql` |');
-    expect(doc).toContain('شمارهٔ بعدی = `0123`');
+    // ۱.۲۷.۷۹ (sdt156) — پین پویا: «شمارهٔ بعدی» سند باید همیشه برابر بعدیِ آزادِ دنباله‌دارِ
+    // واقعی مخزن باشد (literal ثابت در هر مایگریشن تازه می‌شکست — خودِ الگوی testing-002)
+    const maxNum = readdirSync(join(ROOT, 'migrations'))
+      .filter((f) => f.endsWith('.sql'))
+      .map((f) => Number(f.slice(0, 4)))
+      .reduce((a, b) => Math.max(a, b), 0);
+    expect(doc).toContain(`شمارهٔ بعدی = \`0${maxNum + 1}\``);
   });
 });
 

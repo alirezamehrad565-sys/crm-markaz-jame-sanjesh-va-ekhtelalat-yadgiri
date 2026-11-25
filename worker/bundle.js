@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.27.78";
+var APP_VERSION = "1.27.79";
 var NODE_MIN_VERSION = "1.26.0";
 
 // node_modules/zod/v4/classic/external.js
@@ -61320,6 +61320,7 @@ __name(createR2ObjectStore, "createR2ObjectStore");
 // src/core/storage/chunked-d1-store.ts
 var CHUNK_BYTES = 15e5;
 var PAGE_CHUNKS = 6;
+var PAGES_PER_BATCH = 3;
 function chunkToBytes(row) {
   const c = row.content;
   if (typeof c === "string") {
@@ -61341,30 +61342,32 @@ function bytesToBase64(bytes) {
 }
 __name(bytesToBase64, "bytesToBase64");
 async function writeSegments(db, key, segments) {
-  await db.execute(`DELETE FROM exercise_file_chunks WHERE key = ?`, [key]);
-  const chunk = new Uint8Array(CHUNK_BYTES);
-  let fill = 0;
-  let seq = 0;
-  const flushChunk = /* @__PURE__ */ __name(async () => {
-    if (fill === 0) return;
-    await db.execute(
-      `INSERT INTO exercise_file_chunks (key, seq, content) VALUES (?, ?, ?)`,
-      [key, seq, bytesToBase64(chunk.subarray(0, fill))]
-    );
-    seq += 1;
-    fill = 0;
-  }, "flushChunk");
-  for (const seg of segments) {
-    let off = 0;
-    while (off < seg.length) {
-      const n = Math.min(CHUNK_BYTES - fill, seg.length - off);
-      chunk.set(seg.subarray(off, off + n), fill);
-      fill += n;
-      off += n;
-      if (fill === CHUNK_BYTES) await flushChunk();
+  await db.transaction(async (tx) => {
+    await tx.execute(`DELETE FROM exercise_file_chunks WHERE key = ?`, [key]);
+    const chunk = new Uint8Array(CHUNK_BYTES);
+    let fill = 0;
+    let seq = 0;
+    const flushChunk = /* @__PURE__ */ __name(async () => {
+      if (fill === 0) return;
+      await tx.execute(
+        `INSERT INTO exercise_file_chunks (key, seq, content) VALUES (?, ?, ?)`,
+        [key, seq, bytesToBase64(chunk.subarray(0, fill))]
+      );
+      seq += 1;
+      fill = 0;
+    }, "flushChunk");
+    for (const seg of segments) {
+      let off = 0;
+      while (off < seg.length) {
+        const n = Math.min(CHUNK_BYTES - fill, seg.length - off);
+        chunk.set(seg.subarray(off, off + n), fill);
+        fill += n;
+        off += n;
+        if (fill === CHUNK_BYTES) await flushChunk();
+      }
     }
-  }
-  await flushChunk();
+    await flushChunk();
+  });
 }
 __name(writeSegments, "writeSegments");
 function createChunkedD1ObjectStore(db) {
@@ -61384,17 +61387,24 @@ function createChunkedD1ObjectStore(db) {
       );
       const total = countRow?.n ?? 0;
       if (total === 0) return null;
+      const pages = Math.ceil(total / PAGE_CHUNKS);
       const parts = [];
       let size = 0;
-      for (let offset = 0; offset < total; offset += PAGE_CHUNKS) {
-        const rows = await db.query(
-          `SELECT seq, content FROM exercise_file_chunks WHERE key = ? ORDER BY seq LIMIT ${PAGE_CHUNKS} OFFSET ${offset}`,
-          [key]
-        );
-        for (const r of rows) {
-          const b = chunkToBytes(r);
-          parts.push(b);
-          size += b.length;
+      for (let firstPage = 0; firstPage < pages; firstPage += PAGES_PER_BATCH) {
+        const stmts = [];
+        for (let p = firstPage; p < Math.min(firstPage + PAGES_PER_BATCH, pages); p += 1) {
+          stmts.push(db.prepare(
+            `SELECT seq, content FROM exercise_file_chunks WHERE key = ? ORDER BY seq LIMIT ${PAGE_CHUNKS} OFFSET ?`,
+            [key, p * PAGE_CHUNKS]
+          ));
+        }
+        const results = await db.batch(stmts);
+        for (const res of results) {
+          for (const r of res.results ?? []) {
+            const b = chunkToBytes(r);
+            parts.push(b);
+            size += b.length;
+          }
         }
       }
       const out = new Uint8Array(size);
