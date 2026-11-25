@@ -138,7 +138,7 @@ function parseText(v: string | null | undefined, max: number): string | null {
   return t ? t.slice(0, max) : null;
 }
 
-function isFresh(lastAt: string | undefined, nowFn: () => Date): boolean {
+export function isFresh(lastAt: string | undefined, nowFn: () => Date): boolean {
   if (!lastAt) return false;
   const t = Date.parse(lastAt.includes('T') ? lastAt : `${lastAt.replace(' ', 'T')}Z`);
   if (Number.isNaN(t)) return false;
@@ -167,17 +167,17 @@ function faNum(value: number | string): string {
   return String(value).replace(/\d/g, (d) => fa[Number(d)]);
 }
 
-function numOf(value: unknown): number | null {
+export function numOf(value: unknown): number | null {
   if (value === null || value === undefined || value === '') return null;
   const n = Number(String(value).replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))));
   return Number.isFinite(n) ? n : null;
 }
 
-function subscaleScoreOf(event: StageEventRow, id: string): { score: number; band: string | null; color?: string | null } | null {
+export function subscaleScoreOf(event: StageEventRow, id: string): { score: number; band: string | null; color?: string | null } | null {
   return event.analysis?.subscaleScores?.find((s) => s.id === id) ?? null;
 }
 
-function subscaleColorOf(event: StageEventRow, id: string): string | null {
+export function subscaleColorOf(event: StageEventRow, id: string): string | null {
   const ss = subscaleScoreOf(event, id);
   if (!ss) return null;
   if (ss.color) return ss.color;
@@ -185,7 +185,7 @@ function subscaleColorOf(event: StageEventRow, id: string): string | null {
   return ss.band && def ? def.bands?.find((x) => x.label === ss.band)?.color ?? null : null;
 }
 
-function sourceOf(toolKey: string): 'parent' | 'teacher' {
+export function sourceOf(toolKey: string): 'parent' | 'teacher' {
   if (toolKey.includes('-t-') || toolKey === 'ce-sdq-t-v1' || toolKey === 'teacher-classroom') return 'teacher';
   return 'parent';
 }
@@ -205,7 +205,7 @@ interface SuspicionHit {
   text: string;
 }
 
-function computeSuspicion(behavioralEvents: StageEventRow[], decisionEvent: StageEventRow | null, isFreshIso: (isoAt: string) => boolean): SuspicionOutput {
+export function computeSuspicion(behavioralEvents: StageEventRow[], decisionEvent: StageEventRow | null, isFreshIso: (isoAt: string) => boolean): SuspicionOutput {
   const latest = new Map<string, StageEventRow>();
   for (const e of behavioralEvents) {
     if (e.status !== 'completed') continue;

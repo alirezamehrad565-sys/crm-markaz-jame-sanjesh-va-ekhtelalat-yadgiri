@@ -1081,6 +1081,10 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
         await tx.execute(`DELETE FROM student_focus_links WHERE student_id = ?`, [id]); // پیوندهای هدف پروفایل هم با پرونده پاک می‌شوند
         await tx.execute(`DELETE FROM case_events WHERE student_id = ?`, [id]);
         await tx.execute(`DELETE FROM intervention_paths WHERE student_id = ?`, [id]);
+        /* data-003 (۱.۲۷.۸۳) — سیاست صریح report_snapshots: نسخه‌های قطعیِ سند ماندگارند تا وقتی
+           پرونده هست؛ حذف قطعی دانش‌آموز (force) آن‌ها را هم صریحاً حذف می‌کند — ردیف یتیمِ
+           بی‌صاحب باقی نمی‌ماند و گزارش رشد دیگر این جدول را «بی‌سیاست» نمی‌بیند */
+        await tx.execute(`DELETE FROM report_snapshots WHERE student_id = ?`, [id]);
         await tx.execute(`DELETE FROM students WHERE id = ?`, [id]);
         await audit.logInTransaction(tx, {
           actorId: actor.staffId,

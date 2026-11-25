@@ -18,7 +18,11 @@ type BoundValue = string | number | bigint | null;
 
 function normalizeParam(p: unknown): BoundValue {
   if (p === undefined) return null;
-  if (typeof p === 'boolean') return p ? 1 : 0;
+  /* testing-003 (۱.۲۷.۸۳): D1 واقعی boolean را رد می‌کند — ماک هم همان‌طور رد کند
+     (قبلاً بی‌سروصدا به 1/0 تبدیل می‌شد و باگ bind بولی در تست دیده نمی‌شد) */
+  if (typeof p === 'boolean') {
+    throw new TypeError('bind boolean برای D1 نامعتبر است — صریح 1/0 بفرستید');
+  }
   if (p === null || typeof p === 'string' || typeof p === 'number' || typeof p === 'bigint') {
     return p;
   }
@@ -27,6 +31,9 @@ function normalizeParam(p: unknown): BoundValue {
 }
 
 function isRowReturning(sql: string): boolean {
+  /* testing-003 (۱.۲۷.۸۳): پسوند RETURNING هم «سطر برگرداننده» است — DELETE/INSERT … RETURNING
+     باید با .all برود وگرنه pruneOld-styleها در تست همیشه صفر می‌گرفتند */
+  if (/RETURNING\b/i.test(sql)) return true;
   return /^\s*(SELECT|WITH|PRAGMA|EXPLAIN)/i.test(sql);
 }
 

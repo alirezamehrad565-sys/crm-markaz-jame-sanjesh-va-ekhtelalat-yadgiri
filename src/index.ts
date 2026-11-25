@@ -14,6 +14,7 @@ import { buildCpContentConfig, runCpContentCycle, cpContentOpportunistic } from 
 import { buildBugReportConfig, runBugReportForward } from '@app/bug-report-forward'; // بازاعمال ۱.۲۵.۵۱ — گزارش باگ به پشتیبانی CP
 import { createContentScoreService } from '@domain/content-score'; // ۱.۲۵.۴۸ m6
 import { runAlertCycle } from '@app/health/alerts'; // ف۵ (P0-3) — هشدار خودکار روی چرخهٔ digest
+import { cutoffIso, cutoffYmd, pruneOrphanExerciseChunks, pruneRowsOlderThan } from '@core/db/retention'; // data-002/004 (۱.۲۷.۸۳)
 
 export interface Env {
   DB: D1Database;
@@ -142,15 +143,26 @@ async function runDigestCycle(env: Env): Promise<void> {
   // هر دو جدول تا امروز بی‌پاکسازی بودند و بی‌کران رشد می‌کردند
   // ف۴ — audit_log به همان بلوک پیوست شد (پیش‌فرض ۱۸۰ روز؛ env اختیاری؛ صفر = خاموش)
   const retention = await (async () => {
-    try {
-      const clientErrors = await services.clientErrors.pruneOld();
-      const rumEvents = await services.rum.pruneOld();
-      const auditLog = await audit.pruneOld();
-      return { client_errors: clientErrors, rum_events: rumEvents, audit_log: auditLog };
-    } catch (err: unknown) {
-      logger.error('retention.failed', { error: err instanceof Error ? err.message : String(err) });
-      return null;
-    }
+    // ۱.۲۷.۸۳ (data-004) — هر جدول در نگه‌دارندهٔ خودش: خطای یک جدول بقیه را نمی‌بُرد
+    const out: Record<string, number | null> = {};
+    const step = async (name: string, fn: () => Promise<number>): Promise<void> => {
+      try {
+        out[name] = await fn();
+      } catch (err: unknown) {
+        logger.error('retention.failed', { table: name, error: err instanceof Error ? err.message : String(err) });
+        out[name] = null;
+      }
+    };
+    await step('client_errors', () => services.clientErrors.pruneOld());
+    await step('rum_events', () => services.rum.pruneOld());
+    await step('audit_log', () => audit.pruneOld());
+    // data-004 (۱.۲۷.۸۳) — سه جدولی که تا امروز بی‌پاکسازی رشد می‌کردند؛ عمرها در TABLE_POLICIES ثبت است
+    await step('node_push_events', () => pruneRowsOlderThan(db, 'node_push_events', 'received_at', cutoffIso(90, Date.now())));
+    await step('node_sync_inbox', () => pruneRowsOlderThan(db, 'node_sync_inbox', 'received_at', cutoffIso(90, Date.now())));
+    await step('quota_usage', () => pruneRowsOlderThan(db, 'quota_usage', 'day', cutoffYmd(400, Date.now())));
+    // data-002 (۱.۲۷.۸۳) — سوییپ شبانهٔ chunkهای یتیم تمرین (key بدون attachment زنده)
+    await step('exercise_file_chunks_orphans', () => pruneOrphanExerciseChunks(db));
+    return out;
   })();
   // ف۴ — گزارش رشد جدول‌ها: شمارش ردیف‌ها فقط همین‌جا (کرون، هرگز مسیر درخواست نیست)؛
   // مُهر ۲۴ساعتهٔ growth.last_snapshot_at دوباره‌کاری را می‌بندد
