@@ -67,7 +67,7 @@
           "detail": "createTestApp sets CF_ACCESS_TEAM_DOMAIN: 'test.team.example.com' in env, but no test in the repository consumes that setting through the middleware fallback"
         }
       ],
-      "status": "new",
+      "status": "fixed",
       "verification": {
         "status": "confirmed",
         "counterevidence": [
@@ -77,7 +77,8 @@
             "detail": "تأیید رقیب: verifyAccessToken فقط در jwt.ts:41 و middleware.ts:101؛ grep بی‌حساسیت روی همهٔ *.test.ts صفر ارجاع؛ هیچ تستی Cf-Access-Jwt-Assertion نمی‌فرستد و mock برای /cdn-cgi/access/certs هم نیست؛ ۴۰۱ِ «بدون توکن» قبل از شاخهٔ CF throw می‌شود (middleware.ts:97-99). اصلاح استنادی: هارنس CF_ACCESS_TEAM_DOMAIN را در خطوط 125/149 می‌گذارد نه 173."
           }
         ],
-        "note": "تأیید مستقل کور در 2026-11-24 (verifier: independent-blind-verifier)"
+        "note": "تأیید مستقل کور در 2026-11-24 (verifier: independent-blind-verifier)",
+        "lifecycle_note": "release 1.27.75/76 (sdt153) — commit ca132e6"
       },
       "remediation": {
         "observable_effect": "Signature/audience/expiry verification and the resolveStaffByEmail role mapping for the primary production login path could regress without any test failing; e2e-auth would stay green",
@@ -288,11 +289,12 @@
           "detail": "Release record shows ui-voice-check, contrast-check and desktop:check were run manually for that release, confirming they are expected quality gates yet remain unenforced in CI"
         }
       ],
-      "status": "new",
+      "status": "fixed",
       "verification": {
         "status": "not-required",
         "counterevidence": [],
-        "note": ""
+        "note": "",
+        "lifecycle_note": "release 1.27.75/76 (sdt153) — commit ca132e6"
       },
       "remediation": {
         "observable_effect": "Complexity debt, UI-voice token violations, contrast regressions and secret-leak patterns can merge to main without CI redness despite the repo's own policy documents",

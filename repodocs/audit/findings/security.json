@@ -75,7 +75,7 @@
           "detail": "The same token is also placed into data-token=\"...\" but there it passes through esc(); only the script-block embedding at line 88 is raw."
         }
       ],
-      "status": "new",
+      "status": "fixed",
       "verification": {
         "status": "confirmed",
         "counterevidence": [
@@ -85,7 +85,8 @@
             "detail": "تأیید رقیب: توکن خام با JSON.stringify در inline script (page.ts:88)؛ مسیر خطای getState هم با توکن خام رندر می‌کند (routes.ts:299-301)؛ CSP unsafe-inline (routes.ts:307)؛ Hono پارامتر را decode می‌کند پس %3C/script%3E به sink می‌رسد. محدودیت: decode از dist hono 4.13.16 خوانده شد نه نسخهٔ نصب‌شده؛ راستی‌آزمایی edge نرمال‌سازی مسیر CF بدون شبکه ممکن نبود."
           }
         ],
-        "note": "تأیید مستقل کور در 2026-11-24 (verifier: independent-blind-verifier)"
+        "note": "تأیید مستقل کور در 2026-11-24 (verifier: independent-blind-verifier)",
+        "lifecycle_note": "release 1.27.75/76 (sdt153) — commit ffdf11c"
       },
       "remediation": {
         "change_boundary": "پیش‌نویس پیش از Decide: برطرف‌کردن وضعیت توصیف‌شده در عنوان یافته (Reflected XSS on public /m/:token page: URL token embedded unescaped into inline script while CSP allows unsafe-inline) با کمترین تغییر، پس از تأیید رقیب و تصمیم کارفرما",
@@ -127,7 +128,7 @@
           "detail": "Test harness constructs env with ENV 'development', showing the dev path is the default wiring for any environment assembled outside the committed wrangler.toml."
         }
       ],
-      "status": "new",
+      "status": "fixed",
       "verification": {
         "status": "confirmed",
         "counterevidence": [
@@ -137,7 +138,8 @@
             "detail": "تأیید رقیب: گیت فقط env.ENV==='development' است، بدون راز؛ کانال‌های استقرار فعلی امن‌اند (wrangler.games.toml:31، engine-server.js:1904/1916، provision.ts:545) و صرفاً misconfig پیکربندی فعالش می‌کند — همان صورت ادعا."
           }
         ],
-        "note": "تأیید مستقل کور در 2026-11-24 (verifier: independent-blind-verifier)"
+        "note": "تأیید مستقل کور در 2026-11-24 (verifier: independent-blind-verifier)",
+        "lifecycle_note": "release 1.27.75/76 (sdt153) — commit ca132e6"
       },
       "remediation": {
         "change_boundary": "پیش‌نویس پیش از Decide: برطرف‌کردن وضعیت توصیف‌شده در عنوان یافته (Full staff impersonation via X-Dev-Staff-Id header is gated only on the plain ENV wrangler variable) با کمترین تغییر، پس از تأیید رقیب و تصمیم کارفرما",
@@ -179,7 +181,7 @@
           "detail": "In production without AUTH_SECRET the runtime secret is generated and stored in plaintext in the settings table of the application D1 database, readable by any code path and backup with DB access."
         }
       ],
-      "status": "new",
+      "status": "fixed",
       "verification": {
         "status": "downgraded",
         "counterevidence": [
@@ -190,7 +192,8 @@
           }
         ],
         "note": "تأیید مستقل کور در 2026-11-24 (verifier: independent-blind-verifier)",
-        "resulting_severity": "medium"
+        "resulting_severity": "medium",
+        "lifecycle_note": "release 1.27.75/76 (sdt153) — commit ca132e6"
       },
       "remediation": {
         "change_boundary": "پیش‌نویس پیش از Decide: برطرف‌کردن وضعیت توصیف‌شده در عنوان یافته (Hardcoded dev session secret doubles as production fallback and as the instance-sync bearer credential) با کمترین تغییر، پس از تأیید رقیب و تصمیم کارفرما",
@@ -232,7 +235,7 @@
           "detail": "POST/PUT/DELETE /api/working-hours* (lines 19-42) register no requireRole, contrasting with sibling modules that do (finance, clearbook, docs use local gate middlewares)."
         }
       ],
-      "status": "new",
+      "status": "fixed",
       "verification": {
         "status": "downgraded",
         "counterevidence": [
@@ -243,7 +246,8 @@
           }
         ],
         "note": "تأیید مستقل کور در 2026-11-24 (verifier: independent-blind-verifier)",
-        "resulting_severity": "medium"
+        "resulting_severity": "medium",
+        "lifecycle_note": "release 1.27.75/76 (sdt153) — commit ca132e6"
       },
       "remediation": {
         "change_boundary": "پیش‌نویس پیش از Decide: برطرف‌کردن وضعیت توصیف‌شده در عنوان یافته (Sampled write routes enforce authentication but no per-route role gate; role checks deferred to unverified service layer) با کمترین تغییر، پس از تأیید رقیب و تصمیم کارفرما",
@@ -280,11 +284,12 @@
           "detail": "Webhook accepts the secret either from the URL path parameter or the standard secret header; path usage feeds the logger at api-routing:637."
         }
       ],
-      "status": "new",
+      "status": "fixed",
       "verification": {
         "status": "not-required",
         "counterevidence": [],
-        "note": ""
+        "note": "",
+        "lifecycle_note": "release 1.27.78 (sdt155) — موج B1: ماسک مسیر لاگ (log-mask + گیت front-12778-sec-hardening)"
       },
       "remediation": {
         "observable_effect": "Anyone with access to worker logs/telemetry can enumerate child game-link tokens (each token grants full read of a child's mission state) and webhook secrets.",
@@ -323,11 +328,12 @@
           "detail": "Third copy of the same esc(); the embedded JSON blocks here DO escape angle brackets (lines 172-173), showing the codebase knows the stricter contract but does not apply it to esc()."
         }
       ],
-      "status": "new",
+      "status": "fixed",
       "verification": {
         "status": "not-required",
         "counterevidence": [],
-        "note": ""
+        "note": "",
+        "lifecycle_note": "release 1.27.75/76 (sdt153) — commit ffdf11c"
       },
       "remediation": {
         "observable_effect": "Latent only today: any future single-quoted attribute interpolation of esc() output would allow attribute breakout from public form input.",
@@ -361,11 +367,12 @@
           "detail": "Global response-header middleware sets six security headers but no Content-Security-Policy; the SPA shell and all authenticated views therefore rely solely on output escaping across ~24 innerHTML sinks."
         }
       ],
-      "status": "new",
+      "status": "accepted",
       "verification": {
         "status": "not-required",
         "counterevidence": [],
-        "note": ""
+        "note": "",
+        "lifecycle_note": "AUD-4 (sdt155) — ADR-004 در repodocs/decisions.md؛ راهکار قطعی پرهزینه/شکننده در انتظار تأیید کارفرما"
       },
       "remediation": {
         "observable_effect": "A single missed escape anywhere in the SPA or public pages executes unrestricted same-origin script; CSP provides no defense-in-depth.",
@@ -404,11 +411,12 @@
           "detail": "Login route has its own D1-backed dual throttle (identity 5/15min + IP 20/15min) which does survive isolate restarts, unlike the global layer."
         }
       ],
-      "status": "new",
+      "status": "fixed",
       "verification": {
         "status": "not-required",
         "counterevidence": [],
-        "note": ""
+        "note": "",
+        "lifecycle_note": "release 1.27.78 (sdt155) — موج B1: سقف GETهای توکن‌دار عمومی (۱۲۰/دقیقه + env)"
       },
       "remediation": {
         "observable_effect": "Distributed or high-parallelism abuse of public endpoints and brute-force of game token paths are bounded only by isolate-count luck.",
@@ -447,11 +455,12 @@
           "detail": "Sink inventory (first-party, excluding vendor/dist bundles): referral-page.ts 17 innerHTML/insertAdjacentHTML, form-page.ts 5 innerHTML, case-events/preview-form.ts 1 innerHTML + 1 document.write (line 284, writing same-origin server HTML after fetch), feedback-sheet.js:187 document.write, progress-report.js:603 document.write (esc'd), ui.js:251, login.js:9, illustrations.js:6, charts.js:44 innerHTML (fixed/escaped data sources), plus play engine markup builders under public/assets/play using esc() for server item text."
         }
       ],
-      "status": "new",
+      "status": "accepted",
       "verification": {
         "status": "not-required",
         "counterevidence": [],
-        "note": ""
+        "note": "",
+        "lifecycle_note": "AUD-4 (sdt155) — ADR-005 در repodocs/decisions.md؛ راهکار قطعی پرهزینه/شکننده در انتظار تأیید کارفرما"
       },
       "remediation": {
         "observable_effect": "One XSS sink regression converts into 30-day account takeover including supervisor/manager roles depending on stolen token.",

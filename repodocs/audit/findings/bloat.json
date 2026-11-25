@@ -91,11 +91,12 @@
           "detail": "P3-12: R2 بایندنشده؛ تصمیم مستند هنوز معلق است (G6 در MIGRATION_PLAN.md:74)."
         }
       ],
-      "status": "new",
+      "status": "accepted",
       "verification": {
         "status": "not-required",
         "counterevidence": [],
-        "note": ""
+        "note": "",
+        "lifecycle_note": "AUD-4 (sdt155) — ADR-006 در repodocs/decisions.md؛ راهکار قطعی پرهزینه/شکننده در انتظار تأیید کارفرما"
       },
       "remediation": {
         "observable_effect": "حدود ۳۰ خط آداپتور + تست آن نگه‌داری می‌شوند بدون آن‌که در هیچ استقراری اجرا شوند؛ مسیر ذخیرهٔ فایل همیشه chunked-D1 است.",

@@ -147,11 +147,12 @@
           "detail": "workerEnv سلف‌هاست فقط DB/ENV/CF_ACCESS_TEAM_DOMAIN/BALE_*/CLINIC_NAME/AUTH_SECRET/PUBLIC_BASE_URL را می‌سازد — EXERCISE_FILES هم اینجا غایب است."
         }
       ],
-      "status": "new",
+      "status": "accepted",
       "verification": {
         "status": "not-required",
         "counterevidence": [],
-        "note": ""
+        "note": "",
+        "lifecycle_note": "AUD-4 (sdt155) — ADR-006 در repodocs/decisions.md؛ راهکار قطعی پرهزینه/شکننده در انتظار تأیید کارفرما"
       },
       "remediation": {
         "observable_effect": "آپلود فایل‌های تمرین در همهٔ اهداف استقرار روی ذخیرهٔ chunked-D1 اجرا می‌شود؛ آداپتور R2 و هر توثیق رابط کاربری به R2 عملاً بی‌اثر است.",
@@ -195,11 +196,12 @@
           "detail": "گیت‌های خطوط ۲۸-۴۱ هر دو فایل را با APP_VERSION مقایسه و در عدم برابری bad() می‌دهند — یعنی شکست گیت در همین revision از محتوای فایل‌ها قابل استنتاج است."
         }
       ],
-      "status": "new",
+      "status": "fixed",
       "verification": {
         "status": "not-required",
         "counterevidence": [],
-        "note": ""
+        "note": "",
+        "lifecycle_note": "release 1.27.75/76 (sdt153) — commit ca132e6"
       },
       "remediation": {
         "observable_effect": "اجرای npm run desktop:check در این revision شکست می‌خورد و بامپ‌های اخیر اپ (تا 1.27.74) به پوستهٔ دسکتاپ منتقل نشده‌اند.",

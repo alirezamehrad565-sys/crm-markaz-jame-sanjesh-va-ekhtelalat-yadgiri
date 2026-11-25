@@ -90,7 +90,7 @@
           "detail": "کف کلی اپ برای ردیف‌های تعاملی 42px (button.search-row min-height: 42px) — ۲۲px یک‌سوم زیر کف داخلی."
         }
       ],
-      "status": "new",
+      "status": "fixed",
       "verification": {
         "status": "confirmed",
         "counterevidence": [
@@ -100,7 +100,8 @@
             "detail": "تأیید رقیب — شدیدتر از ادعا: قاعدهٔ پایهٔ .tag-chip__x (width/height 15px، padding:0) در خط 806 بعد از بلاک coarse با specificity برابر می‌آید و ترتیب منبع مغلوبش می‌کند → اندازهٔ مؤثر واقعی در مد لمسی 15px است نه 22px؛ قاعدهٔ 759 عملاً کد مرده است. استثناهای WCAG 2.5.8 رد شدند (چیپ والد کلیک‌پذیر نیست tagging.js:36-44؛ gap 4px خط 827؛ border-box سراسری). تخفیف جزئی: .tag-del با 24px (خط 758) استثنای هدف هم‌ارز در رابط ویرایشگر تگ — ولی در نمایش چیپِ حذف‌پذیر تنها مسیر حذف همان × 15px است."
           }
         ],
-        "note": "تأیید مستقل کور در 2026-11-24 (verifier: independent-blind-verifier)"
+        "note": "تأیید مستقل کور در 2026-11-24 (verifier: independent-blind-verifier)",
+        "lifecycle_note": "release 1.27.75/76 (sdt153) — commit ffdf11c"
       },
       "remediation": {
         "change_boundary": "پیش‌نویس پیش از Decide: برطرف‌کردن وضعیت توصیف‌شده در عنوان یافته (هدف لمسی tag-chip__x در مد لمسی ۲۲px است — زیر کف ۲۴px گواه WCAG 2.5.8 AA که خود بلوک مدعی رعایت آن است) با کمترین تغییر، پس از تأیید رقیب و تصمیم کارفرما",
@@ -132,11 +133,12 @@
           "detail": ".row-menu__item { min-height: 38px; } و سایر اعضای بلوک: row-menu__btn/call-badge ۳۲ (خط ۷۵۵ و ۷۵۷)، combo__clear ۲۶ (خط ۷۶۰)، toast__close ۳۰ (خط ۷۶۱)، att-seg__btn ۳۸ (خط ۷۶۲) — همه زیر ۴۲."
         }
       ],
-      "status": "new",
+      "status": "fixed",
       "verification": {
         "status": "not-required",
         "counterevidence": [],
-        "note": ""
+        "note": "",
+        "lifecycle_note": "release 1.27.75/76 (sdt153) — commit ffdf11c"
       },
       "remediation": {
         "change_boundary": "پیش‌نویس پیش از Decide: برطرف‌کردن وضعیت توصیف‌شده در عنوان یافته (در مد لمسی، اهداف متعدد ۲۶–۳۸px زیر کف ۴۲px اعلام‌شدهٔ خود اپ هستند) با کمترین تغییر، پس از تأیید رقیب و تصمیم کارفرما",
@@ -219,11 +221,12 @@
           "detail": "focusablesOf همان مودال با .filter((n) => n.getClientRects().length > 0) عناصر غیررندرشده را حذف می‌کند — دو معیار ناسازگار در یک تابع."
         }
       ],
-      "status": "new",
+      "status": "fixed",
       "verification": {
         "status": "not-required",
         "counterevidence": [],
-        "note": ""
+        "note": "",
+        "lifecycle_note": "release 1.27.75/76 (sdt153) — commit ffdf11c"
       },
       "remediation": {
         "change_boundary": "پیش‌نویس پیش از Decide: برطرف‌کردن وضعیت توصیف‌شده در عنوان یافته (فوکوس اولیهٔ openModal انتخابگرش visibility را چک نمی‌کند و می‌تواند روی input پنهان بیفتد) با کمترین تغییر، پس از تأیید رقیب و تصمیم کارفرما",
