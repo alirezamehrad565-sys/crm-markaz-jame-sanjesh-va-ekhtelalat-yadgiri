@@ -367,12 +367,12 @@
           "detail": "Global response-header middleware sets six security headers but no Content-Security-Policy; the SPA shell and all authenticated views therefore rely solely on output escaping across ~24 innerHTML sinks."
         }
       ],
-      "status": "accepted",
+      "status": "fixed",
       "verification": {
         "status": "not-required",
         "counterevidence": [],
         "note": "",
-        "lifecycle_note": "AUD-4 (sdt155) — ADR-004 در repodocs/decisions.md؛ راهکار قطعی پرهزینه/شکننده در انتظار تأیید کارفرما"
+        "lifecycle_note": "release 1.27.82 (sdt159) — ADR-014: ثابت مشترک PUBLIC_PAGE_CSP (script-src 'self' بدون unsafe-inline؛ style-src 'unsafe-inline' عمداً برای <style>/style-attr با دلیل ثبت‌شده) + انتقال اسکریپت‌های درون‌خطی به فایل بیرونی با بلاک دادهٔ JSON (صفحهٔ بازی page-boot.js + فرم‌های عمومی fill-form.js/preview-form.js) + رفع شکاف مطلق case-events (CSP نداشتند) + CSP حداقلی JSON_API_CSP برای پاسخ‌های JSON با گارد بازنویسی‌نکردن CSP صفحه‌ها؛ SPA shell از قبل با CSP هش‌دار _headers پوشیده بود — هر دو بند done_when کامل شد؛ Tauri boot-page CSP خارج از دامنهٔ یافته ماند (نیازمند QA دسکتاپ — پیوست ADR)"
       },
       "remediation": {
         "observable_effect": "A single missed escape anywhere in the SPA or public pages executes unrestricted same-origin script; CSP provides no defense-in-depth.",
@@ -455,12 +455,12 @@
           "detail": "Sink inventory (first-party, excluding vendor/dist bundles): referral-page.ts 17 innerHTML/insertAdjacentHTML, form-page.ts 5 innerHTML, case-events/preview-form.ts 1 innerHTML + 1 document.write (line 284, writing same-origin server HTML after fetch), feedback-sheet.js:187 document.write, progress-report.js:603 document.write (esc'd), ui.js:251, login.js:9, illustrations.js:6, charts.js:44 innerHTML (fixed/escaped data sources), plus play engine markup builders under public/assets/play using esc() for server item text."
         }
       ],
-      "status": "accepted",
+      "status": "fixed",
       "verification": {
         "status": "not-required",
         "counterevidence": [],
         "note": "",
-        "lifecycle_note": "AUD-4 (sdt155) — ADR-005 در repodocs/decisions.md؛ راهکار قطعی پرهزینه/شکننده در انتظار تأیید کارفرما"
+        "lifecycle_note": "release 1.27.82 (sdt159) — ADR-015: کوکی cs_session با HttpOnly/Secure/SameSite=Strict صادر/پاک می‌شود و authMiddleware کوکی یا Bearer می‌خواند؛ CSRF دو-لایه (SameSite=Strict + بررسی Origin روی متدهای نوشتنیِ احرازشده با کوکی)؛ فرانت: فروشگاه localStorage حذف شد (۱۷ نقطه در ۹ فایل) و ۶ گارد سخت رانر سینک به توکن اختیاری رفت (webview با کوکی هم‌مبدأ)؛ بند «TTL کوتاه‌تر + چرخش» مخصوص گزینهٔ دوم بود و اجرا نشد؛ توکن در بدنهٔ login فقط برای کلاینت‌های غیرمرورگری (wizard ابری/گذار) مانده و SPA دیگر آن را ذخیره نمی‌کند — done_when بند اول (token no longer readable by script از منظر پایداری/ذخیره‌سازی) کامل شد"
       },
       "remediation": {
         "observable_effect": "One XSS sink regression converts into 30-day account takeover including supervisor/manager roles depending on stolen token.",

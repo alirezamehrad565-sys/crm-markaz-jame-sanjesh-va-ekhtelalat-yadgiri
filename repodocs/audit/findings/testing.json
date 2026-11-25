@@ -121,7 +121,7 @@
           "detail": "1673-line scheduling view is referenced by 10+ test files only as regex-gate text (front-12758, front-supervisor-readonly, front-drill-3, ...); its handlers, state transitions and rendering never execute under test"
         }
       ],
-      "status": "new",
+      "status": "fixed",
       "verification": {
         "status": "confirmed",
         "counterevidence": [
@@ -131,7 +131,8 @@
             "detail": "تأیید رقیب با تصحیح عددی: ۵۶ فایل front-*، ۵۱ readFileSync ✓؛ environment node بدون jsdom ✓؛ بدون playwright/cypress ✓؛ شمارش دقیق اجرای ماژول: ۱۰ ماژول واقعاً import و اجرا می‌شوند (profile/registry.js هم هست که ممیز از قلم انداخته بود) → ۷۴ از ۸۴ ماژول فرانت هرگز اجرا نمی‌شوند (≈۸۸٪) — جوهر یافته پابرجا؛ FakeDocument دست‌ساز فقط src/tutorial را اجرا می‌کند."
           }
         ],
-        "note": "تأیید مستقل کور در 2026-11-24 (verifier: independent-blind-verifier)"
+        "note": "تأیید مستقل کور در 2026-11-24 (verifier: independent-blind-verifier)",
+        "lifecycle_note": "release 1.27.82 (sdt159) — ADR-013: بند اول done_when کامل — منطق خالص چهار ویو بزرگ (appointments/student-profile/exercises/clearbook) با export صفر-رفتار در سوئیت اجرا می‌شود (۴ فایل آزمون رفتاری، الگوی front-updater؛ appointment با استاب سبک sessionStorage). بند دوم — مکانیزم توقف پین آرایشی: گیت بهداشت تازهٔ ۵سناریویی (سقف ratchet پین‌های متن سورس = ۸۰۱، سه ممنوعیت مطلق: مُهر نسخه docs/مکانیک import مثبت/مارکر کامنت نسخه‌دار، سیم بودن چهار ویو) + نمونه‌های ممیز حذف/رفتاری شدند؛ playwright طبق uncertainty یافته «تصمیم محصولی» ماند و حداقلِ اصلاحِ ثبت‌شده در همان uncertainty اجرا شد"
       },
       "remediation": {
         "observable_effect": "Frontend logic regressions (broken handlers, wrong state transitions, rendering crashes) ship with all gates green; simultaneously every cosmetic refactor risks red gates, training developers to distrust the suite",
