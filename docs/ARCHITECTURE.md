@@ -307,6 +307,12 @@ export function registerRoutes(app: AppHono, service: AppointmentService): void;
 appointmentRoutes(app, services.appointments);
 ```
 
+**تثبیت قرارداد (sdt158 — ADR-012، بستن architecture-004 با گزینهٔ الف):** این الگو قاعدهٔ رسمی است و «routes.ts در دامنه» نقض مرز نیست — ممیز رقیب همین را مستند کرده بود و هزینهٔ باقی‌مانده (جفت‌شدگی به Hono در ۲۸ ماژول + نبود نقطهٔ واحد کشف) با رجیستری سبک پاس شد:
+
+- **نقطهٔ واحد کشف مسیرها** = `docs/route-registry.json` (ماشین‌ساخته؛ ۴۴۱ ثبت در ۵۶ ماژول) — گیت `check:route-registry` (`scripts/check-route-registry.mjs`) با اسکن سورس هر واگرایی را می‌گیرد (در CI و سوئیت). `--update` برای تازه‌سازی پس از بررسی.
+- ستون `zone` از محل فراخوانی register در `api-routing/routes.ts` مشتق می‌شود، نه حدس دستی: `public` (زنجیرهٔ پیش از گیت auth + دو mount زیراپ)، `protected`، `public+protected`، `router` (خود فایل رجیستری)، `games-worker` (ورکر مستقل بازی‌ها).
+- مسیرهای `/public/*` ثبت‌شده در گروه protected (پرکردن رویداد، rum، client-errors) «عمومیِ مؤثر»اند — گیت auth/nاظر فقط `/api/*` را می‌گیرند؛ رجیستری همین را با خودِ مسیر شفاف نگه می‌دارد.
+
 ### ۴.۴ الگوی Module Dependencies (Dependency Injection)
 
 ```typescript
@@ -693,6 +699,8 @@ export interface DashboardService {
 ---
 
 ## بخش ۹ — قرارداد API هر ماژول
+
+> ۱.۲۷.۸۱ (sdt158): فهرست زندهٔ ماشین‌ساختهٔ همهٔ ۴۴۱ ثبت مسیر در `docs/route-registry.json` است (نقطهٔ واحد کشف — گیت `check:route-registry`)؛ جداول این بخش مرجعِ قراردادیِ درخواست/پاسخ‌اند و شمارش‌شان تضمین‌شده نیست.
 
 ### ۹.۱ appointment-core — Endpoints
 

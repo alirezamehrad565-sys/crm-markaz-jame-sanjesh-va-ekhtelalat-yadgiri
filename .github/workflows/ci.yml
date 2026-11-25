@@ -87,6 +87,11 @@ jobs:
       - name: Migrations content manifest gate
         run: node scripts/check-migrations-manifest.mjs
 
+      # sdt158 (architecture-004) — گیت رجیستری مسیرها: نقطهٔ واحد کشف endpointها؛ هر ثبت/حذف
+      # مسیر باید با --update در docs/route-registry.json ثبت شود وگرنه CI سرخ می‌شود
+      - name: Route registry gate
+        run: node scripts/check-route-registry.mjs
+
       # v1.27.۱۹ — گیت هم‌مِهری نسخه‌ها (منبع یگانه version.ts ↔ package.json/tauri.conf.json/
       # Cargo.toml/sw.js/پین‌های index.html) — منشأ: گزارش کارفرمای ۱.۲۷.۱۸ (CARGO_PKG_VERSION
       # جامانده → گیت «نصب ارتقا ناقص» پوسته). بامپ فقط با scripts/bump-version.mjs.
