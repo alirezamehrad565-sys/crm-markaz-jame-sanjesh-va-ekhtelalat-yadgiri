@@ -83,7 +83,7 @@
           "detail": "Deploy applies migrations via wrangler d1 migrations apply --remote, which tracks applied state by filename in d1_migrations; a filename match with drifted content is silently skipped, so any content difference between repo file and what production originally ran persists unmeasured."
         }
       ],
-      "status": "new",
+      "status": "fixed",
       "verification": {
         "status": "downgraded",
         "counterevidence": [
@@ -94,7 +94,8 @@
           }
         ],
         "note": "تأیید مستقل کور در 2026-11-24 (verifier: independent-blind-verifier)",
-        "resulting_severity": "medium"
+        "resulting_severity": "medium",
+        "lifecycle_note": "release 1.27.79 (sdt156) — موج B1: مایگریشن آشتی‌دهندهٔ 0124 (central_records) + گیت fresh-install-parity + گیت مانیفست SHA-256 (check-migrations-manifest) + ردیف سند 0123/تصحیح ادعای ترتیب"
       },
       "remediation": {
         "change_boundary": "پیش‌نویس پیش از Decide: برطرف‌کردن وضعیت توصیف‌شده در عنوان یافته (Duplicate/gap migration numbers make fresh-install schema diverge from production and d1_migrations records filename only, not content) با کمترین تغییر، پس از تأیید رقیب و تصمیم کارفرما",

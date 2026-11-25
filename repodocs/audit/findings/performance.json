@@ -91,7 +91,7 @@
           "detail": "پیاده‌سازی موازی همین الگو داخل سرویس docs (خواندن همهٔ تکه‌ها با یک SELECT بدون صفحه‌بندی — الگوی درست‌تر) به‌علاوهٔ نسخه‌های مشابه در src/domain/exercise-bank/service.ts:1084، src/domain/clearbook/service.ts:508 و src/domain/knowledge/service.ts:345 — چهار نسخهٔ تکراری منطق تکه‌گذاری"
         }
       ],
-      "status": "new",
+      "status": "fixed",
       "verification": {
         "status": "confirmed",
         "counterevidence": [
@@ -101,7 +101,8 @@
             "detail": "تأیید رقیب: خواندن واقعاً متوالی (COUNT :74 + حلقهٔ await LIMIT 6 OFFSET n :83-87)، نوشتن DELETE+INSERT تک‌تکه (:33-58)، decode کاراکتربه‌کاراکتر (:13-22)؛ حجم واقعی تولید در مخزن شواهدی ندارد (بکاپ گزارش‌شده محلی seed با ۰ ردیف بود)؛ wrangler.prod.toml وجود ندارد و بدون binding R2، مسیر D1 تکه‌ای پیش‌فرض تولید است (src/index.ts:82)."
           }
         ],
-        "note": "تأیید مستقل کور در 2026-11-24 (verifier: independent-blind-verifier)"
+        "note": "تأیید مستقل کور در 2026-11-24 (verifier: independent-blind-verifier)",
+        "lifecycle_note": "release 1.27.79 (sdt156) — موج B2: نوشتن اتمیک transaction→batch + خواندن بچ بازه‌ای (۳ رفت‌وبرگشت بیشینه، زیر سقف ۵۰MB) + parity نتایج SELECT در MockD1/NodeD1"
       },
       "remediation": {
         "observable_effect": "خواندن هر پیوست به‌جای یک کوئری، ۱+⌈K/6⌉ رفت‌وبرگشت متوالی D1 و K عملیات atob با حلقهٔ کاراکتری است؛ نوشتن K رفت‌وبرگشت INSERT متوالی است؛ جدول تا ۴/۳ حجم واقعی فایل‌ها رشد می‌کند",
