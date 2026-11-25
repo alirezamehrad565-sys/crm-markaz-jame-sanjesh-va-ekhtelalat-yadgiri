@@ -9,6 +9,7 @@ import type { AuditWriter } from '@core/audit';
 import { createLogger } from '@core/logger';
 import type { Logger } from '@core/logger';
 import { ConflictCheckSchema, DashboardSummaryQuerySchema, DashboardTodayQuerySchema } from '@core/shared';
+import { maskSensitivePath } from '@core/shared/log-mask'; // security-005 (۱.۲۷.۷۸) — مسیرِ لاگ ماسک می‌شود
 import { createInternalChannel, createNotifyService } from '@core/notify';
 import type { NotifyService } from '@core/notify';
 
@@ -119,7 +120,7 @@ import { registerNodeSyncStatusRoute } from '../../node-sync-runner/status'; // 
 import { createInstanceSyncApp } from '../../application/instance-sync/index'; // فاز B — هستهٔ هم‌گامی دوسویه نمونه‌ها (§۲-۴؛ گیت Bearer runtime-secret خودش)
 import { registerDesktopRoutes } from '@app/instance-sync/desktop-routes'; // فاز B — هم‌گامی میز↔ابر + کلون (سند §۲-۲/§۲-۴)
 
-import { errorHandler, parseApiRateLimitPerMin, makeKeyedRateLimiter, API_RATE_LIMIT_WINDOW_MS } from '@app/http';
+import { errorHandler, parseApiRateLimitPerMin, parseTokenGetRateLimitPerMin, makeKeyedRateLimiter, API_RATE_LIMIT_WINDOW_MS } from '@app/http';
 import { RateLimitError } from '@core/errors';
 
 export interface AppDeps {
@@ -612,6 +613,39 @@ export function createApp(deps: AppDeps): AppHono {
     return next();
   });
 
+  /* ف۵ (security-008 — ۱.۲۷.۷۸-B1) — سقف خواندنی‌های توکن‌دارِ عمومی per-IP: صفحهٔ /m/:token و
+     API زنجیرهٔ عمومی /api/m/* با «توکنِ خودِ لینک» کار می‌کنند (bearer هم‌ارز) و تا امروز بی‌سقف
+     بودند؛ این دروازهٔ سخاوتمندانهٔ سوم (۱۲۰/دقیقه بر IP) فقط رگبار ماشینی روی لینک‌های عمومی را
+     می‌بندد و کاربرد عادی هرگز ۴۲۹ نمی‌بیند. env اختیاری API_TOKEN_GET_RATE_LIMIT_PER_MIN
+     («۰» = خاموش با یک لاگ). همان محدودیت صادقانهٔ per-isolate در @app/http/rate-limit ثبت است —
+     کاهش قطعی روی دامنهٔ اختصاصی با WAF rate-limit کلادفلر ممکن است. */
+  const tokenGetLimiter = makeKeyedRateLimiter(API_RATE_LIMIT_WINDOW_MS);
+  let tokenGetDisabledLogged = false;
+  app.use('*', async (c, next) => {
+    if (c.req.method !== 'GET') return next();
+    const p = c.req.path;
+    if (!/^\/m\/[^/]+/.test(p) && !p.startsWith('/api/m/')) return next(); // فقط لینک‌های عمومی توکن‌دار
+    const perMin = parseTokenGetRateLimitPerMin(c.env?.API_TOKEN_GET_RATE_LIMIT_PER_MIN);
+    if (perMin <= 0) {
+      if (!tokenGetDisabledLogged) {
+        tokenGetDisabledLogged = true;
+        services.logger.child('http').warn('api_token_get_rate_limit.disabled', {
+          reason: 'API_TOKEN_GET_RATE_LIMIT_PER_MIN=0'
+        });
+      }
+      return next();
+    }
+    const ip = (c.req.header('cf-connecting-ip') ?? 'unknown').slice(0, 64);
+    if (!tokenGetLimiter.allow(`tg:${perMin}:${ip}`, perMin)) {
+      c.header('Retry-After', String(Math.ceil(API_RATE_LIMIT_WINDOW_MS / 1000)));
+      throw new RateLimitError(
+        Math.ceil(API_RATE_LIMIT_WINDOW_MS / 1000),
+        'درخواست‌های لینک عمومی بیش از حد مجاز است — کمی بعد دوباره تلاش کنید'
+      );
+    }
+    return next();
+  });
+
   app.use('*', async (c, next) => {
     await next();
     c.header('X-Content-Type-Options', 'nosniff'); // جلوی MIME-sniffing مرورگر
@@ -641,7 +675,7 @@ export function createApp(deps: AppDeps): AppHono {
     await next();
     services.logger.child('http').info('request', {
       method: c.req.method,
-      path: c.req.path,
+      path: maskSensitivePath(c.req.path), // security-005 (۱.۲۷.۷۸) — توکن لینک عمومی و سکرت وب‌هوک به لاگ نمی‌روند
       status: c.res.status,
       ms: Date.now() - start
     });

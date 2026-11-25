@@ -22,19 +22,30 @@ export const API_RATE_LIMIT_PER_MIN_MAX = 10_000;
 export const API_RATE_LIMIT_WINDOW_MS = 60_000;
 
 /**
- * تفسیر env اختیاری `API_RATE_LIMIT_PER_MIN`:
- *   نبود/رشتهٔ خالی → پیش‌فرض ۲۴۰ · صفر → خاموش (میدل‌ور یک لاگ می‌دهد) ·
+ * تفسیر env اختیاری سقف‌ها (نوشتنی P2-15 و خواندنیِ توکن‌دار security-008):
+ *   نبود/رشتهٔ خالی → پیش‌فرض همان سقف · صفر → خاموش (میدل‌ور یک لاگ می‌دهد) ·
  *   غیرعددی/منفی → پیش‌فرض · عدد مثبت → گیرهٔ ۱..۱۰۰۰۰.
  * مقادیر env در Workers رشته می‌آیند؛ پس رشتهٔ «۳» هم می‌پذیریم.
  */
-export function parseApiRateLimitPerMin(raw: unknown): number {
+function parsePerMinWithDefault(raw: unknown, fallback: number): number {
   if (raw === null || raw === undefined || (typeof raw === 'string' && raw.trim() === '')) {
-    return API_RATE_LIMIT_PER_MIN_DEFAULT;
+    return fallback;
   }
   const n = typeof raw === 'string' ? Number(raw.trim()) : Number(raw);
-  if (!Number.isFinite(n) || n < 0) return API_RATE_LIMIT_PER_MIN_DEFAULT;
+  if (!Number.isFinite(n) || n < 0) return fallback;
   if (n === 0) return 0;
   return Math.min(Math.trunc(n), API_RATE_LIMIT_PER_MIN_MAX);
+}
+
+export function parseApiRateLimitPerMin(raw: unknown): number {
+  return parsePerMinWithDefault(raw, API_RATE_LIMIT_PER_MIN_DEFAULT);
+}
+
+/** پیش‌فرض سقف خواندنی‌های توکن‌دارِ عمومی per-IP در دقیقه (security-008 — ۱.۲۷.۷۸) — سخاوتمندانه */
+export const API_TOKEN_GET_RATE_LIMIT_PER_MIN_DEFAULT = 120;
+
+export function parseTokenGetRateLimitPerMin(raw: unknown): number {
+  return parsePerMinWithDefault(raw, API_TOKEN_GET_RATE_LIMIT_PER_MIN_DEFAULT);
 }
 
 /**
