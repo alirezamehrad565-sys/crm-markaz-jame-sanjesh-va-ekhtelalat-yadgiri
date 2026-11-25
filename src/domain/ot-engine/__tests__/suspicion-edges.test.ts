@@ -7,6 +7,8 @@ import { describe, it, expect } from 'vitest';
 // @ts-ignore — سرویس OT خارج از مسیر آزمون‌های فرانت است اما خالص است
 import { computeSuspicion, isFresh, sourceOf, numOf } from '../service';
 
+type EventsArg = Parameters<typeof computeSuspicion>[0];
+
 const NOW = () => new Date('2026-11-25T12:00:00Z');
 const freshIso = (iso: string) => isFresh(iso, NOW);
 
@@ -24,15 +26,15 @@ function snapEvent(role: 'p' | 't', ia: number | null, hi: number | null, occurr
 
 describe('computeSuspicion — برش‌ها و تازگی (testing-007 — ۱.۲۷.۸۳)', () => {
   it('SNAP والد — danger ۱۶ / watch ۱۱ / زیر مرز ۱۰ بی‌سگنال', () => {
-    expect(computeSuspicion([snapEvent('p', 16, null)], null, freshIso).signals.some((s) => s.construct === 'adhd' && s.level === 'high' && s.sources.includes('parent'))).toBe(true);
-    expect(computeSuspicion([snapEvent('p', 11, null)], null, freshIso).signals.some((s) => s.construct === 'adhd' && s.level === 'watch')).toBe(true);
-    expect(computeSuspicion([snapEvent('p', 10, null)], null, freshIso).signals).toHaveLength(0);
+    expect(computeSuspicion([snapEvent('p', 16, null)] as unknown as EventsArg, null, freshIso).signals.some((s) => s.construct === 'adhd' && s.level === 'high' && s.sources.includes('parent'))).toBe(true);
+    expect(computeSuspicion([snapEvent('p', 11, null)] as unknown as EventsArg, null, freshIso).signals.some((s) => s.construct === 'adhd' && s.level === 'watch')).toBe(true);
+    expect(computeSuspicion([snapEvent('p', 10, null)] as unknown as EventsArg, null, freshIso).signals).toHaveLength(0);
   });
 
   it('SNAP معلم — مرزهای جدا: IA watch از ۱۴ و HI high از ۱۱', () => {
-    expect(computeSuspicion([snapEvent('t', 14, null)], null, freshIso).signals.some((s) => s.construct === 'adhd' && s.level === 'watch')).toBe(true);
-    expect(computeSuspicion([snapEvent('t', 11, null)], null, freshIso).signals).toHaveLength(0); // زیر مرز معلم
-    const hiHit = computeSuspicion([snapEvent('t', null, 11)], null, freshIso);
+    expect(computeSuspicion([snapEvent('t', 14, null)] as unknown as EventsArg, null, freshIso).signals.some((s) => s.construct === 'adhd' && s.level === 'watch')).toBe(true);
+    expect(computeSuspicion([snapEvent('t', 11, null)] as unknown as EventsArg, null, freshIso).signals).toHaveLength(0); // زیر مرز معلم
+    const hiHit = computeSuspicion([snapEvent('t', null, 11)] as unknown as EventsArg, null, freshIso);
     expect(hiHit.signals.some((s) => s.construct === 'adhd' && s.level === 'high')).toBe(true);
   });
 
@@ -41,7 +43,7 @@ describe('computeSuspicion — برش‌ها و تازگی (testing-007 — ۱.�
       toolKey: 'ce-scared-p-v1', status: 'completed', occurredAt: '2026-08-01T10:00:00Z',
       analysis: { score }
     });
-    const out = (score: number) => computeSuspicion([ev(score)], null, freshIso).signals.filter((s) => s.construct === 'anxiety');
+    const out = (score: number) => computeSuspicion([ev(score)] as unknown as EventsArg, null, freshIso).signals.filter((s) => s.construct === 'anxiety');
     expect(out(30)[0]?.level).toBe('high');
     expect(out(25)[0]?.level).toBe('high');
     expect(out(24)[0]?.level).toBe('watch');
@@ -53,13 +55,13 @@ describe('computeSuspicion — برش‌ها و تازگی (testing-007 — ۱.�
       toolKey: 'ce-sdq-p-v1', status: 'completed', occurredAt: '2026-08-01T10:00:00Z',
       analysis: { subscaleScores: [{ id: 'hyper', score: 8, band: 'بالا', color: 'danger' }, { id: 'emo', score: 7, band: 'بالا', color: 'danger' }] }
     };
-    const signals = computeSuspicion([ev], null, freshIso).signals;
+    const signals = computeSuspicion([ev] as unknown as EventsArg, null, freshIso).signals;
     expect(signals.some((s) => s.construct === 'adhd' && s.level === 'high')).toBe(true);
     expect(signals.some((s) => s.construct === 'anxiety' && s.level === 'watch')).toBe(true);
   });
 
   it('هم‌گرایی والد+معلم — هر دو منبع در evidence یک سگنال', () => {
-    const out = computeSuspicion([snapEvent('p', 16, null), snapEvent('t', 16, null)], null, freshIso);
+    const out = computeSuspicion([snapEvent('p', 16, null), snapEvent('t', 16, null)] as unknown as EventsArg, null, freshIso);
     const adhd = out.signals.find((s) => s.construct === 'adhd');
     expect(adhd?.level).toBe('high');
     expect(adhd?.sources).toEqual(expect.arrayContaining(['parent', 'teacher']));
@@ -68,11 +70,11 @@ describe('computeSuspicion — برش‌ها و تازگی (testing-007 — ۱.�
 
   it('تازگی ۱۲ماهه — رویداد کهنه از برش‌ها بیرون است', () => {
     const stale = snapEvent('p', 16, null, '2024-06-01T10:00:00Z');
-    expect(computeSuspicion([stale], null, freshIso).signals).toHaveLength(0);
+    expect(computeSuspicion([stale] as unknown as EventsArg, null, freshIso).signals).toHaveLength(0);
     const fresh = snapEvent('p', 16, null, '2026-08-01T10:00:00Z');
-    expect(computeSuspicion([fresh], null, freshIso).signals.length).toBeGreaterThan(0);
+    expect(computeSuspicion([fresh] as unknown as EventsArg, null, freshIso).signals.length).toBeGreaterThan(0);
     // رویداد ناتمام هم بیرون است
-    expect(computeSuspicion([{ ...fresh, status: 'pending' }], null, freshIso).signals).toHaveLength(0);
+    expect(computeSuspicion([{ ...fresh, status: 'pending' }] as unknown as EventsArg, null, freshIso).signals).toHaveLength(0);
   });
 
   it('isFresh — مرز دقیق پنجرهٔ ۱۲×۳۰ روز + قالب بدون T', () => {

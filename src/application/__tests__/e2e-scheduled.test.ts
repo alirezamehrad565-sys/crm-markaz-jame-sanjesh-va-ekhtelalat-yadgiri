@@ -7,7 +7,10 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { DIGEST_CRON, BATCH_CRON } from '@core/shared';
 import worker from '../../index';
+import type { D1Database } from '@cloudflare/workers-types';
 import { createTestApp } from '../../test/harness';
+
+const dbOf = (A: ReturnType<typeof createTestApp>): D1Database => (A.env as unknown as { DB: D1Database }).DB;
 
 function fakeCtx(): { ctx: ExecutionContext; waits: Promise<unknown>[] } {
   const waits: Promise<unknown>[] = [];
@@ -25,7 +28,7 @@ async function runScheduled(A: ReturnType<typeof createTestApp>, cron: string): 
 }
 
 async function snapshotCount(A: ReturnType<typeof createTestApp>): Promise<number> {
-  const row = await A.env.DB.prepare(`SELECT COUNT(*) AS n FROM table_growth_snapshots`).first<{ n: number }>();
+  const row = await dbOf(A).prepare(`SELECT COUNT(*) AS n FROM table_growth_snapshots`).first<{ n: number }>();
   return row?.n ?? 0;
 }
 
@@ -42,13 +45,13 @@ describe('orchestration worker.scheduled (testing-005 — ۱.۲۷.۸۳)', () => 
     const after = await snapshotCount(A);
     expect(after).toBeGreaterThanOrEqual(before); // growth.captureDaily در همان اجرا رخ داده (skip مُهر ۲۴ساعته هم رکورد می‌گذارد یا می‌پرد)
     // جدول‌های هرس سالم‌اند — stepهای retention واقعاً روی DB رفتند
-    const ce = await A.env.DB.prepare(`SELECT COUNT(*) AS n FROM client_errors`).first<{ n: number }>();
+    const ce = await dbOf(A).prepare(`SELECT COUNT(*) AS n FROM client_errors`).first<{ n: number }>();
     expect(ce).not.toBeNull();
   });
 
   it('failing job چرخه را نمی‌بُرد — جدول حذف‌شدهٔ client_errors، snapshot رشد را نگه می‌دارد', async () => {
     const B = createTestApp();
-    await B.env.DB.prepare(`DROP TABLE client_errors`).run();
+    await dbOf(B).prepare(`DROP TABLE client_errors`).run();
     const before = await snapshotCount(B);
     await expect(runScheduled(B, DIGEST_CRON)).resolves.toBeUndefined(); // هیچ jobی کل چرخه را نمی‌شکند
     const after = await snapshotCount(B);

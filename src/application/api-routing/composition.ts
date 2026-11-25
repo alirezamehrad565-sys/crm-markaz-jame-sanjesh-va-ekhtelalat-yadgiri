@@ -95,6 +95,7 @@ import type { DashboardService } from '@app/dashboard';
 import { createDashboardKpiService } from '../dashboard/kpi-source'; // ۱.۲۷.۸۰ — تجمیع KPI (architecture-001)
 import type { DashboardKpiService } from '../dashboard/kpi-source';
 import { createNotifyAppService } from '@app/notify';
+import { enqueueToMany } from '@app/notify/enqueue-to-many'; // architecture-002 + performance-002 (۱.۲۷.۸۳)
 import type { NotifyAppService } from '@app/notify';
 import { createSettingsService } from '@app/settings';
 import type { SettingsService } from '@app/settings';
@@ -305,7 +306,11 @@ export function createServices(deps: AppDeps): Services {
     storage: exerciseStorage,
     mediaFetcher: docMediaFetcher,
     notify: notifyCore,
-    settings
+    // architecture-002/003 (۱.۲۷.۸۳): به‌جای کل SettingsService از @app — تزریق تابعی همان
+    // helper مشترک (الگوی formulationOt)
+    getClinicName: () => settings.getClinicName(),
+    enqueueMany: (inputs) => notifyCore.enqueueMany(inputs),
+    flushPending: (limit?: number) => notifyCore.dispatchPending(limit)
   });
 
   const notify = createNotifyAppService({
@@ -359,22 +364,18 @@ export function createServices(deps: AppDeps): Services {
   });
 
   caseEvents.setSendObserver(async (input) => {
+    /* architecture-002 + performance-002 (۱.۲۷.۸۳): حلقهٔ enqueue/flush فقط در enqueueToMany —
+       رفت‌وبرگشت DB مستقل از تعداد گیرنده‌ها (SELECT dedup با IN + یک INSERT چندردیفی) */
     const channel: 'bale' | 'internal' = notifyCore.getChannel('bale') ? 'bale' : 'internal';
     const clinicName = await settings.getClinicName();
-    let sent = 0;
-    for (const chat of input.chats) {
-      const outcome = await notifyCore.enqueue({
-        channel,
-        template: input.template,
-        recipient: chat,
-        studentId: input.studentId,
-        payload: { ...input.vars, clinicName },
-        dedupKey: `${input.dedupBase}:${chat}`
-      });
-      if (!outcome.duplicate) sent += 1;
-    }
-    if (sent > 0) await notifyCore.dispatchPending(50);
-    return sent;
+    return enqueueToMany(notifyCore, {
+      channel,
+      template: input.template,
+      chats: input.chats,
+      payloadFor: (chat) => ({ ...input.vars, clinicName }),
+      dedupKeyFor: (chat) => `${input.dedupBase}:${chat}`,
+      studentId: input.studentId
+    });
   });
 
   // اعلان «نتیجهٔ چک‌لیست ثبت شد» به درمانگر ثبت‌کننده؛ هم پر کردن وب و هم بات را پوشش می‌دهد
@@ -391,25 +392,20 @@ export function createServices(deps: AppDeps): Services {
       const studentName = student ? `${student.firstName} ${student.lastName}` : null;
       const channel: 'bale' | 'internal' = notifyCore.getChannel('bale') ? 'bale' : 'internal';
       const clinicName = await settings.getClinicName();
-      let sent = 0;
-      for (const chat of chats) {
-        const outcome = await notifyCore.enqueue({
-          channel,
-          template: 'bot_checklist_result',
-          recipient: chat,
-          studentId: input.studentId,
-          payload: {
-            studentName: studentName ?? undefined,
-            formTitle: input.teacherName ? `${input.formTitle} (پاسخ معلم: ${input.teacherName})` : input.formTitle,
-            score: input.score != null ? faDigits(String(input.score)) : undefined,
-            band: input.band ?? undefined,
-            clinicName
-          },
-          dedupKey: `ce-result:${input.eventId}:${chat}`
-        });
-        if (!outcome.duplicate) sent += 1;
-      }
-      if (sent > 0) await notifyCore.dispatchPending(50);
+      await enqueueToMany(notifyCore, {
+        channel,
+        template: 'bot_checklist_result',
+        chats,
+        payloadFor: (chat) => ({
+          studentName: studentName ?? undefined,
+          formTitle: input.teacherName ? `${input.formTitle} (پاسخ معلم: ${input.teacherName})` : input.formTitle,
+          score: input.score != null ? faDigits(String(input.score)) : undefined,
+          band: input.band ?? undefined,
+          clinicName
+        }),
+        dedupKeyFor: (chat) => `ce-result:${input.eventId}:${chat}`,
+        studentId: input.studentId
+      });
     } catch (err) {
       logger.warn('case-events.fill_observer_failed', { err: err instanceof Error ? err.message : String(err) });
     }
@@ -418,20 +414,14 @@ export function createServices(deps: AppDeps): Services {
   exerciseBank.setSendObserver(async (input) => {
     const channel: 'bale' | 'internal' = notifyCore.getChannel('bale') ? 'bale' : 'internal';
     const clinicName = await settings.getClinicName();
-    let sent = 0;
-    for (const chat of input.chats) {
-      const outcome = await notifyCore.enqueue({
-        channel,
-        template: input.template,
-        recipient: chat,
-        studentId: input.studentId,
-        payload: { ...input.vars, clinicName },
-        dedupKey: `${input.dedupBase}:${chat}`
-      });
-      if (!outcome.duplicate) sent += 1;
-    }
-    if (sent > 0) await notifyCore.dispatchPending(50);
-    return sent;
+    return enqueueToMany(notifyCore, {
+      channel,
+      template: input.template,
+      chats: input.chats,
+      payloadFor: (chat) => ({ ...input.vars, clinicName }),
+      dedupKeyFor: (chat) => `${input.dedupBase}:${chat}`,
+      studentId: input.studentId
+    });
   });
 
   const reports = createReportService({ db, logger });

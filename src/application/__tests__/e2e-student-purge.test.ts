@@ -5,32 +5,35 @@
  * یعنی snapshot فقط با حذف واقعی پرونده می‌رود (سیاست ثبت‌شده در TABLE_POLICIES).
  */
 import { describe, it, expect, beforeAll } from 'vitest';
+import type { D1Database } from '@cloudflare/workers-types';
 import { createTestApp, asRole, makeNationalId, MANAGER_ID } from '../../test/harness';
+
+const dbOf = (A: ReturnType<typeof createTestApp>): D1Database => (A.env as unknown as { DB: D1Database }).DB;
 
 /** دانش‌آموز مستقیم از DB — ردیف مادر برای snapshots */
 async function createStudent(A: ReturnType<typeof createTestApp>): Promise<string> {
   const id = crypto.randomUUID();
-  await A.env.DB.prepare(
+  await dbOf(A).prepare(
     `INSERT INTO students (id, national_id, first_name, last_name) VALUES (?, ?, ?, ?)`
   ).bind(id, makeNationalId(), 'نمونه', 'حذف‌شدنی').run();
   return id;
 }
 
 async function seedSnapshot(A: ReturnType<typeof createTestApp>, studentId: string): Promise<void> {
-  await A.env.DB.prepare(
+  await dbOf(A).prepare(
     `INSERT INTO report_snapshots (id, student_id, template_key, sections_json, content_hash, report_no)
      VALUES (?, ?, 'pathway_report', '{}', 'deadbeef', ?)`
   ).bind(crypto.randomUUID(), studentId, `1405-T-${crypto.randomUUID().slice(0, 8)}`).run();
 }
 
 async function snapshotExists(A: ReturnType<typeof createTestApp>, studentId: string): Promise<boolean> {
-  const row = await A.env.DB.prepare(`SELECT id FROM report_snapshots WHERE student_id = ? LIMIT 1`).bind(studentId).first();
+  const row = await dbOf(A).prepare(`SELECT id FROM report_snapshots WHERE student_id = ? LIMIT 1`).bind(studentId).first();
   return row !== null;
 }
 
 /** سابقهٔ غیرمالی — پیگیری متعلق به پرونده (منابع مالی حتی force را هم می‌بندند — سیاست ثبت‌شده) */
 async function seedHistoryRef(A: ReturnType<typeof createTestApp>, studentId: string): Promise<void> {
-  await A.env.DB.prepare(
+  await dbOf(A).prepare(
     `INSERT INTO followups (id, entity_type, entity_id, student_id, title, assignee_id, created_by)
      VALUES (?, 'student', ?, ?, 'پیگیری آزمون', ?, ?)`
   ).bind(crypto.randomUUID(), studentId, studentId, MANAGER_ID, MANAGER_ID).run();

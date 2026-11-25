@@ -7,7 +7,10 @@ import { describe, it, expect, beforeAll } from 'vitest';
 
 const FAKE_CTX = { waitUntil: () => undefined, passThroughOnException: () => undefined } as unknown as ExecutionContext;
 import { hashApiKey } from '@core/auth';
+import type { D1Database } from '@cloudflare/workers-types';
 import { createTestApp, MANAGER_ID, ALI_ID } from '../../test/harness';
+
+const dbOf = (A: ReturnType<typeof createTestApp>): D1Database => (A.env as unknown as { DB: D1Database }).DB;
 
 /** کلید هم‌قالب looksLikeApiKey: ck_(live|test)_ + ۴۰ نویسهٔ الفبا-رقم */
 function makeKeyToken(): string {
@@ -26,7 +29,7 @@ describe('X-Api-Key — شاخهٔ کلید API (testing-004 — ۱.۲۷.۸۳)',
 
   async function seedKey(opts: { role?: string; createdBy?: string; active?: number }): Promise<string> {
     const token = makeKeyToken();
-    await A.env.DB.prepare(
+    await dbOf(A).prepare(
       `INSERT INTO api_keys (id, name, prefix, key_hash, role, active, created_by, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))`
     ).bind(
@@ -59,13 +62,13 @@ describe('X-Api-Key — شاخهٔ کلید API (testing-004 — ۱.۲۷.۸۳)',
   });
 
   it('مالک غیرفعال → ۴۰۱ (حتی با کلید فعال)', async () => {
-    await A.env.DB.prepare(`UPDATE staff SET active = 0 WHERE id = ?`).bind(ALI_ID).run();
+    await dbOf(A).prepare(`UPDATE staff SET active = 0 WHERE id = ?`).bind(ALI_ID).run();
     try {
       const token = await seedKey({ createdBy: ALI_ID });
       const raw = await A.app.request('/api/me', { headers: { 'X-Api-Key': token } }, A.env as never, FAKE_CTX);
       expect(raw.status).toBe(401);
     } finally {
-      await A.env.DB.prepare(`UPDATE staff SET active = 1 WHERE id = ?`).bind(ALI_ID).run();
+      await dbOf(A).prepare(`UPDATE staff SET active = 1 WHERE id = ?`).bind(ALI_ID).run();
     }
   });
 

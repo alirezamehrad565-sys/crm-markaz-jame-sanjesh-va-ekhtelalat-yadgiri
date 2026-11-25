@@ -85,7 +85,7 @@ describe('مرزهای جدول نُرم وکسلر (testing-007 — ۱.۲۷.۸�
   it('جدول‌های NORMS — قرارداد ساختاری (باند سن و شاخص‌ها سرِ جایشان)', () => {
     expect(Object.keys(NORMS.bands)).toEqual(['sq-6', 'sq-7', 'sq-8', 'sq-9', 'sq-10', 'sq-11', 'sq-12', 'sq-13', 'sq-14']);
     expect(Object.keys(NORMS.indices)).toEqual(['VCI', 'PRI', 'WMI', 'PSI', 'FSIQ', 'GAI']);
-    const bdRows = NORMS.bands['sq-6'].BD;
+    const bdRows = (NORMS.bands as unknown as Record<string, Record<string, number[][]>>)['sq-6'].BD;
     expect(bdRows[0]).toEqual([0, 1]);
     expect(bdRows[bdRows.length - 1]).toEqual([50, 19]);
   });

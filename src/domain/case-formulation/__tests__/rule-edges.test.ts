@@ -7,6 +7,8 @@ import { describe, it, expect } from 'vitest';
 // @ts-ignore — باندل خالص موتور صورت‌بندی
 import { wechslerFromEvent, ageYearsFromBirthDate, __tables } from '../engine.js';
 
+type WResult = { ok?: boolean; snapshot?: { fsiq?: number; indexScatter?: number; indices?: Record<string, { scaled?: number }> } } | null;
+
 describe('مرزهای موتور صورت‌بندی (testing-007 — ۱.۲۷.۸۳)', () => {
   it('wechslerFromEvent — مسیر engine_output معتبر: کل پاکت ok دار برگردانده می‌شود (ورودی = خود payload)', () => {
     const payload = {
@@ -15,14 +17,14 @@ describe('مرزهای موتور صورت‌بندی (testing-007 — ۱.۲۷.�
         snapshot: { indices: { VCI: 13, PRI: 12, WMI: 10, PSI: 9 }, fsiq: 105 }
       }) }
     };
-    const w = wechslerFromEvent(payload);
+    const w = wechslerFromEvent(payload) as unknown as WResult;
     expect(w?.ok).toBe(true);
     expect(w?.snapshot?.fsiq).toBe(105);
   });
 
   it('wechslerFromEvent — مسیر فیلدهای دستی (payload[key].value): snapshot.fsiq', () => {
     const payload = { vci: { value: '11' }, pri: { value: '8' }, wmi: { value: '9' }, psi: { value: '12' }, fsiq: { value: '98' } };
-    const w = wechslerFromEvent(payload);
+    const w = wechslerFromEvent(payload) as unknown as WResult;
     expect(w?.snapshot?.fsiq).toBe(98);
     expect(w?.snapshot?.indexScatter).toBeGreaterThan(0); // پراکندگی گزارش می‌شود (قرارداد)
     expect(w?.snapshot?.indices?.VCI?.scaled).toBe(11);
@@ -30,7 +32,7 @@ describe('مرزهای موتور صورت‌بندی (testing-007 — ۱.۲۷.�
 
   it('wechslerFromEvent — پراکندگی دستی وقتی فقط دو مقدار مانده باشد', () => {
     const payload = { vci: { value: '6' }, pri: { value: '15' } };
-    const w = wechslerFromEvent(payload);
+    const w = wechslerFromEvent(payload) as unknown as WResult;
     expect(w?.snapshot?.indexScatter).toBeGreaterThan(0);
   });
 

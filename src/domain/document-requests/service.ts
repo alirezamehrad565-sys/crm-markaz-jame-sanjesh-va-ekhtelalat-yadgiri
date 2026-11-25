@@ -125,7 +125,7 @@ const DOC_REQUEST_SELECT = `SELECT r.id, r.student_id, r.templates, r.custom_not
   LEFT JOIN staff s ON s.id = r.requested_by`;
 
 export function createDocumentRequestService(deps: DocumentRequestDeps) {
-  const { db, audit, logger, storage, mediaFetcher, notify, settings } = deps;
+  const { db, audit, logger, storage, mediaFetcher, notify, getClinicName } = deps;
   const log = logger.child('doc-requests');
   const now = deps.now ?? (() => new Date());
 
@@ -236,21 +236,22 @@ export function createDocumentRequestService(deps: DocumentRequestDeps) {
       );
 
       const extra = buildDocRequestBody(tags, customNote, dueHint);
-      const clinicName = await settings.getClinicName();
+      const clinicName = await deps.getClinicName();
       const channel: 'bale' | 'internal' = notify.getChannel('bale') ? 'bale' : 'internal';
-      let delivered = 0;
-      for (const chatId of chats) {
-        const outcome = await notify.enqueue({
+      /* architecture-002 (۱.۲۷.۸۳): حلقهٔ enqueue/flush به تزریق enqueueMany/flushPending
+         منتقل شد — همان helper مشترک @app/notify که در composition root سیم شده است */
+      const outcomes = await deps.enqueueMany(
+        chats.map((chatId) => ({
           channel,
           template: 'doc_request_sent',
           recipient: chatId,
           studentId,
           payload: { studentName, extra, clinicName },
           dedupKey: `docreq:${id}:${chatId}`
-        });
-        if (!outcome.duplicate) delivered += 1;
-      }
-      if (delivered > 0) await notify.dispatchPending(50);
+        }))
+      );
+      const delivered = outcomes.filter((o) => !o.duplicate).length;
+      if (delivered > 0) await deps.flushPending(50);
 
       if (delivered > 0) {
         await db.execute(`UPDATE document_requests SET delivered_chats = ? WHERE id = ?`, [delivered, id]);

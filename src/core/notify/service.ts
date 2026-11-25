@@ -7,6 +7,7 @@ import type {
 } from '@core/shared';
 import { MAX_DISPATCH_ATTEMPTS } from '@core/shared';
 import { renderTemplate } from './templates';
+import { inParamChunks, inPlaceholders } from '../db/in-chunks'; // دروازهٔ IN-list (ف۶ ⑧)
 import {
   insertNotification,
   markNotificationFailed,
@@ -40,6 +41,8 @@ export interface NotifyService {
   registerChannel(channel: NotifyChannel): void;
   getChannel(name: string): NotifyChannel | null;
   enqueue(input: EnqueueInput): Promise<EnqueueOutcome>;
+  /** performance-002 (۱.۲۷.۸۳): رفت‌وبرگشت مستقل از تعداد گیرنده‌ها — یک SELECT dedup + حداکثر یک INSERT چندردیفی */
+  enqueueMany(inputs: EnqueueInput[]): Promise<EnqueueOutcome[]>;
   dispatchPending(limit?: number): Promise<DispatchSummary>;
   retryFailed(limit?: number): Promise<number>;
   release(id: string): Promise<boolean>;
@@ -110,6 +113,61 @@ export function createNotifyService(deps: NotifyDeps): NotifyService {
         }
         throw err;
       }
+    },
+
+    /* performance-002 (۱.۲۷.۸۳) — نسخهٔ batched رفت‌وبرگشتیِ enqueue: تعداد رفت‌وبرگشت DB
+       مستقل از تعداد گیرنده‌ها است — یک SELECT dedup با IN (...) + حداکثر یک INSERT چندردیفی.
+       خروجی همان رکوردهای enqueue تکی با همان dedupKey (قرارداد ADR ثبت‌شده). */
+    async enqueueMany(inputs: EnqueueInput[]): Promise<EnqueueOutcome[]> {
+      if (inputs.length === 0) return [];
+      const nowIso = now().toISOString();
+      const dedupKeys = [...new Set(inputs.map((i) => i.dedupKey).filter((k): k is string => Boolean(k)))];
+      const existing = new Set<string>();
+      // دروازهٔ IN-list (ف۶ ⑧): تکه‌بندی ۹۰تایی استاندارد — بدون ثبت بدهی تازه
+      if (dedupKeys.length > 0) {
+        for (const chunk of inParamChunks(dedupKeys)) {
+          const rows = await db.query<{ dedup_key: string }>(
+            `SELECT dedup_key FROM notifications WHERE dedup_key IN (${inPlaceholders(chunk.length)})`,
+            chunk
+          );
+          for (const r of rows) if (r.dedup_key) existing.add(r.dedup_key);
+        }
+      }
+      const outcomes: EnqueueOutcome[] = [];
+      const values: unknown[] = [];
+      const tuples: string[] = [];
+      for (const input of inputs) {
+        if (input.dedupKey && existing.has(input.dedupKey)) {
+          outcomes.push({ id: null, duplicate: true });
+          continue;
+        }
+        const id = crypto.randomUUID();
+        tuples.push('(?, ?, ?, ?, ?, ?, ?, ?, \'pending\', 0, ?, ?, ?, ?)');
+        values.push(
+          id, input.channel, input.template, input.recipient ?? null,
+          input.studentId ?? null, input.appointmentId ?? null, input.staffId ?? null,
+          JSON.stringify(input.payload ?? {}), input.dedupKey ?? null, input.sendAt ?? null,
+          nowIso, nowIso
+        );
+        outcomes.push({ id, duplicate: false });
+      }
+      if (tuples.length > 0) {
+        const cols = '(id, channel, template, recipient, student_id, appointment_id, staff_id, payload, status, attempts, dedup_key, send_at, created_at, updated_at)';
+        try {
+          await db.execute(
+            `INSERT INTO notifications ${cols} VALUES ${tuples.join(', ')}`,
+            values
+          );
+        } catch (err) {
+          if (!isUniqueViolation(err)) throw err;
+          // ریس یکتای بین-ایزولیت — سقوط امن به مسیر تکی (همان قرارداد enqueue)
+          for (let i = 0; i < inputs.length; i += 1) {
+            if (outcomes[i].duplicate) continue;
+            outcomes[i] = await this.enqueue(inputs[i]);
+          }
+        }
+      }
+      return outcomes;
     },
 
     async dispatchPending(limit = 50): Promise<DispatchSummary> {

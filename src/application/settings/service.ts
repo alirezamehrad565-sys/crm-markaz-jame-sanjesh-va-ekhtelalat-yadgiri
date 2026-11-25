@@ -84,6 +84,11 @@ function tehranYmdOfEpochUtc(epoch: string): string {
   return new Date(ms).toISOString().slice(0, 10);
 }
 
+/* performance-002 (۱.۲۷.۸۳) — کش درون‌ایزولیت نام مرکز (الگوی baleTokenCache — ۶۰ثانیه؛
+   انحرال در update() روی همان کلید) — getClinicName در هر رویداد اعلان صدا زده می‌شود */
+let clinicNameCache: { value: string; at: number } | null = null;
+const CLINIC_NAME_CACHE_TTL_MS = 60_000;
+
 function sanitizeWeight(v: unknown, max = 10_000): number | undefined {
   const n = Number(v);
   return Number.isInteger(n) && n >= 0 && n <= max ? n : undefined;
@@ -193,6 +198,7 @@ export function createSettingsService(deps: SettingsDeps): SettingsService {
 
       if (input.clinicName !== undefined) {
         await upsertSetting(SETTING_KEYS.CLINIC_NAME, input.clinicName.trim(), actor);
+        clinicNameCache = null; // performance-002 — انحرال کش نام مرکز
       }
       if (input.defaultReminderHours !== undefined) {
         await upsertSetting(SETTING_KEYS.DEFAULT_REMINDER_HOURS, input.defaultReminderHours, actor);
@@ -320,19 +326,23 @@ export function createSettingsService(deps: SettingsDeps): SettingsService {
     },
 
     async getClinicName(): Promise<string> {
+      const cached = clinicNameCache;
+      if (cached && Date.now() - cached.at < CLINIC_NAME_CACHE_TTL_MS) return cached.value;
       const row = await db.queryOne<{ value: string }>(
         `SELECT value FROM settings WHERE key = ?`,
         [SETTING_KEYS.CLINIC_NAME]
       );
+      let resolved = deps.envClinicName ?? DEFAULT_SETTINGS[SETTING_KEYS.CLINIC_NAME];
       if (row) {
         try {
           const parsed = JSON.parse(row.value) as unknown;
-          if (typeof parsed === 'string' && parsed.trim().length > 0) return parsed;
+          if (typeof parsed === 'string' && parsed.trim().length > 0) resolved = parsed;
         } catch {
           /* نرم — مقدار خراب در تنظیمات → پیش‌فرض */
         }
       }
-      return deps.envClinicName ?? DEFAULT_SETTINGS[SETTING_KEYS.CLINIC_NAME];
+      clinicNameCache = { value: resolved, at: Date.now() };
+      return resolved;
     },
 
     async getClinicPhone(): Promise<string> {
