@@ -21,7 +21,7 @@ import type {
   UpdateSchoolInput,
   UpdateStudentInput
 } from './types';
-import { rowToClass, rowToEducationHistory, rowToSchool, rowToStudent, rowToStudentTeacher, studentSearchQuery, STUDENT_WAIT_PROJECTION, STUDENT_OWNER_PROJECTION, tagsForStudentsQuery, assessmentCountsForStudentsQuery, type EduHistoryRow, type StudentTeacherRow } from './repository';
+import { rowToClass, rowToEducationHistory, rowToSchool, rowToStudent, rowToStudentTeacher, studentSearchQuery, studentTextCondition, STUDENT_WAIT_PROJECTION, STUDENT_OWNER_PROJECTION, tagsForStudentsQuery, assessmentCountsForStudentsQuery, type EduHistoryRow, type StudentTeacherRow } from './repository';
 import type { ClassRow, SchoolRow, StudentRow, StudentTagJoinRow } from './repository';
 import type { StudentDeleteBlock, StudentDeleteCheck } from './types';
 import type { TagRef } from '@core/shared';
@@ -572,9 +572,9 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
       const countConditions: string[] = [];
       const countParams: unknown[] = [];
       if (filters.query) {
-        countConditions.push(`(first_name LIKE ? OR last_name LIKE ? OR national_id LIKE ?)`);
-        const q = `%${filters.query}%`;
-        countParams.push(q, q, q);
+        const text = studentTextCondition(filters.query, '');
+        countConditions.push(text.sql);
+        countParams.push(...text.params);
       }
       if (filters.schoolId) {
         countConditions.push('school_id = ?');

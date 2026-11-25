@@ -1,11 +1,9 @@
-import { SEARCH_QUERY_MAX_LENGTH } from '@core/shared';
+import { SEARCH_QUERY_MAX_LENGTH, toLatinDigits } from '@core/shared';
 import type { SearchEntityType, SearchGroup, SearchItem } from '@core/shared';
 
-export function toLatinDigits(value: string): string {
-  return value
-    .replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
-    .replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
-}
+/* ۱.۲۷.۷۷ — پیاده‌سازی نرمال‌سازی/الگو به @core/shared/fa-search منتقل شد تا دامنه (students)
+   هم بدون وارونگی وابستگی همان قرارداد را مصرف کند؛ اینجا برای سازگاری re-export می‌شود. */
+export { toLatinDigits, likePattern, faNormalize, sanitizeFaQuery, faHaystackExpr } from '@core/shared';
 
 export function sanitizeSearchQuery(raw: string | undefined | null): string {
   return toLatinDigits(String(raw ?? ''))
@@ -17,10 +15,6 @@ export function sanitizeSearchQuery(raw: string | undefined | null): string {
 
 export function isSearchable(value: string, minLength: number): boolean {
   return value.length >= minLength;
-}
-
-export function likePattern(value: string): string {
-  return `%${value}%`;
 }
 
 const GROUP_ORDER: SearchEntityType[] = ['student', 'staff', 'school', 'tag', 'waitlist', 'doc']; // + اسناد

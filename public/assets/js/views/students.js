@@ -1,5 +1,5 @@
 import { api, qs } from '../api.js';
-import { fa, gradeLabel, isPlaceholderNid } from '../format.js';
+import { fa, faNormalize, gradeLabel, isPlaceholderNid } from '../format.js';
 import { el, icon, confirmModal, toast, toastError, statusBadge, skeletonState, emptyState, callBadge, collapseRemove, flashNode, lockBtn, ddOpen } from '../ui.js';
 import { illoStudents } from '../illustrations.js'; /* ۱.۲۵.۰۵ — نگارهٔ حالت خالی */
 import { fetchTags, tagChipsPreview, openTagEditor } from '../tagging.js';
@@ -107,13 +107,25 @@ export async function renderStudents(container, ctx) {
     if (local.ownerId && String(s.ownerStaffId ?? '') !== String(local.ownerId)) return false;
     if (local.tagId && !(s.tags ?? []).some((t) => String(t?.id ?? t) === String(local.tagId))) return false;
     if (local.query) {
-      const q = local.query.toLowerCase();
-      const name = `${s.firstName ?? ''} ${s.lastName ?? ''}`.toLowerCase();
-      const nid = String(s.nationalId ?? '').toLowerCase();
-      if (!name.includes(q) && !nid.includes(q)) return false;
+      /* ۱.۲۷.۷۷ — جستجوی هوشمند (پیام ۱۶): آینهٔ قرارداد سرور (studentTextCondition) —
+         نرمال فارسی روی سؤال و همهٔ ستون‌ها + تطبیق نامِ کامل + نام/تلفن ولیّ */
+      const q = faNormalize(local.query);
+      const name = faNormalize(`${s.firstName ?? ''} ${s.lastName ?? ''}`);
+      const nid = faNormalize(String(s.nationalId ?? ''));
+      const guardian = faNormalize(`${s.guardianName ?? ''} ${s.guardianPhone ?? ''}`);
+      if (!name.includes(q) && !nid.includes(q) && !guardian.includes(q)) return false;
     }
     return true;
   }
+
+  /* ۱.۲۷.۷۷ — برچسب وضعیت پرونده (پیام ۱۶: «جزئیات پرونده» روی کارت) — مقادیر = STUDENT_CASE_STATUSES سمت سرور */
+  const CASE_STATUS_LABELS = {
+    identified: 'شناسایی‌شده',
+    awaiting_assessment: 'در انتظار ارزیابی',
+    in_intervention: 'در مداخله',
+    monitoring: 'پایش',
+    archived: 'بایگانی'
+  };
 
   const columns = [
     {
@@ -140,10 +152,15 @@ export async function renderStudents(container, ctx) {
             el('span', { class: 'badge badge--accent' }, ownerBadgeLabel(s.ownerStaffId)))
         : el('span', { class: 'cell-sub', title: 'هنوز مسئولی تعیین نشده' }, '—')
     },
-    { key: 'guardianPhone', label: 'تلفن ولیّ', render: (s) => s.guardianPhone
-      ? el('span', { class: 'cell-phone' },
-          el('span', { dir: 'ltr' }, fa(s.guardianPhone)),
-          callBadge(s.guardianPhone, `تماس با ولیّ ${s.firstName} ${s.lastName} — ${fa(s.guardianPhone)}`))
+    /* ۱.۲۷.۷۷ — ولیّ: نام اصلی + تلفن زیرِ آن (قبلاً فقط تلفن بود و نام ولیّ هیچ‌جا رندر نمی‌شد) */
+    { key: 'guardianPhone', label: 'ولیّ', render: (s) => (s.guardianName || s.guardianPhone)
+      ? el('div', {},
+          s.guardianName ? el('div', { class: 'cell-main' }, s.guardianName) : null,
+          s.guardianPhone
+            ? el('div', { class: 'cell-sub' },
+                el('span', { dir: 'ltr' }, fa(s.guardianPhone)),
+                callBadge(s.guardianPhone, `تماس با ولیّ ${s.firstName} ${s.lastName} — ${fa(s.guardianPhone)}`))
+            : null)
       : el('span', { class: 'cell-sub' }, '—') },
     {
       key: 'assessmentCount', label: 'رویداد', align: 'center',
@@ -156,7 +173,13 @@ export async function renderStudents(container, ctx) {
     },
     {
       key: 'active', label: 'وضعیت',
-      render: (s) => statusBadge(s.active ? 'active' : 'inactive')
+      /* ۱.۲۷.۷۷ — جزئیات پرونده کنار وضعیت: برچسب caseStatus وقتی موجود است */
+      render: (s) => el('div', { style: { display: 'flex', gap: 'var(--sp-1)', alignItems: 'center', justifyContent: 'center' } },
+        s.caseStatus && CASE_STATUS_LABELS[s.caseStatus]
+          ? el('span', { class: 'badge badge--neutral', title: 'وضعیت پرونده' }, CASE_STATUS_LABELS[s.caseStatus])
+          : null,
+        statusBadge(s.active ? 'active' : 'inactive')
+      )
     }
   ];
 

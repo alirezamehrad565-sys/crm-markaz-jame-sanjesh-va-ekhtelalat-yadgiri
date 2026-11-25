@@ -422,6 +422,8 @@ export {
 } from './constants';
 export type { StudentProtocol } from './constants';
 
+export { toLatinDigits, faNormalize, sanitizeFaQuery, likePattern, faHaystackExpr } from './fa-search';
+
 export { isValidIranianNationalId, normalizeNationalId } from './national-id';
 
 export { FEATURES } from './features';

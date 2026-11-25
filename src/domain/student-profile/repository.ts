@@ -1,3 +1,5 @@
+import { faHaystackExpr, likePattern, sanitizeFaQuery } from '@core/shared';
+
 export interface SchoolRow {
   id: string;
   name: string;
@@ -168,6 +170,26 @@ export const STUDENT_OWNER_PROJECTION = `,
        s.owner_staff_id,
        (SELECT st2.full_name FROM staff st2 WHERE st2.id = s.owner_staff_id) AS owner_name`;
 
+/**
+ * شرطِ متنیِ جستجوی دانش‌آموز (۱.۲۷.۷۷ — جستجوی هوشمند پیام ۱۶): نامِ کاملِ چسبیده، نام ولیّ،
+ * کد ملی و تلفن ولیّ — سؤال و ستون‌ها هر دو با قواعد فارسیِ @core/shared/fa-search هم‌سطح
+ * می‌شوند (ي/ك عربی، أ إ آ، ة، نیم‌فاصله، ارقام)؛ wildcard های LIKE هم بی‌اثر می‌شوند.
+ * `p` = پیشوند ستون ('s.' در لیست، '' در کوئری شمارش) — دو کوئری همیشه یک قرارداد دارند.
+ */
+export function studentTextCondition(
+  query: string,
+  p: 's.' | ''
+): { sql: string; params: string[] } {
+  const q = likePattern(sanitizeFaQuery(query));
+  return {
+    sql: `(${faHaystackExpr(`(${p}first_name || ' ' || ${p}last_name)`)} LIKE ?
+          OR ${faHaystackExpr(`${p}guardian_name`)} LIKE ?
+          OR ${p}national_id LIKE ?
+          OR ${p}guardian_phone LIKE ?)`,
+    params: [q, q, q, q]
+  };
+}
+
 export function studentSearchQuery(filters: {
   query?: string;
   schoolId?: string;
@@ -180,9 +202,9 @@ export function studentSearchQuery(filters: {
   const conditions: string[] = [];
   const params: unknown[] = [];
   if (filters.query) {
-    conditions.push(`(s.first_name LIKE ? OR s.last_name LIKE ? OR s.national_id LIKE ?)`);
-    const q = `%${filters.query}%`;
-    params.push(q, q, q);
+    const text = studentTextCondition(filters.query, 's.');
+    conditions.push(text.sql);
+    params.push(...text.params);
   }
   if (filters.schoolId) {
     conditions.push('s.school_id = ?');
