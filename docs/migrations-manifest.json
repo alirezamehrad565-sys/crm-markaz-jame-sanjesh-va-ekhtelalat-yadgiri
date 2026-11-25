@@ -125,5 +125,6 @@
   "0121_waitlist_referral_family_context.sql": "009d116d74fceed88e76fb1e96ab8487eae37ead45e143f39dfa69c92ade1d99",
   "0122_report_snapshots.sql": "9d637e9f549ac6209a4d2509b287c3d8e1ab900967c71fc8bc37cd34d15d1bd9",
   "0123_attendance_late_and_followup_result.sql": "9b9d2d00ee0e464435c26dfad1e55b642d6f53fdfeea3d9048fff333f9c32308",
-  "0124_reconcile_central_records.sql": "d4aeaed15643f7d887153cb615db2e515626703a4f1eeccca8638f1f796d1a74"
+  "0124_reconcile_central_records.sql": "d4aeaed15643f7d887153cb615db2e515626703a4f1eeccca8638f1f796d1a74",
+  "0125_audit_log_created_at_index.sql": "01305c214809e795e952d92c3a603ed7e9eff53ef40519c6ef5ea01d8f32e321"
 }

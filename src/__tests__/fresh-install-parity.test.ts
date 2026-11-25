@@ -25,6 +25,11 @@ describe('گیت parity نصب از صفر (data-001) — ۱.۲۷.۷۹', () => {
     ]);
   });
 
+  it('①b ایندکس idx_audit_created_at پس از نصب از صفر حاضر است (مایگریشن 0125)', () => {
+    const row = db.prepare("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_audit_created_at'").get();
+    expect(row).toBeDefined();
+  });
+
   it('② فهرست بحرانی جدول‌ها پس از نصب از صفر همه حاضرند', () => {
     const rows = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as Array<{ name: string }>;
     const names = new Set(rows.map((r) => r.name));
