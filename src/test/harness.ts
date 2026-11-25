@@ -168,6 +168,8 @@ const FAKE_CTX = { waitUntil: () => undefined, passThroughOnException: () => und
 }
 
 export class Api {
+  private cookie: string | null = null;
+
   constructor(
     private readonly testApp: TestApp,
     private token: string | null = null
@@ -181,12 +183,19 @@ export class Api {
     const headers: Record<string, string> = {};
     if (body !== undefined) headers['content-type'] = 'application/json';
     if (this.token) headers['authorization'] = `Bearer ${this.token}`;
+    /* ۱.۲۷.۸۲ (ADR-005): هارنس هم‌زمان کوکی نشست و Bearer می‌فرستد — هر دو مسیر احراز
+       در کل سوئیت اثبات می‌شوند؛ ۱۱۶ فایل آزمون بدون تغییر دو مسیر را می‌پوشانند. */
+    if (this.cookie) headers['cookie'] = this.cookie;
     const res = await this.testApp.app.request(
       url,
       { method, headers, body: body === undefined ? undefined : JSON.stringify(body) },
       this.testApp.env as never,
       FAKE_CTX
     );
+    const setCookie = res.headers.get('set-cookie');
+    if (setCookie?.startsWith('cs_session=')) {
+      this.cookie = setCookie.startsWith('cs_session=;') ? null : setCookie.split(';')[0];
+    }
     const cacheControl = res.headers.get('cache-control');
     const requestId = res.headers.get('x-request-id');
     let parsed: unknown = null;

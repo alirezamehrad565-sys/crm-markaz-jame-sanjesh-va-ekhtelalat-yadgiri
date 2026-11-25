@@ -100,10 +100,7 @@ let gen = 0; // — F1: گارد نسل واکشی (الگوی waitlist) — پ�
 async function fileObjectUrl(entryId, fileId) {
   const key = `${entryId}/${fileId}`;
   if (urlCache.has(key)) return urlCache.get(key);
-  const token = localStorage.getItem('cs.token') ?? '';
-  const res = await fetch(`/api/clearbook/entries/${entryId}/files/${fileId}`, {
-    headers: { Authorization: `Bearer ${token}` }
-  });
+  const res = await fetch(`/api/clearbook/entries/${entryId}/files/${fileId}`); // ۱.۲۷.۸۲ (ADR-005): احراز با کوکی نشست
   if (!res.ok) throw new Error('دریافت فایل ناموفق بود');
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);

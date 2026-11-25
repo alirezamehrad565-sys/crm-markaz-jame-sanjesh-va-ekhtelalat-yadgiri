@@ -72,10 +72,7 @@ async function uploadAttachments(itemId, files, onProgress) {
 }
 
 async function fetchAttachmentBlob(itemId, file) {
-  const token = localStorage.getItem('cs.token') ?? '';
-  const res = await fetch(`/api/knowledge/${itemId}/files/${file.id}`, {
-    headers: { Authorization: `Bearer ${token}` }
-  });
+  const res = await fetch(`/api/knowledge/${itemId}/files/${file.id}`); // ۱.۲۷.۸۲ (ADR-005): احراز با کوکی نشست
   if (!res.ok) throw new Error(`دریافت فایل ناموفق بود (کد ${fa(res.status)})`);
   return res.blob();
 }

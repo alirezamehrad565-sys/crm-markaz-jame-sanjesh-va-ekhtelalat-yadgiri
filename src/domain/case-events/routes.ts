@@ -1,5 +1,5 @@
 import type { AppHono, AppBindings } from '@core/shared';
-import { getAuthContext, requireRole, verifySessionJwt, resolveSessionSecret, getStaffById } from '@core/auth';
+import { getAuthContext, requireRole, verifySessionJwt, resolveSessionSecret, getStaffById, readSessionCookie } from '@core/auth';
 import type { StaffRow } from '@core/auth';
 import { AuthError, ForbiddenError, ValidationError } from '@core/errors';
 import { CaseEventTypeInputSchema, CaseEventTypeUpdateSchema, SurveyCreateSchema, teacherBindingOfPayload, analyzeChecklist, buildSummary } from './pure';
@@ -333,7 +333,8 @@ export function registerCaseEventPublicRoutes(
      تحلیلی که پس از ارسال واقعی در پرونده ثبت می‌شود. قراردادهای سخت:
      ① هیچ نوشتنی — نه db، نه audit، نه sync؛ فقط رندر HTML و محاسبهٔ خالص (analyzeChecklist).
      ② مسیر زیر /public است (میدل‌ور auth فقط /api را می‌پوشاند) پس توکن نشست کارمند در بدنه
-        می‌آید و عین مسیر Bearer میدل‌ور تأیید می‌شود: verifySessionJwt + کارمند فعال + نقش مجاز.
+        می‌آید (یا از کوکی نشست همان‌مبدأ — ۱.۲۷.۸۲/ADR-005) و عین مسیر Bearer میدل‌ور تأیید
+        می‌شود: verifySessionJwt + کارمند فعال + نقش مجاز.
      ③ توکن فقط در پاسخِ همان تبِ خود همکار برمی‌گردد (no-store، noindex) — هیچ لاگی از آن نیست. */
   const STAFF_ROLES = ['manager', 'secretary', 'therapist'];
   async function previewStaffOf(env: AppBindings, token: string): Promise<StaffRow> {
@@ -372,7 +373,7 @@ export function registerCaseEventPublicRoutes(
       try { definition = JSON.parse(String(form?.get('definition') ?? 'null')); }
       catch { definition = null; }
     }
-    await previewStaffOf(c.env, token); /* ۱.۲۷.۴۳ — احراز پس از پارس و پیش از هر رندر (دوباره‌نشانی: در وصلهٔ قبلی جا افتاده بود و گیت ۴۰۱ گرفت) */
+    await previewStaffOf(c.env, token || readSessionCookie(c.req.header('Cookie')) || ''); /* ۱.۲۷.۴۳ — احراز پس از پارس و پیش از هر رندر؛ ۱.۲۷.۸۲ — fallback کوکی نشست */
     const parsed = CaseEventTypeInputSchema.safeParse(definition);
     if (!parsed.success) {
       const issue = parsed.error.issues[0];
@@ -405,7 +406,7 @@ export function registerCaseEventPublicRoutes(
     if (!body) {
       return c.json({ error: { code: 'BAD_REQUEST', message: 'درخواست نامعتبر است' } }, 400);
     }
-    await previewStaffOf(c.env, String(body.token ?? ''));
+    await previewStaffOf(c.env, String(body.token ?? '') || readSessionCookie(c.req.header('Cookie')) || '');
     const parsed = CaseEventTypeInputSchema.safeParse(body.definition);
     if (!parsed.success) {
       const issue = parsed.error.issues[0];

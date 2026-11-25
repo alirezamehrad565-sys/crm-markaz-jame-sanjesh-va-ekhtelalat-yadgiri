@@ -1,5 +1,5 @@
 const STAFF_ID_KEY = 'cs.staffId';
-const TOKEN_KEY = 'cs.token';
+const TOKEN_KEY = 'cs.token'; // میراث — فقط برای پاک‌سازی نشست‌های قدیمی (ADR-005، ۱.۲۷.۸۲)
 
 export function getDevStaffId() {
   return localStorage.getItem(STAFF_ID_KEY) || '';
@@ -10,17 +10,11 @@ export function setDevStaffId(id) {
   else localStorage.removeItem(STAFF_ID_KEY);
 }
 
-export function getToken() {
-  return localStorage.getItem(TOKEN_KEY) || '';
-}
-
-export function setToken(token) {
-  if (token) localStorage.setItem(TOKEN_KEY, token);
-  else localStorage.removeItem(TOKEN_KEY);
-}
-
+/* ۱.۲۷.۸۲ (security-009/ADR-005): توکن نشست در کوکی httpOnly است و اسکریپت آن را نمی‌خواند؛
+   fetch هم‌مبدأ کوکی را خودکار می‌فرستد. getToken/setToken حذف شدند — هیچ نقطه‌ای از فرانت
+   دیگر توکن را ذخیره یا ارسال نمی‌کند. */
 export function clearSession() {
-  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(TOKEN_KEY); // پاک‌سازی میراث نشست‌های پیش از مهاجرت در همان خروج اول
   localStorage.removeItem(STAFF_ID_KEY);
 }
 
@@ -67,8 +61,6 @@ function abortError() {
 async function doRequest(method, path, body, signal) {
   const headers = { Accept: 'application/json' };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
-  const token = getToken();
-  if (token) headers['Authorization'] = `Bearer ${token}`;
   const staffId = getDevStaffId();
   if (staffId) headers['X-Dev-Staff-Id'] = staffId;
 
@@ -163,8 +155,6 @@ async function requestForm(method, path, formData) {
   if (inflightMut.has(mkey)) return inflightMut.get(mkey);
   const p = (async () => {
   const headers = { Accept: 'application/json' };
-  const token = getToken();
-  if (token) headers.Authorization = `Bearer ${token}`;
   const staffId = getDevStaffId();
   if (staffId) headers['X-Dev-Staff-Id'] = staffId;
 
@@ -202,11 +192,9 @@ async function requestForm(method, path, formData) {
 
 api.postForm = (path, formData) => requestForm('POST', path, formData);
 
-// دانلود فایل باینری/JSON با توکن احراز هویت (برای پشتیبان‌گیری)
+// دانلود فایل باینری/JSON (احراز با کوکی نشست — برای پشتیبان‌گیری)
 api.downloadBlob = async (path) => {
   const headers = { Accept: '*/*' };
-  const token = getToken();
-  if (token) headers.Authorization = `Bearer ${token}`;
   const staffId = getDevStaffId();
   if (staffId) headers['X-Dev-Staff-Id'] = staffId;
   let res;
@@ -237,8 +225,6 @@ api.putRaw = (path, arrayBuffer) => requestRaw('PUT', path, arrayBuffer);
 
 async function requestRaw(method, path, arrayBuffer) {
   const headers = { Accept: 'application/json', 'Content-Type': 'application/octet-stream' };
-  const token = getToken();
-  if (token) headers.Authorization = `Bearer ${token}`;
   const staffId = getDevStaffId();
   if (staffId) headers['X-Dev-Staff-Id'] = staffId;
 

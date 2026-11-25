@@ -7,6 +7,7 @@ import { verifySessionJwt } from './session-jwt';
 import { resolveSessionSecret } from './runtime-secret';
 import { getStaffById, resolveStaffByEmail } from './staff';
 import { findApiKeyByHash, hashApiKey, looksLikeApiKey, touchApiKeyLastUsed } from './api-keys';
+import { readSessionCookie } from './session-cookie';
 
 type Env = { Bindings: AppBindings; Variables: AppVariables };
 
@@ -63,9 +64,27 @@ export function authMiddleware(): MiddlewareHandler<Env> {
       return next();
     }
 
+    /* ۱.۲۷.۸۲ (security-009/ADR-005): توکن نشست از کوکی httpOnly یا Bearer می‌آید.
+       کوکی مسیر SPA است (اسکریپت‌ناخوان)؛ Bearer مسیر کلاینت‌های غیرمرورگری (wizard ابری،
+       node-tools، گذار آزمون‌ها). CSRF: درخواستِ احرازشده با کوکی و متد نوشتنی باید هم‌مبدأ
+       باشد (SameSite=Strict لایهٔ اول؛ بررسی Origin لایهٔ دوم) — نبود Origin در کلاینت‌های
+       غیرمرورگری مجاز است و Bearer از این گیت خارج است چون مبدأ متفاوتش عمدی است. */
     const authHeader = c.req.header('Authorization');
-    if (authHeader?.startsWith('Bearer ')) {
-      const sessionToken = authHeader.slice(7).trim();
+    const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() : undefined;
+    const fromCookie = !bearerToken;
+    const sessionToken = fromCookie
+      ? readSessionCookie(c.req.header('Cookie'))
+      : bearerToken;
+    if (sessionToken) {
+      if (fromCookie) {
+        const method = c.req.method.toUpperCase();
+        const origin = c.req.header('Origin');
+        if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS' && origin) {
+          if (origin !== new URL(c.req.url).origin) {
+            throw new ForbiddenError('درخواست بین‌مبدأ با کوکی نشست مجاز نیست');
+          }
+        }
+      }
       const payload = await verifySessionJwt(sessionToken, await resolveSessionSecret(env));
       if (payload) {
         // مایلستون ۱ (0111) — ابطال سمت‌سرور: امضای معتبر کافی نیست؛ ردیف نشست باید

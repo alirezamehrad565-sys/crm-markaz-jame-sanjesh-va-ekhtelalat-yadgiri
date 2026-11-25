@@ -779,9 +779,13 @@ export function createNodeSyncRunner(opts: NodeSyncRunnerOptions): NodeSyncRunne
    */
   async function localInboxCounts(): Promise<Record<string, number> | null> {
     try {
+      /* ۱.۲۷.۸۲ (ADR-005): توکن اختیاری — در webview کوکی نشست هم‌مبدأ احراز می‌کند؛
+         توکن تزریق‌شده (آزمون/گذار) اگر بود Bearer می‌رود */
       const token = opts.tokenProvider?.() ?? null;
-      if (!token) return null;
-      const res = await fetchFn(LOCAL_STATUS_PATH, { method: 'GET', headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetchFn(LOCAL_STATUS_PATH, {
+        method: 'GET',
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
       if (res.status !== 200) return null;
       let parsed: unknown = null;
       try {
@@ -859,8 +863,7 @@ export function createNodeSyncRunner(opts: NodeSyncRunnerOptions): NodeSyncRunne
   function mirrorStatus(): void {
     void (async () => {
       try {
-        const token = opts.tokenProvider?.() ?? null;
-        if (!token) return; // بدون سشن آینه ممکن نیست — نرم
+        const token = opts.tokenProvider?.() ?? null; // اختیاری — کوکی نشست هم‌مبدأ هم کافی است (ADR-005، ۱.۲۷.۸۲)
         const st = readStatus(progress);
         const cu = readCatchUpState(progress);
         const co = readCoordStateSafe(progress);
@@ -889,7 +892,9 @@ export function createNodeSyncRunner(opts: NodeSyncRunnerOptions): NodeSyncRunne
         };
         await fetchFn(STATUS_MIRROR_PATH, {
           method: 'POST',
-          headers: { 'content-type': 'application/json', Authorization: `Bearer ${token}` },
+          headers: token
+            ? { 'content-type': 'application/json', Authorization: `Bearer ${token}` }
+            : { 'content-type': 'application/json' },
           body: JSON.stringify(body)
         });
         // پاسخ مصرف نمی‌شود — آینه فقط-افزودنی است
@@ -944,16 +949,15 @@ export function createNodeSyncRunner(opts: NodeSyncRunnerOptions): NodeSyncRunne
         });
 
         if (pull.items.length > 0) {
-          if (!token) {
-            const st = readStatus(progress);
-            writeStatus({ ...st, last_error: 'توکن سشن در دسترس نیست', last_error_at: now().toISOString() });
-            return { status: 'ingest_error', http: 0, message: 'توکن سشن در دسترس نیست' };
-          }
+          // ۱.۲۷.۸۲ (ADR-005): گارد سخت توکن برداشته شد — کوکی نشست هم‌مبدأ کافی است؛
+          // ۴۰۱ در پاسخ همان مسیر خطای ingest_error قبلی دیده می‌شود
           let res: { status: number };
           try {
             res = await fetchFn(ingestPath, {
               method: 'POST',
-              headers: { 'content-type': 'application/json', Authorization: `Bearer ${token}` },
+              headers: token
+                ? { 'content-type': 'application/json', Authorization: `Bearer ${token}` }
+                : { 'content-type': 'application/json' },
               body: JSON.stringify({ items: pull.items })
             });
           } catch (err) {
@@ -993,18 +997,14 @@ export function createNodeSyncRunner(opts: NodeSyncRunnerOptions): NodeSyncRunne
     async pushNow() {
       if (!opts.baseUrl || !opts.nodeCode || !opts.nodeKey) return { status: 'unconfigured' };
 
-      // ۱) outbox موتور محلی — همان مبدا، فقط توکن سشن کارمند (نه اعتبار نود)؛ از watermark
+      // ۱) outbox موتور محلی — همان مبدا، فقط کوکی نشست کارمند/توکن گذار (نه اعتبار نود)؛ از watermark
       const since = readWatermark();
-      const token = opts.tokenProvider?.() ?? null;
-      if (!token) {
-        recordPushError('توکن سشن در دسترس نیست');
-        return { status: 'outbox_error', http: 0 };
-      }
+      const token = opts.tokenProvider?.() ?? null; // اختیاری (ADR-005، ۱.۲۷.۸۲) — ۴۰۱ در مسیر خطای نرم outbox دیده می‌شود
       let res: RunnerFetchRes;
       try {
         res = await fetchFn(`${OUTBOX_PATH}${since ? `?since=${encodeURIComponent(since)}` : ''}`, {
           method: 'GET',
-          headers: { Authorization: `Bearer ${token}` }
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -1202,16 +1202,15 @@ export function createNodeSyncRunner(opts: NodeSyncRunnerOptions): NodeSyncRunne
 
         // استقرار صفحه در موتور محلی = تعهد صفحه؛ cursor فقط «بعد از» پاسخ ۲۰۰ جلو می‌رود
         if (pageData.items.length > 0) {
+          // ۱.۲۷.۸۲ (ADR-005): گارد سخت توکن برداشته شد — کوکی نشست هم‌مبدأ کافی است
           const token = opts.tokenProvider?.() ?? null;
-          if (!token) {
-            pullFailure = { status: 'ingest_error', http: 0, code: null, message: 'توکن سشن در دسترس نیست' };
-            break;
-          }
           let ingRes: RunnerFetchRes;
           try {
             ingRes = await fetchFn(ingestPath, {
               method: 'POST',
-              headers: { 'content-type': 'application/json', Authorization: `Bearer ${token}` },
+              headers: token
+                ? { 'content-type': 'application/json', Authorization: `Bearer ${token}` }
+                : { 'content-type': 'application/json' },
               body: JSON.stringify({ items: pageData.items })
             });
           } catch (err) {
@@ -1273,14 +1272,8 @@ export function createNodeSyncRunner(opts: NodeSyncRunnerOptions): NodeSyncRunne
       const skipPush =
         outcome.status === 'unconfigured' || outcome.status === 'auth_error' || outcome.status === 'version_error';
       if (!skipPush) {
-        const token = opts.tokenProvider?.() ?? null;
-        if (!token) {
-          recordPushError('توکن سشن در دسترس نیست');
-          outcome.status = 'push_failed';
-          outcome.phase = 'push';
-          outcome.code = 'outbox_error';
-          outcome.http = 0;
-        } else {
+        const token = opts.tokenProvider?.() ?? null; // ۱.۲۷.۸۲ (ADR-005): اختیاری — کوکی نشست هم‌مبدأ کافی است
+        {
           let pushFailure: { status: CatchUpStatus; http: number | null; code: string | null; message: string | null } | null = null;
           let watermark = readWatermark();
           for (;;) {
@@ -1289,7 +1282,7 @@ export function createNodeSyncRunner(opts: NodeSyncRunnerOptions): NodeSyncRunne
             try {
               boxRes = await fetchFn(`${OUTBOX_PATH}${watermark ? `?since=${encodeURIComponent(watermark)}` : ''}`, {
                 method: 'GET',
-                headers: { Authorization: `Bearer ${token}` }
+                headers: token ? { Authorization: `Bearer ${token}` } : {}
               });
             } catch (err) {
               pushFailure = { status: 'network_error', http: null, code: 'outbox_error', message: err instanceof Error ? err.message : String(err) };

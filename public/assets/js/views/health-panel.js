@@ -1686,10 +1686,9 @@ export async function renderHealthPanel(outlet) {
           nodeCode: rec.node_code,
           nodeKey: key,
           progressStorage: storage,
-          tokenProvider: () => {
-            try { return (typeof localStorage !== 'undefined' ? localStorage.getItem('cs.token') : null) ?? null; }
-            catch { return null; }
-          }
+          /* ۱.۲۷.۸۲ (security-009/ADR-005): توکن دیگر در localStorage نیست — رانر در webview
+             با کوکی نشستِ هم‌مبدأ احراز می‌شود؛ provider فقط برای تزریق آزمون/گذار مانده است */
+          tokenProvider: () => null
         });
         const coord = coordM.createSyncCoordinator({ runner, progressStorage: storage });
         setResult(resultLine, 'جبران در جریان است…', 'warn');

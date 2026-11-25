@@ -1,6 +1,6 @@
 import type { AppHono } from '@core/shared';
 import { LoginSchema } from '@core/shared';
-import { findStaffByUsername, signSessionJwt, verifyPassword, hashPassword, isLegacyPasswordHash, resolveSessionSecret, getAuthContext } from '@core/auth';
+import { findStaffByUsername, signSessionJwt, verifyPassword, hashPassword, isLegacyPasswordHash, resolveSessionSecret, getAuthContext, buildSessionCookie, clearSessionCookie } from '@core/auth';
 import { createDb } from '@core/db';
 import { AuthError, RateLimitError } from '@core/errors';
 import type { AuditWriter } from '@core/audit';
@@ -186,6 +186,10 @@ export function registerAuthRoutes(app: AppHono, deps: AuthRoutesDeps): void {
 
     deps.logger.child('auth').info('login.ok', { role: staff.role });
 
+    /* ۱.۲۷.۸۲ (security-009/ADR-005): نشست SPA با کوکی httpOnly صادر می‌شود — توکن در بدنه
+       فقط برای کلاینت‌های غیرمرورگری (wizard ابری با مبدأ متفاوت) و گذار می‌ماند و SPA دیگر
+       آن را ذخیره نمی‌کند. */
+    c.header('Set-Cookie', buildSessionCookie(token));
     return c.json(
       {
         data: {
@@ -228,6 +232,7 @@ export function registerLogoutRoute(app: AppHono, deps: AuthRoutesDeps): void {
       resourceId: ctx.staffId
     });
     deps.logger.child('auth').info('logout.ok', { role: ctx.role });
+    c.header('Set-Cookie', clearSessionCookie()); // ۱.۲۷.۸۲ (ADR-005) — کوکی نشست در مرورگر هم پاک می‌شود
     return c.json({ data: { ok: true } }, 200);
   });
 }

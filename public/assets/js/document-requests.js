@@ -208,9 +208,7 @@ function openDocPreviewModal(doc) {
   (async () => {
     stage.replaceChildren(el('span', { class: 'exb-preview__status' }, 'در حال دریافت پیش‌نمایش…'));
     try {
-      const res = await fetch(docFileUrl(doc), {
-        headers: { Authorization: `Bearer ${localStorage.getItem('cs.token') ?? ''}` }
-      });
+      const res = await fetch(docFileUrl(doc)); // ۱.۲۷.۸۲ (ADR-005): احراز با کوکی نشست
       if (!res.ok) throw new Error(`دریافت فایل ناموفق بود (کد ${fa(res.status)})`);
       const blob = await res.blob();
       const objUrl = URL.createObjectURL(blob);
@@ -239,9 +237,7 @@ function openDocPreviewModal(doc) {
 
 export async function openDocDownload(doc) {
   try {
-    const res = await fetch(docFileUrl(doc), {
-      headers: { Authorization: `Bearer ${localStorage.getItem('cs.token') ?? ''}` }
-    });
+    const res = await fetch(docFileUrl(doc)); // ۱.۲۷.۸۲ (ADR-005): احراز با کوکی نشست
     if (!res.ok) throw new Error('دریافت فایل ناموفق بود');
     const blob = await res.blob();
     const objUrl = URL.createObjectURL(blob);
@@ -276,9 +272,7 @@ function docThumb(doc) {
       obs.disconnect();
       (async () => {
         try {
-          const res = await fetch(docFileUrl(doc), {
-            headers: { Authorization: `Bearer ${localStorage.getItem('cs.token') ?? ''}` }
-          });
+          const res = await fetch(docFileUrl(doc)); // ۱.۲۷.۸۲ (ADR-005): احراز با کوکی نشست
           if (!res.ok) throw new Error('بارگذاری پیش‌نمایش ناموفق بود');
           const objUrl = URL.createObjectURL(await res.blob());
           stage.replaceChildren(el('img', { src: objUrl, alt: doc.fileName }));

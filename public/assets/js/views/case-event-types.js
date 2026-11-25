@@ -1,4 +1,4 @@
-import { api, getToken } from '../api.js';
+import { api } from '../api.js';
 import { fa, formatJalaliDateTime } from '../format.js';
 import { el, icon, openModal, formModal, confirmModal, toast, toastError, emptyState, errorState, skeletonState, scienceNote, rowMenu, collapseRemove, flashNode, lockBtn } from '../ui.js'; /* ۱.۲۲.۰ — collapseRemove/flashNode/lockBtn برای جریان پیوسته */
 import { TOOL_GUIDES } from '../clinical-content.js';
@@ -527,8 +527,9 @@ export async function renderCaseEventTypes(container) {
       toolNorm: t.toolNorm ?? null
     };
     const form = el('form', { method: 'POST', action: '/public/case-events/preview', target: '_blank', style: { display: 'none' } },
-      hidden('definition', JSON.stringify(definition)),
-      hidden('token', getToken() ?? ''));
+      hidden('definition', JSON.stringify(definition)));
+    /* ۱.۲۷.۸۲ (ADR-005): فیلد مخفی توکن حذف شد — فرم هم‌مبدأ کوکی نشست را می‌فرستد و
+       سمت سرور previewStaffOf از کوکی fallback می‌گیرد */
     document.body.appendChild(form);
     form.submit();
     setTimeout(() => form.remove(), 2000);
@@ -886,9 +887,8 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
     }
     const hidden = (name, value) => el('input', { type: 'hidden', name, value });
     const form = el('form', { method: 'POST', action: '/public/case-events/preview', target: '_blank', style: { display: 'none' } },
-      hidden('definition', JSON.stringify(definitionPayload())),
-      hidden('token', getToken() ?? ''));
-    document.body.appendChild(form);
+      hidden('definition', JSON.stringify(definitionPayload())));
+    document.body.appendChild(form); // ۱.۲۷.۸۲ (ADR-005): توکن مخفی حذف شد — احراز با کوکی نشست
     form.submit();
     setTimeout(() => form.remove(), 2000);
   }

@@ -46,11 +46,12 @@ describe('گیت فرانت ۱.۲۵.۸۱ — پیش‌نمایش از نگاه �
     expect(saveUseIdx).toBeGreaterThan(builderIdx);
   });
 
-  it('③ فرم POST مخفی با توکن نشست به /public/case-events/preview — تب تازه', () => {
+  it('③ فرم POST مخفی به /public/case-events/preview — تب تازه؛ احراز با کوکی نشست (ADR-005 — ۱.۲۷.۸۲)', () => {
     expect(view).toContain("action: '/public/case-events/preview'");
     expect(view).toContain("target: '_blank'");
-    expect(view).toContain("hidden('token', getToken() ?? '')");
-    expect(view).toContain("import { api, getToken } from '../api.js'");
+    expect(view).not.toContain("hidden('token'"); // فیلد مخفی توکن حذف شد — اسکریپت دیگر توکن ندارد
+    expect(view).toContain("import { api } from '../api.js'");
+    expect(view).not.toContain('getToken'); // هیچ مصرف توکن در ویو باقی نمانده است
   });
 
   it('④ نقطهٔ پایانی تحلیل = خالص و بدون نوشتنی؛ توکن با verifySessionJwt + نقش مجاز', () => {

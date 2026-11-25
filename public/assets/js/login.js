@@ -1,4 +1,4 @@
-import { api, setToken, setDevStaffId } from './api.js';
+import { api, setDevStaffId } from './api.js';
 import { el, icon, bindThemeBtn } from './ui.js';
 
 const SESSION_KEY = 'cs.loginOk';
@@ -115,7 +115,8 @@ export function renderLoginPage(onSuccess) {
     btn.disabled = true;
     try {
       const res = await api.post('/api/auth/login', { username, password });
-      setToken(res.data.token);
+      /* ۱.۲۷.۸۲ (security-009/ADR-005): توکن نشست در کوکی httpOnly صادر شد — SPA آن را
+         ذخیره/ارسال نمی‌کند. مقدار body.token فقط برای کلاینت‌های غیرمرورگری (wizard ابری) است. */
       setDevStaffId(res.data.staff.id);
       sessionStorage.setItem(SESSION_KEY, '1');
       /* B1 — ورود موفق نباید روی hash «#/login» بماند: روتر این مسیر را نمی‌شناسد و نمای ۴۰۴ می‌بیند.

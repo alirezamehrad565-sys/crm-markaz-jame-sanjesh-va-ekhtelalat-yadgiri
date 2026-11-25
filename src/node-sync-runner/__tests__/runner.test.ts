@@ -121,13 +121,16 @@ describe('node-sync-runner (rust-f9)', () => {
     expect(st.last_error).toBeNull();
   });
 
-  it('بدون توکن سشن → ingest_error نرم و خطا در وضعیت', async () => {
-    const { fetch } = makeFetch();
+  it('بدون توکن — استقرار بدون هدر Bearer می‌رود (مسیر کوکی نشست؛ ADR-005 — ۱.۲۷.۸۲)', async () => {
+    const { fetch, calls } = makeFetch();
     const store = memStore();
     const runner = createNodeSyncRunner({ baseUrl: 'http://cloud.test', nodeCode: 'DESKTOP:t1', nodeKey: 'nk', progressStorage: store, fetchFn: fetch, tokenProvider: () => null });
     const out = await runner.syncNow();
-    expect(out.status).toBe('ingest_error');
-    expect(runner.status().last_error).toContain('توکن');
+    const ingests = calls.filter((c) => c.url.includes('/ingest'));
+    expect(ingests.length).toBeGreaterThan(0); // درخواست استقرار رخ می‌دهد — گارد سختِ توکن حذف شد
+    const h = ((ingests[0].init.headers ?? {}) as Record<string, string>);
+    expect(h['Authorization']).toBeUndefined(); // بدون توکن — کوکی نشست هم‌مبدأ مسیر احراز است
+    expect(out.status).not.toBe('ingest_error');
   });
 
   it('pull ۵۰۰ → http_error نرم؛ cursor دست‌نخورده و last_error ثبت', async () => {

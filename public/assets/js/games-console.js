@@ -2,7 +2,7 @@
 // حلقهٔ کامل «تجویز → مأموریت → لینک → پیگیری → گزارش» یکی‌جا؛
 // دو سطح استفاده: نمای «بازی‌ها» (#/games) و تب «بازی‌ها» پروفایل کودک.
 // هیچ کلید پاسخی این‌جا نیست — نمره‌دهی همیشه سمت سرور است.
-import { api, getToken, getDevStaffId } from './api.js';
+import { api, getDevStaffId } from './api.js';
 import { fa, formatJalaliDateTime, tehranTodayYmd } from './format.js';
 import {
   el, icon, toast, toastError, lockBtn, openModal, confirmModal, formModal,
@@ -725,11 +725,9 @@ function lineChart(seriesList, { height = 190, yMax = null, unit = '' } = {}) {
   return el('div', { style: { marginTop: '8px' } }, svg, legend);
 }
 
-// ─── دریافت خام با توکن (برای HTML/CSV) ───
+// ─── دریافت خام گزارش (HTML/CSV) — احراز با کوکی نشست (ADR-005، ۱.۲۷.۸۲) ───
 async function fetchReportBlob(childId, format) {
   const headers = { Accept: format === 'csv' ? 'text/csv' : 'text/html' };
-  const token = getToken();
-  if (token) headers.Authorization = `Bearer ${token}`;
   const staffId = getDevStaffId();
   if (staffId) headers['X-Dev-Staff-Id'] = staffId;
   const res = await fetch(`/api/games/children/${encodeURIComponent(childId)}/report?format=${format}`, { headers });

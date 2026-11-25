@@ -134,9 +134,7 @@ async function exerciseThumbUrl(exId, file) {
   const key = `${exId}/${file.id ?? ''}`; // فایل لگاسی بدون id هم با همان مسیر قدیمی کش می‌شود
   if (thumbUrlCache.has(key)) return thumbUrlCache.get(key);
   const url = file.id ? `/api/exercises/${exId}/files/${file.id}` : `/api/exercises/${exId}/file`;
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${localStorage.getItem('cs.token') ?? ''}` }
-  });
+  const res = await fetch(url); // ۱.۲۷.۸۲ (ADR-005): احراز با کوکی نشست
   if (!res.ok) throw new Error('بارگذاری پیش‌نمایش ناموفق بود');
   const objUrl = URL.createObjectURL(await res.blob());
   thumbUrlCache.set(key, objUrl);
@@ -905,9 +903,7 @@ export function renderExercises(container) {
       const url = file?.id
         ? `/api/exercises/${ex.id}/files/${file.id}`
         : `/api/exercises/${ex.id}/file`;
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('cs.token') ?? ''}` }
-      });
+      const res = await fetch(url); // ۱.۲۷.۸۲ (ADR-005): احراز با کوکی نشست
       if (!res.ok) throw new Error('دریافت فایل ناموفق بود — دوباره تلاش کنید');
       const blob = await res.blob();
       const objUrl = URL.createObjectURL(blob);

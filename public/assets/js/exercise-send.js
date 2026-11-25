@@ -13,9 +13,7 @@ function studentLabel(student) {
 
 export async function downloadSubmissionFile(submissionId, filename) {
   try {
-    const res = await fetch(`/api/exercises/submissions/${submissionId}/file`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem('cs.token') ?? ''}` }
-    });
+    const res = await fetch(`/api/exercises/submissions/${submissionId}/file`); // ۱.۲۷.۸۲ (ADR-005): احراز با کوکی نشست
     if (!res.ok) throw new Error('دریافت فایل بازگشتی ناموفق بود');
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
