@@ -266,11 +266,12 @@
           "detail": "DELETE FROM audit_log WHERE created_at < ? — nightly full-table scan; the table is bounded at ~180 days by the same job, so cost is recurring rather than growing without limit."
         }
       ],
-      "status": "new",
+      "status": "fixed",
       "verification": {
         "status": "not-required",
         "counterevidence": [],
-        "note": ""
+        "note": "",
+        "lifecycle_note": "release 1.27.79 (sdt156) — موج B3: مایگریشن 0125 ایندکس idx_audit_created_at روی audit_log (ثبت دیرهنگام 1.27.80/sdt157: نوشتنِ این رکورد در ec6fe08 به‌دلیل باگ نوشتنِ درون‌حلقه‌ای اسکریپت هم‌گام جامان بود)"
       },
       "remediation": {
         "observable_effect": "Every nightly prune and every date-filtered audit read walks the full table; at 180-day retention this is a bounded but recurring cost on the D1 free tier.",

@@ -98,7 +98,7 @@
           "detail": "قلاب تستی (app as unknown as { __services?: Services }).__services = services در کد پروداکشن تعبیه شده است."
         }
       ],
-      "status": "new",
+      "status": "fixed",
       "verification": {
         "status": "confirmed",
         "counterevidence": [
@@ -108,7 +108,8 @@
             "detail": "تأیید رقیب با بازتولید شمارش‌ها: ۹۵۶ خط؛ ۴۵ سرویس (151-197، :544)؛ ۸ ناظر؛ ساخت دو-ناقله 772/784/877؛ هندلر KPI ~۵۵ خطی 893-947؛ ~۵۸ register* + ۲ app.route + ۷ روت inline. تخفیف‌دهنده: ~۵۹ ماژول register خودشان را دارند و این فایل عمدتاً چسبِ ترکیب است — «god-module» فقط دربارهٔ آمیختن سه نقش در همین فایل صادق است."
           }
         ],
-        "note": "تأیید مستقل کور در 2026-11-24 (verifier: independent-blind-verifier)"
+        "note": "تأیید مستقل کور در 2026-11-24 (verifier: independent-blind-verifier)",
+        "lifecycle_note": "release 1.27.80 (sdt157) — موج B1: تفکیک سه نقش api-routing به composition/middleware/routes + index باریک؛ سرویس‌های دو-ناقله به ریشهٔ ترکیب منتقل شدند؛ تجمیع KPI به @app/dashboard/kpi-source رفت؛ گیت ساختاری api-routing-structure + سواپ مسیر شش گیت قرارداد-متن"
       },
       "remediation": {
         "observable_effect": "هر تغییر سیم‌کشی یا مسیر تازه، ویرایش یک فایل مرکزی ۹۵۶ خطی را تحمیل می‌کند؛ مرور diff و تعارض‌های هم‌زمان در همین فایل متمرکز می‌شود.",
