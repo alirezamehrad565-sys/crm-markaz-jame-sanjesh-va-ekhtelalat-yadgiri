@@ -142,7 +142,9 @@ export function registerRoutes(app: AppHono, service: StudentProfileService): vo
     return c.body(null, 204);
   });
 
-  app.post('/api/students', async (c) => {
+  /* SEC-12776 (security-004 ممیزی) — گیت نقش: ثبت/ویرایش پایه با هر سه نقش عملیاتی
+     (رفتار therapist-محورِ create حفظ)، supervisor بسته؛ حذف/وضعیت/مالک فقط مدیر و منشی */
+  app.post('/api/students', requireRole('manager', 'secretary', 'therapist'), async (c) => {
     const actor = getAuthContext(c);
     const body = NewStudentSchema.parse(await c.req.json<unknown>());
     const ownerStaffId = actor.role === 'therapist' ? actor.staffId : body.owner_staff_id;
@@ -208,7 +210,7 @@ export function registerRoutes(app: AppHono, service: StudentProfileService): vo
     return c.json({ data: student }, 200);
   });
 
-  app.patch('/api/students/:id', async (c) => {
+  app.patch('/api/students/:id', requireRole('manager', 'secretary', 'therapist'), async (c) => {
     const actor = getAuthContext(c);
     const body = UpdateStudentSchema.parse(await c.req.json<unknown>());
     const student = await service.updateStudent(
@@ -231,13 +233,13 @@ export function registerRoutes(app: AppHono, service: StudentProfileService): vo
     return c.json({ data: student }, 200);
   });
 
-  app.post('/api/students/:id/deactivate', async (c) => {
+  app.post('/api/students/:id/deactivate', requireRole('manager', 'secretary'), async (c) => {
     const actor = getAuthContext(c);
     const student = await service.deactivateStudent(c.req.param('id'), actor);
     return c.json({ data: student }, 200);
   });
 
-  app.post('/api/students/:id/activate', async (c) => {
+  app.post('/api/students/:id/activate', requireRole('manager', 'secretary'), async (c) => {
     const actor = getAuthContext(c);
     const student = await service.activateStudent(c.req.param('id'), actor);
     return c.json({ data: student }, 200);

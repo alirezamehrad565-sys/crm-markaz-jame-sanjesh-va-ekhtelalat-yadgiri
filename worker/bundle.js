@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.27.74";
+var APP_VERSION = "1.27.76";
 var NODE_MIN_VERSION = "1.26.0";
 
 // node_modules/zod/v4/classic/external.js
@@ -23834,45 +23834,23 @@ function d1AsSecretStore(db) {
   };
 }
 __name(d1AsSecretStore, "d1AsSecretStore");
-function randomHexSecret() {
-  const bytes = crypto.getRandomValues(new Uint8Array(32));
-  return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-__name(randomHexSecret, "randomHexSecret");
-var cachedSecret = null;
-async function getOrCreateRuntimeSecret(store) {
-  if (cachedSecret) return cachedSecret;
-  const row = await store.queryOne(
+async function resolveSessionSecret(env) {
+  if (env.AUTH_SECRET && env.AUTH_SECRET.length >= 16) return env.AUTH_SECRET;
+  if (isDevEnv(env.ENV)) return DEV_AUTH_SECRET;
+  const row = await d1AsSecretStore(env.DB).queryOne(
     `SELECT value FROM settings WHERE key = ? LIMIT 1`,
     [SETTINGS_AUTH_SECRET_KEY]
   );
   if (row) {
     try {
       const parsed = JSON.parse(row.value);
-      if (typeof parsed === "string" && parsed.length >= 32) {
-        cachedSecret = parsed;
-        return cachedSecret;
-      }
+      if (typeof parsed === "string" && parsed.length >= 32) return parsed;
     } catch {
     }
   }
-  const secret = randomHexSecret();
-  await store.execute(
-    `INSERT INTO settings (key, value, updated_by, updated_at)
-     VALUES (?, ?, NULL, datetime('now'))
-     ON CONFLICT(key) DO UPDATE SET
-       value = excluded.value,
-       updated_at = excluded.updated_at`,
-    [SETTINGS_AUTH_SECRET_KEY, JSON.stringify(secret)]
+  throw new Error(
+    "SEC-12776: \u062F\u0631 \u0645\u062D\u06CC\u0637 \u062A\u0648\u0644\u06CC\u062F AUTH_SECRET \u062A\u0646\u0638\u06CC\u0645 \u0646\u0634\u062F\u0647 \u0627\u0633\u062A \u2014 \u0628\u0627 \xABnpx wrangler secret put AUTH_SECRET\xBB \u0631\u0627\u0632 \u0642\u0648\u06CC (\u062D\u062F\u0627\u0642\u0644 \u06F1\u06F6 \u06A9\u0627\u0631\u0627\u06A9\u062A\u0631) \u0628\u06AF\u0630\u0627\u0631\u06CC\u062F\u061B \u0633\u0627\u062E\u062A \u062E\u0648\u062F\u06A9\u0627\u0631 \u0631\u0627\u0632 \u0646\u0634\u0633\u062A \u062D\u0630\u0641 \u0634\u062F\u0647 \u0627\u0633\u062A."
   );
-  cachedSecret = secret;
-  return secret;
-}
-__name(getOrCreateRuntimeSecret, "getOrCreateRuntimeSecret");
-async function resolveSessionSecret(env) {
-  if (env.AUTH_SECRET && env.AUTH_SECRET.length >= 16) return env.AUTH_SECRET;
-  if (isDevEnv(env.ENV)) return DEV_AUTH_SECRET;
-  return getOrCreateRuntimeSecret(d1AsSecretStore(env.DB));
 }
 __name(resolveSessionSecret, "resolveSessionSecret");
 
@@ -23940,7 +23918,7 @@ function authMiddleware() {
   return async (c, next) => {
     const env = c.env;
     const db = env.DB;
-    if (env.ENV === "development") {
+    if (env.ENV === "development" && env.DEV_IMPERSONATION === "1") {
       const devStaffId = c.req.header(DEV_STAFF_HEADER);
       if (devStaffId) {
         const staff2 = await getStaffById(db, devStaffId);
@@ -23988,9 +23966,12 @@ function authMiddleware() {
           throw new AuthError("\u062A\u0648\u06A9\u0646 \u0641\u0627\u0642\u062F \u0634\u0646\u0627\u0633\u0647\u0654 \u0646\u0634\u0633\u062A \u0627\u0633\u062A \u2014 \u0648\u0631\u0648\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A");
         }
         const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
-        const session = await db.prepare("SELECT revoked_at, expires_at FROM auth_sessions WHERE sid = ?").bind(payload2.sid).first();
+        const session = await db.prepare("SELECT revoked_at, expires_at, staff_id FROM auth_sessions WHERE sid = ?").bind(payload2.sid).first();
         if (!session || session.revoked_at !== null || session.expires_at <= nowIso2) {
           throw new AuthError("\u0646\u0634\u0633\u062A \u0628\u0627\u0637\u0644 \u06CC\u0627 \u0645\u0646\u0642\u0636\u06CC \u0634\u062F\u0647 \u0627\u0633\u062A \u2014 \u0648\u0631\u0648\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A");
+        }
+        if (session.staff_id !== payload2.sub) {
+          throw new AuthError("\u0646\u0634\u0633\u062A \u0628\u0647 \u06A9\u0627\u0631\u0628\u0631 \u062F\u06CC\u06AF\u0631\u06CC \u062A\u0639\u0644\u0642 \u062F\u0627\u0631\u062F \u2014 \u0648\u0631\u0648\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A");
         }
         const staff2 = await getStaffById(db, payload2.sub);
         if (!staff2 || staff2.active !== 1) {
@@ -29677,7 +29658,7 @@ function registerRoutes3(app, service) {
     await service.deleteClass(c.req.param("id"), actor);
     return c.body(null, 204);
   });
-  app.post("/api/students", async (c) => {
+  app.post("/api/students", requireRole("manager", "secretary", "therapist"), async (c) => {
     const actor = getAuthContext(c);
     const body = NewStudentSchema.parse(await c.req.json());
     const ownerStaffId = actor.role === "therapist" ? actor.staffId : body.owner_staff_id;
@@ -29739,7 +29720,7 @@ function registerRoutes3(app, service) {
     if (!student) throw new NotFoundError("\u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632");
     return c.json({ data: student }, 200);
   });
-  app.patch("/api/students/:id", async (c) => {
+  app.patch("/api/students/:id", requireRole("manager", "secretary", "therapist"), async (c) => {
     const actor = getAuthContext(c);
     const body = UpdateStudentSchema.parse(await c.req.json());
     const student = await service.updateStudent(
@@ -29761,12 +29742,12 @@ function registerRoutes3(app, service) {
     );
     return c.json({ data: student }, 200);
   });
-  app.post("/api/students/:id/deactivate", async (c) => {
+  app.post("/api/students/:id/deactivate", requireRole("manager", "secretary"), async (c) => {
     const actor = getAuthContext(c);
     const student = await service.deactivateStudent(c.req.param("id"), actor);
     return c.json({ data: student }, 200);
   });
-  app.post("/api/students/:id/activate", async (c) => {
+  app.post("/api/students/:id/activate", requireRole("manager", "secretary"), async (c) => {
     const actor = getAuthContext(c);
     const student = await service.activateStudent(c.req.param("id"), actor);
     return c.json({ data: student }, 200);
@@ -32319,7 +32300,7 @@ var state = {
   priorEval: null, priorEvalNote: '',
   rows: [], awareIdx: 0, meta: null, submitting: false
 };
-function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 function normDigits(s){return String(s==null?'':s).replace(/[\u06F0-\u06F9]/g,function(d){return String('\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9'.indexOf(d));}).replace(/[\u0660-\u0669]/g,function(d){return String('\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669'.indexOf(d));});}
 function normPhone(s){var v = normDigits(s).replace(/[\\s\\-().]/g,'');if(v.indexOf('+98')===0){v='0'+v.slice(3);}else if(v.indexOf('98')===0&&v.length===12){v='0'+v.slice(2);}return v;}
 function validPhone(s){return /^09\\d{9}$/.test(normPhone(s));}
@@ -33742,7 +33723,7 @@ var PAGE_SCRIPT2 = `
 var F = window.__FORM__; var app = document.getElementById('app'); var bar = document.getElementById('bar');
 var REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 var state = { step: 0, answers: {}, name: '', phone: '', submitting: false };
-function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 function normDigits(s){return String(s==null?'':s).replace(/[\u06F0-\u06F9]/g,function(d){return String('\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9'.indexOf(d));}).replace(/[\u0660-\u0669]/g,function(d){return String('\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669'.indexOf(d));});}
 function normPhone(s){var v=normDigits(s).replace(/[\\s\\-().]/g,'');if(v.indexOf('+98')===0){v='0'+v.slice(3);}else if(v.indexOf('98')===0&&v.length===12){v='0'+v.slice(2);}return v;}
 function validPhone(s){return /^09\\d{9}$/.test(normPhone(s));}
@@ -43221,7 +43202,7 @@ function renderPreviewPage(def, token) {
   var TOTAL = ${total};
   var FA = '\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9';
   function fa(n) { return String(n).replace(/[0-9]/g, function (d) { return FA[Number(d)]; }); }
-  function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
 
   function updateProgress() {
     var answered = {};
@@ -47680,9 +47661,13 @@ function faNum6(n) {
 }
 __name(faNum6, "faNum");
 function esc2(s) {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 __name(esc2, "esc");
+function safeJson(v) {
+  return JSON.stringify(v ?? null).replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
+}
+__name(safeJson, "safeJson");
 function skinLink(kind) {
   const k = String(kind ?? "");
   return GAME_KIND_IDS.includes(k) ? `<link rel="stylesheet" href="/assets/play/skins/${k}.css?v=${APP_VERSION}" />` : "";
@@ -47747,7 +47732,7 @@ function page(model, token, body) {
 <div class="wrap">${body}</div>
 <script>
 (function () {
-  var TOKEN = ${JSON.stringify(token)};
+  var TOKEN = ${safeJson(token)};
   function post(path, body) {
     return fetch('/api/m/' + TOKEN + path, {
       method: 'POST',
@@ -55315,7 +55300,7 @@ function faNum9(s) {
 }
 __name(faNum9, "faNum");
 function esc3(s) {
-  return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 __name(esc3, "esc");
 function fmtNum(v) {
@@ -78081,7 +78066,7 @@ function registerSetupStatusRoutes(app, deps) {
 __name(registerSetupStatusRoutes, "registerSetupStatusRoutes");
 var CompleteSchema = external_exports.object({ close_demo: external_exports.boolean().optional().default(true) });
 function registerSetupCompleteRoutes(app, deps) {
-  app.post("/api/setup/complete", async (c) => {
+  app.post("/api/setup/complete", requireRole("manager"), async (c) => {
     const body = CompleteSchema.parse(await c.req.json().catch(() => ({})));
     const out = await completeSetup(deps, body.close_demo);
     return c.json({ data: out }, 200);

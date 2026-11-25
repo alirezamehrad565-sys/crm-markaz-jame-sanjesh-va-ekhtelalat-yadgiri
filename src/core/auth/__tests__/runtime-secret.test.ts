@@ -1,16 +1,14 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
   resolveSessionSecret,
-  getOrCreateRuntimeSecret,
-  resetRuntimeSecretCache,
   isDevEnv,
   DEV_AUTH_SECRET,
   SETTINGS_AUTH_SECRET_KEY
 } from '../runtime-secret';
 
-function fakeD1(rows: Map<string, string>, writes: string[] = []): D1Database {
+function fakeD1(rows: Map<string, string>): D1Database {
   const store = rows;
-  const db = {
+  return {
     prepare(sql: string) {
       return {
         bind(..._params: unknown[]) {
@@ -24,12 +22,6 @@ function fakeD1(rows: Map<string, string>, writes: string[] = []): D1Database {
               return null;
             },
             async run() {
-              if (sql.includes('INSERT INTO settings')) {
-                const [key, rawValue] = _params as [string, string];
-                const previous = store.get(key);
-                writes.push(previous === undefined ? 'insert' : 'update');
-                store.set(key, rawValue);
-              }
               return { success: true };
             }
           };
@@ -37,12 +29,7 @@ function fakeD1(rows: Map<string, string>, writes: string[] = []): D1Database {
       };
     }
   } as unknown as D1Database;
-  return db;
 }
-
-beforeEach(() => {
-  resetRuntimeSecretCache();
-});
 
 describe('isDevEnv', () => {
   it('development و test محیط توسعه‌اند', () => {
@@ -56,7 +43,7 @@ describe('isDevEnv', () => {
   });
 });
 
-describe('resolveSessionSecret', () => {
+describe('resolveSessionSecret — SEC-12776', () => {
   it('۱ — AUTH_SECRET معتبر (≥۱۶) همیشه برنده است و D1 را لمس نمی‌کند', async () => {
     const db = fakeD1(new Map());
     const secret = await resolveSessionSecret({
@@ -67,11 +54,11 @@ describe('resolveSessionSecret', () => {
     expect(secret).toBe('x'.repeat(16));
   });
 
-  it('۲ — AUTH_SECRET کوتاه (<۱۶) پذیرفته نمی‌شود', async () => {
+  it('۲ — تولید بدون AUTH_SECRET و بدون رکورد: خطای صریح (ساخت بی‌سروصدا حذف شد)', async () => {
     const db = fakeD1(new Map());
-    const secret = await resolveSessionSecret({ AUTH_SECRET: 'short', ENV: 'production', DB: db });
-    expect(secret).not.toBe('short');
-    expect(secret.length).toBeGreaterThanOrEqual(32);
+    await expect(
+      resolveSessionSecret({ ENV: 'production', DB: db })
+    ).rejects.toThrow(/AUTH_SECRET/);
   });
 
   it('۳ — محیط توسعه مقدار ثابت توسعه را می‌گیرد (بدون D1)', async () => {
@@ -80,40 +67,31 @@ describe('resolveSessionSecret', () => {
     expect(secret).toBe(DEV_AUTH_SECRET);
   });
 
-  it('۴ — تولید بدون secret: secret ذخیره‌شدهٔ معتبر settings خوانده می‌شود', async () => {
+  it('۴ — تولید بدون AUTH_SECRET: راز ذخیره‌شدهٔ معتبر قبلی (deploy موجود) ادامه می‌یابد', async () => {
     const stored = 'a'.repeat(40);
     const db = fakeD1(new Map([[SETTINGS_AUTH_SECRET_KEY, JSON.stringify(stored)]]));
     const secret = await resolveSessionSecret({ ENV: 'production', DB: db });
     expect(secret).toBe(stored);
   });
 
-  it('۵ — تولید بدون secret و بدون رکورد: secret تصادفی می‌سازد و درج می‌کند (فقط یک‌بار)', async () => {
-    const writes: string[] = [];
-    const db = fakeD1(new Map(), writes);
-    const secret1 = await resolveSessionSecret({ ENV: 'production', DB: db });
-    expect(secret1).toMatch(/^[0-9a-f]{64}$/);
-    expect(writes).toEqual(['insert']);
-
-    const secret2 = await resolveSessionSecret({ ENV: 'production', DB: db });
-    expect(secret2).toBe(secret1);
-    expect(writes).toEqual(['insert']);
+  it('۵ — مقدار خراب در settings راز معتبر نیست → خطای صریح (بازتولید حذف شد)', async () => {
+    const db = fakeD1(new Map([[SETTINGS_AUTH_SECRET_KEY, 'not-json']]));
+    await expect(
+      resolveSessionSecret({ ENV: 'production', DB: db })
+    ).rejects.toThrow(/AUTH_SECRET/);
   });
 
-  it('۶ — مقدار خراب در settings بازسازی می‌شود', async () => {
-    const writes: string[] = [];
-    const db = fakeD1(new Map([[SETTINGS_AUTH_SECRET_KEY, 'not-json']]), writes);
-    const secret = await resolveSessionSecret({ ENV: 'production', DB: db });
-    expect(secret).toMatch(/^[0-9a-f]{64}$/);
-    expect(writes).toEqual(['update']);
+  it('۶ — راز ذخیره‌شدهٔ کوتاه (<۳۲) پذیرفته نمی‌شود → خطای صریح', async () => {
+    const db = fakeD1(new Map([[SETTINGS_AUTH_SECRET_KEY, JSON.stringify('short')]]));
+    await expect(
+      resolveSessionSecret({ ENV: 'production', DB: db })
+    ).rejects.toThrow(/AUTH_SECRET/);
   });
-});
 
-describe('getOrCreateRuntimeSecret', () => {
-  it('secret با طول کمتر از ۳۲ قابل قبول نیست و بازسازی می‌شود', async () => {
-    const writes: string[] = [];
-    const db = fakeD1(new Map([[SETTINGS_AUTH_SECRET_KEY, JSON.stringify('short')]]), writes);
-    const secret = await getOrCreateRuntimeSecret((await import('../runtime-secret')).d1AsSecretStore(db));
-    expect(secret).toMatch(/^[0-9a-f]{64}$/);
-    expect(writes.length).toBe(1);
+  it('۷ — پیام خطا دستور رفع را می‌دهد (wrangler secret put)', async () => {
+    const db = fakeD1(new Map());
+    await expect(
+      resolveSessionSecret({ ENV: 'production', DB: db })
+    ).rejects.toThrow(/wrangler secret put/);
   });
 });

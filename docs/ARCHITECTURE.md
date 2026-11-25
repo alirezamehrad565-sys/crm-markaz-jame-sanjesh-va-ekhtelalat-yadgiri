@@ -399,7 +399,7 @@ Public API: `authMiddleware`, `requireRole(...roles)`, `getAuthContext(c)`, `res
 - email → staff resolution. اگر نبود، 401. `staff.active = 0` نیز 401.
 - Caching: کلید عمومی تیم (JWKS) به مدت ۵ دقیقه cache.
 - استثنای Webhook: مسیر `/webhook/*` از auth مستثنی است.
-- Dev bypass: در `ENV=development` هدر `X-Dev-Staff-Id` بدون JWT پذیرفته می‌شود (فقط محلی).
+- Dev bypass: در `ENV=development` **و** `DEV_IMPERSONATION=1` (از `.dev.vars` — هرگز کامیت/دیپلوی نمی‌شود؛ SEC-12776) هدر `X-Dev-Staff-Id` بدون JWT پذیرفته می‌شود (فقط محلی). بدون متغیر دوم، impersonation بسته است.
 
 ### ۵.۴ audit — Audit Log Helper
 

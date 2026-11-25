@@ -348,6 +348,8 @@ export interface AppBindings {
   ENV: string;
   CF_ACCESS_TEAM_DOMAIN: string;
   AUTH_SECRET?: string;
+  /** SEC-12776 (security-002) — impersonation dev فقط با «۱» باز می‌شود؛ از .dev.vars که هرگز کامیت/دیپلوی نمی‌شود */
+  DEV_IMPERSONATION?: string;
   /** ف۵ (P2-15) — سقف نوشتنی per-IP در دقیقه روی /api/*؛ رشتهٔ «۰» = خاموش (پارس در @app/http/rate-limit) */
   API_RATE_LIMIT_PER_MIN?: string;
   /** EXP-7 — سقف درخواست نودی per-node در دقیقه روی /node/pull|push|reconcile؛ رشتهٔ «۰» = خاموش (پارس در node-sync/service) */

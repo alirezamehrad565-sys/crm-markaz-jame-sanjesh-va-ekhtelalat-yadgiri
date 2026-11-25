@@ -15,7 +15,8 @@
 | دیتابیس | D1 `center-system-db` | binding `DB`؛ مایگریشن‌ها از `migrations/` با ردیابی `d1_migrations` |
 | Cron | ۴ تریگر | یادآوری‌ها (۲۰:۳۰ و ۱۰:۰۰ تهران)، خلاصهٔ روز + KPI هفتگی (۰۷:۳۰)، ساعت ارسال اعلان (۱۸:۰۰) |
 | Secrets | `BALE_BOT_TOKEN`, `BALE_WEBHOOK_SECRET` | با `wrangler secret put` — در باندل جابه‌جا نمی‌شوند |
-| ENV | `production` (پیش‌فرض امن) | بای‌پس توسعه‌ای `X-Dev-Staff-Id` فقط با `ENV=development` (فایل `.dev.vars` فقط برای `wrangler dev`) |
+| ENV | `production` (پیش‌فرض امن) | بای‌پس توسعه‌ای `X-Dev-Staff-Id` فقط با `ENV=development` **و** `DEV_IMPERSONATION=1` در `.dev.vars` (فقط `wrangler dev`؛ SEC-12776) |
+| AUTH_SECRET | الزامی در تولید (SEC-12776) | با `wrangler secret put AUTH_SECRET` (≥۱۶ کاراکتر)؛ بدون آن ورود با خطای صریح می‌ایستد — ساخت خودکار راز حذف شد |
 
 > **نکتهٔ بک‌اند:** بک‌اند استقراری، باندل `worker/bundle.js` است (ورودی دولایه در `wrangler.toml` مستند است).
 > تغییرات رفتاری روی فایل‌های `worker/` اعمال و با مجموعهٔ تست `src/` راستی‌آزمایی می‌شود.

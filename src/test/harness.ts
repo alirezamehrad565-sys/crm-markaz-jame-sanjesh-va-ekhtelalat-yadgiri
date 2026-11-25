@@ -79,6 +79,8 @@ export interface TestApp {
     ENV: string;
     CF_ACCESS_TEAM_DOMAIN: string;
     AUTH_SECRET?: string;
+    /** SEC-12776 — impersonation dev در هارنس پیش‌فرض روشن؛ با devImpersonation:false خاموش می‌شود */
+    DEV_IMPERSONATION?: string;
     /** ف۵ (P2-15) — هارنس پیش‌فرض محدودساز را خاموش می‌گذارد تا آزمون‌های موجود با رگبار درخواست ۴۲۹ نخورند؛
      *  آزمون اختصاصی محدودساز خودش مقدار مشخص می‌دهد (هم‌الگوی صریح‌نگه‌داشتن رفتار در آزمون) */
     API_RATE_LIMIT_PER_MIN?: string;
@@ -101,6 +103,7 @@ export function createTestApp(
     backupDocumentSender?: BackupDocumentSender | null;
     exerciseFileSender?: ExerciseFileSender | null; // ارسال همهٔ فایل‌های تمرین با یک کلیک (تست)
     publicBaseUrl?: string | null; // بازنویسی برای تست تنظیم‌نبودن آدرس عمومی
+    devImpersonation?: boolean; // SEC-12776 — پیش‌فرض true؛ false = impersonation بسته
   }
 ): TestApp {
   const store = sql ?? createTestDb();
@@ -123,6 +126,9 @@ export function createTestApp(
     DB: d1 as unknown as D1Database,
     ENV: 'development',
     CF_ACCESS_TEAM_DOMAIN: 'test.team.example.com',
+    // SEC-12776 — هارنس impersonation dev را روشن می‌کند؛ آزمونِ «بسته با بودن DEV_IMPERSONATION»
+    // با devImpersonation:false خودش اپ جدا می‌سازد
+    DEV_IMPERSONATION: opts?.devImpersonation === false ? undefined : '1',
     API_RATE_LIMIT_PER_MIN: '0' // هارنس: محدودساز خاموش — آزمون اختصاصی P2-15 خودش سقف می‌دهد
   };
   return { sql: store, d1, db, app, env };

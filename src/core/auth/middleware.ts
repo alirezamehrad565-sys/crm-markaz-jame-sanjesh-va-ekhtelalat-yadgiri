@@ -19,7 +19,10 @@ export function authMiddleware(): MiddlewareHandler<Env> {
     const env = c.env;
     const db = env.DB;
 
-    if (env.ENV === 'development') {
+    /* SEC-12776 (security-002 ممیزی) — impersonation فقط با هر دو شرط ENV=development
+       و متغیر صریح DEV_IMPERSONATION=1 (از .dev.vars که هرگز کامیت/دیپلوی نمی‌شود).
+       ENV یک var committed است؛ خطای پیکربندی استقرار دیگر به‌تنهایی درِ جعل هویت را باز نمی‌کند. */
+    if (env.ENV === 'development' && env.DEV_IMPERSONATION === '1') {
       const devStaffId = c.req.header(DEV_STAFF_HEADER);
       if (devStaffId) {
         const staff = await getStaffById(db, devStaffId);
@@ -72,11 +75,16 @@ export function authMiddleware(): MiddlewareHandler<Env> {
         }
         const nowIso = new Date().toISOString();
         const session = await db
-          .prepare('SELECT revoked_at, expires_at FROM auth_sessions WHERE sid = ?')
+          .prepare('SELECT revoked_at, expires_at, staff_id FROM auth_sessions WHERE sid = ?')
           .bind(payload.sid)
-          .first<{ revoked_at: string | null; expires_at: string }>();
+          .first<{ revoked_at: string | null; expires_at: string; staff_id: string }>();
         if (!session || session.revoked_at !== null || session.expires_at <= nowIso) {
           throw new AuthError('نشست باطل یا منقضی شده است — ورود دوباره لازم است');
+        }
+        /* SEC-12776 (security-003 ممیزی) — اتصال sid↔sub: توکنِ امضاشده با راز مشترک
+           (سناریوی instance-sync/سرقت راز) با sid نشستِ کاربر دیگر پذیرفته نمی‌شود. */
+        if (session.staff_id !== payload.sub) {
+          throw new AuthError('نشست به کاربر دیگری تعلق دارد — ورود دوباره لازم است');
         }
         const staff = await getStaffById(db, payload.sub);
         if (!staff || staff.active !== 1) {
