@@ -444,7 +444,7 @@ try {
   capsSrc.includes("'/api/engine/capabilities'") && capsSrc.includes('APP_VERSION')
     ? ok('پایانهٔ قابلیت‌ها: مسیر عمومی با APP_VERSION منبع یکتا سیم است')
     : bad('engine-capabilities/routes.ts: مسیر/APP_VERSION غایب است');
-  const routingSrc = readFileSync(path.join(ROOT, 'src', 'application', 'api-routing', 'index.ts'), 'utf8');
+  const routingSrc = readFileSync(path.join(ROOT, 'src', 'application', 'api-routing', 'routes.ts'), 'utf8'); // ۱.۲۷.۸۰ — رجیستری مسیرها به routes.ts منتقل شد (architecture-001)
   routingSrc.includes('registerEngineCapabilitiesRoutes')
     ? ok('api-routing: ثبت پایانهٔ قابلیت‌ها سیم است (ناحیهٔ عمومی — پیش از گیت auth)')
     : bad('api-routing: registerEngineCapabilitiesRoutes غایب است');

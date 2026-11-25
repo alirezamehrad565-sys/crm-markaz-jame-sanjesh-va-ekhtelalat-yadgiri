@@ -1,8 +1,8 @@
 /**
  * رجیستری مسیرها — ۱.۲۷.۸۰ (architecture-001 — sdt157): از بدنهٔ createApp منتقل شد.
- * دو تابع با مرزِ گیت auth: روت‌های عمومی و subappها «پیش از» گیت ثبت می‌شوند و بقیه
- * «پس از» آن — ترتیبِ فراخوانی در index.ts این مرز را نگه می‌دارد و جابه‌جایی نکنند.
- * افزودن یک ماژول دامنه فقط یک ورودی به همین فایل است (done_when یافتهٔ ممیزی).
+ * دو تابعِ مرزیِ ثبت (عمومی/محافظت‌شده) با مرزِ گیت auth — ترتیبِ فراخوانی در index.ts این
+ * مرز را نگه می‌دارد و گروه‌های درونی جابه‌جا نکنند. هر گروه دامنه‌ای یک ثبت‌کنندهٔ مستقل
+ * است؛ افزودن یک ماژول دامنه فقط یک ورودی به گروه مربوط است (done_when یافتهٔ ممیزی).
  * سرویس‌ها از composition می‌آیند — این‌جا هیچ سرویسی ساخته نمی‌شود؛ منطق تجمیعیِ
  * داشبورد هم به سرویس @app/dashboard/kpi-source منتقل شده است (فاز F).
  */
@@ -65,8 +65,8 @@ import { createInstanceSyncApp } from '../../application/instance-sync/index'; /
 import { registerDesktopRoutes } from '@app/instance-sync/desktop-routes'; // فاز B — هم‌گامی میز↔ابر + کلون (سند §۲-۲/§۲-۴)
 import type { AppDeps, Services } from './composition';
 
-/** روت‌های عمومی و بی‌احراز + subappهایی که احرازِ خودشان را دارند — همگی پیش از گیت auth */
-export function registerPublicRoutes(app: AppHono, services: Services, deps: AppDeps): void {
+/** روت‌های عمومیِ درون‌خطی: سلامت واقعی (EXP-4) + دو مسیر عمومی لینک‌دار */
+function registerPublicInlineRoutes(app: AppHono, services: Services): void {
   // — : سلامت واقعی = دسترسی D1 هم آزموده می‌شود؛ خرابی → 503 تا مانیتور بیرونی متوجه شود.
   // EXP-4 (رصد بیرونی مرکز): این مسیر «عمومی و بی‌احراز» است و شکل پاسخ حداقلی و قراردادی
   // {ok, version, server_ts} — نه فیلد بیشتر (بدون هیچ نشت داده؛ جزئیات db/ping بیرون نمی‌رود).
@@ -113,7 +113,10 @@ export function registerPublicRoutes(app: AppHono, services: Services, deps: App
       }
     });
   });
+}
 
+/** ماژول‌های عمومی و subappهایی که احرازِ خودشان را دارند — همگی پیش از گیت auth */
+function registerPublicModules(app: AppHono, services: Services): void {
   // ۱.۲۵.۰۷ — زنجیرهٔ عمومی بازی (/m/:token و /api/m/:token/*): باید «پیش از» گیت authMiddleware
   // ثبت شود تا توکنِ خودِ لینک جای احراز هویت بنشیند (قرارداد §۵ نقشهٔ راه؛ بدون هیچ اطلاعات بالینی در خطا)
   registerGamesPublicRoutes(app, services.games);
@@ -146,8 +149,14 @@ export function registerPublicRoutes(app: AppHono, services: Services, deps: App
   app.route('/api/instance-sync', createInstanceSyncApp({ db: services.db, logger: services.logger }));
 }
 
-/** روت‌های محافظت‌شده — پس از گیت auth + گیت ناظر (ترتیب در index.ts) */
-export function registerProtectedRoutes(app: AppHono, services: Services, deps: AppDeps): void {
+/** روت‌های عمومی و بی‌احراز — «پیش از» گیت auth (ترتیب در index.ts) */
+export function registerPublicRoutes(app: AppHono, services: Services, deps: AppDeps): void {
+  registerPublicInlineRoutes(app, services);
+  registerPublicModules(app, services);
+}
+
+/** زیرساخت پست-گیت: خروج، پایان راه‌اندازی، سینک میز/ابر، دیدهای مدیریتی و /api/me */
+function registerPostGateSystemRoutes(app: AppHono, services: Services, deps: AppDeps): void {
   // بستن حلقهٔ خروج: خروج احرازشده بعد از گیت ناظر سوار می‌شود؛ رویداد ممیزی actor درست دارد.
   // ناظر طبق از گیت رد می‌شود (۴۰۳) — رفتار فقط-خواندن دست‌نخورده می‌ماند.
   registerLogoutRoute(app, { audit: services.audit, logger: services.logger });
@@ -185,7 +194,10 @@ export function registerProtectedRoutes(app: AppHono, services: Services, deps: 
   registerCentralNodesMapRoutes(app, { db: services.db });
 
   app.get('/api/me', (c) => c.json({ data: c.get('authContext') }, 200));
+}
 
+/** دامنه‌های بالینی: نوبت/حضور/پرونده/انتظار/فرم/پیگیری/رویداد/موتور بالینی/خروجی نسخه‌دار/بازی */
+function registerClinicalDomainRoutes(app: AppHono, services: Services, deps: AppDeps): void {
   appointmentRoutes(app, services.appointments);
   // ۱.۲۷.۱۴ — بلوک نوبت سنجش (سرویس در composition ساخته می‌شود — architecture-001)
   registerAssessmentBlockRoutes(app, services.assessmentBlocks);
@@ -224,7 +236,10 @@ export function registerProtectedRoutes(app: AppHono, services: Services, deps: 
       return st ? `${st.firstName} ${st.lastName}` : null;
     }
   });
+}
 
+/** دامنه‌های محتوایی/اداری: برچسب تا کلیدهای API و زیرساخت پایش */
+function registerContentDomainRoutes(app: AppHono, services: Services, deps: AppDeps): void {
   tagRoutes(app, services.tags);
   registerSearchRoutes(app, services.search);
 
@@ -272,7 +287,10 @@ export function registerProtectedRoutes(app: AppHono, services: Services, deps: 
   registerContentScoreRoutes(app, { contentScore: services.contentScore }); // ۱.۲۵.۴۸ m6 — امتیاز شناسنامه
 
   if (FEATURES.apiKeys) registerKeysRoutes(app, services.keys);
+}
 
+/** موتور تعارض نوبت — دو مسیر درون‌خطی سبک (منطق در @domain/conflict-engine) */
+function registerConflictRoutes(app: AppHono, services: Services): void {
   app.get('/api/conflicts', async (c) => {
     const staffId = c.req.query('staff_id') ?? '';
     const from = c.req.query('from') ?? '1970-01-01T00:00:00.000Z';
@@ -291,13 +309,15 @@ export function registerProtectedRoutes(app: AppHono, services: Services, deps: 
     });
     return c.json({ data }, 200);
   });
+}
 
+/* فاز F: تلفیق KPI داشبورد — یک رفت‌وبرگشت HTTP و یک بررسی auth به‌جای ۱۱ GET هم‌زمان.
+   ۱.۲۷.۸۰ (architecture-001) — منطق تجمیع به سرویس @app/dashboard/kpi-source منتقل شد؛
+   این هندلر فقط پرس‌وجو را می‌گیرد و زمینهٔ scoring (url/headers/env) را پاس می‌دهد.
+   endpointهای قدیمی دست‌نخورده‌اند (انتقال تدریجی — design.md §API). */
+function registerDashboardTailRoutes(app: AppHono, services: Services): void {
   dashboardRoutes(app, services.dashboard);
 
-  /* فاز F: تلفیق KPI داشبورد — یک رفت‌وبرگشت HTTP و یک بررسی auth به‌جای ۱۱ GET هم‌زمان.
-     ۱.۲۷.۸۰ (architecture-001) — منطق تجمیع به سرویس @app/dashboard/kpi-source منتقل شد؛
-     این هندلر فقط پرس‌وجو را می‌گیرد و زمینهٔ scoring (url/headers/env) را پاس می‌دهد.
-     endpointهای قدیمی دست‌نخورده‌اند (انتقال تدریجی — design.md §API). */
   app.get('/api/dashboard/kpis', async (c) => {
     const data = await services.dashboardKpi.getKpis(
       getAuthContext(c),
@@ -314,4 +334,13 @@ export function registerProtectedRoutes(app: AppHono, services: Services, deps: 
   });
 
   notifyRoutes(app, services.notify);
+}
+
+/** روت‌های محافظت‌شده — «پس از» گیت auth + گیت ناظر (ترتیب در index.ts) */
+export function registerProtectedRoutes(app: AppHono, services: Services, deps: AppDeps): void {
+  registerPostGateSystemRoutes(app, services, deps);
+  registerClinicalDomainRoutes(app, services, deps);
+  registerContentDomainRoutes(app, services, deps);
+  registerConflictRoutes(app, services);
+  registerDashboardTailRoutes(app, services);
 }
