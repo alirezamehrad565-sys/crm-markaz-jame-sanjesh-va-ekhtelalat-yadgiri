@@ -13,7 +13,6 @@ import {
 import { el, icon, skeletonState, errorState, emptyState, openModal, progressRing, toast, toastError, kpi, KPI_ALERT_RATE } from '../ui.js'; // toast/toastError گم‌شده بود: مسیر ذخیرهٔ حسابرسی بی‌بازخورد می‌افتد · ۱.۲۵.۰۵: kpi/آستانه تک‌منبع
 import { illoNoAnnouncements, illoKnowledge } from '../illustrations.js'; // — وکتورها
 import { session } from '../state.js';
-import { canSeeTodos, renderMyTodosCard } from '../my-todos.js';
 
 const KNOWLEDGE_CATEGORY_LABELS = { tip: 'نکتهٔ آموزشی', protocol: 'پروتکل درمانی', article: 'مقاله', news: 'خبر مرکز' };
 
@@ -59,7 +58,7 @@ export async function renderDashboard(container) {
   if (isTherapist) {
     parts.push(...therapistDashboard(container, { myStats, scoring, knowledge, announcements }));
   } else {
-    parts.push(...officeDashboard(container, { todayData, summaryData, goalData, scoring, knowledge, announcements, waitlist, followups, today, validation }));
+    parts.push(...(await officeDashboard(container, { todayData, summaryData, goalData, scoring, knowledge, announcements, waitlist, followups, today, validation })));
   }
 
   container.replaceChildren(...parts.filter(Boolean));
@@ -215,7 +214,7 @@ function scoreTiles(myStats) {
   );
 }
 
-function officeDashboard(container, { todayData, summaryData, goalData, scoring, knowledge, announcements, waitlist, followups, today, validation }) {
+async function officeDashboard(container, { todayData, summaryData, goalData, scoring, knowledge, announcements, waitlist, followups, today, validation }) {
   const parts = [];
 
   parts.push(
@@ -253,7 +252,10 @@ function officeDashboard(container, { todayData, summaryData, goalData, scoring,
      ③ «دانش‌افزایی» هم بیاید بالا — بلافاصله زیر ردیف قهرمان؛
      ④ کارت رویدادهای روز حذف شد — مدیران راضی نبودند و ضرورت نداشت (تقویم نوبت‌ها مرجع کامل همان داده است)؛
      ⑤ بقیهٔ ماژول‌ها (شاخص‌ها، تابلو، پیگیری‌ها، روند و هدف) زیر این سه می‌نشینند. */
-  const todosCard = canSeeTodos() ? renderMyTodosCard() : null;
+  /* performance-003 (۱.۲۷.۸۳): my-todos از گراف بوت خارج شد — فقط برای نقش‌هایی که کارت
+     «کارهای من» را می‌بینند با import پویا در لحظهٔ رندر می‌آید (eager_modules ۷→۶) */
+  const todosMod = await import('../my-todos.js');
+  const todosCard = todosMod.canSeeTodos() ? todosMod.renderMyTodosCard() : null;
   const anCard = announcementsCard(announcements);
   if (todosCard) {
     parts.push(el('div', { class: 'dash-duo', style: { marginBottom: 'var(--sp-4)' } }, todosCard, anCard));
