@@ -12,7 +12,7 @@ const ROOT = join(__dirname, '../..');
 const read = (p: string) => readFileSync(join(ROOT, p), 'utf8');
 
 describe('گیت B1 — هاردن کردن لاگ و سقف GET توکن‌دار ۱.۲۷.۷۸', () => {
-  const routing = read('src/application/api-routing/index.ts');
+  const routing = read('src/application/api-routing/middleware.ts'); // ۱.۲۷.۸۰ — میان‌افزار سراسری به middleware.ts منتقل شد (architecture-001)
   const logMask = read('src/core/shared/log-mask.ts');
   const rateLimit = read('src/application/http/rate-limit.ts');
   const barrel = read('src/application/http/index.ts');

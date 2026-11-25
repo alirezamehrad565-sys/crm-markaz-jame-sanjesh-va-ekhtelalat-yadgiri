@@ -57,7 +57,7 @@ describe('POLISH-3 M6 — بازنویسی کارت اعتبارسنجی بیر�
     const routes = read('src/domain/clinical-engine/routes.ts');
     expect(routes).toContain("requireRole('manager', 'secretary', 'therapist')");
     expect(routes).toContain("app.post('/api/case-audits', requireRole('manager', 'secretary')");
-    const routing = read('src/application/api-routing/index.ts');
+    const routing = read('src/application/dashboard/kpi-source.ts'); // ۱.۲۷.۸۰ — تجمیع KPI به سرویس منتقل شد (architecture-001)
     expect(routing).toContain("actor.role === 'therapist'");
     expect(routing).toContain('kpis: null, audits: a ?? []');
     const dash = read('public/assets/js/views/dashboard.js');

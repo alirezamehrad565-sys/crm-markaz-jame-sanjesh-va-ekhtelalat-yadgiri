@@ -19,7 +19,9 @@ const read = (p: string) => readFileSync(join(ROOT, p), 'utf8');
 describe('گیت امنیتی ۱.۲۷.۴۳ — نشتی راز', () => {
   it('بدنهٔ اجرایی هیچ راز جایگزین ثابتی ندارد', () => {
     const files = [
-      'src/application/api-routing/index.ts',
+      'src/application/api-routing/composition.ts',
+      'src/application/api-routing/middleware.ts',
+      'src/application/api-routing/routes.ts',
       'src/index.ts',
       'src/core/auth/index.ts',
       'worker/entry.js'
@@ -31,7 +33,7 @@ describe('گیت امنیتی ۱.۲۷.۴۳ — نشتی راز', () => {
   });
 
   it('راز دانلود بدون تنظیم سرور، تصادفیِ هر بوت است — نه رشتهٔ شناخته‌شده', () => {
-    const src = read('src/application/api-routing/index.ts');
+    const src = read('src/application/api-routing/composition.ts');
     expect(src).toMatch(/downloadSecret: deps\.downloadSecret \?\? deps\.webhookSecret \?\? \(crypto\.randomUUID\(\) \+ crypto\.randomUUID\(\)\)/);
   });
 

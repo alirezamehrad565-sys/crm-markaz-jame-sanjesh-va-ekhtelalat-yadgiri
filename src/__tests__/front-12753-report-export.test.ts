@@ -32,7 +32,8 @@ describe('موج ۳ — سند و migration', () => {
 
 describe('موج ۳ — ماژول report-export و سیم‌کشی', () => {
   const svc = read('src/application/report-export/service.ts');
-  const wiring = read('src/application/api-routing/index.ts');
+  const wiring = read('src/application/api-routing/composition.ts'); // ۱.۲۷.۸۰ — ترکیب سرویس‌ها به composition.ts منتقل شد (architecture-001)
+  const routes = read('src/application/api-routing/routes.ts');
 
   it('snapshot-first: هش SHA-256 + شمارهٔ سالانهٔ جلالی + امضاکنندهٔ لحظهٔ قطعی', () => {
     expect(svc).toContain('export async function sha256Hex');
@@ -48,7 +49,7 @@ describe('موج ۳ — ماژول report-export و سیم‌کشی', () => {
   it('سازندهٔ گزارش تزریقی است (نه وابستگی domain→domain) و route ثبت شده', () => {
     expect(wiring).toContain('createReportExportService({');
     expect(wiring).toContain('clinicalEngine.getPathwayReport(pathId, { from: null, to: null }, actor)');
-    expect(wiring).toContain('registerReportExportRoutes(app, services.reportExport);');
+    expect(routes).toContain('registerReportExportRoutes(app, services.reportExport);');
   });
 });
 
