@@ -37,13 +37,13 @@
  *   /api/central/nodes-map را با همان گیت quota (سشن + نقش مدیر) ثبت می‌کند؛ خروجی JSON
  *   پاکت قراردادی و با ?format=html صفحهٔ مدیریتی رندر-سروری فارسی RTL بدون هیچ JavaScript.
  */
+import { installRequestId, installWriteRateLimit, installNoStore, installNotFound } from '@app/http/chain'; // architecture-008 (۱.۲۷.۸۳)
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
 import type { AppHono, AppBindings, AppVariables } from '@core/shared';
 import { faDigits } from '@core/shared';
 import { authMiddleware, requireRole, getAuthContext } from '@core/auth';
-import { runWithRequestId } from '@core/audit';
 import type { AuditWriter } from '@core/audit';
 import type { DbClient } from '@core/db';
 import type { Logger } from '@core/logger';
@@ -130,16 +130,8 @@ export function createNodeSyncApp(deps: NodeSyncAppDeps): AppHono {
 
   const app: AppHono = new Hono<Env>();
 
-  // — request-id سراسری زیراپ (هم‌الگوی /api/* اپ اصلی) —
-  app.use('*', async (c, next) => {
-    const requestId = `req-${crypto.randomUUID()}`;
-    c.set('requestId', requestId);
-    try {
-      return await runWithRequestId(requestId, () => next());
-    } finally {
-      c.header('X-Request-Id', requestId);
-    }
-  });
+  // — request-id سراسری زیراپ (architecture-008 ۱.۲۷.۸۳ — تعریف یگانه، مسیر '*') —
+  installRequestId(app, '*');
 
   // ─── EXP-7 — محدودساز نرخ per-node روی pull/push/reconcile (پنجرهٔ لغزان per-isolate) ───
   // کلید = node_code هدر (هویت نود؛ مقدار غیرمحرمانه)؛ هدر غایب = کلید per-IP در حافظهٔ همین
@@ -181,30 +173,15 @@ export function createNodeSyncApp(deps: NodeSyncAppDeps): AppHono {
   app.use('/push', nodeRateLimitGuard);
   app.use('/reconcile', nodeRateLimitGuard);
 
-  // — محدودساز نوشتنی per-IP (همان سقف و همان مستثنی‌های اپ اصلی؛ env «۰» = خاموش) —
-  const limiter = makeKeyedRateLimiter(API_RATE_LIMIT_WINDOW_MS);
-  app.use('*', async (c, next) => {
-    if (c.req.method !== 'POST' && c.req.method !== 'PUT' && c.req.method !== 'PATCH' && c.req.method !== 'DELETE') {
-      return next();
-    }
-    const perMin = parseApiRateLimitPerMin(c.env?.API_RATE_LIMIT_PER_MIN);
-    if (perMin <= 0) return next();
-    const ip = (c.req.header('cf-connecting-ip') ?? 'unknown').slice(0, 64);
-    if (!limiter.allow(`nodesync:${perMin}:${ip}`, perMin)) {
-      c.header('Retry-After', String(Math.ceil(API_RATE_LIMIT_WINDOW_MS / 1000)));
-      throw new RateLimitError(
-        Math.ceil(API_RATE_LIMIT_WINDOW_MS / 1000),
-        'درخواست‌های سینک نود بیش از حد مجاز است — کمی بعد دوباره تلاش کنید'
-      );
-    }
-    return next();
+  // — محدودساز نوشتنی per-IP (architecture-008 ۱.۲۷.۸۳ — تعریف یگانه؛ بدون مستثنی و با
+  //   پیشوند کلید و پیام اختصاصی سینک) + no-store سراسری —
+  installWriteRateLimit(app, {
+    path: '*',
+    exceptionPaths: [],
+    keyPrefix: 'nodesync:',
+    message: 'درخواست‌های سینک نود بیش از حد مجاز است — کمی بعد دوباره تلاش کنید'
   });
-
-  // — پاسخ‌های این زیراپ هرگز کش نمی‌شوند —
-  app.use('*', async (c, next) => {
-    await next();
-    c.header('Cache-Control', 'no-store');
-  });
+  installNoStore(app, '*');
 
   // ─── احراز نود مشترک pull/push — پاسخ رد یک‌شکل و کم‌دست (بدون نشت وجود/عدم‌وجود کد) ───
   async function authNode(c: Context<Env>): Promise<SyncNodeRow | null> {
@@ -446,8 +423,8 @@ export function createNodeSyncApp(deps: NodeSyncAppDeps): AppHono {
     return c.json({ data: { nodes: await listNodes(db) } }, 200);
   });
 
-  // ۴۰۴ کم‌دست — هیچ جزئیاتی از مسیرهای زیر /node لو نمی‌رود (هم‌قرارداد §۵)
-  app.notFound((c) => c.json({ error: 'NOT_FOUND' }, 404));
+  // ۴۰۴ کم‌دست — هیچ جزئیاتی از مسیرهای زیر /node لو نمی‌رود (هم‌قرارداد §۵؛ architecture-008)
+  installNotFound(app);
 
   // خطاها به errorHandler میزبان می‌روند (زیراپ همیشه در اپ اصلی سوار است)؛
   // errorHandler پاکت استاندارد + request_id همین زیراپ را می‌پیوندد.

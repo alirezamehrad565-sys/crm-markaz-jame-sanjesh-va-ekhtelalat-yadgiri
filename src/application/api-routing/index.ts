@@ -6,6 +6,7 @@
  * روت‌های محافظت‌شده → خطا/۴۰۴. افزودن یک ماژول دامنه فقط یک ورودی به ./routes است
  * (done_when یافتهٔ architecture-001 رجیستری ممیزی).
  */
+import { installNotFound } from '@app/http/chain'; // architecture-008 (۱.۲۷.۸۳)
 import { Hono } from 'hono';
 import type { AppHono, AppBindings, AppVariables } from '@core/shared';
 import { authMiddleware, supervisorGate } from '@core/auth';
@@ -37,7 +38,7 @@ export function createApp(deps: AppDeps): AppHono {
 
   app.onError(errorHandler);
 
-  app.notFound((c) => c.json({ error: 'NOT_FOUND', message: 'مسیر درخواستی یافت نشد' }, 404));
+  installNotFound(app, 'مسیر درخواستی یافت نشد'); // architecture-008 (۱.۲۷.۸۳)
 
   return app;
 }

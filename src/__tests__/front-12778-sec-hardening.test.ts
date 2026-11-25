@@ -42,8 +42,12 @@ describe('گیت B1 — هاردن کردن لاگ و سقف GET توکن‌دا
   });
 
   it('④ سقف نوشتنی P2-15 دست‌نخورده مانده (مسیر مستثنی ورود + کلید IP سقف‌دار)', () => {
-    expect(routing).toContain("if (c.req.path === '/api/auth/login') return next();");
-    expect(routing).toContain('apiRateLimiter.allow(`${perMin}:${ip}`, perMin)');
+    /* architecture-008 (۱.۲۷.۸۳): منطق P2-15 به تعریف یگانهٔ @app/http/chain رفت —
+       همان قرارداد (مستثنی ورود + کلید سقف‌دار IP) آن‌جاست و middleware delegate است */
+    expect(routing).toContain('installWriteRateLimitGeneric');
+    const chain = read('src/application/http/chain.ts');
+    expect(chain).toContain("opts.exceptionPaths ?? ['/api/auth/login']");
+    expect(chain).toContain('apiRateLimiter.allow(`${keyPrefix}${perMin}:${ip}`, perMin)');
   });
 
   it('⑤ آزمون‌ها سرِ جای خودشان‌اند: واحد ماسک + e2e سقف توکن‌دار', () => {

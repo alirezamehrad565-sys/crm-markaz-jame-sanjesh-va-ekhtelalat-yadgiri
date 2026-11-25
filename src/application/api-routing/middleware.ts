@@ -11,7 +11,8 @@ import { runWithRequestId } from '@core/audit';
 import { parseApiRateLimitPerMin, parseTokenGetRateLimitPerMin, makeKeyedRateLimiter, API_RATE_LIMIT_WINDOW_MS } from '@app/http';
 import { RateLimitError } from '@core/errors';
 import { maskSensitivePath } from '@core/shared/log-mask'; // security-005 (۱.۲۷.۷۸) — مسیرِ لاگ ماسک می‌شود
-import { JSON_API_CSP } from '@core/shared/csp'; // ۱.۲۷.۸۲ (security-007/ADR-004) — CSP حداقلی پاسخ‌های JSON
+import { JSON_API_CSP } from '@core/shared/csp';
+import { installRequestId as installRequestIdGeneric, installWriteRateLimit as installWriteRateLimitGeneric, installNoStore as installNoStoreGeneric } from '@app/http/chain'; // ۱.۲۷.۸۲ (security-007/ADR-004) — CSP حداقلی پاسخ‌های JSON
 import type { AppHono } from '@core/shared';
 import type { Services } from './composition';
 
@@ -29,57 +30,13 @@ function installLoggerContext(app: AppHono, services: Services): void {
    audit.logهای از اعماق سرویس‌ها بدون تغییر امضا شامل می‌شوند). میدل‌ور اولِ /api/* است
    تا هر چیزی که بعدش می‌آید — حتی خطا — شناسه را داشته باشد. */
 function installRequestId(app: AppHono): void {
-  app.use('/api/*', async (c, next) => {
-    const requestId = `req-${crypto.randomUUID()}`;
-    c.set('requestId', requestId);
-    try {
-      return await runWithRequestId(requestId, () => next());
-    } finally {
-      // با finally حتی روی مسیر خطا (۴xx/۵xx) هدر می‌نشیند
-      c.header('X-Request-Id', requestId);
-    }
-  });
+  installRequestIdGeneric(app); // architecture-008 (۱.۲۷.۸۳) — تعریف یگانه در @app/http/chain
 }
 
-/* ف۵ (P2-15) — محدودسازی نرخ نوشتنی /api/* per-IP (پنجرهٔ ثابت درون‌حافظهٔ per-isolate):
-   پیش‌فرض ۲۴۰ نوشتنی در دقیقه بر IP — سخاوتمندانه تا کاربرد عادی هرگز ۴۲۹ نبیند؛
-   env اختیاری API_RATE_LIMIT_PER_MIN («۰» = خاموش با یک لاگ). مستثنی‌ها:
-   ① /api/auth/login — throttle اختصاصی دوبل خودش را دارد (login_throttle: ۵/۱۵دقیقه بر
-     شناسه + ۲۰/۱۵دقیقه بر IP) و سقف سراسری روی مسیر ورود، قفل‌شدن دفتر پشت NAT واحد را
-     به‌همراه دارد؛ ② مسیرهای /public (تله‌متری rum/client-errors) در این میدل‌ور نیستند و
-     limiter خودشان را دارند. محدودیت صادقانه: شمارنده per-isolate است — جزئیات در
-     @app/http/rate-limit و سند طرح §۴ آیتم ۱۵. */
 function installWriteRateLimit(app: AppHono, services: Services): void {
-  const apiRateLimiter = makeKeyedRateLimiter(API_RATE_LIMIT_WINDOW_MS);
-  let rateLimitDisabledLogged = false;
-  app.use('/api/*', async (c, next) => {
-    if (c.req.method !== 'POST' && c.req.method !== 'PUT' && c.req.method !== 'PATCH' && c.req.method !== 'DELETE') {
-      return next(); // فقط متدهای نوشتنی — خواندنی‌ها بی‌سقف می‌مانند (کش no-store خودشان را دارند)
-    }
-    if (c.req.path === '/api/auth/login') return next(); // مستثنی مستند — throttle اختصاصی دارد
-
-    // env در هر درخواست از bindings خوانده می‌شود (wrangler var/secret رشته می‌دهد)؛
-    // کلید سطل، سقف را هم شامل است تا تغییر env سطل تازه بسازد نه بازنویسی سطل قدیم
-    const perMin = parseApiRateLimitPerMin(c.env?.API_RATE_LIMIT_PER_MIN);
-    if (perMin <= 0) {
-      if (!rateLimitDisabledLogged) {
-        rateLimitDisabledLogged = true;
-        services.logger.child('http').warn('api_rate_limit.disabled', {
-          reason: 'API_RATE_LIMIT_PER_MIN=0'
-        });
-      }
-      return next();
-    }
-    const ip = (c.req.header('cf-connecting-ip') ?? 'unknown').slice(0, 64);
-    if (!apiRateLimiter.allow(`${perMin}:${ip}`, perMin)) {
-      c.header('Retry-After', String(Math.ceil(API_RATE_LIMIT_WINDOW_MS / 1000)));
-      throw new RateLimitError(
-        Math.ceil(API_RATE_LIMIT_WINDOW_MS / 1000),
-        'درخواست‌های نوشتنی بیش از حد مجاز است — کمی بعد دوباره تلاش کنید'
-      );
-    }
-    return next();
-  });
+  installWriteRateLimitGeneric(app, {
+    onDisabled: () => services.logger.child('http').warn('api_rate_limit.disabled', { reason: 'API_RATE_LIMIT_PER_MIN=0' })
+  }); // architecture-008 (۱.۲۷.۸۳) — تعریف یگانه در @app/http/chain
 }
 
 /* ف۵ (security-008 — ۱.۲۷.۷۸-B1) — سقف خواندنی‌های توکن‌دارِ عمومی per-IP: صفحهٔ /m/:token و
@@ -134,10 +91,7 @@ function installSecurityAndCacheHeaders(app: AppHono): void {
     }
   });
 
-  app.use('/api/*', async (c, next) => {
-    await next();
-    c.header('Cache-Control', 'no-store');
-  });
+  installNoStoreGeneric(app); // architecture-008 (۱.۲۷.۸۳) — تعریف یگانه
 
   app.use('/public/exercise-files/*', async (c, next) => {
     await next();

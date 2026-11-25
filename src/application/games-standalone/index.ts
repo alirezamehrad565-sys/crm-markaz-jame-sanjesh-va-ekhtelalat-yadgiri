@@ -11,14 +11,13 @@ import type { AppHono, AppBindings, AppVariables } from '@core/shared';
 import { APP_VERSION } from '@core/version';
 import { authMiddleware, supervisorGate } from '@core/auth';
 import type { DbClient } from '@core/db';
-import { runWithRequestId } from '@core/audit';
 import type { AuditWriter } from '@core/audit';
 import type { Logger } from '@core/logger';
 import { createGamesService, registerGamesRoutes, registerGamesPublicRoutes } from '@domain/games';
 import type { PathProbeInjector } from '@domain/games';
 import { registerAuthRoutes, registerLogoutRoute } from '@app/auth';
-import { errorHandler, parseApiRateLimitPerMin, makeKeyedRateLimiter, API_RATE_LIMIT_WINDOW_MS } from '@app/http';
-import { RateLimitError } from '@core/errors';
+import { errorHandler } from '@app/http';
+import { applyGenericChain, installNotFound } from '@app/http/chain';
 
 export interface GamesAppDeps {
   db: DbClient;
@@ -50,35 +49,10 @@ export function createGamesApp(deps: GamesAppDeps): AppHono {
     return next();
   });
 
-  // ف۵ (P2-13) — request-id سراسری /api/* — هم‌الگوی اپ اصلی (هدر X-Request-Id + زمینهٔ audit)
-  app.use('/api/*', async (c, next) => {
-    const requestId = `req-${crypto.randomUUID()}`;
-    c.set('requestId', requestId);
-    try {
-      return await runWithRequestId(requestId, () => next());
-    } finally {
-      c.header('X-Request-Id', requestId);
-    }
-  });
-
-  // ف۵ (P2-15) — محدودساز نوشتنی per-IP — همان سقف و همان مستثنی login؛ سقف از env خوانده می‌شود
-  const apiRateLimiter = makeKeyedRateLimiter(API_RATE_LIMIT_WINDOW_MS);
-  app.use('/api/*', async (c, next) => {
-    if (c.req.method !== 'POST' && c.req.method !== 'PUT' && c.req.method !== 'PATCH' && c.req.method !== 'DELETE') {
-      return next();
-    }
-    if (c.req.path === '/api/auth/login') return next();
-    const perMin = parseApiRateLimitPerMin(c.env?.API_RATE_LIMIT_PER_MIN);
-    if (perMin <= 0) return next();
-    const ip = (c.req.header('cf-connecting-ip') ?? 'unknown').slice(0, 64);
-    if (!apiRateLimiter.allow(`${perMin}:${ip}`, perMin)) {
-      c.header('Retry-After', String(Math.ceil(API_RATE_LIMIT_WINDOW_MS / 1000)));
-      throw new RateLimitError(
-        Math.ceil(API_RATE_LIMIT_WINDOW_MS / 1000),
-        'درخواست‌های نوشتنی بیش از حد مجاز است — کمی بعد دوباره تلاش کنید'
-      );
-    }
-    return next();
+  // architecture-008 (۱.۲۷.۸۳) — زنجیرهٔ عمومی از تعریف یگانهٔ @app/http/chain
+  applyGenericChain(app, {
+    writeLimit: { exceptionPaths: ['/api/auth/login'] },
+    notFound: { message: 'مسیر درخواستی یافت نشد' }
   });
 
   // هدرهای امنیتی — همان بستهٔ اپ اصلی
@@ -90,11 +64,6 @@ export function createGamesApp(deps: GamesAppDeps): AppHono {
     c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     c.header('Cross-Origin-Opener-Policy', 'same-origin');
     c.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-  });
-
-  app.use('/api/*', async (c, next) => {
-    await next();
-    c.header('Cache-Control', 'no-store');
   });
 
   app.use('*', async (c, next) => {
@@ -155,7 +124,7 @@ export function createGamesApp(deps: GamesAppDeps): AppHono {
   registerGamesRoutes(app, games);
 
   app.onError(errorHandler);
-  app.notFound((c) => c.json({ error: 'NOT_FOUND', message: 'مسیر درخواستی یافت نشد' }, 404));
+  installNotFound(app, 'مسیر درخواستی یافت نشد'); // architecture-008 — تکرار حذف شد
 
   return app;
 }
