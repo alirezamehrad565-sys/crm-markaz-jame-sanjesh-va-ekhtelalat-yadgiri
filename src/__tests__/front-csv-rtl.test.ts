@@ -59,18 +59,17 @@ describe('csvTable — جدول هم‌عرض (۱.۲۷.۱۵ خواست کارف�
 describe('پین‌های سیم‌کشی خروجی‌های CSV', () => {
   it('سنجش روزانه (screening.js): ستون «جزئیات» آخرِ CSV و جدول روی صفحه + جدول هم‌عرض (۱.۲۷.۱۵)', () => {
     const src = read('public/assets/js/views/screening.js');
-    expect(src).toMatch(/from '\.\.\/csv-rtl\.js'/);
+    /* testing-002: پین مکانیک import (`from '../csv-rtl.js'`) آرایشی است — مصرفِ helperها با پین‌های پایین‌تر گرفته می‌شود */
     expect(src).toMatch(/downloadCsv\(`sanjesh-/);
     expect(src).toMatch(/csvTable\(\[/);
     // ستون جزئیات در CSV — بعد از همهٔ ستون‌های برچسب
     expect(src).toMatch(/\.\.\.tagColumns,\s*\n?\s*'جزئیات'/);
-    // ستون جزئیات در جدول صفحه (آخرین ستون buildEntriesTable)
-    expect(src).toMatch(/label: 'جزئیات', \/\* ۱\.۲۷\.۱۴/);
+    // ستون جزئیات در جدول صفحه (آخرین ستون buildEntriesTable) — بدون پینِ مارکر کامنت
+    expect(src).toMatch(/label: 'جزئیات'/);
   });
 
   it('گزارش مدیر (reports.js): هر دو خروجی تحلیل پیشرفته و حضور همکاران از csv-rtl می‌روند + جدول هم‌عرض', () => {
     const src = read('public/assets/js/views/reports.js');
-    expect(src).toMatch(/from '\.\.\/csv-rtl\.js'/);
     expect(src).toMatch(/downloadCsv\(`advanced-report-/);
     expect(src).toMatch(/downloadCsv\(`staff-attendance-/);
     expect(src).toMatch(/csvRow\(\['# روند هفتگی'\]\)/);

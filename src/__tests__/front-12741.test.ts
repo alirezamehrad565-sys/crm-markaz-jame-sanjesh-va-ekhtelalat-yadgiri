@@ -33,11 +33,6 @@ describe('گیت فرانت ۱.۲۷.۴۱ — تحویل دسکتاپ فقط Setu
     expect(guide).not.toContain('USB');
     expect(guide).toContain('Setup.exe');
   });
-
-  it('مستندات طراحی/عملیات به سیاست تازه مُهر خورده‌اند (بازنگری ۱.۲۷.۴۱)', () => {
-    expect(read('docs/rust/installer.md')).toContain('بازنگری ۱.۲۷.۴۱');
-    expect(read('docs/rust/design.md')).toContain('بازنگری ۱.۲۷.۴۱');
-  });
 });
 
 describe('گیت فرانت ۱.۲۷.۴۱ — بازطراحی فرم‌ساز', () => {

@@ -21,11 +21,11 @@ import { buildTaxonomyPicker } from '../taxonomy.js'; // درخت واحد طب�
 
 // «کارت‌های آماده»: ریبرند بانک تمرین — هر رکورد یک کارت آمادهٔ طرح درمان است
 // حلقهٔ تکلیف (ارسال به خانواده با بله + بازگشت نتیجه) دست‌نخورده می‌ماند؛ روت #/exercises برای پایداری لینک‌ها عوض نشده
-const LIMITS = {
+export const LIMITS = {
   maxFileBytes: 50 * 1024 * 1024,
   maxFilesPerUpload: 10
 };
-const EXT_MIME_FALLBACK = {
+export const EXT_MIME_FALLBACK = {
   mp4: 'video/mp4', m4v: 'video/x-m4v', webm: 'video/webm', mov: 'video/quicktime',
   avi: 'video/x-msvideo', mkv: 'video/x-matroska', '3gp': 'video/3gpp', wmv: 'video/x-ms-wmv',
   mpeg: 'video/mpeg', mpg: 'video/mpeg',
@@ -143,8 +143,22 @@ async function exerciseThumbUrl(exId, file) {
   return objUrl;
 }
 
-const PREVIEW_EXTS = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'pdf'];
-function previewable(file) {
+export const PREVIEW_EXTS = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'pdf'];
+
+/* ۱.۲۷.۷۸-B2 — آینهٔ نرمال‌سازی فارسی سرور (fa-search::faNormalize در format.js) —
+   هم‌الگوی matchesListFilter دانش‌آموزان؛ پچِ درجای ردیف‌ها همان حکم سرور را تکرار می‌کند
+   (testing-002 ۱.۲۷.۸۲: نسخهٔ خالص پارامتری برای آزمون رفتاری) */
+export function matchesFilterCore(ex, format, published, q) {
+  if (format && ex.format !== format) return false;
+  if (published !== 'all' && Boolean(ex.published) !== (published === 'true')) return false;
+  if (q) {
+    const hay = faNormalize(`${ex.title ?? ''} ${ex.description ?? ''}`);
+    if (!hay.includes(faNormalize(q))) return false;
+  }
+  return true;
+}
+
+export function previewable(file) {
   const mime = String(file?.mime ?? '').toLowerCase();
   if (mime.startsWith('image/') || mime === 'application/pdf') return true;
   if (!mime || mime === 'application/octet-stream') {
@@ -163,14 +177,14 @@ function publishedBadge(published) {
 }
 
 
-function localMime(file) {
+export function localMime(file) {
   const t = (file.type || '').toLowerCase();
   if (t && t !== 'application/octet-stream') return t;
   const ext = (file.name || '').split('.').pop()?.toLowerCase() ?? '';
   return EXT_MIME_FALLBACK[ext] ?? t ?? 'application/octet-stream';
 }
 
-function validateLocalFile(file) {
+export function validateLocalFile(file) {
   const mime = localMime(file);
   const ext = (file.name || '').split('.').pop()?.toLowerCase() ?? '';
   if (!EXT_MIME_FALLBACK[ext] && !(mime && mime !== 'application/octet-stream')) {
@@ -817,15 +831,7 @@ export function renderExercises(container) {
   /* ۱.۲۲.۰ — آینهٔ فیلترهای ساده (نوع کارت/انتشار/جستجو) برای تصمیم پچ یا جمع‌شدن؛
      فیلترهای درخت (هدف/اختلال/پایه) سمت سرور گسترش می‌یابند — در حضورشان ctl.patch به quietSync برمی‌گردد */
   function matchesFilter(ex) {
-    if (state.format && ex.format !== state.format) return false;
-    if (state.published !== 'all' && Boolean(ex.published) !== (state.published === 'true')) return false;
-    if (state.q) {
-      /* ۱.۲۷.۷۸-B2 — آینهٔ نرمال‌سازی فارسی سرور (fa-search::faNormalize در format.js) —
-         هم‌الگوی matchesListFilter دانش‌آموزان؛ پچِ درجای ردیف‌ها همان حکم سرور را تکرار می‌کند */
-      const hay = faNormalize(`${ex.title ?? ''} ${ex.description ?? ''}`);
-      if (!hay.includes(faNormalize(state.q))) return false;
-    }
-    return true;
+    return matchesFilterCore(ex, state.format, state.published, state.q);
   }
 
   /* پس از جمع‌شدن نرمِ آخرین کارتِ ناحیه، حقیقت سرور بی‌صدا بنشیند (بدون اسکلت) */

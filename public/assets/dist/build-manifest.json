@@ -1,6 +1,6 @@
 {
   "_comment": "مانیفست باندل کلاینت؛ گات بودجه (perf-budget.mjs) از این می‌خواند. فایل ساخته‌شده است — دستی ویرایش نشود.",
-  "boot": "boot.OFTKS7GZ.js",
+  "boot": "boot.CTT3NZKV.js",
   "bootImports": [
     "chunk.KPX3C6MD.js",
     "chunk.RECL5AM3.js",
@@ -11,9 +11,9 @@
   ],
   "outputs": [
     {
-      "name": "appointments.SPPABFHZ.js",
-      "raw": 43614,
-      "gz": 13863,
+      "name": "appointments.KDDW4LEL.js",
+      "raw": 43868,
+      "gz": 14022,
       "role": "lazy"
     },
     {
@@ -35,9 +35,9 @@
       "role": "lazy"
     },
     {
-      "name": "boot.OFTKS7GZ.js",
+      "name": "boot.CTT3NZKV.js",
       "raw": 81382,
-      "gz": 26066,
+      "gz": 26067,
       "role": "boot"
     },
     {
@@ -245,9 +245,9 @@
       "role": "lazy"
     },
     {
-      "name": "clearbook.26QXYPLO.js",
-      "raw": 37827,
-      "gz": 12024,
+      "name": "clearbook.QXHACYZG.js",
+      "raw": 38053,
+      "gz": 12147,
       "role": "lazy"
     },
     {
@@ -275,9 +275,9 @@
       "role": "lazy"
     },
     {
-      "name": "exercises.I3VHYO2O.js",
-      "raw": 41558,
-      "gz": 12440,
+      "name": "exercises.MW7GJ6FJ.js",
+      "raw": 41716,
+      "gz": 12563,
       "role": "lazy"
     },
     {
@@ -401,9 +401,9 @@
       "role": "lazy"
     },
     {
-      "name": "student-profile.SDPW4235.js",
-      "raw": 189506,
-      "gz": 54642,
+      "name": "student-profile.IERXCBLI.js",
+      "raw": 189603,
+      "gz": 54712,
       "role": "lazy"
     },
     {
@@ -451,7 +451,7 @@
   ],
   "totals": {
     "files": 73,
-    "raw": 1378216,
-    "gz": 446995
+    "raw": 1378951,
+    "gz": 447471
   }
 }

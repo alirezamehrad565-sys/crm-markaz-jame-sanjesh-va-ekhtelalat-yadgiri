@@ -10,6 +10,9 @@
  */
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+// testing-002 (۱.۲۷.۸۲): ثابت تجاری مرز شیفت به‌جای پینِ متن سورس، اجرا و سنجیده می‌شود
+// @ts-ignore
+import { SHIFT_BREAK_MINUTE } from '../../public/assets/js/views/working-hours.js';
 
 const ROOT = join(__dirname, '../..');
 const JS = join(ROOT, 'public/assets/js');
@@ -19,14 +22,13 @@ describe('گیت فرانت ۱.۲۵.۵۷ — هفت خواستهٔ کارفرم�
   const app = read('app.js');
   const ui = read('ui.js');
   const bug = read('views/bug-report.js');
-  const wh = read('views/working-hours.js');
   const settings = read('views/settings.js');
   const reports = read('views/reports.js');
   const screening = read('views/screening.js');
 
   test('① سایدبار: عنکبوت + «گزارش به پشتیبانی»؛ نمای ساده با بلوک پاسخ پشتیبانی', () => {
     expect(app).toMatch(/\{ hash: '#\/bug-report', label: 'گزارش به پشتیبانی', icon: 'bug', group: 'مرکز' \}/);
-    expect(ui).toMatch(/bug: '<path d="m8 2 1\.88 1\.88"\/>/);
+    /* testing-002: پین آرایشی path SVG آیکن حذف شد — مسیر بصری آیکن قرارداد رفتاری نیست */
     expect(bug).toMatch(/'گزارش به پشتیبانی'/);
     /* ساده‌سازی: فیلد readonly صفحه و خط «گزارش‌دهنده» حذف شده‌اند؛ ارسال خودکار می‌ماند */
     expect(bug).not.toMatch(/readonly: true/);
@@ -39,9 +41,8 @@ describe('گیت فرانت ۱.۲۵.۵۷ — هفت خواستهٔ کارفرم�
     expect(bug).toMatch(/replyBlock\(rec\)/);
   });
 
-  test('② مرز شیفت عصر از ۱۳:۰۰', () => {
-    expect(wh).toMatch(/const SHIFT_BREAK_MINUTE = 13 \* 60;/);
-    expect(wh).not.toMatch(/14 \* 60/);
+  test('② مرز شیفت عصر از ۱۳:۰۰ — رفتاری: ثابت exportشده اجرا می‌شود', () => {
+    expect(SHIFT_BREAK_MINUTE).toBe(13 * 60); // ۷۸۰ دقیقه — پینِ متنِ سورس با گیت رفتاری جایگزین شد
   });
 
   test('③ توکن بات از کاربر + «دربارهٔ مرکز» قابل ویرایش + کشوی کم‌رنگ توضیح', () => {

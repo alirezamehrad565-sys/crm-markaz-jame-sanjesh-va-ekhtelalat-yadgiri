@@ -52,7 +52,7 @@ const TIMELINE_PAGE = 30;
 
 /* موج ۱ — فصل‌های روایت (طرح D «فصل‌های پرونده»): برچسب/آیکون هر فاز؛ جمع‌بندی «آمار-و-نقل»
    و نوار روند از سرور می‌آید (periodizeTimeline قطعی — بدون LLM و بدون ادعای بالینی). */
-const TIMELINE_PHASE_META = {
+export const TIMELINE_PHASE_META = {
   screening: { label: 'غربال و ورود', icon: 'clock' },
   assessment: { label: 'ارزیابی', icon: 'clip' },
   plan: { label: 'طرح درمان', icon: 'target' },
@@ -1544,7 +1544,7 @@ function openTeacherReportModal(student) {
   void close;
 }
 
-function relationLabel(rel) {
+export function relationLabel(rel) {
   return { father: 'پدر', mother: 'مادر', other: 'سایر' }[rel] ?? rel ?? '—';
 }
 
@@ -1712,7 +1712,7 @@ async function buildTeacherMessageCard(student) {
   );
 }
 
-function normalizePhoneValue(phone) {
+export function normalizePhoneValue(phone) {
   return enDigits(String(phone ?? '')).trim().replace(/[^\d+]/g, '');
 }
 
@@ -1735,7 +1735,7 @@ async function copyTextFallback(text) {
   }
 }
 
-function pickActiveLinkCode(links) {
+export function pickActiveLinkCode(links) {
   return links.find((l) => l.status === 'pending')?.code
     ?? links.find((l) => l.status === 'linked')?.code
     ?? links[0]?.code

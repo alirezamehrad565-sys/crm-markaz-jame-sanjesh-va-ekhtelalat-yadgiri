@@ -44,10 +44,11 @@ let SCALE = null; // { start, end, workStart, workEnd, yOf(m), span(a, b), total
 let VIEW = null; // دستگیره‌های نمای زندهٔ تقویم — در هر لحظه حداکثر یک نمونه
 let gridSeq = 0; // گارد نسل: پاسخ کهنهٔ ناوبری سریع نباید روی گرید تازه بنشیند
 
-function buildScale(visibleYmds, items) {
+export function buildScaleCore(visibleYmds, items, centerHours, workPpm) {
+  /* نسخهٔ خالصِ buildScale — برای آزمون رفتاری (testing-002): همهٔ ورودی‌ها پارامترند */
   const wdSet = new Set(visibleYmds.map((ymd) => iranianWeekdayOfYmd(ymd)));
   let wStart = Infinity, wEnd = -Infinity, hasHours = false;
-  for (const r of state.centerHours ?? []) {
+  for (const r of centerHours ?? []) {
     if (!wdSet.has(r.weekday)) continue;
     hasHours = true;
     wStart = Math.min(wStart, r.startMinute);
@@ -71,11 +72,15 @@ function buildScale(visibleYmds, items) {
   const offBefore = () => (workStart - start) * PPM_OFF;
   const yOf = (m) => {
     if (m <= workStart) return (m - start) * PPM_OFF;
-    if (m <= workEnd) return offBefore() + (m - workStart) * WORK_PPM;
-    return offBefore() + (workEnd - workStart) * WORK_PPM + (m - workEnd) * PPM_OFF;
+    if (m <= workEnd) return offBefore() + (m - workStart) * workPpm;
+    return offBefore() + (workEnd - workStart) * workPpm + (m - workEnd) * PPM_OFF;
   };
   const span = (a, b) => yOf(Math.min(b, end)) - yOf(Math.max(a, start));
   return { start, end, workStart, workEnd, yOf, span, total: yOf(end) };
+}
+
+function buildScale(visibleYmds, items) {
+  return buildScaleCore(visibleYmds, items, state.centerHours, WORK_PPM);
 }
 const DURATIONS = [15, 30, 45, 60, 90, 120, 180, 240]; /* S2-06 */
 
@@ -155,6 +160,13 @@ function apptStatusClass(a) {
   if (st === 'no_show') return ' is-noshow';
   return '';
 }
+
+/* testing-002 (۱.۲۷.۸۲): منطق خالص تقویم از این پس در سوئیت اجرا می‌شود (نه فقط به‌صورت متن) */
+export {
+  DAY_START, DAY_END, CELL_MINUTES, WORK_CAP,
+  DURATIONS, NEXT_ACTION_LABELS,
+  attStateOf, apptStatusClass, weekStartOf, groupByDay, isoToYmd
+};
 
 const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
 

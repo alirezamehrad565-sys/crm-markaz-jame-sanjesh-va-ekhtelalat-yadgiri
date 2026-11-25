@@ -25,8 +25,10 @@ describe('گیت B2 — جستجوی هوشمند کارت‌های آماده �
   });
 
   it('② آینهٔ کلاینت matchesFilter با faNormalize است — toLowerCase خام بازنگشته', () => {
+    /* ۱.۲۷.۸۲ (testing-002): فیلتر به matchesFilterCore پارامتری بالاکش شد — رفتارش در
+       front-exercises-logic.test.ts اجرا می‌شود (ی/ي هم‌ارز)؛ اینجا فقط سیمِ آینه پین است */
     expect(view).toContain("faNormalize(`${ex.title ?? ''} ${ex.description ?? ''}`)");
-    expect(view).toContain('faNormalize(state.q)');
+    expect(view).toContain('matchesFilterCore(ex, state.format, state.published, state.q)');
     expect(view).not.toContain('state.q.toLowerCase()');
   });
 

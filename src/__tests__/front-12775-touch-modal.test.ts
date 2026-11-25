@@ -26,18 +26,19 @@ describe('مودال/لمس/امنیت — ۱.۲۷.۷۵', () => {
   });
 
   it('② قاعدهٔ tag-chip__x با specificity زنده است + hit-area شفاف', () => {
-    expect(css).toContain('.tag-chip .tag-chip__x { width: 22px; height: 22px; position: relative; }');
-    expect(css).toContain('.tag-chip .tag-chip__x::after { content: \'\'; position: absolute; inset: -10px; }');
+    /* testing-002: قالب دقیق اعلان CSS پین نمی‌شود — اندازه‌های قراردادی a11y با regex شل‌تر گرفته می‌شوند */
+    expect(css).toMatch(/\.tag-chip\s+\.tag-chip__x\s*\{[^}]*width:\s*22px[^}]*height:\s*22px/);
+    expect(css).toMatch(/\.tag-chip\s+\.tag-chip__x::after\s*\{[^}]*inset:\s*-10px/);
   });
 
   it('③ کف لمسی ۴۲px روی coarse + hit-area کنترل‌های درون‌خطی', () => {
-    expect(css).toContain('.row-menu__btn { width: 42px; height: 42px; }');
-    expect(css).toContain('.call-badge { width: 42px; height: 42px; }');
-    expect(css).toContain('.row-menu__item { min-height: 42px; }');
-    expect(css).toContain('.att-seg__btn { min-height: 42px; min-width: 44px; }');
-    expect(css).toContain('.tag-del::after { content: \'\'; position: absolute; inset: -9px; }');
-    expect(css).toContain('.combo__clear::after { content: \'\'; position: absolute; inset: -8px; }');
-    expect(css).toContain('.toast__close::after { content: \'\'; position: absolute; inset: -6px; }');
+    expect(css).toMatch(/\.row-menu__btn\s*\{[^}]*width:\s*42px[^}]*height:\s*42px/);
+    expect(css).toMatch(/\.call-badge\s*\{[^}]*width:\s*42px[^}]*height:\s*42px/);
+    expect(css).toMatch(/\.row-menu__item\s*\{[^}]*min-height:\s*42px/);
+    expect(css).toMatch(/\.att-seg__btn\s*\{[^}]*min-height:\s*42px[^}]*min-width:\s*44px/);
+    expect(css).toMatch(/\.tag-del::after\s*\{[^}]*inset:\s*-9px/);
+    expect(css).toMatch(/\.combo__clear::after\s*\{[^}]*inset:\s*-8px/);
+    expect(css).toMatch(/\.toast__close::after\s*\{[^}]*inset:\s*-6px/);
   });
 
   it('④ embed توکن صفحهٔ بازی از safeJson می‌گذرد (نه JSON.stringify خام)', () => {
