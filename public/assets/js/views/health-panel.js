@@ -368,7 +368,7 @@ function engineBannerNode() {
       top: 'var(--sp-3)',
       left: '50%',
       transform: 'translateX(-50%)',
-      zIndex: '9999',
+      zIndex: 'var(--z-toast)', /* ۱.۲۷.۷۷: از 9999 خام به لایهٔ توست مقیاس — بنر وضعیت = هم‌لایهٔ اعلان */
       padding: 'var(--sp-2) var(--sp-4)',
       borderRadius: '10px',
       fontSize: '0.85rem',

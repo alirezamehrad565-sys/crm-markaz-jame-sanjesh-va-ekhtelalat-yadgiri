@@ -293,7 +293,8 @@ html {
 :root {
   --shadow-4: 0 4px 12px rgba(15, 23, 42, 0.07), 0 18px 40px rgba(15, 23, 42, 0.11); /* ۱.۲۷.۴۹ نرم‌تر */
   --shadow-lg: var(--shadow-3); /* نام مستعار برای سایهٔ شناورها (قبلاً تعریف نشده بود و fallback هاردکد می‌خورد) */
-  --z-sticky: 30; --z-sidebar: 40; --z-backdrop: 45; --z-dropdown: 60;
+  /* مقیاس معنایی z — ۱.۲۷.۷۷: همهٔ لایه‌های ثابت باید از همین مقیاس مصرف کنند، نه literal */
+  --z-sticky: 30; --z-drawer-backdrop: 35; --z-sidebar: 40; --z-backdrop: 45; --z-dropdown: 60;
   --z-popover: 80; --z-row-menu: 90; /* پاپ‌اور منوی ردیف (بین popover و modal) */
   --z-modal: 100; --z-toast: 200; --z-drag: 300;
 
@@ -446,7 +447,7 @@ textarea {
   border-radius: var(--radius-2xl); /* توکن‌شد (۲۸px) */
   box-shadow: var(--shadow-sidebar);
   height: calc(100vh - 28px);
-  z-index: 40;
+  z-index: var(--z-sidebar); /* ۱.۲۷.۷۷ — از literal ۴۰ */
   transition: background var(--normal);
 }
 
@@ -601,7 +602,7 @@ textarea {
 .topbar {
   position: sticky;
   top: 14px; /* هم‌تراز شناوری سایدبار () */
-  z-index: 30;
+  z-index: var(--z-sticky); /* ۱.۲۷.۷۷ — از literal ۳۰ */
   display: flex;
   align-items: center;
   gap: var(--sp-3);
@@ -757,8 +758,8 @@ textarea {
   .sidebar-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.4);
-    z-index: 35;
+    background: var(--backdrop); /* ۱.۲۷.۷۷ — از rgba خام؛ هم‌رنگ اسکریم مودال */
+    z-index: var(--z-drawer-backdrop); /* ۱.۲۷.۷۷ — از literal ۳۵ */
     border: none;
     padding: 0;
   }

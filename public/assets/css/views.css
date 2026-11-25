@@ -4752,7 +4752,7 @@ body.cb-printing #cb-print-root { display: block; }
 
 /* ── انتخابگر دانش‌آموز (دراپ‌داون کوچک) ── */
 .fin-sp { position: relative; }
-.fin-sp__dd { position: absolute; inset-inline: 0; top: calc(100% + var(--sp-1)); z-index: 30; background: var(--surface);
+.fin-sp__dd { position: absolute; inset-inline: 0; top: calc(100% + var(--sp-1)); z-index: var(--z-sticky); background: var(--surface);
   border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-2); max-height: 220px; overflow-y: auto; }
 .fin-sp__item { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; width: 100%; text-align: start;
   padding: var(--sp-2) var(--sp-3); background: none; border: 0; border-bottom: 1px solid var(--border); cursor: pointer; font: inherit; color: var(--text); }
@@ -4772,7 +4772,7 @@ body.cb-printing #cb-print-root { display: block; }
 .fin-report__meta { font-size: 9.5pt; color: #444; margin: 2px 0 14px; }
 .fin-report h3 { font-size: 11.5pt; margin: 14px 0 6px; }
 .fin-report table { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
-.fin-report th, .fin-report td { border: 1px solid var(--border-strong); padding: var(--sp-1) 7px; text-align: right; } /* #bbb به توکن مرز */
+.fin-report th, .fin-report td { border: 1px solid var(--border-strong); padding: var(--sp-1) 7px; text-align: start; } /* #bbb به توکن مرز · ۱.۲۷.۷۷: right→start (در RTL همان رندر) */
 .fin-report th { background: var(--surface-3); } /* هاردکد روشن در دارک‌تم جدول تیره را می‌شکست */
 .fin-report__sums { margin-top: 6px; }
 .fin-report__foot { margin-top: var(--sp-4); font-size: 8.5pt; color: #555; border-top: 1px solid #ccc; padding-top: 6px; }
@@ -4867,4 +4867,4 @@ body.cb-printing #cb-print-root { display: block; }
 #print-root .print-doc__title { font-weight: 700; font-size: 14pt; margin-bottom: 4px; }
 #print-root .print-doc .card { box-shadow: none; border: 1px solid #D0CABB; break-inside: avoid; }
 #print-root .print-doc table { width: 100%; font-size: 10.5pt; border-collapse: collapse; }
-#print-root .print-doc th, #print-root .print-doc td { border: 1px solid #D0CABB; padding: 4px 6px; text-align: right; }
+#print-root .print-doc th, #print-root .print-doc td { border: 1px solid #D0CABB; padding: 4px 6px; text-align: start; } /* ۱.۲۷.۷۷: right→start */

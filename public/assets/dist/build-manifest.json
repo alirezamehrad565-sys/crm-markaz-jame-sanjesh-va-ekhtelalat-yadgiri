@@ -1,6 +1,6 @@
 {
   "_comment": "مانیفست باندل کلاینت؛ گات بودجه (perf-budget.mjs) از این می‌خواند. فایل ساخته‌شده است — دستی ویرایش نشود.",
-  "boot": "boot.TKVEOXZU.js",
+  "boot": "boot.YF6PDLJ6.js",
   "bootImports": [
     "chunk.KPX3C6MD.js",
     "chunk.IMG4VDBE.js",
@@ -35,9 +35,9 @@
       "role": "lazy"
     },
     {
-      "name": "boot.TKVEOXZU.js",
-      "raw": 81368,
-      "gz": 26062,
+      "name": "boot.YF6PDLJ6.js",
+      "raw": 81381,
+      "gz": 26064,
       "role": "boot"
     },
     {
@@ -47,9 +47,9 @@
       "role": "lazy"
     },
     {
-      "name": "case-event-types.CR6YJD7W.js",
+      "name": "case-event-types.GGV6KJY2.js",
       "raw": 41675,
-      "gz": 12356,
+      "gz": 12357,
       "role": "lazy"
     },
     {
@@ -104,12 +104,6 @@
       "name": "chunk.CXETSC3K.js",
       "raw": 5804,
       "gz": 2397,
-      "role": "lazy"
-    },
-    {
-      "name": "chunk.DOKLKLDT.js",
-      "raw": 49108,
-      "gz": 17430,
       "role": "lazy"
     },
     {
@@ -203,6 +197,12 @@
       "role": "lazy"
     },
     {
+      "name": "chunk.S2PW7GUJ.js",
+      "raw": 49123,
+      "gz": 17440,
+      "role": "lazy"
+    },
+    {
       "name": "chunk.TIWLGGHJ.js",
       "raw": 7215,
       "gz": 3263,
@@ -293,21 +293,21 @@
       "role": "lazy"
     },
     {
-      "name": "form-builder.EVNRLOLO.js",
-      "raw": 23176,
-      "gz": 7164,
+      "name": "form-builder.LBZXEGJV.js",
+      "raw": 23189,
+      "gz": 7168,
       "role": "lazy"
     },
     {
-      "name": "games-console.MCL33LT3.js",
+      "name": "games-console.NMWPWL3O.js",
       "raw": 216,
       "gz": 171,
       "role": "lazy"
     },
     {
-      "name": "games.U3DZUBI7.js",
+      "name": "games.FGY5IXVU.js",
       "raw": 13513,
-      "gz": 4826,
+      "gz": 4827,
       "role": "lazy"
     },
     {
@@ -317,9 +317,9 @@
       "role": "lazy"
     },
     {
-      "name": "health-panel.WRL2PHRE.js",
-      "raw": 63276,
-      "gz": 17960,
+      "name": "health-panel.DXI6GCGB.js",
+      "raw": 63286,
+      "gz": 17961,
       "role": "lazy"
     },
     {
@@ -401,7 +401,7 @@
       "role": "lazy"
     },
     {
-      "name": "student-profile.B7CVEAYZ.js",
+      "name": "student-profile.N2RCWQC4.js",
       "raw": 189516,
       "gz": 54643,
       "role": "lazy"
@@ -451,7 +451,7 @@
   ],
   "totals": {
     "files": 73,
-    "raw": 1377368,
-    "gz": 446625
+    "raw": 1377419,
+    "gz": 446644
   }
 }

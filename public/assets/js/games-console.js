@@ -62,7 +62,7 @@ export function childSearchField({ onPick, placeholder = 'نام دانش‌آم
   const results = el('div', {
     style: inline
       ? { display: 'none', marginTop: '6px', overflow: 'hidden', borderRadius: '12px' }
-      : { position: 'absolute', zIndex: '30', top: '100%', right: '0', left: '0', display: 'none', overflow: 'hidden', borderRadius: '12px' },
+      : { position: 'absolute', zIndex: 'var(--z-dropdown)', top: '100%', right: '0', left: '0', display: 'none', overflow: 'hidden', borderRadius: '12px' }, /* ۱.۲۷.۷۷: literal ۳۰ → مقیاس معنایی */
     class: 'card'
   });
   const wrap = inline
