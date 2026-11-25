@@ -83,6 +83,10 @@ jobs:
       - name: MIGRATIONS.md sync gate
         run: node scripts/check-migrations-doc.mjs
 
+      # sdt156 (data-001) — گیت مانیفست محتوای مایگریشن‌ها: ویرایش بی‌صدای فایل اعمال‌شده را می‌گیرد
+      - name: Migrations content manifest gate
+        run: node scripts/check-migrations-manifest.mjs
+
       # v1.27.۱۹ — گیت هم‌مِهری نسخه‌ها (منبع یگانه version.ts ↔ package.json/tauri.conf.json/
       # Cargo.toml/sw.js/پین‌های index.html) — منشأ: گزارش کارفرمای ۱.۲۷.۱۸ (CARGO_PKG_VERSION
       # جامانده → گیت «نصب ارتقا ناقص» پوسته). بامپ فقط با scripts/bump-version.mjs.

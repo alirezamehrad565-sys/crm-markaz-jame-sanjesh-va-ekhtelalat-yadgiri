@@ -42,6 +42,7 @@
     "backup:local": "node scripts/ops/export-local-backup.mjs",
     "load:baseline": "node scripts/load/baseline.mjs",
     "check:d1": "node scripts/check-d1-compat.mjs",
+    "check:migrations-manifest": "node scripts/check-migrations-manifest.mjs",
     "build:engine-server": "node scripts/build-engine-server.mjs",
     "smoke:engine": "node scripts/engine/engine-smoke.mjs",
     "smoke:engine:adapter": "SMOKE_ENGINE=adapter node scripts/engine/engine-smoke.mjs",
