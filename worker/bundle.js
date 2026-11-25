@@ -1823,7 +1823,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.27.76";
+var APP_VERSION = "1.27.77";
 var NODE_MIN_VERSION = "1.26.0";
 
 // node_modules/zod/v4/classic/external.js
@@ -23599,6 +23599,38 @@ var FormResponseSubmitSchema = external_exports.object({
   token: external_exports.string().trim().max(200).optional()
 });
 
+// src/core/shared/fa-search.ts
+function toLatinDigits(value) {
+  return value.replace(/[۰-۹]/g, (d) => String("\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9".indexOf(d))).replace(/[٠-٩]/g, (d) => String("\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669".indexOf(d)));
+}
+__name(toLatinDigits, "toLatinDigits");
+function faNormalize(value) {
+  return toLatinDigits(String(value ?? "")).replace(/[\u064B-\u065F\u0670]/g, "").replace(/[يى]/g, "\u06CC").replace(/ك/g, "\u06A9").replace(/[أإآ]/g, "\u0627").replace(/ة/g, "\u0647").replace(/\u200c/g, "").replace(/\s+/g, " ").trim();
+}
+__name(faNormalize, "faNormalize");
+function sanitizeFaQuery(raw2) {
+  return faNormalize(String(raw2 ?? "")).replace(/[%_]/g, " ").replace(/\s+/g, " ").trim().slice(0, SEARCH_QUERY_MAX_LENGTH);
+}
+__name(sanitizeFaQuery, "sanitizeFaQuery");
+function likePattern(value) {
+  return `%${value}%`;
+}
+__name(likePattern, "likePattern");
+function faHaystackExpr(sqlColumn) {
+  const rules = [
+    ["\u064A", "\u06CC"],
+    ["\u0649", "\u06CC"],
+    ["\u0643", "\u06A9"],
+    ["\u0623", "\u0627"],
+    ["\u0625", "\u0627"],
+    ["\u0622", "\u0627"],
+    ["\u0629", "\u0647"],
+    ["\u200C", ""]
+  ];
+  return rules.reduce((expr, [from, to]) => `REPLACE(${expr}, '${from}', '${to}')`, sqlColumn);
+}
+__name(faHaystackExpr, "faHaystackExpr");
+
 // src/core/shared/features.ts
 var FEATURES = {
   apiKeys: false
@@ -28189,13 +28221,24 @@ var STUDENT_WAIT_PROJECTION = `,
 var STUDENT_OWNER_PROJECTION = `,
        s.owner_staff_id,
        (SELECT st2.full_name FROM staff st2 WHERE st2.id = s.owner_staff_id) AS owner_name`;
+function studentTextCondition(query, p) {
+  const q = likePattern(sanitizeFaQuery(query));
+  return {
+    sql: `(${faHaystackExpr(`(${p}first_name || ' ' || ${p}last_name)`)} LIKE ?
+          OR ${faHaystackExpr(`${p}guardian_name`)} LIKE ?
+          OR ${p}national_id LIKE ?
+          OR ${p}guardian_phone LIKE ?)`,
+    params: [q, q, q, q]
+  };
+}
+__name(studentTextCondition, "studentTextCondition");
 function studentSearchQuery(filters) {
   const conditions = [];
   const params = [];
   if (filters.query) {
-    conditions.push(`(s.first_name LIKE ? OR s.last_name LIKE ? OR s.national_id LIKE ?)`);
-    const q = `%${filters.query}%`;
-    params.push(q, q, q);
+    const text = studentTextCondition(filters.query, "s.");
+    conditions.push(text.sql);
+    params.push(...text.params);
   }
   if (filters.schoolId) {
     conditions.push("s.school_id = ?");
@@ -28765,9 +28808,9 @@ function createStudentProfileService(deps) {
       const countConditions = [];
       const countParams = [];
       if (filters.query) {
-        countConditions.push(`(first_name LIKE ? OR last_name LIKE ? OR national_id LIKE ?)`);
-        const q = `%${filters.query}%`;
-        countParams.push(q, q, q);
+        const text = studentTextCondition(filters.query, "");
+        countConditions.push(text.sql);
+        countParams.push(...text.params);
       }
       if (filters.schoolId) {
         countConditions.push("school_id = ?");
@@ -76227,22 +76270,10 @@ function registerKeysRoutes(app, service) {
 __name(registerKeysRoutes, "registerKeysRoutes");
 
 // src/application/search/pure.ts
-function toLatinDigits(value) {
-  return value.replace(/[۰-۹]/g, (d) => String("\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9".indexOf(d))).replace(/[٠-٩]/g, (d) => String("\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669".indexOf(d)));
-}
-__name(toLatinDigits, "toLatinDigits");
-function sanitizeSearchQuery(raw2) {
-  return toLatinDigits(String(raw2 ?? "")).replace(/[%_]/g, " ").replace(/\s+/g, " ").trim().slice(0, SEARCH_QUERY_MAX_LENGTH);
-}
-__name(sanitizeSearchQuery, "sanitizeSearchQuery");
 function isSearchable(value, minLength) {
   return value.length >= minLength;
 }
 __name(isSearchable, "isSearchable");
-function likePattern(value) {
-  return `%${value}%`;
-}
-__name(likePattern, "likePattern");
 var GROUP_ORDER = ["student", "staff", "school", "tag", "waitlist", "doc"];
 function orderGroups(groups) {
   return GROUP_ORDER.map((type) => groups.find((g) => g.type === type)).filter(
@@ -76261,7 +76292,7 @@ function createSearchService(deps) {
   const { db, logger } = deps;
   return {
     async globalSearch(rawQuery, actorRole) {
-      const q = sanitizeSearchQuery(rawQuery);
+      const q = sanitizeFaQuery(rawQuery);
       if (!isSearchable(q, SEARCH_QUERY_MIN_LENGTH)) {
         return { query: q, groups: [] };
       }
@@ -76273,8 +76304,9 @@ function createSearchService(deps) {
           `SELECT id, first_name, last_name, grade, national_id
              FROM students
             WHERE active = 1
-              AND (first_name LIKE ? OR last_name LIKE ? OR national_id LIKE ?
-                   OR (first_name || ' ' || last_name) LIKE ?)
+              AND (${faHaystackExpr("first_name")} LIKE ? OR ${faHaystackExpr("last_name")} LIKE ?
+                   OR national_id LIKE ?
+                   OR ${faHaystackExpr(`(first_name || ' ' || last_name)`)} LIKE ?)
             ORDER BY last_name, first_name
             LIMIT ${PER_GROUP_LIMIT.students}`,
           [pattern, pattern, pattern, pattern]
@@ -76282,7 +76314,7 @@ function createSearchService(deps) {
         db.query(
           `SELECT id, full_name, role
              FROM staff
-            WHERE active = 1 AND full_name LIKE ?
+            WHERE active = 1 AND ${faHaystackExpr("full_name")} LIKE ?
             ORDER BY full_name
             LIMIT ${PER_GROUP_LIMIT.staff}`,
           [pattern]
@@ -76290,7 +76322,7 @@ function createSearchService(deps) {
         db.query(
           `SELECT id, name, kind, code
              FROM schools
-            WHERE active = 1 AND (name LIKE ? OR (code IS NOT NULL AND code LIKE ?))
+            WHERE active = 1 AND (${faHaystackExpr("name")} LIKE ? OR (code IS NOT NULL AND code LIKE ?))
             ORDER BY name
             LIMIT ${PER_GROUP_LIMIT.schools}`,
           [pattern, pattern]
@@ -76308,8 +76340,9 @@ function createSearchService(deps) {
           `SELECT id, first_name, last_name, phone, status
              FROM waitlist
             WHERE deleted_at IS NULL
-              AND (first_name LIKE ? OR last_name LIKE ? OR phone LIKE ?
-                   OR (first_name || ' ' || last_name) LIKE ?)
+              AND (${faHaystackExpr("first_name")} LIKE ? OR ${faHaystackExpr("last_name")} LIKE ?
+                   OR phone LIKE ?
+                   OR ${faHaystackExpr(`(first_name || ' ' || last_name)`)} LIKE ?)
             ORDER BY last_name, first_name
             LIMIT ${PER_GROUP_LIMIT.waitlist}`,
           [pattern, pattern, pattern, pattern]

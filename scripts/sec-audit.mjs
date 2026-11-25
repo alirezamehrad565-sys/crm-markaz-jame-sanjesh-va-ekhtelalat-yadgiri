@@ -123,7 +123,8 @@ for (const f of walk(ROOT)) {
 try {
   const tracked = execSync('git ls-files', { cwd: ROOT, encoding: 'utf8' }).split('\n').filter(Boolean);
   for (const t of tracked) {
-    if (/\.(sqlite|db|pem|key|p12|pfx|kdbx)$/.test(t) || /(^|\/)(\.dev\.vars|auth-secret|secrets?\.|credentials)/.test(t)) {
+    /* ۱.۲۷.۷۷ — فایل‌های .example به‌صورت قراردادی بی‌رازند (نمونهٔ فلگ‌ها؛ خود قانون .env پایین همین استثنا را دارد) */
+    if (/\.(sqlite|db|pem|key|p12|pfx|kdbx)$/.test(t) || /(^|\/)(\.dev\.vars|auth-secret|secrets?\.|credentials)(?!\.example)/.test(t)) {
       add('HIGH', 'S10', path.join(ROOT, t), 0, 'فایل رازدار/دیتابیسی ردیابی‌شده در گیت');
     }
     if (/\.env/.test(t) && !/\.example/.test(t)) {
