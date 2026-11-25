@@ -88,16 +88,18 @@ export class MockD1 {
     return new MockD1PreparedStatement(this.store, sql, []);
   }
 
-  async batch(statements: MockD1PreparedStatement[]): Promise<Array<{ success: boolean; meta: Record<string, unknown> }>> {
+  async batch(statements: MockD1PreparedStatement[]): Promise<Array<{ success: boolean; meta: Record<string, unknown>; results: Record<string, unknown>[] }>> {
     if (statements.length === 0) return [];
-    const results: Array<{ success: boolean; meta: Record<string, unknown> }> = [];
+    const results: Array<{ success: boolean; meta: Record<string, unknown>; results: Record<string, unknown>[] }> = [];
     this.store.exec('BEGIN IMMEDIATE');
     try {
       for (const stmt of statements) {
-        const { changes } = (
+        const { rows, changes } = (
           stmt as unknown as { execSync(): { rows: Record<string, unknown>[]; changes: number | bigint } }
         ).execSync();
-        results.push({ success: true, meta: { changes, rows_affected: changes, duration: 0 } });
+        /* ۱.۲۷.۷۹-B2 (performance-001) — parity با D1 واقعی: ردیف‌های SELECT در results برمی‌گردند
+           (قبلاً دور ریخته می‌شد و «خواندن با batch» را در تست ناممکن می‌کرد) */
+        results.push({ success: true, meta: { changes, rows_affected: changes, duration: 0 }, results: rows });
       }
       this.store.exec('COMMIT');
       return results;
