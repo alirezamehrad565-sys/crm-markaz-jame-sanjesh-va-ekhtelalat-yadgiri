@@ -113,3 +113,21 @@ idempotency نهایی سمت ابر با `(node_code, id)` برقرار است�
 
 - **نگاشت اطلاعیه‌ها به جدول نمایشی**: مایگریشن `0112_synced_announcements` — جدول نمایشی مستقل (id اطلاعیهٔ مرکز / title / body / published_at / active / received_at). درج مستقیم در جدول `announcements` (0008) راه نیست چون `created_by NOT NULL REFERENCES staff(id)` دارد و ردیف سینک‌شدهٔ مرکز چنین FKای ندارد — درج یعنی دروغ FK. ingest اکنون پس از هر نوشتن موفق صندوق برای دامنهٔ `announcements` یک UPSERT نرم در `synced_announcements` می‌زند (خطای نگاشت فقط log.warn؛ صندوق transport log و منبع حقیقت می‌ماند). `GET /api/internal/sync/status` فیلد `synced_announcements` (COUNT) دارد. نمایش در UI اطلاعیه‌ها = گام بعدی.
 - **usage_summary منبع واقعی گرفت**: outbox موتور اکنون هر سه دامنهٔ فهرست سفید push را سرو می‌کند. آیتم `usage_summary` بکت روزانه (id = `usage-<YYYY-MM-DD>`) با شمارنده‌های تجمیعی بی‌PII: `students_active`، `appointments_total`، `appointments_7d`، `day_notes_total`، `audit_events_24h`، `inbox_items_total`. هر شمارنده یک COUNT ساده؛ جدول غایب/خطا/مقدار غیرمتناهی → فقط آن شمارنده حذف؛ payload با `UsageSummaryPayloadSchema` safeParse و ناسازگار → آیتم حذف (حکم م۲۱۰). در نود تجمیع، در ابر فقط عدد.
+
+## یال‌های مجاز درون خانوادهٔ سینک (۱.۲۷.۸۴ — architecture-007)
+
+خانوادهٔ سینک (internal-sync · node-sync · node-sync-client · node-sync-runner · cloud-setup)
+فقط از طریق aliasهای `@sync/*` به هم می‌رسند و این جهت‌ها مجازند — گیت
+`arch-sync-edges` دفترِ همین جدول را با کد هم‌خوان نگه می‌دارد (یال تازهٔ بی‌مجوز قرمز است):
+
+| یال | نوع | دلیل |
+|---|---|---|
+| `internal-sync→node-sync` | اجرایی | آینهٔ فهرست سفید push و قرارداد صندوق خروجی (rust-f9/f15) |
+| `node-sync-runner→node-sync-client` | اجرایی | رانر روی کلاینت سینک سوار می‌شود (rust-f14) |
+| `node-sync-runner→cloud-setup` | اجرایی | DOM سازندهٔ پنل سینک (csEl/csButton مشترک) |
+| `node-sync→@app/http` | application | زنجیرهٔ عمومی میزبان (architecture-008) — application→core مجاز |
+| `api-routing→@sync/*` | mount | سوارکردن زیراپ‌ها فقط با alias — مسیر نسبی/@domain ممنوع |
+
+ممنوع: وارونهٔ `node-sync→internal-sync` · هر `→@domain` در خانواده · import نسبی بین
+پوشه‌های خانواده. aliasها در tsconfig.json و vitest.config.ts ثبت‌اند؛ esbuild باندل ورکر
+همان paths را می‌خواند.

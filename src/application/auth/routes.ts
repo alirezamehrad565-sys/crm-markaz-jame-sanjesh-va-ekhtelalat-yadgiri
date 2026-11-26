@@ -7,7 +7,7 @@ import type { AuditWriter } from '@core/audit';
 import type { Logger } from '@core/logger';
 // rust-f15 — شمارش برآوردی سهمیهٔ روزانه: هر تلاش ورود (موفق/ناموفق) شمارندهٔ quota_usage را
 // جمع می‌زند. import مستقیم از service (نه barrel) تا زیراپ app.ts و زنجیرهٔ آن کشیده نشود.
-import { bumpQuotaUsage } from '../../node-sync/service';
+import { bumpQuotaUsage } from '@sync/node-sync/service';
 
 const LOGIN_MAX_FAILURES = 5; // بر اساس نام کاربری — 
 const LOGIN_IP_MAX_FAILURES = 20; // بر اساس IP (سخت‌گیرتر از ۵ نیست — NAT دفتر قفل نشود) — 

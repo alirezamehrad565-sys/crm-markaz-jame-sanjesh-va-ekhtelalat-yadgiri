@@ -64,8 +64,8 @@ import {
   ClientErrorPayloadSchema,
   HealthPingPayloadSchema,
   UsageSummaryPayloadSchema
-} from '../node-sync';
-import type { NodePushDomain } from '../node-sync';
+} from '@sync/node-sync'; /* architecture-007 ۱.۲۷.۸۴ */
+import type { NodePushDomain } from '@sync/node-sync'; /* architecture-007 ۱.۲۷.۸۴ */
 
 // ─── سقف و اعتبارسنجی since ───
 

@@ -37,9 +37,9 @@
  * فهرست سفید سه‌لایه دست‌نخورده: ابر (pull) ← کلاینت (client.ts) ← سرور میز (internal-sync).
  * push مسیر معکوس است: موتور محلی (outbox) → client.push (پیش‌فیلتر فهرست سفید) → ابر (node/push).
  */
-import { createNodeSyncClient } from '../node-sync-client/client.js';
-import { NODE_PULL_DOMAINS } from '../node-sync-client/client.js';
-import type { NodePullItem, NodeSyncStore } from '../node-sync-client/client.js';
+import { createNodeSyncClient } from '@sync/node-sync-client/client.js';
+import { NODE_PULL_DOMAINS } from '@sync/node-sync-client/client.js';
+import type { NodePullItem, NodeSyncStore } from '@sync/node-sync-client/client.js';
 import { APP_VERSION, compareSemver } from '../core/version.js';
 import { SYNC_COORD_KEY } from './coordinator.js';
 

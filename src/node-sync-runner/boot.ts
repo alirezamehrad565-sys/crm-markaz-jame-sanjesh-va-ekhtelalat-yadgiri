@@ -17,7 +17,7 @@ import { createNodeSyncRunner, CATCHUP_STATE_KEY } from './runner.js';
 import type { CatchUpStateV1, NodeSyncRunner, RunnerFetch } from './runner.js';
 import { createSyncCoordinator, COORD_INTERVAL_MS_DEFAULT } from './coordinator.js';
 import type { SyncCoordinator } from './coordinator.js';
-import type { NodeSyncStore } from '../node-sync-client/client.js';
+import type { NodeSyncStore } from '@sync/node-sync-client/client.js';
 
 export interface BootCatchUpDeps {
   /** اعتبار از اتصال ابر — در لحظهٔ بوت خوانده می‌شود (راز در انبار نمی‌نشیند) */

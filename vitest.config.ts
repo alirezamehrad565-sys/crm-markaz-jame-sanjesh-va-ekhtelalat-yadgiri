@@ -26,7 +26,13 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
       '@core': path.resolve(__dirname, './src/core'),
       '@domain': path.resolve(__dirname, './src/domain'),
-      '@app': path.resolve(__dirname, './src/application')
+      '@app': path.resolve(__dirname, './src/application'),
+      /* architecture-007 (۱.۲۷.۸۴) — خانوادهٔ سینک یک‌ریشه */
+      '@sync/internal-sync': path.resolve(__dirname, './src/internal-sync'),
+      '@sync/node-sync': path.resolve(__dirname, './src/node-sync'),
+      '@sync/node-sync-client': path.resolve(__dirname, './src/node-sync-client'),
+      '@sync/node-sync-runner': path.resolve(__dirname, './src/node-sync-runner'),
+      '@sync/cloud-setup': path.resolve(__dirname, './src/cloud-setup')
     }
   }
 });

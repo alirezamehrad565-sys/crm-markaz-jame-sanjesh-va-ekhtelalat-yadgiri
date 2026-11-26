@@ -58,9 +58,9 @@ import { registerKeysRoutes } from '@app/keys';
 import { registerSearchRoutes } from '@app/search';
 import { registerRoutes as reportRoutes } from '@app/reports';
 import { registerSessionNoteRoutes } from '@app/session-notes';
-import { createNodeSyncApp, registerCentralQuotaRoutes, registerCentralNodesMapRoutes } from '../../node-sync/app'; // rust-f4 — زیراپ سینک نودهای دسکتاپ؛ rust-f15 — دید سهمیهٔ روزانه فقط-مدیر؛ EXP-8 — نقشهٔ معماری فقط-مدیر
-import { registerInternalSyncRoutes } from '../../internal-sync'; // rust-f9 — استقرار سینک (فقط-موتور، گیت env)
-import { registerNodeSyncStatusRoute } from '../../node-sync-runner/status'; // rust-f14 — وضعیت سینک نود برای UI میز
+import { createNodeSyncApp, registerCentralQuotaRoutes, registerCentralNodesMapRoutes } from '@sync/node-sync/app'; /* architecture-007 ۱.۲۷.۸۴ */ // rust-f4 — زیراپ سینک نودهای دسکتاپ؛ rust-f15 — دید سهمیهٔ روزانه فقط-مدیر؛ EXP-8 — نقشهٔ معماری فقط-مدیر
+import { registerInternalSyncRoutes } from '@sync/internal-sync'; /* architecture-007 ۱.۲۷.۸۴ */ // rust-f9 — استقرار سینک (فقط-موتور، گیت env)
+import { registerNodeSyncStatusRoute } from '@sync/node-sync-runner/status'; /* architecture-007 ۱.۲۷.۸۴ */ // rust-f14 — وضعیت سینک نود برای UI میز
 import { createInstanceSyncApp } from '../../application/instance-sync/index'; // فاز B — هستهٔ هم‌گامی دوسویه نمونه‌ها (§۲-۴؛ گیت Bearer runtime-secret خودش)
 import { registerDesktopRoutes } from '@app/instance-sync/desktop-routes'; // فاز B — هم‌گامی میز↔ابر + کلون (سند §۲-۲/§۲-۴)
 import type { AppDeps, Services } from './composition';
