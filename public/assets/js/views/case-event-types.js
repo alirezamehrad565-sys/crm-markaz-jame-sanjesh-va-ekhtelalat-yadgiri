@@ -607,7 +607,7 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
   const tagMap = tagName instanceof Map ? tagName : new Map(Object.entries(tagName ?? {}));
   const availableTags = [...tagMap.entries()].map(([id, name]) => ({ id, name }));
 
-  const { close } = openModal({
+  const { close, root: formRoot } = openModal({
     title: isEdit ? `ویرایش قالب: ${type.title}` : 'قالب جدید — فرم‌ساز سنجش',
     wide: true,
     body: el('div', {}),
@@ -624,9 +624,9 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
       (closeModal) => el('button', { class: 'btn btn--ghost', onclick: closeModal }, 'انصراف')
     ]
   });
-  const overlays = document.querySelectorAll('.modal-overlay');
-  const lastOverlay = overlays[overlays.length - 1];
-  const bodySlot = lastOverlay?.querySelector('.modal__body') ?? null;
+  /* ۱.۲۸.۰۲ — اسلات بدنه از overlay همین مودال (handle بازگشتی) گرفته می‌شود، نه آخرین
+     overlay در DOM؛ reach-in به آخرین overlay با دو مودالِ باز به مودال دیگر می‌افتاد */
+  const bodySlot = formRoot.closest('.modal-overlay')?.querySelector('.modal__body') ?? null;
 
   function v(text) { return String(text ?? '').trim(); }
 
@@ -956,7 +956,7 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
     if (rows.length && rows[rows.length - 1].max < expectedMax) rows[rows.length - 1].max = expectedMax;
 
     let slot = null;
-    const { close } = openModal({
+    const { close, root: bandsRoot } = openModal({
       title: 'باندهای تحلیل — از کم به زیاد',
       wide: true,
       body: el('div', {}),
@@ -965,8 +965,8 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
         (closeModal) => el('button', { class: 'btn btn--ghost', onclick: closeModal }, 'انصراف')
       ]
     });
-    const _ov = document.querySelectorAll('.modal-overlay');
-    slot = _ov[_ov.length - 1]?.querySelector('.modal__body') ?? null;
+    /* ۱.۲۸.۰۲ — overlay همین مودال، نه آخرین overlay در DOM */
+    slot = bandsRoot.closest('.modal-overlay')?.querySelector('.modal__body') ?? null;
 
     function rerender() {
       const list = el('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-2)' } });
@@ -1029,7 +1029,7 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
     }
 
     let slot = null;
-    const { close } = openModal({
+    const { close, root: itemRoot } = openModal({
       title: initial ? `ویرایش آیتم: ${initial.label}` : 'آیتم جدید',
       wide: true,
       body: el('div', {}),
@@ -1038,8 +1038,8 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
         (closeModal) => el('button', { class: 'btn btn--ghost', onclick: closeModal }, 'انصراف')
       ]
     });
-    const _ov = document.querySelectorAll('.modal-overlay');
-    slot = _ov[_ov.length - 1]?.querySelector('.modal__body') ?? null;
+    /* ۱.۲۸.۰۲ — overlay همین مودال، نه آخرین overlay در DOM */
+    slot = itemRoot.closest('.modal-overlay')?.querySelector('.modal__body') ?? null;
 
     function rerender() {
       const labelInput = el('input', { class: 'input', type: 'text', value: f.label, placeholder: 'متن آیتم/پرسش', style: { width: '100%' } });

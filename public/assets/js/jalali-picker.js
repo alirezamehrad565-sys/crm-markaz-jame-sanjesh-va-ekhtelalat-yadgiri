@@ -93,12 +93,37 @@ export function jalaliDateInput({ value = '', allowClear = true, onChange } = {}
     return toJalali(gy, gm, gd);
   };
 
+  /* ۱.۲۸.۰۲ — قفل اسکرول بدنه هنگام باز بودن تقویم (الگوی کوچکِ محلی، بدون import از ui.js):
+     رزرو عرض اسکرول‌بار تا قفل‌کردن شیفت چیدمان ندهد؛ عرض صفر (اسکرول‌بار موبایل) رزرو ندارد */
+  let popScrollPrev = null;
+  let popPadPrev = null;
+  function lockScroll() {
+    popScrollPrev = document.body.style.overflow;
+    const sw = Math.max(0, window.innerWidth - document.documentElement.clientWidth);
+    document.body.style.overflow = 'hidden';
+    popPadPrev = null;
+    if (sw > 0) {
+      popPadPrev = document.body.style.paddingInlineEnd;
+      document.body.style.paddingInlineEnd = `${sw}px`;
+    }
+  }
+  function unlockScroll() {
+    if (popScrollPrev !== null) document.body.style.overflow = popScrollPrev;
+    popScrollPrev = null;
+    if (popPadPrev !== null) document.body.style.paddingInlineEnd = popPadPrev;
+    popPadPrev = null;
+  }
+
   function closePop() {
+    const hadFocus = document.activeElement;
     pop?.remove();
     pop = null;
     document.removeEventListener('mousedown', outside, true);
     document.removeEventListener('keydown', popEsc, true); /* S3-26/S8-34 */
     calBtn.setAttribute('aria-expanded', 'false');
+    unlockScroll();
+    /* ۱.۲۸.۰۲ — فوکوسِ گم‌شده (بودن روی گرهٔ داخل پاپِ حذف‌شده) به کادر تاریخ برمی‌گردد */
+    if (hadFocus && hadFocus !== document.body && !hadFocus.isConnected) field.focus();
   }
 
   /* S3-26/S8-34: Escape پاپ‌آور را می‌بندد، نه کل مودال */
@@ -125,6 +150,7 @@ export function jalaliDateInput({ value = '', allowClear = true, onChange } = {}
     document.addEventListener('mousedown', outside, true);
     document.addEventListener('keydown', popEsc, true);
     calBtn.setAttribute('aria-expanded', 'true');
+    lockScroll(); /* ۱.۲۸.۰۲ */
   }
 
   function drawPop() {

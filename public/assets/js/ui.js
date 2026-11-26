@@ -378,7 +378,10 @@ export function openModal({ title, body, actions = [], wide = false, onClose }) 
     const idx = modalStack.indexOf(overlay);
     if (idx >= 0) modalStack.splice(idx, 1);
     if (prevFocus && prevFocus.isConnected) prevFocus.focus(); // — فوکوس به عنصر فراخوان برمی‌گردد (Esc و بستن صریح)
-    if (modalStack.length === 0) document.body.style.overflow = ''; /* S11-03: با بستن آخرین مودال آزاد شود */
+    if (modalStack.length === 0) {
+      document.body.style.overflow = ''; /* S11-03: با بستن آخرین مودال آزاد شود */
+      document.body.style.paddingInlineEnd = ''; /* ۱.۲۸.۰۲: رزرو عرض اسکرول‌بار هم با آخرین مودال آزاد شود */
+    }
     const remove = () => { overlay.remove(); };
     let removed = false;
     const once = () => { if (!removed) { removed = true; remove(); } };
@@ -414,21 +417,31 @@ export function openModal({ title, body, actions = [], wide = false, onClose }) 
     }
   };
 
-  overlay.addEventListener('mousedown', (e) => {
+  /* ۱.۲۸.۰۲ — بستن با کلیک روی پس‌زمینه فقط وقتی هدفِ کلیک خودِ overlay است (نه فرزند)؛
+     click جایگزین mousedown شد تا درگِ انتخابِ متنی که روی overlay تمام می‌شود مودال را نبندد */
+  overlay.addEventListener('click', (e) => {
     if (e.target === overlay) close();
   });
   document.addEventListener('keydown', onKey);
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
   modalStack.push(overlay);
+  /* ۱.۲۸.۰۲ — قفل اسکرول با رزرو عرض اسکرول‌بار (S11-03): ناپدیدشدن اسکرول‌بار باعث شیفت
+     چیدمان نمی‌شود؛ عرض صفر (اسکرول‌بار شناور موبایل) رزروی ندارد */
+  const scrollbarW = Math.max(0, window.innerWidth - document.documentElement.clientWidth);
   document.body.style.overflow = 'hidden'; /* S11-03: بدنهٔ پشت مودال اسکرول نکند */
+  if (scrollbarW > 0) document.body.style.paddingInlineEnd = `${scrollbarW}px`;
 
   /* UX-ممیزی ui-004: فوکوس اولیه فقط روی عنصر واقعاً رندرشده — همان صافی getClientRects
      تلهٔ فوکوس؛ querySelector خام می‌توانست input مخفی (مثل چک‌باکس switch) را فوکوس کند */
   const first = ['input', 'select', 'textarea', 'button.btn--primary']
     .map((sel) => focusablesOf().find((n) => n.matches(sel)))
     .find(Boolean);
-  if (first) setTimeout(() => first.focus(), 60);
+  if (first) setTimeout(() => {
+    /* ۱.۲۸.۰۲ — اگر مودال پیش از شلیک تایمر بسته شده، فوکوس به گرهٔ حذف‌شده نرود */
+    if (!overlay.isConnected || modalStack.indexOf(overlay) < 0) return;
+    first.focus();
+  }, 60);
 
   return { close, root: modal };
 }
@@ -445,7 +458,14 @@ export function populateModalShell(shell, { title, body, actions = [], wide }) {
   const titleId = titleEl?.id;
   shell.root.replaceChildren(...modalInner({ titleId, title: title ?? titleEl?.textContent ?? '', body, actions, close: shell.close }));
   const first = shell.root.querySelector('.modal__body input, .modal__body select, .modal__body textarea');
-  if (first) setTimeout(() => first.focus(), 60);
+  /* ۱.۲۸.۰۲ — re-focus پس از لودِ داده دزدانه نباشد: اگر کاربر در فاصلهٔ لود فوکوس را جابه‌جا
+     کرده، پس نگیریم — فقط وقتی فوکوس روی خود overlay یا body است به اولین فیلد می‌رود */
+  const overlayEl = shell.root.closest('.modal-overlay');
+  if (first) setTimeout(() => {
+    const ae = document.activeElement;
+    if (ae !== document.body && ae !== overlayEl) return;
+    first.focus();
+  }, 60);
 }
 
 /* ۱.۲۷.۷۲ — لنگر مشترک پاپ‌اور: در موبایل fixed بدون top از دکمه جدا می‌افتاد؛
