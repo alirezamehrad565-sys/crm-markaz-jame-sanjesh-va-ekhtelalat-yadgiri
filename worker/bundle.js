@@ -24151,6 +24151,18 @@ function validateExerciseFileInput(input2, maxBytes = MAX_EXERCISE_FILE_BYTES) {
   return { ok: true };
 }
 __name(validateExerciseFileInput, "validateExerciseFileInput");
+function validateAttachmentFileInput(allowedMimes, input2, maxBytes, mimeRejectReason = "\u0627\u06CC\u0646 \u0646\u0648\u0639 \u0641\u0627\u06CC\u0644 \u0645\u062C\u0627\u0632 \u0646\u06CC\u0633\u062A \u2014 \u0641\u0642\u0637 \u0633\u0646\u062F \u0648 \u062A\u0635\u0648\u06CC\u0631") {
+  const filename = sanitizeFilename(input2.filename);
+  if (filename.length === 0) return { ok: false, reason: "\u0646\u0627\u0645 \u0641\u0627\u06CC\u0644 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A" };
+  if (!allowedMimes.includes(input2.mimeType.toLowerCase())) {
+    return { ok: false, reason: mimeRejectReason };
+  }
+  const bytes = estimateBase64Bytes(stripDataUrlPrefix(input2.contentB64));
+  if (bytes <= 0) return { ok: false, reason: "\u0645\u062D\u062A\u0648\u0627\u06CC \u0641\u0627\u06CC\u0644 \u062E\u0627\u0644\u06CC \u0627\u0633\u062A" };
+  if (bytes > maxBytes) return { ok: false, reason: sizeLimitMessage(maxBytes) };
+  return { ok: true };
+}
+__name(validateAttachmentFileInput, "validateAttachmentFileInput");
 function validateExerciseFileBytes(input2, maxBytes) {
   const filename = sanitizeFilename(input2.filename);
   if (filename.length === 0) return { ok: false, reason: "\u0646\u0627\u0645 \u0641\u0627\u06CC\u0644 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A" };
@@ -24679,6 +24691,7 @@ function errorHandler2(err, c) {
     );
   }
   if (err instanceof AppError) {
+    if (err instanceof RateLimitError) c.header("Retry-After", String(err.retryAfterSeconds));
     return c.json(
       withRequestId({
         error: err.code,
@@ -27316,7 +27329,8 @@ function selectAppointments(filters) {
   }
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
   return {
-    sql: `SELECT ${APPOINTMENT_COLS} FROM appointments ${where} ORDER BY start_at`,
+    sql: `SELECT ${APPOINTMENT_COLS} FROM appointments ${where} ORDER BY start_at, id`,
+    // ترتیب پایدار: هم‌زمان‌ها با id (۱.۲۷.۸۵)
     params
   };
 }
@@ -28935,7 +28949,8 @@ function studentSearchQuery(filters) {
                  ${STUDENT_WAIT_PROJECTION}
                  ${STUDENT_OWNER_PROJECTION}
             FROM students s
-            LEFT JOIN classes c ON c.id = s.class_id ${where} ORDER BY s.last_name, s.first_name LIMIT ? OFFSET ?`,
+            LEFT JOIN classes c ON c.id = s.class_id ${where} ORDER BY s.last_name, s.first_name, s.id LIMIT ? OFFSET ?`,
+    // گره خوردن نام‌های برابر با id — ترتیب پایدار (۱.۲۷.۸۵)
     params
   };
 }
@@ -29965,7 +29980,7 @@ function createStudentProfileService(deps) {
            JOIN appointments a ON a.id = a_s.appointment_id
            LEFT JOIN staff s ON s.id = a.staff_id
           WHERE ${conditions.join(" AND ")}
-          ORDER BY a.start_at DESC
+          ORDER BY a.start_at DESC, a.id DESC -- \u062A\u0631\u062A\u06CC\u0628 \u067E\u0627\u06CC\u062F\u0627\u0631: \u0647\u0645\u200C\u0632\u0645\u0627\u0646\u200C\u0647\u0627 \u0628\u0627 id (\u06F1.\u06F2\u06F7.\u06F8\u06F5)
           LIMIT ${limit}`,
         params
       );
@@ -32027,8 +32042,10 @@ function createWaitlistService(deps) {
         params.push(filters.priority);
       }
       if (filters.q && filters.q.trim()) {
-        const pattern = `%${filters.q.trim()}%`;
-        conditions.push("(w.first_name LIKE ? OR w.last_name LIKE ? OR w.phone LIKE ? OR (w.first_name || ' ' || w.last_name) LIKE ?)");
+        const pattern = likePattern(sanitizeFaQuery(filters.q));
+        conditions.push(
+          `(${faHaystackExpr("w.first_name")} LIKE ? OR ${faHaystackExpr("w.last_name")} LIKE ? OR w.phone LIKE ? OR ${faHaystackExpr(`(w.first_name || ' ' || w.last_name)`)} LIKE ?)`
+        );
         params.push(pattern, pattern, pattern, pattern);
       }
       const sql = `${SELECT_BASE} WHERE ${conditions.join(" AND ")} LIMIT ${WAITLIST_LIST_LIMIT}`;
@@ -38657,27 +38674,8 @@ function stripDataUrlPrefix2(b64) {
   return b64.replace(/^data:[^;]*;base64,/, "");
 }
 __name(stripDataUrlPrefix2, "stripDataUrlPrefix");
-function isAllowedMimeType(mime) {
-  return ALLOWED_FILE_MIME_TYPES.includes(mime.toLowerCase());
-}
-__name(isAllowedMimeType, "isAllowedMimeType");
-function sanitizeFilename2(raw2) {
-  const base = raw2.split(/[/\\]/).pop() ?? "";
-  return base.replace(/\s+/g, " ").trim().slice(0, 200);
-}
-__name(sanitizeFilename2, "sanitizeFilename");
 function validateFileInput(input2) {
-  const filename = sanitizeFilename2(input2.filename);
-  if (filename.length === 0) return { ok: false, reason: "\u0646\u0627\u0645 \u0641\u0627\u06CC\u0644 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A" };
-  if (!isAllowedMimeType(input2.mimeType)) {
-    return { ok: false, reason: "\u0627\u06CC\u0646 \u0646\u0648\u0639 \u0641\u0627\u06CC\u0644 \u0645\u062C\u0627\u0632 \u0646\u06CC\u0633\u062A \u2014 \u0641\u0642\u0637 \u0633\u0646\u062F \u0648 \u062A\u0635\u0648\u06CC\u0631" };
-  }
-  const bytes = estimateBase64Bytes2(stripDataUrlPrefix2(input2.contentB64));
-  if (bytes <= 0) return { ok: false, reason: "\u0645\u062D\u062A\u0648\u0627\u06CC \u0641\u0627\u06CC\u0644 \u062E\u0627\u0644\u06CC \u0627\u0633\u062A" };
-  if (bytes > MAX_FILE_BYTES) {
-    return { ok: false, reason: "\u062D\u062C\u0645 \u0641\u0627\u06CC\u0644 \u0628\u06CC\u0634 \u0627\u0632 \u06F5\u06F1\u06F2 \u06A9\u06CC\u0644\u0648\u0628\u0627\u06CC\u062A \u0627\u0633\u062A" };
-  }
-  return { ok: true };
+  return validateAttachmentFileInput(ALLOWED_FILE_MIME_TYPES, input2, MAX_FILE_BYTES);
 }
 __name(validateFileInput, "validateFileInput");
 function base64ToBytes2(b64) {
@@ -42620,7 +42618,7 @@ function createCaseEventsService(deps) {
       const check2 = validateFileInput(input2);
       if (!check2.ok) throw new ValidationError(check2.reason);
       const contentB64 = stripDataUrlPrefix2(input2.contentB64);
-      const filename = sanitizeFilename2(input2.filename);
+      const filename = sanitizeFilename(input2.filename);
       return db.transaction(async (tx) => {
         const row = await tx.queryOne(
           `SELECT status FROM case_events WHERE id = ?`,
@@ -43131,7 +43129,7 @@ function safeJsonEmbed2(v) {
 __name(safeJsonEmbed2, "safeJsonEmbed");
 
 // src/core/version.ts
-var APP_VERSION = "1.27.85";
+var APP_VERSION = "1.27.86";
 var NODE_MIN_VERSION = "1.26.0";
 
 // src/domain/case-events/public-form.ts
@@ -64005,11 +64003,6 @@ function escapeLike2(raw2) {
   return String(raw2 ?? "").replace(/[%_\\]/g, (ch) => `\\${ch}`);
 }
 __name(escapeLike2, "escapeLike");
-function sanitizeFilename3(raw2) {
-  const base = String(raw2 ?? "").split(/[/\\]/).pop() ?? "";
-  return base.replace(/\s+/g, " ").trim().slice(0, 200);
-}
-__name(sanitizeFilename3, "sanitizeFilename");
 function concatSegments4(segments) {
   if (segments.length === 1) return segments[0];
   const total = segments.reduce((n, s) => n + s.length, 0);
@@ -64145,7 +64138,7 @@ function createDocsService(deps) {
     if (!ALLOWED_FILE_MIME_TYPES.includes(mime)) {
       throw new ValidationError("\u0646\u0648\u0639 \u0641\u0627\u06CC\u0644 \u0645\u062C\u0627\u0632 \u0646\u06CC\u0633\u062A \u2014 \u0641\u0642\u0637 \u0633\u0646\u062F (PDF/Word/Excel/\u0645\u062A\u0646) \u0648 \u062A\u0635\u0648\u06CC\u0631 (JPG/PNG/WebP)");
     }
-    const filename = sanitizeFilename3(file2.filename);
+    const filename = sanitizeFilename(file2.filename);
     if (!filename) throw new ValidationError("\u0646\u0627\u0645 \u0641\u0627\u06CC\u0644 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A");
     if (!Number.isFinite(file2.size) || file2.size <= 0) throw new ValidationError("\u0645\u062D\u062A\u0648\u0627\u06CC \u0641\u0627\u06CC\u0644 \u062E\u0627\u0644\u06CC \u0627\u0633\u062A");
     if (file2.size > Math.min(storage.maxObjectBytes, MAX_EXERCISE_PANEL_FILE_BYTES)) {
@@ -71210,6 +71203,7 @@ function createDigestSection(ctx) {
       const clinicName = await deps.settings.getClinicName();
       const { start, end } = tehranRange(todayYmd, todayYmd);
       const staffNames = await staffNamesMap();
+      const dayAppointments = await appointments.list({ from: start, to: end });
       const enqueueDigest = /* @__PURE__ */ __name(async (template, chatId, extra) => {
         const outcome = await notify.enqueue({
           channel,
@@ -71226,7 +71220,7 @@ function createDigestSection(ctx) {
         `SELECT staff_id, chat_id FROM staff_bot_links WHERE status = 'linked' AND chat_id IS NOT NULL`
       );
       for (const row of staffChatRows) {
-        const list = await appointments.list({ staffId: row.staff_id, from: start, to: end });
+        const list = dayAppointments.filter((a) => a.staffId === row.staff_id);
         const studentIds = [...new Set(list.flatMap((a) => a.students.map((s) => s.studentId)))];
         const names = await studentNamesMap(studentIds);
         const entries = buildScheduleEntries(list, { kind: "staff", names });
@@ -71241,14 +71235,34 @@ function createDigestSection(ctx) {
           UNION
          SELECT DISTINCT chat_id FROM notification_prefs WHERE chat_id IS NOT NULL AND reminders_enabled = 1 AND channel = 'bale'`
       );
+      const chatIds = parentChatRows.map((r) => r.chat_id);
+      const linkedByChat = /* @__PURE__ */ new Map();
+      const prefByChat = /* @__PURE__ */ new Map();
+      for (const chunk of inParamChunks(chatIds)) {
+        const linkRows = await db.query(
+          `SELECT DISTINCT chat_id, student_id FROM bot_links
+            WHERE status = 'linked' AND chat_id IN (${inPlaceholders(chunk.length)})`,
+          chunk
+        );
+        for (const r of linkRows) {
+          const arr = linkedByChat.get(r.chat_id) ?? [];
+          arr.push(r.student_id);
+          linkedByChat.set(r.chat_id, arr);
+        }
+        const prefRows = await db.query(
+          `SELECT chat_id, student_id FROM notification_prefs
+            WHERE chat_id IN (${inPlaceholders(chunk.length)}) AND reminders_enabled = 1`,
+          chunk
+        );
+        for (const r of prefRows) {
+          const arr = prefByChat.get(r.chat_id) ?? [];
+          arr.push(r.student_id);
+          prefByChat.set(r.chat_id, arr);
+        }
+      }
       for (const row of parentChatRows) {
-        const chatStudentRows = await db.query(
-          ...spreadStmt(selectStudentIdsByChat(row.chat_id))
-        );
-        const prefIds = await db.query(
-          `SELECT student_id FROM notification_prefs WHERE chat_id = ? AND reminders_enabled = 1`,
-          [row.chat_id]
-        );
+        const chatStudentRows = (linkedByChat.get(row.chat_id) ?? []).map((student_id) => ({ student_id }));
+        const prefIds = (prefByChat.get(row.chat_id) ?? []).map((student_id) => ({ student_id }));
         const studentIds = [.../* @__PURE__ */ new Set([...chatStudentRows.map((r) => r.student_id), ...prefIds.map((r) => r.student_id)])];
         if (studentIds.length === 0) {
           summary.skippedEmpty += 1;
@@ -71257,8 +71271,8 @@ function createDigestSection(ctx) {
         const merged = [];
         const seen = /* @__PURE__ */ new Set();
         for (const sid of studentIds) {
-          const list = await appointments.list({ studentId: sid, from: start, to: end });
-          for (const a of list) {
+          for (const a of dayAppointments) {
+            if (!a.students.some((s) => s.studentId === sid)) continue;
             if (!seen.has(a.id)) {
               seen.add(a.id);
               merged.push(a);
@@ -71288,8 +71302,8 @@ function createDigestSection(ctx) {
         const merged = [];
         const seen = /* @__PURE__ */ new Set();
         for (const sid of classStudentIds) {
-          const list = await appointments.list({ studentId: sid, from: start, to: end });
-          for (const a of list) {
+          for (const a of dayAppointments) {
+            if (!a.students.some((s) => s.studentId === sid)) continue;
             if (!seen.has(a.id)) {
               seen.add(a.id);
               merged.push(a);
@@ -72524,9 +72538,42 @@ function isCreatedTemplate(template) {
 }
 __name(isCreatedTemplate, "isCreatedTemplate");
 
+// src/application/notify/enqueue-to-many.ts
+async function enqueueToMany(notify, input2) {
+  const outcomes = await notify.enqueueMany(
+    input2.chats.map((chat) => ({
+      channel: input2.channel,
+      template: input2.template,
+      recipient: chat,
+      studentId: input2.studentId ?? null,
+      staffId: input2.staffId ?? null,
+      payload: input2.payloadFor(chat),
+      dedupKey: input2.dedupKeyFor(chat)
+    }))
+  );
+  const sent = outcomes.filter((o) => !o.duplicate).length;
+  if (sent > 0 && input2.flush !== false) await notify.dispatchPending(50);
+  return sent;
+}
+__name(enqueueToMany, "enqueueToMany");
+
 // src/application/notify/senders.ts
 function createNotificationSendersSection(ctx) {
   const { deps, db, audit, log, notify, now, appointments, students, studentNamesMap, staffNamesMap } = ctx;
+  async function familyTargets(studentId) {
+    const linkRows = await db.query(
+      `SELECT DISTINCT chat_id FROM bot_links
+        WHERE student_id = ? AND status = 'linked' AND chat_id IS NOT NULL`,
+      [studentId]
+    );
+    const prefRows = await db.query(
+      `SELECT chat_id FROM notification_prefs
+        WHERE student_id = ? AND chat_id IS NOT NULL AND channel = 'bale'`,
+      [studentId]
+    );
+    return [.../* @__PURE__ */ new Set([...linkRows.map((r) => r.chat_id), ...prefRows.map((r) => r.chat_id)])];
+  }
+  __name(familyTargets, "familyTargets");
   return {
     async sendReportToStudentTeacher(studentId, text, actor) {
       const student = await students.getStudentById(studentId);
@@ -72539,24 +72586,19 @@ function createNotificationSendersSection(ctx) {
         throw new ConflictError("\u0645\u0639\u0644\u0645 \u0627\u06CC\u0646 \u06A9\u0644\u0627\u0633 \u0647\u0646\u0648\u0632 \u0628\u0627\u062A \u0631\u0627 \u0645\u062A\u0635\u0644 \u0646\u06A9\u0631\u062F\u0647 \u0627\u0633\u062A \u2014 \u0628\u0627 \u0633\u0627\u062E\u062A \xAB\u06A9\u062F \u0627\u062A\u0635\u0627\u0644 \u0645\u0639\u0644\u0645\xBB \u062F\u0631 \u0628\u062E\u0634 \u0645\u062F\u0627\u0631\u0633\u060C \u0627\u0648 \u0631\u0627 \u0645\u062A\u0635\u0644 \u06A9\u0646\u06CC\u062F");
       }
       const clinicName = await deps.settings.getClinicName();
-      let enqueued = 0;
-      for (const chatId of targets) {
-        const outcome = await notify.enqueue({
-          channel: notify.getChannel("bale") ? "bale" : "internal",
-          template: "teacher_report",
-          recipient: chatId,
-          studentId,
-          payload: {
-            studentName: `${student.firstName} ${student.lastName}`,
-            className: cls?.name ?? "",
-            extra: text,
-            clinicName
-          },
-          dedupKey: `teacher-report:${studentId}:${now().toISOString()}:${chatId}`
-        });
-        if (!outcome.duplicate) enqueued++;
-      }
-      if (enqueued > 0) await notify.dispatchPending(50);
+      const enqueued = await enqueueToMany(notify, {
+        channel: notify.getChannel("bale") ? "bale" : "internal",
+        template: "teacher_report",
+        chats: targets,
+        payloadFor: /* @__PURE__ */ __name(() => ({
+          studentName: `${student.firstName} ${student.lastName}`,
+          className: cls?.name ?? "",
+          extra: text,
+          clinicName
+        }), "payloadFor"),
+        dedupKeyFor: /* @__PURE__ */ __name((chatId) => `teacher-report:${studentId}:${now().toISOString()}:${chatId}`, "dedupKeyFor"),
+        studentId
+      });
       await audit.log({
         actorId: actor.staffId,
         action: "notification.teacher_report",
@@ -72571,38 +72613,23 @@ function createNotificationSendersSection(ctx) {
     async sendReportToStudentFamily(studentId, text, actor) {
       const student = await students.getStudentById(studentId);
       if (!student) throw new NotFoundError("\u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632");
-      const linkRows = await db.query(
-        `SELECT DISTINCT chat_id FROM bot_links
-          WHERE student_id = ? AND status = 'linked' AND chat_id IS NOT NULL`,
-        [studentId]
-      );
-      const prefRows = await db.query(
-        `SELECT chat_id FROM notification_prefs
-          WHERE student_id = ? AND chat_id IS NOT NULL AND channel = 'bale'`,
-        [studentId]
-      );
-      const targets = [.../* @__PURE__ */ new Set([...linkRows.map((r) => r.chat_id), ...prefRows.map((r) => r.chat_id)])];
+      const targets = await familyTargets(studentId);
       if (targets.length === 0) {
         throw new ConflictError("\u062E\u0627\u0646\u0648\u0627\u062F\u0647\u0654 \u0627\u06CC\u0646 \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \u0647\u0646\u0648\u0632 \u0628\u0627\u062A \u0631\u0627 \u0645\u062A\u0635\u0644 \u0646\u06A9\u0631\u062F\u0647 \u0627\u0633\u062A \u2014 \u0627\u0628\u062A\u062F\u0627 \u062F\u0631 \u062A\u0628 \u0627\u0631\u062A\u0628\u0627\u0637\u0627\u062A \xAB\u0644\u06CC\u0646\u06A9 \u0627\u062A\u0635\u0627\u0644 \u062E\u0627\u0646\u0648\u0627\u062F\u0647\xBB \u0628\u0633\u0627\u0632\u06CC\u062F \u0648 \u0628\u0647 \u0622\u0646\u0647\u0627 \u0628\u062F\u0647\u06CC\u062F");
       }
       const clinicName = await deps.settings.getClinicName();
-      let enqueued = 0;
-      for (const chatId of targets) {
-        const outcome = await notify.enqueue({
-          channel: notify.getChannel("bale") ? "bale" : "internal",
-          template: "family_report",
-          recipient: chatId,
-          studentId,
-          payload: {
-            studentName: `${student.firstName} ${student.lastName}`,
-            extra: text,
-            clinicName
-          },
-          dedupKey: `family-report:${studentId}:${now().toISOString()}:${chatId}`
-        });
-        if (!outcome.duplicate) enqueued++;
-      }
-      if (enqueued > 0) await notify.dispatchPending(50);
+      const enqueued = await enqueueToMany(notify, {
+        channel: notify.getChannel("bale") ? "bale" : "internal",
+        template: "family_report",
+        chats: targets,
+        payloadFor: /* @__PURE__ */ __name(() => ({
+          studentName: `${student.firstName} ${student.lastName}`,
+          extra: text,
+          clinicName
+        }), "payloadFor"),
+        dedupKeyFor: /* @__PURE__ */ __name((chatId) => `family-report:${studentId}:${now().toISOString()}:${chatId}`, "dedupKeyFor"),
+        studentId
+      });
       await audit.log({
         actorId: actor.staffId,
         action: "notification.family_report",
@@ -72793,17 +72820,7 @@ function createNotificationSendersSection(ctx) {
         [appointmentId]
       );
       if (!appt || appt.status === "cancelled") return;
-      const linkRows = await db.query(
-        `SELECT DISTINCT chat_id FROM bot_links
-          WHERE student_id = ? AND status = 'linked' AND chat_id IS NOT NULL`,
-        [studentId]
-      );
-      const prefRows = await db.query(
-        `SELECT chat_id FROM notification_prefs
-          WHERE student_id = ? AND chat_id IS NOT NULL AND channel = 'bale'`,
-        [studentId]
-      );
-      const targets = [.../* @__PURE__ */ new Set([...linkRows.map((r) => r.chat_id), ...prefRows.map((r) => r.chat_id)])];
+      const targets = await familyTargets(studentId);
       if (targets.length === 0) return;
       const [names, clinicName] = await Promise.all([
         studentNamesMap([studentId]),
@@ -72816,19 +72833,19 @@ function createNotificationSendersSection(ctx) {
         timeLabel: tehranTimeLabel(appt.start_at),
         clinicName
       };
-      let enqueued = 0;
-      for (const chatId of targets) {
-        const outcome = await notify.enqueue({
-          channel: notify.getChannel("bale") ? "bale" : "internal",
+      const channel = notify.getChannel("bale") ? "bale" : "internal";
+      const outcomes = await notify.enqueueMany(
+        targets.map((chatId) => ({
+          channel,
           template: "attendance_absent",
           recipient: chatId,
           studentId,
           appointmentId,
           payload,
           dedupKey: `att-absent:${appointmentId}:${studentId}:${chatId}`
-        });
-        if (!outcome.duplicate) enqueued++;
-      }
+        }))
+      );
+      const enqueued = outcomes.filter((o) => !o.duplicate).length;
       if (enqueued > 0) await notify.dispatchPending(50);
       await audit.log({
         actorId: "system",
@@ -72840,39 +72857,23 @@ function createNotificationSendersSection(ctx) {
       log.info("attendance.absent.notified", { appointmentId, targets: targets.length, enqueued });
     },
     async notifyHomeworkGraded(input2) {
-      const linkRows = await db.query(
-        `SELECT DISTINCT chat_id FROM bot_links
-          WHERE student_id = ? AND status = 'linked' AND chat_id IS NOT NULL`,
-        [input2.studentId]
-      );
-      const prefRows = await db.query(
-        `SELECT chat_id FROM notification_prefs
-          WHERE student_id = ? AND chat_id IS NOT NULL AND channel = 'bale'`,
-        [input2.studentId]
-      );
-      const targets = [.../* @__PURE__ */ new Set([...linkRows.map((r) => r.chat_id), ...prefRows.map((r) => r.chat_id)])];
+      const targets = await familyTargets(input2.studentId);
       if (targets.length === 0) return;
       const clinicName = await deps.settings.getClinicName();
-      const channel = notify.getChannel("bale") ? "bale" : "internal";
-      let enqueued = 0;
-      for (const chatId of targets) {
-        const outcome = await notify.enqueue({
-          channel,
-          template: "homework_graded",
-          recipient: chatId,
-          studentId: input2.studentId,
-          payload: {
-            studentName: input2.studentName,
-            exerciseTitle: input2.exerciseTitle,
-            feedback: input2.feedback,
-            senderName: input2.gradedByName ?? void 0,
-            clinicName
-          },
-          dedupKey: `hw-graded:${input2.studentId}:${input2.exerciseTitle}:${chatId}`
-        });
-        if (!outcome.duplicate) enqueued += 1;
-      }
-      if (enqueued > 0) await notify.dispatchPending(50);
+      const enqueued = await enqueueToMany(notify, {
+        channel: notify.getChannel("bale") ? "bale" : "internal",
+        template: "homework_graded",
+        chats: targets,
+        payloadFor: /* @__PURE__ */ __name(() => ({
+          studentName: input2.studentName,
+          exerciseTitle: input2.exerciseTitle,
+          feedback: input2.feedback,
+          senderName: input2.gradedByName ?? void 0,
+          clinicName
+        }), "payloadFor"),
+        dedupKeyFor: /* @__PURE__ */ __name((chatId) => `hw-graded:${input2.studentId}:${input2.exerciseTitle}:${chatId}`, "dedupKeyFor"),
+        studentId: input2.studentId
+      });
       await audit.log({
         actorId: "system",
         action: "notification.homework_graded",
@@ -72898,26 +72899,20 @@ function createNotificationSendersSection(ctx) {
       if (todo.dueAt) {
         extraLines.push(`\u0645\u0647\u0644\u062A: ${jalaliFullLabel(tehranYmdOf(todo.dueAt))} \u0633\u0627\u0639\u062A ${faDigits(tehranTimeLabel(todo.dueAt))}`);
       }
-      let enqueued = 0;
-      let duplicates = 0;
-      for (const r of chatRows) {
-        const outcome = await notify.enqueue({
-          channel,
-          template: "todo_assigned",
-          recipient: r.chat_id,
-          staffId: todo.assigneeId,
-          payload: {
-            staffName: assigneeName,
-            taskTitle: todo.title,
-            extra: extraLines.join("\n"),
-            clinicName
-          },
-          dedupKey: `todo-assigned:${todo.id}:${todo.assigneeId}`
-        });
-        if (outcome.duplicate) duplicates += 1;
-        else enqueued += 1;
-      }
-      if (enqueued > 0) await notify.dispatchPending(50);
+      const enqueued = await enqueueToMany(notify, {
+        channel,
+        template: "todo_assigned",
+        chats: chatRows.map((r) => r.chat_id),
+        payloadFor: /* @__PURE__ */ __name(() => ({
+          staffName: assigneeName,
+          taskTitle: todo.title,
+          extra: extraLines.join("\n"),
+          clinicName
+        }), "payloadFor"),
+        dedupKeyFor: /* @__PURE__ */ __name(() => `todo-assigned:${todo.id}:${todo.assigneeId}`, "dedupKeyFor"),
+        staffId: todo.assigneeId
+      });
+      const duplicates = chatRows.length - enqueued;
       log.info("todo.assigned.notified", { todoId: todo.id, enqueued, duplicates, channel });
     },
     async enqueuePendingAttendanceNudges() {
@@ -73438,25 +73433,6 @@ function extractChatId(update) {
   return id === void 0 || id === null ? null : String(id);
 }
 __name(extractChatId, "extractChatId");
-
-// src/application/notify/enqueue-to-many.ts
-async function enqueueToMany(notify, input2) {
-  const outcomes = await notify.enqueueMany(
-    input2.chats.map((chat) => ({
-      channel: input2.channel,
-      template: input2.template,
-      recipient: chat,
-      studentId: input2.studentId ?? null,
-      staffId: input2.staffId ?? null,
-      payload: input2.payloadFor(chat),
-      dedupKey: input2.dedupKeyFor(chat)
-    }))
-  );
-  const sent = outcomes.filter((o) => !o.duplicate).length;
-  if (sent > 0 && input2.flush !== false) await notify.dispatchPending(50);
-  return sent;
-}
-__name(enqueueToMany, "enqueueToMany");
 
 // src/application/settings/service.ts
 function epochUtcOfTehranYmd(ymd) {
@@ -74896,6 +74872,7 @@ __name(capItems, "capItems");
 
 // src/application/search/service.ts
 var PER_GROUP_LIMIT = { students: 6, staff: 4, schools: 3, tags: 4, waitlist: 4 };
+var DOCS_LIMIT = 4;
 function createSearchService(deps) {
   const { db, logger } = deps;
   return {
@@ -74907,126 +74884,83 @@ function createSearchService(deps) {
       const pattern = likePattern(q);
       const started = Date.now();
       const canSeeDocs = actorRole === "manager" || actorRole === "secretary";
-      const [studentRows, staffRows, schoolRows, tagRows, waitlistRows, docRows] = await Promise.all([
-        db.query(
-          `SELECT id, first_name, last_name, grade, national_id
+      const docsBranch = canSeeDocs ? `UNION ALL SELECT * FROM (
+             SELECT 'doc' AS kind, id, title, category AS subtitle
+               FROM docs
+              WHERE deleted_at IS NULL
+                AND (title LIKE ? OR description LIKE ? OR tags LIKE ?)
+              ORDER BY created_at DESC
+              LIMIT ${DOCS_LIMIT}
+           )` : "";
+      const rows = await db.query(
+        `SELECT * FROM (
+           SELECT 'student' AS kind, id,
+                  (first_name || ' ' || last_name) AS title,
+                  COALESCE(grade, national_id) AS subtitle
              FROM students
             WHERE active = 1
               AND (${faHaystackExpr("first_name")} LIKE ? OR ${faHaystackExpr("last_name")} LIKE ?
                    OR national_id LIKE ?
                    OR ${faHaystackExpr(`(first_name || ' ' || last_name)`)} LIKE ?)
             ORDER BY last_name, first_name
-            LIMIT ${PER_GROUP_LIMIT.students}`,
-          [pattern, pattern, pattern, pattern]
-        ),
-        db.query(
-          `SELECT id, full_name, role
+            LIMIT ${PER_GROUP_LIMIT.students}
+         )
+         UNION ALL SELECT * FROM (
+           SELECT 'staff' AS kind, id, full_name AS title, role AS subtitle
              FROM staff
             WHERE active = 1 AND ${faHaystackExpr("full_name")} LIKE ?
             ORDER BY full_name
-            LIMIT ${PER_GROUP_LIMIT.staff}`,
-          [pattern]
-        ),
-        db.query(
-          `SELECT id, name, kind, code
+            LIMIT ${PER_GROUP_LIMIT.staff}
+         )
+         UNION ALL SELECT * FROM (
+           SELECT 'school' AS kind, id, name AS title, COALESCE(code, kind) AS subtitle
              FROM schools
             WHERE active = 1 AND (${faHaystackExpr("name")} LIKE ? OR (code IS NOT NULL AND code LIKE ?))
             ORDER BY name
-            LIMIT ${PER_GROUP_LIMIT.schools}`,
-          [pattern, pattern]
-        ),
-        db.query(
-          `SELECT t.id, t.name, t.category,
-                  (SELECT COUNT(*) FROM student_tags st WHERE st.tag_id = t.id) AS usage
-             FROM tags t
-            WHERE t.active = 1 AND t.name LIKE ?
-            ORDER BY t.category, t.name
-            LIMIT ${PER_GROUP_LIMIT.tags}`,
-          [pattern]
-        ),
-        db.query(
-          `SELECT id, first_name, last_name, phone, status
+            LIMIT ${PER_GROUP_LIMIT.schools}
+         )
+         UNION ALL SELECT * FROM (
+           SELECT 'tag' AS kind, id, name AS title,
+                  CASE WHEN usage > 0 THEN CAST(usage AS TEXT) ELSE NULL END AS subtitle
+             FROM (
+               SELECT t.id, t.name, t.category,
+                      (SELECT COUNT(*) FROM student_tags st WHERE st.tag_id = t.id) AS usage
+                 FROM tags t
+                WHERE t.active = 1 AND t.name LIKE ?
+                ORDER BY t.category, t.name
+                LIMIT ${PER_GROUP_LIMIT.tags}
+             )
+         )
+         UNION ALL SELECT * FROM (
+           SELECT 'waitlist' AS kind, id,
+                  (first_name || ' ' || last_name) AS title,
+                  phone AS subtitle
              FROM waitlist
             WHERE deleted_at IS NULL
               AND (${faHaystackExpr("first_name")} LIKE ? OR ${faHaystackExpr("last_name")} LIKE ?
                    OR phone LIKE ?
                    OR ${faHaystackExpr(`(first_name || ' ' || last_name)`)} LIKE ?)
             ORDER BY last_name, first_name
-            LIMIT ${PER_GROUP_LIMIT.waitlist}`,
-          [pattern, pattern, pattern, pattern]
-        ),
-        // جستجوی اسناد (عنوان/توضیح/برچسب‌ها) — فقط برای مدیر/منشی اجرا می‌شود
-        canSeeDocs ? db.query(
-          `SELECT id, title, category
-                 FROM docs
-                WHERE deleted_at IS NULL
-                  AND (title LIKE ? OR description LIKE ? OR tags LIKE ?)
-                ORDER BY created_at DESC
-                LIMIT 4`,
-          [pattern, pattern, pattern]
-        ) : Promise.resolve([])
-      ]);
+            LIMIT ${PER_GROUP_LIMIT.waitlist}
+         )
+         ${docsBranch}`,
+        // الگوی جستجو به ترتیب شاخه‌ها: دانش‌آموز×۴، کارمند×۱، مدرسه×۲، برچسب×۱، انتظار×۴ (+ اسناد×۳)
+        (() => {
+          const params = [pattern, pattern, pattern, pattern, pattern, pattern, pattern, pattern, pattern, pattern, pattern, pattern];
+          if (canSeeDocs) params.push(pattern, pattern, pattern);
+          return params;
+        })()
+      );
+      const ofKind = /* @__PURE__ */ __name((kind) => rows.filter((r) => r.kind === kind), "ofKind");
+      const itemsOf = /* @__PURE__ */ __name((kind, type) => ofKind(kind).map((r) => ({ type, id: r.id, title: r.title, subtitle: r.subtitle })), "itemsOf");
       const groups = [
-        {
-          type: "student",
-          items: capItems(
-            studentRows.map(
-              (r) => ({
-                type: "student",
-                id: r.id,
-                title: `${r.first_name} ${r.last_name}`,
-                subtitle: r.grade ?? r.national_id
-              })
-            ),
-            PER_GROUP_LIMIT.students
-          )
-        },
-        {
-          type: "staff",
-          items: staffRows.map(
-            (r) => ({ type: "staff", id: r.id, title: r.full_name, subtitle: r.role })
-          )
-        },
-        {
-          type: "school",
-          items: schoolRows.map(
-            (r) => ({ type: "school", id: r.id, title: r.name, subtitle: r.code ?? r.kind })
-          )
-        },
-        {
-          type: "tag",
-          items: tagRows.map(
-            (r) => ({
-              type: "tag",
-              id: r.id,
-              title: r.name,
-              subtitle: r.usage > 0 ? String(r.usage) : null
-            })
-          )
-        },
-        {
-          type: "waitlist",
-          items: waitlistRows.map(
-            (r) => ({
-              type: "waitlist",
-              id: r.id,
-              title: `${r.first_name} ${r.last_name}`,
-              subtitle: r.phone
-            })
-          )
-        },
+        { type: "student", items: capItems(itemsOf("student", "student"), PER_GROUP_LIMIT.students) },
+        { type: "staff", items: itemsOf("staff", "staff") },
+        { type: "school", items: itemsOf("school", "school") },
+        { type: "tag", items: itemsOf("tag", "tag") },
+        { type: "waitlist", items: itemsOf("waitlist", "waitlist") },
         // گروه اسناد
-        {
-          type: "doc",
-          items: docRows.map(
-            (r) => ({
-              type: "doc",
-              id: r.id,
-              title: r.title,
-              subtitle: r.category
-            })
-          )
-        }
+        { type: "doc", items: itemsOf("doc", "doc") }
       ];
       const result = { query: q, groups: orderGroups(groups) };
       logger.child("search").info("global.search", {
@@ -75912,7 +75846,7 @@ function createServices(deps) {
       gradedByName: record2.gradedByName
     });
   });
-  caseEvents.setSendObserver(async (input2) => {
+  const enqueueObserver = /* @__PURE__ */ __name(async (input2) => {
     const channel = notifyCore.getChannel("bale") ? "bale" : "internal";
     const clinicName = await settings.getClinicName();
     return enqueueToMany(notifyCore, {
@@ -75923,7 +75857,8 @@ function createServices(deps) {
       dedupKeyFor: /* @__PURE__ */ __name((chat) => `${input2.dedupBase}:${chat}`, "dedupKeyFor"),
       studentId: input2.studentId
     });
-  });
+  }, "enqueueObserver");
+  caseEvents.setSendObserver(enqueueObserver);
   caseEvents.setFillObserver(async (input2) => {
     try {
       if (!input2.staffId) return;
@@ -75955,18 +75890,7 @@ function createServices(deps) {
       logger.warn("case-events.fill_observer_failed", { err: err instanceof Error ? err.message : String(err) });
     }
   });
-  exerciseBank.setSendObserver(async (input2) => {
-    const channel = notifyCore.getChannel("bale") ? "bale" : "internal";
-    const clinicName = await settings.getClinicName();
-    return enqueueToMany(notifyCore, {
-      channel,
-      template: input2.template,
-      chats: input2.chats,
-      payloadFor: /* @__PURE__ */ __name((chat) => ({ ...input2.vars, clinicName }), "payloadFor"),
-      dedupKeyFor: /* @__PURE__ */ __name((chat) => `${input2.dedupBase}:${chat}`, "dedupKeyFor"),
-      studentId: input2.studentId
-    });
-  });
+  exerciseBank.setSendObserver(enqueueObserver);
   const reports = createReportService({ db, logger });
   const sessionNotes = createSessionNotesService({ db, audit, logger, followups });
   const announcements = createAnnouncementService({
@@ -81842,131 +81766,77 @@ async function runBackupAutoSendCycle(env) {
   logger.info("backup.auto.cycle.done", { archive, outcome });
 }
 __name(runBackupAutoSendCycle, "runBackupAutoSendCycle");
-async function runCpSyncCycle(env) {
-  const db = createDb(env.DB);
-  const logger = createLogger("sync");
-  await stampCpSyncAttempt(db).catch(() => void 0);
-  const result = await syncCpAnnouncements({
-    db,
-    logger,
-    config: buildCpSyncConfig(env),
-    binding: env.CP ?? null
-  });
-  logger.info("cp_sync.cycle.done", { status: result.status, applied: result.applied ?? 0 });
+function makeOpportunisticGate(name, spec) {
+  let probeAt = 0;
+  return {
+    probe(env, ctx) {
+      const t = Date.now();
+      if (t - probeAt < 6e4) return;
+      probeAt = t;
+      ctx.waitUntil(
+        spec.probeOp({
+          db: createDb(env.DB),
+          logger: createLogger("sync"),
+          config: spec.config(env),
+          binding: env.CP ?? null
+        }).catch(() => void 0)
+      );
+    },
+    async runCycle(env) {
+      const db = createDb(env.DB);
+      const logger = createLogger("sync");
+      if (spec.stamp) await spec.stamp(db).catch(() => void 0);
+      const result = await spec.cycleOp({
+        db,
+        logger,
+        config: spec.config(env),
+        binding: env.CP ?? null,
+        ...spec.force ? { force: true } : {}
+      });
+      logger.info(`${name}.cycle.done`, { status: result.status, ...spec.logFields(result) });
+    }
+  };
 }
-__name(runCpSyncCycle, "runCpSyncCycle");
-var cpSyncProbeAt = 0;
-function probeCpSync(env, ctx) {
-  const t = Date.now();
-  if (t - cpSyncProbeAt < 6e4) return;
-  cpSyncProbeAt = t;
-  ctx.waitUntil(
-    cpSyncOpportunistic({
-      db: createDb(env.DB),
-      logger: createLogger("sync"),
-      config: buildCpSyncConfig(env),
-      binding: env.CP ?? null
-    }).catch(() => void 0)
-  );
-}
-__name(probeCpSync, "probeCpSync");
-async function runCpReportCycle(env) {
-  const db = createDb(env.DB);
-  const logger = createLogger("sync");
-  const result = await pushCpReport({
-    db,
-    logger,
-    config: buildCpReportConfig(env),
-    binding: env.CP ?? null
-  });
-  logger.info("cp_report.cycle.done", { status: result.status, seq: result.seq ?? 0 });
-}
-__name(runCpReportCycle, "runCpReportCycle");
-var cpReportProbeAt = 0;
-function probeCpReport(env, ctx) {
-  const t = Date.now();
-  if (t - cpReportProbeAt < 6e4) return;
-  cpReportProbeAt = t;
-  ctx.waitUntil(
-    cpReportOpportunistic({
-      db: createDb(env.DB),
-      logger: createLogger("sync"),
-      config: buildCpReportConfig(env),
-      binding: env.CP ?? null
-    }).catch(() => void 0)
-  );
-}
-__name(probeCpReport, "probeCpReport");
-async function runCpContentCycleWrap(env) {
-  const db = createDb(env.DB);
-  const logger = createLogger("sync");
-  const result = await runCpContentCycle({
-    db,
-    logger,
-    config: buildCpContentConfig(env),
-    binding: env.CP ?? null
-  });
-  logger.info("cp_content.cycle.done", {
-    status: result.status,
-    pushed: result.pushed ?? 0,
-    applied: result.applied ?? 0
-  });
-}
-__name(runCpContentCycleWrap, "runCpContentCycleWrap");
-var cpContentProbeAt = 0;
-function probeCpContent(env, ctx) {
-  const t = Date.now();
-  if (t - cpContentProbeAt < 6e4) return;
-  cpContentProbeAt = t;
-  ctx.waitUntil(
-    cpContentOpportunistic({
-      db: createDb(env.DB),
-      logger: createLogger("sync"),
-      config: buildCpContentConfig(env),
-      binding: env.CP ?? null
-    }).catch(() => void 0)
-  );
-}
-__name(probeCpContent, "probeCpContent");
-async function runBugReportForwardWrap(env) {
-  const db = createDb(env.DB);
-  const logger = createLogger("sync");
-  const result = await runBugReportForward({
-    db,
-    logger,
-    config: buildBugReportConfig(env),
-    binding: env.CP ?? null,
-    force: true
-  });
-  logger.info("bug_report.cycle.done", {
-    status: result.status,
+__name(makeOpportunisticGate, "makeOpportunisticGate");
+var cpSyncGate = makeOpportunisticGate("cp_sync", {
+  config: buildCpSyncConfig,
+  probeOp: cpSyncOpportunistic,
+  cycleOp: syncCpAnnouncements,
+  logFields: /* @__PURE__ */ __name((result) => ({ applied: result.applied ?? 0 }), "logFields"),
+  stamp: stampCpSyncAttempt
+});
+var cpReportGate = makeOpportunisticGate("cp_report", {
+  config: buildCpReportConfig,
+  probeOp: cpReportOpportunistic,
+  cycleOp: pushCpReport,
+  logFields: /* @__PURE__ */ __name((result) => ({ seq: result.seq ?? 0 }), "logFields")
+});
+var cpContentGate = makeOpportunisticGate("cp_content", {
+  config: buildCpContentConfig,
+  probeOp: cpContentOpportunistic,
+  cycleOp: runCpContentCycle,
+  logFields: /* @__PURE__ */ __name((result) => ({ pushed: result.pushed ?? 0, applied: result.applied ?? 0 }), "logFields")
+});
+var bugReportGate = makeOpportunisticGate("bug_report", {
+  config: buildBugReportConfig,
+  probeOp: runBugReportForward,
+  cycleOp: runBugReportForward,
+  logFields: /* @__PURE__ */ __name((result) => ({
     sent: result.status === "done" ? result.sent : 0,
     failed: result.status === "done" ? result.failed : 0,
     pulled: result.status === "done" ? result.pulled : 0
-  });
-}
-__name(runBugReportForwardWrap, "runBugReportForwardWrap");
-var bugReportProbeAt = 0;
-function probeBugReportForward(env, ctx) {
-  const t = Date.now();
-  if (t - bugReportProbeAt < 6e4) return;
-  bugReportProbeAt = t;
-  ctx.waitUntil(
-    runBugReportForward({
-      db: createDb(env.DB),
-      logger: createLogger("sync"),
-      config: buildBugReportConfig(env),
-      binding: env.CP ?? null
-    }).catch(() => void 0)
-  );
-}
-__name(probeBugReportForward, "probeBugReportForward");
+  }), "logFields"),
+  force: true
+});
+var CRON_GATES = {
+  [CP_SYNC_CRON]: [cpSyncGate, cpReportGate, cpContentGate, bugReportGate]
+};
 var src_default = {
   async fetch(request, env, ctx) {
-    probeCpSync(env, ctx);
-    probeCpReport(env, ctx);
-    probeCpContent(env, ctx);
-    probeBugReportForward(env, ctx);
+    cpSyncGate.probe(env, ctx);
+    cpReportGate.probe(env, ctx);
+    cpContentGate.probe(env, ctx);
+    bugReportGate.probe(env, ctx);
     const db = createDb(env.DB);
     const audit = createAuditWriter(db);
     const logger = createLogger("worker");
@@ -81990,11 +81860,9 @@ var src_default = {
     return app.fetch(request, env, ctx);
   },
   async scheduled(event, env, ctx) {
-    if (event.cron === CP_SYNC_CRON) {
-      ctx.waitUntil(runCpSyncCycle(env));
-      ctx.waitUntil(runCpReportCycle(env));
-      ctx.waitUntil(runCpContentCycleWrap(env));
-      ctx.waitUntil(runBugReportForwardWrap(env));
+    const gates = CRON_GATES[event.cron];
+    if (gates) {
+      for (const gate of gates) ctx.waitUntil(gate.runCycle(env));
       return;
     }
     if (event.cron === DIGEST_CRON) {

@@ -289,11 +289,12 @@
           "detail": "سربرگ فایل vendor نسخهٔ 6.2.3 را اعلام می‌کند؛ تنها نقش یافته‌شدهٔ بستهٔ npm، مرجع نسخه‌سازی است. — دو شکل جست‌وجو: (۱) grep الگوی import در src/scripts/public — فقط vendor و کامنت؛ (۲) grep نام بسته در کل مخزن — فقط vendor، کامنت build-client.mjs:64 و docs؛ هر دو هم‌نظر + خواندن مستقیم rum.js."
         }
       ],
-      "status": "new",
+      "status": "fixed",
       "verification": {
         "status": "not-required",
         "counterevidence": [],
-        "note": ""
+        "note": "",
+        "lifecycle_note": "release 1.27.86 (sdt163) — web-vitals از devDependencies حذف شد؛ runtime از فایل vendor‌شده تغذیه می‌شود (باقی ماند)."
       },
       "remediation": {
         "observable_effect": "بسته‌ای در درخت وابستگی‌ها نصب/به‌روز می‌شود که هیچ مصرف ساخت یا ران‌تایمی ندارد.",
@@ -479,11 +480,12 @@
           "detail": "usb:pack رسماً حذف شده (بازنگری 1.27.41) اما در acceptance-checklist.md:67 همچنان در چک‌لیست است."
         }
       ],
-      "status": "new",
+      "status": "fixed",
       "verification": {
         "status": "not-required",
         "counterevidence": [],
-        "note": ""
+        "note": "",
+        "lifecycle_note": "release 1.27.86 (sdt163) — ارجاع‌های build:worker به node scripts/build-worker-bundle.mjs اصلاح شد؛ usb:pack تاریخی حاشیه‌نویسی شد. desktop:dev/engine:dev در دو سند تاریخی باقی است (یادداشت در گزارش)."
       },
       "remediation": {
         "observable_effect": "دنبال‌کردن پیام خطای مونتاژ نصاب یا چک‌لیست پذیرش به دستور ناموجود می‌رسد؛ بار نگه‌داری اسکریپت worker/bundle.js فقط با دانستن مسیر مستقیم فایل ممکن است.",

@@ -19,7 +19,7 @@ export const illoKnowledge = () => svg(`
   <path d="M80 42v52" stroke="var(--border)"/>
   <path d="M118 24l2.5 6 6 2.5-6 2.5-2.5 6-2.5-6-6-2.5 6-2.5 2.5-6Z" fill="var(--accent-soft)" stroke="var(--accent)"/>`);
 
-export const illoHeroOrnament = () => svg(`
+const illoHeroOrnament = () => svg(`
   <circle cx="190" cy="20" r="90" stroke="var(--primary-soft)" stroke-width="26"/>
   <circle cx="190" cy="20" r="46" stroke="color-mix(in srgb, var(--accent) 18%, transparent)" stroke-width="10"/>
   <circle cx="104" cy="120" r="5" fill="var(--accent-soft)" stroke="var(--accent)"/>

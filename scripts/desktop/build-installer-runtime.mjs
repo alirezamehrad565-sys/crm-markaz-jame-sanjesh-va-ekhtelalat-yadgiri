@@ -177,7 +177,7 @@ async function main() {
   // پیش‌نیازها — باندل موتور و باندل‌های ورکر باید از پیش ساخته و کامیت شده باشند
   for (const [file, hint] of [
     ['scripts/engine/engine-server.js', 'npm run build:engine-server'],
-    ['worker/bundle.js', 'npm run build:worker (scripts/build-worker-bundle.mjs)'],
+    ['worker/bundle.js', 'node scripts/build-worker-bundle.mjs (scripts/build-worker-bundle.mjs)'],
     ['worker/games-bundle.js', 'npm run build:games-worker'],
   ]) {
     if (!existsSync(path.join(ROOT, file))) throw new Error(`${file} نیست — ابتدا «${hint}» را اجرا و commit کنید`);

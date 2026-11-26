@@ -1,59 +1,59 @@
 {
   "_comment": "مانیفست باندل کلاینت؛ گات بودجه (perf-budget.mjs) از این می‌خواند. فایل ساخته‌شده است — دستی ویرایش نشود.",
-  "boot": "boot.3HPVUEMR.js",
+  "boot": "boot.6HD6PK7V.js",
   "bootImports": [
     "chunk.KPX3C6MD.js",
-    "chunk.7ETSEQCZ.js",
+    "chunk.PZOA2LNO.js",
     "chunk.3ELOCRLD.js",
-    "chunk.QT3RTLDB.js"
+    "chunk.POJGODY3.js"
   ],
   "outputs": [
     {
-      "name": "appointments.JGD6MAUL.js",
-      "raw": 43806,
-      "gz": 14001,
+      "name": "appointments.LD7FCOVE.js",
+      "raw": 44237,
+      "gz": 14137,
       "role": "lazy"
     },
     {
-      "name": "archive.A67ZMCOE.js",
-      "raw": 11248,
-      "gz": 4309,
+      "name": "archive.VUHBYIZL.js",
+      "raw": 11626,
+      "gz": 4441,
       "role": "lazy"
     },
     {
-      "name": "backup.6L7PZXHQ.js",
-      "raw": 19337,
+      "name": "backup.MTGLJA6X.js",
+      "raw": 19338,
       "gz": 6475,
       "role": "lazy"
     },
     {
-      "name": "boot.3HPVUEMR.js",
-      "raw": 70449,
-      "gz": 22639,
+      "name": "boot.6HD6PK7V.js",
+      "raw": 72386,
+      "gz": 23374,
       "role": "boot"
     },
     {
-      "name": "boot.IL53B4LY.js",
+      "name": "boot.LAVZZUWL.js",
       "raw": 1174,
       "gz": 707,
       "role": "lazy"
     },
     {
-      "name": "bug-report.Q5TZVVAN.js",
-      "raw": 6923,
-      "gz": 2813,
+      "name": "bug-report.WIWWPLN7.js",
+      "raw": 6924,
+      "gz": 2814,
       "role": "lazy"
     },
     {
-      "name": "case-event-types.O4HQTWOP.js",
-      "raw": 41551,
-      "gz": 12308,
+      "name": "case-event-types.5JUHESAY.js",
+      "raw": 41475,
+      "gz": 12303,
       "role": "lazy"
     },
     {
-      "name": "center-kpi.A343KE6F.js",
+      "name": "center-kpi.JSKF7MSA.js",
       "raw": 7254,
-      "gz": 2854,
+      "gz": 2855,
       "role": "lazy"
     },
     {
@@ -69,21 +69,27 @@
       "role": "lazy"
     },
     {
-      "name": "chunk.4WRJR46G.js",
-      "raw": 362,
-      "gz": 265,
+      "name": "chunk.7SW2MDUZ.js",
+      "raw": 3130,
+      "gz": 1602,
       "role": "lazy"
     },
     {
-      "name": "chunk.7ETSEQCZ.js",
-      "raw": 1795,
-      "gz": 900,
-      "role": "boot-dep"
+      "name": "chunk.AZW4P2RV.js",
+      "raw": 49065,
+      "gz": 17404,
+      "role": "lazy"
     },
     {
-      "name": "chunk.CRICXUJL.js",
-      "raw": 23115,
-      "gz": 7010,
+      "name": "chunk.E3FDWPLK.js",
+      "raw": 20407,
+      "gz": 6719,
+      "role": "lazy"
+    },
+    {
+      "name": "chunk.EAGRSJHZ.js",
+      "raw": 4255,
+      "gz": 1815,
       "role": "lazy"
     },
     {
@@ -93,21 +99,15 @@
       "role": "lazy"
     },
     {
-      "name": "chunk.EUNSWG6X.js",
-      "raw": 3129,
-      "gz": 1602,
-      "role": "lazy"
-    },
-    {
-      "name": "chunk.F33RCLND.js",
-      "raw": 49069,
-      "gz": 17406,
-      "role": "lazy"
-    },
-    {
       "name": "chunk.FRLJOGR3.js",
       "raw": 902,
       "gz": 569,
+      "role": "lazy"
+    },
+    {
+      "name": "chunk.GU3OYPZD.js",
+      "raw": 11573,
+      "gz": 4462,
       "role": "lazy"
     },
     {
@@ -117,33 +117,15 @@
       "role": "lazy"
     },
     {
-      "name": "chunk.H52QHRB7.js",
-      "raw": 4259,
-      "gz": 1814,
-      "role": "lazy"
-    },
-    {
-      "name": "chunk.HRNC7ZMM.js",
-      "raw": 11573,
-      "gz": 4462,
-      "role": "lazy"
-    },
-    {
-      "name": "chunk.IEQCOT6P.js",
-      "raw": 13619,
-      "gz": 5401,
-      "role": "lazy"
-    },
-    {
       "name": "chunk.JYDCTDOR.js",
       "raw": 2565,
       "gz": 1133,
       "role": "lazy"
     },
     {
-      "name": "chunk.JZDQEHUP.js",
-      "raw": 7265,
-      "gz": 2891,
+      "name": "chunk.KBDOI2NT.js",
+      "raw": 2379,
+      "gz": 1147,
       "role": "lazy"
     },
     {
@@ -153,39 +135,9 @@
       "role": "boot-dep"
     },
     {
-      "name": "chunk.L7JZ6OQS.js",
+      "name": "chunk.LNUBPJW5.js",
       "raw": 400,
       "gz": 285,
-      "role": "lazy"
-    },
-    {
-      "name": "chunk.LXGZSBJE.js",
-      "raw": 7215,
-      "gz": 3261,
-      "role": "lazy"
-    },
-    {
-      "name": "chunk.MHMLAXH6.js",
-      "raw": 13519,
-      "gz": 4810,
-      "role": "lazy"
-    },
-    {
-      "name": "chunk.MNL5UMFF.js",
-      "raw": 5804,
-      "gz": 2396,
-      "role": "lazy"
-    },
-    {
-      "name": "chunk.NEZFDST3.js",
-      "raw": 9705,
-      "gz": 3716,
-      "role": "lazy"
-    },
-    {
-      "name": "chunk.NL2UB6US.js",
-      "raw": 2378,
-      "gz": 1147,
       "role": "lazy"
     },
     {
@@ -195,22 +147,70 @@
       "role": "lazy"
     },
     {
-      "name": "chunk.OEWYESUS.js",
-      "raw": 4627,
-      "gz": 2108,
-      "role": "lazy"
-    },
-    {
-      "name": "chunk.ORLQ3NG3.js",
+      "name": "chunk.P33MEWZ4.js",
       "raw": 241,
       "gz": 217,
       "role": "lazy"
     },
     {
-      "name": "chunk.QT3RTLDB.js",
-      "raw": 51502,
-      "gz": 19254,
+      "name": "chunk.PEFKPIKU.js",
+      "raw": 9706,
+      "gz": 3716,
+      "role": "lazy"
+    },
+    {
+      "name": "chunk.POJGODY3.js",
+      "raw": 52488,
+      "gz": 19539,
       "role": "boot-dep"
+    },
+    {
+      "name": "chunk.PZOA2LNO.js",
+      "raw": 1795,
+      "gz": 901,
+      "role": "boot-dep"
+    },
+    {
+      "name": "chunk.QVVAJBZW.js",
+      "raw": 4628,
+      "gz": 2112,
+      "role": "lazy"
+    },
+    {
+      "name": "chunk.R66AQT7I.js",
+      "raw": 23115,
+      "gz": 7010,
+      "role": "lazy"
+    },
+    {
+      "name": "chunk.RGD7PVQW.js",
+      "raw": 58088,
+      "gz": 17929,
+      "role": "lazy"
+    },
+    {
+      "name": "chunk.SLRB5V7H.js",
+      "raw": 7626,
+      "gz": 3416,
+      "role": "lazy"
+    },
+    {
+      "name": "chunk.T3TWZWSL.js",
+      "raw": 362,
+      "gz": 265,
+      "role": "lazy"
+    },
+    {
+      "name": "chunk.TFM3FN6P.js",
+      "raw": 13520,
+      "gz": 4810,
+      "role": "lazy"
+    },
+    {
+      "name": "chunk.UCIRYCCC.js",
+      "raw": 7266,
+      "gz": 2890,
+      "role": "lazy"
     },
     {
       "name": "chunk.UEGWBNGC.js",
@@ -219,33 +219,33 @@
       "role": "lazy"
     },
     {
-      "name": "chunk.UGQCZDO7.js",
-      "raw": 20406,
-      "gz": 6720,
+      "name": "chunk.WHBDH4JO.js",
+      "raw": 13620,
+      "gz": 5403,
       "role": "lazy"
     },
     {
-      "name": "chunk.Z5ARNO3K.js",
-      "raw": 58092,
-      "gz": 17931,
+      "name": "chunk.YKA2K32X.js",
+      "raw": 5805,
+      "gz": 2396,
       "role": "lazy"
     },
     {
-      "name": "clearbook.BSZB44QB.js",
-      "raw": 37945,
-      "gz": 12068,
+      "name": "clearbook.6EJ6H24Z.js",
+      "raw": 37946,
+      "gz": 12071,
       "role": "lazy"
     },
     {
-      "name": "cloud-setup.C2IJ4DIG.js",
+      "name": "cloud-setup.G3JJU7Y3.js",
       "raw": 19531,
-      "gz": 6749,
+      "gz": 6748,
       "role": "lazy"
     },
     {
-      "name": "cloud-setup.HKFGULWZ.js",
-      "raw": 26841,
-      "gz": 8125,
+      "name": "cloud-setup.W634V4BB.js",
+      "raw": 26842,
+      "gz": 8127,
       "role": "lazy"
     },
     {
@@ -255,129 +255,129 @@
       "role": "lazy"
     },
     {
-      "name": "docs.OIHODRJM.js",
-      "raw": 16056,
-      "gz": 5548,
+      "name": "docs.UJLXE6XG.js",
+      "raw": 16057,
+      "gz": 5549,
       "role": "lazy"
     },
     {
-      "name": "exercises.M6DPRICB.js",
-      "raw": 41504,
-      "gz": 12534,
+      "name": "exercises.WLI7DSES.js",
+      "raw": 41874,
+      "gz": 12656,
       "role": "lazy"
     },
     {
-      "name": "family-surveys.QHZQZND2.js",
-      "raw": 28456,
-      "gz": 8749,
+      "name": "family-surveys.2JJC73H7.js",
+      "raw": 28457,
+      "gz": 8748,
       "role": "lazy"
     },
     {
-      "name": "finance.WEVA5RN5.js",
-      "raw": 25296,
-      "gz": 7150,
+      "name": "finance.5FLRKBRW.js",
+      "raw": 25302,
+      "gz": 7154,
       "role": "lazy"
     },
     {
-      "name": "form-builder.ULPULWA4.js",
-      "raw": 23161,
-      "gz": 7153,
+      "name": "form-builder.5V4W75WJ.js",
+      "raw": 23167,
+      "gz": 7157,
       "role": "lazy"
     },
     {
-      "name": "games-console.BYFY3N6N.js",
+      "name": "games-console.KGWUHJQ3.js",
       "raw": 188,
-      "gz": 158,
+      "gz": 160,
       "role": "lazy"
     },
     {
-      "name": "games.AWIYZYYO.js",
-      "raw": 13447,
-      "gz": 4796,
+      "name": "games.WYRQ46SQ.js",
+      "raw": 13453,
+      "gz": 4800,
       "role": "lazy"
     },
     {
-      "name": "global-search.NSXFPDTH.js",
+      "name": "global-search.ZTL4PBPI.js",
       "raw": 113,
       "gz": 113,
       "role": "lazy"
     },
     {
-      "name": "health-panel.JEN7IOLQ.js",
-      "raw": 63235,
-      "gz": 17951,
+      "name": "health-panel.7LNBONVL.js",
+      "raw": 63236,
+      "gz": 17955,
       "role": "lazy"
     },
     {
-      "name": "my-todos.VAJHPWUW.js",
-      "raw": 10929,
-      "gz": 4153,
+      "name": "my-todos.XAI2UU3U.js",
+      "raw": 10930,
+      "gz": 4154,
       "role": "lazy"
     },
     {
-      "name": "not-found.DHBHQVYL.js",
+      "name": "not-found.IIZA6MRA.js",
       "raw": 1151,
-      "gz": 703,
+      "gz": 704,
       "role": "lazy"
     },
     {
-      "name": "outbox.WDCS3UZZ.js",
-      "raw": 5766,
-      "gz": 2412,
+      "name": "outbox.P56TTQVU.js",
+      "raw": 5772,
+      "gz": 2414,
       "role": "lazy"
     },
     {
-      "name": "panel.4BFYOYPB.js",
+      "name": "panel.DU7I6NBO.js",
       "raw": 4183,
-      "gz": 1549,
+      "gz": 1550,
       "role": "lazy"
     },
     {
-      "name": "progress-report.RCPCYV2V.js",
-      "raw": 32579,
-      "gz": 10763,
+      "name": "progress-report.RHFGOLVL.js",
+      "raw": 32580,
+      "gz": 10764,
       "role": "lazy"
     },
     {
-      "name": "reports.T5H2AL77.js",
-      "raw": 26548,
-      "gz": 7659,
+      "name": "reports.2ZK2KOG5.js",
+      "raw": 26544,
+      "gz": 7655,
       "role": "lazy"
     },
     {
-      "name": "runner.5JFO5JUI.js",
+      "name": "runner.ELPZCH2J.js",
       "raw": 555,
-      "gz": 323,
+      "gz": 325,
       "role": "lazy"
     },
     {
-      "name": "schools.A7IZGBU2.js",
-      "raw": 20195,
-      "gz": 6502,
+      "name": "schools.JEZXIA45.js",
+      "raw": 20196,
+      "gz": 6504,
       "role": "lazy"
     },
     {
-      "name": "screening.6MH3L4VL.js",
-      "raw": 35111,
-      "gz": 11271,
+      "name": "screening.5EV6TQ6Z.js",
+      "raw": 35107,
+      "gz": 11269,
       "role": "lazy"
     },
     {
-      "name": "settings.LZDCO4WV.js",
-      "raw": 59419,
+      "name": "settings.347B4P5N.js",
+      "raw": 59420,
       "gz": 17147,
       "role": "lazy"
     },
     {
-      "name": "special-needs.VNR27QS3.js",
-      "raw": 9825,
-      "gz": 3841,
+      "name": "special-needs.JTEKUGFX.js",
+      "raw": 9826,
+      "gz": 3839,
       "role": "lazy"
     },
     {
-      "name": "staff.MZYN6UQL.js",
-      "raw": 17327,
-      "gz": 6051,
+      "name": "staff.4CISHI3H.js",
+      "raw": 17323,
+      "gz": 6049,
       "role": "lazy"
     },
     {
@@ -387,27 +387,27 @@
       "role": "lazy"
     },
     {
-      "name": "student-narrative.C2BHRJRN.js",
+      "name": "student-narrative.25BOEVIC.js",
       "raw": 5650,
-      "gz": 2415,
+      "gz": 2416,
       "role": "lazy"
     },
     {
-      "name": "student-profile.N4YVKMZJ.js",
-      "raw": 189378,
-      "gz": 54686,
+      "name": "student-profile.PHZRCHFP.js",
+      "raw": 189368,
+      "gz": 54685,
       "role": "lazy"
     },
     {
-      "name": "students.JA5CAE2E.js",
-      "raw": 17102,
-      "gz": 5994,
+      "name": "students.LTXFHWQ5.js",
+      "raw": 17476,
+      "gz": 6130,
       "role": "lazy"
     },
     {
-      "name": "treatment-plans.A6L2RUZF.js",
-      "raw": 10979,
-      "gz": 4174,
+      "name": "treatment-plans.O3Q65SSI.js",
+      "raw": 10980,
+      "gz": 4175,
       "role": "lazy"
     },
     {
@@ -423,27 +423,27 @@
       "role": "lazy"
     },
     {
-      "name": "version.NNRL6AQD.js",
+      "name": "version.7647L6KN.js",
       "raw": 106,
       "gz": 110,
       "role": "lazy"
     },
     {
-      "name": "waitlist.NUBQLA7D.js",
-      "raw": 34069,
-      "gz": 10133,
+      "name": "waitlist.O4IEAMJL.js",
+      "raw": 34506,
+      "gz": 10278,
       "role": "lazy"
     },
     {
-      "name": "working-day.ZQM3KEZ4.js",
-      "raw": 30920,
-      "gz": 9836,
+      "name": "working-day.PB7YVLTZ.js",
+      "raw": 30931,
+      "gz": 9841,
       "role": "lazy"
     }
   ],
   "totals": {
     "files": 72,
-    "raw": 1375355,
-    "gz": 446795
+    "raw": 1380626,
+    "gz": 448668
   }
 }

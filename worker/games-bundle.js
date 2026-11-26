@@ -1979,7 +1979,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.27.85";
+var APP_VERSION = "1.27.86";
 
 // node_modules/zod/v4/classic/external.js
 var external_exports = {};
@@ -28833,6 +28833,7 @@ function errorHandler2(err, c) {
     );
   }
   if (err instanceof AppError) {
+    if (err instanceof RateLimitError) c.header("Retry-After", String(err.retryAfterSeconds));
     return c.json(
       withRequestId({
         error: err.code,

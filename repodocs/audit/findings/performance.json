@@ -249,7 +249,8 @@
       "verification": {
         "status": "not-required",
         "counterevidence": [],
-        "note": "در مقیاس کلینیک (صدها تا چند هزار ردیف) اسکن کامل عملاً ارزان است — لذا low؛ اگر جدول docs یا waitlist بزرگ شود الگو به medium میرود"
+        "note": "در مقیاس کلینیک (صدها تا چند هزار ردیف) اسکن کامل عملاً ارزان است — لذا low؛ اگر جدول docs یا waitlist بزرگ شود الگو به medium میرود",
+        "lifecycle_note": "release 1.27.86 (sdt163) — پیشرفت جزئی: شش کوئری موازی /api/search به یک UNION ALL با LIMIT شاخه‌ای تا رفت؛ قرارداد انتظاری با fa-نرمال‌سازی + escape هم‌راستا شد؛ tiebreakerهای id به ترتیب‌ها اضافه شد. باقی‌مانده: ستون‌های سایهٔ norm + ایندکس (موج بعد)."
       },
       "remediation": {
         "observable_effect": "هر ضربهٔ جست‌وجو (per-keystroke از global-search) اسکن کامل پنج-شش جدول؛ در جدول‌های بزرگ، تأخیر و مصرف CPU D1 خطی با حجم جدول",
@@ -326,11 +327,12 @@
           "detail": "scheduled: DIGEST_CRON هم‌زمان runDigestCycle و runBackupAutoSendCycle را waitUntil موازی می‌کند — رقابت منابع همان شب؛ backup خواندن صفحه‌ای ۴۰۰تایی (۴تایی برای chunks) دارد و بدون include_files جدول سنگین را کنار می‌گذارد"
         }
       ],
-      "status": "new",
+      "status": "fixed",
       "verification": {
         "status": "not-required",
         "counterevidence": [],
-        "note": "trace کامل digest انجام نشد (محدودیت ثبت‌شده در scope)؛ فقط الگوی per-chat در کوئری‌های سطح بالا تأیید شد — لذا confidence medium"
+        "note": "trace کامل digest انجام نشد (محدودیت ثبت‌شده در scope)؛ فقط الگوی per-chat در کوئری‌های سطح بالا تأیید شد — لذا confidence medium",
+        "lifecycle_note": "release 1.27.86 (sdt163) — دو SELECT درون‌حلقهٔ دیجست با IN(...) تکه‌ای پیش از حلقه جایگزین شد؛ N+1 مربوط به appointments.list هم با یک کوئری بازه‌ای حل شد."
       },
       "remediation": {
         "observable_effect": "در شبانه یک اجرا، N کوئری اضافی به‌ازای N چت متصل — در مقیاس کلینیک هزینهٔ جزئی",

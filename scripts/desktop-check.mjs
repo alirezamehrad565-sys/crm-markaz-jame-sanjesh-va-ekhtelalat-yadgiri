@@ -451,7 +451,7 @@ try {
   const workerBundle = readFileSync(path.join(ROOT, 'worker', 'bundle.js'), 'utf8');
   workerBundle.includes('/api/engine/capabilities')
     ? ok('باندل worker: مسیر قابلیت‌ها داخل باندل است (بازساخت شده)')
-    : bad('worker/bundle.js: مسیر قابلیت‌ها نیست — build:worker را اجرا و commit کنید');
+    : bad('worker/bundle.js: مسیر قابلیت‌ها نیست — node scripts/build-worker-bundle.mjs را اجرا و commit کنید');
   mustExist(path.join(ROOT, 'src', 'application', '__tests__', 'e2e-engine-capabilities.test.ts'), 'آزمون e2e-engine-capabilities');
   const hpCaps = readFileSync(path.join(ROOT, 'public', 'assets', 'js', 'views', 'health-panel.js'), 'utf8');
   hpCaps.includes("api.get('/api/engine/capabilities')") && hpCaps.includes('engineCapabilitiesVersionView')

@@ -24038,7 +24038,7 @@ function findStaffByUsername(db, username) {
 __name(findStaffByUsername, "findStaffByUsername");
 
 // src/core/version.ts
-var APP_VERSION = "1.27.85";
+var APP_VERSION = "1.27.86";
 var NODE_MIN_VERSION = "1.26.0";
 
 // src/node-sync/service.ts

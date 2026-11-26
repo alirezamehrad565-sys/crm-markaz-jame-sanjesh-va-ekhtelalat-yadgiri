@@ -16,7 +16,7 @@ const CARD_TYPE_LIST = [
 const CARD_TYPE_LABELS = Object.fromEntries(CARD_TYPE_LIST.map((t) => [t.key, t.label]));
 const ITEM_TEXT_MAX = 500; // PATHWAY_SESSION_ITEM_TEXT_MAX سمت سرور
 
-export function appendExerciseToTextarea(ta, title) {
+function appendExerciseToTextarea(ta, title) {
   if (!ta || !title) return;
   const prev = ta.value.trim();
   const sep = !prev ? '' : /[؛;،,.]\s*$/.test(prev) ? ' ' : '؛ ';
@@ -29,7 +29,7 @@ export function appendExerciseToTextarea(ta, title) {
   ta.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
-export function bankPickButton({ onPick }) {
+function bankPickButton({ onPick }) {
   return el('button', {
     class: 'btn btn--ghost btn--sm expick-open',
     type: 'button',

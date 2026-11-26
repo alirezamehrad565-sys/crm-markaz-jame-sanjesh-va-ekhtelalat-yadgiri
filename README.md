@@ -9,7 +9,7 @@
 
 سامانهٔ مدیریت کامل (CRM) مراکز سنجش و اختلالات یادگیری — مدیریت نوبت‌دهی، پروندهٔ دانش‌آموز، ارزیابی و مسیر بالینی — با دو بستر هم‌ارز: **میزی آفلاین‌فرست** (Node/Tauri روی خودِ مرکز) و **ابری** (Cloudflare Workers + D1)؛ فرانت‌اند ES Module خام (بدون bundler) و رابط کاربری کامل فارسی/RTL.
 
-> 👤 **سازنده:** این برنامه توسط آیدی تلگرام [@sdt144](https://t.me/sdt144) ساخته شده است.
+> **سازنده:** این برنامه توسط آیدی تلگرام [@sdt144](https://t.me/sdt144) ساخته شده است.
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](tsconfig.json)
 [![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers%20%2B%20D1-F38020?logo=cloudflare&logoColor=white)](wrangler.toml)

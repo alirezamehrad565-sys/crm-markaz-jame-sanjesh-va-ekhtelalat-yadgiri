@@ -488,11 +488,12 @@
           "detail": "scheduled با سه if روی event.cron و یک fallback پیش‌فرض dispatch می‌کند؛ چهار عبارت کرون wrangler.toml (ترگرهای ۴گانه) با همین ترتیب هم‌خوان است — رفتار درست اما فاقد جدول نگاشت cron→handler."
         }
       ],
-      "status": "new",
+      "status": "fixed",
       "verification": {
         "status": "not-required",
         "counterevidence": [],
-        "note": ""
+        "note": "",
+        "lifecycle_note": "release 1.27.86 (sdt163) — makeOpportunisticGate جایگزین چهار جفت probe/wrapper در src/index.ts شد؛ زنجیرهٔ cron به نقشهٔ CRON_GATES تبدیل شد — رفتار معادل-بایت."
       },
       "remediation": {
         "observable_effect": "افزودن مأموریت دوره‌ای تازه، کپی دو تابع (probe + wrapper) و یک if دیگر را تحمیل می‌کند و ریسک فراموشی مُهر زمان ماژول‌سطح دارد.",
@@ -531,11 +532,12 @@
           "detail": "محل تعریف ابزارهای عمومی: sanitizeFilename (خط ۲۵) و validateExerciseFileBytes (خط ۵۵) و parseMultipartStream در multipart.ts:59؛ محتوا عمومی است (پاک‌سازی نام فایل، اعتبارسنجی بایت‌ها، پارس multipart) و جای قراردادی آن @core/storage یا @app/http است — نام پاکِت ویژگی‌محور، محتوا هستهٔ مشترک."
         }
       ],
-      "status": "new",
+      "status": "fixed",
       "verification": {
         "status": "not-required",
         "counterevidence": [],
-        "note": ""
+        "note": "",
+        "lifecycle_note": "release 1.27.86 (sdt163) — کپی‌های محلی sanitizeFilename در docs/service و case-events/pure حذف و به @core/shared/file-sanitize وصل شد؛ validateAttachmentFileInput عمومی‌سازی شد."
       },
       "remediation": {
         "observable_effect": "یال‌های domain→domain ساختگی (هستهٔ architecture-005) و ریسک تصور وابستگی معنایی به تمرین‌بان؛ حرکت/تغییر exercise-bank چهار ماژول بی‌ربط را می‌شکند.",

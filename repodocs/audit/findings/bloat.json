@@ -150,11 +150,12 @@
           "detail": "تنها مصرف‌ندهٔ هر دو ماژول: فقط openExercisePicker و openEventPicker را import می‌کند؛ هیچ فایل دیگری event-pick.js یا exercise-pick.js را import نمی‌کند."
         }
       ],
-      "status": "new",
+      "status": "fixed",
       "verification": {
         "status": "not-required",
         "counterevidence": [],
-        "note": ""
+        "note": "",
+        "lifecycle_note": "release 1.27.86 (sdt163) — پنج export مرده (event-pick ×۲، exercise-pick ×۲، illustrations ×۱) لغو شد؛ پیاده‌سازی داخلی حفظ شد."
       },
       "remediation": {
         "observable_effect": "حدود ۶۰ خط تابع/ثابت مرده در باندل کلاینت؛ سطح export گمراه‌کننده برای نگهدارنده.",
@@ -217,7 +218,8 @@
       "verification": {
         "status": "not-required",
         "counterevidence": [],
-        "note": ""
+        "note": "",
+        "lifecycle_note": "release 1.27.86 (sdt163) — فهرست دقیق ۶ اسکیما/۱۱ ثابت مرده استخراج و تأیید شد؛ حذف به دلیل ارجاع درون-فایلی (TodoBoxSchema→TodoStatusSchema) با بازگردانی امن لغو شد — موج بعد با تجزیهٔ وابستگی درون-فایلی."
       },
       "remediation": {
         "observable_effect": "سطح export barrel با ۶ نام گمراه‌کننده بزرگ‌تر از مصرف واقعی است؛ حدود ۲۰ خط تعریف مرده.",
@@ -260,7 +262,8 @@
       "verification": {
         "status": "not-required",
         "counterevidence": [],
-        "note": ""
+        "note": "",
+        "lifecycle_note": "release 1.27.86 (sdt163) — فهرست دقیق ۶ اسکیما/۱۱ ثابت مرده استخراج و تأیید شد؛ حذف به دلیل ارجاع درون-فایلی (TodoBoxSchema→TodoStatusSchema) با بازگردانی امن لغو شد — موج بعد با تجزیهٔ وابستگی درون-فایلی."
       },
       "remediation": {
         "observable_effect": "حدود ۲۰ خط ثابت مرده؛ خطر واگرایی قرارداد فرم‌ساز بین constants.ts و دامنهٔ واقعی.",
@@ -361,11 +364,12 @@
           "detail": "ذکر نثر خانوادهٔ scripts/make-*-seed-sql.mjs به‌عنوان روش نقد — نثر مانع حذف نیست و به‌عنوان ویرایش پس از حذف ثبت می‌شود."
         }
       ],
-      "status": "new",
+      "status": "fixed",
       "verification": {
         "status": "not-required",
         "counterevidence": [],
-        "note": ""
+        "note": "",
+        "lifecycle_note": "release 1.27.86 (sdt163) — ۱۶ اسکریپت یتیم scripts/ حذف شد (شامل make-corsi با ارجاع کامنتی)."
       },
       "remediation": {
         "observable_effect": "نویز ابزاری در scripts/؛ نگهدارندهٔ تازه نمی‌تواند ابزار رسمی را از بقایای نسخه‌ای تشخیص دهد؛ هیچ آسیب رانتی ندارد چون اجرا نمی‌شوند.",

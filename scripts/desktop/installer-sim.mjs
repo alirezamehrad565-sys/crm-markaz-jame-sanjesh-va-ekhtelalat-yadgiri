@@ -155,7 +155,7 @@ if (!CORRUPT && !failed) {
           ? ok(`/api/engine/capabilities ۲۰۰ داد و نسخهٔ موتور (${caps.version}) با APP_VERSION یکی است`)
           : bad(`پایانهٔ قابلیت‌ها ناهم‌گام است — status=${res.status} version=${caps?.version} انتظار=${appVersion} (باندل worker/bundle.js کهنه است؟)`);
       } catch (e) {
-        bad(`/api/engine/capabilities در دسترس نیست — ${e.message} (باندل کهنه؟ build:worker را اجرا کنید)`);
+        bad(`/api/engine/capabilities در دسترس نیست — ${e.message} (باندل کهنه؟ node scripts/build-worker-bundle.mjs را اجرا کنید)`);
       }
     } else {
       bad(`engine-config.json در مهلت ${CONFIG_TIMEOUT_MS / 1000} ثانیه نیامد — بوت شبیه‌ساز شکست`);

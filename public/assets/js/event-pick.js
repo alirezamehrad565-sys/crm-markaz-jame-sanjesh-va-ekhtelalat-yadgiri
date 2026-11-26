@@ -9,7 +9,7 @@ const CATEGORY_LABELS = { session: 'جلسه', checklist: 'چک‌لیست', not
 const AUDIENCE_LABELS = { family: 'خانواده', teacher: 'معلم کلاس', both: 'خانواده و معلم' };
 const CATEGORY_KEYS = ['session', 'checklist', 'note'];
 
-export function appendEventToTextarea(ta, title) {
+function appendEventToTextarea(ta, title) {
   if (!ta || !title) return;
   const prev = ta.value.trim();
   const sep = !prev ? '' : /[؛;،,.]\s*$/.test(prev) ? ' ' : '؛ ';
@@ -22,7 +22,7 @@ export function appendEventToTextarea(ta, title) {
   ta.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
-export function eventPickButton({ onPick }) {
+function eventPickButton({ onPick }) {
   return el('button', {
     class: 'btn btn--ghost btn--sm expick-open',
     type: 'button',
