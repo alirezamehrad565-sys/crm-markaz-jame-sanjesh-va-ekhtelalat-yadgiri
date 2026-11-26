@@ -43140,7 +43140,7 @@ function safeJsonEmbed2(v) {
 __name(safeJsonEmbed2, "safeJsonEmbed");
 
 // src/core/version.ts
-var APP_VERSION = "1.27.86";
+var APP_VERSION = "1.27.87";
 var NODE_MIN_VERSION = "1.26.0";
 
 // src/domain/case-events/public-form.ts

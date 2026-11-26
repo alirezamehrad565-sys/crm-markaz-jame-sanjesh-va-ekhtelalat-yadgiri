@@ -84,7 +84,7 @@ export function renderLoginPage(onSuccess) {
     id: 'login-username',
     type: 'text',
     autocomplete: 'username',
-    placeholder: 'manager', /* ۱.۲۷.۸۶ — تک‌زبانه: «مثلاً manager» در input لاتین‌چپ، tanvin فارسی را جدا می‌کشید */
+    placeholder: 'e.g. manager', /* ۱.۲۷.۸۷ — نمونهٔ حرفه‌ای تک‌دست‌وری (ASCII خالص) در input لاتین‌چپ؛ بدون artifact bidi */
     dir: 'ltr',
     style: { textAlign: 'left' }
   });
@@ -93,9 +93,11 @@ export function renderLoginPage(onSuccess) {
     id: 'login-password',
     type: 'password',
     autocomplete: 'current-password',
-    /* ۱.۲۷.۸۶ — placeholder «••••••» حذف: فیلد خالی را پرشده نشان می‌داد */
+    /* ۱.۲۷.۸۷ — placeholder حرفه‌ای: جملهٔ راهنمای فارسیِ تک‌دست‌وری (بدون مخلوط دو جهت)
+       راست‌چین تا زیر لیبل راست‌چین بنشیند؛ dir=ltr می‌ماند تا نگارش رمز لاتین درست بماند */
+    placeholder: 'رمز عبور خود را وارد کنید',
     dir: 'ltr',
-    style: { textAlign: 'left' }
+    style: { textAlign: 'right' }
   });
   /* ۱.۲۷.۷۷ — role=alert: اسکرین‌ریدر خطا را بلافاصله اعلام می‌کند (قبلاً فقط تغییر متن بود) */
   const errorBox = el('div', { class: 'login__error', id: 'login-error', role: 'alert', style: { display: 'none' } });
