@@ -51,7 +51,7 @@ window.addEventListener('unhandledrejection', (e) => {
   reportClientError(String(r?.message ?? r ?? 'unhandledrejection'), null, null, null, r?.stack ?? null);
 });
 
-import { session } from './state.js';
+import { session } from './api.js';
 import { initRum } from './rum.js'; // تله‌متری بی‌نام کارایی (بدون IP/UA — قانون PII design.md)
 // فاز A — نشانگر سربرگ «سرور محلی» از feed مشترک پوسته (engine:status + poll ۳۰ثانیه‌ای) تغذیه می‌شود؛
 // تابع نگاشت حالت→رنگ/برچسب همان خالصِ پنل سلامت است (serverStateView — یک منبع، دو لایه).

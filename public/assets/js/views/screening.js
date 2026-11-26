@@ -30,7 +30,7 @@ import {
 } from '../ui.js';
 import { illoScreening } from '../illustrations.js'; /* ۱.۲۵.۰۵ — نگارهٔ حالت خالی */
 import { jalaliDateInput } from '../jalali-picker.js';
-import { session } from '../state.js';
+import { session } from '../api.js';
 
 const PREDEFINED = [
   { label: 'ارجاع تخصصی بینایی', kind: 'referral', badge: 'badge--error' },

@@ -4,7 +4,7 @@ import { el, icon, formModal, openModal, confirmModal, toast, toastError, status
 import { openStudentDelete } from '../student-delete.js'; // — حذف کامل پرونده (جریان واحد با فهرست دانش‌آموزان)
 import { SPECIAL_NEED_TYPE_LABELS, SPECIAL_NEED_SEVERITY_LABELS, SPECIAL_NEED_SEVERITY_TONES } from '../taxonomy.js'; /* ۱.۲۵.۰۲ — واژه‌نامهٔ مشترک نیاز ویژه */
 import { openTeacherManager } from '../student-teachers.js'; // — مدیریت معلم‌ها: افزودن/حذف (APIهای POST/DELETE معلم)
-import { session } from '../state.js';
+import { session } from '../api.js';
 import { fetchTags, fetchStudentTags, tagChip, openTagEditor } from '../tagging.js';
 import { fetchStudentFocus, focusLabels, openFocusEditor } from '../student-focus.js'; // درخت هدف در پروفایل
 import { openCaseEventForm, openCaseEventDetail, canCreateCaseEvents, openChecklistSendModal, fillTargetOf } from '../case-events.js'; // — رویدادهای پرونده + ارسال چک‌لیست + سه‌هدف

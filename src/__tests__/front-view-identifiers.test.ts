@@ -70,7 +70,7 @@ function stripStringsAndComments(src: string): string {
 }
 
 // ─── استخراج صادرات ماژول‌های مشترک (تنظیم «قواعد شناخته‌شده») ───
-const SHARED_MODULES = ['ui.js', 'format.js', 'api.js', 'state.js', 'charts.js', 'session-type.js', 'staff-hue.js'];
+const SHARED_MODULES = ['ui.js', 'format.js', 'api.js', 'charts.js', 'session-type.js', 'staff-hue.js'];
 function exportsOfModule(filePath: string): string[] {
   const src = stripStringsAndComments(readFileSync(filePath, 'utf8'));
   const names = new Set<string>();

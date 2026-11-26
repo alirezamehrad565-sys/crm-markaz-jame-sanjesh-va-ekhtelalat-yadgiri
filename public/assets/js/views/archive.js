@@ -3,7 +3,7 @@ import { fa, gradeLabel, isPlaceholderNid } from '../format.js';
 import { el, icon, confirmModal, toast, toastError, loadingState, emptyState, phoneCell, collapseRemove, flashNode, lockBtn, ddOpen } from '../ui.js';
 import { fetchTags, tagChipsPreview, openTagEditor } from '../tagging.js';
 import { openArchiveStudentForm, openEducationHistory } from '../archive-form.js';
-import { session } from '../state.js';
+import { session } from '../api.js';
 
 const local = {
   query: '',

@@ -7,7 +7,7 @@
 import { api } from './api.js';
 import { fa } from './format.js';
 import { el, openModalAsync, toast, toastError, lockBtn } from './ui.js';
-import { session } from './state.js';
+import { session } from './api.js';
 
 export function openStudentDelete(student, { onDeleted } = {}) {
   openModalAsync({

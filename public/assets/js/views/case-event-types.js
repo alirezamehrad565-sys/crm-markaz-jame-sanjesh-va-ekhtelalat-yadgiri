@@ -2,7 +2,7 @@ import { api } from '../api.js';
 import { fa, formatJalaliDateTime } from '../format.js';
 import { el, icon, openModal, formModal, confirmModal, toast, toastError, emptyState, errorState, skeletonState, scienceNote, rowMenu, collapseRemove, flashNode, lockBtn } from '../ui.js'; /* ۱.۲۲.۰ — collapseRemove/flashNode/lockBtn برای جریان پیوسته */
 import { TOOL_GUIDES } from '../clinical-content.js';
-import { session } from '../state.js';
+import { session } from '../api.js';
 import { openChecklistSendModal, fillTargetOf } from '../case-events.js';
 import { CATEGORY_ICONS, TYPE_ICON_CHOICES, typeIconNode } from '../case-event-icons.js';
 /* ۱.۲۵.۶۰ — نظرسنجی خانواده‌ها به ماژول مستقل «#/family-surveys» منتقل شد (فقط مدیر)؛

@@ -7,7 +7,7 @@ import { openFocusEditor } from '../student-focus.js'; // درخت هدف در �
 import { openStudentForm } from '../student-form.js';
 import { openStudentDelete } from '../student-delete.js'; // — جریان واحد حذف کامل پرونده (مشترک با کارت پروفایل)
 import { hueClass, hueDot } from '../staff-hue.js'; // — رنگ درمانگر روی ردیف جدول/چیپ فیلتر/راهنما
-import { session } from '../state.js';
+import { session } from '../api.js';
 
 const local = {
   query: '',

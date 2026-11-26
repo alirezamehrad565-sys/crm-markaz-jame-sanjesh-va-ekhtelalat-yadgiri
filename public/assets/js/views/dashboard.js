@@ -12,7 +12,7 @@ import {
 } from '../format.js';
 import { el, icon, skeletonState, errorState, emptyState, openModal, progressRing, toast, toastError, kpi, KPI_ALERT_RATE } from '../ui.js'; // toast/toastError گم‌شده بود: مسیر ذخیرهٔ حسابرسی بی‌بازخورد می‌افتد · ۱.۲۵.۰۵: kpi/آستانه تک‌منبع
 import { illoNoAnnouncements, illoKnowledge } from '../illustrations.js'; // — وکتورها
-import { session } from '../state.js';
+import { session } from '../api.js';
 
 const KNOWLEDGE_CATEGORY_LABELS = { tip: 'نکتهٔ آموزشی', protocol: 'پروتکل درمانی', article: 'مقاله', news: 'خبر مرکز' };
 

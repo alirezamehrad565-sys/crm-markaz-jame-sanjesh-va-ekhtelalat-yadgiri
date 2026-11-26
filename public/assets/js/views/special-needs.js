@@ -1,7 +1,7 @@
 import { api, qs } from '../api.js';
 import { fa, STUDENT_GRADES, gradeLabel, tehranTimeOfIso } from '../format.js'; // ساعت تهران برای برچسب زمان محاسبه
 import { el, icon, toast, openModal, statusBadge, dataTable, loadingState, skeletonState, emptyState, errorState, kpi } from '../ui.js'; /* ۱.۲۵.۰۵ — kpi تک‌منبع */
-import { session } from '../state.js';
+import { session } from '../api.js';
 import { SPECIAL_NEED_TYPE_LABELS, SPECIAL_NEED_SEVERITY_LABELS, SPECIAL_NEED_SEVERITY_TONES } from '../taxonomy.js'; /* ۱.۲۵.۰۲ */
 
 /* ۱.۲۵.۰۲ — واژه‌نامهٔ نیاز ویژه از taxonomy.js (کپی محلی حذف شد — خطر واگرایی) */

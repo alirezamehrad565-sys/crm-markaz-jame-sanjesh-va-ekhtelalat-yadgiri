@@ -1,6 +1,6 @@
 import { api } from './api.js';
 import { el, icon, toast, toastError, confirmModal, formModal, emptyState, loadingState, openModal } from './ui.js';
-import { session } from './state.js';
+import { session } from './api.js';
 import { fa, formatJalaliDateTime, sizeLabel } from './format.js'; /* ۱.۲۵.۰۲ — یکسان‌سازی sizeLabel */
 
 const CATEGORY_LABELS = { tip: 'نکتهٔ آموزشی', protocol: 'پروتکل درمانی', article: 'مقاله', news: 'خبر مرکز' };

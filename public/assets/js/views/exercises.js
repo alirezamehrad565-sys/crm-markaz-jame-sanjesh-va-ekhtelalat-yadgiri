@@ -15,7 +15,7 @@ import {
 } from '../ui.js';
 import { illoExercises } from '../illustrations.js'; /* ۱.۲۵.۰۵ — نگارهٔ حالت خالی بانک کارت */
 import { fa, faNormalize, formatJalaliNumeric, safeExternalHref, sizeLabelEn } from '../format.js'; /* ۱.۲۷.۷۸-B2 — faNormalize آینهٔ فارسی جستجو */
-import { session } from '../state.js';
+import { session } from '../api.js';
 import { hueClass, hueDot } from '../staff-hue.js'; // — رنگ ثابت سازندهٔ تمرین (همان پالت درمانگر)
 import { buildTaxonomyPicker } from '../taxonomy.js'; // درخت واحد طبقه‌بندی (یک کامپوننت برای منو/فرم/پیکر)
 

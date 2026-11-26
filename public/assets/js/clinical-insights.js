@@ -2,7 +2,7 @@ import { api } from './api.js';
 import { el, icon, confirmModal, formModal, openModal, toast, toastError, emptyState, loadingState, scienceNote } from './ui.js';
 import { fa, enDigits, formatJalaliDateTime, formatJalaliNumeric, formatJalaliShort, formatStoredJalaliNumeric, parseJalaliInput, tehranDayRange, tehranTodayYmd, tehranYmdOfIso, toJalali, gradeLabel } from './format.js'; // enDigits/جلالی برای فرم پراپ
 import { lineChart } from './charts.js'; // روند پراپ پیشروی با خط ملاک
-import { session } from './state.js';
+import { session } from './api.js';
 import { openExerciseSendModal } from './exercise-send.js';
 import { cardListEditor } from './plan-cards.js'; // ویرایشگر کارت جلسه (کارت‌های آماده + کارت‌های قبلی + کارت آزاد)
 import { openCaseEventForm, openCaseEventDetail, openChecklistBatchSendModal } from './case-events.js'; // — : ارسال گروهی فرم‌های پلن + : بازکردن جزئیات فرم از ردیف‌های تب بالینی

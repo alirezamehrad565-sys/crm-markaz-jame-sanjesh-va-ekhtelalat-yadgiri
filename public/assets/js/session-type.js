@@ -1,6 +1,6 @@
 import { el, formModal, toast } from './ui.js';
 import { api } from './api.js';
-import { session } from './state.js';
+import { session } from './api.js';
 
 export const SESSION_TYPES = [
   { key: 'individual', label: 'مداخله فردی', short: 'فردی', durationMin: 45, hint: 'جلسهٔ یک‌به‌یک درمانگر با دانش‌آموز' },

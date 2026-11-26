@@ -1,7 +1,7 @@
 import { api } from './api.js';
 import { el, icon, toast, toastError, confirmModal, formModal, openModal, statusBadge, emptyState, loadingState, errorState } from './ui.js';
 import { fa, formatJalaliNumeric, safeExternalHref } from './format.js';
-import { session } from './state.js';
+import { session } from './api.js';
 
 function isStaff() {
   return session.user && ['manager', 'therapist', 'secretary'].includes(session.user.role);

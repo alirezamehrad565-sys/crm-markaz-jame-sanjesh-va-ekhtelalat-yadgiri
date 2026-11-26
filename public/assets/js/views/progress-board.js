@@ -1,7 +1,7 @@
 import { api } from '../api.js';
 import { el, icon, toastError, emptyState, skeletonState, errorState, openModal } from '../ui.js';
 import { fa, formatJalaliNumeric, tehranYmdOfIso, tehranTimeOfIso } from '../format.js';
-import { session } from '../state.js';
+import { session } from '../api.js';
 
 const ROLE_LABELS = { manager: 'مدیر', therapist: 'درمانگر', secretary: 'منشی', supervisor: 'ناظر' };
 const PERIOD_TABS = [

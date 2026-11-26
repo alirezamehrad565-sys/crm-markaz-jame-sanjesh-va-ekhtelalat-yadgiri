@@ -1,3 +1,9 @@
+/* ۱.۲۷.۸۵ (sdt162 — performance-003): session از state.js به api.js ادغام شد —
+   همهٔ مصرف‌کنندگان session از قبل api.js را import می‌کردند؛ شیم ۳۴ بایتیِ چانک مشترک از گراف بوت حذف می‌شود */
+export const session = {
+  user: null // {staffId, email, role, displayName}
+};
+
 const STAFF_ID_KEY = 'cs.staffId';
 const TOKEN_KEY = 'cs.token'; // میراث — فقط برای پاک‌سازی نشست‌های قدیمی (ADR-005، ۱.۲۷.۸۲)
 

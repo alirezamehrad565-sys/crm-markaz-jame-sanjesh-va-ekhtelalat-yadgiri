@@ -2,7 +2,7 @@ import { api } from './api.js';
 import { el, formModal, openModalAsync, toast, toastError } from './ui.js';
 import { STUDENT_GRADES, isPlaceholderNid } from './format.js';
 import { STUDENT_PATHWAYS } from './session-type.js'; // — مسیر پرونده
-import { session } from './state.js';
+import { session } from './api.js';
 
 let metaCache = null;
 export async function ensureFormMeta() {

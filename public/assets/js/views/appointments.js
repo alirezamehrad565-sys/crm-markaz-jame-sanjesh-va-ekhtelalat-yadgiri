@@ -24,7 +24,7 @@ import { el, icon, openModal, confirmModal, formModal, toast, toastError, status
 import { hueClass, hueDot } from '../staff-hue.js'; // — رنگ ثابت هر درمانگر
 import { sessionTypeOf, sessionTypeChip, sessionTypeOptions } from '../session-type.js'; // — نوع جلسه (جدول ۴)
 import { openCaseEventForm, openCaseEventDetail, canCreateCaseEvents } from '../case-events.js';
-import { session } from '../state.js';
+import { session } from '../api.js';
 import { fetchAllStudents } from '../student-fetch.js'; // حلقهٔ صفحه‌بندی مشترک (سقف خاموش ۱۰۰ حذف شد)
 
 const DAY_START = 6 * 60;    // کف مطلق شبکه (فقط پشتیبان)
