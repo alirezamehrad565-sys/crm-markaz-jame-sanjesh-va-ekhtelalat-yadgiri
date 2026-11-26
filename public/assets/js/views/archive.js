@@ -318,6 +318,33 @@ export async function renderArchive(container) {
     }, 350);
   });
 
+  /* ۱.۲۷.۸۵ — دکمهٔ پاک‌کردن جست‌وجو: فقط وقتی ورودی متن دارد دیده می‌شود؛
+     کلیک = پاک‌سازی + تازه‌سازی بی‌فیلتر با همان مسیر ورودی + برگشت فوکوس */
+  function searchClearField(inp, onClear) {
+    const btn = el('button', {
+      class: 'search-clear',
+      type: 'button',
+      'aria-label': 'پاک‌کردن جست‌وجو',
+      onclick: () => {
+        inp.value = '';
+        btn.hidden = true;
+        onClear();
+        inp.focus();
+      }
+    }, icon('x', 13));
+    const sync = () => { btn.hidden = !inp.value; };
+    inp.addEventListener('input', sync);
+    inp.addEventListener('search', sync); // پاک‌کردن بومی Escape در WebKit هم روپوش را مخفی می‌کند
+    sync();
+    return [el('div', { class: 'search-field' }, inp, btn), btn];
+  }
+  const [searchField] = searchClearField(searchInput, () => {
+    clearTimeout(debounce);
+    local.query = '';
+    local.page = 1;
+    refreshRows();
+  });
+
   const schoolSel = el('select', { class: 'select', onchange: (e) => { local.schoolId = e.target.value; local.page = 1; refreshRows(); } },
     el('option', { value: '' }, 'همه مدارس'),
     local.schools.map((s) => el('option', { value: s.id, selected: s.id === local.schoolId }, s.name))
@@ -326,7 +353,7 @@ export async function renderArchive(container) {
   const tagFilter = local.tags.length > 0 ? buildTagDropdown(ctl) : null;
 
   const toolbar = el('div', { class: 'toolbar' },
-    searchInput,
+    searchField,
     schoolSel,
     tagFilter,
     el('div', { class: 'spacer' }),

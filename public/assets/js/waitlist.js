@@ -497,12 +497,39 @@ export async function renderWaitlist(container, initialQuery = '', prefillName =
     class: 'input',
     type: 'search',
     placeholder: 'جستجوی نام یا تلفن…',
+    'aria-label': 'جست‌وجو در فهرست انتظار', /* ۱.۲۷.۸۵ — a11y */
     value: state.q,
     oninput: (e) => {
       state.q = e.target.value.trim();
       clearTimeout(searchInput._t);
       searchInput._t = setTimeout(refreshRows, 250);
     }
+  });
+
+  /* ۱.۲۷.۸۵ — دکمهٔ پاک‌کردن جست‌وجو: فقط وقتی ورودی متن دارد دیده می‌شود؛
+     کلیک = پاک‌سازی + تازه‌سازی بی‌فیلتر با همان مسیر ورودی + برگشت فوکوس */
+  function searchClearField(inp, onClear) {
+    const btn = el('button', {
+      class: 'search-clear',
+      type: 'button',
+      'aria-label': 'پاک‌کردن جست‌وجو',
+      onclick: () => {
+        inp.value = '';
+        btn.hidden = true;
+        onClear();
+        inp.focus();
+      }
+    }, icon('x', 13));
+    const sync = () => { btn.hidden = !inp.value; };
+    inp.addEventListener('input', sync);
+    inp.addEventListener('search', sync); // پاک‌کردن بومی Escape در WebKit هم روپوش را مخفی می‌کند
+    sync();
+    return [el('div', { class: 'search-field' }, inp, btn), btn];
+  }
+  const [searchField] = searchClearField(searchInput, () => {
+    state.q = '';
+    clearTimeout(searchInput._t);
+    refreshRows();
   });
   const addBtn = canAddApplicant
     ? el('button', { class: 'btn btn--primary btn--sm', onclick: () => openAddModal(ctl, prefillName) }, icon('plus', 16), 'متقاضی جدید')
@@ -665,7 +692,7 @@ export async function renderWaitlist(container, initialQuery = '', prefillName =
   );
 
   const toolbar = el('div', { class: 'week-bar' },
-    statusSel, prioritySel, searchInput,
+    statusSel, prioritySel, searchField,
     el('div', { class: 'spacer' }),
     ...(autoBtn ? [autoBtn] : []), /* ۱.۲۵.۰۱ — ناظر: addBtn null است؛ پخش شرطی تا گره خالی ساخته نشود */
     ...(addBtn ? [addBtn] : [])

@@ -559,6 +559,33 @@ export function renderExercises(container) {
       }, 350);
     });
 
+    /* ۱.۲۷.۸۵ — دکمهٔ پاک‌کردن جست‌وجو: فقط وقتی ورودی متن دارد دیده می‌شود؛
+       کلیک = پاک‌سازی + تازه‌سازی بی‌فیلتر با همان مسیر ورودی + برگشت فوکوس */
+    function searchClearField(inp, onClear) {
+      const btn = el('button', {
+        class: 'search-clear',
+        type: 'button',
+        'aria-label': 'پاک‌کردن جست‌وجو',
+        onclick: () => {
+          inp.value = '';
+          btn.hidden = true;
+          onClear();
+          inp.focus();
+        }
+      }, icon('x', 13));
+      const sync = () => { btn.hidden = !inp.value; };
+      inp.addEventListener('input', sync);
+      inp.addEventListener('search', sync); // پاک‌کردن بومی Escape در WebKit هم روپوش را مخفی می‌کند
+      sync();
+      return [el('div', { class: 'search-field' }, inp, btn), btn];
+    }
+    const [searchField] = searchClearField(search, () => {
+      clearTimeout(debounce);
+      state.q = '';
+      state.page = 1;
+      refreshZone();
+    });
+
     const pubSel = el(
       'select',
       { class: 'select', 'aria-label': 'وضعیت انتشار' }, /* S6-16 */
@@ -607,7 +634,7 @@ export function renderExercises(container) {
 
     nav.replaceChildren(
       taxPicker.el, // چهار ستون با یک زبان: تب + خلاصهٔ انتخاب‌ها + درخت
-      el('div', { class: 'exb-filters' }, search, pubSel),
+      el('div', { class: 'exb-filters' }, searchField, pubSel),
       typeChips
     );
   }

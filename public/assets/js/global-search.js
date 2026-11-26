@@ -16,6 +16,7 @@ const ROLE_LABELS = { manager: 'مدیر', therapist: 'درمانگر', secretor
 const KIND_LABELS = { school: 'مدرسه', kindergarten: 'مهدکودک' };
 
 let opened = false;
+let hotkeysBound = false; // ۱.۲۷.۸۵ — گارد ثبت دوبارهٔ میان‌برها: init هرگز کلیدها را دو بار بند نمی‌کند
 
 /* ۱.۲۷.۷۳ — سرچ هوشمند: اکشن مستقیم روی نتیجه، بدون خروج از پالت.
    «پرینت خام سند» = فایل اصلی سند خام (همان الگوی previewFile مخزن اسناد: بایتِ
@@ -60,6 +61,8 @@ function itemActions(item) {
 }
 
 export function initGlobalSearch() {
+  if (hotkeysBound) return; // ۱.۲۷.۸۵ — idempotent: app.js هم lazy فراخوانی می‌کند؛ ثبت دوباره ممنوع
+  hotkeysBound = true;
   const btn = document.getElementById('global-search-btn');
   if (btn) btn.addEventListener('click', openPalette);
 
@@ -96,6 +99,22 @@ export function openPalette() {
     spellcheck: 'false'
   });
   const results = el('div', { class: 'gsearch__results' });
+
+  /* ۱.۲۷.۸۵ — دکمهٔ پاک‌کردن جست‌وجو: فقط وقتی ورودی متن دارد دیده می‌شود؛
+     کلیک = پاک‌سازی + بازگشت به حالت آغازین پالت (بخش‌های «همین پرونده» یا پیام حداقل نویسه) + برگشت فوکوس */
+  const clearBtn = el('button', {
+    class: 'search-clear gsearch__clear',
+    type: 'button',
+    'aria-label': 'پاک‌کردن جست‌وجو',
+    onclick: () => {
+      input.value = '';
+      clearBtn.hidden = true;
+      seq++; // پاسخ‌های در راهِ قبلی نادیده گرفته می‌شوند
+      renderInitial();
+      input.focus();
+    }
+  }, icon('x', 14));
+  const field = el('div', { class: 'gsearch__field' }, input, clearBtn);
 
   function hintRow() {
     return el('div', { class: 'gsearch__hint' },
@@ -158,6 +177,12 @@ export function openPalette() {
     );
   }
 
+  /* ۱.۲۷.۸۵ — حالت آغازین پالت: با بخش‌های «همین پرونده» یا پیام حداقل نویسه — همان مسیر openPalette */
+  function renderInitial() {
+    if (localProfileSections().length > 0) renderGroups({ groups: [] });
+    else renderEmpty('برای جستجو حداقل ۲ نویسه بنویسید…');
+  }
+
   function renderItem({ node, iconName, title, sub, actions, goTarget }) {
     flatItems.push(goTarget);
     node.append(
@@ -166,13 +191,15 @@ export function openPalette() {
         el('span', { class: 'gsearch__item-title' }, title),
         sub ? el('span', { class: 'gsearch__item-sub' }, sub) : null
       ),
-      /* ۱.۲۷.۷۳ — اکشن‌های مستقیم: کلیک روی آن‌ها از ناوبری ردیف جدا است */
+      /* ۱.۲۷.۷۳ — اکشن‌های مستقیم: کلیک روی آن‌ها از ناوبری ردیف جدا است · ۱.۲۷.۸۵: کیبوردپذیر (tabindex + Enter/Space همان مسیر کلیک) */
       ...(actions ?? []).map((a) => el('span', {
         class: 'gsearch__act',
         role: 'button',
+        tabindex: '0',
         title: a.label,
         'aria-label': a.label,
-        onmousedown: (e) => { e.preventDefault(); e.stopPropagation(); a.hash ? go({ hash: a.hash }) : a.run(); }
+        onmousedown: (e) => { e.preventDefault(); e.stopPropagation(); a.hash ? go({ hash: a.hash }) : a.run(); },
+        onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); a.hash ? go({ hash: a.hash }) : a.run(); } }
       }, icon(a.icon, 13))),
       icon('chevL', 14)
     );
@@ -273,6 +300,7 @@ export function openPalette() {
   }
 
   input.addEventListener('input', () => {
+    clearBtn.hidden = !input.value; // ۱.۲۷.۸۵ — دکمهٔ پاک‌کردن فقط با متن ورودی
     clearTimeout(debounce);
     debounce = setTimeout(run, 220);
   });
@@ -288,14 +316,13 @@ export function openPalette() {
 
   const modal = openModal({
     title: 'جستجوی سراسری',
-    body: [input, results, hintRow()],
+    body: [field, results, hintRow()],
     onClose: () => { opened = false; clearTimeout(debounce); seq++; }
   });
   closePalette = modal.close;
   modal.root.classList.add('modal--gsearch');
 
   /* ۱.۲۷.۶۴ — موج ۳: در پروندهٔ باز، بخش‌های «همین پرونده» بی‌درنگ و بدون تایپ دیده می‌شوند */
-  if (localProfileSections().length > 0) renderGroups({ groups: [] });
-  else renderEmpty('برای جستجو حداقل ۲ نویسه بنویسید…');
+  renderInitial();
   setTimeout(() => input.focus(), 60);
 }

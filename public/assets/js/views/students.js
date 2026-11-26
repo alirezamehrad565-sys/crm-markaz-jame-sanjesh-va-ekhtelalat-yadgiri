@@ -403,6 +403,27 @@ export async function renderStudents(container, ctx) {
   const searchInput = el('input', { class: 'input', type: 'search', placeholder: 'جستجو: نام یا کد ملی…', 'aria-label': 'جستجوی نام یا کد ملی', value: local.query }); /* S5-03 */
   let searchTimer = null;
 
+  /* ۱.۲۷.۸۵ — دکمهٔ پاک‌کردن جست‌وجو: فقط وقتی ورودی متن دارد دیده می‌شود؛
+     کلیک = پاک‌سازی + تازه‌سازی بی‌فیلتر با همان مسیر ورودی + برگشت فوکوس */
+  function searchClearField(inp, onClear) {
+    const btn = el('button', {
+      class: 'search-clear',
+      type: 'button',
+      'aria-label': 'پاک‌کردن جست‌وجو',
+      onclick: () => {
+        inp.value = '';
+        btn.hidden = true;
+        onClear();
+        inp.focus();
+      }
+    }, icon('x', 13));
+    const sync = () => { btn.hidden = !inp.value; };
+    inp.addEventListener('input', sync);
+    inp.addEventListener('search', sync); // پاک‌کردن بومی Escape در WebKit هم روپوش را مخفی می‌کند
+    sync();
+    return [el('div', { class: 'search-field' }, inp, btn), btn];
+  }
+
   function runSearch() {
     const v = searchInput.value.trim();
     if (v === local.query) return;
@@ -423,8 +444,9 @@ export async function renderStudents(container, ctx) {
   });
   searchInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') { e.preventDefault(); clearTimeout(searchTimer); runSearch(); }
-    else if (e.key === 'Escape' && searchInput.value) { searchInput.value = ''; clearTimeout(searchTimer); runSearch(); }
+    else if (e.key === 'Escape' && searchInput.value) { searchInput.value = ''; clearTimeout(searchTimer); runSearch(); searchClear.hidden = true; }
   });
+  const [searchField, searchClear] = searchClearField(searchInput, () => { clearTimeout(searchTimer); runSearch(); });
 
   const schoolSel = el('select', { class: 'select', 'aria-label': 'فیلتر مدرسه', onchange: (e) => { local.schoolId = e.target.value; local.page = 1; refreshRows(); } }, /* S5-03 */
     el('option', { value: '' }, 'همه مدارس'),
@@ -460,7 +482,7 @@ export async function renderStudents(container, ctx) {
   const tagFilter = local.tags.length > 0 ? buildTagDropdown() : null;
 
   const toolbar = el('div', { class: 'toolbar' },
-    searchInput,
+    searchField,
     schoolSel,
     ownerChips,
     tagFilter,

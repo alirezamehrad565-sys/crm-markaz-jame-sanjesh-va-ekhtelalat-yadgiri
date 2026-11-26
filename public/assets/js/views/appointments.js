@@ -1160,6 +1160,27 @@ function openAssessmentBlockDetailModal(blockId) {
   });
 }
 
+/* ۱.۲۷.۸۵ — دکمهٔ پاک‌کردن جست‌وجوی پیکرها: فقط وقتی ورودی متن دارد دیده می‌شود؛
+   کلیک = پاک‌سازی + بازکشیدن فهرست بی‌فیلتر (فیلتر همین‌جا سمت کلاینت است) + برگشت فوکوس */
+function searchClearField(inp, onClear) {
+  const btn = el('button', {
+    class: 'search-clear',
+    type: 'button',
+    'aria-label': 'پاک‌کردن جست‌وجو',
+    onclick: () => {
+      inp.value = '';
+      btn.hidden = true;
+      onClear();
+      inp.focus();
+    }
+  }, icon('x', 13));
+  const sync = () => { btn.hidden = !inp.value; };
+  inp.addEventListener('input', sync);
+  inp.addEventListener('search', sync); // پاک‌کردن بومی Escape در WebKit هم روپوش را مخفی می‌کند
+  sync();
+  return [el('div', { class: 'search-field' }, inp, btn), btn];
+}
+
 function openCreateModal(container, preset = {}) {
   const picked = new Set();
   const isTher = session.user?.role === 'therapist';
@@ -1167,7 +1188,7 @@ function openCreateModal(container, preset = {}) {
   const defaultYmd = preset.ymd ?? (state.weekStart === weekStartOf(tehranTodayYmd()) ? tehranTodayYmd() : state.weekStart);
   const defaultMinute = preset.minute ?? (9 * 60);
 
-  const searchInput = el('input', { class: 'input', placeholder: 'جستجوی نام دانش‌آموز…', 'aria-label': 'جستجوی نام دانش‌آموز' }); /* S2-10 */
+  const searchInput = el('input', { class: 'input', type: 'search', placeholder: 'جستجوی نام دانش‌آموز…', 'aria-label': 'جستجوی نام دانش‌آموز' }); /* S2-10 */
   const listBox = el('div', { class: 'pick-list' });
 
   const drawList = () => {
@@ -1189,6 +1210,7 @@ function openCreateModal(container, preset = {}) {
     );
   };
   drawList();
+  const [searchField] = searchClearField(searchInput, drawList);
 
   let durationValue = preset.duration ?? state.lastDuration;
   let chipBox = null;
@@ -1276,7 +1298,7 @@ function openCreateModal(container, preset = {}) {
 
     const block = el('div', { class: 'field span-2' },
       el('label', { class: 'field__label' }, 'دانش‌آموزان (اختیاری)'),
-      searchInput, listBox
+      searchField, listBox
     );
     searchInput.style.marginBottom = 'var(--sp-2)';
     searchInput.addEventListener('input', drawList);
@@ -1478,7 +1500,7 @@ async function openDetailModal(appointmentId) {
 
   const isTherapistHere = session.user?.role === 'therapist';
   const addPool = isTherapistHere ? state.myStudents : state.studentsAll;
-  const addSearch = el('input', { class: 'input', placeholder: isTherapistHere ? 'جستجو در دانش‌آموزان من…' : 'جستجوی نام دانش‌آموز…', style: { marginBottom: 'var(--sp-2)' } });
+  const addSearch = el('input', { class: 'input', type: 'search', 'aria-label': 'جستجوی نام دانش‌آموز', placeholder: isTherapistHere ? 'جستجو در دانش‌آموزان من…' : 'جستجوی نام دانش‌آموز…', style: { marginBottom: 'var(--sp-2)' } }); /* ۱.۲۷.۸۵ — a11y + پاک‌کردن */
   const addList = el('div', { class: 'pick-list', style: { maxHeight: '160px' } });
   const drawAddList = () => {
     const existing = new Set((a.students ?? []).map((s) => s.studentId));
@@ -1507,6 +1529,7 @@ async function openDetailModal(appointmentId) {
     );
   };
   addSearch.addEventListener('input', drawAddList);
+  const [addSearchField] = searchClearField(addSearch, drawAddList);
   drawAddList();
 
   const durationMin = Math.round((Date.parse(a.endAt) - Date.parse(a.startAt)) / 60000);
@@ -1525,7 +1548,7 @@ async function openDetailModal(appointmentId) {
       el('div', { class: 'field' },
         el('label', { class: 'field__label' }, 'دانش‌آموزان نوبت — نام = مشاهده پروفایل'),
         studentsBox,
-        a.status === 'cancelled' ? null : (canManage(a) ? el('div', {}, addSearch, addList) : null)
+        a.status === 'cancelled' ? null : (canManage(a) ? el('div', {}, addSearchField, addList) : null)
       )
     ],
     actions: [

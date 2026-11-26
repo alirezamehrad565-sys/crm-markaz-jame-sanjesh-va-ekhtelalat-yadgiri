@@ -16,6 +16,23 @@ import { session } from '../api.js';
 
 const KNOWLEDGE_CATEGORY_LABELS = { tip: 'نکتهٔ آموزشی', protocol: 'پروتکل درمانی', article: 'مقاله', news: 'خبر مرکز' };
 
+/* ۱.۲۷.۸۵ — ترتیب بخش‌های داشبورد مدیر یک‌جا اعلام می‌شود (به‌جای pushهای پراکنده):
+   کارهای اقدامی (پیگیری‌های سررسیده، پیرشدن لیست انتظار) بلافاصله پس از ردیف «کارهای من»
+   می‌آیند — اقدامِ امروز اول، تحلیل منفعل بعد. ترتیب صریحی از کارفرما داده نشده بود؛
+   این پیش‌فرض انتخاب شد. هر بخش هنگام رندر data-card می‌گیرد (نشانه‌گذاری پایدار برای آزمون/دیباگ). */
+const DASH_CARDS = [
+  'next-appointment', // آلرت نوبت بعدی امروز
+  'dash-duo', // «کارهای من» + اطلاع‌رسانی مرکز
+  'followups-due', // پیگیری‌های سررسیده — اقدام امروز
+  'waitlist-aging', // چه مدت در انتظارند؟ — اقدام امروز
+  'knowledge', // دانش‌افزایی
+  'kpi-grid', // شاخص‌های امروز
+  'leaderboard', // تابلوی پیشرفت درمانگران
+  'validation', // اعتبارسنجی بیرونی
+  'week-trend', // روند ۷ روز اخیر
+  'screening-goal' // هدف غربالگری
+];
+
 export async function renderDashboard(container) {
   container.replaceChildren(skeletonState('cards', 4));
 
@@ -226,16 +243,16 @@ async function officeDashboard(container, { todayData, summaryData, goalData, sc
     )
   );
 
+  const cards = {}; // ۱.۲۷.۸۵ — هر بخش با شناسهٔ پایدار ساخته می‌شود؛ ترتیب نهایی چیدمان از DASH_CARDS می‌آید
+
   if (todayData.nextAppointment) {
     const next = todayData.nextAppointment;
     const staffName = todayData.perStaff.find((s) => s.staffId === next.staffId)?.staffName ?? '';
-    parts.push(
-      el(
-        'div',
-        { class: 'alert alert--info', style: { marginBottom: 'var(--sp-4)', cursor: 'pointer' }, title: 'مشاهده در تقویم نوبت‌ها', onclick: () => { location.hash = '#/appointments'; } } /* POLISH-3 M2 — حفر آلرت نوبت بعدی */,
-        icon('clock', 18),
-        el('span', {}, `نوبت بعدی امروز: ساعت ${fa(tehranTimeOfIso(next.startAt))} — ${staffName}`)
-      )
+    cards['next-appointment'] = el(
+      'div',
+      { class: 'alert alert--info', style: { marginBottom: 'var(--sp-4)', cursor: 'pointer' }, title: 'مشاهده در تقویم نوبت‌ها', onclick: () => { location.hash = '#/appointments'; } } /* POLISH-3 M2 — حفر آلرت نوبت بعدی */,
+      icon('clock', 18),
+      el('span', {}, `نوبت بعدی امروز: ساعت ${fa(tehranTimeOfIso(next.startAt))} — ${staffName}`)
     );
   }
 
@@ -251,59 +268,68 @@ async function officeDashboard(container, { todayData, summaryData, goalData, sc
      ② «اطلاع‌رسانی مرکز» بغل‌به‌بغلِ همان کارت (یک‌سوم باقی‌مانده)؛
      ③ «دانش‌افزایی» هم بیاید بالا — بلافاصله زیر ردیف قهرمان؛
      ④ کارت رویدادهای روز حذف شد — مدیران راضی نبودند و ضرورت نداشت (تقویم نوبت‌ها مرجع کامل همان داده است)؛
-     ⑤ بقیهٔ ماژول‌ها (شاخص‌ها، تابلو، پیگیری‌ها، روند و هدف) زیر این سه می‌نشینند. */
+     ⑤ بقیهٔ ماژول‌ها (شاخص‌ها، تابلو، پیگیری‌ها، روند و هدف) زیر این سه می‌نشینند.
+     (۱.۲۷.۸۵ — کارهای اقدامی «پیگیری‌های سررسیده» و «پیرشدن لیست انتظار» هم بلافاصله پس از
+     ردیف قهرمان می‌آیند؛ دانش‌افزایی و شاخص‌ها بعد از آن‌ها — ترتیب از DASH_CARDS.) */
   /* performance-003 (۱.۲۷.۸۳): my-todos از گراف بوت خارج شد — فقط برای نقش‌هایی که کارت
      «کارهای من» را می‌بینند با import پویا در لحظهٔ رندر می‌آید (eager_modules ۷→۶) */
   const todosMod = await import('../my-todos.js');
   const todosCard = todosMod.canSeeTodos() ? todosMod.renderMyTodosCard() : null;
   const anCard = announcementsCard(announcements);
   if (todosCard) {
-    parts.push(el('div', { class: 'dash-duo', style: { marginBottom: 'var(--sp-4)' } }, todosCard, anCard));
+    cards['dash-duo'] = el('div', { class: 'dash-duo', style: { marginBottom: 'var(--sp-4)' } }, todosCard, anCard);
   } else {
-    if (anCard) parts.push(anCard);
+    if (anCard) cards['dash-duo'] = anCard;
   }
-  const knCard = knowledgeCard(knowledge);
-  if (knCard) parts.push(knCard);
 
-  parts.push(
-    // A19: stagger فقط در mount اول نشست — هر refresh داده KPIها دوباره «می‌رقصیدند»
-    el(
-      'div',
-      { class: `kpi-grid${document.body.dataset.kpiStaggered ? '' : ' stagger'}`, style: { marginBottom: 'var(--sp-5)' }, ...(document.body.dataset.kpiStaggered ? {} : { dataset: { staggerOnce: '1' } }) },
-      /* POLISH-3 M2 — حفر گرید KPI: هر شاخص به فهرست پشتِ عددش می‌رود */
-      kpi('نوبت‌های امروز', fa(todayData.appointments.total), `برنامه‌ریزی‌شده ${fa(todayData.appointments.scheduled)} · لغوشده ${fa(todayData.appointments.cancelled)}`, 'primary', null, '#/appointments'),
-      kpi('در انتظار حضور و غیاب', fa(todayData.pendingAttendance), 'نوبت‌های امروز بدون وضعیت', 'accent', null, '#/working-day'),
-      kpi('نرخ غیبت', hasAttendanceData ? `${fa(absencePct)}٪` : '—', hasAttendanceData ? 'آمار حضور امروز' : 'هنوز حاضری امروز ثبت نشده', hasAttendanceData ? ((todayData.absenceRate ?? 0) >= KPI_ALERT_RATE ? 'error' : 'success') : 'neutral', null, '#/working-day') /* ۱.۲۵.۰۵: مقایسه با نرخ خام و آستانهٔ مشترک — قبلاً 20 روی درصد گردشده بود */,
-      waitingCount !== null
-        ? kpi('لیست انتظار', fa(waitingCount), 'متقاضیِ در صف (در انتظار/فراخوانده)', waitingCount > 0 ? 'accent' : 'neutral', null, '#/waitlist')
-        : null,
-      kpi('دانش‌آموزان فعال', fa(todayData.studentsSummary.totalStudents), `در ${fa(todayData.studentsSummary.totalSchools)} مدرسه`, 'primary', null, '#/students')
-    )
+  const fuCard = followupsDueCard(followups, today);
+  if (fuCard) cards['followups-due'] = fuCard;
+  const agingCard = waitlistAgingCard(waitlist);
+  if (agingCard) cards['waitlist-aging'] = agingCard;
+
+  const knCard = knowledgeCard(knowledge);
+  if (knCard) cards['knowledge'] = knCard;
+
+  // A19: stagger فقط در mount اول نشست — هر refresh داده KPIها دوباره «می‌رقصیدند»
+  cards['kpi-grid'] = el(
+    'div',
+    { class: `kpi-grid${document.body.dataset.kpiStaggered ? '' : ' stagger'}`, style: { marginBottom: 'var(--sp-5)' }, ...(document.body.dataset.kpiStaggered ? {} : { dataset: { staggerOnce: '1' } }) },
+    /* POLISH-3 M2 — حفر گرید KPI: هر شاخص به فهرست پشتِ عددش می‌رود */
+    kpi('نوبت‌های امروز', fa(todayData.appointments.total), `برنامه‌ریزی‌شده ${fa(todayData.appointments.scheduled)} · لغوشده ${fa(todayData.appointments.cancelled)}`, 'primary', null, '#/appointments'),
+    kpi('در انتظار حضور و غیاب', fa(todayData.pendingAttendance), 'نوبت‌های امروز بدون وضعیت', 'accent', null, '#/working-day'),
+    kpi('نرخ غیبت', hasAttendanceData ? `${fa(absencePct)}٪` : '—', hasAttendanceData ? 'آمار حضور امروز' : 'هنوز حاضری امروز ثبت نشده', hasAttendanceData ? ((todayData.absenceRate ?? 0) >= KPI_ALERT_RATE ? 'error' : 'success') : 'neutral', null, '#/working-day') /* ۱.۲۵.۰۵: مقایسه با نرخ خام و آستانهٔ مشترک — قبلاً 20 روی درصد گردشده بود */,
+    waitingCount !== null
+      ? kpi('لیست انتظار', fa(waitingCount), 'متقاضیِ در صف (در انتظار/فراخوانده)', waitingCount > 0 ? 'accent' : 'neutral', null, '#/waitlist')
+      : null,
+    kpi('دانش‌آموزان فعال', fa(todayData.studentsSummary.totalStudents), `در ${fa(todayData.studentsSummary.totalSchools)} مدرسه`, 'primary', null, '#/students')
   );
   if (!document.body.dataset.kpiStaggered) document.body.dataset.kpiStaggered = '1'; /* A19 */
 
   const scoreRows = scoring?.rows ?? [];
   if (scoreRows.length) {
-    parts.push(leaderboardCard(scoreRows, 'تابلوی پیشرفت درمانگران', session.user?.staffId, scoring?.since, '#/staff'));
+    cards['leaderboard'] = leaderboardCard(scoreRows, 'تابلوی پیشرفت درمانگران', session.user?.staffId, scoring?.since, '#/staff');
   }
-
-  const fuCard = followupsDueCard(followups, today);
-  if (fuCard) parts.push(fuCard);
-  const agingCard = waitlistAgingCard(waitlist);
-  if (agingCard) parts.push(agingCard);
 
   // اعتبارسنجی بیرونی (M6 ۱.۲۷.۲۹): روایت + حفر KPI + فرم پیگیری ۳–۶ماهه + نمای درمانگرِ همان پرونده
   // fetch تنبل در renderDashboard انجام می‌شود و از پارامتر می‌آید (officeDashboard همگام است)
-  if (validation) parts.push(validationCard(validation.kpis, validation.audits));
+  if (validation) cards['validation'] = validationCard(validation.kpis, validation.audits);
 
   if (summaryData) {
     /* UX-ممیزی P2: «روند ۷ روز اخیر» با همهٔ صفرها = نیم‌صفحهٔ مرده؛
        اگر در کل هفته حتی یک نوبت نبوده، کارت اصلاً رندر نمی‌شود */
     const weekHasAny = summaryData.byDay.some((d) => d.total > 0);
-    if (weekHasAny) parts.push(weekTrendCard(summaryData, todayData, today));
+    if (weekHasAny) cards['week-trend'] = weekTrendCard(summaryData, todayData, today);
   }
 
-  if (goalData) parts.push(drawScreeningGoalCard(goalData));
+  if (goalData) cards['screening-goal'] = drawScreeningGoalCard(goalData);
+
+  /* ۱.۲۷.۸۵ — چیدمان نهایی از DASH_CARDS؛ بخش‌های بی‌داده (null) مثل قبل رندر نمی‌شوند */
+  for (const id of DASH_CARDS) {
+    const node = cards[id];
+    if (!node) continue;
+    node.setAttribute('data-card', id);
+    parts.push(node);
+  }
 
   return parts;
 }
