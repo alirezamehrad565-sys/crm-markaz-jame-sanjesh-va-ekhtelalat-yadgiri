@@ -52,7 +52,7 @@ describe('/ — auth & session (API واقعی)', () => {
     expect(sc).toContain('Secure');
     expect(sc).toContain('SameSite=Strict');
     expect(sc).toContain('Path=/');
-    expect(sc).toMatch(/Max-Age=\d{6,}/); // ۳۰ روز
+    expect(sc).toMatch(/Max-Age=\d{6,}/); // ۱۴ روز (ADR-019) — الگوی عرضی عمداً وابسته به عدد نیست
   });
 
   it('احراز با کوکی تنها (بدون Bearer) کار می‌کند — /api/me ۲۰۰', async () => {
