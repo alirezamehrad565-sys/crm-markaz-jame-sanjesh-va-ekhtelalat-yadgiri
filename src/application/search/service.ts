@@ -1,7 +1,7 @@
 import type { DbClient } from '@core/db';
 import type { Logger } from '@core/logger';
 import { SEARCH_QUERY_MIN_LENGTH } from '@core/shared';
-import type { GlobalSearchResult, SearchGroup, SearchItem } from '@core/shared';
+import type { GlobalSearchResult, SearchGroup, SearchItem, SearchEntityType } from '@core/shared';
 import { capItems, faHaystackExpr, isSearchable, likePattern, orderGroups, sanitizeFaQuery } from './pure';
 
 export interface SearchDeps {
@@ -10,6 +10,19 @@ export interface SearchDeps {
 }
 
 const PER_GROUP_LIMIT = { students: 6, staff: 4, schools: 3, tags: 4, waitlist: 4 };
+const DOCS_LIMIT = 4;
+
+/* ۱.۲۷.۸۵ (sdt164: performance-004) — شش پرس‌وجوی موازیِ جستجوی سراسری یک statement شد:
+   هر شاخه در زیر-SELECT خودش ORDER BY + LIMIT می‌گیرد (همان ترتیب و همان سقف قبلی) و ستون
+   نخستِ literal «kind» بعداً ردیف‌ها را به همان گروه‌های پاسخ قدیمی برمی‌گرداند. شاخهٔ اسناد
+   برای نقش غیرمجاز اصلاً به statement نمی‌نشیند (همان گیت مدیر/منشی). LIKE '%q%' و
+   faHaystackExpr دست‌نخورده — بدون تغییر schema. */
+interface SearchRow {
+  kind: SearchEntityType;
+  id: string;
+  title: string;
+  subtitle: string | null;
+}
 
 export interface SearchService {
   // actorRole: برای گیت نمایش گروه «اسناد» فقط به مدیر/منشی (additive و اختیاری)
@@ -32,135 +45,89 @@ export function createSearchService(deps: SearchDeps): SearchService {
 
       // گروه «اسناد» فقط برای مدیر/منشی (اسناد اداری خام)
       const canSeeDocs = actorRole === 'manager' || actorRole === 'secretary';
-      const [studentRows, staffRows, schoolRows, tagRows, waitlistRows, docRows] = await Promise.all([
-        db.query<{
-          id: string;
-          first_name: string;
-          last_name: string;
-          grade: string | null;
-          national_id: string;
-        }>(
-          `SELECT id, first_name, last_name, grade, national_id
+      const docsBranch = canSeeDocs
+        ? `UNION ALL SELECT * FROM (
+             SELECT 'doc' AS kind, id, title, category AS subtitle
+               FROM docs
+              WHERE deleted_at IS NULL
+                AND (title LIKE ? OR description LIKE ? OR tags LIKE ?)
+              ORDER BY created_at DESC
+              LIMIT ${DOCS_LIMIT}
+           )`
+        : '';
+
+      const rows = await db.query<SearchRow>(
+        `SELECT * FROM (
+           SELECT 'student' AS kind, id,
+                  (first_name || ' ' || last_name) AS title,
+                  COALESCE(grade, national_id) AS subtitle
              FROM students
             WHERE active = 1
               AND (${faHaystackExpr('first_name')} LIKE ? OR ${faHaystackExpr('last_name')} LIKE ?
                    OR national_id LIKE ?
                    OR ${faHaystackExpr(`(first_name || ' ' || last_name)`)} LIKE ?)
             ORDER BY last_name, first_name
-            LIMIT ${PER_GROUP_LIMIT.students}`,
-          [pattern, pattern, pattern, pattern]
-        ),
-        db.query<{ id: string; full_name: string; role: string }>(
-          `SELECT id, full_name, role
+            LIMIT ${PER_GROUP_LIMIT.students}
+         )
+         UNION ALL SELECT * FROM (
+           SELECT 'staff' AS kind, id, full_name AS title, role AS subtitle
              FROM staff
             WHERE active = 1 AND ${faHaystackExpr('full_name')} LIKE ?
             ORDER BY full_name
-            LIMIT ${PER_GROUP_LIMIT.staff}`,
-          [pattern]
-        ),
-        db.query<{ id: string; name: string; kind: string; code: string | null }>(
-          `SELECT id, name, kind, code
+            LIMIT ${PER_GROUP_LIMIT.staff}
+         )
+         UNION ALL SELECT * FROM (
+           SELECT 'school' AS kind, id, name AS title, COALESCE(code, kind) AS subtitle
              FROM schools
             WHERE active = 1 AND (${faHaystackExpr('name')} LIKE ? OR (code IS NOT NULL AND code LIKE ?))
             ORDER BY name
-            LIMIT ${PER_GROUP_LIMIT.schools}`,
-          [pattern, pattern]
-        ),
-        db.query<{ id: string; name: string; category: string; usage: number }>(
-          `SELECT t.id, t.name, t.category,
-                  (SELECT COUNT(*) FROM student_tags st WHERE st.tag_id = t.id) AS usage
-             FROM tags t
-            WHERE t.active = 1 AND t.name LIKE ?
-            ORDER BY t.category, t.name
-            LIMIT ${PER_GROUP_LIMIT.tags}`,
-          [pattern]
-        ),
-        db.query<{ id: string; first_name: string; last_name: string; phone: string; status: string }>(
-          `SELECT id, first_name, last_name, phone, status
+            LIMIT ${PER_GROUP_LIMIT.schools}
+         )
+         UNION ALL SELECT * FROM (
+           SELECT 'tag' AS kind, id, name AS title,
+                  CASE WHEN usage > 0 THEN CAST(usage AS TEXT) ELSE NULL END AS subtitle
+             FROM (
+               SELECT t.id, t.name, t.category,
+                      (SELECT COUNT(*) FROM student_tags st WHERE st.tag_id = t.id) AS usage
+                 FROM tags t
+                WHERE t.active = 1 AND t.name LIKE ?
+                ORDER BY t.category, t.name
+                LIMIT ${PER_GROUP_LIMIT.tags}
+             )
+         )
+         UNION ALL SELECT * FROM (
+           SELECT 'waitlist' AS kind, id,
+                  (first_name || ' ' || last_name) AS title,
+                  phone AS subtitle
              FROM waitlist
             WHERE deleted_at IS NULL
               AND (${faHaystackExpr('first_name')} LIKE ? OR ${faHaystackExpr('last_name')} LIKE ?
                    OR phone LIKE ?
                    OR ${faHaystackExpr(`(first_name || ' ' || last_name)`)} LIKE ?)
             ORDER BY last_name, first_name
-            LIMIT ${PER_GROUP_LIMIT.waitlist}`,
-          [pattern, pattern, pattern, pattern]
-        ),
-        // جستجوی اسناد (عنوان/توضیح/برچسب‌ها) — فقط برای مدیر/منشی اجرا می‌شود
-        canSeeDocs
-          ? db.query<{ id: string; title: string; category: string }>(
-              `SELECT id, title, category
-                 FROM docs
-                WHERE deleted_at IS NULL
-                  AND (title LIKE ? OR description LIKE ? OR tags LIKE ?)
-                ORDER BY created_at DESC
-                LIMIT 4`,
-              [pattern, pattern, pattern]
-            )
-          : Promise.resolve([] as { id: string; title: string; category: string }[])
-      ]);
+            LIMIT ${PER_GROUP_LIMIT.waitlist}
+         )
+         ${docsBranch}`,
+        // الگوی جستجو به ترتیب شاخه‌ها: دانش‌آموز×۴، کارمند×۱، مدرسه×۲، برچسب×۱، انتظار×۴ (+ اسناد×۳)
+        (() => {
+          const params = [pattern, pattern, pattern, pattern, pattern, pattern, pattern, pattern, pattern, pattern, pattern, pattern];
+          if (canSeeDocs) params.push(pattern, pattern, pattern);
+          return params;
+        })()
+      );
+
+      const ofKind = (kind: SearchRow['kind']): SearchRow[] => rows.filter((r) => r.kind === kind);
+      const itemsOf = (kind: SearchRow['kind'], type: SearchEntityType): SearchItem[] =>
+        ofKind(kind).map((r): SearchItem => ({ type, id: r.id, title: r.title, subtitle: r.subtitle }));
 
       const groups: SearchGroup[] = [
-        {
-          type: 'student',
-          items: capItems(
-            studentRows.map(
-              (r): SearchItem => ({
-                type: 'student',
-                id: r.id,
-                title: `${r.first_name} ${r.last_name}`,
-                subtitle: r.grade ?? r.national_id
-              })
-            ),
-            PER_GROUP_LIMIT.students
-          )
-        },
-        {
-          type: 'staff',
-          items: staffRows.map(
-            (r): SearchItem => ({ type: 'staff', id: r.id, title: r.full_name, subtitle: r.role })
-          )
-        },
-        {
-          type: 'school',
-          items: schoolRows.map(
-            (r): SearchItem => ({ type: 'school', id: r.id, title: r.name, subtitle: r.code ?? r.kind })
-          )
-        },
-        {
-          type: 'tag',
-          items: tagRows.map(
-            (r): SearchItem => ({
-              type: 'tag',
-              id: r.id,
-              title: r.name,
-              subtitle: r.usage > 0 ? String(r.usage) : null
-            })
-          )
-        },
-        {
-          type: 'waitlist',
-          items: waitlistRows.map(
-            (r): SearchItem => ({
-              type: 'waitlist',
-              id: r.id,
-              title: `${r.first_name} ${r.last_name}`,
-              subtitle: r.phone
-            })
-          )
-        },
+        { type: 'student', items: capItems(itemsOf('student', 'student'), PER_GROUP_LIMIT.students) },
+        { type: 'staff', items: itemsOf('staff', 'staff') },
+        { type: 'school', items: itemsOf('school', 'school') },
+        { type: 'tag', items: itemsOf('tag', 'tag') },
+        { type: 'waitlist', items: itemsOf('waitlist', 'waitlist') },
         // گروه اسناد
-        {
-          type: 'doc',
-          items: docRows.map(
-            (r): SearchItem => ({
-              type: 'doc',
-              id: r.id,
-              title: r.title,
-              subtitle: r.category
-            })
-          )
-        }
+        { type: 'doc', items: itemsOf('doc', 'doc') }
       ];
 
       const result: GlobalSearchResult = { query: q, groups: orderGroups(groups) };

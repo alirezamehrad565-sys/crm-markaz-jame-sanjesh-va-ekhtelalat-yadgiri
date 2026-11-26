@@ -245,7 +245,7 @@ export function studentSearchQuery(filters: {
                  ${STUDENT_WAIT_PROJECTION}
                  ${STUDENT_OWNER_PROJECTION}
             FROM students s
-            LEFT JOIN classes c ON c.id = s.class_id ${where} ORDER BY s.last_name, s.first_name LIMIT ? OFFSET ?`,
+            LEFT JOIN classes c ON c.id = s.class_id ${where} ORDER BY s.last_name, s.first_name, s.id LIMIT ? OFFSET ?`, // گره خوردن نام‌های برابر با id — ترتیب پایدار (۱.۲۷.۸۵)
     params
   };
 }

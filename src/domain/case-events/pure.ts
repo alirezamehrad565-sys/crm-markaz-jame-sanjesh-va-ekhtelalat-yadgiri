@@ -3,6 +3,7 @@
 import { z } from 'zod';
 import { ValidationError } from '@core/errors';
 import { ALLOWED_FILE_MIME_TYPES, MAX_FILE_BYTES } from '@core/shared';
+import { validateAttachmentFileInput } from '@core/shared/file-sanitize'; // architecture-010 ۱.۲۷.۸۵
 import type {
   CaseEventAnalysis, CaseEventBand, CaseEventField, CaseEventFieldType, CaseEventFlag,
   CaseEventSubscale, CaseEventSubscaleScore, CaseEventScoredOption
@@ -75,31 +76,17 @@ export function stripDataUrlPrefix(b64: string): string {
   return b64.replace(/^data:[^;]*;base64,/, '');
 }
 
-export function isAllowedMimeType(mime: string): boolean {
-  return (ALLOWED_FILE_MIME_TYPES as readonly string[]).includes(mime.toLowerCase());
-}
-
-export function sanitizeFilename(raw: string): string {
-  const base = raw.split(/[/\\]/).pop() ?? '';
-  return base.replace(/\s+/g, ' ').trim().slice(0, 200);
-}
+/* architecture-010 (۱.۲۷.۸۵) — سه‌گانهٔ اعتبارسنجی فایل دیگر تعریف محلی ندارد:
+   sanitizeFilename canonical از هستهٔ مشترک (@core/shared) می‌آید و validateFileInput فقط
+   پارامتری‌سازیِ فهرست MIME پیوست رویداد (ALLOWED_FILE_MIME_TYPES) روی validateAttachmentFileInput است. */
+export { sanitizeFilename } from '@core/shared';
 
 export function validateFileInput(input: {
   filename: string;
   mimeType: string;
   contentB64: string;
 }): { ok: true } | { ok: false; reason: string } {
-  const filename = sanitizeFilename(input.filename);
-  if (filename.length === 0) return { ok: false, reason: 'نام فایل نامعتبر است' };
-  if (!isAllowedMimeType(input.mimeType)) {
-    return { ok: false, reason: 'این نوع فایل مجاز نیست — فقط سند و تصویر' };
-  }
-  const bytes = estimateBase64Bytes(stripDataUrlPrefix(input.contentB64));
-  if (bytes <= 0) return { ok: false, reason: 'محتوای فایل خالی است' };
-  if (bytes > MAX_FILE_BYTES) {
-    return { ok: false, reason: 'حجم فایل بیش از ۵۱۲ کیلوبایت است' };
-  }
-  return { ok: true };
+  return validateAttachmentFileInput(ALLOWED_FILE_MIME_TYPES, input, MAX_FILE_BYTES);
 }
 
 export function base64ToBytes(b64: string): Uint8Array {

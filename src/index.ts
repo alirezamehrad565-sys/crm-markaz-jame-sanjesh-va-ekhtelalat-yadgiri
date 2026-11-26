@@ -231,149 +231,114 @@ async function runBackupAutoSendCycle(env: Env): Promise<void> {
   logger.info('backup.auto.cycle.done', { archive, outcome });
 }
 
-/** چرخهٔ سینک اعلان CP — کرون اختصاصی یا سلف‌هاست؛ مُهر تلاش مشترک با دروازهٔ فرصت‌طلب */
-async function runCpSyncCycle(env: Env): Promise<void> {
-  const db = createDb(env.DB);
-  const logger = createLogger('sync');
-  await stampCpSyncAttempt(db).catch(() => undefined);
-  const result = await syncCpAnnouncements({
-    db,
-    logger,
-    config: buildCpSyncConfig(env),
-    binding: env.CP ?? null
-  });
-  logger.info('cp_sync.cycle.done', { status: result.status, applied: result.applied ?? 0 });
-}
-
 /**
- * دروازهٔ فرصت‌طلب سینک CP روی هر درخواست — چون پلن Free کلادفلر سقف ۵ کرون در حساب دارد
- * و این حساب پر است، به‌جای کرون پنجم هر دورهٔ سینک روی خودِ ترافیک زنده سوار می‌شود:
- * هر isolate حداکثر یک‌بار در دقیقه settings را می‌خواند و تلاش‌ها ۱۵ دقیقه فاصله دارند.
- * env خالی = صفر بار اضافه (اولین گارد قبل از هر خواندنی برمی‌گردد).
+ * architecture-009 (۱.۲۷.۸۵) — چهار جفتِ «دروازهٔ فرصت‌طلب + چرخهٔ کرون» یک شکل‌اند: مُهر ۶۰ثانیه‌ای
+ * روی isolate + waitUntil(op({db, logger, config, binding})). کارخانه هر جفت را یک‌بار تعریف می‌کند؛
+ * لاگ چرخه هم شکل قبل می‌ماند («<name>.cycle.done» + status + فیلدهای اختصاصی هر گیت).
  */
-let cpSyncProbeAt = 0;
-function probeCpSync(env: Env, ctx: ExecutionContext): void {
-  const t = Date.now();
-  if (t - cpSyncProbeAt < 60_000) return;
-  cpSyncProbeAt = t;
-  ctx.waitUntil(
-    cpSyncOpportunistic({
-      db: createDb(env.DB),
-      logger: createLogger('sync'),
-      config: buildCpSyncConfig(env),
-      binding: env.CP ?? null
-    }).catch(() => undefined)
-  );
+interface OpDeps<C> {
+  db: ReturnType<typeof createDb>;
+  logger: ReturnType<typeof createLogger>;
+  config: C;
+  /** Service Binding به ورکر شبکهٔ مراکز — همان env.CP */
+  binding: Fetcher | null;
+  /** فقط گیت bug-report: چرخهٔ کرون با force اجرا می‌شود */
+  force?: boolean;
 }
 
-/** چرخهٔ گزارش‌دهی تجمیعی نود → CP (فاز غنی‌سازی) — گیت ۲۴ساعتهٔ درونی دارد؛ خاموش اگر env خالی باشد */
-async function runCpReportCycle(env: Env): Promise<void> {
-  const db = createDb(env.DB);
-  const logger = createLogger('sync');
-  const result = await pushCpReport({
-    db,
-    logger,
-    config: buildCpReportConfig(env),
-    binding: env.CP ?? null
-  });
-  logger.info('cp_report.cycle.done', { status: result.status, seq: result.seq ?? 0 });
+interface OpportunisticGate {
+  probe: (env: Env, ctx: ExecutionContext) => void;
+  runCycle: (env: Env) => Promise<void>;
 }
 
-/** دروازهٔ فرصت‌طلب گزارش‌دهی — همان الگوی cp-sync؛ گیت ۲۴ساعتهٔ مشترک دوباره‌کاری را می‌بندد */
-let cpReportProbeAt = 0;
-function probeCpReport(env: Env, ctx: ExecutionContext): void {
-  const t = Date.now();
-  if (t - cpReportProbeAt < 60_000) return;
-  cpReportProbeAt = t;
-  ctx.waitUntil(
-    cpReportOpportunistic({
-      db: createDb(env.DB),
-      logger: createLogger('sync'),
-      config: buildCpReportConfig(env),
-      binding: env.CP ?? null
-    }).catch(() => undefined)
-  );
+function makeOpportunisticGate<C, P, S extends { status: string }>(
+  name: string,
+  spec: {
+    config: (env: Env) => C;
+    probeOp: (deps: OpDeps<C>) => Promise<P>;
+    cycleOp: (deps: OpDeps<C>) => Promise<S>;
+    /** فیلدهای اختصاصی لاگ چرخه — status خودکار اضافه می‌شود */
+    logFields: (result: S) => Record<string, unknown>;
+    /** پیش از op چرخهٔ کرون — فقط cp-sync (مُهر تلاش مشترک کرون/فرصت‌طلب) */
+    stamp?: (db: ReturnType<typeof createDb>) => Promise<void>;
+    /** فقط bug-report — چرخهٔ کرون با force: true */
+    force?: boolean;
+  }
+): OpportunisticGate {
+  let probeAt = 0;
+  return {
+    probe(env, ctx) {
+      const t = Date.now();
+      if (t - probeAt < 60_000) return;
+      probeAt = t;
+      ctx.waitUntil(
+        spec.probeOp({
+          db: createDb(env.DB),
+          logger: createLogger('sync'),
+          config: spec.config(env),
+          binding: env.CP ?? null
+        }).catch(() => undefined)
+      );
+    },
+    async runCycle(env) {
+      const db = createDb(env.DB);
+      const logger = createLogger('sync');
+      if (spec.stamp) await spec.stamp(db).catch(() => undefined);
+      const result = await spec.cycleOp({
+        db,
+        logger,
+        config: spec.config(env),
+        binding: env.CP ?? null,
+        ...(spec.force ? { force: true } : {})
+      });
+      logger.info(`${name}.cycle.done`, { status: result.status, ...spec.logFields(result) });
+    }
+  };
 }
 
-/**
- * چرخهٔ کتابخانهٔ شبکه (محور دوم غنی‌سازی): push همرسانی‌ها + pull برگزیده‌ها —
- * قرارداد docs/cp-node-content-hub.md؛ بدون env تازه (همان کلید نود م۱.۲)؛
- * گیت ۱۵دقیقه‌ای درونی دارد؛ CP بدون درگاه = فقط warn و تلاش دورهٔ بعد.
- */
-async function runCpContentCycleWrap(env: Env): Promise<void> {
-  const db = createDb(env.DB);
-  const logger = createLogger('sync');
-  const result = await runCpContentCycle({
-    db,
-    logger,
-    config: buildCpContentConfig(env),
-    binding: env.CP ?? null
-  });
-  logger.info('cp_content.cycle.done', {
-    status: result.status,
-    pushed: result.pushed ?? 0,
-    applied: result.applied ?? 0
-  });
-  // 1.25.48 m6 — مولد امتیاز داخل هستهٔ چرخه اجرا می‌شود (هم کرون و هم مسیر فرصت‌طلب را پوشش می‌دهد).
-}
-
-/** دروازهٔ فرصت‌طلب کتابخانهٔ شبکه — همان الگوی cp-sync/cp-report */
-let cpContentProbeAt = 0;
-function probeCpContent(env: Env, ctx: ExecutionContext): void {
-  const t = Date.now();
-  if (t - cpContentProbeAt < 60_000) return;
-  cpContentProbeAt = t;
-  ctx.waitUntil(
-    cpContentOpportunistic({
-      db: createDb(env.DB),
-      logger: createLogger('sync'),
-      config: buildCpContentConfig(env),
-      binding: env.CP ?? null
-    }).catch(() => undefined)
-  );
-}
-
-/** چرخهٔ ارسال گزارش باگ به پشتیبانی CP (بازاعمال ۱.۲۵.۵۱) — گیت ۵دقیقه‌ای درونی، خاموش بدون env */
-async function runBugReportForwardWrap(env: Env): Promise<void> {
-  const db = createDb(env.DB);
-  const logger = createLogger('sync');
-  const result = await runBugReportForward({
-    db,
-    logger,
-    config: buildBugReportConfig(env),
-    binding: env.CP ?? null,
-    force: true
-  });
-  logger.info('bug_report.cycle.done', {
-    status: result.status,
+/* چهار گیت — ترتیب، مُهر ۶۰ثانیه‌ای و لاگ عین قبل */
+const cpSyncGate = makeOpportunisticGate('cp_sync', {
+  config: buildCpSyncConfig,
+  probeOp: cpSyncOpportunistic,
+  cycleOp: syncCpAnnouncements,
+  logFields: (result) => ({ applied: result.applied ?? 0 }),
+  stamp: stampCpSyncAttempt
+});
+const cpReportGate = makeOpportunisticGate('cp_report', {
+  config: buildCpReportConfig,
+  probeOp: cpReportOpportunistic,
+  cycleOp: pushCpReport,
+  logFields: (result) => ({ seq: result.seq ?? 0 })
+});
+const cpContentGate = makeOpportunisticGate('cp_content', {
+  config: buildCpContentConfig,
+  probeOp: cpContentOpportunistic,
+  cycleOp: runCpContentCycle,
+  logFields: (result) => ({ pushed: result.pushed ?? 0, applied: result.applied ?? 0 })
+});
+const bugReportGate = makeOpportunisticGate('bug_report', {
+  config: buildBugReportConfig,
+  probeOp: runBugReportForward,
+  cycleOp: runBugReportForward,
+  logFields: (result) => ({
     sent: result.status === 'done' ? result.sent : 0,
     failed: result.status === 'done' ? result.failed : 0,
     pulled: result.status === 'done' ? result.pulled : 0
-  });
-}
+  }),
+  force: true
+});
 
-/** دروازهٔ فرصت‌طلب ارسال گزارش باگ — همان الگوی cp-sync/cp-report/cp-content */
-let bugReportProbeAt = 0;
-function probeBugReportForward(env: Env, ctx: ExecutionContext): void {
-  const t = Date.now();
-  if (t - bugReportProbeAt < 60_000) return;
-  bugReportProbeAt = t;
-  ctx.waitUntil(
-    runBugReportForward({
-      db: createDb(env.DB),
-      logger: createLogger('sync'),
-      config: buildBugReportConfig(env),
-      binding: env.CP ?? null
-    }).catch(() => undefined)
-  );
-}
+/* architecture-009 — نگاشت رویداد کرون سینک → گیت‌ها (ترتیب اجرای چهار چرخه عین قبل) */
+const CRON_GATES: Partial<Record<string, readonly OpportunisticGate[]>> = {
+  [CP_SYNC_CRON]: [cpSyncGate, cpReportGate, cpContentGate, bugReportGate]
+};
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    probeCpSync(env, ctx); // فرصت‌طلب؛ بدون env خالی است و فوراً برمی‌گردد
-    probeCpReport(env, ctx); // گزارش‌دهی تجمیعی روزانه به CP — گیت ۲۴ساعتهٔ درونی
-    probeCpContent(env, ctx); // کتابخانهٔ شبکه — push همرسانی + pull برگزیده‌ها (گیت ۱۵دقیقه‌ای)
-    probeBugReportForward(env, ctx); // گزارش باگ → پشتیبانی CP — گیت ۵دقیقه‌ای درونی (بازاعمال ۱.۲۵.۵۱)
+    cpSyncGate.probe(env, ctx); // فرصت‌طلب؛ بدون env خالی است و فوراً برمی‌گردد
+    cpReportGate.probe(env, ctx); // گزارش‌دهی تجمیعی روزانه به CP — گیت ۲۴ساعتهٔ درونی
+    cpContentGate.probe(env, ctx); // کتابخانهٔ شبکه — push همرسانی + pull برگزیده‌ها (گیت ۱۵دقیقه‌ای)
+    bugReportGate.probe(env, ctx); // گزارش باگ → پشتیبانی CP — گیت ۵دقیقه‌ای درونی (بازاعمال ۱.۲۵.۵۱)
     const db = createDb(env.DB);
     const audit = createAuditWriter(db);
     const logger = createLogger('worker');
@@ -395,11 +360,10 @@ export default {
   },
 
   async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
-    if (event.cron === CP_SYNC_CRON) {
-      ctx.waitUntil(runCpSyncCycle(env)); // سینک اعلان از شبکهٔ مراکز — خاموش اگر env خالی باشد
-      ctx.waitUntil(runCpReportCycle(env)); // گزارش‌دهی تجمیعی — گیت ۲۴ساعتهٔ مشترک، دوباره‌کاری صفر
-      ctx.waitUntil(runCpContentCycleWrap(env)); // کتابخانهٔ شبکه — گیت ۱۵دقیقه‌ای مشترک، دوباره‌کاری صفر
-      ctx.waitUntil(runBugReportForwardWrap(env)); // گزارش باگ → پشتیبانی CP — گیت ۵دقیقه‌ای مشترک (بازاعمال ۱.۲۵.۵۱)
+    // architecture-009 — چهار چرخهٔ سینک CP روی نگاشت گیت‌ها (کرون ۱۵دقیقه‌ای موجود؛ ترتیب عین قبل)
+    const gates = CRON_GATES[event.cron];
+    if (gates) {
+      for (const gate of gates) ctx.waitUntil(gate.runCycle(env));
       return;
     }
     if (event.cron === DIGEST_CRON) {

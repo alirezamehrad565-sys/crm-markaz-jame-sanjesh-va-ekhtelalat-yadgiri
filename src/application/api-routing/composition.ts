@@ -47,10 +47,11 @@ import { createTodosService } from '@domain/todos';
 import type { TodosService } from '@domain/todos';
 import { createExerciseBankService, sendBaleDocument } from '@domain/exercise-bank';
 import type { ExerciseBankService, ExerciseFileSender } from '@domain/exercise-bank';
+import type { BatchSendObserverInput } from '@domain/exercise-bank/types'; // bloat-007 — ناظر enqueue مشترک
 import { createDocumentRequestService } from '@domain/document-requests';
 import type { DocumentRequestService } from '@domain/document-requests';
 import { createCaseEventsService } from '@domain/case-events';
-import type { CaseEventsService } from '@domain/case-events';
+import type { CaseEventsService, SendObserverInput } from '@domain/case-events';
 import { createGamesService } from '@domain/games'; // بستر بک‌اند بازی (۱.۲۵.۰۷)
 import type { GamesService } from '@domain/games';
 import { createClinicalEngineService } from '@domain/clinical-engine';
@@ -363,9 +364,11 @@ export function createServices(deps: AppDeps): Services {
     });
   });
 
-  caseEvents.setSendObserver(async (input) => {
-    /* architecture-002 + performance-002 (۱.۲۷.۸۳): حلقهٔ enqueue/flush فقط در enqueueToMany —
-       رفت‌وبرگشت DB مستقل از تعداد گیرنده‌ها (SELECT dedup با IN + یک INSERT چندردیفی) */
+  /* bloat-007 (۱.۲۷.۸۵) — دو ناظر enqueue هم‌شکلِ case-events و exercise-bank یک تعریف دارند:
+     انتخاب کانال + clinicName + enqueueToMany؛ ورودی هر دو ناظر از یک شکل است (template/chats/vars/dedupBase/studentId) */
+  const enqueueObserver = async (
+    input: SendObserverInput | BatchSendObserverInput
+  ): Promise<number> => {
     const channel: 'bale' | 'internal' = notifyCore.getChannel('bale') ? 'bale' : 'internal';
     const clinicName = await settings.getClinicName();
     return enqueueToMany(notifyCore, {
@@ -376,9 +379,12 @@ export function createServices(deps: AppDeps): Services {
       dedupKeyFor: (chat) => `${input.dedupBase}:${chat}`,
       studentId: input.studentId
     });
-  });
+  };
+
+  caseEvents.setSendObserver(enqueueObserver);
 
   // اعلان «نتیجهٔ چک‌لیست ثبت شد» به درمانگر ثبت‌کننده؛ هم پر کردن وب و هم بات را پوشش می‌دهد
+  // bloat-007 — با enqueueToMany ادغام نشد: نام فرم/امتیاز per-input و گاهی زودتر از linkRows برمی‌گردد (گیت خطا هم دارد)
   caseEvents.setFillObserver(async (input) => {
     try {
       if (!input.staffId) return;
@@ -411,18 +417,8 @@ export function createServices(deps: AppDeps): Services {
     }
   });
 
-  exerciseBank.setSendObserver(async (input) => {
-    const channel: 'bale' | 'internal' = notifyCore.getChannel('bale') ? 'bale' : 'internal';
-    const clinicName = await settings.getClinicName();
-    return enqueueToMany(notifyCore, {
-      channel,
-      template: input.template,
-      chats: input.chats,
-      payloadFor: (chat) => ({ ...input.vars, clinicName }),
-      dedupKeyFor: (chat) => `${input.dedupBase}:${chat}`,
-      studentId: input.studentId
-    });
-  });
+  // ناظر exercise-bank همان تعریف بالا را می‌خواند (bloat-007) — ورودی/خروجی یک قرارداد است
+  exerciseBank.setSendObserver(enqueueObserver);
 
   const reports = createReportService({ db, logger });
 

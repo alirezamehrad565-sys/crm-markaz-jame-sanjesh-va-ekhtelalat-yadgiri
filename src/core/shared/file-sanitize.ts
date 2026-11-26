@@ -53,6 +53,33 @@ export function validateExerciseFileInput(
   return { ok: true };
 }
 
+/**
+ * validateAttachmentFileInput — ۱.۲۷.۸۵ (sdt164: architecture-010) نسخهٔ پارامتریِ همان قرارداد
+ * برای دامنه‌هایی که فهرست MIME خودشان را دارند (پیوست رویداد پرونده با ALLOWED_FILE_MIME_TYPES
+ * و سقف MAX_FILE_BYTES). رفتار و پیام‌ها عین validateExerciseFileInput؛ فقط فهرست مجاز/سقف/پیامِ
+ * نوع به صدا زننده سپرده می‌شود.
+ */
+export function validateAttachmentFileInput(
+  allowedMimes: readonly string[],
+  input: {
+    filename: string;
+    mimeType: string;
+    contentB64: string;
+  },
+  maxBytes: number,
+  mimeRejectReason: string = 'این نوع فایل مجاز نیست — فقط سند و تصویر'
+): { ok: true } | { ok: false; reason: string } {
+  const filename = sanitizeFilename(input.filename);
+  if (filename.length === 0) return { ok: false, reason: 'نام فایل نامعتبر است' };
+  if (!(allowedMimes as readonly string[]).includes(input.mimeType.toLowerCase())) {
+    return { ok: false, reason: mimeRejectReason };
+  }
+  const bytes = estimateBase64Bytes(stripDataUrlPrefix(input.contentB64));
+  if (bytes <= 0) return { ok: false, reason: 'محتوای فایل خالی است' };
+  if (bytes > maxBytes) return { ok: false, reason: sizeLimitMessage(maxBytes) };
+  return { ok: true };
+}
+
 export function validateExerciseFileBytes(
   input: {
     filename: string;

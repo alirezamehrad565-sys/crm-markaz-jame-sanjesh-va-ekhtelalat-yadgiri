@@ -5,7 +5,10 @@ import {
   WAITLIST_LIST_LIMIT,
   WAITLIST_QUEUE_STATUSES,
   currentSchoolYear,
-  jalaliToGregorianYmd
+  faHaystackExpr,
+  jalaliToGregorianYmd,
+  likePattern,
+  sanitizeFaQuery
 } from '@core/shared';
 import { ConflictError, NotFoundError, ValidationError } from '@core/errors';
 import type { AuditWriter } from '@core/audit';
@@ -271,8 +274,12 @@ export function createWaitlistService(deps: WaitlistDeps): WaitlistService {
         params.push(filters.priority);
       }
       if (filters.q && filters.q.trim()) {
-        const pattern = `%${filters.q.trim()}%`;
-        conditions.push('(w.first_name LIKE ? OR w.last_name LIKE ? OR w.phone LIKE ? OR (w.first_name || \' \' || w.last_name) LIKE ?)');
+        /* ۱.۲۷.۸۵ (sdt164) — هم‌قرارداد جستجوی دانش‌آموزان (fa-search): سؤال نرمال فارسی + بی‌اثرشدن
+           wildcard های LIKE می‌شود و ستون‌های متنی با faHaystackExpr هم‌سطح؛ تلفن مثل مسیر students ساده LIKE است */
+        const pattern = likePattern(sanitizeFaQuery(filters.q));
+        conditions.push(
+          `(${faHaystackExpr('w.first_name')} LIKE ? OR ${faHaystackExpr('w.last_name')} LIKE ? OR w.phone LIKE ? OR ${faHaystackExpr(`(w.first_name || ' ' || w.last_name)`)} LIKE ?)`
+        );
         params.push(pattern, pattern, pattern, pattern);
       }
       const sql = `${SELECT_BASE} WHERE ${conditions.join(' AND ')} LIMIT ${WAITLIST_LIST_LIMIT}`;

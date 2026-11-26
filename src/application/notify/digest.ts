@@ -60,7 +60,8 @@ export function followupsNudgeBody(list: FollowUp[], now: Date): {
 // بخش «گزارش روزانه و یادآورها» از service.ts منتقل شد؛ هلپرهای همین فایل را مستقیم صدا می‌زند.
 import type { Appointment } from '@core/shared';
 import { tehranRange, tehranTimeLabel, tehranTodayYmd } from '@core/shared';
-import { selectStaffChats, selectStudentIdsByChat, renderDigestBody } from '@core/notify';
+import { selectStaffChats, renderDigestBody } from '@core/notify';
+import { inParamChunks, inPlaceholders } from '@core/db/in-chunks';
 import { buildScheduleEntries } from './lifecycle';
 import type { NotifyAppService } from './service';
 import { BOT_ACTOR, spreadStmt } from './context';
@@ -96,6 +97,10 @@ export function createDigestSection(ctx: NotifyCtx): Pick<NotifyAppService, 'sen
       const { start, end } = tehranRange(todayYmd, todayYmd);
       const staffNames = await staffNamesMap();
 
+      /* performance-004 (۱.۲۷.۸۵) — یک پرس‌وجوی بازهٔ روز به‌جای یک list برای هر درمانگر/دانش‌آموز؛
+         گروه‌بندی در JS با همان معنای فیلتر staffId/studentId مسیر appointments.list */
+      const dayAppointments = await appointments.list({ from: start, to: end });
+
       const enqueueDigest = async (
         template: 'digest_staff' | 'digest_family' | 'digest_class',
         chatId: string,
@@ -117,7 +122,7 @@ export function createDigestSection(ctx: NotifyCtx): Pick<NotifyAppService, 'sen
         `SELECT staff_id, chat_id FROM staff_bot_links WHERE status = 'linked' AND chat_id IS NOT NULL`
       );
       for (const row of staffChatRows) {
-        const list = await appointments.list({ staffId: row.staff_id, from: start, to: end });
+        const list = dayAppointments.filter((a) => a.staffId === row.staff_id);
         const studentIds = [...new Set(list.flatMap((a) => a.students.map((s) => s.studentId)))];
         const names = await studentNamesMap(studentIds);
         const entries = buildScheduleEntries(list, { kind: 'staff', names });
@@ -133,14 +138,37 @@ export function createDigestSection(ctx: NotifyCtx): Pick<NotifyAppService, 'sen
           UNION
          SELECT DISTINCT chat_id FROM notification_prefs WHERE chat_id IS NOT NULL AND reminders_enabled = 1 AND channel = 'bale'`
       );
+      /* performance-004 (۱.۲۷.۸۵) — دو SELECT هر گفتگو (bot_links و notification_prefs) پیش از حلقه،
+         یک‌بار با IN تکه‌تکه (دروازهٔ ف۶ ⑧) خوانده می‌شود؛ نقشهٔ chat_id → student_ids در حلقه مصرف می‌شود.
+         شرط prefs عین کوئری قبلی است — بدون فیلتر کانال (قرارداد همان قبلی). */
+      const chatIds = parentChatRows.map((r) => r.chat_id);
+      const linkedByChat = new Map<string, string[]>();
+      const prefByChat = new Map<string, string[]>();
+      for (const chunk of inParamChunks(chatIds)) {
+        const linkRows = await db.query<{ chat_id: string; student_id: string }>(
+          `SELECT DISTINCT chat_id, student_id FROM bot_links
+            WHERE status = 'linked' AND chat_id IN (${inPlaceholders(chunk.length)})`,
+          chunk
+        );
+        for (const r of linkRows) {
+          const arr = linkedByChat.get(r.chat_id) ?? [];
+          arr.push(r.student_id);
+          linkedByChat.set(r.chat_id, arr);
+        }
+        const prefRows = await db.query<{ chat_id: string; student_id: string }>(
+          `SELECT chat_id, student_id FROM notification_prefs
+            WHERE chat_id IN (${inPlaceholders(chunk.length)}) AND reminders_enabled = 1`,
+          chunk
+        );
+        for (const r of prefRows) {
+          const arr = prefByChat.get(r.chat_id) ?? [];
+          arr.push(r.student_id);
+          prefByChat.set(r.chat_id, arr);
+        }
+      }
       for (const row of parentChatRows) {
-        const chatStudentRows = await db.query<{ student_id: string }>(
-          ...spreadStmt(selectStudentIdsByChat(row.chat_id))
-        );
-        const prefIds = await db.query<{ student_id: string }>(
-          `SELECT student_id FROM notification_prefs WHERE chat_id = ? AND reminders_enabled = 1`,
-          [row.chat_id]
-        );
+        const chatStudentRows = (linkedByChat.get(row.chat_id) ?? []).map((student_id) => ({ student_id }));
+        const prefIds = (prefByChat.get(row.chat_id) ?? []).map((student_id) => ({ student_id }));
         const studentIds = [...new Set([...chatStudentRows.map((r) => r.student_id), ...prefIds.map((r) => r.student_id)])];
         if (studentIds.length === 0) {
           summary.skippedEmpty += 1;
@@ -150,8 +178,8 @@ export function createDigestSection(ctx: NotifyCtx): Pick<NotifyAppService, 'sen
         const merged: Appointment[] = [];
         const seen = new Set<string>();
         for (const sid of studentIds) {
-          const list = await appointments.list({ studentId: sid, from: start, to: end });
-          for (const a of list) {
+          for (const a of dayAppointments) {
+            if (!a.students.some((s) => s.studentId === sid)) continue;
             if (!seen.has(a.id)) {
               seen.add(a.id);
               merged.push(a);
@@ -184,8 +212,8 @@ export function createDigestSection(ctx: NotifyCtx): Pick<NotifyAppService, 'sen
         const merged: Appointment[] = [];
         const seen = new Set<string>();
         for (const sid of classStudentIds) {
-          const list = await appointments.list({ studentId: sid, from: start, to: end });
-          for (const a of list) {
+          for (const a of dayAppointments) {
+            if (!a.students.some((s) => s.studentId === sid)) continue;
             if (!seen.has(a.id)) {
               seen.add(a.id);
               merged.push(a);

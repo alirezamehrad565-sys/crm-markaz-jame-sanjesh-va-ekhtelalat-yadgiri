@@ -9,12 +9,30 @@ import type { PrefsRow, SendResult } from '@core/notify';
 import { planLifecycleNotifications } from './lifecycle';
 import type { LifecycleEvent } from './lifecycle';
 import { computeBatchSendAt, isCreatedTemplate } from './batch';
+import { enqueueToMany } from './enqueue-to-many';
 import type { NotifyAppService } from './service';
 import { spreadStmt } from './context';
 import type { NotifyCtx } from './context';
 
 export function createNotificationSendersSection(ctx: NotifyCtx): Pick<NotifyAppService, 'sendReportToStudentTeacher' | 'sendReportToStudentFamily' | 'notifyWaitlistSlotFreed' | 'notifyAppointmentCreated' | 'notifyAppointmentMoved' | 'notifyAppointmentCancelled' | 'notifyLifecycle' | 'sendTest' | 'notifyAttendanceMarked' | 'notifyHomeworkGraded' | 'notifyTodoAssigned' | 'enqueuePendingAttendanceNudges'> {
   const { deps, db, audit, log, notify, now, appointments, students, studentNamesMap, staffNamesMap } = ctx;
+
+  /* bloat-007 (۱.۲۷.۸۵) — گفتگوهای متصلِ خانوادهٔ یک دانش‌آموز: bot_links + notification_prefs
+     (کانال بله) — سه نقطهٔ تکراری (گزارش خانواده/غیبت/نمرهٔ تمرین) یک تعریف دارند؛ شرط هر دو
+     کوئری عین قبل است. */
+  async function familyTargets(studentId: string): Promise<string[]> {
+    const linkRows = await db.query<{ chat_id: string }>(
+      `SELECT DISTINCT chat_id FROM bot_links
+        WHERE student_id = ? AND status = 'linked' AND chat_id IS NOT NULL`,
+      [studentId]
+    );
+    const prefRows = await db.query<{ chat_id: string }>(
+      `SELECT chat_id FROM notification_prefs
+        WHERE student_id = ? AND chat_id IS NOT NULL AND channel = 'bale'`,
+      [studentId]
+    );
+    return [...new Set([...linkRows.map((r) => r.chat_id), ...prefRows.map((r) => r.chat_id)])];
+  }
 
   return {
     async sendReportToStudentTeacher(studentId: string, text: string, actor: AuthContext): Promise<{ enqueued: number; className: string | null }> {
@@ -30,24 +48,21 @@ export function createNotificationSendersSection(ctx: NotifyCtx): Pick<NotifyApp
       }
 
       const clinicName = await deps.settings.getClinicName();
-      let enqueued = 0;
-      for (const chatId of targets) {
-        const outcome = await notify.enqueue({
-          channel: notify.getChannel('bale') ? 'bale' : 'internal',
-          template: 'teacher_report',
-          recipient: chatId,
-          studentId,
-          payload: {
-            studentName: `${student.firstName} ${student.lastName}`,
-            className: cls?.name ?? '',
-            extra: text,
-            clinicName
-          },
-          dedupKey: `teacher-report:${studentId}:${now().toISOString()}:${chatId}`
-        });
-        if (!outcome.duplicate) enqueued++;
-      }
-      if (enqueued > 0) await notify.dispatchPending(50);
+      /* bloat-007 (۱.۲۷.۸۵) — حلقهٔ enqueue/flush فقط در enqueueToMany: رفت‌وبرگشت DB مستقل از
+         تعداد گیرنده‌ها (SELECT dedup با IN + یک INSERT چندردیفی)؛ شمارش و dispatch همان قبلی */
+      const enqueued = await enqueueToMany(notify, {
+        channel: notify.getChannel('bale') ? 'bale' : 'internal',
+        template: 'teacher_report',
+        chats: targets,
+        payloadFor: () => ({
+          studentName: `${student.firstName} ${student.lastName}`,
+          className: cls?.name ?? '',
+          extra: text,
+          clinicName
+        }),
+        dedupKeyFor: (chatId) => `teacher-report:${studentId}:${now().toISOString()}:${chatId}`,
+        studentId
+      });
 
       await audit.log({
         actorId: actor.staffId,
@@ -65,39 +80,25 @@ export function createNotificationSendersSection(ctx: NotifyCtx): Pick<NotifyApp
       const student = await students.getStudentById(studentId);
       if (!student) throw new NotFoundError('دانش‌آموز');
 
-      const linkRows = await db.query<{ chat_id: string }>(
-        `SELECT DISTINCT chat_id FROM bot_links
-          WHERE student_id = ? AND status = 'linked' AND chat_id IS NOT NULL`,
-        [studentId]
-      );
-      const prefRows = await db.query<{ chat_id: string }>(
-        `SELECT chat_id FROM notification_prefs
-          WHERE student_id = ? AND chat_id IS NOT NULL AND channel = 'bale'`,
-        [studentId]
-      );
-      const targets = [...new Set([...linkRows.map((r) => r.chat_id), ...prefRows.map((r) => r.chat_id)])];
+      const targets = await familyTargets(studentId);
       if (targets.length === 0) {
         throw new ConflictError('خانوادهٔ این دانش‌آموز هنوز بات را متصل نکرده است — ابتدا در تب ارتباطات «لینک اتصال خانواده» بسازید و به آنها بدهید');
       }
 
       const clinicName = await deps.settings.getClinicName();
-      let enqueued = 0;
-      for (const chatId of targets) {
-        const outcome = await notify.enqueue({
-          channel: notify.getChannel('bale') ? 'bale' : 'internal',
-          template: 'family_report',
-          recipient: chatId,
-          studentId,
-          payload: {
-            studentName: `${student.firstName} ${student.lastName}`,
-            extra: text,
-            clinicName
-          },
-          dedupKey: `family-report:${studentId}:${now().toISOString()}:${chatId}`
-        });
-        if (!outcome.duplicate) enqueued++;
-      }
-      if (enqueued > 0) await notify.dispatchPending(50);
+      // bloat-007 — همان مسیر batched گزارش معلم؛ تخصیص گفتگوها از هلپر مشترک familyTargets
+      const enqueued = await enqueueToMany(notify, {
+        channel: notify.getChannel('bale') ? 'bale' : 'internal',
+        template: 'family_report',
+        chats: targets,
+        payloadFor: () => ({
+          studentName: `${student.firstName} ${student.lastName}`,
+          extra: text,
+          clinicName
+        }),
+        dedupKeyFor: (chatId) => `family-report:${studentId}:${now().toISOString()}:${chatId}`,
+        studentId
+      });
 
       await audit.log({
         actorId: actor.staffId,
@@ -324,17 +325,7 @@ export function createNotificationSendersSection(ctx: NotifyCtx): Pick<NotifyApp
       );
       if (!appt || appt.status === 'cancelled') return;
 
-      const linkRows = await db.query<{ chat_id: string }>(
-        `SELECT DISTINCT chat_id FROM bot_links
-          WHERE student_id = ? AND status = 'linked' AND chat_id IS NOT NULL`,
-        [studentId]
-      );
-      const prefRows = await db.query<{ chat_id: string }>(
-        `SELECT chat_id FROM notification_prefs
-          WHERE student_id = ? AND chat_id IS NOT NULL AND channel = 'bale'`,
-        [studentId]
-      );
-      const targets = [...new Set([...linkRows.map((r) => r.chat_id), ...prefRows.map((r) => r.chat_id)])];
+      const targets = await familyTargets(studentId);
       if (targets.length === 0) return;
 
       const [names, clinicName] = await Promise.all([
@@ -350,19 +341,22 @@ export function createNotificationSendersSection(ctx: NotifyCtx): Pick<NotifyApp
         clinicName
       };
 
-      let enqueued = 0;
-      for (const chatId of targets) {
-        const outcome = await notify.enqueue({
-          channel: notify.getChannel('bale') ? 'bale' : 'internal',
-          template: 'attendance_absent',
+      /* bloat-007 (۱.۲۷.۸۵) — همان هستهٔ batched enqueueToMany؛ چون قرارداد EnqueueToManyInput
+         ستون appointment_id را ندارد و این قالب به آن نیاز دارد، مستقیم از notify.enqueueMany
+         (یک SELECT dedup + یک INSERT چندردیفی) با همان شمارش و flush مصرف می‌شود */
+      const channel: 'bale' | 'internal' = notify.getChannel('bale') ? 'bale' : 'internal';
+      const outcomes = await notify.enqueueMany(
+        targets.map((chatId) => ({
+          channel,
+          template: 'attendance_absent' as const,
           recipient: chatId,
           studentId,
           appointmentId,
           payload,
           dedupKey: `att-absent:${appointmentId}:${studentId}:${chatId}`
-        });
-        if (!outcome.duplicate) enqueued++;
-      }
+        }))
+      );
+      const enqueued = outcomes.filter((o) => !o.duplicate).length;
       if (enqueued > 0) await notify.dispatchPending(50);
 
       await audit.log({
@@ -376,40 +370,25 @@ export function createNotificationSendersSection(ctx: NotifyCtx): Pick<NotifyApp
     },
 
     async notifyHomeworkGraded(input) {
-      const linkRows = await db.query<{ chat_id: string }>(
-        `SELECT DISTINCT chat_id FROM bot_links
-          WHERE student_id = ? AND status = 'linked' AND chat_id IS NOT NULL`,
-        [input.studentId]
-      );
-      const prefRows = await db.query<{ chat_id: string }>(
-        `SELECT chat_id FROM notification_prefs
-          WHERE student_id = ? AND chat_id IS NOT NULL AND channel = 'bale'`,
-        [input.studentId]
-      );
-      const targets = [...new Set([...linkRows.map((r) => r.chat_id), ...prefRows.map((r) => r.chat_id)])];
+      const targets = await familyTargets(input.studentId);
       if (targets.length === 0) return;
 
       const clinicName = await deps.settings.getClinicName();
-      const channel: 'bale' | 'internal' = notify.getChannel('bale') ? 'bale' : 'internal';
-      let enqueued = 0;
-      for (const chatId of targets) {
-        const outcome = await notify.enqueue({
-          channel,
-          template: 'homework_graded',
-          recipient: chatId,
-          studentId: input.studentId,
-          payload: {
-            studentName: input.studentName,
-            exerciseTitle: input.exerciseTitle,
-            feedback: input.feedback,
-            senderName: input.gradedByName ?? undefined,
-            clinicName
-          },
-          dedupKey: `hw-graded:${input.studentId}:${input.exerciseTitle}:${chatId}`
-        });
-        if (!outcome.duplicate) enqueued += 1;
-      }
-      if (enqueued > 0) await notify.dispatchPending(50);
+      // bloat-007 — همان مسیر batched گزارش خانواده؛ تخصیص گفتگوها از هلپر مشترک familyTargets
+      const enqueued = await enqueueToMany(notify, {
+        channel: notify.getChannel('bale') ? 'bale' : 'internal',
+        template: 'homework_graded',
+        chats: targets,
+        payloadFor: () => ({
+          studentName: input.studentName,
+          exerciseTitle: input.exerciseTitle,
+          feedback: input.feedback,
+          senderName: input.gradedByName ?? undefined,
+          clinicName
+        }),
+        dedupKeyFor: (chatId) => `hw-graded:${input.studentId}:${input.exerciseTitle}:${chatId}`,
+        studentId: input.studentId
+      });
 
       await audit.log({
         actorId: 'system',
@@ -439,26 +418,21 @@ export function createNotificationSendersSection(ctx: NotifyCtx): Pick<NotifyApp
         extraLines.push(`مهلت: ${jalaliFullLabel(tehranYmdOf(todo.dueAt))} ساعت ${faDigits(tehranTimeLabel(todo.dueAt))}`);
       }
 
-      let enqueued = 0;
-      let duplicates = 0;
-      for (const r of chatRows) {
-        const outcome = await notify.enqueue({
-          channel,
-          template: 'todo_assigned',
-          recipient: r.chat_id,
-          staffId: todo.assigneeId,
-          payload: {
-            staffName: assigneeName,
-            taskTitle: todo.title,
-            extra: extraLines.join('\n'),
-            clinicName
-          },
-          dedupKey: `todo-assigned:${todo.id}:${todo.assigneeId}`
-        });
-        if (outcome.duplicate) duplicates += 1;
-        else enqueued += 1;
-      }
-      if (enqueued > 0) await notify.dispatchPending(50);
+      // bloat-007 — مسیر batched؛ dedupKey بدون chatId عین قبل است (تنها نخستین گیرنده می‌نشیند)
+      const enqueued = await enqueueToMany(notify, {
+        channel,
+        template: 'todo_assigned',
+        chats: chatRows.map((r) => r.chat_id),
+        payloadFor: () => ({
+          staffName: assigneeName,
+          taskTitle: todo.title,
+          extra: extraLines.join('\n'),
+          clinicName
+        }),
+        dedupKeyFor: () => `todo-assigned:${todo.id}:${todo.assigneeId}`,
+        staffId: todo.assigneeId
+      });
+      const duplicates = chatRows.length - enqueued; // هر گفتگو یک outcome دارد — همان شمارش قبلی
       log.info('todo.assigned.notified', { todoId: todo.id, enqueued, duplicates, channel });
     },
 

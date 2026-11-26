@@ -1147,7 +1147,7 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
            JOIN appointments a ON a.id = a_s.appointment_id
            LEFT JOIN staff s ON s.id = a.staff_id
           WHERE ${conditions.join(' AND ')}
-          ORDER BY a.start_at DESC
+          ORDER BY a.start_at DESC, a.id DESC -- ترتیب پایدار: هم‌زمان‌ها با id (۱.۲۷.۸۵)
           LIMIT ${limit}`,
         params
       );

@@ -88,7 +88,7 @@ export function selectAppointments(filters: { staffId?: string; studentId?: stri
   }
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
   return {
-    sql: `SELECT ${APPOINTMENT_COLS} FROM appointments ${where} ORDER BY start_at`,
+    sql: `SELECT ${APPOINTMENT_COLS} FROM appointments ${where} ORDER BY start_at, id`, // ترتیب پایدار: هم‌زمان‌ها با id (۱.۲۷.۸۵)
     params
   };
 }

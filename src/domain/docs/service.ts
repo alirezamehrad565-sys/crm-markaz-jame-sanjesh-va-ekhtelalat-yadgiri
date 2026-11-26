@@ -3,7 +3,8 @@ import {
   ALLOWED_FILE_MIME_TYPES,
   MAX_EXERCISE_PANEL_FILE_BYTES,
   MAX_EXERCISE_UPLOAD_CHUNK_BYTES,
-  faDigits
+  faDigits,
+  sanitizeFilename // architecture-010 ۱.۲۷.۸۵ — تعریف محلی حذف شد؛ canonical از هستهٔ مشترک
 } from '@core/shared';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@core/errors';
 import { inParamChunks, inPlaceholders } from '@core/db/in-chunks'; // ۱.۲۵.۷۲ — دروازهٔ IN-list (بدهی ف۶ ⑧)
@@ -71,11 +72,6 @@ function dedupeTags(tags: string[]): string[] {
 
 function escapeLike(raw: string): string {
   return String(raw ?? '').replace(/[%_\\]/g, (ch) => `\\${ch}`);
-}
-
-function sanitizeFilename(raw: string): string {
-  const base = String(raw ?? '').split(/[/\\]/).pop() ?? '';
-  return base.replace(/\s+/g, ' ').trim().slice(0, 200);
 }
 
 function concatSegments(segments: Uint8Array[]): Uint8Array {
