@@ -262,10 +262,11 @@ describe('گزارش دوره‌ای طرح درمان', () => {
       phone: '09123330099',
       national_id: makeNationalId(),
       username: 'sup--report',
-      role: 'supervisor'
+      role: 'supervisor',
+      password: 'sup-pass-2026'
     });
     expect(createSup.status).toBe(201);
-    const sup = new Api(A, await loginToken(A, 'sup--report'));
+    const sup = new Api(A, await loginToken(A, 'sup--report', 'sup-pass-2026'));
     expect((await sup.get(`/api/clinical-paths/${pathId}/report`)).status).toBe(403);
 
     // بدون احراز → ۴۰۱

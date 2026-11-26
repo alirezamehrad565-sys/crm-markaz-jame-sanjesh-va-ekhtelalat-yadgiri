@@ -22,7 +22,8 @@ const audit = (db) => createAuditWriter(db);
 
 const SetupSchema = z.object({
   username: z.string().min(3).max(64).regex(/^[a-z0-9._-]+$/, 'نام کاربری فقط حروف انگلیسی کوچک/عدد/نقطه/خط'),
-  password: z.string().min(6).max(128),
+  /* ۱.۲۷.۸۶ — هم‌تراز با سیاست StaffPasswordSchema (حداقل ۸، فقط-رقمی ممنوع) */
+  password: z.string().min(8, 'رمز باید حداقل ۸ نویسه باشد').max(128).regex(/\D/, 'رمز نمی‌تواند فقط رقم باشد'),
   full_name: z.string().min(2).max(120)
 });
 

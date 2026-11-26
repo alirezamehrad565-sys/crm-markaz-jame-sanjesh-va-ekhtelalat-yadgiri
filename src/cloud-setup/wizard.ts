@@ -352,7 +352,7 @@ export function openSetupWizard(deps: SetupWizardDeps): SetupWizardHandle {
   // ─── اسلاید ۴ — ساخت سرور مرکزی با کلادفلر (v1.26.0) ───
   const deployTokenInput = csInput(deps.doc, 'password', 'توکن API کلادفلر (مجوز: Workers Scripts:Edit + D1:Edit)', 'cloud-input');
   const deployUserInput = csInput(deps.doc, 'text', 'نام کاربری مدیر مرکز (انگلیسی کوچک)', 'cloud-input');
-  const deployPassInput = csInput(deps.doc, 'password', 'رمز مدیر مرکز — حداقل ۶ نویسه', 'cloud-input');
+  const deployPassInput = csInput(deps.doc, 'password', 'رمز مدیر مرکز — حداقل ۸ نویسه', 'cloud-input');
   const deployNameInput = csInput(deps.doc, 'text', 'نام کامل مدیر مرکز', 'cloud-input');
 
   // موج ۲ (۲-۳) — بلوک «تلاش دوباره» استقرار: پس از شکست قطعهٔ i/n نمایان می‌شود؛
@@ -435,7 +435,7 @@ export function openSetupWizard(deps: SetupWizardDeps): SetupWizardHandle {
   const staffName = csInput(deps.doc, 'text', 'نام و نام خانوادگی', 'cloud-input');
   const staffUser = csInput(deps.doc, 'text', 'نام کاربری (انگلیسی کوچک)', 'cloud-input');
   const staffRole = csInput(deps.doc, 'text', 'نقش: manager | secretary | therapist | supervisor', 'cloud-input');
-  const staffPass = csInput(deps.doc, 'password', 'رمز — حداقل ۶ نویسه', 'cloud-input');
+  const staffPass = csInput(deps.doc, 'password', 'رمز — حداقل ۸ نویسه', 'cloud-input');
 
   const staff = csEl(deps.doc, 'div', 'cloud-slide');
   staff.appendChild(
@@ -583,7 +583,7 @@ export function openSetupWizard(deps: SetupWizardDeps): SetupWizardHandle {
       const p = password.trim();
       const n = fullName.trim();
       if (!/^[a-z0-9._-]{3,64}$/.test(u)) return { ok: false, message: 'نام کاربری مدیر: فقط انگلیسی کوچک/عدد/نقطه/خط، حداقل ۳ نویسه.' };
-      if (p.length < 6) return { ok: false, message: 'رمز مدیر حداقل ۶ نویسه است.' };
+      if (p.length < 8) return { ok: false, message: 'رمز مدیر حداقل ۸ نویسه است.' };
       if (n.length < 2) return { ok: false, message: 'نام کامل مدیر را بنویسید.' };
 
       // ۱) ساخت مدیر با توکن یک‌بارمصرف

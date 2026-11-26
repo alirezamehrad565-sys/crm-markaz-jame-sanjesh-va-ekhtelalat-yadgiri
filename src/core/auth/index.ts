@@ -4,7 +4,7 @@ export type { StaffRow } from './staff';
 export type { AccessJwtPayload } from './jwt';
 export { generateApiKey, hashApiKey, looksLikeApiKey } from './api-keys';
 export type { GeneratedApiKey } from './api-keys';
-export { hashPassword, verifyPassword, isLegacyPasswordHash, DEFAULT_PASSWORD } from './password';
+export { hashPassword, verifyPassword, isLegacyPasswordHash, passwordNeedsUpgrade } from './password';
 export { signSessionJwt, verifySessionJwt } from './session-jwt';
 export type { SessionJwtPayload } from './session-jwt';
 export { buildSessionCookie, clearSessionCookie, readSessionCookie, SESSION_COOKIE_NAME } from './session-cookie';

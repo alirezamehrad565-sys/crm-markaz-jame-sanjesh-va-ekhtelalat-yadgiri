@@ -132,10 +132,11 @@ describe('پیوند درخت هدف با پروفایل دانش‌آموز', (
     const create = await manager.post('/api/staff', {
       full_name: 'ناظر هدف ',
       username: 'sup-focus236',
-      role: 'supervisor'
+      role: 'supervisor',
+      password: 'sup-pass-2026'
     });
     expect(create.status).toBe(201);
-    const token = await loginToken(A, 'sup-focus236');
+    const token = await loginToken(A, 'sup-focus236', 'sup-pass-2026');
     const sup = new Api(A, token);
 
     const read = await sup.get(`/api/students/${studentId}/focus`);

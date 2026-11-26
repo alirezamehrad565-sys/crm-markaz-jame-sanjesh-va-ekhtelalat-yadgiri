@@ -89,8 +89,12 @@ async function toWebRequest(req, url) {
 async function writeWebResponse(res, response) {
   const headers = { ...Object.fromEntries(response.headers) };
   const setCookies = typeof response.headers.getSetCookie === 'function' ? response.headers.getSetCookie() : [];
-  res.writeHead(response.status, response.statusText || undefined, headers);
+  // — Set-Cookie باید «پیش از» flush یعنی قبل از writeHead با appendHeader اضافه شود؛
+  //   بعد از writeHead این خطا ERR_HTTP_HEADERS_SENT می‌دهد و پاسخ لاگین بی‌بدنه می‌شد.
+  //   کوکی جوین‌شده در writeHead هم نباید برود وگرنه دوبار می‌آید — فقط مسیر appendHeader.
+  if (setCookies.length > 0) delete headers['set-cookie'];
   for (const c of setCookies) res.appendHeader('set-cookie', c);
+  res.writeHead(response.status, response.statusText || undefined, headers);
   if (reqHead(res.req?.method)) {
     res.end();
     return;

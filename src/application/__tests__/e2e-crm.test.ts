@@ -178,7 +178,8 @@ describe('بات نقش‌محور CRM + قفل اتصال + ناظر اداره
     const create = await manager.post('/api/staff', {
       full_name: 'ناظر سبک ',
       username: 'sup-lite220',
-      role: 'supervisor'
+      role: 'supervisor',
+      password: 'sup-pass-2026'
     });
     expect(create.status).toBe(201);
     const member = ((create.body as { data: { role: string; nationalId: string | null; phone: string | null } }).data);
@@ -204,13 +205,14 @@ describe('بات نقش‌محور CRM + قفل اتصال + ناظر اداره
       phone: '09127770044',
       national_id: makeNationalId(),
       username: 'supervisor62',
-      role: 'supervisor'
+      role: 'supervisor',
+      password: 'sup-pass-2026'
     });
     expect(create.status).toBe(201);
     const member = ((create.body as { data: { role: string } }).data);
     expect(member.role).toBe('supervisor'); // نقش مؤثر از COALESCE(role_ext, role)
 
-    const token = await loginToken(A, 'supervisor62');
+    const token = await loginToken(A, 'supervisor62', 'sup-pass-2026');
     const sup = new Api(A, token);
 
     const dash = await sup.get('/api/dashboard/summary?from=2026-10-01&to=2026-10-11');

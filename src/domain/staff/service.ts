@@ -1,5 +1,5 @@
 import type { AuthContext, StaffRole } from '@core/shared';
-import { DEFAULT_PASSWORD, hashPassword } from '@core/auth';
+import { hashPassword } from '@core/auth';
 import { ConflictError, NotFoundError } from '@core/errors';
 import type { StaffDeps, StaffMember, NewStaffInput, UpdateStaffInput, StaffService } from './types';
 
@@ -83,7 +83,11 @@ export function createStaffService(deps: StaffDeps): StaffService {
         if (dupNid) throw new ConflictError('این کد ملی قبلاً ثبت شده است');
       }
 
-      const passwordHash = await hashPassword(input.password?.trim() ? input.password.trim() : DEFAULT_PASSWORD);
+      /* ۱.۲۷.۸۶ — بدون رمزِ تعیین‌شده، رمز تصادفی ناشناخته هش می‌شود (قبلاً ثابتِ شناخته‌شدهٔ «۱۲۳۴»
+         درِ جلویی سامانه بود). حساب تا زمانی که مدیر رمز بگذارد عملاً ورودناپذیر است. */
+      const passwordHash = await hashPassword(
+        input.password?.trim() ? input.password.trim() : crypto.randomUUID() + crypto.randomUUID()
+      );
       const id = crypto.randomUUID();
       const email = syntheticEmail();
 
@@ -165,6 +169,12 @@ export function createStaffService(deps: StaffDeps): StaffService {
         if (patch.password !== undefined && patch.password.trim() !== '') {
           const passwordHash = await hashPassword(patch.password.trim());
           await tx.execute(`UPDATE staff SET password_hash = ? WHERE id = ?`, [passwordHash, id]);
+          /* ۱.۲۷.۸۶ — تغییر رمز، همهٔ نشست‌های جاری همان کارمند را ابطال می‌کند: توکن مسروقه/دستگاه
+             گم‌شده تا ۱۴ روز TTL نشست زنده نمی‌ماند (هم‌تراز با ابطال خروج در auth/logout) */
+          await tx.execute(
+            `UPDATE auth_sessions SET revoked_at = ? WHERE staff_id = ? AND revoked_at IS NULL`,
+            [new Date().toISOString(), id]
+          );
           changes.password = { from: '••••', to: '••••' };
         }
 

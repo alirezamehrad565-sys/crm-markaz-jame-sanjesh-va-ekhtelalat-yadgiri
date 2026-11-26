@@ -45,14 +45,14 @@ describe('/ — کارکنان: CRUD + ورود با رمز', () => {
       phone: '09121119876',
       national_id: makeNationalId(),
       username: 'saeed',
-      password: '9998',
+      password: 'pass-9998',
       role: 'therapist'
     });
     expect(res.status).toBe(201);
     const member = (res.body as { data: { id: string } }).data;
     expect(member.id).toBeTruthy();
 
-    const token = await loginToken(A, 'saeed', '9998');
+    const token = await loginToken(A, 'saeed', 'pass-9998');
     expect(token.split('.').length).toBe(3);
 
     await expect(loginToken(A, 'saeed', '1234')).rejects.toThrow();
@@ -86,18 +86,18 @@ describe('/ — کارکنان: CRUD + ورود با رمز', () => {
       phone: '09121117777',
       national_id: makeNationalId(),
       username: 'maryamtest',
-      password: '7777',
+      password: 'pass-7777',
       role: 'secretary'
     });
     const id = (created.body as { data: { id: string } }).data.id;
 
     const deact = await manager.post(`/api/staff/${id}/deactivate`);
     expect(deact.status).toBe(200);
-    await expect(loginToken(A, 'maryamtest', '7777')).rejects.toThrow();
+    await expect(loginToken(A, 'maryamtest', 'pass-7777')).rejects.toThrow();
 
     const act = await manager.post(`/api/staff/${id}/activate`);
     expect(act.status).toBe(200);
-    const token = await loginToken(A, 'maryamtest', '7777');
+    const token = await loginToken(A, 'maryamtest', 'pass-7777');
     expect(token).toBeTruthy();
   });
 

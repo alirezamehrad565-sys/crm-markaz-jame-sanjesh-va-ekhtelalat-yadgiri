@@ -114,10 +114,11 @@ describe('لج فرضیه (اسنپ‌شات در رویداد پرونده)', (
       phone: '09127770123',
       national_id: makeNationalId(),
       username: 'supervisor223',
-      role: 'supervisor'
+      role: 'supervisor',
+      password: 'sup-pass-2026'
     });
     expect(create.status).toBe(201);
-    const sup = new Api(A, await loginToken(A, 'supervisor223'));
+    const sup = new Api(A, await loginToken(A, 'supervisor223', 'sup-pass-2026'));
     const res = await sup.get(`/api/students/${studentId}/clinical-insights`);
     expect(res.status).toBe(403);
     expect(logRowsOf(A, studentId)).toHaveLength(2); // بدون نوشتن جدید

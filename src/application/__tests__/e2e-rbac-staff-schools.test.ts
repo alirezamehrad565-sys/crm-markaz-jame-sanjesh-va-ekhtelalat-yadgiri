@@ -17,7 +17,7 @@ describe('تنظیم کارکنان فقط مدیر', () => {
       phone: '09121119999',
       national_id: makeNationalId(),
       username: `t${Date.now()}`,
-      password: '1234',
+      password: 'pass-1234',
       role: 'therapist'
     };
 
@@ -40,7 +40,7 @@ describe('تنظیم کارکنان فقط مدیر', () => {
       phone: '09121119888',
       national_id: makeNationalId(),
       username: `m${Date.now()}`,
-      password: '1234',
+      password: 'pass-1234',
       role: 'secretary'
     });
     expect(created.status).toBe(201);

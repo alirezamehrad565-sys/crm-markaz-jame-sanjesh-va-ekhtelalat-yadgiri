@@ -78,7 +78,8 @@ const CASES = [
 const mod = await import(pathToFileURL(BUNDLE).href);
 const worker = mod.default;
 const db = new MockD1(makeDb());
-const env = { DB: db, ENV: 'development', CF_ACCESS_TEAM_DOMAIN: '', API_RATE_LIMIT_PER_MIN: '0' };
+/* SEC-12776 — impersonation دولبقه‌ای است: ENV=development کافی نیست، DEV_IMPERSONATION=1 هم لازم */
+const env = { DB: db, ENV: 'development', DEV_IMPERSONATION: '1', CF_ACCESS_TEAM_DOMAIN: '', API_RATE_LIMIT_PER_MIN: '0' };
 const ctx = { waitUntil() {}, passThroughOnException() {} };
 
 const logLines = [];

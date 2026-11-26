@@ -302,7 +302,7 @@ describe('حذف همکار', () => {
       phone: '09120001122',
       national_id: makeNationalId(),
       username,
-      password: '1234',
+      password: 'pass-1234',
       role,
       notify_enabled: false
     });

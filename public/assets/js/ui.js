@@ -1186,6 +1186,9 @@ export function applyTheme(next, persist = true) {
     document.documentElement.dataset.theme = theme;
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute('content', THEME_COLORS[theme]);
+    /* ۱.۲۷.۸۶ — رنگ دکمهٔ تم باید پس از جهش dataset.theme باشد: زیر startViewTransition این
+       کلوژر async اجرا می‌شود و رنگِ بیرونی با تم قدیمی می‌خورد (آیکن ماه در تم تاریک یخ می‌زد) */
+    document.querySelectorAll('.theme-toggle').forEach(paintThemeBtn);
   };
   // A15: گذار تم یکدست با View Transitions — قبلاً body fade می‌شد و بقیهٔ سطوح snap (دو سرعته)
   const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
@@ -1195,7 +1198,6 @@ export function applyTheme(next, persist = true) {
     set();
   }
   if (persist) { try { localStorage.setItem(THEME_KEY, theme); } catch { /* noop */ } }
-  document.querySelectorAll('.theme-toggle').forEach(paintThemeBtn);
 }
 
 export function toggleTheme() {

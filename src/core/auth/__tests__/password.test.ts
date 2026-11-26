@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { hashPassword, verifyPassword, isLegacyPasswordHash, DEFAULT_PASSWORD } from '../password';
+import { hashPassword, verifyPassword, isLegacyPasswordHash, passwordNeedsUpgrade } from '../password';
 
 const LEGACY_1234 = '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4';
 
@@ -53,9 +53,13 @@ describe('verifyPassword', () => {
     expect(await verifyPassword('1234', 'pbkdf2$25000$%%%$AAAA')).toBe(false);
   });
 
-  it('رمز پیش‌فرض سامانه ۱۲۳۴ است — هم legacy و هم فرمت جدید تأیید می‌شود', async () => {
-    expect(DEFAULT_PASSWORD).toBe('1234');
-    expect(await verifyPassword(DEFAULT_PASSWORD, LEGACY_1234)).toBe(true);
-    expect(await verifyPassword(DEFAULT_PASSWORD, await hashPassword(DEFAULT_PASSWORD))).toBe(true);
+  it('هش‌های نیازمند ارتقا (legacy و دُرِ کهنه) تشخیص داده می‌شوند — ۱.۲۷.۸۶', async () => {
+    // DEFAULT_PASSWORD حذف شد — حساب بدون رمز با هش تصادفی ناشناخته ساخته می‌شود
+    expect(passwordNeedsUpgrade(LEGACY_1234)).toBe(true);
+    expect(passwordNeedsUpgrade('pbkdf2$25000$AAAA$AAAA')).toBe(true);
+    expect(passwordNeedsUpgrade(await hashPassword('s3cure-pass'))).toBe(false);
+    expect(passwordNeedsUpgrade('')).toBe(false);
+    expect(await verifyPassword('1234', LEGACY_1234)).toBe(true);
+    expect(await verifyPassword('1234', await hashPassword('1234'))).toBe(true);
   });
 });

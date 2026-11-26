@@ -337,7 +337,9 @@ const StaffPhoneSchema = z
 export const StaffPasswordSchema = z
   .string()
   .min(STAFF_PASSWORD_MIN, `رمز باید حداقل ${STAFF_PASSWORD_MIN} نویسه باشد`)
-  .max(STAFF_PASSWORD_MAX, 'رمز بیش از حد طولانی است');
+  .max(STAFF_PASSWORD_MAX, 'رمز بیش از حد طولانی است')
+  /* ۱.۲۷.۸۶ — فقط-رقمی ممنوع: حدس رمز عددی کوتاه چندثانیه‌ای است (الگوی رمز پیش‌فرض کهنه) */
+  .regex(/\D/, 'رمز نمی‌تواند فقط رقم باشد');
 
 // ناظر فقط نام کاربری + رمز: تلفن/کد ملی اختیاری‌اند و فقط برای بقیهٔ نقش‌ها الزام می‌شوند
 export const NewStaffSchema = z

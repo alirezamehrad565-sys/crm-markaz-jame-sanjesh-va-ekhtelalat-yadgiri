@@ -1,6 +1,6 @@
 import type { AppHono } from '@core/shared';
 import { LoginSchema } from '@core/shared';
-import { findStaffByUsername, signSessionJwt, verifyPassword, hashPassword, isLegacyPasswordHash, resolveSessionSecret, getAuthContext, buildSessionCookie, clearSessionCookie } from '@core/auth';
+import { findStaffByUsername, signSessionJwt, verifyPassword, hashPassword, passwordNeedsUpgrade, resolveSessionSecret, getAuthContext, buildSessionCookie, clearSessionCookie } from '@core/auth';
 import { createDb } from '@core/db';
 import { AuthError, RateLimitError } from '@core/errors';
 import type { AuditWriter } from '@core/audit';
@@ -117,12 +117,32 @@ export function registerAuthRoutes(app: AppHono, deps: AuthRoutesDeps): void {
     }
 
     const staff = await findStaffByUsername(c.env.DB, body.username);
+    /* ۱.۲۷.۸۶ — سطل سوم throttle روی شناسهٔ کانونی حساب: ورود با username و email دو کلید خام
+       جدا می‌ساخت و سقف ۵تایی را عملاً ۱۰تایی می‌کرد؛ کلید staff:<id> هر دو مسیر را یکی می‌کند */
+    const idKey = staff ? `staff:${staff.id}` : null;
+    if (staff && idKey) {
+      const idBlockedFor = await throttleRemainingSeconds(c.env.DB, idKey, LOGIN_MAX_FAILURES);
+      if (idBlockedFor > 0) {
+        await deps.audit.log({
+          actorId: 'anonymous',
+          action: 'auth.login_throttled',
+          resourceType: 'staff',
+          resourceId: staff.id,
+          changes: { retryAfterSeconds: { from: null, to: idBlockedFor }, scope: { from: null, to: 'identity' } }
+        });
+        throw new RateLimitError(
+          idBlockedFor,
+          `تلاش‌های ناموفق بیش از حد مجاز است — ${Math.ceil(idBlockedFor / 60)} دقیقه دیگر دوباره تلاش کنید`
+        );
+      }
+    }
 
     if (!staff || staff.active !== 1) {
       // PBKDF2 ساختگی برای هم‌زمان‌سازی زمان پاسخ با مسیر «رمز اشتباه»
       await verifyPassword(body.password, await getDummyHash());
       await recordLoginFailure(c.env.DB, identity);
       await recordLoginFailure(c.env.DB, ipKey);
+      if (idKey) await recordLoginFailure(c.env.DB, idKey);
       await deps.audit.log({
         actorId: 'anonymous',
         action: 'auth.login_failed',
@@ -137,6 +157,7 @@ export function registerAuthRoutes(app: AppHono, deps: AuthRoutesDeps): void {
     if (!ok) {
       await recordLoginFailure(c.env.DB, identity);
       await recordLoginFailure(c.env.DB, ipKey);
+      if (idKey) await recordLoginFailure(c.env.DB, idKey);
       await deps.audit.log({
         actorId: staff.id,
         action: 'auth.login_failed',
@@ -148,8 +169,10 @@ export function registerAuthRoutes(app: AppHono, deps: AuthRoutesDeps): void {
     }
 
     await clearThrottle(c.env.DB, identity);
+    if (idKey) await clearThrottle(c.env.DB, idKey);
 
-    if (staff.password_hash && isLegacyPasswordHash(staff.password_hash)) {
+    /* ۱.۲۷.۸۶ — ارتقای هش نه فقط برای legacy بدون‌دُر، که برای هر هش با دورِ زیر دورِ جاری (۲۵هزار → ۱۰۰هزار) */
+    if (passwordNeedsUpgrade(staff.password_hash ?? '')) {
       try {
         const upgraded = await hashPassword(body.password);
         await c.env.DB.prepare('UPDATE staff SET password_hash = ? WHERE id = ?')

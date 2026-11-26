@@ -84,7 +84,7 @@ export function renderLoginPage(onSuccess) {
     id: 'login-username',
     type: 'text',
     autocomplete: 'username',
-    placeholder: 'مثلاً manager',
+    placeholder: 'manager', /* ۱.۲۷.۸۶ — تک‌زبانه: «مثلاً manager» در input لاتین‌چپ، tanvin فارسی را جدا می‌کشید */
     dir: 'ltr',
     style: { textAlign: 'left' }
   });
@@ -93,26 +93,45 @@ export function renderLoginPage(onSuccess) {
     id: 'login-password',
     type: 'password',
     autocomplete: 'current-password',
-    placeholder: '••••••',
+    /* ۱.۲۷.۸۶ — placeholder «••••••» حذف: فیلد خالی را پرشده نشان می‌داد */
     dir: 'ltr',
     style: { textAlign: 'left' }
   });
   /* ۱.۲۷.۷۷ — role=alert: اسکرین‌ریدر خطا را بلافاصله اعلام می‌کند (قبلاً فقط تغییر متن بود) */
-  const errorBox = el('div', { class: 'login__error', role: 'alert', style: { display: 'none' } });
+  const errorBox = el('div', { class: 'login__error', id: 'login-error', role: 'alert', style: { display: 'none' } });
   const annBox = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px' } });
   const hintBox = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px' } });
 
+  /* ۱.۲۷.۸۶ — پیوند خطا به فیلد (WCAG 4.1.2): state فیلد معیوب و متن خطا برای SR اعلام می‌شود */
+  const markInvalid = (input) => {
+    input.setAttribute('aria-invalid', 'true');
+    input.setAttribute('aria-describedby', 'login-error');
+    input.classList.add('is-invalid');
+  };
+  const clearInvalid = () => {
+    for (const i of [userInput, passInput]) {
+      i.removeAttribute('aria-invalid');
+      i.removeAttribute('aria-describedby');
+      i.classList.remove('is-invalid');
+    }
+  };
+
   const submit = async () => {
+    clearInvalid();
     errorBox.style.display = 'none';
     const username = userInput.value.trim();
     const password = passInput.value;
     if (!username || !password) {
       errorBox.textContent = 'نام کاربری و رمز عبور را وارد کنید.';
       errorBox.style.display = '';
+      if (!username) markInvalid(userInput);
+      if (!password) markInvalid(passInput);
       return;
     }
     const btn = root.querySelector('#login-submit');
     btn.disabled = true;
+    btn.classList.add('is-busy'); /* ۱.۲۷.۸۶ — بازخورد «در حال ورود» روی شبکهٔ کند (چرخ‌ندهٔ مشترک) */
+    btn.setAttribute('aria-busy', 'true');
     try {
       const res = await api.post('/api/auth/login', { username, password });
       /* ۱.۲۷.۸۲ (security-009/ADR-005): توکن نشست در کوکی httpOnly صادر شد — SPA آن را
@@ -127,11 +146,17 @@ export function renderLoginPage(onSuccess) {
     } catch (err) {
       errorBox.textContent = err.message || 'ورود ناموفق بود.';
       errorBox.style.display = '';
+      markInvalid(userInput); /* پیام سرور کدام فیلد را مقصر نمی‌داند — هر دو اعلام می‌شوند */
+      markInvalid(passInput);
       passInput.value = '';
       passInput.focus();
     } finally {
       const b = root.querySelector('#login-submit');
-      if (b) b.disabled = false;
+      if (b) {
+        b.disabled = false;
+        b.classList.remove('is-busy');
+        b.removeAttribute('aria-busy');
+      }
     }
   };
 

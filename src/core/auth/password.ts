@@ -1,10 +1,9 @@
-// هش رمز عبور با PBKDF2 (۲۵ هزار دور، SHA-256، نمک ۱۶ بایتی) روی WebCrypto.
-// مقایسهٔ هش‌ها زمان-ثابت است تا حملهٔ تایمینگ ممکن نشود — حساب‌های تازه با DEFAULT_PASSWORD شروع می‌کنند.
+// هش رمز عبور با PBKDF2 (۱۰۰ هزار دور از ۱.۲۷.۸۶ — قبلاً ۲۵ هزار، SHA-256، نمک ۱۶ بایتی) روی WebCrypto.
+// دُرِ iteration در قالب هش ذخیره می‌شود → هش‌های کهنه با دورِ خودشان وریفای و در ورود بعدی ارتقا می‌یابند.
+// مقایسهٔ هش‌ها زمان-ثابت است تا حملهٔ تایمینگ ممکن نشود — حساب بدون رمزِ تعیین‌شده با رمز تصادفی ناشناخته ساخته می‌شود.
 import { hashApiKey } from './api-keys';
 
-export const DEFAULT_PASSWORD = '1234';
-
-const PBKDF2_ITERATIONS = 25_000;
+const PBKDF2_ITERATIONS = 100_000;
 
 const SALT_BYTES = 16;
 const DERIVED_BITS = 256;
@@ -54,6 +53,18 @@ export async function hashPassword(password: string): Promise<string> {
 
 export function isLegacyPasswordHash(storedHash: string): boolean {
   return Boolean(storedHash) && !storedHash.startsWith(`${HASH_PREFIX}$`);
+}
+
+/* ۱.۲۷.۸۶ — آیا هش ذخیره‌شده از پارامترهای جاری ضعیف‌تر است؟ (legacy بدون‌دُر، یا دُر زیر دورِ جاری)
+   مبنای ارتقای شفاف هش در ورود موفق — بدون اجبار کاربر به تغییر رمز. */
+export function passwordNeedsUpgrade(storedHash: string): boolean {
+  if (!storedHash) return false;
+  if (isLegacyPasswordHash(storedHash)) return true;
+  const parts = storedHash.split('$');
+  if (parts.length !== 4 || parts[0] !== HASH_PREFIX) return false;
+  const iterations = Number.parseInt(parts[1], 10);
+  if (!Number.isFinite(iterations)) return true;
+  return iterations < PBKDF2_ITERATIONS;
 }
 
 export async function verifyPassword(password: string, storedHash: string): Promise<boolean> {

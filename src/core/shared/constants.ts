@@ -389,7 +389,7 @@ export const EDUCATION_HISTORY_NOTE_MAX = 1000;
 export const STAFF_USERNAME_MIN = 3;
 export const STAFF_USERNAME_MAX = 40;
 export const STAFF_PHONE_MAX = 20;
-export const STAFF_PASSWORD_MIN = 4;
+export const STAFF_PASSWORD_MIN = 8; /* ۱.۲۷.۸۶ — از ۴ به ۸: حداقلِ متعارف برای رمز کارمند */
 export const STAFF_PASSWORD_MAX = 64;
 
 export const FOLLOWUP_STATUSES = ['open', 'in_progress', 'done', 'cancelled'] as const;

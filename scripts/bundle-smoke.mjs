@@ -82,7 +82,8 @@ async function probe(bundlePath) {
   const mod = await import(pathToFileURL(path.resolve(bundlePath)).href);
   const worker = mod.default;
   const db = new MockD1(makeDb());
-  const env = { DB: db, ENV: 'development', CF_ACCESS_TEAM_DOMAIN: '' };
+  /* SEC-12776 — impersonation دولبقه‌ای است: ENV=development کافی نیست، DEV_IMPERSONATION=1 هم لازم */
+  const env = { DB: db, ENV: 'development', DEV_IMPERSONATION: '1', CF_ACCESS_TEAM_DOMAIN: '' };
   const ctx = { waitUntil() {}, passThroughOnException() {} };
   const out = [];
   for (const [method, urlPath, staffId, body] of CASES) {

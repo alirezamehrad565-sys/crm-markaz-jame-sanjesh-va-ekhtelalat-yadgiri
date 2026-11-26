@@ -631,12 +631,14 @@ document.getElementById('menu-btn').addEventListener('click', () => {
 document.getElementById('sidebar-close')?.addEventListener('click', closeSidebar); /* UX-ممیزی: دکمهٔ ✕ دراور موبایل */
 
 const outlet = document.getElementById('outlet');
-initAnnouncementBanners(); // — بنر اعلان‌ها (صفحه ورود + پنل)
 /* rust-f3 — توتوریال اولیه: هوک شروع فقط در پوستهٔ دسکتاپ (فلگ استاتیک ماژول تور هم پیش‌فرض خاموش است).
    در وب تولیدی گارد زیر هرگز true نمی‌شود → نه DOM، نه fetch، نه تغییر مسیر؛ حتی چانک تور fetch نمی‌شود.
    login.js پس از ورود location.reload() می‌زند → این فراخوانی روی بوتِ پس از نشست معتبر = «ورود نخست». */
 loadCurrentUser().then((ok) => {
   if (!ok) return;
+  /* ۱.۲۷.۸۶ — بنر اعلان‌ها فقط در پوستهٔ لاگین‌شده: بوتِ بی‌احراز دوبار ۴۰۱ می‌گرفت و بنرش هرگز
+     دیده نمی‌شد (#ann-banner-root داخل shell پنهان است)؛ صفحهٔ ورود بنر public خودش را دارد */
+  initAnnouncementBanners();
   start(outlet);
   updateWaitlistBadge();
   updateTodosBadge();

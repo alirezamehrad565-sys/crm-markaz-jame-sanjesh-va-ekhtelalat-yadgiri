@@ -223,12 +223,12 @@ describe('فاز ۵ — دانش‌آموزان من (my-students)', () => {
       phone: '09121117777',
       national_id: makeNationalId(),
       username: `fresh${Date.now()}`,
-      password: '1234',
+      password: 'pass-1234',
       role: 'therapist'
     });
     expect(created.status).toBe(201);
     const username = (created.body as { data: { username: string } }).data.username;
-    freshTher = new Api(A, await loginToken(A, username));
+    freshTher = new Api(A, await loginToken(A, username, 'pass-1234'));
   });
 
   it('معلم بی‌سابقه — لیست خالی؛ خروجی نسبت به خود بازیگر است (منشی هم خالی)', async () => {

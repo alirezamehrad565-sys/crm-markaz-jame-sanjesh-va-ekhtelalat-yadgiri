@@ -22614,7 +22614,7 @@ var EDUCATION_HISTORY_NOTE_MAX = 1e3;
 var STAFF_USERNAME_MIN = 3;
 var STAFF_USERNAME_MAX = 40;
 var STAFF_PHONE_MAX = 20;
-var STAFF_PASSWORD_MIN = 4;
+var STAFF_PASSWORD_MIN = 8;
 var STAFF_PASSWORD_MAX = 64;
 var FOLLOWUP_STATUSES = ["open", "in_progress", "done", "cancelled"];
 var FOLLOWUP_ENTITY_TYPES = ["appointment", "student", "waitlist", "case_event"];
@@ -22937,7 +22937,7 @@ var StaffUsernameSchema = external_exports.string().trim().min(STAFF_USERNAME_MI
   /* S9-03: تطویل از متن حذف شد؛ رجکس آن را نمی‌پذیرفت */
 );
 var StaffPhoneSchema = external_exports.string().trim().min(7, "\u0634\u0645\u0627\u0631\u0647 \u062A\u0644\u0641\u0646 \u06A9\u0648\u062A\u0627\u0647 \u0627\u0633\u062A").max(STAFF_PHONE_MAX, "\u0634\u0645\u0627\u0631\u0647 \u062A\u0644\u0641\u0646 \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0637\u0648\u0644\u0627\u0646\u06CC \u0627\u0633\u062A").regex(/^[0-9+\s-]+$/, "\u0634\u0645\u0627\u0631\u0647 \u062A\u0644\u0641\u0646 \u0641\u0642\u0637 \u0631\u0642\u0645 \u0648 + \u0627\u0633\u062A");
-var StaffPasswordSchema = external_exports.string().min(STAFF_PASSWORD_MIN, `\u0631\u0645\u0632 \u0628\u0627\u06CC\u062F \u062D\u062F\u0627\u0642\u0644 ${STAFF_PASSWORD_MIN} \u0646\u0648\u06CC\u0633\u0647 \u0628\u0627\u0634\u062F`).max(STAFF_PASSWORD_MAX, "\u0631\u0645\u0632 \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0637\u0648\u0644\u0627\u0646\u06CC \u0627\u0633\u062A");
+var StaffPasswordSchema = external_exports.string().min(STAFF_PASSWORD_MIN, `\u0631\u0645\u0632 \u0628\u0627\u06CC\u062F \u062D\u062F\u0627\u0642\u0644 ${STAFF_PASSWORD_MIN} \u0646\u0648\u06CC\u0633\u0647 \u0628\u0627\u0634\u062F`).max(STAFF_PASSWORD_MAX, "\u0631\u0645\u0632 \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0637\u0648\u0644\u0627\u0646\u06CC \u0627\u0633\u062A").regex(/\D/, "\u0631\u0645\u0632 \u0646\u0645\u06CC\u200C\u062A\u0648\u0627\u0646\u062F \u0641\u0642\u0637 \u0631\u0642\u0645 \u0628\u0627\u0634\u062F");
 var NewStaffSchema = external_exports.object({
   full_name: external_exports.string().min(2, "\u0646\u0627\u0645 \u0628\u0627\u06CC\u062F \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0628\u0627\u0634\u062F").max(200),
   phone: StaffPhoneSchema.optional(),
@@ -23956,7 +23956,7 @@ function getAuthContext(c) {
 __name(getAuthContext, "getAuthContext");
 
 // src/core/auth/password.ts
-var PBKDF2_ITERATIONS = 25e3;
+var PBKDF2_ITERATIONS = 1e5;
 var SALT_BYTES = 16;
 var DERIVED_BITS = 256;
 var HASH_PREFIX = "pbkdf2";
@@ -24004,6 +24004,16 @@ function isLegacyPasswordHash(storedHash) {
   return Boolean(storedHash) && !storedHash.startsWith(`${HASH_PREFIX}$`);
 }
 __name(isLegacyPasswordHash, "isLegacyPasswordHash");
+function passwordNeedsUpgrade(storedHash) {
+  if (!storedHash) return false;
+  if (isLegacyPasswordHash(storedHash)) return true;
+  const parts = storedHash.split("$");
+  if (parts.length !== 4 || parts[0] !== HASH_PREFIX) return false;
+  const iterations = Number.parseInt(parts[1], 10);
+  if (!Number.isFinite(iterations)) return true;
+  return iterations < PBKDF2_ITERATIONS;
+}
+__name(passwordNeedsUpgrade, "passwordNeedsUpgrade");
 async function verifyPassword(password, storedHash) {
   if (!password || !storedHash) return false;
   if (storedHash.startsWith(`${HASH_PREFIX}$`)) {
@@ -24038,7 +24048,7 @@ function findStaffByUsername(db, username) {
 __name(findStaffByUsername, "findStaffByUsername");
 
 // src/core/version.ts
-var APP_VERSION = "1.27.85";
+var APP_VERSION = "1.27.86";
 var NODE_MIN_VERSION = "1.26.0";
 
 // src/node-sync/service.ts
@@ -25487,10 +25497,28 @@ function registerAuthRoutes(app, deps) {
       );
     }
     const staff = await findStaffByUsername(c.env.DB, body.username);
+    const idKey = staff ? `staff:${staff.id}` : null;
+    if (staff && idKey) {
+      const idBlockedFor = await throttleRemainingSeconds(c.env.DB, idKey, LOGIN_MAX_FAILURES);
+      if (idBlockedFor > 0) {
+        await deps.audit.log({
+          actorId: "anonymous",
+          action: "auth.login_throttled",
+          resourceType: "staff",
+          resourceId: staff.id,
+          changes: { retryAfterSeconds: { from: null, to: idBlockedFor }, scope: { from: null, to: "identity" } }
+        });
+        throw new RateLimitError(
+          idBlockedFor,
+          `\u062A\u0644\u0627\u0634\u200C\u0647\u0627\u06CC \u0646\u0627\u0645\u0648\u0641\u0642 \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0645\u062C\u0627\u0632 \u0627\u0633\u062A \u2014 ${Math.ceil(idBlockedFor / 60)} \u062F\u0642\u06CC\u0642\u0647 \u062F\u06CC\u06AF\u0631 \u062F\u0648\u0628\u0627\u0631\u0647 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F`
+        );
+      }
+    }
     if (!staff || staff.active !== 1) {
       await verifyPassword(body.password, await getDummyHash());
       await recordLoginFailure(c.env.DB, identity);
       await recordLoginFailure(c.env.DB, ipKey);
+      if (idKey) await recordLoginFailure(c.env.DB, idKey);
       await deps.audit.log({
         actorId: "anonymous",
         action: "auth.login_failed",
@@ -25504,6 +25532,7 @@ function registerAuthRoutes(app, deps) {
     if (!ok) {
       await recordLoginFailure(c.env.DB, identity);
       await recordLoginFailure(c.env.DB, ipKey);
+      if (idKey) await recordLoginFailure(c.env.DB, idKey);
       await deps.audit.log({
         actorId: staff.id,
         action: "auth.login_failed",
@@ -25514,7 +25543,8 @@ function registerAuthRoutes(app, deps) {
       throw new AuthError("\u0646\u0627\u0645 \u06A9\u0627\u0631\u0628\u0631\u06CC \u06CC\u0627 \u0631\u0645\u0632 \u0639\u0628\u0648\u0631 \u0627\u0634\u062A\u0628\u0627\u0647 \u0627\u0633\u062A");
     }
     await clearThrottle(c.env.DB, identity);
-    if (staff.password_hash && isLegacyPasswordHash(staff.password_hash)) {
+    if (idKey) await clearThrottle(c.env.DB, idKey);
+    if (passwordNeedsUpgrade(staff.password_hash ?? "")) {
       try {
         const upgraded = await hashPassword(body.password);
         await c.env.DB.prepare("UPDATE staff SET password_hash = ? WHERE id = ?").bind(upgraded, staff.id).run();
@@ -25597,7 +25627,8 @@ var logger = createLogger("central");
 var audit = /* @__PURE__ */ __name((db) => createAuditWriter(db), "audit");
 var SetupSchema = external_exports.object({
   username: external_exports.string().min(3).max(64).regex(/^[a-z0-9._-]+$/, "\u0646\u0627\u0645 \u06A9\u0627\u0631\u0628\u0631\u06CC \u0641\u0642\u0637 \u062D\u0631\u0648\u0641 \u0627\u0646\u06AF\u0644\u06CC\u0633\u06CC \u06A9\u0648\u0686\u06A9/\u0639\u062F\u062F/\u0646\u0642\u0637\u0647/\u062E\u0637"),
-  password: external_exports.string().min(6).max(128),
+  /* ۱.۲۷.۸۶ — هم‌تراز با سیاست StaffPasswordSchema (حداقل ۸، فقط-رقمی ممنوع) */
+  password: external_exports.string().min(8, "\u0631\u0645\u0632 \u0628\u0627\u06CC\u062F \u062D\u062F\u0627\u0642\u0644 \u06F8 \u0646\u0648\u06CC\u0633\u0647 \u0628\u0627\u0634\u062F").max(128).regex(/\D/, "\u0631\u0645\u0632 \u0646\u0645\u06CC\u200C\u062A\u0648\u0627\u0646\u062F \u0641\u0642\u0637 \u0631\u0642\u0645 \u0628\u0627\u0634\u062F"),
   full_name: external_exports.string().min(2).max(120)
 });
 var AnnounceSchema = external_exports.object({

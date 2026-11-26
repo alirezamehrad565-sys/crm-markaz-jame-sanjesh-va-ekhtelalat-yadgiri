@@ -46,15 +46,17 @@ describe('NewStaffSchema', () => {
     expect(NewStaffSchema.safeParse({ ...VALID_BASE, username: 'ab' }).success).toBe(false);
   });
 
-  it('رمز اختیاری است ولی حداقل ۴ نویسه', () => {
+  it('رمز اختیاری است ولی حداقل ۸ نویسه و غیرِفقط-رقمی (۱.۲۷.۸۶)', () => {
     expect(NewStaffSchema.safeParse({ ...VALID_BASE, password: '12' }).success).toBe(false);
-    expect(NewStaffSchema.safeParse({ ...VALID_BASE, password: '1234' }).success).toBe(true);
+    expect(NewStaffSchema.safeParse({ ...VALID_BASE, password: '12345678' }).success).toBe(false); // فقط رقم
+    expect(NewStaffSchema.safeParse({ ...VALID_BASE, password: '1234' }).success).toBe(false); // هم کوتاه هم فقط رقم
+    expect(NewStaffSchema.safeParse({ ...VALID_BASE, password: 's3cure-pass' }).success).toBe(true);
   });
 });
 
 describe('UpdateStaffSchema', () => {
   it('به‌روزرسانی جزئی نام کاربری/رمز مجاز است', () => {
-    const parsed = UpdateStaffSchema.parse({ username: 'new-name', password: '5678' });
+    const parsed = UpdateStaffSchema.parse({ username: 'new-name', password: 'pass-5678' });
     expect(parsed.username).toBe('new-name');
   });
 
