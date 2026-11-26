@@ -2,7 +2,7 @@ import type { AppHono } from '@core/shared';
 import { NewKnowledgeSchema, UpdateKnowledgeSchema, UuidSchema } from '@core/shared';
 import { getAuthContext, requireRole } from '@core/auth';
 import { NotFoundError, ValidationError } from '@core/errors';
-import { parseMultipartStream } from '@domain/exercise-bank/multipart';
+import { parseMultipartStream } from '@core/shared'; /* architecture-005 ۱.۲۷.۸۴ */
 import type { KnowledgeService } from './types';
 
 const EXT_MIME_FALLBACK: Record<string, string> = {

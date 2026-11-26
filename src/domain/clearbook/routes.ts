@@ -12,7 +12,7 @@ import {
 } from '@core/shared';
 import { NotFoundError, ValidationError } from '@core/errors';
 import { getAuthContext, requireRole } from '@core/auth';
-import { parseMultipartStream } from '@domain/exercise-bank/multipart';
+import { parseMultipartStream } from '@core/shared'; /* architecture-005 ۱.۲۷.۸۴ */
 import type { ClearbookService } from './types';
 
 // ─── کلر بوک مرکز: مسیرها (همه فقط مدیر/منشی) ───

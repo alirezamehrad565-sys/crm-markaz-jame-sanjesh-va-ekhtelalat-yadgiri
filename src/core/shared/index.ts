@@ -427,3 +427,7 @@ export { toLatinDigits, faNormalize, sanitizeFaQuery, likePattern, faHaystackExp
 export { isValidIranianNationalId, normalizeNationalId } from './national-id';
 
 export { FEATURES } from './features';
+export { pageParams } from './http-params'; // architecture-003 (۱.۲۷.۸۴)
+export { SNAP_IV_CUTOFFS, SCARED_CUTOFFS } from './cutoffs'; // architecture-005 (۱.۲۷.۸۴)
+export { parseMultipartStream } from './multipart'; // architecture-005 (۱.۲۷.۸۴)
+export { estimateBase64Bytes, stripDataUrlPrefix, isAllowedExerciseMimeType, sanitizeFilename, validateExerciseFileInput, validateExerciseFileBytes } from './file-sanitize'; // architecture-005 (۱.۲۷.۸۴)

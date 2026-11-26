@@ -6,7 +6,7 @@ import type { Logger } from '@core/logger';
 import type { DbClient } from '@core/db';
 import type { ObjectStore } from '@core/storage';
 import { inParamChunks, inPlaceholders } from '@core/db/in-chunks'; // ۱.۲۵.۷۲ — دروازهٔ IN-list (بدهی ف۶ ⑧)
-import { sanitizeFilename, validateExerciseFileBytes } from '@domain/exercise-bank/pure';
+import { sanitizeFilename, validateExerciseFileBytes } from '@core/shared'; /* architecture-005 ۱.۲۷.۸۴ */
 import type { KnowledgeService, NewKnowledgeInput, UpdateKnowledgeInput } from './types';
 
 interface KnowledgeRow {

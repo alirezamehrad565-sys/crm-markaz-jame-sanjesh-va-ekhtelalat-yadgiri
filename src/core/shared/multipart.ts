@@ -1,3 +1,8 @@
+/**
+ * parseMultipartStream — پارسر استریم multipart/form-data (بدون hono — خالص)
+ * architecture-005 (۱.۲۷.۸۴): از src/domain/exercise-bank/multipart.ts به هستهٔ مشترک منتقل شد —
+ * پنج دامنه (تمرین/کلیربوک/اسناد/دانش/مالی) همین یک تعریف را می‌خوانند؛ یال domain→domain حذف.
+ */
 import { ValidationError } from '@core/errors';
 
 const SEGMENT_TARGET = 1_500_000;

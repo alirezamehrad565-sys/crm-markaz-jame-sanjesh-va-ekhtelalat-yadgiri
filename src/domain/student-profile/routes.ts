@@ -2,8 +2,8 @@ import type { AppHono, SchoolKind } from '@core/shared';
 import { ChangeCaseStatusSchema, ChangeOwnerSchema, ChangePathwaySchema, ChangeSpecialNeedSchema, NewClassSchema, NewEducationHistorySchema, NewSchoolSchema, NewStudentSchema, UpdateClassSchema, UpdateSchoolSchema, UpdateStudentSchema } from '@core/shared';
 import { getAuthContext, requireRole } from '@core/auth';
 import { ForbiddenError, NotFoundError } from '@core/errors';
-import { normalizeNationalId } from '@core/shared';
-import { pageParams } from '@app/http';
+import { normalizeNationalId, pageParams } from '@core/shared'; // architecture-003 (۱.۲۷.۸۴)
+
 import { z } from 'zod';
 import type { StudentProfileService } from './types';
 

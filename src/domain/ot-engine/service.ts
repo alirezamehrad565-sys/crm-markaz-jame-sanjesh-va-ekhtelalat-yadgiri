@@ -1,6 +1,6 @@
 import type { AuthContext } from '@core/shared';
 import { NEED_PROTOCOL_SUGGESTIONS, STUDENT_PROTOCOL_LABELS, type StudentProtocol } from '@core/shared';
-import { SNAP_IV_CUTOFFS, SCARED_CUTOFFS } from '@domain/clinical-engine/instruments'; /* ۱.۲۵.۰۶ — تک‌منبع برش‌ها (کپی محلی حذف) */
+import { SCARED_CUTOFFS, SNAP_IV_CUTOFFS } from '@core/shared'; /* architecture-005 ۱.۲۷.۸۴ — تک‌منبع برش‌ها */
 import type { DbClient } from '@core/db';
 import { inParamChunks, inPlaceholders } from '@core/db/in-chunks'; // ۱.۲۵.۷۲ — دروازهٔ IN-list (بدهی ف۶ ⑧)
 import { ForbiddenError, NotFoundError, ValidationError } from '@core/errors';

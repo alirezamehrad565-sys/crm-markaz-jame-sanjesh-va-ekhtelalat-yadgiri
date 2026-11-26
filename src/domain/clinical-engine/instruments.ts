@@ -47,12 +47,8 @@ export const DIGITS_2MIN_NORM: Record<string, number> = {
    از این پس موتورها و گیت‌ها همه از همین جدول می‌خوانند. اعداد = ارزش‌های عملیاتیِ جاری
    (خانوادهٔ Swanson 95th برای والد: IA ۱۶ · HI ۱۳ — همان‌هایی که گیت رفتاری از اول می‌شناخت).
    تفاوت عمدی با باندهای نمایشی m176 (severity tiers) در CHANGELOG ۱.۲۵.۰۶ ثبت شده است. */
-export const SNAP_IV_CUTOFFS = {
-  parent: { ia: { warn: 11, danger: 16 }, hi: { danger: 13 }, odd: { warn: 10, danger: 14 } },
-  teacher: { ia: { warn: 14, danger: 16 }, hi: { danger: 11 }, odd: { warn: 12, danger: 16 } }
-} as const;
-
-export const SCARED_CUTOFFS = { danger: 25, warnMin: 20, strong: 30 } as const; // نمرهٔ کل — سه کپی قبلی هم‌عدد بودند
+/* architecture-005 (۱.۲۷.۸۴): تعریف به @core/shared/cutoffs رفت — این مسیر فقط سازگاری */
+export { SNAP_IV_CUTOFFS, SCARED_CUTOFFS } from '@core/shared';
 
 /* DCDQ: مرزهای سنی مستند بازبینی بیرونی مرکز (m176 راهنمای باند «بسته به سن»):
    ۵ تا ۷ سال → ۳۱ · ۸ تا ۹ سال → ۴۰ · ۱۰ تا ۱۵ سال → ۴۲؛ نمرهٔ کل ≤ مرزِ سن = خطر.

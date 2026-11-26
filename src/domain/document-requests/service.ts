@@ -6,7 +6,6 @@ import { renderTemplate } from '@core/notify';
 import type { DbClient } from '@core/db';
 import type { AuditWriter } from '@core/audit';
 import type { Logger } from '@core/logger';
-import type { SettingsService } from '@app/settings';
 import { inParamChunks, inPlaceholders } from '@core/db/in-chunks'; // ۱.۲۵.۷۲ — دروازهٔ IN-list (بدهی ف۶ ⑧)
 import type {
   DocBotReply,

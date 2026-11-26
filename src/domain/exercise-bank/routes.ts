@@ -5,7 +5,7 @@ import { NotFoundError, ValidationError } from '@core/errors';
 import type { ExerciseBankService, ListExercisesFilters } from './types';
 import { buildTaxonomyTree } from './focus'; // درخت واحد طبقه‌بندی
 import { renderActivitiesPage } from './activities-page'; // ۱.۲۷.۳۸ — صفحهٔ عمومی تمرین‌ها و کارت‌های آماده
-import { parseMultipartStream } from './multipart';
+import { parseMultipartStream } from '@core/shared'; /* architecture-005 ۱.۲۷.۸۴ */
 import type { SendResult } from '@core/notify/types';
 import type { BaleApiResponse, SendDocumentOptions } from '@core/notify/bale/documents';
 

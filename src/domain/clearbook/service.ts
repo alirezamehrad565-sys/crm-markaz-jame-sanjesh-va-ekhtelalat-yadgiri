@@ -15,7 +15,7 @@ import type { Logger } from '@core/logger';
 import type { DbClient } from '@core/db';
 import type { ObjectStore } from '@core/storage';
 import { inParamChunks, inPlaceholders } from '@core/db/in-chunks'; // ۱.۲۵.۷۲ — دروازهٔ IN-list (بدهی ف۶ ⑧)
-import { sanitizeFilename } from '@domain/exercise-bank/pure';
+import { sanitizeFilename } from '@core/shared'; /* architecture-005 ۱.۲۷.۸۴ */
 import {
   buildSeedPlans,
   dedupeTags,
