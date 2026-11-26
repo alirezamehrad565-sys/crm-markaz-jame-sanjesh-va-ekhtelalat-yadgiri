@@ -91,6 +91,7 @@ html {
   --on-sick-soft: #5B21B6; /* متن روی sick-soft — لایت ۷٫۲۶ */
   --warn: #8F6408; /* هم‌مقدار --warning-strong؛ برچسب آستانهٔ نمودار (۵٫۱۳ روی کرم) */
   --danger: #B8403A;        /* مترادف --error — برخی viewها از این نام استفاده می‌کنند */
+  --on-danger: #FFFFFF;     /* ui-006 ۱.۲۷.۸۳: متن/آیکن روی fill خطر — #fff روی #B8403A = ۵٫۴۸ */
   --brand: #0D72A8;         /* مترادف --primary */
   --focus: #0D72A8; /* حلقهٔ فوکوس بدون color-mix (۴٫۵۶ — WCAG 2.2 §2.4.11) */
   --backdrop: rgba(20, 23, 29, 0.5); /* پردهٔ مودال؛ جانشین #0F1113 میراثی */
@@ -179,6 +180,7 @@ html {
   --on-sick-soft: #D4C5F9; /* ۷٫۶۹ */
   --warn: #EDC063; /* هم‌مقدار --warning-strong تیره */
   --danger: #E97971;        /* مترادف --error */
+  --on-danger: #153E50;     /* ui-006 ۱.۲۷.۸۳: در تم تیره #fff روی #E97971 فقط ۲٫۸۲ بود → نیوی ۴٫۰۵ */
   --brand: #45B7F0;         /* مترادف --primary */
   --focus: #6CC6F5; /* ۹٫۴۳ روی surface */
   --backdrop: rgba(0, 0, 0, 0.62); /* */
@@ -293,7 +295,8 @@ html {
 :root {
   --shadow-4: 0 4px 12px rgba(15, 23, 42, 0.07), 0 18px 40px rgba(15, 23, 42, 0.11); /* ۱.۲۷.۴۹ نرم‌تر */
   --shadow-lg: var(--shadow-3); /* نام مستعار برای سایهٔ شناورها (قبلاً تعریف نشده بود و fallback هاردکد می‌خورد) */
-  --z-sticky: 30; --z-sidebar: 40; --z-backdrop: 45; --z-dropdown: 60;
+  /* مقیاس معنایی z — ۱.۲۷.۷۷: همهٔ لایه‌های ثابت باید از همین مقیاس مصرف کنند، نه literal */
+  --z-sticky: 30; --z-drawer-backdrop: 35; --z-sidebar: 40; --z-backdrop: 45; --z-dropdown: 60;
   --z-popover: 80; --z-row-menu: 90; /* پاپ‌اور منوی ردیف (بین popover و modal) */
   --z-modal: 100; --z-toast: 200; --z-drag: 300;
 
@@ -353,6 +356,10 @@ html {
   overflow-y: scroll;
   scrollbar-gutter: stable;
 }
+
+/* ۱.۲۷.۶۶ (sdt144) — کشوی بیرون‌صفحه به اسکرول افقی سند سرریز می‌شد؛ clip روی body است نه html
+   (کنار overflow-y:scroll روی html، clip به auto تبدیل می‌شد). clip ظرف اسکرول نمی‌سازد — sticky سالم؛ fixed بریده نمی‌شود. */
+body { overflow-x: clip; }
 
 body {
   margin: 0;
@@ -442,7 +449,7 @@ textarea {
   border-radius: var(--radius-2xl); /* توکن‌شد (۲۸px) */
   box-shadow: var(--shadow-sidebar);
   height: calc(100vh - 28px);
-  z-index: 40;
+  z-index: var(--z-sidebar); /* ۱.۲۷.۷۷ — از literal ۴۰ */
   transition: background var(--normal);
 }
 
@@ -597,7 +604,7 @@ textarea {
 .topbar {
   position: sticky;
   top: 14px; /* هم‌تراز شناوری سایدبار () */
-  z-index: 30;
+  z-index: var(--z-sticky); /* ۱.۲۷.۷۷ — از literal ۳۰ */
   display: flex;
   align-items: center;
   gap: var(--sp-3);
@@ -753,8 +760,8 @@ textarea {
   .sidebar-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.4);
-    z-index: 35;
+    background: var(--backdrop); /* ۱.۲۷.۷۷ — از rgba خام؛ هم‌رنگ اسکریم مودال */
+    z-index: var(--z-drawer-backdrop); /* ۱.۲۷.۷۷ — از literal ۳۵ */
     border: none;
     padding: 0;
   }
@@ -872,7 +879,7 @@ html[lang='fa'] .nav__label { letter-spacing: 0; }
   width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
   background: var(--primary); color: var(--on-primary);
   display: grid; place-items: center;
-  font-size: 12px; font-weight: 700; line-height: 1;
+  font-size: var(--fs-2xs); font-weight: 700; line-height: 1; /* ui-003: px خام خارج از مقیاس نباشد */
 }
 .topbar__user { padding-inline: 8px 14px; }
 .topbar__user .badge { font-size: var(--fs-2xs); padding: 1px 8px; } /* S11-12: بج نقش کاربر، کف ۱۲px */
@@ -896,7 +903,9 @@ html[lang='fa'] .nav__label { letter-spacing: 0; }
   }
   .sidebar-backdrop {
     background: var(--backdrop); /* از #0F1113 میراثی به توکن تم */
-    backdrop-filter: blur(2px);
+    /* ۱.۲۷.۶۷ — یکدست با کشو/مودال */
+    backdrop-filter: blur(12px) saturate(1.25);
+    -webkit-backdrop-filter: blur(12px) saturate(1.25);
   }
   .sidebar::after {
     content: ''; position: absolute; top: 6px; inset-inline-start: 50%;

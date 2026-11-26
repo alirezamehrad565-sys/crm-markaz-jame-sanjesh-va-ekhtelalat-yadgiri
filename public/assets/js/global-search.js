@@ -1,5 +1,5 @@
 import { api } from './api.js';
-import { el, icon, openModal } from './ui.js';
+import { el, icon, openModal, toast, toastError } from './ui.js';
 
 const ENTITY_META = {
   student: { label: 'دانش‌آموزان', iconName: 'student', href: (it) => `#/students/${it.id}` },
@@ -16,6 +16,48 @@ const ROLE_LABELS = { manager: 'مدیر', therapist: 'درمانگر', secretor
 const KIND_LABELS = { school: 'مدرسه', kindergarten: 'مهدکودک' };
 
 let opened = false;
+
+/* ۱.۲۷.۷۳ — سرچ هوشمند: اکشن مستقیم روی نتیجه، بدون خروج از پالت.
+   «پرینت خام سند» = فایل اصلی سند خام (همان الگوی previewFile مخزن اسناد: بایتِ
+   احرازشده → objectURL → تب جدید؛ window.open مستقیم روی /api/* توکن ندارد). */
+function isPreviewableFile(file) {
+  const m = String(file.mime ?? '').toLowerCase();
+  return m === 'application/pdf' || m.startsWith('image/');
+}
+
+async function printDocRaw(docId) {
+  try {
+    const res = await api.get(`/api/docs/${docId}`);
+    const doc = res.data ?? res;
+    const files = doc.files ?? [];
+    const file = files.find(isPreviewableFile) ?? files[0];
+    if (!file) { toast('این سند فایلی برای پرینت ندارد', 'error'); return; }
+    const { blob } = await api.downloadBlob(`/api/docs/${docId}/files/${file.id}?inline=1`);
+    const objUrl = URL.createObjectURL(blob);
+    const w = window.open(objUrl, '_blank', 'noopener');
+    if (!w) {
+      const a = el('a', { href: objUrl, target: '_blank', rel: 'noopener' });
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+    setTimeout(() => URL.revokeObjectURL(objUrl), 60000);
+    toast(`«${doc.title}» برای پرینت باز شد`, 'success');
+  } catch (err) {
+    toastError(err);
+  }
+}
+
+/* اکشن‌های مستقیم هر نوع نتیجه — student با دیپ‌لینک ?action= (پروفایل کلاسیک مودال اقدام را باز می‌کند) */
+function itemActions(item) {
+  if (item.type === 'doc') return [{ icon: 'printer', label: 'پرینت خام', run: () => printDocRaw(item.id) }];
+  if (item.type === 'student') return [
+    { icon: 'bell', label: 'ثبت رویداد', hash: `#/students/${item.id}?action=event` },
+    { icon: 'bot', label: 'گزارش معلم', hash: `#/students/${item.id}?action=teacher-report` },
+    { icon: 'file', label: 'گزارش قطعی', hash: `#/students/${item.id}?action=definite` }
+  ];
+  return [];
+}
 
 export function initGlobalSearch() {
   const btn = document.getElementById('global-search-btn');
@@ -80,10 +122,34 @@ export function openPalette() {
   let closePalette = null;
 
   function go(item) {
+    /* ۱.۲۷.۶۴ — موج ۳: بخش‌های پروندهٔ باز در پالت (گروه محلی) با hash مستقیم می‌روند */
+    if (item.hash) {
+      location.hash = item.hash;
+      if (closePalette) closePalette();
+      return;
+    }
     const meta = ENTITY_META[item.type];
     if (!meta) return;
     location.hash = meta.href(item);
     if (closePalette) closePalette();
+  }
+
+  /* ۱.۲۷.۶۴ — موج ۳: وقتی پالت از درون یک پرونده باز می‌شود، بخش‌های همان پرونده بالای
+     نتایج سراسری می‌آیند — ناوبری بدون خروج از پرونده */
+  function localProfileSections() {
+    const m = location.hash.match(/#\/students\/([0-9a-f-]{36})(?:\?.*)?$/);
+    if (!m) return [];
+    const base = `#/students/${m[1]}`;
+    return [
+      { type: 'profile-section', icon: 'brain', title: 'تفسیر بالینی', hash: `${base}?tab=clinical` }, // ۱.۲۷.۷۱ — دیپ‌لینک کلاسیک
+      { type: 'profile-section', icon: 'user', title: 'اطلاعات پایه', hash: `${base}?tab=info` },
+      { type: 'profile-section', icon: 'bell', title: 'پیگیری‌ها', hash: `${base}?tab=timeline&filter=followups` },
+      { type: 'profile-section', icon: 'clock', title: 'تاریخچهٔ پرونده', hash: `${base}?tab=timeline` },
+      { type: 'profile-section', icon: 'file', title: 'گزارش‌های خروجی', hash: `${base}?tab=timeline&filter=reports` },
+      { type: 'profile-section', icon: 'calendar', title: 'جلسات', hash: `${base}?tab=sessions` },
+      { type: 'profile-section', icon: 'clip', title: 'تمرین‌ها', hash: `${base}?tab=exercises` },
+      { type: 'profile-section', icon: 'bot', title: 'ارتباطات', hash: `${base}?tab=comms` }
+    ];
   }
 
   function renderEmpty(text) {
@@ -92,35 +158,79 @@ export function openPalette() {
     );
   }
 
+  function renderItem({ node, iconName, title, sub, actions, goTarget }) {
+    flatItems.push(goTarget);
+    node.append(
+      el('span', { class: 'gsearch__item-icon' }, icon(iconName, 16)),
+      el('span', { class: 'gsearch__item-main' },
+        el('span', { class: 'gsearch__item-title' }, title),
+        sub ? el('span', { class: 'gsearch__item-sub' }, sub) : null
+      ),
+      /* ۱.۲۷.۷۳ — اکشن‌های مستقیم: کلیک روی آن‌ها از ناوبری ردیف جدا است */
+      ...(actions ?? []).map((a) => el('span', {
+        class: 'gsearch__act',
+        role: 'button',
+        title: a.label,
+        'aria-label': a.label,
+        onmousedown: (e) => { e.preventDefault(); e.stopPropagation(); a.hash ? go({ hash: a.hash }) : a.run(); }
+      }, icon(a.icon, 13))),
+      icon('chevL', 14)
+    );
+    return node;
+  }
+
   function renderGroups(data) {
     flatItems = [];
     activeIndex = -1;
     const nodes = [];
-    for (const group of data.groups ?? []) {
+    const groups = [...(data.groups ?? [])];
+    /* ۱.۲۷.۷۳ (خواست کارفرما) — در پروندهٔ باز «اسم دانش‌آموز» بالای بخش‌های «همین پرونده»
+       می‌آید؛ قبلاً برعکس بود. */
+    const studentIdx = groups.findIndex((g) => g.type === 'student');
+    const studentGroup = studentIdx >= 0 ? groups.splice(studentIdx, 1)[0] : null;
+    const pushGroup = (group) => {
       const meta = ENTITY_META[group.type];
-      if (!meta) continue;
+      if (!meta) return;
       nodes.push(el('div', { class: 'gsearch__group-label' }, icon(meta.iconName, 14), meta.label));
       for (const item of group.items) {
-        flatItems.push(item);
-        const sub = itemSubtitle(item);
-        nodes.push(
-          el('button', {
+        nodes.push(renderItem({
+          node: el('button', {
             type: 'button',
             class: 'gsearch__item',
-            dataset: { index: String(flatItems.length - 1) },
+            dataset: { index: String(flatItems.length) },
             onmousedown: (e) => { e.preventDefault(); go(item); },
             onmousemove: (e) => setActive(Number(e.currentTarget.dataset.index))
-          },
-            el('span', { class: 'gsearch__item-icon' }, icon(meta.iconName, 16)),
-            el('span', { class: 'gsearch__item-main' },
-              el('span', { class: 'gsearch__item-title' }, item.title),
-              sub ? el('span', { class: 'gsearch__item-sub' }, sub) : null
-            ),
-            icon('chevL', 14)
-          )
-        );
+          }),
+          iconName: meta.iconName,
+          title: item.title,
+          sub: itemSubtitle(item),
+          actions: itemActions(item),
+          goTarget: item
+        }));
+      }
+    };
+    if (studentGroup) pushGroup(studentGroup);
+    const local = localProfileSections();
+    if (local.length > 0) {
+      nodes.push(el('div', { class: 'gsearch__group-label' }, icon('compass', 14), 'همین پرونده'));
+      for (const item of local) {
+        nodes.push(renderItem({
+          node: el('button', {
+            type: 'button',
+            class: 'gsearch__item',
+            dataset: { index: String(flatItems.length) },
+            onmousedown: (e) => { e.preventDefault(); go(item); },
+            onmousemove: (e) => setActive(Number(e.currentTarget.dataset.index))
+          }),
+          iconName: item.icon,
+          title: item.title,
+          sub: null,
+          actions: [],
+          goTarget: item
+        }));
       }
     }
+    for (const group of groups) pushGroup(group);
     if (flatItems.length === 0) {
       renderEmpty('نتیجه‌ای پیدا نشد — عبارت دیگری را امتحان کنید');
       return;
@@ -184,6 +294,8 @@ export function openPalette() {
   closePalette = modal.close;
   modal.root.classList.add('modal--gsearch');
 
-  renderEmpty('برای جستجو حداقل ۲ نویسه بنویسید…');
+  /* ۱.۲۷.۶۴ — موج ۳: در پروندهٔ باز، بخش‌های «همین پرونده» بی‌درنگ و بدون تایپ دیده می‌شوند */
+  if (localProfileSections().length > 0) renderGroups({ groups: [] });
+  else renderEmpty('برای جستجو حداقل ۲ نویسه بنویسید…');
   setTimeout(() => input.focus(), 60);
 }

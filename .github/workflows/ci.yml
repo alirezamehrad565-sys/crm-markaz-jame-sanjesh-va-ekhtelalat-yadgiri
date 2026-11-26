@@ -58,9 +58,39 @@ jobs:
       - name: Performance budget (پیل بوت/CSS/فونت)
         run: node scripts/perf-budget.mjs
 
+      # 1.27.76 (sdt153) — سیم‌کردن شش گیت سندشده به CI (testing-006 ممیزی project-context):
+      # تا پیش از این این گیت‌ها فقط «سند» بودند و هیچ‌کدام در CI اجرا نمی‌شدند؛
+      # کمپلکسیتی ۳۰ انتشار بی‌نظور رشد کرده بود. انتشار بدون سبزیِ همه ممکن نیست.
+      - name: Complexity ratchet gate (توابع ≥۸۰خط/≥۱۵۰خط)
+        run: node scripts/complexity-bench.mjs --gate
+
+      - name: UI voice gate (زبان کاربر — ۰ رشتهٔ غیر فارسی)
+        run: node scripts/ui-voice-check.mjs
+
+      - name: Contrast AA gate (۳۳ جفت × ۲ تم)
+        run: node scripts/contrast-check.mjs
+
+      - name: Security static audit (۱۲ خانوادهٔ الگو)
+        run: node scripts/sec-audit.mjs
+
+      - name: Games bundle smoke
+        run: node scripts/games-bundle-smoke.mjs
+
+      - name: Desktop structure gate (بدون toolchain Rust)
+        run: npm run desktop:check
+
       # ف۲ — گیت همگامی MIGRATIONS.md: هر فایل مایگریشن باید سطر سند داشته باشد
       - name: MIGRATIONS.md sync gate
         run: node scripts/check-migrations-doc.mjs
+
+      # sdt156 (data-001) — گیت مانیفست محتوای مایگریشن‌ها: ویرایش بی‌صدای فایل اعمال‌شده را می‌گیرد
+      - name: Migrations content manifest gate
+        run: node scripts/check-migrations-manifest.mjs
+
+      # sdt158 (architecture-004) — گیت رجیستری مسیرها: نقطهٔ واحد کشف endpointها؛ هر ثبت/حذف
+      # مسیر باید با --update در docs/route-registry.json ثبت شود وگرنه CI سرخ می‌شود
+      - name: Route registry gate
+        run: node scripts/check-route-registry.mjs
 
       # v1.27.۱۹ — گیت هم‌مِهری نسخه‌ها (منبع یگانه version.ts ↔ package.json/tauri.conf.json/
       # Cargo.toml/sw.js/پین‌های index.html) — منشأ: گزارش کارفرمای ۱.۲۷.۱۸ (CARGO_PKG_VERSION

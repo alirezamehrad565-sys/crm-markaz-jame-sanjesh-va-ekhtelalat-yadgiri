@@ -67,6 +67,7 @@ const PAIRS = [
   { role: 'button', fg: '--on-accent', bg: '--accent', label: 'btn--accent' },
   { role: 'button', fg: '--on-success', bg: '--success', label: 'سگمنت حضور فعال' },
   { role: 'button', fg: '--on-error', bg: '--error', label: 'دکمهٔ توپُر خطر' },
+  { role: 'ui', fg: '--on-danger', bg: '--danger', label: 'icon-circle--danger هاور — آیکن روی fill خطر (ui-006 ۱.۲۷.۸۳)' },
   { role: 'button', fg: '--on-warning', bg: '--warning', label: 'سگمنت تأخیر فعال' },
   { role: 'button', fg: '--on-info', bg: '--info', label: 'سگمنت مرخصی فعال' },
   { role: 'button', fg: '--on-sick', bg: '--sick', label: 'سگمنت مرخصی استعلاجی فعال' },

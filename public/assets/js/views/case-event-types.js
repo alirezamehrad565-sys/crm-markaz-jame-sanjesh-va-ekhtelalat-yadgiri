@@ -1,8 +1,8 @@
-import { api, getToken } from '../api.js';
+import { api } from '../api.js';
 import { fa, formatJalaliDateTime } from '../format.js';
 import { el, icon, openModal, formModal, confirmModal, toast, toastError, emptyState, errorState, skeletonState, scienceNote, rowMenu, collapseRemove, flashNode, lockBtn } from '../ui.js'; /* ۱.۲۲.۰ — collapseRemove/flashNode/lockBtn برای جریان پیوسته */
 import { TOOL_GUIDES } from '../clinical-content.js';
-import { session } from '../state.js';
+import { session } from '../api.js';
 import { openChecklistSendModal, fillTargetOf } from '../case-events.js';
 import { CATEGORY_ICONS, TYPE_ICON_CHOICES, typeIconNode } from '../case-event-icons.js';
 /* ۱.۲۵.۶۰ — نظرسنجی خانواده‌ها به ماژول مستقل «#/family-surveys» منتقل شد (فقط مدیر)؛
@@ -265,7 +265,7 @@ export async function renderCaseEventTypes(container) {
       pendingZone.replaceChildren(emptyState({
         iconName: 'check',
         title: 'صف خالی است',
-        hint: 'چک‌لیست در انتظاری وجود ندارد — از پروفایل دانش‌آموز یا دکمهٔ «ارسال» قالب‌ها، چک‌لیست جدید برای خانواده/معلم بفرستید.'
+        hint: 'چک‌لیست در انتظاری وجود ندارد — از پروندهٔ دانش‌آموز یا دکمهٔ «ارسال» قالب‌ها، چک‌لیست جدید برای خانواده/معلم بفرستید.'
       }));
       return;
     }
@@ -527,8 +527,9 @@ export async function renderCaseEventTypes(container) {
       toolNorm: t.toolNorm ?? null
     };
     const form = el('form', { method: 'POST', action: '/public/case-events/preview', target: '_blank', style: { display: 'none' } },
-      hidden('definition', JSON.stringify(definition)),
-      hidden('token', getToken() ?? ''));
+      hidden('definition', JSON.stringify(definition)));
+    /* ۱.۲۷.۸۲ (ADR-005): فیلد مخفی توکن حذف شد — فرم هم‌مبدأ کوکی نشست را می‌فرستد و
+       سمت سرور previewStaffOf از کوکی fallback می‌گیرد */
     document.body.appendChild(form);
     form.submit();
     setTimeout(() => form.remove(), 2000);
@@ -670,7 +671,7 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
         `پرکنندهٔ این فرم: خانواده/معلم با پیام بله (لینک امن وب‌فرم) — در انتخابگر پروفایل زیر گروه «${AUDIENCE_LABELS[st.audience] ?? 'خانواده'}» دیده می‌شود.`));
     } else {
       rows.appendChild(el('div', { class: 'cell-sub', style: { gridColumn: '1 / -1' } },
-        'پرکنندهٔ این فرم: درمانگر — در پروفایل دانش‌آموز، همین‌جا در سایت باز و پر می‌شود (ثبت روی تایم‌لاین پرونده).'));
+        'پرکنندهٔ این فرم: درمانگر — در پروندهٔ دانش‌آموز، همین‌جا در سایت باز و پر می‌شود (ثبت روی تایم‌لاین پرونده).'));
     }
     return el('div', {},
       sectionTitle('۱) مشخصات قالب', null),
@@ -886,9 +887,8 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
     }
     const hidden = (name, value) => el('input', { type: 'hidden', name, value });
     const form = el('form', { method: 'POST', action: '/public/case-events/preview', target: '_blank', style: { display: 'none' } },
-      hidden('definition', JSON.stringify(definitionPayload())),
-      hidden('token', getToken() ?? ''));
-    document.body.appendChild(form);
+      hidden('definition', JSON.stringify(definitionPayload())));
+    document.body.appendChild(form); // ۱.۲۷.۸۲ (ADR-005): توکن مخفی حذف شد — احراز با کوکی نشست
     form.submit();
     setTimeout(() => form.remove(), 2000);
   }

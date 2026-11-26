@@ -19,7 +19,9 @@ const read = (p: string) => readFileSync(join(ROOT, p), 'utf8');
 describe('گیت امنیتی ۱.۲۷.۴۳ — نشتی راز', () => {
   it('بدنهٔ اجرایی هیچ راز جایگزین ثابتی ندارد', () => {
     const files = [
-      'src/application/api-routing/index.ts',
+      'src/application/api-routing/composition.ts',
+      'src/application/api-routing/middleware.ts',
+      'src/application/api-routing/routes.ts',
       'src/index.ts',
       'src/core/auth/index.ts',
       'worker/entry.js'
@@ -31,7 +33,7 @@ describe('گیت امنیتی ۱.۲۷.۴۳ — نشتی راز', () => {
   });
 
   it('راز دانلود بدون تنظیم سرور، تصادفیِ هر بوت است — نه رشتهٔ شناخته‌شده', () => {
-    const src = read('src/application/api-routing/index.ts');
+    const src = read('src/application/api-routing/composition.ts');
     expect(src).toMatch(/downloadSecret: deps\.downloadSecret \?\? deps\.webhookSecret \?\? \(crypto\.randomUUID\(\) \+ crypto\.randomUUID\(\)\)/);
   });
 
@@ -47,10 +49,13 @@ describe('گیت امنیتی ۱.۲۷.۴۳ — نشتی راز', () => {
 });
 
 describe('گیت امنیتی ۱.۲۷.۴۳ — جاسازی اسکریپت و بدنهٔ عمومی', () => {
-  it('صفحهٔ پیش‌نمایش فرم‌ساز JSON را با گریز </ جاسازی می‌کند', () => {
+  it('صفحهٔ پیش‌نمایش فرم‌ساز JSON را با گریز </ جاسازی می‌کند (بلاک دادهٔ ADR-004 — ۱.۲۷.۸۲)', () => {
+    const csp = read('src/core/shared/csp.ts');
+    expect(csp).toContain('export function safeJsonEmbed'); // helper امن مشترک
+    expect(csp).toMatch(/\.replace\(\/</g); // گریز < به \u003c
     const src = read('src/domain/case-events/preview-form.ts');
-    expect(src).toMatch(/JSON\.stringify\(token\)\.replace\(\/</g);
-    expect(src).toMatch(/JSON\.stringify\(JSON\.stringify\(def\)\)\.replace\(\/</g);
+    expect(src).toContain('safeJsonEmbed({ token, def, total })'); // داده در بلاک JSON نشسته است
+    expect(src).not.toMatch(/JSON\.stringify\(token\)\.replace/); // جاسازی خامِ پیشین بازنگشته
   });
 
   it('فرم عمومی منتشرشده هم‌چنان از safeJsonEmbed استفاده می‌کند (رگرسیون XSS نمی‌خورد)', () => {

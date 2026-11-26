@@ -203,7 +203,7 @@ button.search-row:active { background: color-mix(in srgb, var(--primary-soft) 70
   border-radius: 50%;
   background: var(--surface-2, color-mix(in srgb, var(--text) 8%, transparent));
   color: var(--text-2);
-  font-size: 14px;
+  font-size: var(--fs-sm);
   line-height: 1;
   cursor: pointer;
   display: grid;
@@ -457,8 +457,9 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   position: fixed;
   inset: 0;
   background: var(--backdrop); /* پردهٔ مودال از rgba ثابت به توکن تم (در تیره عمیق‌تر) */
-  backdrop-filter: blur(8px) saturate(1.15);
-  -webkit-backdrop-filter: blur(8px) saturate(1.15);
+  /* ۱.۲۷.۶۷ — هماهنگ با کشو/سایدبار: تاری ۱۲px + اشباع ۱٫۲۵ */
+  backdrop-filter: blur(12px) saturate(1.25);
+  -webkit-backdrop-filter: blur(12px) saturate(1.25);
   display: grid;
   place-items: center;
   padding: var(--sp-4);
@@ -751,14 +752,23 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   .btn--sm { padding: 8px var(--sp-3); }
   .select--sm { padding-block: 8px; }
   /* UX-ممیزی الگوی ۳: تکمیل اهداف لمسی زیر ۲۴px (کف WCAG 2.5.8 AA) روی لمس */
-  .row-menu__btn { width: 32px; height: 32px; }
-  .row-menu__item { min-height: 38px; }
-  .call-badge { width: 32px; height: 32px; }
-  .tag-del { width: 24px; height: 24px; }
-  .tag-chip__x { width: 22px; height: 22px; }
-  .combo__clear { width: 26px; height: 26px; }
-  .toast__close { width: 30px; height: 30px; }
-  .att-seg__btn { min-height: 38px; min-width: 44px; }
+  /* 12775 (ui-001/ui-002 ممیزی): کف لمسی اپ ۴۲px روی لمس — کنترل‌های مستقل مستقیم بزرگ
+     می‌شوند؛ کنترل‌های کوچک درون‌خطی اندازهٔ دیدنی خود را نگه می‌دارند و فقط ناحیهٔ ضربه
+     با ::after شفاف به ≥۴۲px گسترش می‌یابد (position:relative برای لنگرِ inset) */
+  .row-menu__btn { width: 42px; height: 42px; }
+  .row-menu__item { min-height: 42px; }
+  .call-badge { width: 42px; height: 42px; }
+  .tag-del { width: 24px; height: 24px; position: relative; }
+  .tag-del::after { content: ''; position: absolute; inset: -9px; }
+  /* قاعدهٔ coarse قبلی (tag-chip__x برابر 22px) با ترتیب منبع توسط قاعدهٔ پایهٔ 15px مغلوب
+     می‌شد — کد مرده (ui-001 ممیزی). specificity بالاتر: اندازهٔ دیدنی 22px واقعاً اعمال می‌شود */
+  .tag-chip .tag-chip__x { width: 22px; height: 22px; position: relative; }
+  .tag-chip .tag-chip__x::after { content: ''; position: absolute; inset: -10px; }
+  .combo__clear { width: 26px; height: 26px; position: relative; }
+  .combo__clear::after { content: ''; position: absolute; inset: -8px; }
+  .toast__close { width: 30px; height: 30px; position: relative; }
+  .toast__close::after { content: ''; position: absolute; inset: -6px; }
+  .att-seg__btn { min-height: 42px; min-width: 44px; }
 }
 
 .tag-chip, .tag-toggle {
@@ -981,6 +991,21 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
 .gsearch__item.is-active .gsearch__item-icon { background: var(--surface); color: var(--primary); }
 .gsearch__item-main { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 .gsearch__item-title { font-weight: 500; }
+/* ۱.۲۷.۷۳ — اکشن مستقیم روی نتیجهٔ پالت (پرینت خام سند / اقدام دانش‌آموز) */
+.gsearch__act {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  color: var(--text-3);
+  cursor: pointer;
+  transition: background var(--fast), color var(--fast);
+}
+.gsearch__act:hover { background: var(--surface-3); color: var(--primary); }
+.gsearch__item.is-active .gsearch__act { color: var(--on-primary-soft); }
 .gsearch__item-sub {
   font-size: var(--fs-xs);
   color: var(--text-3);
@@ -1720,7 +1745,7 @@ html[dir='ltr'] .switch input:checked + .switch__track::after { transform: trans
   cursor: pointer;
   border-radius: var(--radius-xs); /* توکن‌شد */
   font: inherit;
-  font-size: 13px;
+  font-size: var(--fs-xs);
   color: var(--text);
   text-align: start;
   white-space: nowrap;

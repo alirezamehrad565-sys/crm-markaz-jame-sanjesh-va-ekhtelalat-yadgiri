@@ -150,8 +150,14 @@ describe('appointmentEventState — ماتریس عنوان وضعیت جلسه 
     expect(out.title).toBe('جلسه — حضور ثبت شد');
     expect(out.subtitle).toContain('۴۵ دقیقه');
   });
-  it('پیش‌فرض → نوبت جلسه (در انتظار برگزاری)', () => {
-    const out = appointmentEventState({ ...base, status: 'scheduled', attendance: 'pending' });
+  /* ۱.۲۷.۵۹ — نقد پرونده: جلسهٔ گذشتهٔ بدون ثبت حضور دیگر «در انتظار برگزاری» نیست */
+  it('گذشتهٔ بدون ثبت حضور → حضور ثبت نشده (۱.۲۷.۵۹)', () => {
+    const out = appointmentEventState({ ...base, status: 'scheduled', attendance: 'pending' }, Date.parse('2025-02-01T00:00:00Z'));
+    expect(out.title).toBe('جلسه — حضور ثبت نشده');
+    expect(out.subtitle).toContain('برگزار شد');
+  });
+  it('آیندهٔ بدون ثبت حضور → نوبت جلسه (در انتظار برگزاری)', () => {
+    const out = appointmentEventState({ ...base, status: 'scheduled', attendance: 'pending' }, Date.parse('2024-12-01T00:00:00Z'));
     expect(out.title).toBe('نوبت جلسه');
     expect(out.subtitle).toContain('در انتظار برگزاری');
   });

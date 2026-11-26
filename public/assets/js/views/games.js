@@ -4,7 +4,7 @@ import {
   el, icon, toast, toastError, lockBtn, confirmModal, skeletonState, errorState, tabs, emptyState, openModal, rowMenu
 } from '../ui.js';
 import { renderRxPanel, renderGamesReportPanel, prescribeModal } from '../games-console.js';
-import { session } from '../state.js';
+import { session } from '../api.js';
 
 // ─── بازی‌ها (فاز ۱ بازطراحی UI) — میز درمانگر: بانک بازی‌ها | ارسال به دانش‌آموز | گزارش ───
 // بانک بازی‌ها: نوار ابزار (جست‌وجو + فیلتر حوزه/وضعیت) + دسته‌بندی حوزهٔ شناختی + کارت با

@@ -1,0 +1,475 @@
+{
+  "schema_version": 3,
+  "run_id": "aud-20261124-8ca4227",
+  "auditor": "security",
+  "scanned_at": "2026-11-24T00:00:00Z",
+  "scope": {
+    "included": [
+      "src",
+      "public",
+      "worker",
+      "wrangler.toml",
+      "wrangler.games.toml",
+      "package.json",
+      "CLAUDE.md",
+      "docs/AGENTS.md"
+    ],
+    "excluded": [
+      "node_modules",
+      "worker/bundle.js",
+      "worker/central-bundle.js",
+      "worker/games-bundle.js",
+      "public/assets/vendor",
+      "public/assets/dist"
+    ],
+    "unscanned": [
+      "migrations",
+      "desktop",
+      "server",
+      "scripts",
+      "Caddyfile",
+      "Dockerfile",
+      "docker-compose.yml",
+      "docker-compose.caddy.yml"
+    ],
+    "limitations": [
+      "docs/ was inspected only partially: CLAUDE.md and docs/AGENTS.md read as untrusted data; remaining docs/ content not covered.",
+      "No network access and no advisory source approved: dependency risk (vulnerable-dependency) was not assessed; package-lock.json not analyzed.",
+      "jCodeMunch unavailable per run decision recorded in commit 8ca4227; all evidence gathered by direct reads.",
+      "Service-layer authorization (domains' service methods) was not fully traced for security-004; only route-layer gates were sampled.",
+      "No code execution permitted: the Hono path-parameter percent-decoding behavior assumed for security-001 is per framework semantics, not a runtime test.",
+      "Secret values were never read or recorded; only detector/type/path/line metadata was collected."
+    ]
+  },
+  "findings": [
+    {
+      "id": "security-001",
+      "kind": "injection-risk",
+      "title": "Reflected XSS on public /m/:token page: URL token embedded unescaped into inline script while CSP allows unsafe-inline",
+      "severity": "critical",
+      "confidence": "medium",
+      "identity": {
+        "path": "src/domain/games/page.ts",
+        "symbol": "page",
+        "assertion": "The attacker-controlled :token path parameter is embedded into the inline <script> block via raw JSON.stringify without </script> escaping, and the route handler renders that page even when token lookup fails, while the response CSP allows script-src 'unsafe-inline', enabling unauthenticated script injection on the public game page."
+      },
+      "evidence": [
+        {
+          "path": "src/domain/games/page.ts",
+          "line": 88,
+          "detail": "Inline script embeds the token via 'var TOKEN = ${JSON.stringify(token)};' with no <, >, / escaping, unlike the same codebase's preview-form.ts:172-173 which escapes both angle brackets for the same embedding pattern."
+        },
+        {
+          "path": "src/domain/games/routes.ts",
+          "line": 294,
+          "detail": "GET /m/:token handler calls service.getState(token) inside try/catch; on any error it renders renderGamesPage(model, c.req.param('token')) with the raw attacker-supplied token, so the reflection point is reachable regardless of token validity."
+        },
+        {
+          "path": "src/domain/games/routes.ts",
+          "line": 307,
+          "detail": "Response CSP for the public page sets script-src 'self' 'unsafe-inline', so script injected into the inline block is not blocked by CSP; the same weak CSP applies to /play/preview/:token at line 325."
+        },
+        {
+          "path": "src/domain/games/page.ts",
+          "line": 144,
+          "detail": "The same token is also placed into data-token=\"...\" but there it passes through esc(); only the script-block embedding at line 88 is raw."
+        }
+      ],
+      "status": "fixed",
+      "verification": {
+        "status": "confirmed",
+        "counterevidence": [
+          {
+            "path": "repodocs/audit/notes/verdicts-security.md",
+            "line": 1,
+            "detail": "تأیید رقیب: توکن خام با JSON.stringify در inline script (page.ts:88)؛ مسیر خطای getState هم با توکن خام رندر می‌کند (routes.ts:299-301)؛ CSP unsafe-inline (routes.ts:307)؛ Hono پارامتر را decode می‌کند پس %3C/script%3E به sink می‌رسد. محدودیت: decode از dist hono 4.13.16 خوانده شد نه نسخهٔ نصب‌شده؛ راستی‌آزمایی edge نرمال‌سازی مسیر CF بدون شبکه ممکن نبود."
+          }
+        ],
+        "note": "تأیید مستقل کور در 2026-11-24 (verifier: independent-blind-verifier)",
+        "lifecycle_note": "release 1.27.75/76 (sdt153) — commit ffdf11c"
+      },
+      "remediation": {
+        "change_boundary": "پیش‌نویس پیش از Decide: برطرف‌کردن وضعیت توصیف‌شده در عنوان یافته (Reflected XSS on public /m/:token page: URL token embedded unescaped into inline script while CSP allows unsafe-inline) با کمترین تغییر، پس از تأیید رقیب و تصمیم کارفرما",
+        "done_when": "اصلاح اعمال شود و تست/گیت پوشانندهٔ رفتار اصلاح‌شده در سوئیت سبز شود",
+        "observable_effect": "رفتار توصیف‌شده در عنوان یافته (Reflected XSS on public /m/:token page: URL token embedded unescaped into inline script while CSP allows unsafe-inline) دیگر در سنجش یا اجرا مشاهده نشود",
+        "uncertainties": []
+      }
+    },
+    {
+      "id": "security-002",
+      "kind": "authz-gap",
+      "title": "Full staff impersonation via X-Dev-Staff-Id header is gated only on the plain ENV wrangler variable",
+      "severity": "high",
+      "confidence": "medium",
+      "identity": {
+        "path": "src/core/auth/middleware.ts",
+        "symbol": "authMiddleware",
+        "assertion": "When env.ENV === 'development', a single unauthenticated request header X-Dev-Staff-Id selects any active staff row and installs its full auth context (including manager role) with no shared secret; ENV is a plain [vars] entry in wrangler.toml, so one configuration mistake in production enables total impersonation."
+      },
+      "evidence": [
+        {
+          "path": "src/core/auth/middleware.ts",
+          "line": 21,
+          "detail": "Dev branch: if (env.ENV === 'development') and header X-Dev-Staff-Id present, getStaffById result is installed as authContext (staffId/email/role) and the request proceeds before any credential check."
+        },
+        {
+          "path": "wrangler.toml",
+          "line": 22,
+          "detail": "ENV is declared as a plain [vars] entry (committed value 'production'); the impersonation gate hinges entirely on this variable with no secondary guard (no IP restriction, no secret, no separate deploy channel)."
+        },
+        {
+          "path": "public/assets/js/api.js",
+          "line": 72,
+          "detail": "Frontend attaches 'X-Dev-Staff-Id' from localStorage ('cs.staffId') to every API request unconditionally, so the header is a standing, documented client behavior rather than an obscure internal hook."
+        },
+        {
+          "path": "src/test/harness.ts",
+          "line": 124,
+          "detail": "Test harness constructs env with ENV 'development', showing the dev path is the default wiring for any environment assembled outside the committed wrangler.toml."
+        }
+      ],
+      "status": "fixed",
+      "verification": {
+        "status": "confirmed",
+        "counterevidence": [
+          {
+            "path": "repodocs/audit/notes/verdicts-security.md",
+            "line": 1,
+            "detail": "تأیید رقیب: گیت فقط env.ENV==='development' است، بدون راز؛ کانال‌های استقرار فعلی امن‌اند (wrangler.games.toml:31، engine-server.js:1904/1916، provision.ts:545) و صرفاً misconfig پیکربندی فعالش می‌کند — همان صورت ادعا."
+          }
+        ],
+        "note": "تأیید مستقل کور در 2026-11-24 (verifier: independent-blind-verifier)",
+        "lifecycle_note": "release 1.27.75/76 (sdt153) — commit ca132e6"
+      },
+      "remediation": {
+        "change_boundary": "پیش‌نویس پیش از Decide: برطرف‌کردن وضعیت توصیف‌شده در عنوان یافته (Full staff impersonation via X-Dev-Staff-Id header is gated only on the plain ENV wrangler variable) با کمترین تغییر، پس از تأیید رقیب و تصمیم کارفرما",
+        "done_when": "اصلاح اعمال شود و تست/گیت پوشانندهٔ رفتار اصلاح‌شده در سوئیت سبز شود",
+        "observable_effect": "رفتار توصیف‌شده در عنوان یافته (Full staff impersonation via X-Dev-Staff-Id header is gated only on the plain ENV wrangler variable) دیگر در سنجش یا اجرا مشاهده نشود",
+        "uncertainties": []
+      }
+    },
+    {
+      "id": "security-003",
+      "kind": "secret-exposure",
+      "title": "Hardcoded dev session secret doubles as production fallback and as the instance-sync bearer credential",
+      "severity": "high",
+      "confidence": "medium",
+      "identity": {
+        "path": "src/core/auth/runtime-secret.ts",
+        "symbol": "resolveSessionSecret",
+        "assertion": "A compile-time constant dev secret signs session JWTs whenever ENV is development/test or AUTH_SECRET is unset/short, and the same resolveSessionSecret output is compared as the bearer credential for the desktop instance-sync endpoints; session forging with a stolen/known secret plus any valid sid yields impersonation because payload.sub is trusted without binding to the session row."
+      },
+      "evidence": [
+        {
+          "path": "src/core/auth/runtime-secret.ts",
+          "line": 3,
+          "detail": "DEV_AUTH_SECRET is a hardcoded string constant in the repository; resolveSessionSecret returns it for ENV development/test and for any deployment missing AUTH_SECRET shorter than 16 chars only after the dev-env check (line 70-77). Location recorded only; value not reproduced."
+        },
+        {
+          "path": "src/application/instance-sync/routes.ts",
+          "line": 103,
+          "detail": "authorize() for POST /pull and POST /push compares the request Bearer token against resolveSessionSecret(c.env) with timing-safe compare, so the session-signing secret is also the sync API credential; a leaked dev/fallback secret grants cross-instance database pull/push."
+        },
+        {
+          "path": "src/core/auth/middleware.ts",
+          "line": 74,
+          "detail": "Session verification checks only that payload.sid exists and is alive in auth_sessions; payload.sub (impersonation target) is taken from the JWT itself, so signature knowledge plus one valid live sid is sufficient to mint a session for any staff id."
+        },
+        {
+          "path": "src/core/auth/runtime-secret.ts",
+          "line": 42,
+          "detail": "In production without AUTH_SECRET the runtime secret is generated and stored in plaintext in the settings table of the application D1 database, readable by any code path and backup with DB access."
+        }
+      ],
+      "status": "fixed",
+      "verification": {
+        "status": "downgraded",
+        "counterevidence": [
+          {
+            "path": "repodocs/audit/notes/verdicts-security.md",
+            "line": 1,
+            "detail": "تخفیف رقیب: «fallback تولیدی راز هاردکد» نادرست — در ENV=production بدون AUTH_SECRET خروجی راز تصادفیِ D1 است نه ثابت DEV (runtime-secret.ts:73-75)؛ ثابت عمومی فقط با misconfig (زنجیرهٔ security-002) فعال می‌شود. بخش درستِ ادعا: plaintext شدن راز در settings (runtime-secret.ts:42) و رفتن به backup (backup/service.ts:231)؛ راستی‌آزمایی نشست فقط sid را چک می‌کند و sub را از JWT برمی‌دارد (middleware.ts:70-84)."
+          }
+        ],
+        "note": "تأیید مستقل کور در 2026-11-24 (verifier: independent-blind-verifier)",
+        "resulting_severity": "medium",
+        "lifecycle_note": "release 1.27.75/76 (sdt153) — commit ca132e6"
+      },
+      "remediation": {
+        "change_boundary": "پیش‌نویس پیش از Decide: برطرف‌کردن وضعیت توصیف‌شده در عنوان یافته (Hardcoded dev session secret doubles as production fallback and as the instance-sync bearer credential) با کمترین تغییر، پس از تأیید رقیب و تصمیم کارفرما",
+        "done_when": "اصلاح اعمال شود و تست/گیت پوشانندهٔ رفتار اصلاح‌شده در سوئیت سبز شود",
+        "observable_effect": "رفتار توصیف‌شده در عنوان یافته (Hardcoded dev session secret doubles as production fallback and as the instance-sync bearer credential) دیگر در سنجش یا اجرا مشاهده نشود",
+        "uncertainties": []
+      }
+    },
+    {
+      "id": "security-004",
+      "kind": "authz-gap",
+      "title": "Sampled write routes enforce authentication but no per-route role gate; role checks deferred to unverified service layer",
+      "severity": "high",
+      "confidence": "medium",
+      "identity": {
+        "path": "src/domain/appointment-core/routes.ts",
+        "symbol": "registerRoutes",
+        "assertion": "A sampled subset of /api/* write routes (appointments CRUD, working-hours, student create/patch, attendance patch, student tags, followups patch, session notes put, document requests, notification prefs, setup complete, conflicts check) call only getAuthContext and never requireRole, so any authenticated staff role incl. secretary can perform them unless the service layer rejects; supervisor is blocked only by supervisorGate's write prohibition."
+      },
+      "evidence": [
+        {
+          "path": "src/domain/appointment-core/routes.ts",
+          "line": 40,
+          "detail": "POST /api/appointments (and copy-week/move/resize/cancel/restore/delete at lines 15-132) pass getAuthContext(c) but attach no requireRole middleware; requireRole is imported yet unused in this file."
+        },
+        {
+          "path": "src/domain/student-profile/routes.ts",
+          "line": 145,
+          "detail": "POST /api/students and PATCH /api/students/:id (line 211) plus activate/deactivate (lines 234-240) carry no role gate; therapist-only behavior is soft-coded by conditional field overrides, not by ForbiddenError."
+        },
+        {
+          "path": "src/application/setup/routes.ts",
+          "line": 141,
+          "detail": "POST /api/setup/complete (closes demo data / completes setup) has no role middleware; under the global /api/* authMiddleware any authenticated role can invoke it."
+        },
+        {
+          "path": "src/domain/working-hours/routes.ts",
+          "line": 19,
+          "detail": "POST/PUT/DELETE /api/working-hours* (lines 19-42) register no requireRole, contrasting with sibling modules that do (finance, clearbook, docs use local gate middlewares)."
+        }
+      ],
+      "status": "fixed",
+      "verification": {
+        "status": "downgraded",
+        "counterevidence": [
+          {
+            "path": "repodocs/audit/notes/verdicts-security.md",
+            "line": 1,
+            "detail": "تخفیف رقیب: نیمی از نمونه در لایهٔ سرویس گیت واقعی دارد — appointments (service.ts:210-211,286,321,366,410,441,529,562,593 با ForbiddenError مدیر/منشی/خودِ درمانگر) و working-hours (service.ts:44-46)؛ گپ واقعی: students create/patch/deactivate/activate بدون گیت در دو لایه و setup/complete (ناسازگاری کامنت «فقط-مدیر» api-routing:735 با واقعیت)؛ supervisorGate سراسری نوشتن ناظر را می‌بندد (api-routing:729)."
+          }
+        ],
+        "note": "تأیید مستقل کور در 2026-11-24 (verifier: independent-blind-verifier)",
+        "resulting_severity": "medium",
+        "lifecycle_note": "release 1.27.75/76 (sdt153) — commit ca132e6"
+      },
+      "remediation": {
+        "change_boundary": "پیش‌نویس پیش از Decide: برطرف‌کردن وضعیت توصیف‌شده در عنوان یافته (Sampled write routes enforce authentication but no per-route role gate; role checks deferred to unverified service layer) با کمترین تغییر، پس از تأیید رقیب و تصمیم کارفرما",
+        "done_when": "اصلاح اعمال شود و تست/گیت پوشانندهٔ رفتار اصلاح‌شده در سوئیت سبز شود",
+        "observable_effect": "رفتار توصیف‌شده در عنوان یافته (Sampled write routes enforce authentication but no per-route role gate; role checks deferred to unverified service layer) دیگر در سنجش یا اجرا مشاهده نشود",
+        "uncertainties": []
+      }
+    },
+    {
+      "id": "security-005",
+      "kind": "sensitive-data-in-output",
+      "title": "Bearer-equivalent tokens and webhook secret persist in access logs and URL paths",
+      "severity": "medium",
+      "confidence": "high",
+      "identity": {
+        "path": "src/application/api-routing/index.ts",
+        "symbol": "requestLogger",
+        "assertion": "The global request logger records c.req.path verbatim, so game child-link tokens on /m/:token (the sole credential of the public chain) and the webhook secret segment on /webhook/bale/:secret are written to observability logs, and the game token additionally lives in browser history and same-origin referrers."
+      },
+      "evidence": [
+        {
+          "path": "src/application/api-routing/index.ts",
+          "line": 637,
+          "detail": "Logger middleware logs method/path/status for every request including /m/:token and /webhook/bale/:secret; wrangler.toml:28 enables observability, so paths are retained in Cloudflare telemetry."
+        },
+        {
+          "path": "src/domain/games/routes.ts",
+          "line": 294,
+          "detail": "The public page token is a path segment, not a POST body or fragment; strict-origin-when-cross-origin (api-routing:616) prevents cross-origin referrer leakage but not same-origin retention, history, and log capture."
+        },
+        {
+          "path": "src/application/notify/routes.ts",
+          "line": 174,
+          "detail": "Webhook accepts the secret either from the URL path parameter or the standard secret header; path usage feeds the logger at api-routing:637."
+        }
+      ],
+      "status": "fixed",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": "",
+        "lifecycle_note": "release 1.27.78 (sdt155) — موج B1: ماسک مسیر لاگ (log-mask + گیت front-12778-sec-hardening)"
+      },
+      "remediation": {
+        "observable_effect": "Anyone with access to worker logs/telemetry can enumerate child game-link tokens (each token grants full read of a child's mission state) and webhook secrets.",
+        "change_boundary": "src/application/api-routing/index.ts logger middleware; src/domain/games route shape; src/application/notify webhook route.",
+        "done_when": "Access-log payload redacts or never includes bearer-equivalent path segments; webhook secret accepted from header only.",
+        "uncertainties": [
+          "Cloudflare-side edge log retention settings are outside the repository."
+        ]
+      }
+    },
+    {
+      "id": "security-006",
+      "kind": "injection-risk",
+      "title": "Shared esc() helpers omit single-quote escaping, breaking the escaping contract if values reach single-quoted attributes",
+      "severity": "low",
+      "confidence": "medium",
+      "identity": {
+        "path": "src/domain/waitlist/referral-page.ts",
+        "symbol": "esc",
+        "assertion": "Four near-identical esc() helpers escape &, <, >, double quote but not the single quote, while all current interpolation sites use double-quoted attributes or text nodes; the helper is one refactor away from a stored-XSS sink fed by end-user form input (child name, referrer name/phone, school name)."
+      },
+      "evidence": [
+        {
+          "path": "src/domain/waitlist/referral-page.ts",
+          "line": 189,
+          "detail": "esc() escapes & < > \" only; grep found no single-quoted attribute context among its 20+ call sites today (all inputs are double-quoted value=\"...\", options, text nodes)."
+        },
+        {
+          "path": "src/domain/form-builder/form-page.ts",
+          "line": 79,
+          "detail": "Identical esc() contract; feeds public form-fill page with server-stored form definitions and end-user state."
+        },
+        {
+          "path": "src/domain/case-events/preview-form.ts",
+          "line": 31,
+          "detail": "Third copy of the same esc(); the embedded JSON blocks here DO escape angle brackets (lines 172-173), showing the codebase knows the stricter contract but does not apply it to esc()."
+        }
+      ],
+      "status": "fixed",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": "",
+        "lifecycle_note": "release 1.27.75/76 (sdt153) — commit ffdf11c"
+      },
+      "remediation": {
+        "observable_effect": "Latent only today: any future single-quoted attribute interpolation of esc() output would allow attribute breakout from public form input.",
+        "change_boundary": "The four esc() helper definitions (referral-page.ts, form-page.ts, case-events/preview-form.ts, games/report html esc).",
+        "done_when": "esc() also replaces ' with &#39; and a unit test asserts the full contract.",
+        "uncertainties": [
+          "None identified beyond scope of the four helpers."
+        ]
+      }
+    },
+    {
+      "id": "security-007",
+      "kind": "injection-risk",
+      "title": "CSP on public game pages allows unsafe-inline scripts and the staff SPA ships no CSP at all",
+      "severity": "medium",
+      "confidence": "high",
+      "identity": {
+        "path": "src/domain/games/routes.ts",
+        "symbol": "registerGamesPublicRoutes",
+        "assertion": "The only Content-Security-Policy in the system declares script-src 'self' 'unsafe-inline', which neutralizes CSP as an XSS second layer for the public pages, while the authenticated SPA served from public/ receives no CSP header from the worker (api-routing sets nosniff/Referrer-Policy/X-Frame-Options/Permissions-Policy/COOP/HSTS but no CSP)."
+      },
+      "evidence": [
+        {
+          "path": "src/domain/games/routes.ts",
+          "line": 307,
+          "detail": "CSP string contains script-src 'self' 'unsafe-inline'; identical policy repeated at line 325 for the preview page."
+        },
+        {
+          "path": "src/application/api-routing/index.ts",
+          "line": 614,
+          "detail": "Global response-header middleware sets six security headers but no Content-Security-Policy; the SPA shell and all authenticated views therefore rely solely on output escaping across ~24 innerHTML sinks."
+        }
+      ],
+      "status": "fixed",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": "",
+        "lifecycle_note": "release 1.27.82 (sdt159) — ADR-014: ثابت مشترک PUBLIC_PAGE_CSP (script-src 'self' بدون unsafe-inline؛ style-src 'unsafe-inline' عمداً برای <style>/style-attr با دلیل ثبت‌شده) + انتقال اسکریپت‌های درون‌خطی به فایل بیرونی با بلاک دادهٔ JSON (صفحهٔ بازی page-boot.js + فرم‌های عمومی fill-form.js/preview-form.js) + رفع شکاف مطلق case-events (CSP نداشتند) + CSP حداقلی JSON_API_CSP برای پاسخ‌های JSON با گارد بازنویسی‌نکردن CSP صفحه‌ها؛ SPA shell از قبل با CSP هش‌دار _headers پوشیده بود — هر دو بند done_when کامل شد؛ Tauri boot-page CSP خارج از دامنهٔ یافته ماند (نیازمند QA دسکتاپ — پیوست ADR)"
+      },
+      "remediation": {
+        "observable_effect": "A single missed escape anywhere in the SPA or public pages executes unrestricted same-origin script; CSP provides no defense-in-depth.",
+        "change_boundary": "src/domain/games/routes.ts CSP strings and src/application/api-routing/index.ts header middleware (nonce-based script allowlist per page).",
+        "done_when": "CSP without unsafe-inline covers the game/preview pages and a CSP header (at minimum default-src 'self') covers the SPA shell.",
+        "uncertainties": [
+          "play.js engine and page.ts inline bootstrap need inline-code extraction before dropping unsafe-inline."
+        ]
+      }
+    },
+    {
+      "id": "security-008",
+      "kind": "authz-gap",
+      "title": "API rate limiting is per-isolate, in-memory, write-methods-only and fully disableable",
+      "severity": "medium",
+      "confidence": "high",
+      "identity": {
+        "path": "src/application/http/rate-limit.ts",
+        "symbol": "parseApiRateLimitPerMin",
+        "assertion": "The global /api/* limiter counts only write methods in a per-isolate in-memory window (effective budget multiplies with isolate count and resets on restart), reads including public token endpoints are unthrottled, and API_RATE_LIMIT_PER_MIN=0 turns the layer off; the code comments acknowledge this is risk-reduction, not enforcement."
+      },
+      "evidence": [
+        {
+          "path": "src/application/http/rate-limit.ts",
+          "line": 1,
+          "detail": "Header comment states counters are per-isolate and in-memory, effective budget = cap x isolate count, and edge enforcement would require Cloudflare WAF which cannot attach to workers.dev domains."
+        },
+        {
+          "path": "src/application/api-routing/index.ts",
+          "line": 596,
+          "detail": "Write-method gate skips GET entirely and returns next() without limiting when perMin <= 0; /api/m/:token/state and /api/m/:token/next-item (bearer-token reads) are therefore unlimited guessing surface, mitigated only by token entropy."
+        },
+        {
+          "path": "src/application/auth/routes.ts",
+          "line": 30,
+          "detail": "Login route has its own D1-backed dual throttle (identity 5/15min + IP 20/15min) which does survive isolate restarts, unlike the global layer."
+        }
+      ],
+      "status": "fixed",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": "",
+        "lifecycle_note": "release 1.27.78 (sdt155) — موج B1: سقف GETهای توکن‌دار عمومی (۱۲۰/دقیقه + env)"
+      },
+      "remediation": {
+        "observable_effect": "Distributed or high-parallelism abuse of public endpoints and brute-force of game token paths are bounded only by isolate-count luck.",
+        "change_boundary": "src/application/http/rate-limit.ts plus edge WAF configuration outside the repo.",
+        "done_when": "Edge rate-limiting on a zoned domain or Durable-Object-backed counters cover read endpoints of the public chain.",
+        "uncertainties": [
+          "Game token entropy (crypto.randomUUID or shorter?) not verified; entropy may already make guessing impractical."
+        ]
+      }
+    },
+    {
+      "id": "security-009",
+      "kind": "injection-risk",
+      "title": "30-day session JWT stored in localStorage amplifies the impact of any same-origin XSS",
+      "severity": "medium",
+      "confidence": "high",
+      "identity": {
+        "path": "public/assets/js/api.js",
+        "symbol": "getToken",
+        "assertion": "The bearer session token (30-day server TTL) and the dev staff id live in localStorage keys cs.token/cs.staffId with no client-side expiry handling, so any successful same-origin XSS among the ~24 first-party innerHTML/document.write sinks steals a credential valid for 30 days or lets the attacker rotate impersonation identity at will."
+      },
+      "evidence": [
+        {
+          "path": "public/assets/js/api.js",
+          "line": 13,
+          "detail": "getToken/setToken/clearSession map cs.token to localStorage; api.js:72 additionally sends cs.staffId as X-Dev-Staff-Id on every request."
+        },
+        {
+          "path": "src/core/auth/session-jwt.ts",
+          "line": 12,
+          "detail": "SESSION_TTL_SECONDS = 30 days; server-side revocation exists (sid row check in middleware.ts:74-88) but nothing forces rotation or shortens the window after suspected XSS."
+        },
+        {
+          "path": "src/domain/waitlist/referral-page.ts",
+          "line": 235,
+          "detail": "Sink inventory (first-party, excluding vendor/dist bundles): referral-page.ts 17 innerHTML/insertAdjacentHTML, form-page.ts 5 innerHTML, case-events/preview-form.ts 1 innerHTML + 1 document.write (line 284, writing same-origin server HTML after fetch), feedback-sheet.js:187 document.write, progress-report.js:603 document.write (esc'd), ui.js:251, login.js:9, illustrations.js:6, charts.js:44 innerHTML (fixed/escaped data sources), plus play engine markup builders under public/assets/play using esc() for server item text."
+        }
+      ],
+      "status": "fixed",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": "",
+        "lifecycle_note": "release 1.27.82 (sdt159) — ADR-015: کوکی cs_session با HttpOnly/Secure/SameSite=Strict صادر/پاک می‌شود و authMiddleware کوکی یا Bearer می‌خواند؛ CSRF دو-لایه (SameSite=Strict + بررسی Origin روی متدهای نوشتنیِ احرازشده با کوکی)؛ فرانت: فروشگاه localStorage حذف شد (۱۷ نقطه در ۹ فایل) و ۶ گارد سخت رانر سینک به توکن اختیاری رفت (webview با کوکی هم‌مبدأ)؛ بند «TTL کوتاه‌تر + چرخش» مخصوص گزینهٔ دوم بود و اجرا نشد؛ توکن در بدنهٔ login فقط برای کلاینت‌های غیرمرورگری (wizard ابری/گذار) مانده و SPA دیگر آن را ذخیره نمی‌کند — done_when بند اول (token no longer readable by script از منظر پایداری/ذخیره‌سازی) کامل شد"
+      },
+      "remediation": {
+        "observable_effect": "One XSS sink regression converts into 30-day account takeover including supervisor/manager roles depending on stolen token.",
+        "change_boundary": "public/assets/js/api.js storage choice plus login flow; or HttpOnly cookie session with CSRF protection.",
+        "done_when": "Session token no longer readable by script, or TTL shortened with rotation and sinks under continuous esc-contract tests.",
+        "uncertainties": [
+          "Moving off localStorage affects the offline/desktop sync flows and needs product sign-off."
+        ]
+      }
+    }
+  ]
+}

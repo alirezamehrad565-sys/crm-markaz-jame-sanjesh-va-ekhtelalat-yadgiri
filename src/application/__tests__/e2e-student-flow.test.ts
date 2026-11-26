@@ -165,7 +165,7 @@ describe('مرز «لیست دانش‌آموزهای هر معلم» روی GET
 
   it('پس از پذیرش (حضور «حاضر») پرونده در لیست درمانگر باقی می‌ماند — بدون badge انتظار', async () => {
     const st = await createStudent(sec, { owner_staff_id: ALI_ID });
-    const appt = await sec.post('/api/appointments', apptBody(ALI_ID, quarterHourFromNow(450), 45, [st.id]));
+    const appt = await sec.post('/api/appointments', apptBody(ALI_ID, quarterHourFromNow(-60), 45, [st.id]));
     const apptId = (appt.body as { data: { id: string } }).data.id;
 
     const mark = await sec.patch(`/api/attendance/${apptId}/${st.id}`, { status: 'present' });

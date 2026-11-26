@@ -2,7 +2,7 @@ import type { DbClient } from '@core/db';
 import type { Logger } from '@core/logger';
 import { SEARCH_QUERY_MIN_LENGTH } from '@core/shared';
 import type { GlobalSearchResult, SearchGroup, SearchItem } from '@core/shared';
-import { capItems, isSearchable, likePattern, orderGroups, sanitizeSearchQuery } from './pure';
+import { capItems, faHaystackExpr, isSearchable, likePattern, orderGroups, sanitizeFaQuery } from './pure';
 
 export interface SearchDeps {
   db: DbClient;
@@ -21,7 +21,9 @@ export function createSearchService(deps: SearchDeps): SearchService {
 
   return {
     async globalSearch(rawQuery: string, actorRole?: string | null): Promise<GlobalSearchResult> {
-      const q = sanitizeSearchQuery(rawQuery);
+      /* ۱.۲۷.۷۷ — sanitizeFaQuery: نرمال‌سازی فارسی (ي/ك عربی، أ إ آ، ة، نیم‌فاصله، ارقام)
+         علاوه بر بهداشت LIKE — جستجوی سراسری هم‌قرارداد لیست دانش‌آموزان شد */
+      const q = sanitizeFaQuery(rawQuery);
       if (!isSearchable(q, SEARCH_QUERY_MIN_LENGTH)) {
         return { query: q, groups: [] };
       }
@@ -41,8 +43,9 @@ export function createSearchService(deps: SearchDeps): SearchService {
           `SELECT id, first_name, last_name, grade, national_id
              FROM students
             WHERE active = 1
-              AND (first_name LIKE ? OR last_name LIKE ? OR national_id LIKE ?
-                   OR (first_name || ' ' || last_name) LIKE ?)
+              AND (${faHaystackExpr('first_name')} LIKE ? OR ${faHaystackExpr('last_name')} LIKE ?
+                   OR national_id LIKE ?
+                   OR ${faHaystackExpr(`(first_name || ' ' || last_name)`)} LIKE ?)
             ORDER BY last_name, first_name
             LIMIT ${PER_GROUP_LIMIT.students}`,
           [pattern, pattern, pattern, pattern]
@@ -50,7 +53,7 @@ export function createSearchService(deps: SearchDeps): SearchService {
         db.query<{ id: string; full_name: string; role: string }>(
           `SELECT id, full_name, role
              FROM staff
-            WHERE active = 1 AND full_name LIKE ?
+            WHERE active = 1 AND ${faHaystackExpr('full_name')} LIKE ?
             ORDER BY full_name
             LIMIT ${PER_GROUP_LIMIT.staff}`,
           [pattern]
@@ -58,7 +61,7 @@ export function createSearchService(deps: SearchDeps): SearchService {
         db.query<{ id: string; name: string; kind: string; code: string | null }>(
           `SELECT id, name, kind, code
              FROM schools
-            WHERE active = 1 AND (name LIKE ? OR (code IS NOT NULL AND code LIKE ?))
+            WHERE active = 1 AND (${faHaystackExpr('name')} LIKE ? OR (code IS NOT NULL AND code LIKE ?))
             ORDER BY name
             LIMIT ${PER_GROUP_LIMIT.schools}`,
           [pattern, pattern]
@@ -76,8 +79,9 @@ export function createSearchService(deps: SearchDeps): SearchService {
           `SELECT id, first_name, last_name, phone, status
              FROM waitlist
             WHERE deleted_at IS NULL
-              AND (first_name LIKE ? OR last_name LIKE ? OR phone LIKE ?
-                   OR (first_name || ' ' || last_name) LIKE ?)
+              AND (${faHaystackExpr('first_name')} LIKE ? OR ${faHaystackExpr('last_name')} LIKE ?
+                   OR phone LIKE ?
+                   OR ${faHaystackExpr(`(first_name || ' ' || last_name)`)} LIKE ?)
             ORDER BY last_name, first_name
             LIMIT ${PER_GROUP_LIMIT.waitlist}`,
           [pattern, pattern, pattern, pattern]

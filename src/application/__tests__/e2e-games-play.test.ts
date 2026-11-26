@@ -87,7 +87,9 @@ describe('پخش‌کنندهٔ کودک (M2) — صفحه، راهنمای بی
     const html = await pageHtml(link.token);
     expect(html).toContain('آمادهٔ شروع هستیم');
     expect(html).not.toContain('play-root');
-    expect(html).not.toContain('/assets/play/');
+    /* ۱.۲۷.۸۲ (ADR-004): page-boot.js (بوت گذارهای صفحه) در همهٔ شاخه‌ها هست؛
+       دارایی پخش‌کننده (css/js/skins) فقط در شاخهٔ کودک/پیش‌نمایش */
+    expect(html).not.toMatch(/assets\/play\/(?!page-boot\.js)/);
   });
 
   it('child_active: پخش‌کننده با نوع‌بازی و راهنمای آموزشی بار می‌شود', async () => {

@@ -1,0 +1,1305 @@
+{
+  "version": 1,
+  "generator": "scripts/check-route-registry.mjs — ۱.۲۷.۸۱ (sdt158) — نقطهٔ واحد کشف مسیرها (architecture-004 گزینهٔ الف)",
+  "summary": {
+    "totalEndpoints": 441,
+    "byMethod": {
+      "get": 183,
+      "post": 172,
+      "put": 16,
+      "patch": 35,
+      "delete": 35
+    },
+    "byLayer": {
+      "domain": 331,
+      "application": 95,
+      "other": 15
+    }
+  },
+  "modules": [
+    {
+      "file": "src/application/api-routing/routes.ts",
+      "layer": "application",
+      "zone": "router",
+      "counts": {
+        "get": 6,
+        "post": 1,
+        "put": 0,
+        "patch": 0,
+        "delete": 0
+      },
+      "mounts": [
+        "/api/instance-sync",
+        "/node"
+      ],
+      "endpoints": [
+        "GET /api/conflicts",
+        "GET /api/dashboard/kpis",
+        "GET /api/me",
+        "GET /health",
+        "GET /public/announcements",
+        "GET /public/exercise-files/:id",
+        "POST /api/conflicts/check"
+      ]
+    },
+    {
+      "file": "src/application/auth/routes.ts",
+      "layer": "application",
+      "zone": "public+protected",
+      "counts": {
+        "get": 0,
+        "post": 2,
+        "put": 0,
+        "patch": 0,
+        "delete": 0
+      },
+      "mounts": [],
+      "endpoints": [
+        "POST /api/auth/login",
+        "POST /api/auth/logout"
+      ]
+    },
+    {
+      "file": "src/application/backup/routes.ts",
+      "layer": "application",
+      "zone": "protected",
+      "counts": {
+        "get": 4,
+        "post": 3,
+        "put": 1,
+        "patch": 0,
+        "delete": 0
+      },
+      "mounts": [],
+      "endpoints": [
+        "GET /api/backup/delivery",
+        "GET /api/backup/download",
+        "GET /api/backup/export",
+        "GET /api/backup/status",
+        "POST /api/backup/inspect",
+        "POST /api/backup/restore",
+        "POST /api/backup/send",
+        "PUT /api/backup/delivery"
+      ]
+    },
+    {
+      "file": "src/application/client-errors/routes.ts",
+      "layer": "application",
+      "zone": "protected",
+      "counts": {
+        "get": 1,
+        "post": 1,
+        "put": 0,
+        "patch": 0,
+        "delete": 0
+      },
+      "mounts": [],
+      "endpoints": [
+        "GET /api/client-errors",
+        "POST /public/client-errors"
+      ]
+    },
+    {
+      "file": "src/application/dashboard/routes.ts",
+      "layer": "application",
+      "zone": "protected",
+      "counts": {
+        "get": 4,
+        "post": 0,
+        "put": 0,
+        "patch": 0,
+        "delete": 0
+      },
+      "mounts": [],
+      "endpoints": [
+        "GET /api/dashboard/me",
+        "GET /api/dashboard/screening-goal",
+        "GET /api/dashboard/summary",
+        "GET /api/dashboard/today"
+      ]
+    },
+    {
+      "file": "src/application/engine-capabilities/routes.ts",
+      "layer": "application",
+      "zone": "public",
+      "counts": {
+        "get": 1,
+        "post": 0,
+        "put": 0,
+        "patch": 0,
+        "delete": 0
+      },
+      "mounts": [],
+      "endpoints": [
+        "GET /api/engine/capabilities"
+      ]
+    },
+    {
+      "file": "src/application/excel-import/routes.ts",
+      "layer": "application",
+      "zone": "protected",
+      "counts": {
+        "get": 1,
+        "post": 2,
+        "put": 0,
+        "patch": 0,
+        "delete": 0
+      },
+      "mounts": [],
+      "endpoints": [
+        "GET /api/import/registry",
+        "POST /api/import/:entity/commit",
+        "POST /api/import/:entity/validate"
+      ]
+    },
+    {
+      "file": "src/application/games-standalone/index.ts",
+      "layer": "application",
+      "zone": "games-worker",
+      "counts": {
+        "get": 2,
+        "post": 0,
+        "put": 0,
+        "patch": 0,
+        "delete": 0
+      },
+      "mounts": [],
+      "endpoints": [
+        "GET /api/me",
+        "GET /health"
+      ]
+    },
+    {
+      "file": "src/application/growth/routes.ts",
+      "layer": "application",
+      "zone": "protected",
+      "counts": {
+        "get": 1,
+        "post": 0,
+        "put": 0,
+        "patch": 0,
+        "delete": 0
+      },
+      "mounts": [],
+      "endpoints": [
+        "GET /api/growth/report"
+      ]
+    },
+    {
+      "file": "src/application/health/routes.ts",
+      "layer": "application",
+      "zone": "protected",
+      "counts": {
+        "get": 1,
+        "post": 0,
+        "put": 0,
+        "patch": 0,
+        "delete": 0
+      },
+      "mounts": [],
+      "endpoints": [
+        "GET /api/health/panel"
+      ]
+    },
+    {
+      "file": "src/application/instance-sync/desktop-routes.ts",
+      "layer": "application",
+      "zone": "protected",
+      "counts": {
+        "get": 2,
+        "post": 6,
+        "put": 0,
+        "patch": 0,
+        "delete": 1
+      },
+      "mounts": [],
+      "endpoints": [
+        "DELETE /api/instance-sync/config",
+        "GET /api/instance-sync/backups",
+        "GET /api/instance-sync/status",
+        "POST /api/instance-sync/clone",
+        "POST /api/instance-sync/config",
+        "POST /api/instance-sync/provision",
+        "POST /api/instance-sync/provision/discover",
+        "POST /api/instance-sync/provision/verify",
+        "POST /api/instance-sync/run-now"
+      ]
+    },
+    {
+      "file": "src/application/instance-sync/routes.ts",
+      "layer": "application",
+      "zone": "public",
+      "counts": {
+        "get": 1,
+        "post": 2,
+        "put": 0,
+        "patch": 0,
+        "delete": 0
+      },
+      "mounts": [],
+      "endpoints": [
+        "GET /state",
+        "POST /pull",
+        "POST /push"
+      ]
+    },
+    {
+      "file": "src/application/keys/routes.ts",
+      "layer": "application",
+      "zone": "protected",
+      "counts": {
+        "get": 1,
+        "post": 2,
+        "put": 0,
+        "patch": 0,
+        "delete": 0
+      },
+      "mounts": [],
+      "endpoints": [
+        "GET /api/keys",
+        "POST /api/keys",
+        "POST /api/keys/:id/revoke"
+      ]
+    },
+    {
+      "file": "src/application/notify/routes.ts",
+      "layer": "application",
+      "zone": "protected",
+      "counts": {
+        "get": 8,
+        "post": 12,
+        "put": 1,
+        "patch": 0,
+        "delete": 1
+      },
+      "mounts": [],
+      "endpoints": [
+        "DELETE /api/notifications/class-links/:id",
+        "GET /api/notifications",
+        "GET /api/notifications/bot-username",
+        "GET /api/notifications/class-links",
+        "GET /api/notifications/links",
+        "GET /api/notifications/outbox",
+        "GET /api/notifications/prefs/:studentId",
+        "GET /api/notifications/staff-links",
+        "GET /api/notifications/stats",
+        "POST /api/notifications/:id/release",
+        "POST /api/notifications/class-links",
+        "POST /api/notifications/digest",
+        "POST /api/notifications/dispatch",
+        "POST /api/notifications/failed/retry",
+        "POST /api/notifications/family-report",
+        "POST /api/notifications/links",
+        "POST /api/notifications/reminders/enqueue",
+        "POST /api/notifications/staff-links",
+        "POST /api/notifications/teacher-report",
+        "POST /api/notifications/test",
+        "POST /webhook/bale/:secret",
+        "PUT /api/notifications/prefs/:studentId"
+      ]
+    },
+    {
+      "file": "src/application/report-export/routes.ts",
+      "layer": "application",
+      "zone": "protected",
+      "counts": {
+        "get": 2,
+        "post": 1,
+        "put": 0,
+        "patch": 0,
+        "delete": 0
+      },
+      "mounts": [],
+      "endpoints": [
+        "GET /api/students/:id/report-snapshots",
+        "GET /api/students/:id/report-snapshots/:sid",
+        "POST /api/students/:id/report-snapshots"
+      ]
+    },
+    {
+      "file": "src/application/reports/routes.ts",
+      "layer": "application",
+      "zone": "protected",
+      "counts": {
+        "get": 2,
+        "post": 0,
+        "put": 0,
+        "patch": 0,
+        "delete": 0
+      },
+      "mounts": [],
+      "endpoints": [
+        "GET /api/reports",
+        "GET /api/reports/advanced"
+      ]
+    },
+    {
+      "file": "src/application/rum/routes.ts",
+      "layer": "application",
+      "zone": "protected",
+      "counts": {
+        "get": 1,
+        "post": 1,
+        "put": 0,
+        "patch": 0,
+        "delete": 0
+      },
+      "mounts": [],
+      "endpoints": [
+        "GET /api/rum/summary",
+        "POST /public/rum"
+      ]
+    },
+    {
+      "file": "src/application/search/routes.ts",
+      "layer": "application",
+      "zone": "protected",
+      "counts": {
+        "get": 1,
+        "post": 0,
+        "put": 0,
+        "patch": 0,
+        "delete": 0
+      },
+      "mounts": [],
+      "endpoints": [
+        "GET /api/search"
+      ]
+    },
+    {
+      "file": "src/application/session-notes/routes.ts",
+      "layer": "application",
+      "zone": "protected",
+      "counts": {
+        "get": 1,
+        "post": 0,
+        "put": 1,
+        "patch": 0,
+        "delete": 0
+      },
+      "mounts": [],
+      "endpoints": [
+        "GET /api/appointments/:id/students/:studentId/note",
+        "PUT /api/appointments/:id/students/:studentId/note"
+      ]
+    },
+    {
+      "file": "src/application/settings/routes.ts",
+      "layer": "application",
+      "zone": "protected",
+      "counts": {
+        "get": 3,
+        "post": 1,
+        "put": 4,
+        "patch": 0,
+        "delete": 0
+      },
+      "mounts": [],
+      "endpoints": [
+        "GET /api/settings",
+        "GET /api/settings/center-hours",
+        "GET /api/settings/scoring",
+        "POST /api/settings/center-hours/apply-to-all",
+        "PUT /api/settings",
+        "PUT /api/settings/bot-token",
+        "PUT /api/settings/center-hours",
+        "PUT /api/settings/scoring"
+      ]
+    },
+    {
+      "file": "src/application/setup/routes.ts",
+      "layer": "application",
+      "zone": "public+protected",
+      "counts": {
+        "get": 1,
+        "post": 1,
+        "put": 0,
+        "patch": 0,
+        "delete": 0
+      },
+      "mounts": [],
+      "endpoints": [
+        "GET /api/setup/status",
+        "POST /api/setup/complete"
+      ]
+    },
+    {
+      "file": "src/application/special-needs/routes.ts",
+      "layer": "application",
+      "zone": "protected",
+      "counts": {
+        "get": 2,
+        "post": 0,
+        "put": 0,
+        "patch": 0,
+        "delete": 0
+      },
+      "mounts": [],
+      "endpoints": [
+        "GET /api/schools/:id/overview",
+        "GET /api/special-needs/grid"
+      ]
+    },
+    {
+      "file": "src/application/student-timeline/routes.ts",
+      "layer": "application",
+      "zone": "protected",
+      "counts": {
+        "get": 1,
+        "post": 0,
+        "put": 0,
+        "patch": 0,
+        "delete": 0
+      },
+      "mounts": [],
+      "endpoints": [
+        "GET /api/students/:id/timeline"
+      ]
+    },
+    {
+      "file": "src/application/system/routes.ts",
+      "layer": "application",
+      "zone": "public+protected",
+      "counts": {
+        "get": 3,
+        "post": 1,
+        "put": 0,
+        "patch": 0,
+        "delete": 0
+      },
+      "mounts": [],
+      "endpoints": [
+        "GET /api/support/error-package",
+        "GET /api/system/lan",
+        "GET /api/system/restart-status",
+        "POST /api/system/restart"
+      ]
+    },
+    {
+      "file": "src/domain/announcements/routes.ts",
+      "layer": "domain",
+      "zone": "protected",
+      "counts": {
+        "get": 2,
+        "post": 2,
+        "put": 0,
+        "patch": 1,
+        "delete": 1
+      },
+      "mounts": [],
+      "endpoints": [
+        "DELETE /api/announcements/:id",
+        "GET /api/announcements",
+        "GET /api/announcements/manage",
+        "PATCH /api/announcements/:id",
+        "POST /api/announcements",
+        "POST /api/announcements/:id/send"
+      ]
+    },
+    {
+      "file": "src/domain/appointment-core/routes.ts",
+      "layer": "domain",
+      "zone": "protected",
+      "counts": {
+        "get": 2,
+        "post": 6,
+        "put": 0,
+        "patch": 3,
+        "delete": 2
+      },
+      "mounts": [],
+      "endpoints": [
+        "DELETE /api/appointments/:id",
+        "DELETE /api/appointments/:id/students/:studentId",
+        "GET /api/appointments",
+        "GET /api/appointments/my-students",
+        "PATCH /api/appointments/:id",
+        "PATCH /api/appointments/:id/move",
+        "PATCH /api/appointments/:id/resize",
+        "POST /api/appointments",
+        "POST /api/appointments/:id/cancel",
+        "POST /api/appointments/:id/restore",
+        "POST /api/appointments/:id/students",
+        "POST /api/appointments/copy-week",
+        "POST /api/appointments/copy-week/:batchId/undo"
+      ]
+    },
+    {
+      "file": "src/domain/assessment-blocks/routes.ts",
+      "layer": "domain",
+      "zone": "protected",
+      "counts": {
+        "get": 1,
+        "post": 1,
+        "put": 0,
+        "patch": 1,
+        "delete": 1
+      },
+      "mounts": [],
+      "endpoints": [
+        "DELETE /api/assessment-blocks/:id",
+        "GET /api/assessment-blocks",
+        "PATCH /api/assessment-blocks/:id",
+        "POST /api/assessment-blocks"
+      ]
+    },
+    {
+      "file": "src/domain/attendance/routes.ts",
+      "layer": "domain",
+      "zone": "protected",
+      "counts": {
+        "get": 2,
+        "post": 0,
+        "put": 0,
+        "patch": 1,
+        "delete": 0
+      },
+      "mounts": [],
+      "endpoints": [
+        "GET /api/attendance/pending",
+        "GET /api/attendance/stats",
+        "PATCH /api/attendance/:appointmentId/:studentId"
+      ]
+    },
+    {
+      "file": "src/domain/attendance/staff-routes.ts",
+      "layer": "domain",
+      "zone": "protected",
+      "counts": {
+        "get": 3,
+        "post": 0,
+        "put": 1,
+        "patch": 0,
+        "delete": 0
+      },
+      "mounts": [],
+      "endpoints": [
+        "GET /api/staff-attendance",
+        "GET /api/staff-attendance/day-summary",
+        "GET /api/staff-attendance/range-summary",
+        "PUT /api/staff-attendance"
+      ]
+    },
+    {
+      "file": "src/domain/bug-reports/routes.ts",
+      "layer": "domain",
+      "zone": "protected",
+      "counts": {
+        "get": 1,
+        "post": 1,
+        "put": 0,
+        "patch": 0,
+        "delete": 0
+      },
+      "mounts": [],
+      "endpoints": [
+        "GET /api/bug-reports",
+        "POST /api/bug-reports"
+      ]
+    },
+    {
+      "file": "src/domain/case-events/routes.ts",
+      "layer": "domain",
+      "zone": "protected",
+      "counts": {
+        "get": 12,
+        "post": 16,
+        "put": 0,
+        "patch": 2,
+        "delete": 3
+      },
+      "mounts": [],
+      "endpoints": [
+        "DELETE /api/case-events/:id",
+        "DELETE /api/case-events/:id/files/:fileId",
+        "DELETE /api/case-events/types/:id",
+        "GET /api/appointments/:id/case-events",
+        "GET /api/case-events/:id",
+        "GET /api/case-events/:id/files",
+        "GET /api/case-events/:id/files/:fileId",
+        "GET /api/case-events/by-appointments",
+        "GET /api/case-events/pending",
+        "GET /api/case-events/surveys",
+        "GET /api/case-events/surveys/insights",
+        "GET /api/case-events/types",
+        "GET /api/students/:id/case-events",
+        "GET /api/students/:id/case-events/suggest",
+        "GET /public/case-events/:id/fill",
+        "PATCH /api/case-events/:id",
+        "PATCH /api/case-events/types/:id",
+        "POST /api/case-events/:id/cancel",
+        "POST /api/case-events/:id/files",
+        "POST /api/case-events/:id/finalize",
+        "POST /api/case-events/:id/send",
+        "POST /api/case-events/:id/teacher-link",
+        "POST /api/case-events/surveys",
+        "POST /api/case-events/types",
+        "POST /api/case-events/types/:id/deactivate",
+        "POST /api/students/:id/case-events",
+        "POST /api/students/:id/case-events/probe",
+        "POST /api/students/:id/case-events/read-core",
+        "POST /api/students/:id/case-events/rehab-fx",
+        "POST /api/students/:id/case-events/sensory-chip",
+        "POST /public/case-events/:id/fill",
+        "POST /public/case-events/preview",
+        "POST /public/case-events/preview/analyze"
+      ]
+    },
+    {
+      "file": "src/domain/center-kpi/routes.ts",
+      "layer": "domain",
+      "zone": "protected",
+      "counts": {
+        "get": 1,
+        "post": 0,
+        "put": 0,
+        "patch": 0,
+        "delete": 0
+      },
+      "mounts": [],
+      "endpoints": [
+        "GET /api/kpi/summary"
+      ]
+    },
+    {
+      "file": "src/domain/clearbook/routes.ts",
+      "layer": "domain",
+      "zone": "protected",
+      "counts": {
+        "get": 5,
+        "post": 8,
+        "put": 1,
+        "patch": 3,
+        "delete": 3
+      },
+      "mounts": [],
+      "endpoints": [
+        "DELETE /api/clearbook/entries/:id",
+        "DELETE /api/clearbook/entries/:id/files/:fileId",
+        "DELETE /api/clearbook/plans/:id",
+        "GET /api/clearbook/entries",
+        "GET /api/clearbook/entries/:id/files/:fileId",
+        "GET /api/clearbook/plans",
+        "GET /api/clearbook/tags",
+        "GET /api/clearbook/years",
+        "PATCH /api/clearbook/entries/:id",
+        "PATCH /api/clearbook/entries/:id/files/:fileId",
+        "PATCH /api/clearbook/plans/:id",
+        "POST /api/clearbook/entries",
+        "POST /api/clearbook/entries/:id/files",
+        "POST /api/clearbook/entries/:id/files/:fileId/complete",
+        "POST /api/clearbook/entries/:id/files/begin",
+        "POST /api/clearbook/plans",
+        "POST /api/clearbook/plans/copy",
+        "POST /api/clearbook/plans/reorder",
+        "POST /api/clearbook/plans/seed-template",
+        "PUT /api/clearbook/entries/:id/files/:fileId/chunks/:seq"
+      ]
+    },
+    {
+      "file": "src/domain/clinical-engine/routes.ts",
+      "layer": "domain",
+      "zone": "protected",
+      "counts": {
+        "get": 13,
+        "post": 9,
+        "put": 0,
+        "patch": 4,
+        "delete": 1
+      },
+      "mounts": [],
+      "endpoints": [
+        "DELETE /api/clinical-paths/:id/sessions/:sid",
+        "GET /api/case-audits",
+        "GET /api/clinical-cards",
+        "GET /api/clinical-paths/:id/probes",
+        "GET /api/clinical-paths/:id/report",
+        "GET /api/clinical-targets",
+        "GET /api/pathway-templates",
+        "GET /api/students/:id/case-formulation",
+        "GET /api/students/:id/checklist-plan",
+        "GET /api/students/:id/clinical-insights",
+        "GET /api/students/:id/clinical-narrative",
+        "GET /api/students/:id/clinical-paths",
+        "GET /api/validation-kpis",
+        "GET /public/family/progress-sheet/:token",
+        "PATCH /api/clinical-paths/:id/goal",
+        "PATCH /api/clinical-paths/:id/probes/:pid",
+        "PATCH /api/clinical-paths/:id/sessions/:sid",
+        "PATCH /api/pathway-templates/:key",
+        "POST /api/case-audits",
+        "POST /api/clinical-paths/:id/decision",
+        "POST /api/clinical-paths/:id/probes",
+        "POST /api/clinical-paths/:id/sessions",
+        "POST /api/clinical-paths/:id/sessions/reorder",
+        "POST /api/clinical-paths/:id/steps/toggle",
+        "POST /api/pathway-templates",
+        "POST /api/students/:id/clinical-paths",
+        "POST /api/students/:id/progress-sheet-link"
+      ]
+    },
+    {
+      "file": "src/domain/content-score/routes.ts",
+      "layer": "domain",
+      "zone": "protected",
+      "counts": {
+        "get": 1,
+        "post": 1,
+        "put": 0,
+        "patch": 0,
+        "delete": 0
+      },
+      "mounts": [],
+      "endpoints": [
+        "GET /api/content-scores/:table/:id",
+        "POST /api/content-scores/refresh"
+      ]
+    },
+    {
+      "file": "src/domain/docs/routes.ts",
+      "layer": "domain",
+      "zone": "protected",
+      "counts": {
+        "get": 3,
+        "post": 4,
+        "put": 1,
+        "patch": 1,
+        "delete": 2
+      },
+      "mounts": [],
+      "endpoints": [
+        "DELETE /api/docs/:id",
+        "DELETE /api/docs/:id/files/:fileId",
+        "GET /api/docs",
+        "GET /api/docs/:id",
+        "GET /api/docs/:id/files/:fileId",
+        "PATCH /api/docs/:id",
+        "POST /api/docs",
+        "POST /api/docs/:id/files",
+        "POST /api/docs/:id/files/:fileId/complete",
+        "POST /api/docs/:id/files/begin",
+        "PUT /api/docs/:id/files/:fileId/chunks/:seq"
+      ]
+    },
+    {
+      "file": "src/domain/document-requests/routes.ts",
+      "layer": "domain",
+      "zone": "protected",
+      "counts": {
+        "get": 3,
+        "post": 2,
+        "put": 0,
+        "patch": 0,
+        "delete": 0
+      },
+      "mounts": [],
+      "endpoints": [
+        "GET /api/students/:id/document-requests",
+        "GET /api/students/:id/received-docs",
+        "GET /api/students/:id/received-docs/:docId/file",
+        "POST /api/requests/:id/close",
+        "POST /api/students/:id/document-requests"
+      ]
+    },
+    {
+      "file": "src/domain/exercise-bank/routes.ts",
+      "layer": "domain",
+      "zone": "protected",
+      "counts": {
+        "get": 14,
+        "post": 9,
+        "put": 3,
+        "patch": 2,
+        "delete": 3
+      },
+      "mounts": [],
+      "endpoints": [
+        "DELETE /api/exercises/:id",
+        "DELETE /api/exercises/:id/files/:fileId",
+        "DELETE /api/exercises/packages/:id",
+        "GET /api/exercises",
+        "GET /api/exercises/:id",
+        "GET /api/exercises/:id/assignments",
+        "GET /api/exercises/:id/file",
+        "GET /api/exercises/:id/files/:fileId",
+        "GET /api/exercises/meta",
+        "GET /api/exercises/packages",
+        "GET /api/exercises/packages/:id",
+        "GET /api/exercises/submissions",
+        "GET /api/exercises/submissions/:id/file",
+        "GET /api/students/:id/exercises/batches",
+        "GET /api/students/:id/exercises/suggest",
+        "GET /api/students/:id/focus",
+        "GET /public/activities",
+        "PATCH /api/exercises/:id",
+        "PATCH /api/exercises/packages/:id",
+        "POST /api/exercises",
+        "POST /api/exercises/:id/files",
+        "POST /api/exercises/:id/files/:fileId/complete",
+        "POST /api/exercises/:id/files/begin",
+        "POST /api/exercises/:id/reassign",
+        "POST /api/exercises/assignments/:id/grade",
+        "POST /api/exercises/batches/:id/send",
+        "POST /api/exercises/packages",
+        "POST /api/students/:id/exercises/batches",
+        "PUT /api/exercises/:id/file",
+        "PUT /api/exercises/:id/files/:fileId/chunks/:seq",
+        "PUT /api/students/:id/focus"
+      ]
+    },
+    {
+      "file": "src/domain/finance/routes.ts",
+      "layer": "domain",
+      "zone": "protected",
+      "counts": {
+        "get": 5,
+        "post": 4,
+        "put": 0,
+        "patch": 3,
+        "delete": 4
+      },
+      "mounts": [],
+      "endpoints": [
+        "DELETE /api/finance/budgets/:id",
+        "DELETE /api/finance/donations/:id",
+        "DELETE /api/finance/invoices/:id",
+        "DELETE /api/finance/invoices/:id/attachment",
+        "GET /api/finance/budgets",
+        "GET /api/finance/donations",
+        "GET /api/finance/invoices",
+        "GET /api/finance/invoices/:id/attachment",
+        "GET /api/finance/summary",
+        "PATCH /api/finance/budgets/:id",
+        "PATCH /api/finance/donations/:id",
+        "PATCH /api/finance/invoices/:id",
+        "POST /api/finance/budgets",
+        "POST /api/finance/donations",
+        "POST /api/finance/invoices",
+        "POST /api/finance/invoices/:id/attachment"
+      ]
+    },
+    {
+      "file": "src/domain/followups/routes.ts",
+      "layer": "domain",
+      "zone": "protected",
+      "counts": {
+        "get": 2,
+        "post": 1,
+        "put": 0,
+        "patch": 1,
+        "delete": 0
+      },
+      "mounts": [],
+      "endpoints": [
+        "GET /api/followups",
+        "GET /api/followups/:id",
+        "PATCH /api/followups/:id",
+        "POST /api/followups"
+      ]
+    },
+    {
+      "file": "src/domain/form-builder/routes.ts",
+      "layer": "domain",
+      "zone": "protected",
+      "counts": {
+        "get": 4,
+        "post": 3,
+        "put": 0,
+        "patch": 1,
+        "delete": 1
+      },
+      "mounts": [],
+      "endpoints": [
+        "DELETE /api/forms/:id",
+        "GET /api/forms",
+        "GET /api/forms/:id",
+        "GET /api/forms/:id/responses",
+        "GET /public/form/:slug",
+        "PATCH /api/forms/:id",
+        "POST /api/forms",
+        "POST /api/forms/:id/responses/:rid/seen",
+        "POST /public/form/:slug/submit"
+      ]
+    },
+    {
+      "file": "src/domain/games/routes.ts",
+      "layer": "domain",
+      "zone": "public+protected",
+      "counts": {
+        "get": 13,
+        "post": 17,
+        "put": 0,
+        "patch": 0,
+        "delete": 0
+      },
+      "mounts": [],
+      "endpoints": [
+        "GET /api/games/children/:childId/report",
+        "GET /api/games/followups",
+        "GET /api/games/goals",
+        "GET /api/games/metrics",
+        "GET /api/games/missions",
+        "GET /api/games/missions/:id/sessions",
+        "GET /api/games/packages",
+        "GET /api/games/prescriptions",
+        "GET /api/m/:token/next-item",
+        "GET /api/m/:token/state",
+        "GET /api/play/preview/:token/item/:n",
+        "GET /m/:token",
+        "GET /play/preview/:token",
+        "POST /api/games/goals",
+        "POST /api/games/links/:jti/revoke",
+        "POST /api/games/metrics",
+        "POST /api/games/missions",
+        "POST /api/games/missions/:id/link",
+        "POST /api/games/packages",
+        "POST /api/games/packages/:id/:version/publish",
+        "POST /api/games/packages/:id/:version/retire",
+        "POST /api/games/prescriptions",
+        "POST /api/games/prescriptions/:id/status",
+        "POST /api/games/preview",
+        "POST /api/m/:token/attempts",
+        "POST /api/m/:token/confirm",
+        "POST /api/m/:token/finish",
+        "POST /api/m/:token/parent-gate",
+        "POST /api/m/:token/start",
+        "POST /api/play/preview/:token/feedback"
+      ]
+    },
+    {
+      "file": "src/domain/knowledge/routes.ts",
+      "layer": "domain",
+      "zone": "protected",
+      "counts": {
+        "get": 3,
+        "post": 4,
+        "put": 1,
+        "patch": 1,
+        "delete": 2
+      },
+      "mounts": [],
+      "endpoints": [
+        "DELETE /api/knowledge/:id",
+        "DELETE /api/knowledge/:id/files/:fileId",
+        "GET /api/knowledge",
+        "GET /api/knowledge/:id/files/:fileId",
+        "GET /api/knowledge/manage",
+        "PATCH /api/knowledge/:id",
+        "POST /api/knowledge",
+        "POST /api/knowledge/:id/files",
+        "POST /api/knowledge/:id/files/:fileId/complete",
+        "POST /api/knowledge/:id/files/begin",
+        "PUT /api/knowledge/:id/files/:fileId/chunks/:seq"
+      ]
+    },
+    {
+      "file": "src/domain/network-content/routes.ts",
+      "layer": "domain",
+      "zone": "protected",
+      "counts": {
+        "get": 3,
+        "post": 4,
+        "put": 0,
+        "patch": 0,
+        "delete": 0
+      },
+      "mounts": [],
+      "endpoints": [
+        "GET /api/network-content",
+        "GET /api/network-content/:id",
+        "GET /api/network-content/cp/:id/file",
+        "POST /api/network-content",
+        "POST /api/network-content/:id/queue",
+        "POST /api/network-content/:id/withdraw",
+        "POST /api/network-content/cp/:id/install"
+      ]
+    },
+    {
+      "file": "src/domain/ot-engine/routes.ts",
+      "layer": "domain",
+      "zone": "protected",
+      "counts": {
+        "get": 3,
+        "post": 2,
+        "put": 0,
+        "patch": 0,
+        "delete": 0
+      },
+      "mounts": [],
+      "endpoints": [
+        "GET /api/students/:id/clinical-gates",
+        "GET /api/students/:id/ot/profile",
+        "GET /api/students/:id/ot/progress",
+        "POST /api/students/:id/needs-summary",
+        "POST /api/students/:id/ot/sessions"
+      ]
+    },
+    {
+      "file": "src/domain/screening/routes.ts",
+      "layer": "domain",
+      "zone": "protected",
+      "counts": {
+        "get": 3,
+        "post": 2,
+        "put": 0,
+        "patch": 1,
+        "delete": 1
+      },
+      "mounts": [],
+      "endpoints": [
+        "DELETE /api/screening/:id",
+        "GET /api/screening",
+        "GET /api/screening/:id/iq-evaluation",
+        "GET /api/screening/tags",
+        "PATCH /api/screening/:id",
+        "POST /api/screening",
+        "POST /api/screening/:id/iq-evaluation"
+      ]
+    },
+    {
+      "file": "src/domain/staff/routes.ts",
+      "layer": "domain",
+      "zone": "protected",
+      "counts": {
+        "get": 2,
+        "post": 3,
+        "put": 0,
+        "patch": 1,
+        "delete": 1
+      },
+      "mounts": [],
+      "endpoints": [
+        "DELETE /api/staff/:id",
+        "GET /api/staff",
+        "GET /api/staff/:id",
+        "PATCH /api/staff/:id",
+        "POST /api/staff",
+        "POST /api/staff/:id/activate",
+        "POST /api/staff/:id/deactivate"
+      ]
+    },
+    {
+      "file": "src/domain/student-profile/routes.ts",
+      "layer": "domain",
+      "zone": "protected",
+      "counts": {
+        "get": 12,
+        "post": 11,
+        "put": 0,
+        "patch": 7,
+        "delete": 5
+      },
+      "mounts": [],
+      "endpoints": [
+        "DELETE /api/classes/:id",
+        "DELETE /api/schools/:id",
+        "DELETE /api/students/:id",
+        "DELETE /api/students/:id/education-history/:entryId",
+        "DELETE /api/students/:id/teachers/:teacherId",
+        "GET /api/classes",
+        "GET /api/classes/:id",
+        "GET /api/schools",
+        "GET /api/schools/:id",
+        "GET /api/students",
+        "GET /api/students/:id",
+        "GET /api/students/:id/appointments",
+        "GET /api/students/:id/delete-check",
+        "GET /api/students/:id/education-history",
+        "GET /api/students/:id/teachers",
+        "GET /api/students/by-national-id/:nationalId",
+        "GET /public/partner-schools",
+        "PATCH /api/classes/:id",
+        "PATCH /api/schools/:id",
+        "PATCH /api/students/:id",
+        "PATCH /api/students/:id/case-status",
+        "PATCH /api/students/:id/owner",
+        "PATCH /api/students/:id/pathway",
+        "PATCH /api/students/:id/special-need",
+        "POST /api/classes",
+        "POST /api/classes/:id/activate",
+        "POST /api/classes/:id/deactivate",
+        "POST /api/schools",
+        "POST /api/schools/:id/activate",
+        "POST /api/schools/:id/deactivate",
+        "POST /api/students",
+        "POST /api/students/:id/activate",
+        "POST /api/students/:id/deactivate",
+        "POST /api/students/:id/education-history",
+        "POST /api/students/:id/teachers"
+      ]
+    },
+    {
+      "file": "src/domain/tags/routes.ts",
+      "layer": "domain",
+      "zone": "protected",
+      "counts": {
+        "get": 2,
+        "post": 2,
+        "put": 1,
+        "patch": 0,
+        "delete": 0
+      },
+      "mounts": [],
+      "endpoints": [
+        "GET /api/students/:id/tags",
+        "GET /api/tags",
+        "POST /api/tags",
+        "POST /api/tags/:id/deactivate",
+        "PUT /api/students/:id/tags"
+      ]
+    },
+    {
+      "file": "src/domain/todos/routes.ts",
+      "layer": "domain",
+      "zone": "protected",
+      "counts": {
+        "get": 1,
+        "post": 3,
+        "put": 0,
+        "patch": 1,
+        "delete": 0
+      },
+      "mounts": [],
+      "endpoints": [
+        "GET /api/todos",
+        "PATCH /api/todos/:id",
+        "POST /api/todos",
+        "POST /api/todos/:id/checklist",
+        "POST /api/todos/:id/complete"
+      ]
+    },
+    {
+      "file": "src/domain/waitlist/routes.ts",
+      "layer": "domain",
+      "zone": "protected",
+      "counts": {
+        "get": 6,
+        "post": 13,
+        "put": 0,
+        "patch": 1,
+        "delete": 1
+      },
+      "mounts": [],
+      "endpoints": [
+        "DELETE /api/waitlist/:id",
+        "GET /api/waitlist",
+        "GET /api/waitlist/:id",
+        "GET /api/waitlist/badge",
+        "GET /api/waitlist/referrals",
+        "GET /public/guide/:slug",
+        "GET /public/referral",
+        "PATCH /api/waitlist/:id",
+        "POST /api/students/:id/wait-status",
+        "POST /api/waitlist",
+        "POST /api/waitlist/:id/call",
+        "POST /api/waitlist/:id/cancel",
+        "POST /api/waitlist/:id/no-show",
+        "POST /api/waitlist/:id/reject",
+        "POST /api/waitlist/:id/reopen",
+        "POST /api/waitlist/:id/schedule",
+        "POST /api/waitlist/auto-order",
+        "POST /api/waitlist/referrals/:id/accept",
+        "POST /api/waitlist/referrals/:id/reject",
+        "POST /api/waitlist/reorder",
+        "POST /public/referrals"
+      ]
+    },
+    {
+      "file": "src/domain/working-day/routes.ts",
+      "layer": "domain",
+      "zone": "protected",
+      "counts": {
+        "get": 1,
+        "post": 1,
+        "put": 0,
+        "patch": 0,
+        "delete": 1
+      },
+      "mounts": [],
+      "endpoints": [
+        "DELETE /api/working-day/notes/:id",
+        "GET /api/working-day",
+        "POST /api/working-day/notes"
+      ]
+    },
+    {
+      "file": "src/domain/working-hours/routes.ts",
+      "layer": "domain",
+      "zone": "protected",
+      "counts": {
+        "get": 1,
+        "post": 1,
+        "put": 1,
+        "patch": 0,
+        "delete": 1
+      },
+      "mounts": [],
+      "endpoints": [
+        "DELETE /api/working-hours/:id",
+        "GET /api/working-hours",
+        "POST /api/working-hours",
+        "PUT /api/working-hours/staff/:staffId"
+      ]
+    },
+    {
+      "file": "src/internal-sync/routes.ts",
+      "layer": "other",
+      "zone": "protected",
+      "counts": {
+        "get": 3,
+        "post": 1,
+        "put": 0,
+        "patch": 0,
+        "delete": 0
+      },
+      "mounts": [],
+      "endpoints": [
+        "GET /api/internal/sync/announcements",
+        "GET /api/internal/sync/outbox",
+        "GET /api/internal/sync/status",
+        "POST /api/internal/sync/ingest"
+      ]
+    },
+    {
+      "file": "src/node-sync-runner/status.ts",
+      "layer": "other",
+      "zone": "protected",
+      "counts": {
+        "get": 1,
+        "post": 1,
+        "put": 0,
+        "patch": 0,
+        "delete": 0
+      },
+      "mounts": [],
+      "endpoints": [
+        "GET /api/node-sync/status",
+        "POST /api/node-sync/status"
+      ]
+    },
+    {
+      "file": "src/node-sync/app.ts",
+      "layer": "other",
+      "zone": "public+protected",
+      "counts": {
+        "get": 5,
+        "post": 4,
+        "put": 0,
+        "patch": 0,
+        "delete": 0
+      },
+      "mounts": [],
+      "endpoints": [
+        "GET /api/central/nodes-map",
+        "GET /api/central/quota",
+        "GET /nodes",
+        "GET /pull",
+        "GET /reconcile",
+        "POST /push",
+        "POST /register",
+        "POST /revoke",
+        "POST /rotate-key"
+      ]
+    }
+  ]
+}

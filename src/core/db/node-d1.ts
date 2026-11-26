@@ -123,16 +123,17 @@ export class NodeD1 {
     return new NodeD1PreparedStatement(this.store, sql, []);
   }
 
-  async batch(statements: NodeD1PreparedStatement[]): Promise<Array<{ success: boolean; meta: Record<string, unknown> }>> {
+  async batch(statements: NodeD1PreparedStatement[]): Promise<Array<{ success: boolean; meta: Record<string, unknown>; results: Record<string, unknown>[] }>> {
     if (statements.length === 0) return [];
-    const results: Array<{ success: boolean; meta: Record<string, unknown> }> = [];
+    const results: Array<{ success: boolean; meta: Record<string, unknown>; results: Record<string, unknown>[] }> = [];
     this.store.exec('BEGIN IMMEDIATE');
     try {
       for (const stmt of statements) {
-        const { changes } = (
+        const { rows, changes } = (
           stmt as unknown as { execSync(): { rows: Record<string, unknown>[]; changes: number } }
         ).execSync();
-        results.push({ success: true, meta: { changes, rows_affected: changes, duration: 0 } });
+        /* ۱.۲۷.۷۹-B2 (performance-001) — parity با D1 واقعی: ردیف‌های SELECT در results برمی‌گردند */
+        results.push({ success: true, meta: { changes, rows_affected: changes, duration: 0 }, results: rows });
       }
       this.store.exec('COMMIT');
       return results;

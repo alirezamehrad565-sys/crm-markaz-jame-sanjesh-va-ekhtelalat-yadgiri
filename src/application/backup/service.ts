@@ -364,7 +364,7 @@ export function createBackupService(deps: {
   }
 
   async function listTables(): Promise<string[]> {
-    // ⚠️ : جدول داخلی _cf_KV (متعلق به خود D1) روی پروداکشن در sqlite_master هست؛
+    // هشدار : جدول داخلی _cf_KV (متعلق به خود D1) روی پروداکشن در sqlite_master هست؛
     // کوئری زدن روی آن از داخل Worker با «D1_ERROR: not authorized: SQLITE_AUTH» رد می‌شود
     // (از wrangler/REST مجاز است — فقط binding داخل Worker محافظت می‌شود).
     // همین امر پنل پشتیبان (status)، خروجی (export) و بازیابی (inspect) را ۵۰۰ می‌کرد.

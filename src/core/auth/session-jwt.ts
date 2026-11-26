@@ -9,7 +9,7 @@ export interface SessionJwtPayload {
   exp: number;
 }
 
-const SESSION_TTL_SECONDS = 30 * 24 * 60 * 60; // ۳۰ روز
+export const SESSION_TTL_SECONDS = 14 * 24 * 60 * 60; // ۱۴ روز (۱.۲۷.۸۴ — ADR-019: تصمیم محصولی تأییدشدهٔ کارفرما «همه رو انجام بده»؛ کوکی نشست هم‌سن این TTL است — هر ورود تازه عمر می‌گیرد)
 
 function base64UrlEncode(bytes: Uint8Array): string {
   let bin = '';

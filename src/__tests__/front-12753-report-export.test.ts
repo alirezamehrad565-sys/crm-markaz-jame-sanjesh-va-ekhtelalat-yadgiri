@@ -6,7 +6,7 @@
  * منطق سرویس خودش در report-export.test.ts پوشش دارد؛ اینجا فقط قرارداد پین می‌شود.
  */
 import { describe, it, expect } from 'vitest';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 const ROOT = join(__dirname, '../..');
@@ -20,13 +20,20 @@ describe('موج ۳ — سند و migration', () => {
     expect(mig).toContain('content_hash TEXT NOT NULL');
     const doc = read('docs/MIGRATIONS.md');
     expect(doc).toContain('| 122 | `0122_report_snapshots.sql` |');
-    expect(doc).toContain('شمارهٔ بعدی = `0123`');
+    // ۱.۲۷.۷۹ (sdt156) — پین پویا: «شمارهٔ بعدی» سند باید همیشه برابر بعدیِ آزادِ دنباله‌دارِ
+    // واقعی مخزن باشد (literal ثابت در هر مایگریشن تازه می‌شکست — خودِ الگوی testing-002)
+    const maxNum = readdirSync(join(ROOT, 'migrations'))
+      .filter((f) => f.endsWith('.sql'))
+      .map((f) => Number(f.slice(0, 4)))
+      .reduce((a, b) => Math.max(a, b), 0);
+    expect(doc).toContain(`شمارهٔ بعدی = \`0${maxNum + 1}\``);
   });
 });
 
 describe('موج ۳ — ماژول report-export و سیم‌کشی', () => {
   const svc = read('src/application/report-export/service.ts');
-  const wiring = read('src/application/api-routing/index.ts');
+  const wiring = read('src/application/api-routing/composition.ts'); // ۱.۲۷.۸۰ — ترکیب سرویس‌ها به composition.ts منتقل شد (architecture-001)
+  const routes = read('src/application/api-routing/routes.ts');
 
   it('snapshot-first: هش SHA-256 + شمارهٔ سالانهٔ جلالی + امضاکنندهٔ لحظهٔ قطعی', () => {
     expect(svc).toContain('export async function sha256Hex');
@@ -42,7 +49,7 @@ describe('موج ۳ — ماژول report-export و سیم‌کشی', () => {
   it('سازندهٔ گزارش تزریقی است (نه وابستگی domain→domain) و route ثبت شده', () => {
     expect(wiring).toContain('createReportExportService({');
     expect(wiring).toContain('clinicalEngine.getPathwayReport(pathId, { from: null, to: null }, actor)');
-    expect(wiring).toContain('registerReportExportRoutes(app, services.reportExport);');
+    expect(routes).toContain('registerReportExportRoutes(app, services.reportExport);');
   });
 });
 
@@ -66,7 +73,7 @@ describe('موج ۳ — timeline و کلاینت', () => {
   });
 
   it('آرشیو: چیپ «گزارش‌های خروجی» و بازکردن سند از خط زمانی (سند نه پیام)', () => {
-    expect(view).toContain("{ key: 'reports', label: 'گزارش‌های خروجی', kinds: 'report_export' }");
+    expect(view).toContain("{ key: 'reports', label: 'گزارش‌های خروجی', kinds: 'report_export' }"); // ۱.۲۷.۷۱ — نام چیپ کلاسیک
     expect(view).toContain('const isSnapshot = e.kind === \'report_export\' && e.ref?.type === \'report_snapshot\'');
     expect(view).toContain('report_export: { icon: \'file\', tone: \'accent\' }');
   });

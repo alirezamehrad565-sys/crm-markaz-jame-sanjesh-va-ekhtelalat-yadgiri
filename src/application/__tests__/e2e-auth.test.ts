@@ -39,6 +39,71 @@ describe('/ — auth & session (API واقعی)', () => {
     expect(new Date(data.expiresAt).getTime()).toBeGreaterThan(Date.now());
   });
 
+  it('login کوکی httpOnly نشست را با فلگ‌های امن می‌گذارد (security-009/ADR-005 — ۱.۲۷.۸۲)', async () => {
+    const raw = await A.app.request(
+      '/api/auth/login',
+      { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: 'manager', password: '1234' }) },
+      A.env as never
+    );
+    expect(raw.status).toBe(200);
+    const sc = raw.headers.get('set-cookie') ?? '';
+    expect(sc).toContain('cs_session=');
+    expect(sc).toContain('HttpOnly');  // اسکریپت صفحه نمی‌تواند بخواند
+    expect(sc).toContain('Secure');
+    expect(sc).toContain('SameSite=Strict');
+    expect(sc).toContain('Path=/');
+    expect(sc).toMatch(/Max-Age=\d{6,}/); // ۱۴ روز (ADR-019) — الگوی عرضی عمداً وابسته به عدد نیست
+  });
+
+  it('احراز با کوکی تنها (بدون Bearer) کار می‌کند — /api/me ۲۰۰', async () => {
+    const raw = await A.app.request(
+      '/api/auth/login',
+      { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: 'ali', password: '1234' }) },
+      A.env as never
+    );
+    const cookie = (raw.headers.get('set-cookie') ?? '').split(';')[0];
+    expect(cookie.startsWith('cs_session=')).toBe(true);
+    const me = await A.app.request('/api/me', { method: 'GET', headers: { cookie } }, A.env as never);
+    expect(me.status).toBe(200);
+    expect((me.headers.get('content-security-policy') ?? '')).toContain("frame-ancestors 'none'");
+  });
+
+  it('CSRF: POST بین‌مبدأ با کوکی نشست ۴۰۳؛ همان درخواست با Bearer از گیت کوکی می‌گذرد', async () => {
+    const raw = await A.app.request(
+      '/api/auth/login',
+      { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: 'manager', password: '1234' }) },
+      A.env as never
+    );
+    const cookie = (raw.headers.get('set-cookie') ?? '').split(';')[0];
+    const token = await loginToken(A, 'manager');
+    const bad = await A.app.request(
+      '/api/staff',
+      { method: 'POST', headers: { cookie, origin: 'https://evil.example', 'content-type': 'application/json' }, body: '{}' },
+      A.env as never
+    );
+    expect(bad.status).toBe(403);
+    const viaBearer = await A.app.request(
+      '/api/staff',
+      { method: 'POST', headers: { authorization: `Bearer ${token}`, origin: 'https://evil.example', 'content-type': 'application/json' }, body: '{}' },
+      A.env as never
+    );
+    expect(viaBearer.status).not.toBe(403); // Bearer مسیر عمدی کلاینت غیرمرورگری است
+  });
+
+  it('logout کوکی نشست را پاک می‌کند (Max-Age=0) و همان کوکی بلافاصله ۴۰۱ می‌گیرد', async () => {
+    const raw = await A.app.request(
+      '/api/auth/login',
+      { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: 'manager', password: '1234' }) },
+      A.env as never
+    );
+    const cookie = (raw.headers.get('set-cookie') ?? '').split(';')[0];
+    const out = await A.app.request('/api/auth/logout', { method: 'POST', headers: { cookie } }, A.env as never);
+    expect(out.status).toBe(200);
+    expect(out.headers.get('set-cookie') ?? '').toContain('Max-Age=0');
+    const me = await A.app.request('/api/me', { method: 'GET', headers: { cookie } }, A.env as never);
+    expect(me.status).toBe(401); // ابطال سمت‌سرور sid + کوکی پاک‌شده
+  });
+
   it('رمز اشتباه — 401 با پیام عامدانه کلی', async () => {
     const api = new Api(A);
     const res = await api.post('/api/auth/login', { username: 'manager', password: 'wrong' });

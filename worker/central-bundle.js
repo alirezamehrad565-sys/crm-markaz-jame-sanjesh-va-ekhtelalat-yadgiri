@@ -1,6 +1,6 @@
 /**
  * ورکر مرکزی مستقل «markaz-central» — ساخته‌شده از منبع با scripts/build-central-bundle.mjs
- * ⚠ این فایل را دستی ویرایش نکنید — تغییرها را در src/ بدهید و باندل را بازسازی کنید.
+ * هشدار این فایل را دستی ویرایش نکنید — تغییرها را در src/ بدهید و باندل را بازسازی کنید.
  * نصب: پوستهٔ دسکتاپ (cf_deploy.rs) این ماژول را با توکن کلادفلر کاربر deploy می‌کند.
  */
 var __defProp = Object.defineProperty;
@@ -22200,6 +22200,276 @@ function date4(params) {
 }
 __name(date4, "date");
 
+// src/core/errors/errors.ts
+var AppError = class extends Error {
+  static {
+    __name(this, "AppError");
+  }
+  code;
+  status;
+  details;
+  constructor(code, status, message, details) {
+    super(message);
+    this.name = "AppError";
+    this.code = code;
+    this.status = status;
+    this.details = details;
+  }
+};
+var ValidationError = class extends AppError {
+  static {
+    __name(this, "ValidationError");
+  }
+  constructor(message = "\u0648\u0631\u0648\u062F\u06CC \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A", details) {
+    super("VALIDATION_ERROR", 400, message, details);
+    this.name = "ValidationError";
+  }
+};
+var AuthError = class extends AppError {
+  static {
+    __name(this, "AuthError");
+  }
+  constructor(message = "\u0627\u062D\u0631\u0627\u0632 \u0647\u0648\u06CC\u062A \u0646\u0627\u0645\u0648\u0641\u0642 \u0628\u0648\u062F") {
+    super("AUTH_ERROR", 401, message);
+    this.name = "AuthError";
+  }
+};
+var ForbiddenError = class extends AppError {
+  static {
+    __name(this, "ForbiddenError");
+  }
+  constructor(message = "\u062F\u0633\u062A\u0631\u0633\u06CC \u0645\u062C\u0627\u0632 \u0646\u06CC\u0633\u062A") {
+    super("FORBIDDEN", 403, message);
+    this.name = "ForbiddenError";
+  }
+};
+var NotFoundError = class extends AppError {
+  static {
+    __name(this, "NotFoundError");
+  }
+  constructor(resource = "\u0645\u0646\u0628\u0639", message) {
+    super("NOT_FOUND", 404, message ?? `${resource} \u067E\u06CC\u062F\u0627 \u0646\u0634\u062F`);
+    this.name = "NotFoundError";
+  }
+};
+var ConflictError = class extends AppError {
+  static {
+    __name(this, "ConflictError");
+  }
+  currentVersion;
+  constructor(message = "\u062A\u0639\u0627\u0631\u0636 \u062F\u0631 \u0648\u0636\u0639\u06CC\u062A \u0641\u0639\u0644\u06CC \u0631\u06A9\u0648\u0631\u062F", currentVersion) {
+    super("CONFLICT", 409, message, currentVersion !== void 0 ? { currentVersion } : void 0);
+    this.name = "ConflictError";
+    this.currentVersion = currentVersion;
+  }
+};
+var RateLimitError = class extends AppError {
+  static {
+    __name(this, "RateLimitError");
+  }
+  retryAfterSeconds;
+  constructor(retryAfterSeconds, message = "\u062A\u0644\u0627\u0634\u200C\u0647\u0627\u06CC \u0646\u0627\u0645\u0648\u0641\u0642 \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0645\u062C\u0627\u0632 \u0627\u0633\u062A \u2014 \u06A9\u0645\u06CC \u0628\u0639\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F") {
+    super("RATE_LIMITED", 429, message, { reason: "rate_limited", retryAfterSeconds });
+    this.name = "RateLimitError";
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
+};
+
+// src/core/audit/writer.ts
+var AUDIT_RETENTION_DAYS_DEFAULT = 180;
+function parseAuditRetentionDays(raw2) {
+  if (raw2 === null || raw2 === void 0 || typeof raw2 === "string" && raw2.trim() === "") {
+    return AUDIT_RETENTION_DAYS_DEFAULT;
+  }
+  const n = typeof raw2 === "string" ? Number(raw2.trim()) : Number(raw2);
+  if (!Number.isFinite(n) || n < 0) return AUDIT_RETENTION_DAYS_DEFAULT;
+  return Math.trunc(n);
+}
+__name(parseAuditRetentionDays, "parseAuditRetentionDays");
+function pickAsyncLocalStorage() {
+  try {
+    const probe = globalThis.process?.getBuiltinModule?.("node:async_hooks");
+    const ALS = probe?.AsyncLocalStorage;
+    return ALS ? new ALS() : null;
+  } catch {
+    return null;
+  }
+}
+__name(pickAsyncLocalStorage, "pickAsyncLocalStorage");
+var requestIdALS = pickAsyncLocalStorage();
+function runWithRequestId(requestId, fn) {
+  if (!requestIdALS) return fn();
+  return requestIdALS.run({ requestId }, fn);
+}
+__name(runWithRequestId, "runWithRequestId");
+function currentRequestId() {
+  return requestIdALS?.getStore()?.requestId ?? null;
+}
+__name(currentRequestId, "currentRequestId");
+function buildInsert(entry) {
+  return {
+    sql: `INSERT INTO audit_log (id, actor_id, action, resource_type, resource_id, changes, request_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    params: [
+      crypto.randomUUID(),
+      entry.actorId,
+      entry.action,
+      entry.resourceType,
+      entry.resourceId,
+      entry.changes ? JSON.stringify(entry.changes) : null,
+      // صراحتِ صدا زننده همیشه برندهٔ زمینهٔ درخواست است (مثلاً میدل‌ور ناظر که بعد از پاسخ می‌نویسد)
+      entry.requestId ?? currentRequestId()
+    ]
+  };
+}
+__name(buildInsert, "buildInsert");
+function createAuditWriter(db, opts) {
+  const retentionDays = opts?.retentionDays !== void 0 ? parseAuditRetentionDays(opts.retentionDays) : AUDIT_RETENTION_DAYS_DEFAULT;
+  return {
+    async log(entry) {
+      const { sql, params } = buildInsert(entry);
+      await db.execute(sql, params);
+    },
+    async logInTransaction(tx, entry) {
+      const { sql, params } = buildInsert(entry);
+      await tx.execute(sql, params);
+    },
+    async pruneOld() {
+      if (retentionDays === 0) return 0;
+      const cutoff = new Date(Date.now() - retentionDays * 24 * 3600 * 1e3).toISOString().slice(0, 19).replace("T", " ");
+      const res = await db.execute(`DELETE FROM audit_log WHERE created_at < ?`, [cutoff]);
+      return typeof res?.meta?.changes === "number" ? res.meta.changes : 0;
+    }
+  };
+}
+__name(createAuditWriter, "createAuditWriter");
+
+// src/application/rum/pure.ts
+function makeRateLimiter(max, windowMs) {
+  let windowStart = 0;
+  let count = 0;
+  return {
+    allow() {
+      const now = Date.now();
+      if (now - windowStart >= windowMs) {
+        windowStart = now;
+        count = 0;
+      }
+      if (count >= max) return false;
+      count += 1;
+      return true;
+    }
+  };
+}
+__name(makeRateLimiter, "makeRateLimiter");
+
+// src/application/http/rate-limit.ts
+var API_RATE_LIMIT_PER_MIN_DEFAULT = 240;
+var API_RATE_LIMIT_PER_MIN_MAX = 1e4;
+var API_RATE_LIMIT_WINDOW_MS = 6e4;
+function parsePerMinWithDefault(raw2, fallback) {
+  if (raw2 === null || raw2 === void 0 || typeof raw2 === "string" && raw2.trim() === "") {
+    return fallback;
+  }
+  const n = typeof raw2 === "string" ? Number(raw2.trim()) : Number(raw2);
+  if (!Number.isFinite(n) || n < 0) return fallback;
+  if (n === 0) return 0;
+  return Math.min(Math.trunc(n), API_RATE_LIMIT_PER_MIN_MAX);
+}
+__name(parsePerMinWithDefault, "parsePerMinWithDefault");
+function parseApiRateLimitPerMin(raw2) {
+  return parsePerMinWithDefault(raw2, API_RATE_LIMIT_PER_MIN_DEFAULT);
+}
+__name(parseApiRateLimitPerMin, "parseApiRateLimitPerMin");
+function makeKeyedRateLimiter(windowMs, maxKeys = 4096) {
+  const buckets = /* @__PURE__ */ new Map();
+  return {
+    allow(key, max) {
+      const now = Date.now();
+      if (!buckets.has(key) && buckets.size >= maxKeys) {
+        for (const [k, b] of buckets) {
+          if (now - b.lastSeen >= windowMs) buckets.delete(k);
+        }
+        if (buckets.size >= maxKeys) {
+          let oldestKey = null;
+          let oldestAt = Number.POSITIVE_INFINITY;
+          for (const [k, b] of buckets) {
+            if (b.lastSeen < oldestAt) {
+              oldestAt = b.lastSeen;
+              oldestKey = k;
+            }
+          }
+          if (oldestKey !== null) buckets.delete(oldestKey);
+        }
+      }
+      let bucket = buckets.get(key);
+      if (!bucket) {
+        bucket = { limiter: makeRateLimiter(max, windowMs), lastSeen: now };
+        buckets.set(key, bucket);
+      }
+      bucket.lastSeen = now;
+      return bucket.limiter.allow();
+    }
+  };
+}
+__name(makeKeyedRateLimiter, "makeKeyedRateLimiter");
+
+// src/application/http/chain.ts
+function installRequestId(app, path = "/api/*") {
+  app.use(path, async (c, next) => {
+    const requestId = `req-${crypto.randomUUID()}`;
+    c.set("requestId", requestId);
+    try {
+      return await runWithRequestId(requestId, () => next());
+    } finally {
+      c.header("X-Request-Id", requestId);
+    }
+  });
+}
+__name(installRequestId, "installRequestId");
+function installWriteRateLimit(app, opts = {}) {
+  const path = opts.path ?? "/api/*";
+  const exceptions = opts.exceptionPaths ?? ["/api/auth/login"];
+  const keyPrefix = opts.keyPrefix ?? "";
+  const message = opts.message ?? "\u062F\u0631\u062E\u0648\u0627\u0633\u062A\u200C\u0647\u0627\u06CC \u0646\u0648\u0634\u062A\u0646\u06CC \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0645\u062C\u0627\u0632 \u0627\u0633\u062A \u2014 \u06A9\u0645\u06CC \u0628\u0639\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F";
+  const apiRateLimiter = makeKeyedRateLimiter(API_RATE_LIMIT_WINDOW_MS);
+  let disabledLogged = false;
+  app.use(path, async (c, next) => {
+    if (c.req.method !== "POST" && c.req.method !== "PUT" && c.req.method !== "PATCH" && c.req.method !== "DELETE") {
+      return next();
+    }
+    if (exceptions.includes(c.req.path)) return next();
+    const perMin = parseApiRateLimitPerMin(c.env?.API_RATE_LIMIT_PER_MIN);
+    if (perMin <= 0) {
+      if (opts.onDisabled && !disabledLogged) {
+        disabledLogged = true;
+        opts.onDisabled();
+      }
+      return next();
+    }
+    const ip = (c.req.header("cf-connecting-ip") ?? "unknown").slice(0, 64);
+    if (!apiRateLimiter.allow(`${keyPrefix}${perMin}:${ip}`, perMin)) {
+      c.header("Retry-After", String(Math.ceil(API_RATE_LIMIT_WINDOW_MS / 1e3)));
+      throw new RateLimitError(Math.ceil(API_RATE_LIMIT_WINDOW_MS / 1e3), message);
+    }
+    return next();
+  });
+}
+__name(installWriteRateLimit, "installWriteRateLimit");
+function installNoStore(app, path = "/api/*") {
+  app.use(path, async (c, next) => {
+    await next();
+    c.header("Cache-Control", "no-store");
+  });
+}
+__name(installNoStore, "installNoStore");
+function installNotFound(app, message) {
+  app.notFound(
+    (c) => c.json(message ? { error: "NOT_FOUND", message } : { error: "NOT_FOUND" }, 404)
+  );
+}
+__name(installNotFound, "installNotFound");
+
 // src/core/shared/constants.ts
 var APPOINTMENT_STATUS = {
   SCHEDULED: "scheduled",
@@ -22579,7 +22849,7 @@ var CopyWeekSchema = external_exports.object({
   dry_run: external_exports.boolean().optional().default(false)
 });
 var MarkAttendanceSchema = external_exports.object({
-  status: external_exports.enum([ATTENDANCE_STATUS.PRESENT, ATTENDANCE_STATUS.LATE, ATTENDANCE_STATUS.ABSENT, ATTENDANCE_STATUS.CANCELLED]),
+  status: external_exports.enum([ATTENDANCE_STATUS.PENDING, ATTENDANCE_STATUS.PRESENT, ATTENDANCE_STATUS.LATE, ATTENDANCE_STATUS.ABSENT, ATTENDANCE_STATUS.CANCELLED]),
   note: external_exports.string().max(1e3).optional()
 });
 var GuardianPhoneSchema = external_exports.string().transform((v) => {
@@ -23058,10 +23328,11 @@ var NewFollowUpSchema = external_exports.object({
 var UpdateFollowUpSchema = external_exports.object({
   status: FollowUpStatusSchema.optional(),
   assignee_id: UuidSchema.optional(),
-  due_at: IsoDateTimeSchema.nullable().optional()
+  due_at: IsoDateTimeSchema.nullable().optional(),
+  result: external_exports.string().trim().max(500, "\u0646\u062A\u06CC\u062C\u0647\u0654 \u067E\u06CC\u06AF\u06CC\u0631\u06CC \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F5\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").optional()
 }).refine(
-  (v) => v.status !== void 0 || v.assignee_id !== void 0 || v.due_at !== void 0,
-  { message: "\u062D\u062F\u0627\u0642\u0644 \u06CC\u06A9\u06CC \u0627\u0632 \u0648\u0636\u0639\u06CC\u062A/\u0645\u0633\u0626\u0648\u0644/\u0645\u0647\u0644\u062A \u0628\u0627\u06CC\u062F \u0627\u0631\u0633\u0627\u0644 \u0634\u0648\u062F" }
+  (v) => v.status !== void 0 || v.assignee_id !== void 0 || v.due_at !== void 0 || v.result !== void 0,
+  { message: "\u062D\u062F\u0627\u0642\u0644 \u06CC\u06A9\u06CC \u0627\u0632 \u0648\u0636\u0639\u06CC\u062A/\u0645\u0633\u0626\u0648\u0644/\u0645\u0647\u0644\u062A/\u0646\u062A\u06CC\u062C\u0647 \u0628\u0627\u06CC\u062F \u0627\u0631\u0633\u0627\u0644 \u0634\u0648\u062F" }
 );
 var TodoPrioritySchema = external_exports.enum(TODO_PRIORITIES);
 var TodoStatusSchema = external_exports.enum(TODO_STATUSES);
@@ -23227,19 +23498,21 @@ var ReferralChildSchema = external_exports.object({
   first_name: external_exports.string().trim().min(2, "\u0646\u0627\u0645 \u06A9\u0648\u062F\u06A9 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").max(80, "\u0646\u0627\u0645 \u06A9\u0648\u062F\u06A9 \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F8\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A"),
   birth_date: TehranYmdSchema.nullish(),
   /* تاریخ تولد شمسیِ تایپی از فرم عمومی — سرویس با jalaliToGregorianYmd به میلادی می‌بَرد؛
-     تبدیل در یک نقطهٔ سمت سرور تا الگوریتم مشترکِ تست‌شدهٔ سامانه تک‌منبع بماند */
-  birth_date_text: external_exports.string().trim().max(20, "\u062A\u0627\u0631\u06CC\u062E \u062A\u0648\u0644\u062F \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F2\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").optional(),
-  school_text: external_exports.string().trim().max(120).optional(),
-  grade_text: external_exports.string().trim().max(40).optional(),
-  class_text: external_exports.string().trim().max(40).optional(),
+     تبدیل در یک نقطهٔ سمت سرور تا الگوریتم مشترکِ تست‌شدهٔ سامانه تک‌منبع بماند
+     ۱.۲۷.۶۱ — فرم عمومی برای «خالی» null می‌فرستد (قرارداد صفحه)؛ این فیلدها nullish‌اند
+     وگرنه گام آخرِ رفرال با «expected string, received null» رد می‌شد؛ سرویس از قبل null را می‌فهمد */
+  birth_date_text: external_exports.string().trim().max(20, "\u062A\u0627\u0631\u06CC\u062E \u062A\u0648\u0644\u062F \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F2\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").nullish(),
+  school_text: external_exports.string().trim().max(120).nullish(),
+  grade_text: external_exports.string().trim().max(40).nullish(),
+  class_text: external_exports.string().trim().max(40).nullish(),
   concern_category: external_exports.enum(REFERRAL_CATEGORIES).nullish(),
   /* تلفن ولیّ هر کودک — در ثبت دسته‌ای معلم به‌ازای هر ردیف جدا می‌آید؛
      در ثبت خانواده خود معرف همان ولیّ است و از referrer_phone استفاده می‌شود */
   guardian_phone: GuardianPhoneSchema.nullish(),
   concern_tags: external_exports.array(external_exports.string().trim().min(2).max(40)).max(8, "\u062D\u062F\u0627\u06A9\u062B\u0631 \u06F8 \u0628\u0631\u0686\u0633\u0628 \u062F\u063A\u062F\u063A\u0647").optional().default([]),
-  concern_text: external_exports.string().trim().max(REFERRAL_CONCERN_MAX).optional(),
+  concern_text: external_exports.string().trim().max(REFERRAL_CONCERN_MAX).nullish(),
   prior_eval: external_exports.boolean().nullish(),
-  prior_eval_note: external_exports.string().trim().max(300).optional(),
+  prior_eval_note: external_exports.string().trim().max(300).nullish(),
   /* ۱.۲۷.۳۶ — فرم تکمیلی وضعیت خانواده زیر هر دانش‌آموز (اختیاری؛ «نمی‌دانم» ارسال نمی‌شود) */
   family_culture: external_exports.enum(REFERRAL_FAMILY_LEVELS).nullish(),
   family_finance: external_exports.enum(REFERRAL_FAMILY_LEVELS).nullish(),
@@ -23252,9 +23525,10 @@ var PublicReferralSubmissionSchema = external_exports.object({
   role: external_exports.enum(["family", "teacher"], { message: "\u0646\u0642\u0634 \u0645\u0639\u0631\u0641 \u0628\u0627\u06CC\u062F \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u06CC\u0627 \u0645\u0639\u0644\u0645 \u0628\u0627\u0634\u062F" }),
   referrer_name: external_exports.string().trim().min(2, "\u0646\u0627\u0645 \u0645\u0639\u0631\u0641 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").max(80, "\u0646\u0627\u0645 \u0645\u0639\u0631\u0641 \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F8\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A"),
   referrer_phone: GuardianPhoneSchema,
-  school_text: external_exports.string().trim().max(120).optional(),
-  grade_text: external_exports.string().trim().max(40).optional(),
-  class_text: external_exports.string().trim().max(40).optional(),
+  /* ۱.۲۷.۶۱ — مسیر معلم هم برای «بدون مدرسه/پایه/کلاس» null می‌فرستد */
+  school_text: external_exports.string().trim().max(120).nullish(),
+  grade_text: external_exports.string().trim().max(40).nullish(),
+  class_text: external_exports.string().trim().max(40).nullish(),
   token: external_exports.string().trim().max(200).optional(),
   children: external_exports.array(ReferralChildSchema).min(1, "\u062D\u062F\u0627\u0642\u0644 \u06CC\u06A9 \u06A9\u0648\u062F\u06A9 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A").max(REFERRAL_CHILDREN_MAX, `\u062D\u062F\u0627\u06A9\u062B\u0631 ${REFERRAL_CHILDREN_MAX} \u06A9\u0648\u062F\u06A9 \u062F\u0631 \u0647\u0631 \u062B\u0628\u062A`)
 }).superRefine((v, ctx) => {
@@ -23319,83 +23593,13 @@ var FormResponseSubmitSchema = external_exports.object({
 
 // src/core/shared/features.ts
 var FEATURES = {
-  apiKeys: false
+  apiKeys: true
 };
 
-// src/core/errors/errors.ts
-var AppError = class extends Error {
-  static {
-    __name(this, "AppError");
-  }
-  code;
-  status;
-  details;
-  constructor(code, status, message, details) {
-    super(message);
-    this.name = "AppError";
-    this.code = code;
-    this.status = status;
-    this.details = details;
-  }
-};
-var ValidationError = class extends AppError {
-  static {
-    __name(this, "ValidationError");
-  }
-  constructor(message = "\u0648\u0631\u0648\u062F\u06CC \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A", details) {
-    super("VALIDATION_ERROR", 400, message, details);
-    this.name = "ValidationError";
-  }
-};
-var AuthError = class extends AppError {
-  static {
-    __name(this, "AuthError");
-  }
-  constructor(message = "\u0627\u062D\u0631\u0627\u0632 \u0647\u0648\u06CC\u062A \u0646\u0627\u0645\u0648\u0641\u0642 \u0628\u0648\u062F") {
-    super("AUTH_ERROR", 401, message);
-    this.name = "AuthError";
-  }
-};
-var ForbiddenError = class extends AppError {
-  static {
-    __name(this, "ForbiddenError");
-  }
-  constructor(message = "\u062F\u0633\u062A\u0631\u0633\u06CC \u0645\u062C\u0627\u0632 \u0646\u06CC\u0633\u062A") {
-    super("FORBIDDEN", 403, message);
-    this.name = "ForbiddenError";
-  }
-};
-var NotFoundError = class extends AppError {
-  static {
-    __name(this, "NotFoundError");
-  }
-  constructor(resource = "\u0645\u0646\u0628\u0639", message) {
-    super("NOT_FOUND", 404, message ?? `${resource} \u067E\u06CC\u062F\u0627 \u0646\u0634\u062F`);
-    this.name = "NotFoundError";
-  }
-};
-var ConflictError = class extends AppError {
-  static {
-    __name(this, "ConflictError");
-  }
-  currentVersion;
-  constructor(message = "\u062A\u0639\u0627\u0631\u0636 \u062F\u0631 \u0648\u0636\u0639\u06CC\u062A \u0641\u0639\u0644\u06CC \u0631\u06A9\u0648\u0631\u062F", currentVersion) {
-    super("CONFLICT", 409, message, currentVersion !== void 0 ? { currentVersion } : void 0);
-    this.name = "ConflictError";
-    this.currentVersion = currentVersion;
-  }
-};
-var RateLimitError = class extends AppError {
-  static {
-    __name(this, "RateLimitError");
-  }
-  retryAfterSeconds;
-  constructor(retryAfterSeconds, message = "\u062A\u0644\u0627\u0634\u200C\u0647\u0627\u06CC \u0646\u0627\u0645\u0648\u0641\u0642 \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0645\u062C\u0627\u0632 \u0627\u0633\u062A \u2014 \u06A9\u0645\u06CC \u0628\u0639\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F") {
-    super("RATE_LIMITED", 429, message, { reason: "rate_limited", retryAfterSeconds });
-    this.name = "RateLimitError";
-    this.retryAfterSeconds = retryAfterSeconds;
-  }
-};
+// src/core/shared/multipart.ts
+var HEADERS_MAX = 64 * 1024;
+var dec = new TextDecoder();
+var EMPTY = new Uint8Array(0);
 
 // src/core/auth/jwt.ts
 var JWKS_TTL_MS = 5 * 60 * 1e3;
@@ -23458,7 +23662,7 @@ async function verifyAccessToken(token, teamDomain) {
 __name(verifyAccessToken, "verifyAccessToken");
 
 // src/core/auth/session-jwt.ts
-var SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
+var SESSION_TTL_SECONDS = 14 * 24 * 60 * 60;
 function base64UrlEncode(bytes) {
   let bin = "";
   for (const b of bytes) bin += String.fromCharCode(b);
@@ -23552,45 +23756,23 @@ function d1AsSecretStore(db) {
   };
 }
 __name(d1AsSecretStore, "d1AsSecretStore");
-function randomHexSecret() {
-  const bytes = crypto.getRandomValues(new Uint8Array(32));
-  return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-__name(randomHexSecret, "randomHexSecret");
-var cachedSecret = null;
-async function getOrCreateRuntimeSecret(store) {
-  if (cachedSecret) return cachedSecret;
-  const row = await store.queryOne(
+async function resolveSessionSecret(env) {
+  if (env.AUTH_SECRET && env.AUTH_SECRET.length >= 16) return env.AUTH_SECRET;
+  if (isDevEnv(env.ENV)) return DEV_AUTH_SECRET;
+  const row = await d1AsSecretStore(env.DB).queryOne(
     `SELECT value FROM settings WHERE key = ? LIMIT 1`,
     [SETTINGS_AUTH_SECRET_KEY]
   );
   if (row) {
     try {
       const parsed = JSON.parse(row.value);
-      if (typeof parsed === "string" && parsed.length >= 32) {
-        cachedSecret = parsed;
-        return cachedSecret;
-      }
+      if (typeof parsed === "string" && parsed.length >= 32) return parsed;
     } catch {
     }
   }
-  const secret = randomHexSecret();
-  await store.execute(
-    `INSERT INTO settings (key, value, updated_by, updated_at)
-     VALUES (?, ?, NULL, datetime('now'))
-     ON CONFLICT(key) DO UPDATE SET
-       value = excluded.value,
-       updated_at = excluded.updated_at`,
-    [SETTINGS_AUTH_SECRET_KEY, JSON.stringify(secret)]
+  throw new Error(
+    "SEC-12776: \u062F\u0631 \u0645\u062D\u06CC\u0637 \u062A\u0648\u0644\u06CC\u062F AUTH_SECRET \u062A\u0646\u0638\u06CC\u0645 \u0646\u0634\u062F\u0647 \u0627\u0633\u062A \u2014 \u0628\u0627 \xABnpx wrangler secret put AUTH_SECRET\xBB \u0631\u0627\u0632 \u0642\u0648\u06CC (\u062D\u062F\u0627\u0642\u0644 \u06F1\u06F6 \u06A9\u0627\u0631\u0627\u06A9\u062A\u0631) \u0628\u06AF\u0630\u0627\u0631\u06CC\u062F\u061B \u0633\u0627\u062E\u062A \u062E\u0648\u062F\u06A9\u0627\u0631 \u0631\u0627\u0632 \u0646\u0634\u0633\u062A \u062D\u0630\u0641 \u0634\u062F\u0647 \u0627\u0633\u062A."
   );
-  cachedSecret = secret;
-  return secret;
-}
-__name(getOrCreateRuntimeSecret, "getOrCreateRuntimeSecret");
-async function resolveSessionSecret(env) {
-  if (env.AUTH_SECRET && env.AUTH_SECRET.length >= 16) return env.AUTH_SECRET;
-  if (isDevEnv(env.ENV)) return DEV_AUTH_SECRET;
-  return getOrCreateRuntimeSecret(d1AsSecretStore(env.DB));
 }
 __name(resolveSessionSecret, "resolveSessionSecret");
 
@@ -23628,6 +23810,23 @@ async function touchApiKeyLastUsed(db, id) {
 }
 __name(touchApiKeyLastUsed, "touchApiKeyLastUsed");
 
+// src/core/auth/session-cookie.ts
+var SESSION_COOKIE_NAME = "cs_session";
+function buildSessionCookie(token) {
+  return `${SESSION_COOKIE_NAME}=${token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${SESSION_TTL_SECONDS}`;
+}
+__name(buildSessionCookie, "buildSessionCookie");
+function readSessionCookie(cookieHeader) {
+  if (!cookieHeader) return void 0;
+  for (const part of cookieHeader.split(";")) {
+    const idx = part.indexOf("=");
+    if (idx === -1) continue;
+    if (part.slice(0, idx).trim() === SESSION_COOKIE_NAME) return part.slice(idx + 1).trim();
+  }
+  return void 0;
+}
+__name(readSessionCookie, "readSessionCookie");
+
 // src/core/auth/middleware.ts
 var DEV_STAFF_HEADER = "X-Dev-Staff-Id";
 var ACCESS_JWT_HEADER = "Cf-Access-Jwt-Assertion";
@@ -23636,7 +23835,7 @@ function authMiddleware() {
   return async (c, next) => {
     const env = c.env;
     const db = env.DB;
-    if (env.ENV === "development") {
+    if (env.ENV === "development" && env.DEV_IMPERSONATION === "1") {
       const devStaffId = c.req.header(DEV_STAFF_HEADER);
       if (devStaffId) {
         const staff2 = await getStaffById(db, devStaffId);
@@ -23676,17 +23875,31 @@ function authMiddleware() {
       return next();
     }
     const authHeader = c.req.header("Authorization");
-    if (authHeader?.startsWith("Bearer ")) {
-      const sessionToken = authHeader.slice(7).trim();
+    const bearerToken3 = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : void 0;
+    const fromCookie = !bearerToken3;
+    const sessionToken = fromCookie ? readSessionCookie(c.req.header("Cookie")) : bearerToken3;
+    if (sessionToken) {
+      if (fromCookie) {
+        const method = c.req.method.toUpperCase();
+        const origin = c.req.header("Origin");
+        if (method !== "GET" && method !== "HEAD" && method !== "OPTIONS" && origin) {
+          if (origin !== new URL(c.req.url).origin) {
+            throw new ForbiddenError("\u062F\u0631\u062E\u0648\u0627\u0633\u062A \u0628\u06CC\u0646\u200C\u0645\u0628\u062F\u0623 \u0628\u0627 \u06A9\u0648\u06A9\u06CC \u0646\u0634\u0633\u062A \u0645\u062C\u0627\u0632 \u0646\u06CC\u0633\u062A");
+          }
+        }
+      }
       const payload2 = await verifySessionJwt(sessionToken, await resolveSessionSecret(env));
       if (payload2) {
         if (!payload2.sid) {
           throw new AuthError("\u062A\u0648\u06A9\u0646 \u0641\u0627\u0642\u062F \u0634\u0646\u0627\u0633\u0647\u0654 \u0646\u0634\u0633\u062A \u0627\u0633\u062A \u2014 \u0648\u0631\u0648\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A");
         }
         const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
-        const session = await db.prepare("SELECT revoked_at, expires_at FROM auth_sessions WHERE sid = ?").bind(payload2.sid).first();
+        const session = await db.prepare("SELECT revoked_at, expires_at, staff_id FROM auth_sessions WHERE sid = ?").bind(payload2.sid).first();
         if (!session || session.revoked_at !== null || session.expires_at <= nowIso2) {
           throw new AuthError("\u0646\u0634\u0633\u062A \u0628\u0627\u0637\u0644 \u06CC\u0627 \u0645\u0646\u0642\u0636\u06CC \u0634\u062F\u0647 \u0627\u0633\u062A \u2014 \u0648\u0631\u0648\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A");
+        }
+        if (session.staff_id !== payload2.sub) {
+          throw new AuthError("\u0646\u0634\u0633\u062A \u0628\u0647 \u06A9\u0627\u0631\u0628\u0631 \u062F\u06CC\u06AF\u0631\u06CC \u062A\u0639\u0644\u0642 \u062F\u0627\u0631\u062F \u2014 \u0648\u0631\u0648\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A");
         }
         const staff2 = await getStaffById(db, payload2.sub);
         if (!staff2 || staff2.active !== 1) {
@@ -23824,144 +24037,9 @@ function findStaffByUsername(db, username) {
 }
 __name(findStaffByUsername, "findStaffByUsername");
 
-// src/core/audit/writer.ts
-var AUDIT_RETENTION_DAYS_DEFAULT = 180;
-function parseAuditRetentionDays(raw2) {
-  if (raw2 === null || raw2 === void 0 || typeof raw2 === "string" && raw2.trim() === "") {
-    return AUDIT_RETENTION_DAYS_DEFAULT;
-  }
-  const n = typeof raw2 === "string" ? Number(raw2.trim()) : Number(raw2);
-  if (!Number.isFinite(n) || n < 0) return AUDIT_RETENTION_DAYS_DEFAULT;
-  return Math.trunc(n);
-}
-__name(parseAuditRetentionDays, "parseAuditRetentionDays");
-function pickAsyncLocalStorage() {
-  try {
-    const probe = globalThis.process?.getBuiltinModule?.("node:async_hooks");
-    const ALS = probe?.AsyncLocalStorage;
-    return ALS ? new ALS() : null;
-  } catch {
-    return null;
-  }
-}
-__name(pickAsyncLocalStorage, "pickAsyncLocalStorage");
-var requestIdALS = pickAsyncLocalStorage();
-function runWithRequestId(requestId, fn) {
-  if (!requestIdALS) return fn();
-  return requestIdALS.run({ requestId }, fn);
-}
-__name(runWithRequestId, "runWithRequestId");
-function currentRequestId() {
-  return requestIdALS?.getStore()?.requestId ?? null;
-}
-__name(currentRequestId, "currentRequestId");
-function buildInsert(entry) {
-  return {
-    sql: `INSERT INTO audit_log (id, actor_id, action, resource_type, resource_id, changes, request_id)
-          VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    params: [
-      crypto.randomUUID(),
-      entry.actorId,
-      entry.action,
-      entry.resourceType,
-      entry.resourceId,
-      entry.changes ? JSON.stringify(entry.changes) : null,
-      // صراحتِ صدا زننده همیشه برندهٔ زمینهٔ درخواست است (مثلاً میدل‌ور ناظر که بعد از پاسخ می‌نویسد)
-      entry.requestId ?? currentRequestId()
-    ]
-  };
-}
-__name(buildInsert, "buildInsert");
-function createAuditWriter(db, opts) {
-  const retentionDays = opts?.retentionDays !== void 0 ? parseAuditRetentionDays(opts.retentionDays) : AUDIT_RETENTION_DAYS_DEFAULT;
-  return {
-    async log(entry) {
-      const { sql, params } = buildInsert(entry);
-      await db.execute(sql, params);
-    },
-    async logInTransaction(tx, entry) {
-      const { sql, params } = buildInsert(entry);
-      await tx.execute(sql, params);
-    },
-    async pruneOld() {
-      if (retentionDays === 0) return 0;
-      const cutoff = new Date(Date.now() - retentionDays * 24 * 3600 * 1e3).toISOString().slice(0, 19).replace("T", " ");
-      const res = await db.execute(`DELETE FROM audit_log WHERE created_at < ?`, [cutoff]);
-      return typeof res?.meta?.changes === "number" ? res.meta.changes : 0;
-    }
-  };
-}
-__name(createAuditWriter, "createAuditWriter");
-
 // src/core/version.ts
-var APP_VERSION = "1.27.56";
+var APP_VERSION = "1.27.85";
 var NODE_MIN_VERSION = "1.26.0";
-
-// src/application/rum/pure.ts
-function makeRateLimiter(max, windowMs) {
-  let windowStart = 0;
-  let count = 0;
-  return {
-    allow() {
-      const now = Date.now();
-      if (now - windowStart >= windowMs) {
-        windowStart = now;
-        count = 0;
-      }
-      if (count >= max) return false;
-      count += 1;
-      return true;
-    }
-  };
-}
-__name(makeRateLimiter, "makeRateLimiter");
-
-// src/application/http/rate-limit.ts
-var API_RATE_LIMIT_PER_MIN_DEFAULT = 240;
-var API_RATE_LIMIT_PER_MIN_MAX = 1e4;
-var API_RATE_LIMIT_WINDOW_MS = 6e4;
-function parseApiRateLimitPerMin(raw2) {
-  if (raw2 === null || raw2 === void 0 || typeof raw2 === "string" && raw2.trim() === "") {
-    return API_RATE_LIMIT_PER_MIN_DEFAULT;
-  }
-  const n = typeof raw2 === "string" ? Number(raw2.trim()) : Number(raw2);
-  if (!Number.isFinite(n) || n < 0) return API_RATE_LIMIT_PER_MIN_DEFAULT;
-  if (n === 0) return 0;
-  return Math.min(Math.trunc(n), API_RATE_LIMIT_PER_MIN_MAX);
-}
-__name(parseApiRateLimitPerMin, "parseApiRateLimitPerMin");
-function makeKeyedRateLimiter(windowMs, maxKeys = 4096) {
-  const buckets = /* @__PURE__ */ new Map();
-  return {
-    allow(key, max) {
-      const now = Date.now();
-      if (!buckets.has(key) && buckets.size >= maxKeys) {
-        for (const [k, b] of buckets) {
-          if (now - b.lastSeen >= windowMs) buckets.delete(k);
-        }
-        if (buckets.size >= maxKeys) {
-          let oldestKey = null;
-          let oldestAt = Number.POSITIVE_INFINITY;
-          for (const [k, b] of buckets) {
-            if (b.lastSeen < oldestAt) {
-              oldestAt = b.lastSeen;
-              oldestKey = k;
-            }
-          }
-          if (oldestKey !== null) buckets.delete(oldestKey);
-        }
-      }
-      let bucket = buckets.get(key);
-      if (!bucket) {
-        bucket = { limiter: makeRateLimiter(max, windowMs), lastSeen: now };
-        buckets.set(key, bucket);
-      }
-      bucket.lastSeen = now;
-      return bucket.limiter.allow();
-    }
-  };
-}
-__name(makeKeyedRateLimiter, "makeKeyedRateLimiter");
 
 // src/node-sync/service.ts
 var NODE_PULL_DOMAINS = ["announcements", "packages", "library"];
@@ -24470,15 +24548,7 @@ function createNodeSyncApp(deps) {
   const now = deps.now ?? (() => /* @__PURE__ */ new Date());
   const minIntervalMs = deps.pushMinIntervalMs ?? NODE_PUSH_MIN_INTERVAL_MS;
   const app = new Hono3();
-  app.use("*", async (c, next) => {
-    const requestId = `req-${crypto.randomUUID()}`;
-    c.set("requestId", requestId);
-    try {
-      return await runWithRequestId(requestId, () => next());
-    } finally {
-      c.header("X-Request-Id", requestId);
-    }
-  });
+  installRequestId(app, "*");
   const nodeLimitWindowMs = deps.rateLimitWindowMs ?? NODE_RATE_LIMIT_WINDOW_MS;
   const nodeLimiter = makeNodeSlidingWindowLimiter(nodeLimitWindowMs);
   const nodeRateLimitGuard = /* @__PURE__ */ __name(async (c, next) => {
@@ -24510,27 +24580,13 @@ function createNodeSyncApp(deps) {
   app.use("/pull", nodeRateLimitGuard);
   app.use("/push", nodeRateLimitGuard);
   app.use("/reconcile", nodeRateLimitGuard);
-  const limiter = makeKeyedRateLimiter(API_RATE_LIMIT_WINDOW_MS);
-  app.use("*", async (c, next) => {
-    if (c.req.method !== "POST" && c.req.method !== "PUT" && c.req.method !== "PATCH" && c.req.method !== "DELETE") {
-      return next();
-    }
-    const perMin = parseApiRateLimitPerMin(c.env?.API_RATE_LIMIT_PER_MIN);
-    if (perMin <= 0) return next();
-    const ip = (c.req.header("cf-connecting-ip") ?? "unknown").slice(0, 64);
-    if (!limiter.allow(`nodesync:${perMin}:${ip}`, perMin)) {
-      c.header("Retry-After", String(Math.ceil(API_RATE_LIMIT_WINDOW_MS / 1e3)));
-      throw new RateLimitError(
-        Math.ceil(API_RATE_LIMIT_WINDOW_MS / 1e3),
-        "\u062F\u0631\u062E\u0648\u0627\u0633\u062A\u200C\u0647\u0627\u06CC \u0633\u06CC\u0646\u06A9 \u0646\u0648\u062F \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0645\u062C\u0627\u0632 \u0627\u0633\u062A \u2014 \u06A9\u0645\u06CC \u0628\u0639\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F"
-      );
-    }
-    return next();
+  installWriteRateLimit(app, {
+    path: "*",
+    exceptionPaths: [],
+    keyPrefix: "nodesync:",
+    message: "\u062F\u0631\u062E\u0648\u0627\u0633\u062A\u200C\u0647\u0627\u06CC \u0633\u06CC\u0646\u06A9 \u0646\u0648\u062F \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0645\u062C\u0627\u0632 \u0627\u0633\u062A \u2014 \u06A9\u0645\u06CC \u0628\u0639\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F"
   });
-  app.use("*", async (c, next) => {
-    await next();
-    c.header("Cache-Control", "no-store");
-  });
+  installNoStore(app, "*");
   async function authNode(c) {
     const outcome = await verifyNodeCredentials(db, {
       nodeCode: c.req.header("X-CP-Node-Code"),
@@ -24698,7 +24754,7 @@ function createNodeSyncApp(deps) {
   app.get("/nodes", authMiddleware(), requireRole("manager"), async (c) => {
     return c.json({ data: { nodes: await listNodes(db) } }, 200);
   });
-  app.notFound((c) => c.json({ error: "NOT_FOUND" }, 404));
+  installNotFound(app);
   return app;
 }
 __name(createNodeSyncApp, "createNodeSyncApp");
@@ -25444,8 +25500,8 @@ function registerAuthRoutes(app, deps) {
       });
       throw new AuthError("\u0646\u0627\u0645 \u06A9\u0627\u0631\u0628\u0631\u06CC \u06CC\u0627 \u0631\u0645\u0632 \u0639\u0628\u0648\u0631 \u0627\u0634\u062A\u0628\u0627\u0647 \u0627\u0633\u062A");
     }
-    const ok2 = await verifyPassword(body.password, staff.password_hash ?? "");
-    if (!ok2) {
+    const ok = await verifyPassword(body.password, staff.password_hash ?? "");
+    if (!ok) {
       await recordLoginFailure(c.env.DB, identity);
       await recordLoginFailure(c.env.DB, ipKey);
       await deps.audit.log({
@@ -25485,6 +25541,7 @@ function registerAuthRoutes(app, deps) {
       resourceId: staff.id
     });
     deps.logger.child("auth").info("login.ok", { role: staff.role });
+    c.header("Set-Cookie", buildSessionCookie(token));
     return c.json(
       {
         data: {

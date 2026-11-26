@@ -368,7 +368,7 @@ function engineBannerNode() {
       top: 'var(--sp-3)',
       left: '50%',
       transform: 'translateX(-50%)',
-      zIndex: '9999',
+      zIndex: 'var(--z-toast)', /* ۱.۲۷.۷۷: از 9999 خام به لایهٔ توست مقیاس — بنر وضعیت = هم‌لایهٔ اعلان */
       padding: 'var(--sp-2) var(--sp-4)',
       borderRadius: '10px',
       fontSize: '0.85rem',
@@ -803,6 +803,8 @@ export function makeServerCardPaint(body, ctx = {}) {
       return;
     }
     const view = serverStateView(status?.state, status?.degradedReason);
+    body.setAttribute('role', 'status'); /* ui-005 ۱.۲۷.۸۳ — کارت سرور محلی منطقهٔ زندهٔ اعلام وضعیت است */
+    body.setAttribute('aria-live', 'polite');
     // فاز D1 — توضیح انسانی پورت‌ها (خواست کارفرما: «سرور محلی روشن است روی پورت …»)
     const portLine = status?.state === 'Ready' ? `سرور محلی روشن است — ${serverPortsView(status)}` : serverPortsView(status);
     body.replaceChildren(
@@ -1686,10 +1688,9 @@ export async function renderHealthPanel(outlet) {
           nodeCode: rec.node_code,
           nodeKey: key,
           progressStorage: storage,
-          tokenProvider: () => {
-            try { return (typeof localStorage !== 'undefined' ? localStorage.getItem('cs.token') : null) ?? null; }
-            catch { return null; }
-          }
+          /* ۱.۲۷.۸۲ (security-009/ADR-005): توکن دیگر در localStorage نیست — رانر در webview
+             با کوکی نشستِ هم‌مبدأ احراز می‌شود؛ provider فقط برای تزریق آزمون/گذار مانده است */
+          tokenProvider: () => null
         });
         const coord = coordM.createSyncCoordinator({ runner, progressStorage: storage });
         setResult(resultLine, 'جبران در جریان است…', 'warn');

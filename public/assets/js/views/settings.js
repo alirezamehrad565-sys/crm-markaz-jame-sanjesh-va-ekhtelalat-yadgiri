@@ -3,7 +3,7 @@ import { fa, enDigits, formatJalaliDateTime, JALALI_MONTHS, tehranTodayYmd, toJa
 import { el, icon, tabs, toast, toastError, formModal, confirmModal, loadingState, skeletonState, errorState, openModal, statusBadge, dataTable } from '../ui.js';
 import { drawAnnouncementsAdmin } from '../announcements-admin.js';
 import { drawKnowledgeAdmin } from '../knowledge-admin.js';
-import { session } from '../state.js';
+import { session } from '../api.js';
 import { weeklyEditor, renderStaffHoursInto } from './working-hours.js';
 import { navigate } from '../router.js'; /* F4: هر بازنویسی تنظیمات از مسیر روتر — host و renderSeq هر رندر محفوظ بماند */
 

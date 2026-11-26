@@ -1,0 +1,121 @@
+{
+  "run_id": "aud-20261124-8ca4227",
+  "skill": "project-context v0.6.2 (skills/project-context)",
+  "revision": "8ca4227b8787b23a684dabdb0c7174c5f288cf2f",
+  "worktree_clean": true,
+  "audited_at": "2026-11-24",
+  "tools": {
+    "jcodemunch": "unavailable — تصمیم صریح کارفرما (دستور full audit با این اسکیل در محیطی که MCP نصب نیست؛ تأییدها با خواندن مستقیم سورس + تأییدکنندهٔ رقیب کور جایگزین شد)"
+  },
+  "verification": "AUD-2: سه تأییدکنندهٔ کور مستقل روی ۱۱ یافتهٔ pending high/critical؛ احکام در repodocs/audit/notes/verdicts-*.md",
+  "inventory": "lite — inventory v3 کامل (source_tree هش‌شده) در این ران اجرا نشد؛ ادغام/تداوم با ران بعدی مطابق قرارداد --previous",
+  "auditors": [
+    {
+      "auditor": "stack",
+      "findings_path": "repodocs/audit/findings/stack.json",
+      "sha256": "sha256:7dc9ba943ab8047032e290ffb9f213d7f23bccc19e571aaaa0f6d61aa4ae19ba",
+      "counts": {
+        "medium": 3,
+        "low": 6
+      },
+      "validation": "valid"
+    },
+    {
+      "auditor": "architecture",
+      "findings_path": "repodocs/audit/findings/architecture.json",
+      "sha256": "sha256:d7c5dfd1733f18701948a831db531bc112fbbcc309b69a9b0092c7ddf8d3ff75",
+      "counts": {
+        "high": 2,
+        "medium": 6,
+        "low": 2
+      },
+      "validation": "valid"
+    },
+    {
+      "auditor": "bloat",
+      "findings_path": "repodocs/audit/findings/bloat.json",
+      "sha256": "sha256:13ad4b6b0112945ba33e1cc6b148852b426ba782b51a97d58ca9be98b3bf104b",
+      "counts": {
+        "low": 6,
+        "medium": 1
+      },
+      "validation": "valid"
+    },
+    {
+      "auditor": "testing",
+      "findings_path": "repodocs/audit/findings/testing.json",
+      "sha256": "sha256:064ab6ab05a45e16f9ae661bb9697bfca74ccf93b6fcf710e9c2d5b190b029fc",
+      "counts": {
+        "high": 2,
+        "medium": 5,
+        "low": 3
+      },
+      "validation": "valid"
+    },
+    {
+      "auditor": "performance",
+      "findings_path": "repodocs/audit/findings/performance.json",
+      "sha256": "sha256:ce96e195c9357fe17d01676f251f1132d02ca5935ff47f6fc806e57ad4c07b1f",
+      "counts": {
+        "high": 1,
+        "medium": 2,
+        "low": 3
+      },
+      "validation": "valid"
+    },
+    {
+      "auditor": "security",
+      "findings_path": "repodocs/audit/findings/security.json",
+      "sha256": "sha256:1b5a8ed52cac9ec818440a76eac641f83dabf8001b4cce25a93bb1c9acedc0f9",
+      "counts": {
+        "critical": 1,
+        "high": 3,
+        "medium": 4,
+        "low": 1
+      },
+      "validation": "valid"
+    },
+    {
+      "auditor": "ui",
+      "findings_path": "repodocs/audit/findings/ui.json",
+      "sha256": "sha256:3f23a0094292953fa53cfe3fd6d99a7efd1777634964a760c1c0f0e4616093c7",
+      "counts": {
+        "high": 1,
+        "medium": 4,
+        "low": 1
+      },
+      "validation": "valid"
+    },
+    {
+      "auditor": "data",
+      "findings_path": "repodocs/audit/findings/data.json",
+      "sha256": "sha256:c452b929a137ed432309bc363f5d71ddac1c264970353ffb3ee4831b3012c9af",
+      "counts": {
+        "high": 1,
+        "medium": 5
+      },
+      "validation": "valid"
+    }
+  ],
+  "active_findings_by_original_severity": {
+    "critical": 1,
+    "high": 10,
+    "medium": 30,
+    "low": 22,
+    "info": 0
+  },
+  "active_findings_by_resulting_severity": {
+    "critical": 1,
+    "high": 6,
+    "medium": 34,
+    "low": 22
+  },
+  "verdicts": {
+    "confirmed": 7,
+    "downgraded": 4,
+    "refuted": 0,
+    "pending": 0,
+    "not-required": 52
+  },
+  "refuted_in_run": 4
+}

@@ -78,7 +78,7 @@ describe('گیت فرانت ۱.۲۷.۳۸ — صندوق ورودی در لیست
     expect(view).toContain('shareCard'); // جعبه در بدنهٔ اصلی نما مونت شده
     // مسیر API پایه را می‌دهد (env استقرار) — و لینک هیچ‌گاه توکن ندارد
     expect(waitRoutes).toContain('public_base_url: opts?.publicBaseUrl ?? null');
-    expect(read('src/application/api-routing/index.ts')).toContain(
+    expect(read('src/application/api-routing/routes.ts')).toContain(
       'registerWaitlistRoutes(app, services.waitlist, { publicBaseUrl: deps.publicBaseUrl ?? null })'
     );
     const shareIdx = view.indexOf('shareUrl()');

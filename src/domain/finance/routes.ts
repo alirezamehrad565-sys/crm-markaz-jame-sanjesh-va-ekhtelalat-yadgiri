@@ -3,7 +3,7 @@ import { UuidSchema } from '@core/shared';
 import { NotFoundError, ValidationError } from '@core/errors';
 import { getAuthContext, requireRole } from '@core/auth';
 import { z } from 'zod';
-import { parseMultipartStream } from '@domain/exercise-bank/multipart';
+import { parseMultipartStream } from '@core/shared'; /* architecture-005 ۱.۲۷.۸۴ */
 import type { FinanceService } from './types';
 
 // ─── بودجه و مالی مرکز: مسیرها (همه فقط مدیر) ───

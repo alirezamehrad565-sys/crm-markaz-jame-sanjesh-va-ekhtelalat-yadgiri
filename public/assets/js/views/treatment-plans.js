@@ -3,7 +3,7 @@
 import { api } from '../api.js';
 import { el, icon, toast, toastError, confirmModal, openModal, emptyState, skeletonState, errorState } from '../ui.js';
 import { fa } from '../format.js';
-import { session } from '../state.js';
+import { session } from '../api.js';
 import { cardListEditor } from '../plan-cards.js';
 import { SESSION_ITEM_TYPES, SESSION_ITEM_LABELS } from '../clinical-content.js';
 

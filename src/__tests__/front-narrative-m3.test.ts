@@ -43,8 +43,10 @@ describe('POLISH-3 M3 — روایت بالینی', () => {
 
   test('پروفایل: بخش روایت هم‌تراز تفسیر بالینی در مرجع + دیپ‌لینک + chunk تنبل (۱.۲۷.۵۸)', () => {
     const profile = read('public/assets/js/views/student-profile.js');
-    expect(profile).toContain("{ key: 'narrative', label: 'روایت بالینی (سه فصل)', icon: 'book', when: () => canSeeClinical }");
-    expect(profile).toContain("knownTabs.splice(1, 0, 'clinical', 'narrative')");
+    /* ۱.۲۷.۷۱ — قرارداد کلاسیک: روایت تب هم‌تراز تفسیر (tabItems + رجیستری)؛ دیپ‌لینک ?tab=narrative */
+    expect(profile).toContain("{ key: 'narrative', label: 'روایت بالینی', icon: 'book', onSelect: selectTab }");
+    expect(profile).toContain("{ key: 'narrative', when: () => canSeeClinical");
+    expect(profile).toContain("selectTab(requestedTab === 'followups' ? 'timeline' : (knownTabs.includes(requestedTab) ? requestedTab : 'info'));");
     expect(profile).toContain('narrative: renderNarrativeTabContent');
     expect(profile).toContain("import('../student-narrative.js')");
   });

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // بامپ هشت‌نقطه‌ای نسخه — مصرف: node scripts/bump-version.mjs <نسخهٔ هدف مثل 1.27.8>
 // نسخهٔ فعلی از src/core/version.ts خوانده می‌شود و در همهٔ مکان‌های پین‌شده جایگزین می‌گردد.
-// ⚠️ پس از اجرا: باندل مرکزی را بازساز (node scripts/build-central-bundle.mjs) تا APP_VERSION تازه بگیرد.
+// هشدار پس از اجرا: باندل مرکزی را بازساز (node scripts/build-central-bundle.mjs) تا APP_VERSION تازه بگیرد.
 import { readFileSync, writeFileSync } from 'node:fs';
 
 const target = process.argv[2];

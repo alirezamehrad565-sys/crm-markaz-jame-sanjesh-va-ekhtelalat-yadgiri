@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>طرح C — کارگاه دوصفحه‌ای: درمان در مرکز، مرجع در لبه (وایرفریم بدون JS)</title>
+<style>
+  :root{
+    --bg:#f2eee6; --card:#ffffff; --card2:#fbf9f4; --ink:#242b34; --sub:#6d7480;
+    --line:#e4ddcf; --accent:#0e7490; --accent-bg:#e8f4f7; --ok:#15803d; --ok-bg:#e9f5ec;
+    --warn:#b45309; --warn-bg:#fbf1e2; --err:#b91c1c; --err-bg:#fbeaea; --dark:#1f2937;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:#e9e4d9; color:var(--ink); font-family:"Vazirmatn","Vazir","IRANSansX","IRANSans",Tahoma,"Segoe UI",sans-serif; font-size:14px; line-height:1.7;}
+  .board{max-width:1500px; margin:0 auto; padding:18px 12px 40px;}
+  .board__title{font-size:17px; font-weight:800; margin:26px 4px 10px; color:var(--dark);}
+  .board__title small{font-weight:400; color:var(--sub); font-size:12px;}
+  .legend{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px 18px; font-size:13px; color:var(--sub);}
+  .legend b{color:var(--ink);}
+  .frame-wrap{overflow-x:auto; border-radius:16px;}
+  .frame{background:var(--bg); border:2px solid #cdbfa4; border-radius:16px; text-align:right;}
+  .frame--desktop{width:1440px; margin:0 auto;}
+  .frame--mobile{width:390px; margin:0 auto;}
+  .artifact{background:var(--card); border:1px dashed #b9a87f; border-radius:14px; padding:16px; margin:14px 0 0; width:fit-content; max-width:100%;}
+  .artifact h3{font-size:13px; color:var(--sub); font-weight:700; margin-bottom:10px;}
+  /* ── اجزای مشترک ── */
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px;}
+  .chip{display:inline-block; border:1px solid var(--line); border-radius:999px; padding:1px 10px; font-size:12px; background:var(--card2); color:var(--sub); white-space:nowrap;}
+  .chip--ok{background:var(--ok-bg); color:var(--ok); border-color:#cfe6d4;}
+  .chip--warn{background:var(--warn-bg); color:var(--warn); border-color:#ecd9b7;}
+  .chip--err{background:var(--err-bg); color:var(--err); border-color:#eecaca;}
+  .chip--acc{background:var(--accent-bg); color:var(--accent); border-color:#bfdfe8;}
+  .btn{display:inline-block; border:1px solid var(--line); background:var(--card); border-radius:9px; padding:5px 12px; font-size:12.5px; font-weight:700; color:var(--ink); white-space:nowrap;}
+  .btn--primary{background:var(--accent); border-color:var(--accent); color:#fff;}
+  .btn--soft{background:var(--accent-bg); border-color:#bfdfe8; color:var(--accent);}
+  .btn--ghost{background:transparent; color:var(--sub);}
+  .btn--danger{background:transparent; border-color:#eecaca; color:var(--err);}
+  .dot{display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--line); vertical-align:middle;}
+  .dot--ok{background:var(--ok);} .dot--warn{background:var(--warn);} .dot--err{background:var(--err);} .dot--acc{background:var(--accent);}
+  .sub{color:var(--sub); font-size:12px;}
+  .note{font-size:12px; color:var(--sub); background:var(--card2); border:1px dashed var(--line); border-radius:8px; padding:4px 10px;}
+  /* ── نوار بالای برنامه ── */
+  .topbar{display:flex; align-items:center; gap:14px; background:var(--card); border-bottom:1px solid var(--line); padding:8px 18px; border-radius:14px 14px 0 0;}
+  .topbar__brand{font-weight:800; font-size:13.5px;}
+  .topbar__search{margin-inline-start:auto; border:1px solid var(--line); border-radius:999px; background:var(--card2); color:var(--sub); font-size:12px; padding:4px 14px;}
+  /* ── نوار هویت ── */
+  .idbar{display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:9px 18px; background:var(--card); border-bottom:1px solid var(--line);}
+  .avatar{width:34px; height:34px; border-radius:50%; background:var(--accent); color:#fff; font-weight:800; display:flex; align-items:center; justify-content:center;}
+  .idbar__name{font-weight:800; font-size:15px;}
+  .idbar__meta{font-size:12px; color:var(--sub);}
+  /* ── نوار ابزار ایستگاه ── */
+  .toolbar{display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:8px 18px; background:var(--card2); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5;}
+  .stn{display:inline-flex; flex-direction:column; align-items:flex-start; border:1px solid var(--line); border-radius:10px; background:var(--card); padding:4px 12px; font-size:12.5px; font-weight:700;}
+  .stn small{font-weight:400; font-size:11.5px; color:var(--sub);}
+  .stn--active{border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-bg);}
+  .stn--alert small{color:var(--err); font-weight:700;}
+  /* ── نوار کار ── */
+  .workstrip{padding:8px 18px 0;}
+  .workstrip details{background:var(--card); border:1px solid var(--line); border-radius:12px;}
+  .workstrip summary{cursor:pointer; list-style:none; padding:7px 14px; font-size:12.5px; font-weight:800; color:var(--accent); display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
+  .workstrip .body{padding:4px 14px 10px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
+  /* ── چیدمان اصلی ── */
+  .main{display:grid; grid-template-columns:minmax(0,62fr) minmax(0,38fr); gap:12px; padding:12px 18px 16px; align-items:start;}
+  .hub{background:var(--card); border:2px solid var(--accent); border-radius:14px; overflow:hidden; position:sticky; top:52px;}
+  .hub__head{display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:9px 14px; background:var(--accent-bg); border-bottom:1px solid var(--line);}
+  .hub__title{font-weight:800; font-size:14.5px; color:var(--accent);}
+  .zone{padding:10px 14px; border-bottom:1px dashed var(--line);}
+  .zone:last-child{border-bottom:0;}
+  .zone__tag{font-size:11.5px; font-weight:800; color:var(--accent); background:var(--accent-bg); border-radius:6px; padding:1px 8px; margin-inline-start:8px;}
+  .hyp{display:flex; gap:10px; align-items:flex-start; flex-wrap:wrap;}
+  .hyp__rank{width:26px; height:26px; border-radius:8px; background:var(--accent); color:#fff; font-weight:800; display:flex; align-items:center; justify-content:center; flex:none;}
+  .steps{display:flex; gap:6px; align-items:center; margin:6px 0;}
+  .step{flex:1; height:14px; border-radius:4px; background:#eae4d6; position:relative;}
+  .step--done{background:var(--ok);} .step--active{background:var(--accent); outline:2px solid var(--accent-bg);}
+  .steps .lbl{font-size:11.5px; color:var(--sub); flex:none;}
+  .pathrow{display:flex; gap:8px; align-items:center; flex-wrap:wrap; font-size:13px; font-weight:700;}
+  .stepcards{display:flex; gap:6px; flex-wrap:wrap; margin:6px 0;}
+  .stepcards .chip{background:var(--accent-bg); color:var(--accent); border-color:#bfdfe8;}
+  .otcheck{display:flex; gap:6px; flex-wrap:wrap; margin:6px 0;}
+  .otcheck .chip{font-size:12px;}
+  .actions{display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;}
+  /* ── لبهٔ مرجع ── */
+  .edge{display:flex; flex-direction:column; gap:10px; position:sticky; top:52px;}
+  .rail{background:var(--card); border:1px solid var(--line); border-radius:14px; overflow:hidden;}
+  .rail__head{display:flex; align-items:center; justify-content:space-between; padding:8px 12px; background:var(--card2); border-bottom:1px solid var(--line); font-weight:800; font-size:13px;}
+  .rail__head code{font-size:11px; color:var(--sub); background:var(--card2); border:1px solid var(--line); border-radius:5px; padding:0 6px;}
+  .railitem{display:flex; align-items:center; gap:8px; padding:6px 12px; border-bottom:1px dashed var(--line); font-size:12.5px;}
+  .railitem:last-child{border-bottom:0;}
+  .railitem .nm{font-weight:700;}
+  .railitem .cnt{margin-inline-start:auto;}
+  .railitem code{font-size:11px; color:var(--sub); direction:ltr;}
+  .railitem--hero{background:var(--accent-bg);}
+  .glance{padding:8px 12px;}
+  .glance h4{font-size:12.5px; font-weight:800; margin-bottom:4px;}
+  .drawer-toggle summary{cursor:pointer; list-style:none; font-weight:800; font-size:12.5px; color:var(--accent); padding:9px 12px; background:var(--accent-bg); border:1px dashed #bfdfe8; border-radius:12px;}
+  /* ── خط فولد ── */
+  .foldline{border-top:2px dashed #b9a87f; margin:2px 18px 14px; padding-top:5px; font-size:12px; color:#8a7a55; text-align:center;}
+  /* ── پالت ── */
+  .palette{width:620px; max-width:100%;}
+  .palette__input{border:1px solid var(--line); border-radius:10px; background:var(--card2); padding:8px 12px; font-size:14px; margin-bottom:8px;}
+  .pal-group{font-size:11.5px; font-weight:800; color:var(--sub); margin:8px 0 4px;}
+  .pal-item{display:flex; gap:8px; align-items:center; border:1px solid var(--line); border-radius:9px; padding:5px 10px; margin-bottom:4px; font-size:13px; background:var(--card2);}
+  .pal-item kbd{margin-inline-start:auto; font-size:11px; border:1px solid var(--line); border-radius:5px; padding:0 6px; background:#fff; color:var(--sub); direction:ltr;}
+  .pal-item--sel{border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-bg);}
+  /* ── کشوی مرجع (نمونهٔ حالت باز) ── */
+  .drawer{width:520px; max-width:100%;}
+  .drawer__tabs{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;}
+  .drawer__tabs .chip{cursor:default;}
+  .drawer__tabs .chip--acc{font-weight:800;}
+  .chapter{border:1px solid var(--line); border-radius:10px; padding:6px 10px; margin-bottom:6px; font-size:12.5px; background:var(--card2); display:flex; gap:8px; align-items:center;}
+  .chapter .cnt{margin-inline-start:auto; color:var(--sub); font-size:11.5px;}
+  .milestone{border:1px dashed #cfe6d4; background:var(--ok-bg); border-radius:10px; padding:6px 10px; font-size:12.5px; color:var(--ok); margin-top:8px;}
+  /* ── نقش‌ها ── */
+  .rolebox{width:980px; max-width:100%;}
+  .rolebox table{width:100%; border-collapse:collapse; font-size:12.5px;}
+  .rolebox th,.rolebox td{border:1px solid var(--line); padding:6px 10px; text-align:right;}
+  .rolebox th{background:var(--card2); font-size:12px;}
+  /* ── موبایل ── */
+  .m-top{display:flex; align-items:center; gap:8px; background:var(--card); padding:8px 12px; border-radius:14px 14px 0 0; border-bottom:1px solid var(--line);}
+  .m-id{background:var(--card); border-bottom:1px solid var(--line); padding:8px 12px;}
+  .m-stepper{position:sticky; top:0; background:var(--card2); border-bottom:1px solid var(--line); padding:7px 10px; display:flex; gap:6px; overflow-x:auto; z-index:6;}
+  .m-stepper .stn{flex:none;}
+  .m-hub{padding:10px 12px 86px; display:flex; flex-direction:column; gap:10px;}
+  .m-block{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 12px;}
+  .m-block h4{font-size:13.5px; font-weight:800; margin-bottom:6px;}
+  .m-cta{position:absolute; bottom:0; inset-inline:0; background:var(--card); border-top:1px solid var(--line); padding:9px 12px; display:flex; gap:8px;}
+  .m-frame{position:relative;}
+  .m-cta .btn{flex:1; text-align:center;}
+  .sheet{width:390px; max-width:100%; position:relative; border:2px solid #cdbfa4; border-radius:16px; overflow:hidden; background:var(--bg);}
+  .sheet__dim{height:150px; background:linear-gradient(#e6e0d3,#f2eee6); color:var(--sub); font-size:12px; text-align:center; padding-top:14px;}
+  .sheet__panel{background:var(--card); border-radius:18px 18px 0 0; border-top:3px solid var(--accent); padding:10px 14px 16px;}
+  .sheet__handle{width:56px; height:5px; border-radius:999px; background:var(--line); margin:0 auto 8px;}
+  .sheet__grid{display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-top:8px;}
+  .sheet__grid .chip{text-align:center; padding:6px 4px;}
+  @media (max-width:640px){
+    .palette,.drawer,.rolebox{width:100%;}
+    .sheet{width:100%;}
+  }
+</style>
+</head>
+<body>
+
+<div class="board">
+  <div class="legend">
+    <b>طرح C — «کارگاه دوصفحه‌ای: درمان در مرکز، مرجع در لبه»</b> · وایرفریم خودکفا بدون JS (فقط HTML/CSS؛ عناصر <code>details</code> قابل باز/بسته‌کردن‌اند) · RTL، کف فونت ۱۲px، تم روشن (توکن‌های تیره در مخزن برقرار) · دادهٔ نمونهٔ واقع‌نما: <b>علی محمدی</b>، ۱۵ سال و ۵ ماه، پنجم دبستان، درمانگر <b>مریم احمدی</b>، هدف درمانی نهایی <b>«بهبود روخوانی»</b>، مسیر فعال <b>«دقت شنیداری — گام ۳ از ۸»</b>. کلید طراحی: <b>هیچ اسکرولی برای گام فعال</b> + <b>مرجع همیشه یک کلیک فاصله است</b>.
+  </div>
+
+  <!-- ══════════════ دسکتاپ ۱۴۴۰ ══════════════ -->
+  <div class="board__title">۱ · نمای دسکتاپ — ۱۴۴۰px <small>(هاب درمان ~۶۲٪ چسبان · لبهٔ مرجع ~۳۸٪ · نوار ابزار ایستگاه بالای هاب)</small></div>
+  <div class="frame-wrap">
+    <div class="frame frame--desktop">
+
+      <div class="topbar">
+        <span class="chip chip--acc">مدیر مرکز</span>
+        <span class="topbar__brand">مرکز جامع سنجش، آموزشی، توانبخشی و مداخلات بهنجار</span>
+        <span class="topbar__search">جست‌وجو در همه بخش — Ctrl/⌘ K (پالت فرمان)</span>
+        <span class="chip">روز/شب</span>
+      </div>
+
+      <div class="idbar">
+        <span class="avatar">ع</span>
+        <span>
+          <span class="idbar__name">علی محمدی</span>
+          <span class="idbar__meta"> · ۱۵ سال و ۵ ماه · پنجم دبستان · دبستان شهید مطهری</span>
+        </span>
+        <span class="chip chip--ok">فعال</span>
+        <span class="chip chip--warn">بسر</span>
+        <span class="chip chip--acc">پیغم</span>
+        <span class="chip">درمانگر: مریم احمدی</span>
+        <span class="chip chip--ok"><span class="dot dot--ok"></span> ربات بله: متصل</span>
+        <span class="btn btn--ghost" style="margin-inline-start:auto;">اقدامات ⋯ (صدور گزارش قطعی · تعیین مسئول · ویرایش · حذف · غربال جدید)</span>
+      </div>
+
+      <div class="toolbar">
+        <span class="stn"><span>آماده‌سازی</span><small>موضوع جلسهٔ قبل در فرم گزارش می‌آید</small></span>
+        <span class="stn stn--alert"><span>برگزاری</span><small>۱ حضور ثبت‌نشده</small></span>
+        <span class="stn stn--active stn--alert"><span>ثبت گزارش</span><small>۱ جلسهٔ بی‌گزارش</small></span>
+        <span class="stn"><span>پیگیری</span><small>۱ پیگیری باز</small></span>
+        <span class="chip">مدارک دریافت‌به: ۵ سند</span>
+        <span class="btn btn--primary" style="margin-inline-start:auto;">ادامه از جلسهٔ قبل — قدیمی‌ترین جلسهٔ بی‌گزارش</span>
+      </div>
+
+      <div class="workstrip">
+        <details open>
+          <summary>نوار کار · ایستگاه فعال: «ثبت گزارش» — فقط یکی باز می‌شود و هاب دست‌نخورده می‌ماند <code class="sub" style="direction:ltr;">?station=log</code></summary>
+          <div class="body">
+            <span class="sub">۱ جلسهٔ بی‌گزارش — قدیمی‌ترین اول:</span>
+            <span class="chip chip--warn">دوشنبه ۱۴۰۵/۰۹/۰۱ — ۱۶:۰۰ · مریم احمدی</span>
+            <span class="btn btn--soft">ثبت گزارش همین جلسه</span>
+            <span class="btn btn--ghost">نوع دیگری از رویداد</span>
+            <span class="chip chip--ok">حضور جلسات به‌روز: ۲ حاضر · ۰ غایب</span>
+          </div>
+        </details>
+      </div>
+
+      <div class="main">
+        <!-- ── هاب درمان ── -->
+        <div class="hub">
+          <div class="hub__head">
+            <span class="hub__title">هاب درمان — علی محمدی</span>
+            <span class="chip chip--acc">هدف درمانی نهایی: بهبود روخوانی</span>
+            <span class="chip chip--ok">مسیر فعال: دقت شنیداری — گام ۳ از ۸</span>
+            <span class="chip">نمای درمانگر (بالینی)</span>
+          </div>
+
+          <div class="zone">
+            <span class="zone__tag">ز-۱ · تفسیر فشردهٔ همیشه‌نما</span>
+            <div class="hyp" style="margin-top:6px;">
+              <span class="hyp__rank">۱</span>
+              <div style="flex:1; min-width:260px;">
+                <div class="pathrow">نارساخوانی توسعه‌ای
+                  <span class="chip chip--ok">اطمینان: بالا</span>
+                  <span class="chip chip--ok"><span class="dot dot--ok"></span> هم‌گرا — سه منبع هم‌جهت</span>
+                  <span class="chip">امتیاز شواهد: ۱۴</span>
+                  <span class="chip chip--acc">ملاک‌ها: ۴ برآورده از ۶</span>
+                  <span class="chip chip--warn">۱ ناقص</span>
+                </div>
+                <div class="sub" style="margin-top:4px;">شواهد: نیم‌رخ وکسلر — FSIQ ۹۴ با افت حیطهٔ دقت/حافظهٔ شنیداری · چک‌لیست معلم: خطای روخوانی واژه‌های ناهم‌آهنگ بالا · جمع‌بندی تشخیصی سه‌منبعی ثبت‌شده (۱۴۰۵/۰۸/۲۲).</div>
+                <div class="sub" style="margin-top:4px;">عمق تفسیر — یک کلیک در کشوی مرجع: <span class="chip">ملاک‌های DSM-5-TR</span> <span class="chip">شرح‌حال (ثبت‌شده ۱۴۰۵/۰۸/۲۰)</span> <span class="chip">پراپ پیشروی با خط ملاک</span> <span class="chip">مالک‌های استثنایی و تفریق تشخیصی</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="zone">
+            <span class="zone__tag">ز-۲ · طرح درمان و مسیرهای مداخله</span>
+            <div class="pathrow" style="margin-top:6px;">مسیر فعال: دقت شنیداری
+              <span class="chip chip--acc">گام ۳ از ۸</span>
+              <span class="chip chip--ok">هدف SMART: خواندن درست ۸۰٪ واژه‌های ناهم‌آهنگ در دو پایش پیاپی</span>
+            </div>
+            <div class="steps">
+              <span class="step step--done"></span><span class="step step--done"></span><span class="step step--active"></span>
+              <span class="step"></span><span class="step"></span><span class="step"></span><span class="step"></span><span class="step"></span>
+              <span class="lbl">۱ ۲ ✓ · ۳ فعال · ۴–۸ در انتظار</span>
+            </div>
+            <div class="sub">پنل پیشرفت جلسه‌به‌جلسه: ۳ از ۸ جلسه اجرا شده · آخرین جلسه: ۱۴۰۵/۰۸/۲۲ — حاضر · قالب: طرح درمان «دقت شنیداری» با پروتکل جلسه‌به‌جلسه.</div>
+            <div class="actions">
+              <span class="btn btn--primary">ثبت گام امروز</span>
+              <span class="btn btn--soft">چک‌لیست مراحل (OT)</span>
+              <span class="btn btn--soft">ساخت مسیر از طرح درمان</span>
+            </div>
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:8px;">
+              <span class="sub">فرضیهٔ دوم (پیشنهاد):</span>
+              <span class="chip">سرعت نام‌گذاری — اطمینان متوسط</span>
+              <span class="btn btn--soft">تأیید و فعال‌سازی</span>
+              <span class="btn btn--ghost">اصلاح هدف</span>
+              <span class="btn btn--ghost">نیاز به اطلاعات بیشتر</span>
+              <span class="btn btn--danger">رد فرضیه</span>
+            </div>
+          </div>
+
+          <div class="zone">
+            <span class="zone__tag">ز-۳ · کارت گام فعال — بدون اسکرول، همیشه بالای خط فولد</span>
+            <div class="pathrow" style="margin-top:6px;">گام ۳ — تمایز جفت‌صداهای مشابه
+              <span class="chip chip--acc">جلسهٔ امروز: سه‌شنبه ۱۴۰۵/۰۹/۰۳ — ۱۶:۰۰ · مریم احمدی</span>
+            </div>
+            <div class="sub" style="margin-top:4px;">هدف جلسه: تمایز شنیداری صداهای /ب/ و /پ/ در ترتیب واژه · معیار تسلط: ۹۰٪ پاسخ درست در دو پایش پیاپی.</div>
+            <div class="stepcards"><span>کارت جلسه: برگهٔ جفت‌صدا ۱</span><span>کارت جلسه: تختهٔ کلمهٔ ناهم‌آهنگ</span><span>کارت جلسه: دفتر ثبت خطاها</span></div>
+            <div class="otcheck">
+              <span class="chip chip--ok">✓ آماده‌سازی شنیداری</span>
+              <span class="chip chip--warn">○ فعالیت اصلی</span>
+              <span class="chip">○ بستن جلسه و پایش</span>
+              <span class="chip">پنل پیشرفت OT: ۳/۸</span>
+            </div>
+            <div class="actions">
+              <span class="btn btn--primary">ثبت گزارش همین جلسه</span>
+              <span class="btn btn--soft">ارسال تمرین خانه با بله</span>
+              <span class="btn btn--soft">ثبت نتیجهٔ پایش</span>
+              <span class="btn btn--ghost">گزارش دورهٔ مداخله (برای صدور)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── لبهٔ مرجع ── -->
+        <div class="edge">
+          <div class="rail">
+            <div class="rail__head">لبهٔ مرجع — بیرون مسیر دید، یک کلیک فاصله <code>⌘K یا کلیک</code></div>
+            <div class="railitem railitem--hero"><span class="dot dot--acc"></span><span class="nm">تفسیر کامل (وکسلر · شرح‌حال · ملاک‌ها · پراپ)</span><span class="cnt chip chip--acc">ثبت‌شده</span><code>?section=clinical</code></div>
+            <div class="railitem"><span class="dot"></span><span class="nm">تاریخچهٔ پرونده — فصل‌ها و نقطه‌های کلیدی</span><span class="cnt chip">۱۲ رویداد</span><code>?section=timeline</code></div>
+            <div class="railitem"><span class="dot"></span><span class="nm">شناسنامه — اطلاعات پایه</span><span class="cnt chip">—</span><code>?section=info</code></div>
+            <div class="railitem"><span class="dot"></span><span class="nm">روایت بالینی (سه فصل)</span><span class="cnt chip chip--warn">۰ ثبت‌شده</span><code>?section=narrative</code></div>
+            <div class="railitem"><span class="dot"></span><span class="nm">گزارش‌های قطعی — سه واریانت + چاپ A4</span><span class="cnt chip chip--warn">۰ صادرشده</span><code>?section=snapshot</code></div>
+            <div class="railitem"><span class="dot"></span><span class="nm">جلسات، حضور و نوبت‌ها</span><span class="cnt chip">۳ جلسه</span><code>?section=sessions</code></div>
+            <div class="railitem"><span class="dot"></span><span class="nm">تمرین‌ها و بسته‌های تکلیف</span><span class="cnt chip">۱ فعال</span><code>?section=exercises</code></div>
+            <div class="railitem"><span class="dot"></span><span class="nm">بازی‌ها</span><span class="cnt chip">۱ تجویز</span><code>?section=games</code></div>
+            <div class="railitem"><span class="dot"></span><span class="nm">ارتباطات و ربات بله — برگهٔ پیشرفت</span><span class="cnt chip chip--ok">متصل</span><code>?section=comms</code></div>
+          </div>
+
+          <div class="card glance">
+            <h4>اقدامات سریع</h4>
+            <div class="actions" style="margin-top:2px;">
+              <span class="btn btn--soft">صدور گزارش قطعی</span>
+              <span class="btn btn--soft">پیگیری جدید</span>
+              <span class="btn btn--soft">ارسال گزارش به معلم مدرسه</span>
+              <span class="btn btn--ghost">غربال/سنجش جدید</span>
+            </div>
+          </div>
+
+          <div class="card glance">
+            <h4>جلسهٔ بعدی و نوبت‌ها</h4>
+            <div class="sub">سه‌شنبه ۱۴۰۵/۰۹/۰۳ — ۱۶:۰۰ · مریم احمدی</div>
+            <div class="actions" style="margin-top:4px;"><span class="btn btn--soft">تغییر/ثبت نوبت</span><span class="btn btn--ghost">بایگانی جلسات و حضور</span></div>
+          </div>
+
+          <div class="card glance">
+            <h4>وضعیت اتصال و مدارک</h4>
+            <div class="sub">ربات بله: متصل · آخرین پیام: یادآوری جلسه (۱۴۰۵/۰۹/۰۱) · مدارک دریافت‌به: ۵ سند — برگهٔ پیشرفت خانواده فعال (بدون DSM/مالی، زبان ترجمه‌شده).</div>
+          </div>
+
+          <details class="drawer-toggle">
+            <summary>کشوی مرجع — با کلیکِ هر آیتم ریل این‌جا تا ۳۶۰px روی هاب لغزیده و باز می‌شود (نمونهٔ حالت باز: پایین صفحه)</summary>
+          </details>
+        </div>
+      </div>
+
+      <div class="foldline">— مرز دید پیش‌فرض در نمایشگر ۱۴۴۰×۹۰۰: هاب درمان چسبان است و هر سه زون (تفسیر · طرح درمان · گام فعال) همیشه بالای این خط می‌مانند — «هیچ اسکرولی برای گام فعال» —</div>
+    </div>
+  </div>
+
+  <!-- نمونهٔ حالت: پالت فرمان -->
+  <div class="artifact palette">
+    <h3>نمونهٔ حالت — پالت فرمان ⌘K (ناوبری درجه‌یک: بخش / ایستگاه / اقدام)</h3>
+    <div class="palette__input">دق…</div>
+    <div class="pal-group">برو به بخش</div>
+    <div class="pal-item pal-item--sel"><span class="dot dot--acc"></span> تفسیر کامل — وکسلر، شرح‌حال، ملاک‌ها، پراپ <kbd>↵</kbd></div>
+    <div class="pal-item"><span class="dot"></span> تاریخچهٔ پرونده — فصل‌ها و نقطه‌های کلیدی <kbd>؟section=timeline</kbd></div>
+    <div class="pal-item"><span class="dot"></span> طرح درمان — قالب‌های گام‌به‌گام و مسیرها <kbd>G D</kbd></div>
+    <div class="pal-group">ایستگاه‌ها</div>
+    <div class="pal-item"><span class="dot dot--err"></span> ثبت گزارش — ۱ جلسهٔ بی‌گزارش <kbd>⌘3</kbd></div>
+    <div class="pal-item"><span class="dot dot--warn"></span> پیگیری — ۱ باز <kbd>⌘4</kbd></div>
+    <div class="pal-group">اقدام‌ها</div>
+    <div class="pal-item"><span class="dot"></span> ثبت گزارش همین جلسه — دوشنبه ۱۴۰۵/۰۹/۰۱ <kbd>↵</kbd></div>
+    <div class="pal-item"><span class="dot"></span> صدور گزارش قطعی — سه واریانت + چاپ A4</div>
+    <div class="pal-item"><span class="dot"></span> ساخت مسیر مداخله از طرح درمان</div>
+  </div>
+
+  <!-- نمونهٔ حالت: کشوی مرجع باز -->
+  <div class="artifact drawer">
+    <h3>نمونهٔ حالت — کشوی مرجع، باز روی تب «تاریخچهٔ پرونده» (۳۶۰px، روی هاب لغزیده · Esc می‌بندد)</h3>
+    <div class="drawer__tabs">
+      <span class="chip chip--acc">تاریخچهٔ پرونده</span><span class="chip">تفسیر کامل</span><span class="chip">شناسنامه</span><span class="chip">روایت بالینی</span><span class="chip">گزارش‌های قطعی</span><span class="chip">جلسات</span><span class="chip">تمرین‌ها</span><span class="chip">بازی‌ها</span><span class="chip">ارتباطات</span>
+    </div>
+    <div class="chip chip--ok">فصل جاری: دورهٔ درمان</div>
+    <div style="margin-top:8px;">
+      <div class="chapter"><span class="dot dot--ok"></span> غربال و ورود <span class="cnt">۴ رویداد</span></div>
+      <div class="chapter"><span class="dot dot--ok"></span> ارزیابی <span class="cnt">۶ رویداد</span></div>
+      <div class="chapter"><span class="dot dot--ok"></span> طرح درمان <span class="cnt">۳ رویداد</span></div>
+      <div class="chapter"><span class="dot dot--acc"></span> دورهٔ درمان — فصل جاری <span class="cnt">۱۲ رویداد</span></div>
+      <div class="chapter"><span class="dot"></span> بازسنجی و تصمیم <span class="cnt">هنوز ثبت نشده — پس از بازسنجی می‌نشیند</span></div>
+    </div>
+    <div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;">
+      <span class="chip">همه</span><span class="chip">جلسات</span><span class="chip chip--acc">پیگیری (?filter=followups)</span><span class="chip">رویدادها/گزارش‌ها</span><span class="chip">تکلیف تمرین</span><span class="chip">گزارش‌های قطعی</span>
+    </div>
+    <div class="milestone">★ نقطهٔ کلیدی: نیم‌رخ وکسلر — FSIQ ۹۴ (۱۴۰۵/۰۸/۲۲)</div>
+    <div class="note" style="margin-top:8px;">صادقانه «ندارم»: روایت بالینی — هنوز فصلی ثبت نشده · گزارش‌های قطعی — هنوز سندی صادر نشده («صدور گزارش قطعی» اولین سند را می‌سازد). خروجی خانواده: بدون DSM و مالی، زبان ترجمه‌شده.</div>
+  </div>
+
+  <!-- چرخ نقش‌ها -->
+  <div class="artifact rolebox">
+    <h3>چرخ نقش‌ها — بدون نقش تازه، با دو وَرایِت هاب</h3>
+    <table>
+      <tr><th>نقش</th><th>هاب</th><th>چه چیزی می‌بیند / چه می‌تواند</th><th>پیام پیش‌نیاز (بن‌بست نیست)</th></tr>
+      <tr><td>مدیر</td><td>هاب درمان</td><td>تفسیر + طرح درمان + گام فعال + اقدامات کامل</td><td>—</td></tr>
+      <tr><td>درمانگر (مالک پرونده)</td><td>هاب درمان</td><td>تفسیر + تصمیم‌ها + ثبت گام و گزارش</td><td>—</td></tr>
+      <tr><td>منشی / ناظر</td><td>هاب پیگیری</td><td>بدون تفسیر بالینی؛ ایستگاه‌ها، پیگیری، مدارک، ارتباطات</td><td>«تفسیر بالینی در اختیار درمانگر است — برای یادآوری، پیگیری بسازید یا پیام بله بفرستید»</td></tr>
+      <tr><td>نمای خانواده-معلم</td><td>هاب پیگیری (خانواده)</td><td>زبان ترجمه‌شده؛ بدون DSM و مالی؛ برگهٔ پیشرفت + تمرین‌ها + یادآوری‌ها</td><td>«گزارش دورهٔ مداخله پس از صدور درمانگر برای شما ترجمه می‌شود»</td></tr>
+    </table>
+  </div>
+
+  <!-- ══════════════ موبایل ۳۹۰ ══════════════ -->
+  <div class="board__title">۲ · نمای موبایل — ۳۹۰px <small>(هاب تمام‌عرض · استپر ایستگاه چسبان · مرجع و اقدامات در باتوم‌شیت · CTA چسبان پایین)</small></div>
+  <div class="frame-wrap">
+    <div class="frame frame--mobile m-frame">
+
+      <div class="m-top">
+        <span class="chip chip--acc">مدیر</span>
+        <span style="font-weight:800; font-size:13px;">مرکز جامع سنجش و توانبخشی</span>
+        <span class="chip" style="margin-inline-start:auto;">⌘K / جست‌وجو</span>
+      </div>
+
+      <div class="m-id">
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <span class="avatar" style="width:28px; height:28px; font-size:13px;">ع</span>
+          <span class="idbar__name" style="font-size:14px;">علی محمدی</span>
+          <span class="chip chip--ok">فعال</span><span class="chip chip--warn">بسر</span><span class="chip chip--acc">پیغم</span>
+        </div>
+        <div class="sub" style="margin-top:2px;">۱۵ سال و ۵ ماه · پنجم دبستان · دبستان شهید مطهری · درمانگر: مریم احمدی</div>
+        <div style="margin-top:4px;"><span class="btn btn--ghost" style="padding:2px 8px;">اقدامات ⋯</span></div>
+      </div>
+
+      <div class="m-stepper">
+        <span class="stn"><span>آماده‌سازی</span><small>موضوع جلسهٔ قبل می‌آید</small></span>
+        <span class="stn stn--alert"><span>برگزاری</span><small>۱ حضور</small></span>
+        <span class="stn stn--active stn--alert"><span>ثبت گزارش</span><small>۱ بی‌گزارش</small></span>
+        <span class="stn"><span>پیگیری</span><small>۱ باز</small></span>
+      </div>
+
+      <div class="m-hub">
+        <div class="m-block" style="border-color:var(--accent);">
+          <h4><span class="chip chip--acc">هدف درمانی نهایی: بهبود روخوانی</span></h4>
+          <div class="pathrow" style="margin-top:4px;">دقت شنیداری <span class="chip chip--acc">گام ۳ از ۸</span></div>
+          <div class="steps"><span class="step step--done"></span><span class="step step--done"></span><span class="step step--active"></span><span class="step"></span><span class="step"></span><span class="step"></span><span class="step"></span><span class="step"></span></div>
+          <div class="sub">پیشرفت: ۳/۸ جلسه · آخرین: ۱۴۰۵/۰۸/۲۲ — حاضر</div>
+          <div class="actions"><span class="btn btn--primary">ثبت گام امروز</span><span class="btn btn--soft">چک‌لیست OT</span></div>
+        </div>
+
+        <div class="m-block">
+          <h4>گام ۳ — تمایز جفت‌صداهای مشابه</h4>
+          <div class="sub">هدف جلسه: تمایز /ب/ و /پ/ در ترتیب واژه · معیار تسلط: ۹۰٪ در دو پایش پیاپی</div>
+          <div class="stepcards"><span>برگهٔ جفت‌صدا ۱</span><span>تختهٔ کلمهٔ ناهم‌آهنگ</span><span>دفتر ثبت خطاها</span></div>
+          <div class="actions">
+            <span class="btn btn--primary" style="flex:1; text-align:center;">ثبت گزارش همین جلسه</span>
+            <span class="btn btn--soft">ارسال تمرین خانه</span>
+          </div>
+        </div>
+
+        <div class="m-block">
+          <h4>تفسیر فشرده</h4>
+          <div class="sub">فرضیهٔ نخست: نارساخوانی توسعه‌ای — اطمینان بالا · هم‌گرا · ملاک‌ها ۴/۶ · شواهد: وکسلر FSIQ ۹۴ با افت حیطهٔ شنیداری، چک‌لیست معلم.</div>
+          <details style="margin-top:6px;">
+            <summary class="sub" style="cursor:pointer; font-weight:700; color:var(--accent);">جزئیات بیشتر (ملاک‌ها، شرح‌حال، پراپ) — باتوم‌شیت «تفسیر کامل»</summary>
+            <div class="sub" style="margin-top:4px;">جمع‌بندی تشخیصی سه‌منبعی ثبت‌شده (۱۴۰۵/۰۸/۲۲) · مسیر پیشنهادی دوم: سرعت نام‌گذاری — اطمینان متوسط.</div>
+          </details>
+        </div>
+
+        <div class="m-block">
+          <h4>مرجع و پیگیری</h4>
+          <div class="sub">پیگیری باز: «زنگ بله به خانواده — سررسید ۱۴۰۵/۰۹/۰۵» · جلسهٔ بعدی: سه‌شنبه ۱۴۰۵/۰۹/۰۳ ۱۶:۰۰ · مدارک: ۵ سند · بله: متصل.</div>
+        </div>
+      </div>
+
+      <div class="m-cta">
+        <span class="btn btn--primary">ثبت گزارش همین جلسه</span>
+        <span class="btn btn--soft">مرجع ▤ (باتوم‌شیت)</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- نمونهٔ حالت: باتوم‌شیت -->
+  <div class="artifact sheet">
+    <h3>نمونهٔ حالت — باتوم‌شیت «مرجع» روی موبایل (تک‌سطحی؛ دکمهٔ مرجع در نوار چسبان پایین)</h3>
+    <div class="sheet__dim">هاب درمان زیر شیت کم‌نور می‌ماند — کاربر گم نمی‌شود</div>
+    <div class="sheet__panel">
+      <div class="sheet__handle"></div>
+      <b style="font-size:13.5px;">مرجع</b>
+      <div class="sheet__grid">
+        <span class="chip chip--acc">تفسیر کامل</span><span class="chip">تاریخچه (۱۲)</span><span class="chip">شناسنامه</span>
+        <span class="chip">روایت (۰)</span><span class="chip">گزارش قطعی (۰)</span><span class="chip">جلسات (۳)</span>
+        <span class="chip">تمرین‌ها (۱)</span><span class="chip">بازی‌ها (۱)</span><span class="chip chip--ok">ارتباطات · متصل</span>
+      </div>
+      <div class="note" style="margin-top:10px;">همان ۹ خانهٔ دسکتاپ با همان دیپ‌لینک‌ها (?section=…) — هیچ قابلیتی در موبایل جا نمی‌ماند.</div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

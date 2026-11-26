@@ -3,7 +3,7 @@ import { fa, tehranTodayYmd, formatJalaliDateTime, formatJalaliNumeric } from '.
 import { el, icon, openModal, formModal, confirmModal, toast, toastError, statusBadge, scienceNote } from './ui.js';
 import { TOOL_GUIDES } from './clinical-content.js';
 import { jalaliDateInput } from './jalali-picker.js';
-import { session } from './state.js';
+import { session } from './api.js';
 import { typeIconNode } from './case-event-icons.js';
 import { wechslerEventAnalysisSection } from './wechsler-profile.js'; // — نیم‌رخ کامل وکسلر در مودال
 const STATUS_LABELS = { draft: 'پیش‌نویس', completed: 'ثبت‌شده', pending_family: 'در انتظار خانواده', cancelled: 'لغوشده' };
@@ -46,7 +46,7 @@ export function canCreateCaseEvents() {
   return Boolean(session.user && ['manager', 'therapist'].includes(session.user.role));
 }
 
-export async function openCaseEventForm({ student, appointmentId = null, onSaved, defaultTypeId = null, occurredYmd = null, onlyKeys = null, pickerTitle = null, previousEventRef = null }) {
+export async function openCaseEventForm({ student, appointmentId = null, onSaved, defaultTypeId = null, defaultTypeKey = null, occurredYmd = null, onlyKeys = null, pickerTitle = null, previousEventRef = null }) {
   let types = [];
   try {
     types = await fetchCaseEventTypes(true);
@@ -84,7 +84,15 @@ export async function openCaseEventForm({ student, appointmentId = null, onSaved
   }
 
   try {
-    const preferred = types.find((t) => t.id === defaultTypeId) ?? types.find((t) => t.id === readLastTypeId()) ?? null;
+    /* ۱.۲۷.۶۰ — نقد §۶: فرم گزارش مستقیم باز می‌شود — با defaultTypeId (نوع جلسهٔ قبل)،
+       defaultTypeKey (کلید پایدار مثل intervention) یا آخرین نوع انتخابی؛ فقط فرم درمانگر
+       مستقیم باز می‌شود — چک‌لیست خانواده/معلم باید از مسیر «ارسال با بله» برود */
+    const wanted = defaultTypeId
+      ? (types.find((t) => t.id === defaultTypeId) ?? null)
+      : defaultTypeKey
+        ? (types.find((t) => t.key === defaultTypeKey) ?? null)
+        : (types.find((t) => t.id === readLastTypeId()) ?? null);
+    const preferred = wanted && fillTargetOf(wanted).group === 'therapist' ? wanted : null;
     if (preferred) {
       openDynamicForm({
         student,

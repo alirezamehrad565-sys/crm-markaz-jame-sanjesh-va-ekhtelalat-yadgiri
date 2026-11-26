@@ -22,7 +22,7 @@ import { el, icon, toast, toastError, skeletonState, errorState, emptyState, sta
 import { hueClass, staffHue } from '../staff-hue.js'; // — رنگ ثابت هر درمانگر روی کارت نوبت
 import { sessionTypeOf } from '../session-type.js'; // — نوع جلسه (جدول ۴)
 import { openCaseEventForm, canCreateCaseEvents } from '../case-events.js';
-import { session } from '../state.js';
+import { session } from '../api.js';
 
 const local = { date: tehranTodayYmd(), viewJ: null }; // viewJ: ماه نمایش تقویم {jy, jm}
 let currentContainer = null;

@@ -1,7 +1,7 @@
 import { api, qs } from '../api.js';
 import { fa, STUDENT_GRADES, gradeLabel, tehranTimeOfIso } from '../format.js'; // ساعت تهران برای برچسب زمان محاسبه
 import { el, icon, toast, openModal, statusBadge, dataTable, loadingState, skeletonState, emptyState, errorState, kpi } from '../ui.js'; /* ۱.۲۵.۰۵ — kpi تک‌منبع */
-import { session } from '../state.js';
+import { session } from '../api.js';
 import { SPECIAL_NEED_TYPE_LABELS, SPECIAL_NEED_SEVERITY_LABELS, SPECIAL_NEED_SEVERITY_TONES } from '../taxonomy.js'; /* ۱.۲۵.۰۲ */
 
 /* ۱.۲۵.۰۲ — واژه‌نامهٔ نیاز ویژه از taxonomy.js (کپی محلی حذف شد — خطر واگرایی) */
@@ -248,7 +248,7 @@ function buildHeatmap(grid, maxVal) {
     return emptyState({
       iconName: 'clip',
       title: 'داده‌ای برای این فیلترها نیست',
-      hint: 'فیلترهای مدرسه/پایه/شدت را بازتر کنید — یا نیاز ویژه را از پروفایل دانش‌آموز ثبت کنید تا اینجا بیاید.'
+      hint: 'فیلترهای مدرسه/پایه/شدت را بازتر کنید — یا نیاز ویژه را از پروندهٔ دانش‌آموز ثبت کنید تا اینجا بیاید.'
     });
   }
 
@@ -268,7 +268,7 @@ function cellDetail(schoolName, schoolId, grade) {
       loadStudents(listBox, schoolId, grade, close);
       return el('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' } },
         el('p', { style: { margin: 0, color: 'var(--text-2)', fontSize: 'var(--fs-sm)' } },
-          'دانش‌آموزان فعال با نیاز ویژهٔ شناسایی‌شده. برای ثبت/ویرایش نیاز به پروفایل دانش‌آموز بروید.'),
+          'دانش‌آموزان فعال با نیاز ویژهٔ شناسایی‌شده. برای ثبت/ویرایش نیاز به پروندهٔ دانش‌آموز بروید.'),
         listBox
       );
     }
@@ -281,7 +281,7 @@ async function loadStudents(listBox, schoolId, grade, close) {
     const students = (res.data || []).filter((s) => s.specialNeedType);
     const filtered = grade ? students.filter((s) => s.grade === grade) : students;
     if (filtered.length === 0) {
-      listBox.replaceChildren(emptyState({ iconName: 'student', title: 'در این سلول دانش‌آموز ویژه‌ای نیست', hint: 'برای ثبت یا ویرایش نیاز ویژه، از پروفایل دانش‌آموز اقدام کنید.' }));
+      listBox.replaceChildren(emptyState({ iconName: 'student', title: 'در این سلول دانش‌آموز ویژه‌ای نیست', hint: 'برای ثبت یا ویرایش نیاز ویژه، از پروندهٔ دانش‌آموز اقدام کنید.' }));
       return;
     }
     listBox.replaceChildren(

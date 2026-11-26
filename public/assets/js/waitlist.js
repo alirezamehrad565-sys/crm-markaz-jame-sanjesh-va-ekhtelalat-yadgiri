@@ -3,7 +3,7 @@ import { fetchAllStudents } from './student-fetch.js'; // حلقهٔ صفحه‌
 import { el, icon, formModal, confirmModal, openModal, toast, toastError, emptyState, phoneCell, rowMenu, lockBtn, loadingState, collapseRemove, flashNode } from './ui.js';
 import { illoWaitlist } from './illustrations.js'; /* ۱.۲۵.۰۵ — نگارهٔ حالت خالی */
 import { fa, addDaysYmd, relativeDayLabel, tehranTodayYmd, tehranYmdMinuteToIso, tehranYmdOfIso, timeToMinute, gridTimes, toUtcIso } from './format.js';
-import { session } from './state.js'; // — دسترسی نقش‌محور (درمانگر: فقط افزودن)
+import { session } from './api.js'; // — دسترسی نقش‌محور (درمانگر: فقط افزودن)
 import { renderReferralInbox } from './views/referral-inbox.js'; // ۱.۲۷.۳۸ — تب «صندوق ورودی» داخل همین نما (خواست کارفرما: ادغام در لیست انتظار)
 
 export const WL_STATUS_LABELS = {

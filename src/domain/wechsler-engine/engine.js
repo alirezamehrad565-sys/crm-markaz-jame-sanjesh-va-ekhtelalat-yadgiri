@@ -336,7 +336,7 @@ function ageFromJalali(ty, tm, td, by, bm, bd) {
 }
 __name(ageFromJalali, "ageFromJalali");
 __name2(ageFromJalali, "ageFromJalali");
-function lookup(pairs, value) {
+export function lookup(pairs, value) {
   let best;
   for (const [key, res] of pairs) {
     if (key <= value) {
@@ -349,7 +349,7 @@ function lookup(pairs, value) {
 }
 __name(lookup, "lookup");
 __name2(lookup, "lookup");
-function num(x) {
+export function num(x) {
   if (typeof x === "boolean")
     return x ? 1 : 0;
   if (typeof x === "number")
@@ -396,7 +396,7 @@ function wiscAge(testDate, birthDate) {
 }
 __name(wiscAge, "wiscAge");
 __name2(wiscAge, "wiscAge");
-function scaledFor(rawScores, years) {
+export function scaledFor(rawScores, years) {
   const band = bandForAge(years);
   const table32 = NORMS.bands[band] ?? {};
   const out = {};
@@ -460,7 +460,7 @@ function contribution(rawScores, years) {
 }
 __name(contribution, "contribution");
 __name2(contribution, "contribution");
-function convertIndex(tableKey, total) {
+export function convertIndex(tableKey, total) {
   const rows = NORMS.indices?.[tableKey]?.rows ?? [];
   return lookup(rows.map((r) => [r.sum, r]), total);
 }
@@ -697,7 +697,7 @@ function clusterRecommendations(pairs, clusters) {
 }
 __name(clusterRecommendations, "clusterRecommendations");
 __name2(clusterRecommendations, "clusterRecommendations");
-function descriptiveClass(score, _bugRef, strict = false) {
+export function descriptiveClass(score, _bugRef, strict = false) {
   const s = num(score);
   if (s > 130)
     return CLS.very_high;
@@ -830,7 +830,7 @@ function presentCodes(raw2) {
 __name(presentCodes, "presentCodes");
 __name2(presentCodes, "presentCodes");
 var RANGE_CACHE = /* @__PURE__ */ new Map();
-function rawRange(band, code) {
+export function rawRange(band, code) {
   const key = `${band}:${code}`;
   const cached = RANGE_CACHE.get(key);
   if (cached)

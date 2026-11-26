@@ -8,7 +8,7 @@
  *   rust-f12-B: آیتم usage_summary روزانه — payload رکورد اعداد متناهی از جدول واقعی ·
  *   فیلتر since=اکنون · idempotency بکت روز · جای‌گذاری آیتم عادی در sort صفحه.
  */
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
 import { createTestApp, Api, loginToken, MANAGER_ID } from '../../test/harness';
 import type { TestApp } from '../../test/harness';
 import { APP_VERSION } from '@core/version';
@@ -28,6 +28,18 @@ interface OutboxBody {
 function dataOf(res: { body: unknown }): OutboxBody['data'] {
   return (res.body as OutboxBody).data;
 }
+
+/* SEC/قیمت‌گذاری زمان (SEC-12776 هم‌کلاس یافتهٔ «وابستگی ساعت دیوار» ممیزی testing):
+   در ساعت اول هر روز UTC بکتِ ساعتیِ ping و بکتِ روزانهٔ usage هر دو برابر
+   «<روز>T00:00:00Z» می‌شوند و ترتیب انتظار تست وابسته به ساعت اجرا می‌شد.
+   Date در این آزمون‌ها به لحظهٔ قطعیِ بیرونِ آن پنجره فریز می‌شود (فقط Date؛ تایمرها واقعی). */
+function freezeAt(iso: string): void {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date(iso));
+}
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe('/api/internal/sync/outbox — صندوق خروج push نود (rust-f11)', () => {
   it('گیت خاموش (تولید وب): ۴۰۴ کم‌دست حتی با سشن معتبر', async () => {
@@ -116,6 +128,7 @@ describe('/api/internal/sync/outbox — صندوق خروج push نود (rust-f1
     });
 
     it('since → فقط تازه‌ترها (at > since اکید) و مرتب ASC بر حسب at', async () => {
+      freezeAt('2026-11-24T23:14:00Z'); // ساعت ۲۳ UTC — بکت ping ≠ بکت usage (قطعیت ترتیب)
       await A.db.execute(
         `INSERT INTO client_errors (id, occurred_at, message) VALUES
            ('outbox-err-old', '2026-11-01 11:00:00', 'کهنه'),
@@ -222,6 +235,7 @@ describe('/api/internal/sync/outbox — صندوق خروج push نود (rust-f1
       });
 
       it('usage آیتم عادی صفحه است: در sort ASC بین خطای کهنه‌تر و ping تازه‌تر می‌نشیند', async () => {
+        freezeAt('2026-11-24T23:14:00Z'); // همان قطعیت ترتیب — بکت ping بعد از بکت روز
         await B.db.execute(
           `INSERT INTO client_errors (id, occurred_at, message) VALUES ('usage-err-old', '2020-01-01 00:00:00', 'کهنه‌تر از بکت امروز')`
         );

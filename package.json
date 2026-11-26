@@ -1,6 +1,6 @@
 {
   "name": "center-system",
-  "version": "1.27.58",
+  "version": "1.27.85",
   "private": true,
   "type": "module",
   "author": {
@@ -42,12 +42,15 @@
     "backup:local": "node scripts/ops/export-local-backup.mjs",
     "load:baseline": "node scripts/load/baseline.mjs",
     "check:d1": "node scripts/check-d1-compat.mjs",
+    "check:migrations-manifest": "node scripts/check-migrations-manifest.mjs",
+    "check:route-registry": "node scripts/check-route-registry.mjs",
     "build:engine-server": "node scripts/build-engine-server.mjs",
     "smoke:engine": "node scripts/engine/engine-smoke.mjs",
     "smoke:engine:adapter": "SMOKE_ENGINE=adapter node scripts/engine/engine-smoke.mjs",
     "audit:sec": "node scripts/sec-audit.mjs",
     "bench:complexity": "node scripts/complexity-bench.mjs",
-    "bench:gate": "node scripts/complexity-bench.mjs --gate"
+    "bench:gate": "node scripts/complexity-bench.mjs --gate",
+    "e2e:browser": "playwright test"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.5",
@@ -58,12 +61,15 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250109.0",
+    "@playwright/test": "1.65.1",
     "@types/node": "^22.20.5",
     "esbuild": "^0.28.2",
     "fast-check": "^4.10.2",
+    "playwright": "1.65.1",
     "typescript": "^5.7.3",
     "vitest": "^2.1.8",
     "web-vitals": "^6.2.3",
+    "workerd": "1.20250718.0",
     "wrangler": "^3.99.0"
   }
 }

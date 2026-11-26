@@ -1,0 +1,10 @@
+# احکام تأییدکنندهٔ رقیب مستقل — گروه security (run_id: aud-20261124-8ca4227)
+
+> تأییدکنندهٔ کور مستقل، فقط‌خواندنی، revision 8ca4227. بازسازی هر ادعا با خواندن مستقیم سورس + جست‌وجوی فعال تخفیف‌دهنده.
+
+| id | حکم | شاهد کلیدی | توضیح |
+|---|---|---|---|
+| security-001 | confirmed | src/domain/games/page.ts:88؛ src/domain/games/routes.ts:296-307 | توکن خام با JSON.stringify در inline script؛ مسیر خطای getState هم با توکن خام رندر می‌کند (routes.ts:299-301)؛ CSP unsafe-inline (307)؛ Hono پارامتر را decode می‌کند پس %3C/script%3E به sink می‌رسد (hono request.js:50 از dist 4.13.16 — نسخهٔ نصب‌شده ^4.6.14، رفتار decode در 4.x پایدار). حمله reflected ولی با SPA هم‌مبدأ و توکن ۳۰روزه در localStorage، critical قابل دفاع. |
+| security-002 | confirmed | middleware.ts:22-35؛ wrangler.toml:22؛ api.js:72 | گیت فقط env.ENV==='development' بدون راز؛ کانال‌های استقرار فعلی امن‌اند (wrangler.games.toml:31، engine-server.js:1904/1916، provision.ts:545) و فقط misconfig فعالش می‌کند — همان صورت ادعا. |
+| security-003 | downgraded | runtime-secret.ts:73-75؛ instance-sync/routes.ts:104-105؛ middleware.ts:70-84 | «fallback تولیدی راز هاردکد» نادرست: در production بدون AUTH_SECRET خروجی راز تصادفی D1 است نه ثابت DEV؛ ثابت فقط با misconfig (زنجیرهٔ 002) فعال می‌شود. درستِ ادعا: plaintext شدن راز در settings (runtime-secret.ts:42) و رفتن به backup (backup/service.ts:231)؛ راستی‌آزمایی نشست فقط sid را چک می‌کند و sub را از JWT برمی‌دارد (middleware.ts:70-84). شدت: medium. |
+| security-004 | downgraded | appointment-core/service.ts:210-211,286,321,366,410,441,529,562,593؛ working-hours/service.ts:44-46؛ student-profile/service.ts:455,666,896-935 | نیمی از نمونه در لایهٔ سرویس گیت واقعی ForbiddenError دارد (مدیر/منشی همه، درمانگر فقط خودش)؛ گپ واقعی: students create/patch/deactivate/activate بدون گیت در دو لایه و setup/complete (ناسازگاری کامنت «فقط-مدیر» api-routing:735 با واقعیت)؛ supervisorGate نوشتن ناظر را می‌بندد (api-routing:729)؛ completeSetup با ConflictError یک‌بار مصرف می‌بندد (setup/routes.ts:78). شدت: medium. |

@@ -16,7 +16,7 @@ import {
 } from './ui.js';
 import { fa, formatJalaliNumeric, tehranYmdOfIso } from './format.js';
 import { jalaliDateInput } from './jalali-picker.js';
-import { session } from './state.js';
+import { session } from './api.js';
 
 export function canSeeTodos() {
   return Boolean(session.user && (session.user.role === 'manager' || session.user.role === 'secretary'));

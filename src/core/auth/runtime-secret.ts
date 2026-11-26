@@ -22,49 +22,15 @@ export function d1AsSecretStore(db: D1Database): SecretStore {
   };
 }
 
-function randomHexSecret(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(32));
-  return [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
-}
-
-let cachedSecret: string | null = null;
-
-export async function getOrCreateRuntimeSecret(store: SecretStore): Promise<string> {
-  if (cachedSecret) return cachedSecret;
-
-  const row = await store.queryOne<{ value: string }>(
-    `SELECT value FROM settings WHERE key = ? LIMIT 1`,
-    [SETTINGS_AUTH_SECRET_KEY]
-  );
-  if (row) {
-    try {
-      const parsed = JSON.parse(row.value) as unknown;
-      if (typeof parsed === 'string' && parsed.length >= 32) {
-        cachedSecret = parsed;
-        return cachedSecret;
-      }
-    } catch {
-      /* نرم — راز خراب = بازتولید و بازنویسی؛ همهٔ سشن‌ها عمداً باطل می‌شوند */
-    }
-  }
-
-  const secret = randomHexSecret();
-  await store.execute(
-    `INSERT INTO settings (key, value, updated_by, updated_at)
-     VALUES (?, ?, NULL, datetime('now'))
-     ON CONFLICT(key) DO UPDATE SET
-       value = excluded.value,
-       updated_at = excluded.updated_at`,
-    [SETTINGS_AUTH_SECRET_KEY, JSON.stringify(secret)]
-  );
-  cachedSecret = secret;
-  return secret;
-}
-
-export function resetRuntimeSecretCache(): void {
-  cachedSecret = null;
-}
-
+/**
+ * SEC-12776 (security-003 ممیزی) — سیاست راز نشست در تولید، بسته:
+ *   ① AUTH_SECRET صریح (≥۱۶) همیشه برنده است.
+ *   ② محیط توسعه (development/test) راز ثابت توسعه می‌گیرد.
+ *   ③ تولید بدون AUTH_SECRET فقط با رازِ ذخیره‌شدهٔ معتبرِ قبلی (deployهای موجود که
+ *      پیش‌تر fallback تصادفی برایشان ساخته بود) ادامه می‌یابد؛
+ *   ④ تولیدِ بدون هیچ راز = خطای صریح — ساختِ بی‌سروصدا حذف شد تا راز نشست هرگز
+ *      پنهانی در settings/backups ننشیند و استقرار تازه راز قوی بخواهد.
+ */
 export async function resolveSessionSecret(env: {
   AUTH_SECRET?: string;
   ENV: string;
@@ -72,5 +38,19 @@ export async function resolveSessionSecret(env: {
 }): Promise<string> {
   if (env.AUTH_SECRET && env.AUTH_SECRET.length >= 16) return env.AUTH_SECRET;
   if (isDevEnv(env.ENV)) return DEV_AUTH_SECRET;
-  return getOrCreateRuntimeSecret(d1AsSecretStore(env.DB));
+  const row = await d1AsSecretStore(env.DB).queryOne<{ value: string }>(
+    `SELECT value FROM settings WHERE key = ? LIMIT 1`,
+    [SETTINGS_AUTH_SECRET_KEY]
+  );
+  if (row) {
+    try {
+      const parsed = JSON.parse(row.value) as unknown;
+      if (typeof parsed === 'string' && parsed.length >= 32) return parsed;
+    } catch {
+      /* نرم — مقدار خراب راز معتبر نیست؛ به خطای صریح می‌رسیم */
+    }
+  }
+  throw new Error(
+    'SEC-12776: در محیط تولید AUTH_SECRET تنظیم نشده است — با «npx wrangler secret put AUTH_SECRET» راز قوی (حداقل ۱۶ کاراکتر) بگذارید؛ ساخت خودکار راز نشست حذف شده است.'
+  );
 }

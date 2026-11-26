@@ -43,16 +43,16 @@ describe('حذف کامل نوبت (ثبت اشتباه/تکراری)', () => {
     expect(back.status).toBe(404);
   });
 
-  it('نوبت آینده با ثبت حضور پیش‌مات (present) قابل حذف است — ثبتِ پیش‌مات خودش اشتباه است', async () => {
+  it('ثبت حضور پیش‌مات برای نوبت آینده رد می‌شود و نوبتِ خالی حذف می‌شود (۱.۲۷.۵۹ — گارد زمانی نقد)', async () => {
     const st = await createStudent(mgr);
     const created = await mgr.post('/api/appointments', apptBody(MARYAM_ID, quarterHourFromNow(240), 45, [st.id]));
     const appt = (created.body as { data: ApptJson }).data;
 
     const marked = await mgr.patch(`/api/attendance/${appt.id}/${st.id}`, { status: 'present' });
-    expect(marked.status).toBe(200);
+    expect(marked.status).toBe(400); // گارد زمانی نقد: حضور برای جلسهٔ برگزارنشده بسته است
 
     const del = await mgr.delete(`/api/appointments/${appt.id}`);
-    expect(del.status).toBe(204); // جلسه هنوز نرسیده — ثبت پیش‌مات با نوبت پاک می‌شود
+    expect(del.status).toBe(204); // نوبت بدون سابقهٔ بالینی پاک می‌شود
   });
 
   it('نوبت گذشته با سابقهٔ جلسه (present) → ۴۰۹ — تاریخچهٔ بالینی حذف نمی‌شود', async () => {

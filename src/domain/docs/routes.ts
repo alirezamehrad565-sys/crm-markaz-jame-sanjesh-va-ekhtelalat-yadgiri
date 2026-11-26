@@ -3,7 +3,7 @@ import { UuidSchema } from '@core/shared';
 import { z } from 'zod';
 import { getAuthContext, requireRole } from '@core/auth';
 import { NotFoundError, ValidationError } from '@core/errors';
-import { parseMultipartStream } from '@domain/exercise-bank/multipart';
+import { parseMultipartStream } from '@core/shared'; /* architecture-005 ۱.۲۷.۸۴ */
 import type { DocsService, DocCategory } from './types';
 import { DOC_CATEGORIES } from './types';
 

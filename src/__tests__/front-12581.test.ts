@@ -23,6 +23,7 @@ describe('گیت فرانت ۱.۲۵.۸۱ — پیش‌نمایش از نگاه �
   const routes = read('src/domain/case-events/routes.ts');
   const pure = read('src/domain/case-events/pure.ts');
   const previewPage = read('src/domain/case-events/preview-form.ts');
+  const previewBoot = read('public/assets/public/preview-form.js');
   const publicForm = read('src/domain/case-events/public-form.ts');
   const version = read('src/core/version.ts');
 
@@ -45,11 +46,12 @@ describe('گیت فرانت ۱.۲۵.۸۱ — پیش‌نمایش از نگاه �
     expect(saveUseIdx).toBeGreaterThan(builderIdx);
   });
 
-  it('③ فرم POST مخفی با توکن نشست به /public/case-events/preview — تب تازه', () => {
+  it('③ فرم POST مخفی به /public/case-events/preview — تب تازه؛ احراز با کوکی نشست (ADR-005 — ۱.۲۷.۸۲)', () => {
     expect(view).toContain("action: '/public/case-events/preview'");
     expect(view).toContain("target: '_blank'");
-    expect(view).toContain("hidden('token', getToken() ?? '')");
-    expect(view).toContain("import { api, getToken } from '../api.js'");
+    expect(view).not.toContain("hidden('token'"); // فیلد مخفی توکن حذف شد — اسکریپت دیگر توکن ندارد
+    expect(view).toContain("import { api } from '../api.js'");
+    expect(view).not.toContain('getToken'); // هیچ مصرف توکن در ویو باقی نمانده است
   });
 
   it('④ نقطهٔ پایانی تحلیل = خالص و بدون نوشتنی؛ توکن با verifySessionJwt + نقش مجاز', () => {
@@ -71,9 +73,12 @@ describe('گیت فرانت ۱.۲۵.۸۱ — پیش‌نمایش از نگاه �
   it('⑥ صفحهٔ پیش‌نمایش بنر «ذخیره نمی‌شود» دارد و بخش‌بندی مشترک می‌خواند', () => {
     expect(previewPage).toContain('هیچ پاسخی جایی ذخیره نمی‌شود');
     expect(previewPage).toContain('familySectionsOf');
-    expect(previewPage).toContain('/public/case-events/preview/analyze');
+    /* ۱.۲۷.۸۲ (ADR-004): منطق اجرایی به فایل بیرونی رفت — endpoint تحلیل و fetch آن‌جاست */
+    expect(previewBoot).toContain('/public/case-events/preview/analyze');
+    expect(previewBoot).toContain('document.open(); document.write(html); document.close();');
+    expect(previewPage).toContain('/assets/public/preview-form.js');
     expect(publicForm).toContain('export function familySectionsOf');
     // نسخه
-    expect(version).toContain("APP_VERSION = '1.27.57'");
+    expect(version).toContain("APP_VERSION = '1.27.85'");
   });
 });

@@ -1,6 +1,6 @@
 import { api } from './api.js';
 import { el, icon, toast, toastError, confirmModal, formModal, emptyState, loadingState, openModal } from './ui.js';
-import { session } from './state.js';
+import { session } from './api.js';
 import { fa, formatJalaliDateTime, sizeLabel } from './format.js'; /* ۱.۲۵.۰۲ — یکسان‌سازی sizeLabel */
 
 const CATEGORY_LABELS = { tip: 'نکتهٔ آموزشی', protocol: 'پروتکل درمانی', article: 'مقاله', news: 'خبر مرکز' };
@@ -72,10 +72,7 @@ async function uploadAttachments(itemId, files, onProgress) {
 }
 
 async function fetchAttachmentBlob(itemId, file) {
-  const token = localStorage.getItem('cs.token') ?? '';
-  const res = await fetch(`/api/knowledge/${itemId}/files/${file.id}`, {
-    headers: { Authorization: `Bearer ${token}` }
-  });
+  const res = await fetch(`/api/knowledge/${itemId}/files/${file.id}`); // ۱.۲۷.۸۲ (ADR-005): احراز با کوکی نشست
   if (!res.ok) throw new Error(`دریافت فایل ناموفق بود (کد ${fa(res.status)})`);
   return res.blob();
 }

@@ -21,7 +21,7 @@ import type {
   UpdateSchoolInput,
   UpdateStudentInput
 } from './types';
-import { rowToClass, rowToEducationHistory, rowToSchool, rowToStudent, rowToStudentTeacher, studentSearchQuery, STUDENT_WAIT_PROJECTION, STUDENT_OWNER_PROJECTION, tagsForStudentsQuery, assessmentCountsForStudentsQuery, type EduHistoryRow, type StudentTeacherRow } from './repository';
+import { rowToClass, rowToEducationHistory, rowToSchool, rowToStudent, rowToStudentTeacher, studentSearchQuery, studentTextCondition, STUDENT_WAIT_PROJECTION, STUDENT_OWNER_PROJECTION, tagsForStudentsQuery, assessmentCountsForStudentsQuery, type EduHistoryRow, type StudentTeacherRow } from './repository';
 import type { ClassRow, SchoolRow, StudentRow, StudentTagJoinRow } from './repository';
 import type { StudentDeleteBlock, StudentDeleteCheck } from './types';
 import type { TagRef } from '@core/shared';
@@ -572,9 +572,9 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
       const countConditions: string[] = [];
       const countParams: unknown[] = [];
       if (filters.query) {
-        countConditions.push(`(first_name LIKE ? OR last_name LIKE ? OR national_id LIKE ?)`);
-        const q = `%${filters.query}%`;
-        countParams.push(q, q, q);
+        const text = studentTextCondition(filters.query, '');
+        countConditions.push(text.sql);
+        countParams.push(...text.params);
       }
       if (filters.schoolId) {
         countConditions.push('school_id = ?');
@@ -1081,6 +1081,10 @@ export function createStudentProfileService(deps: StudentProfileDeps): StudentPr
         await tx.execute(`DELETE FROM student_focus_links WHERE student_id = ?`, [id]); // پیوندهای هدف پروفایل هم با پرونده پاک می‌شوند
         await tx.execute(`DELETE FROM case_events WHERE student_id = ?`, [id]);
         await tx.execute(`DELETE FROM intervention_paths WHERE student_id = ?`, [id]);
+        /* data-003 (۱.۲۷.۸۳) — سیاست صریح report_snapshots: نسخه‌های قطعیِ سند ماندگارند تا وقتی
+           پرونده هست؛ حذف قطعی دانش‌آموز (force) آن‌ها را هم صریحاً حذف می‌کند — ردیف یتیمِ
+           بی‌صاحب باقی نمی‌ماند و گزارش رشد دیگر این جدول را «بی‌سیاست» نمی‌بیند */
+        await tx.execute(`DELETE FROM report_snapshots WHERE student_id = ?`, [id]);
         await tx.execute(`DELETE FROM students WHERE id = ?`, [id]);
         await audit.logInTransaction(tx, {
           actorId: actor.staffId,

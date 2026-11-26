@@ -1,7 +1,7 @@
 import { api } from '../api.js';
 import { fa, formatJalaliNumeric } from '../format.js';
 import { el, icon, toast, toastError, emptyState } from '../ui.js';
-import { session } from '../state.js';
+import { session } from '../api.js';
 
 // ─── گزارش به پشتیبانی (۱.۲۵.۶۴ — نقد اسکرین‌شات و رفع ایرادهای UI/UX) ───
 // همکار مشکل را تیک می‌زند و می‌فرستد؛ بقیه‌اش خودکار است: صفحهٔ موقع گزارش،

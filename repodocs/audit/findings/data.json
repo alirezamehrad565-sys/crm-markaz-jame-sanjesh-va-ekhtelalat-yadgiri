@@ -1,0 +1,333 @@
+{
+  "schema_version": 3,
+  "run_id": "aud-20261124-8ca4227",
+  "auditor": "data",
+  "scanned_at": "2026-11-24T00:00:00Z",
+  "scope": {
+    "included": [
+      "migrations",
+      "docs/MIGRATIONS.md",
+      "scripts/update-remote.mjs",
+      "scripts/restore-drill.mjs",
+      "scripts/engine/apply-migrations.mjs",
+      "scripts/ops/export-local-backup.mjs",
+      "src/core/storage/chunked-d1-store.ts",
+      "src/core/audit/writer.ts",
+      "src/application/growth/service.ts",
+      "src/application/backup/service.ts",
+      "src/application/client-errors/service.ts",
+      "src/application/rum/service.ts",
+      "src/application/instance-sync/tables.ts",
+      "src/domain/student-profile/service.ts",
+      "src/domain/form-builder/form-page.ts",
+      "src/domain/case-events/preview-form.ts",
+      "src/domain/exercise-bank/service.ts",
+      "src/node-sync/service.ts",
+      "src/index.ts"
+    ],
+    "excluded": [
+      "worker/bundle.js",
+      "worker/central-bundle.js",
+      "worker/games-bundle.js"
+    ],
+    "unscanned": [
+      "desktop",
+      "src/__tests__",
+      "scripts/load",
+      "docs/rust"
+    ],
+    "limitations": [
+      "No database was contacted: production d1_migrations state is known only through docs/MIGRATIONS.md claims, not direct read-only queries.",
+      "jCodeMunch index was not used (explicitly unavailable for this run); all evidence comes from direct file reads and grep.",
+      "Built bundles under worker/ were excluded by policy; runtime behavior was read from src/ sources only.",
+      "safeJsonEmbed in form-builder/form-page.ts carries no size cap; the 512KB embed cap named in the dispatch was not located in the inspected serialization paths and remains unlocated.",
+      "The student hard-delete transaction in src/domain/student-profile/service.ts was inspected only partially (around lines 1040-1100); tables deleted earlier inside the same function were not enumerated."
+    ]
+  },
+  "findings": [
+    {
+      "id": "data-001",
+      "kind": "evolution-gap",
+      "title": "Duplicate/gap migration numbers make fresh-install schema diverge from production and d1_migrations records filename only, not content",
+      "severity": "high",
+      "confidence": "high",
+      "identity": {
+        "path": "migrations",
+        "symbol": "0026/0046/0047/0101 duplicates; 0031/0065 gaps",
+        "assertion": "Fresh installs replay migrations/ in lexicographic filename order while production history differs, and d1_migrations tracks filename without content hash, so repo files and live schema cannot be proven identical."
+      },
+      "evidence": [
+        {
+          "path": "migrations/0026_drop_central_records.sql",
+          "line": 1,
+          "detail": "DROP TABLE IF EXISTS central_records — in production this file was applied first (05:29) and 0026_central_data.sql second (18:49) per docs/MIGRATIONS.md, so central_records EXISTS in production; lexicographic order used by fresh installs runs create-then-drop, leaving the table absent."
+        },
+        {
+          "path": "scripts/engine/apply-migrations.mjs",
+          "line": 25,
+          "detail": "readdirSync(...).sort() — local desktop engine applies all migrations in plain filename sort, which orders 0026_central_data.sql before 0026_drop_central_records.sql, the reverse of the production apply order recorded in docs/MIGRATIONS.md."
+        },
+        {
+          "path": "docs/MIGRATIONS.md",
+          "line": 194,
+          "detail": "States files 0046/0047 were deliberately rebuilt from the live production schema, that re-running them on production could rebuild tables with inconsistent CHECK/data, and that the current file content was never applied as-is to production; d1_migrations records only the filename, so this content drift is unverifiable without a manual schema diff."
+        },
+        {
+          "path": "docs/MIGRATIONS.md",
+          "line": 32,
+          "detail": "0065_rehab_cogperf_baseline.sql exists as an applied row in production but the file was deleted from the repo, so fresh installs never create those tables; gap 0031 was never used. Both are covered by an explicit written policy (no backfill, no rename of applied files)."
+        },
+        {
+          "path": "scripts/update-remote.mjs",
+          "line": 211,
+          "detail": "Deploy applies migrations via wrangler d1 migrations apply --remote, which tracks applied state by filename in d1_migrations; a filename match with drifted content is silently skipped, so any content difference between repo file and what production originally ran persists unmeasured."
+        }
+      ],
+      "status": "fixed",
+      "verification": {
+        "status": "downgraded",
+        "counterevidence": [
+          {
+            "path": "repodocs/audit/notes/verdicts-arch-perf-data.md",
+            "line": 1,
+            "detail": "تخفیف رقیب: واگرایی 0026 واقعی و با سند اثبات است (MIGRATIONS.md:184 ترتیب drop→create مقابل replay لغوی create→drop؛ تناقض MIGRATIONS.md:188 با خود جدول)؛ 0047 در واقع سه فایل دارد؛ اعمال تولید با wrangler d1 migrations apply --remote (update-remote.mjs:211) filename-based و بدون هش. تخفیف: سیاست کتبی «بدون backfill/تغییرنام» + گیت CI check-migrations-doc موجود است و صفر مصرف‌کنندهٔ کدی central_records؛ بخش اثبات‌نشده: هم‌ارزی اسکیمای 0046/0047 بازسازی‌شده با پروداکشن (نیازمند diff، خارج از دسترس فقط‌خواندنی)."
+          }
+        ],
+        "note": "تأیید مستقل کور در 2026-11-24 (verifier: independent-blind-verifier)",
+        "resulting_severity": "medium",
+        "lifecycle_note": "release 1.27.79 (sdt156) — موج B1: مایگریشن آشتی‌دهندهٔ 0124 (central_records) + گیت fresh-install-parity + گیت مانیفست SHA-256 (check-migrations-manifest) + ردیف سند 0123/تصحیح ادعای ترتیب"
+      },
+      "remediation": {
+        "change_boundary": "پیش‌نویس پیش از Decide: برطرف‌کردن وضعیت توصیف‌شده در عنوان یافته (Duplicate/gap migration numbers make fresh-install schema diverge from production and d1_migrations records filename only, not content) با کمترین تغییر، پس از تأیید رقیب و تصمیم کارفرما",
+        "done_when": "اصلاح اعمال شود و تست/گیت پوشانندهٔ رفتار اصلاح‌شده در سوئیت سبز شود",
+        "observable_effect": "رفتار توصیف‌شده در عنوان یافته (Duplicate/gap migration numbers make fresh-install schema diverge from production and d1_migrations records filename only, not content) دیگر در سنجش یا اجرا مشاهده نشود",
+        "uncertainties": []
+      }
+    },
+    {
+      "id": "data-002",
+      "kind": "integrity-risk",
+      "title": "exercise_file_chunks blob storage has no foreign key and no orphan sweep, so chunk rows survive on any path that skips storage.delete",
+      "severity": "medium",
+      "confidence": "medium",
+      "identity": {
+        "path": "src/core/storage/chunked-d1-store.ts",
+        "symbol": "createChunkedD1ObjectStore",
+        "assertion": "Blob rows in exercise_file_chunks are linked to attachment metadata only by the key TEXT value with no FK and no retention job, so integrity and bounded growth depend entirely on every code path remembering to call storage.delete."
+      },
+      "evidence": [
+        {
+          "path": "migrations/0036_exercise_attachments.sql",
+          "line": 13,
+          "detail": "exercise_file_chunks (key, seq, content) has PRIMARY KEY (key, seq) and no REFERENCES clause; the ON DELETE CASCADE declared on exercise_attachments.exercise_id removes only the metadata row, never the chunk rows."
+        },
+        {
+          "path": "src/core/storage/chunked-d1-store.ts",
+          "line": 34,
+          "detail": "writeSegments deletes and rewrites all chunks per key, and delete(key) removes chunks, but nothing scans for keys that no longer appear in exercise_attachments/exercises; no retention or orphan cleanup job exists anywhere in src/."
+        },
+        {
+          "path": "src/domain/exercise-bank/service.ts",
+          "line": 1136,
+          "detail": "The per-attachment delete route does call storage.delete(att.file_key) before removing the metadata row — correct on this path; the exercise-level delete path (routes.ts DELETE /api/exercises/:id) was not traced to confirm it deletes every chunk key of the exercise."
+        },
+        {
+          "path": "src/application/growth/service.ts",
+          "line": 16,
+          "detail": "TABLE_POLICIES has no entry for exercise_file_chunks, so the growth report labels it بی‌سیاست (no policy) — acknowledged detector, but no actual cleanup exists; D1 row growth is therefore unbounded apart from the per-file cap MAX_EXERCISE_PANEL_FILE_BYTES."
+        }
+      ],
+      "status": "fixed",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": "",
+        "lifecycle_note": "release 1.27.83 (sdt160) — سوییپ شبانهٔ chunk یتیم تمرین در @core/db/retention تازه (key بدون attachment زنده؛ فقط پیشوند exercise/ — دامنه‌های دیگر جدول خودشان را دارند) سیم به بلوک retention digest؛ آزمون سه‌سناریویی (یتیم/زنده/دامنهٔ دیگر) + TABLE_POLICIES"
+      },
+      "remediation": {
+        "observable_effect": "Any exercise/attachment removal path that misses storage.delete permanently leaks up to file_size/1.5MB chunk rows in D1 with no way to detect them except a manual join against metadata.",
+        "change_boundary": "Add a nightly sweep (inside the existing digest cron) deleting exercise_file_chunks keys not present in exercise_attachments.file_key, and/or an FK-style guard in the store layer; trace the exercise-level delete path first.",
+        "done_when": "A sweep job exists, is wired into the digest cycle, and a test proves an orphaned key is removed.",
+        "uncertainties": [
+          "Actual orphan volume in production is unknown without a read-only query against the live database."
+        ]
+      }
+    },
+    {
+      "id": "data-003",
+      "kind": "integrity-risk",
+      "title": "report_snapshots.student_id has no foreign key and no cleanup, so student hard-deletion leaves orphaned snapshot documents forever",
+      "severity": "medium",
+      "confidence": "medium",
+      "identity": {
+        "path": "migrations/0122_report_snapshots.sql",
+        "symbol": "report_snapshots",
+        "assertion": "report_snapshots.student_id is a bare TEXT column with only an index, unlike most student-linked tables that declare REFERENCES students(id) ON DELETE CASCADE, and nothing ever deletes snapshot rows."
+      },
+      "evidence": [
+        {
+          "path": "migrations/0122_report_snapshots.sql",
+          "line": 10,
+          "detail": "student_id TEXT NOT NULL — no REFERENCES students(id); contrast migrations/0035, 0044, 0047 which declare ON DELETE CASCADE on the same kind of column."
+        },
+        {
+          "path": "src/domain/student-profile/service.ts",
+          "line": 1084,
+          "detail": "The hard-delete transaction manually deletes a long hand-maintained list of child rows (game chain, appointment_students, case_events, intervention_paths, student_tags, student_focus_links) before DELETE FROM students; the visible portion of the function contains no report_snapshots deletion, so the delete list and the schema are two parallel sources of truth that can drift as new student-linked tables are added."
+        },
+        {
+          "path": "src/application/growth/service.ts",
+          "line": 16,
+          "detail": "No retention policy entry exists for report_snapshots, whose sections_json payload (full PathwayReport document) can be large; rows accumulate additively with no cleanup path found in src/."
+        }
+      ],
+      "status": "fixed",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": "",
+        "lifecycle_note": "release 1.27.83 (sdt160) — سیاست صریح report_snapshots: حذف با حذف قطعی دانش‌آموز (tx)، ماندگار تا آن هنگام (snapshot-first)؛ e2e سه‌سناریویی (عادی/force/۴۰۹ رد‌شده) + TABLE_POLICIES — یافته دیگر «بی‌سیاست» نیست"
+      },
+      "remediation": {
+        "observable_effect": "After a student is hard-deleted, their report snapshots persist with a dangling student_id — the unique report_no ledger and personal data outlive the subject with no retention or purge rule.",
+        "change_boundary": "Either add ON DELETE action semantics to the student delete transaction (explicit report_snapshots handling: purge or re-anchor), or declare the snapshot-first retention decision explicitly and register it in growth TABLE_POLICIES.",
+        "done_when": "Deleting a student either removes or explicitly preserves their snapshots per a written policy, and the growth report no longer lists report_snapshots as بی‌سیاست.",
+        "uncertainties": [
+          "Whether the snapshot-first design intentionally preserves history after subject deletion is a product decision not documented in the inspected migrations."
+        ]
+      }
+    },
+    {
+      "id": "data-004",
+      "kind": "integrity-risk",
+      "title": "Retention exists for audit_log/rum_events/client_errors but node_push_events, node_sync_inbox, quota_usage, report_snapshots and exercise_file_chunks have no retention at all",
+      "severity": "medium",
+      "confidence": "high",
+      "identity": {
+        "path": "src/application/growth/service.ts",
+        "symbol": "TABLE_POLICIES",
+        "assertion": "Only audit_log (180d, env-tunable), rum_events and client_errors (90d) have implemented nightly pruning; the sync/log/bookkeeping tables grow unbounded by design with pruning explicitly deferred."
+      },
+      "evidence": [
+        {
+          "path": "src/core/audit/writer.ts",
+          "line": 30,
+          "detail": "AUDIT_RETENTION_DAYS_DEFAULT = 180 with env override AUDIT_LOG_RETENTION_DAYS (0 disables); pruneOld runs nightly."
+        },
+        {
+          "path": "src/application/client-errors/service.ts",
+          "line": 121,
+          "detail": "DELETE FROM client_errors WHERE occurred_at < ? RETURNING id — 90-day cutoff, backed by idx_client_errors_time (0057); rum_events has the same pattern with idx_rum_ts (0086)."
+        },
+        {
+          "path": "migrations/0113_quota_usage.sql",
+          "line": 1,
+          "detail": "Header explicitly states هرس ردیف‌های کهنه بعداً تصمیم جدا دارد (pruning of old rows postponed to a separate decision); quota_usage adds one row per UTC day forever."
+        },
+        {
+          "path": "migrations/0110_node_sync_inbox.sql",
+          "line": 8,
+          "detail": "node_sync_inbox is a page-by-page transport log with PK (domain, id) idempotency but no retention window; node_push_events (0109) is additive-only telemetry with no cleanup found."
+        }
+      ],
+      "status": "fixed",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": "",
+        "lifecycle_note": "release 1.27.83 (sdt160) — هرس شبانهٔ node_push_events/node_sync_inbox (۹۰ روز روی received_at) و quota_usage (۴۰۰ روز روی day) با گاردهای per-job در بلوک retention (خطای یک جدول بقیه را نمی‌بُرد) + TABLE_POLICIES ×۳"
+      },
+      "remediation": {
+        "observable_effect": "Telemetry and bookkeeping tables grow linearly forever on long-lived instances; on the D1 free tier this slowly consumes storage and enlarges every pre-deploy export.",
+        "change_boundary": "Extend the existing nightly retention block in src/index.ts (rum/client_errors pattern) to node_push_events/node_sync_inbox/quota_usage once lifetimes are agreed; register each decision in growth TABLE_POLICIES.",
+        "done_when": "Every user-facing table has either a retention job or an explicit keep-forever entry in TABLE_POLICIES.",
+        "uncertainties": [
+          "Correct lifetimes for sync transport logs and quota history are a product decision; volume impact is small today (single row/day for quota_usage)."
+        ]
+      }
+    },
+    {
+      "id": "data-005",
+      "kind": "evolution-gap",
+      "title": "audit_log has no index on created_at while nightly pruning and date-range reads filter on it",
+      "severity": "medium",
+      "confidence": "high",
+      "identity": {
+        "path": "migrations/0001_initial.sql",
+        "symbol": "audit_log",
+        "assertion": "audit_log carries only idx_audit_resource and idx_audit_actor, but the retention prune and audit views filter by created_at, forcing a full scan of the largest log table every night."
+      },
+      "evidence": [
+        {
+          "path": "migrations/0001_initial.sql",
+          "line": 75,
+          "detail": "Indexes created: idx_audit_resource (resource_type, resource_id) and idx_audit_actor (actor_id); no index on created_at, and none of the later migrations adds one."
+        },
+        {
+          "path": "src/core/audit/writer.ts",
+          "line": 123,
+          "detail": "DELETE FROM audit_log WHERE created_at < ? — nightly full-table scan; the table is bounded at ~180 days by the same job, so cost is recurring rather than growing without limit."
+        }
+      ],
+      "status": "fixed",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": "",
+        "lifecycle_note": "release 1.27.79 (sdt156) — موج B3: مایگریشن 0125 ایندکس idx_audit_created_at روی audit_log (ثبت دیرهنگام 1.27.80/sdt157: نوشتنِ این رکورد در ec6fe08 به‌دلیل باگ نوشتنِ درون‌حلقه‌ای اسکریپت هم‌گام جامان بود)"
+      },
+      "remediation": {
+        "observable_effect": "Every nightly prune and every date-filtered audit read walks the full table; at 180-day retention this is a bounded but recurring cost on the D1 free tier.",
+        "change_boundary": "One additive migration creating CREATE INDEX IF NOT EXISTS idx_audit_created_at ON audit_log(created_at); aligns with the existing idx_rum_ts/idx_client_errors_time pattern.",
+        "done_when": "The index exists in migrations and the prune statement can use it.",
+        "uncertainties": [
+          "None material; additive index on a log table is low-risk."
+        ]
+      }
+    },
+    {
+      "id": "data-006",
+      "kind": "evolution-gap",
+      "title": "Recovery drill validates backup files offline but never executes a restore into a database end-to-end",
+      "severity": "medium",
+      "confidence": "medium",
+      "identity": {
+        "path": "scripts/restore-drill.mjs",
+        "symbol": "restore-drill",
+        "assertion": "The monthly drill checks packet format/version, row counts, per-table SHA-256 checksums and schema match against migrations, but no automated test ever replays a backup into a real SQLite/D1 instance, so full-restore executability remains unproven."
+      },
+      "evidence": [
+        {
+          "path": "scripts/restore-drill.mjs",
+          "line": 4,
+          "detail": "Self-description: اعتبارسنجی کاملِ فایل پشتیبان ... بدونِ هیچ دست‌زدنی به پایگاه داده — validation is file-only; the RTO it records measures validation, not an actual data restore."
+        },
+        {
+          "path": "src/application/backup/service.ts",
+          "line": 17,
+          "detail": "Restore = full replacement of every table inside one atomic batch with format/version checks (BACKUP_FORMAT 'gh-backup' v1, MAX_REQUEST_BYTES 60MB); this path exists in the app but has no automated drill exercising it against a real backup file."
+        },
+        {
+          "path": "scripts/update-remote.mjs",
+          "line": 193,
+          "detail": "Pre-deploy protection is wrangler d1 export --remote --output backups/backup-<stamp>.sql (SQL text format); this is a different artifact from the in-app gh-backup v1 JSON packet, so the drilled format and the deploy-time backup format are two different contracts."
+        }
+      ],
+      "status": "fixed",
+      "verification": {
+        "status": "not-required",
+        "counterevidence": [],
+        "note": "",
+        "lifecycle_note": "release 1.27.83 (sdt160) — دریل بازیابی از اعتبارسنجی صرف به بازپخش واقعی ارتقا یافت: بسته → SQLite موقت با اجرای ۱۲۸ مایگریشن → درج همهٔ ردیف‌ها (defer_foreign_keys) → مقایسهٔ شمارش؛ PASS فقط با بازپخش موفق — راستی‌آزمایی دوطرفه (پاکت سالم PASS / row_count مغایر FAIL خروجی ۱)"
+      },
+      "remediation": {
+        "observable_effect": "A backup can pass the drill yet be unrestorable in practice (e.g., FK cycle ordering, reserved system tables, size limits), because nothing in the pipeline ever performs a real restore before it is needed in an incident.",
+        "change_boundary": "Extend restore-drill.mjs (or a CI job) to replay the packet into a throwaway local SQLite database using the same table-ordering rules as backup/service.ts, then run a row-count comparison.",
+        "done_when": "The drill reports PASS only after a successful end-to-end replay into a scratch database, and the deploy-time export format is either drilled too or linked to the same restore path.",
+        "uncertainties": [
+          "Whether operators run the drill monthly and whether wrangler d1 export output has ever been reimported are operational facts outside the repository."
+        ]
+      }
+    }
+  ]
+}

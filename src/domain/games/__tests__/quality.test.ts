@@ -1,5 +1,5 @@
 // آزمون طلایی کیفیت جلسه (فاز ۷ بازطراحی / ۱.۲۵.۱۷) — سه‌تایی با قواعد شفاف
-// ⚠ ممنوعیت نتیجه‌گیری شناختی: هیچ پرچمی دربارهٔ کودک قضاوت نمی‌کند
+// هشدار ممنوعیت نتیجه‌گیری شناختی: هیچ پرچمی دربارهٔ کودک قضاوت نمی‌کند
 import { describe, it, expect } from 'vitest';
 import { assessQuality, DEFAULT_QUALITY_THRESHOLDS, QUALITY_RULES_VERSION } from '../quality';
 import { FORBIDDEN_TEXT_PATTERNS } from '../pure';

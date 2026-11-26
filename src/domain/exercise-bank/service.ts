@@ -1,5 +1,5 @@
 import type { AuthContext, TagCategory, TagRef } from '@core/shared';
-import { EXB_DOWNLOAD_TTL_SECONDS, EXERCISE_FEEDBACK_MAX, EXERCISE_FEEDBACK_MIN, SUBMISSION_ATTACH_WINDOW_HOURS, SUBMISSION_NOTE_MAX } from '@core/shared';
+import { EXB_DOWNLOAD_TTL_SECONDS, EXERCISE_FEEDBACK_MAX, EXERCISE_FEEDBACK_MIN, faHaystackExpr, likePattern, sanitizeFaQuery, SUBMISSION_ATTACH_WINDOW_HOURS, SUBMISSION_NOTE_MAX } from '@core/shared';
 import { EXERCISE_BATCH_NOTE_MAX, MAX_EXB_BATCH_ATTACH, MAX_EXERCISE_ATTACHMENT_COUNT, MAX_EXERCISE_BATCH_LINKS, MAX_EXERCISE_FILES_PER_UPLOAD, MAX_EXERCISE_FILE_BYTES, MAX_EXERCISE_UPLOAD_CHUNK_BYTES } from '@core/shared';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@core/errors';
 import {
@@ -596,9 +596,14 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
         params.push(filters.format);
       }
       if (filters.q && filters.q.trim().length > 0) {
-        const like = `%${escapeLike(filters.q.trim())}%`;
-        conds.push("(e.title LIKE ? ESCAPE '\\' OR e.description LIKE ? ESCAPE '\\')");
-        params.push(like, like);
+        // ۱.۲۷.۷۸-B2 (sdt155) — جستجوی هوشمند بانک کارت‌های آماده (هم‌الگوی B3 پیام ۱۶): سؤال و
+        // ستون‌ها با قواعد فارسی @core/shared هم‌سطح می‌شوند (ي/ك عربی، أ إ آ، ة، نیم‌فاصله، ارقام)
+        // و wildcardهای LIKE بی‌اثرند. یِ haystack: title و description چسبیده (هم‌الگوی نامِ کاملِ
+        // دانش‌آموز) تا سؤال چندواژه‌ای هم به کارت می‌رسد؛ لیست و شمارش از همین شرط مشترک می‌خوانند.
+        const like = likePattern(sanitizeFaQuery(filters.q));
+        const hay = faHaystackExpr("(e.title || ' ' || COALESCE(e.description, ''))");
+        conds.push(`(${hay} LIKE ? ESCAPE '\\')`);
+        params.push(like);
       }
       if (filters.tagId) {
         conds.push('EXISTS (SELECT 1 FROM exercise_tags et WHERE et.exercise_id = e.id AND et.tag_id = ?)');
@@ -1284,9 +1289,13 @@ export function createExerciseBankService(deps: ExerciseBankDeps) {
 
       if (filters.publishedOnly) conds.push('p.published = 1');
       if (filters.q && filters.q.trim().length > 0) {
-        const like = `%${escapeLike(filters.q.trim())}%`;
-        conds.push("(p.title LIKE ? ESCAPE '\\' OR p.description LIKE ? ESCAPE '\\')");
-        params.push(like, like);
+        // ۱.۲۷.۸۳ (ADR-007 دنباله) — آینهٔ B2 روی فهرست طرح‌های درمان: هستهٔ مشترک fa-search
+        // (ي/ك عربی، أ إ آ، ة، نیم‌فاصله، ارقام؛ بی‌اثرسازی wildcard) با haystack چسبیدهٔ
+        // title+description — همان حکم فهرست کارت‌ها؛ لیست و شمارش از یک where مشترک می‌خوانند.
+        const like = likePattern(sanitizeFaQuery(filters.q));
+        const hay = faHaystackExpr("(p.title || ' ' || COALESCE(p.description, ''))");
+        conds.push(`(${hay} LIKE ? ESCAPE '\\')`);
+        params.push(like);
       }
       if (filters.tagId) {
         conds.push('EXISTS (SELECT 1 FROM exercise_package_tags pt WHERE pt.package_id = p.id AND pt.tag_id = ?)');

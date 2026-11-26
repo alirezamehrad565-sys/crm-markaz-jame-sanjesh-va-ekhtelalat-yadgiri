@@ -1,7 +1,7 @@
 import { api } from './api.js';
 import { el, icon, toast, toastError, confirmModal, formModal, openModal, statusBadge, emptyState, loadingState, errorState } from './ui.js';
 import { fa, formatJalaliNumeric, safeExternalHref } from './format.js';
-import { session } from './state.js';
+import { session } from './api.js';
 
 function isStaff() {
   return session.user && ['manager', 'therapist', 'secretary'].includes(session.user.role);
@@ -13,9 +13,7 @@ function studentLabel(student) {
 
 export async function downloadSubmissionFile(submissionId, filename) {
   try {
-    const res = await fetch(`/api/exercises/submissions/${submissionId}/file`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem('cs.token') ?? ''}` }
-    });
+    const res = await fetch(`/api/exercises/submissions/${submissionId}/file`); // ۱.۲۷.۸۲ (ADR-005): احراز با کوکی نشست
     if (!res.ok) throw new Error('دریافت فایل بازگشتی ناموفق بود');
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);

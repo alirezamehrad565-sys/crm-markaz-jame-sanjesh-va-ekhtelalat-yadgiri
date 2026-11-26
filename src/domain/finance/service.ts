@@ -10,7 +10,7 @@ import type { Logger } from '@core/logger';
 import type { DbClient } from '@core/db';
 import type { ObjectStore } from '@core/storage';
 import { inParamChunks, inPlaceholders } from '@core/db/in-chunks'; // ۱.۲۵.۷۲ — دروازهٔ IN-list (بدهی ف۶ ⑧)
-import { sanitizeFilename } from '@domain/exercise-bank/pure';
+import { sanitizeFilename } from '@core/shared'; /* architecture-005 ۱.۲۷.۸۴ */
 import type {
   BudgetRecord,
   DonationRecord,
@@ -105,6 +105,33 @@ function sizeLimitMessage(bytes: number): string {
   return `حجم فایل بیش از ${label} است`;
 }
 
+// ─── اعتبارسنجی دفاعی خالص (testing-007 ۱.۲۷.۸۳: export شدند تا شاخه‌های مرزی مستقیم آزمون شوند) ───
+// مسیرها هم Zod دارند؛ سرویس مستقل از HTTP درست بماند
+
+export function assertAmount(amount: number): void {
+  if (!Number.isInteger(amount) || amount <= 0) {
+    throw new ValidationError('مبلغ باید عدد صحیح بزرگ‌تر از صفر باشد');
+  }
+}
+
+export function assertYmd(ymd: string, field: string): void {
+  if (!YMD_RE.test(ymd)) {
+    throw new ValidationError(`${field} باید تاریخ میلادی معتبر به قالب YYYY-MM-DD باشد`);
+  }
+}
+
+export function assertNonEmpty(value: string, label: string): void {
+  if (String(value ?? '').trim().length === 0) {
+    throw new ValidationError(`${label} نمی‌تواند خالی باشد`);
+  }
+}
+
+export function assertBudgetRange(from: string | null, to: string | null): void {
+  if (from && to && to < from) {
+    throw new ValidationError('بازهٔ بودجه نامعتبر است — «تا» نباید قبل از «از» باشد');
+  }
+}
+
 export function createFinanceService(deps: FinanceDeps): FinanceService {
   const { db, audit, logger, storage } = deps;
   const log = logger.child('finance');
@@ -113,32 +140,6 @@ export function createFinanceService(deps: FinanceDeps): FinanceService {
   function assertManager(actor: AuthContext): void {
     if (actor.role !== 'manager') {
       throw new ForbiddenError('بودجه و مالی فقط برای مدیر مرکز فعال است');
-    }
-  }
-
-  // ─── اعتبارسنجی دفاعی (مسیرها هم Zod دارند؛ سرویس مستقل از HTTP درست بماند) ───
-
-  function assertAmount(amount: number): void {
-    if (!Number.isInteger(amount) || amount <= 0) {
-      throw new ValidationError('مبلغ باید عدد صحیح بزرگ‌تر از صفر باشد');
-    }
-  }
-
-  function assertYmd(ymd: string, field: string): void {
-    if (!YMD_RE.test(ymd)) {
-      throw new ValidationError(`${field} باید تاریخ میلادی معتبر به قالب YYYY-MM-DD باشد`);
-    }
-  }
-
-  function assertNonEmpty(value: string, label: string): void {
-    if (String(value ?? '').trim().length === 0) {
-      throw new ValidationError(`${label} نمی‌تواند خالی باشد`);
-    }
-  }
-
-  function assertBudgetRange(from: string | null, to: string | null): void {
-    if (from && to && to < from) {
-      throw new ValidationError('بازهٔ بودجه نامعتبر است — «تا» نباید قبل از «از» باشد');
     }
   }
 

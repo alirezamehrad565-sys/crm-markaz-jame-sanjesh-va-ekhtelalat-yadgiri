@@ -1,7 +1,7 @@
 import { api } from './api.js';
 import { el, openModal, formModal, confirmModal, toast, toastError, loadingState, emptyState, icon, openModalAsync } from './ui.js';
 import { STUDENT_GRADES, isPlaceholderNid, fa, formatStoredJalaliNumeric, tehranYmdOfIso } from './format.js'; // نمایش جلالی با مرز روز تهران
-import { session } from './state.js';
+import { session } from './api.js';
 import { ensureFormMeta, normalizePhone } from './student-form.js';
 
 function isOffice() {

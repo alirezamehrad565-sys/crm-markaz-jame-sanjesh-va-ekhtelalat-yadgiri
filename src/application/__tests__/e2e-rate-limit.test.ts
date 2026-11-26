@@ -3,7 +3,7 @@
 // هارنس پیش‌فرض محدودساز را خاموش می‌گذارد؛ این فایل با env صریح خودش رفتار را می‌آزماید.
 import { describe, it, expect, beforeAll } from 'vitest';
 import { createTestApp, loginToken, ALI_ID, quarterHourFromNow } from '../../test/harness';
-import { parseApiRateLimitPerMin, API_RATE_LIMIT_PER_MIN_DEFAULT, API_RATE_LIMIT_PER_MIN_MAX } from '../http/rate-limit';
+import { parseApiRateLimitPerMin, parseTokenGetRateLimitPerMin, API_RATE_LIMIT_PER_MIN_DEFAULT, API_RATE_LIMIT_PER_MIN_MAX, API_TOKEN_GET_RATE_LIMIT_PER_MIN_DEFAULT } from '../http/rate-limit';
 
 const FAKE_CTX = { waitUntil: () => undefined, passThroughOnException: () => undefined } as never;
 
@@ -122,5 +122,63 @@ describe('پارس env اختیاری API_RATE_LIMIT_PER_MIN', () => {
     expect(parseApiRateLimitPerMin('-5')).toBe(API_RATE_LIMIT_PER_MIN_DEFAULT);
     expect(parseApiRateLimitPerMin('300')).toBe(300);
     expect(parseApiRateLimitPerMin('100000')).toBe(API_RATE_LIMIT_PER_MIN_MAX);
+  });
+});
+
+describe('محدودسازی GETهای توکن‌دار عمومی (security-008 — ۱.۲۷.۷۸-B1)', () => {
+  let A: App;
+
+  beforeAll(() => {
+    A = createTestApp();
+  });
+
+  it('سقف=۲: دو GET صفحهٔ عمومی /m/:token می‌گذرد و سومی ۴۲۹ می‌گیرد با پاکت RATE_LIMITED', async () => {
+    const env = { ...A.env, API_TOKEN_GET_RATE_LIMIT_PER_MIN: '2' };
+    for (let i = 0; i < 2; i++) {
+      const res = await call(A, env, 'GET', '/m/tok-unknown', { ip: '10.3.0.1' });
+      expect(res.status).toBe(200); // توکن ناشناخته → صفحهٔ سه‌حالتهٔ «منقضی» با ۲۰۰
+    }
+    const blocked = await call(A, env, 'GET', '/m/tok-unknown', { ip: '10.3.0.1' });
+    expect(blocked.status).toBe(429);
+    expect(blocked.headers.get('retry-after')).toBe('60');
+    const body = (await blocked.json()) as { error: string; message: string };
+    expect(body.error).toBe('RATE_LIMITED');
+    expect(body.message).toContain('لینک عمومی');
+  });
+
+  it('GETهای /api/m/:token/* هم زیر همین سقف‌اند (سقف=۱: اولی عبور، دومی ۴۲۹)', async () => {
+    const env = { ...A.env, API_TOKEN_GET_RATE_LIMIT_PER_MIN: '1' };
+    const first = await call(A, env, 'GET', '/api/m/tok-unknown/state', { ip: '10.3.1.1' });
+    expect(first.status).not.toBe(429); // رفتار هندلر (توکن ناشناخته) مهم نیست — دروازه فقط سقف را می‌سنجد
+    const second = await call(A, env, 'GET', '/api/m/tok-unknown/state', { ip: '10.3.1.1' });
+    expect(second.status).toBe(429);
+  });
+
+  it('سقف فقط برای مسیرهای توکن‌دار است — /api/me با همان IPِ بلاک‌شده عبور می‌کند', async () => {
+    const env = { ...A.env, API_TOKEN_GET_RATE_LIMIT_PER_MIN: '1' };
+    const token = await loginToken(A, 'manager');
+    // سقف GET توکن‌دار را با یک درخواست پر کن…
+    expect((await call(A, env, 'GET', '/m/tok-x', { ip: '10.3.2.1' })).status).not.toBe(429);
+    expect((await call(A, env, 'GET', '/m/tok-x', { ip: '10.3.2.1' })).status).toBe(429);
+    // …ولی خواندنیِ احرازدار همان IP بی‌تأثیر می‌ماند
+    const reads = await call(A, env, 'GET', '/api/me', { token, ip: '10.3.2.1' });
+    expect(reads.status).toBe(200);
+  });
+
+  it('خاموشی با env «۰»: هیچ GET توکن‌داری ۴۲۹ نمی‌گیرد', async () => {
+    const env = { ...A.env, API_TOKEN_GET_RATE_LIMIT_PER_MIN: '0' };
+    for (let i = 0; i < 4; i++) {
+      const res = await call(A, env, 'GET', '/m/tok-unknown', { ip: '10.3.3.1' });
+      expect(res.status).toBe(200);
+    }
+  });
+
+  it('پارس env اختیاری API_TOKEN_GET_RATE_LIMIT_PER_MIN — پیش‌فرض ۱۲۰ با همان گیره', () => {
+    expect(parseTokenGetRateLimitPerMin(undefined)).toBe(API_TOKEN_GET_RATE_LIMIT_PER_MIN_DEFAULT);
+    expect(parseTokenGetRateLimitPerMin('')).toBe(API_TOKEN_GET_RATE_LIMIT_PER_MIN_DEFAULT);
+    expect(parseTokenGetRateLimitPerMin('0')).toBe(0);
+    expect(parseTokenGetRateLimitPerMin('abc')).toBe(API_TOKEN_GET_RATE_LIMIT_PER_MIN_DEFAULT);
+    expect(parseTokenGetRateLimitPerMin('60')).toBe(60);
+    expect(parseTokenGetRateLimitPerMin('100000')).toBe(API_RATE_LIMIT_PER_MIN_MAX);
   });
 });

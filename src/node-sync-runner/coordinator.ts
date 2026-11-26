@@ -11,7 +11,7 @@
  * همه‌چیز نرم: هیچ تابعی throw نمی‌کند و هیچ فراخوانی هم‌زمان دوباره وارد نمی‌شود.
  */
 import type { CatchUpOutcome, NodeSyncRunner, PushNowOutcome, SyncNowOutcome } from './runner.js';
-import type { NodeSyncStore } from '../node-sync-client/client.js';
+import type { NodeSyncStore } from '@sync/node-sync-client/client.js';
 
 export type SyncMode = 'auto' | 'quarantined' | 'paused_version';
 export type SyncFailureKind =

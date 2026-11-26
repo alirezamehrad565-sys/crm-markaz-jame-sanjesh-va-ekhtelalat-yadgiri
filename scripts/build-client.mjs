@@ -57,7 +57,7 @@ try {
     bundle: true,
     splitting: true,
     format: 'esm',
-    target: ['es2020'],
+    target: ['es2022'], /* ۱.۲۷.۸۵ — performance-003: فیلد کلاس بومی → چانک هلپر esbuild از بوت حذف */
     platform: 'browser',
     minify: true,
     charset: 'utf8',

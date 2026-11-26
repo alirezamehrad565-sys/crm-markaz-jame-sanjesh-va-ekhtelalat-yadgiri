@@ -18,7 +18,7 @@ const SRC = join(ROOT, 'src');
 const read = (p: string) => readFileSync(join(ROOT, p), 'utf8');
 
 const app = readFileSync(join(JS, 'app.js'), 'utf8');
-const routing = read('src/application/api-routing/index.ts');
+const routing = read('src/application/api-routing/routes.ts'); // ۱.۲۷.۸۰ — رجیستری مسیرها به routes.ts منتقل شد (architecture-001)
 
 describe('گیت فرانت ۱.۲۵.۷۱ — قطع دو ماژول تشخیصی از UI بدون حذف کد', () => {
   test('① سایدبار و روتر: هیچ ثبت فعالی برای دو مسیر باقی نمانده باشد', () => {

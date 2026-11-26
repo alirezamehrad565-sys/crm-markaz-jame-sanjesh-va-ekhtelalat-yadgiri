@@ -133,7 +133,7 @@ describe('پذیرش خودکار با اولین جلسهٔ واقعی', () => 
     const st = await createStudent(sec);
     const entry = entryOf(await waitStatus(sec, st.id, true, { source: 'school' }));
 
-    const created = await sec.post('/api/appointments', apptBody(ALI_ID, quarterHourFromNow(90), 45, [st.id]));
+    const created = await sec.post('/api/appointments', apptBody(ALI_ID, quarterHourFromNow(-60), 45, [st.id]));
     expect(created.status).toBe(201);
     const apptId = (created.body as { data: { id: string } }).data.id;
 
@@ -157,7 +157,7 @@ describe('پذیرش خودکار با اولین جلسهٔ واقعی', () => 
     const st = await createStudent(sec);
     const entry = entryOf(await waitStatus(sec, st.id, true, { source: 'self' }));
 
-    const created = await sec.post('/api/appointments', apptBody(ALI_ID, quarterHourFromNow(150), 45, [st.id]));
+    const created = await sec.post('/api/appointments', apptBody(ALI_ID, quarterHourFromNow(-60), 45, [st.id]));
     const apptId = (created.body as { data: { id: string } }).data.id;
 
     const r = await mgr.patch(`/api/attendance/${apptId}/${st.id}`, { status: 'present' });

@@ -12,6 +12,20 @@ export function enDigits(input) {
     .replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
 }
 
+/* ۱.۲۷.۷۷ — نرمال‌سازی فارسی جستجو: هم‌الگوی @core/shared/fa-search سمت سرور (همان قواعد،
+   همان ترتیب) — صفحه‌کلید عربی (ي ك)، همزه‌ها، ة، نیم‌فاصله و ارقام جستجو را نمی‌شکنند */
+export function faNormalize(input) {
+  return enDigits(String(input ?? ''))
+    .replace(/[\u064B-\u065F\u0670]/g, '') /* اعراب — هم‌قرارداد fa-search سمت سرور */
+    .replace(/[يى]/g, 'ی')
+    .replace(/ك/g, 'ک')
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/\u200c/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 export const PLACEHOLDER_NID_PREFIX = 'NAS-';
 
 export function isPlaceholderNid(nid) {

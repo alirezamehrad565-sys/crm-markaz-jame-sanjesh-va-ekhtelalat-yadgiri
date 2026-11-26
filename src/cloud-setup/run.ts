@@ -96,13 +96,8 @@ export async function maybeRunSetup(user: SetupUser | null, deps?: Partial<RunDe
           return { baseUrl: fresh.worker_url, nodeCode: fresh.node_code, nodeKey: key };
         },
         progressStorage: store,
-        tokenProvider: () => {
-          try {
-            return (typeof localStorage !== 'undefined' ? localStorage.getItem('cs.token') : null) ?? null;
-          } catch {
-            return null;
-          }
-        },
+        // ۱.۲۷.۸۲ (ADR-005): توکن دیگر از localStorage نمی‌آید — احراز رانر با کوکی نشست هم‌مبدأ
+        tokenProvider: () => null,
         // FetchLike ← قرارداد RunnerFetch زمان‌بند (runner فقط status مصرف می‌کند)
         fetchFn: (input: string, init?: RequestInit) => (merged.fetchImpl ?? globalFetch)(input, init as never)
       });
@@ -231,13 +226,8 @@ export function cloudSetupSection(user: SetupUser | null, deps?: Partial<RunDeps
           return { baseUrl: fresh.worker_url, nodeCode: fresh.node_code, nodeKey: key };
         },
         progressStorage: store,
-        tokenProvider: () => {
-          try {
-            return (typeof localStorage !== 'undefined' ? localStorage.getItem('cs.token') : null) ?? null;
-          } catch {
-            return null;
-          }
-        },
+        // ۱.۲۷.۸۲ (ADR-005): احراز رانر با کوکی نشست هم‌مبدأ (توکن localStorage حذف شد)
+        tokenProvider: () => null,
         // FetchLike ← قرارداد RunnerFetch زمان‌بند (runner فقط status مصرف می‌کند)
         fetchFn: (input: string, init?: RequestInit) => (merged.fetchImpl ?? globalFetch)(input, init as never)
       })

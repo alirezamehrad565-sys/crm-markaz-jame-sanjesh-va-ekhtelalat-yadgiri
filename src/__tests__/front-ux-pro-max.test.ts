@@ -64,7 +64,7 @@ describe('گیت ممیزی UI/UX Pro Max (uupm.cc) — 1.09.0', () => {
   });
 
   test('نسخه: سو 1.19.0 — قفل هم‌نسخه‌ای bump با انتشار (برچسب نسخهٔ سایدبار)', () => {
-    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1.27.57'/);
+    expect(readFileSync(join(__dirname, '../core/version.ts'), 'utf8')).toMatch(/APP_VERSION = '1.27.85'/);
   });
 
   test('۱.۱۹.۰ — روز کاری: جریان پیوسته (هیچ اکشنی کل نما را re-render نمی‌کند)', () => {
@@ -179,12 +179,11 @@ describe('گیت ممیزی UI/UX Pro Max (uupm.cc) — 1.09.0', () => {
     expect(mobileCircles![0]).toMatch(/padding-inline-start:\s*0/);
   });
 
-  test('۱.۲۷.۵۸ — پروفایل: منوی برچسب‌دار «اقدامات» در نوار هویت (جای دکمه‌های دایره‌ای بی‌برچسب ۱.۱۵.۰)', () => {
+  test('۱.۲۷.۷۱ — پروفایل کلاسیک: اقدام کلیدی برچسب روشن دارد و حذف/معلم‌ها سیم‌کشی مستقیم‌اند', () => {
     const profile = readFileSync(join(__dirname, '../../public/assets/js/views/student-profile.js'), 'utf8');
-    // منوی برچسب‌دار ⋯ روی نوار هویت ساخته می‌شود و همهٔ اقدام کلیدی را با نام روشن پوشش می‌دهد
-    expect(profile).toMatch(/buildIdentityMenu/);
-    expect(profile).toMatch(/'اقدامات پرونده — ویرایش، برچسب‌ها، معلم‌ها، تاریخچهٔ تحصیلی، حذف'/);
-    expect(profile).toMatch(/dd__item--danger/); // «حذف کامل» تم خطر دارد و از مسیر ناوبری خارج شده
+    // ردیف اقدام کارت وضعیت + اقدامات برچسب‌دار (قرارداد ۱.۲۷.۵۷)
+    expect(profile).toMatch(/'اقدامات پرونده/);
+    expect(profile).toMatch(/profile-actions__row/);
     // هر آیتم با قفل مشغولی واحد (ضد اسپم) باز می‌شود
     expect(profile).toMatch(/lockBtn\(e\.currentTarget, onclick\)/);
     // API حذف و API معلم (POST/DELETE) مستقیماً سیم‌کشی شده‌اند

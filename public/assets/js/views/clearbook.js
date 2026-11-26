@@ -23,6 +23,7 @@ const CHUNK_UPLOAD_BYTES = 1024 * 1024;      // هر درخواست تکه‌ا�
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
 const PAGE_SIZE = 50;
 const STATUS_LABELS = { planned: 'برنامه‌ریزی‌شده', active: 'در جریان', done: 'تکمیل' };
+export { STATUS_LABELS };
 
 const EXT_MIME_FALLBACK = {
   pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp',
@@ -99,10 +100,7 @@ let gen = 0; // — F1: گارد نسل واکشی (الگوی waitlist) — پ�
 async function fileObjectUrl(entryId, fileId) {
   const key = `${entryId}/${fileId}`;
   if (urlCache.has(key)) return urlCache.get(key);
-  const token = localStorage.getItem('cs.token') ?? '';
-  const res = await fetch(`/api/clearbook/entries/${entryId}/files/${fileId}`, {
-    headers: { Authorization: `Bearer ${token}` }
-  });
+  const res = await fetch(`/api/clearbook/entries/${entryId}/files/${fileId}`); // ۱.۲۷.۸۲ (ADR-005): احراز با کوکی نشست
   if (!res.ok) throw new Error('دریافت فایل ناموفق بود');
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
@@ -418,6 +416,12 @@ function monthSpanBetween(fromYmd, toYmd, max = 14) {
   }
   return out;
 }
+
+/* testing-002 (۱.۲۷.۸۲): منطق خالص تقویم شمسی/سال تحصیلی برای آزمون رفتاری export شد */
+export {
+  pad2, jalaliPartsOf, ymdOfJalali, schoolYearOf, schoolYearBounds, schoolYearLabel,
+  monthKeyOf, monthLabelOf, dateLabelOf, rangeLabel, monthSpanBetween
+};
 
 function monthHeader(sampleYmd, isNow) {
   return el('div', { class: `cb-month${isNow ? ' is-now' : ''}` },

@@ -5,9 +5,5 @@ export function ok<T>(data: T, meta?: Record<string, unknown>): { data: T; meta?
   return meta ? { data, meta } : { data };
 }
 
-export function pageParams(query: Record<string, string | undefined>): { page: number; pageSize: number } {
-  return {
-    page: Number.parseInt(query.page ?? '1', 10) || 1,
-    pageSize: Number.parseInt(query.page_size ?? String(DEFAULT_PAGE_SIZE), 10) || DEFAULT_PAGE_SIZE
-  };
-}
+/* architecture-003 (۱.۲۷.۸۴): پیاده‌سازی به @core/shared/http-params رفت — این مسیر فقط سازگاری */
+export { pageParams } from '@core/shared';

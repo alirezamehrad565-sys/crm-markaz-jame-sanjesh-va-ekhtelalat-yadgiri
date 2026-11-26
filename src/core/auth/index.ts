@@ -7,6 +7,7 @@ export type { GeneratedApiKey } from './api-keys';
 export { hashPassword, verifyPassword, isLegacyPasswordHash, DEFAULT_PASSWORD } from './password';
 export { signSessionJwt, verifySessionJwt } from './session-jwt';
 export type { SessionJwtPayload } from './session-jwt';
-export { resolveSessionSecret, getOrCreateRuntimeSecret, resetRuntimeSecretCache, DEV_AUTH_SECRET } from './runtime-secret';
+export { buildSessionCookie, clearSessionCookie, readSessionCookie, SESSION_COOKIE_NAME } from './session-cookie';
+export { resolveSessionSecret, DEV_AUTH_SECRET, isDevEnv, d1AsSecretStore } from './runtime-secret';
 export { findStaffByUsername } from './login';
 export type { LoginStaffRow } from './login';

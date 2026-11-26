@@ -1,0 +1,6 @@
+# نمونهٔ پیکربندی محلی — کپی کنید به .dev.vars (gitignored؛ هرگز کامیت/دیپلوی نمی‌شود)
+# SEC-12776 (security-002 ممیزی): impersonation dev فقط با هر دو کلید باز می‌شود؛
+# ENV=development تنها کافی نیست تا یک خطای پیکربندی استقرار درِ جعل هویت را باز نکند.
+# بدون DEV_IMPERSONATION=1، هدر X-Dev-Staff-Id حتی در dev پذیرفته نمی‌شود.
+ENV=development
+DEV_IMPERSONATION=1

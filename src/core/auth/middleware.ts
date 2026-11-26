@@ -7,6 +7,7 @@ import { verifySessionJwt } from './session-jwt';
 import { resolveSessionSecret } from './runtime-secret';
 import { getStaffById, resolveStaffByEmail } from './staff';
 import { findApiKeyByHash, hashApiKey, looksLikeApiKey, touchApiKeyLastUsed } from './api-keys';
+import { readSessionCookie } from './session-cookie';
 
 type Env = { Bindings: AppBindings; Variables: AppVariables };
 
@@ -19,7 +20,10 @@ export function authMiddleware(): MiddlewareHandler<Env> {
     const env = c.env;
     const db = env.DB;
 
-    if (env.ENV === 'development') {
+    /* SEC-12776 (security-002 ممیزی) — impersonation فقط با هر دو شرط ENV=development
+       و متغیر صریح DEV_IMPERSONATION=1 (از .dev.vars که هرگز کامیت/دیپلوی نمی‌شود).
+       ENV یک var committed است؛ خطای پیکربندی استقرار دیگر به‌تنهایی درِ جعل هویت را باز نمی‌کند. */
+    if (env.ENV === 'development' && env.DEV_IMPERSONATION === '1') {
       const devStaffId = c.req.header(DEV_STAFF_HEADER);
       if (devStaffId) {
         const staff = await getStaffById(db, devStaffId);
@@ -60,9 +64,27 @@ export function authMiddleware(): MiddlewareHandler<Env> {
       return next();
     }
 
+    /* ۱.۲۷.۸۲ (security-009/ADR-005): توکن نشست از کوکی httpOnly یا Bearer می‌آید.
+       کوکی مسیر SPA است (اسکریپت‌ناخوان)؛ Bearer مسیر کلاینت‌های غیرمرورگری (wizard ابری،
+       node-tools، گذار آزمون‌ها). CSRF: درخواستِ احرازشده با کوکی و متد نوشتنی باید هم‌مبدأ
+       باشد (SameSite=Strict لایهٔ اول؛ بررسی Origin لایهٔ دوم) — نبود Origin در کلاینت‌های
+       غیرمرورگری مجاز است و Bearer از این گیت خارج است چون مبدأ متفاوتش عمدی است. */
     const authHeader = c.req.header('Authorization');
-    if (authHeader?.startsWith('Bearer ')) {
-      const sessionToken = authHeader.slice(7).trim();
+    const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() : undefined;
+    const fromCookie = !bearerToken;
+    const sessionToken = fromCookie
+      ? readSessionCookie(c.req.header('Cookie'))
+      : bearerToken;
+    if (sessionToken) {
+      if (fromCookie) {
+        const method = c.req.method.toUpperCase();
+        const origin = c.req.header('Origin');
+        if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS' && origin) {
+          if (origin !== new URL(c.req.url).origin) {
+            throw new ForbiddenError('درخواست بین‌مبدأ با کوکی نشست مجاز نیست');
+          }
+        }
+      }
       const payload = await verifySessionJwt(sessionToken, await resolveSessionSecret(env));
       if (payload) {
         // مایلستون ۱ (0111) — ابطال سمت‌سرور: امضای معتبر کافی نیست؛ ردیف نشست باید
@@ -72,11 +94,16 @@ export function authMiddleware(): MiddlewareHandler<Env> {
         }
         const nowIso = new Date().toISOString();
         const session = await db
-          .prepare('SELECT revoked_at, expires_at FROM auth_sessions WHERE sid = ?')
+          .prepare('SELECT revoked_at, expires_at, staff_id FROM auth_sessions WHERE sid = ?')
           .bind(payload.sid)
-          .first<{ revoked_at: string | null; expires_at: string }>();
+          .first<{ revoked_at: string | null; expires_at: string; staff_id: string }>();
         if (!session || session.revoked_at !== null || session.expires_at <= nowIso) {
           throw new AuthError('نشست باطل یا منقضی شده است — ورود دوباره لازم است');
+        }
+        /* SEC-12776 (security-003 ممیزی) — اتصال sid↔sub: توکنِ امضاشده با راز مشترک
+           (سناریوی instance-sync/سرقت راز) با sid نشستِ کاربر دیگر پذیرفته نمی‌شود. */
+        if (session.staff_id !== payload.sub) {
+          throw new AuthError('نشست به کاربر دیگری تعلق دارد — ورود دوباره لازم است');
         }
         const staff = await getStaffById(db, payload.sub);
         if (!staff || staff.active !== 1) {

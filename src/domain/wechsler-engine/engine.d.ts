@@ -233,3 +233,10 @@ export declare const INDEX_MEMBERS: Record<"VCI" | "PRI" | "WMI" | "PSI" | "FSIQ
 export declare const GAI_MEMBERS: string[];
 export declare const MIN_AGE: 6;
 export declare const MAX_AGE: 16;
+
+/* testing-007 (۱.۲۷.۸۳): توابع خالص داخلی برای آزمون مرزی export شدند */
+export declare function scaledFor(rawScores: Record<string, unknown>, years: number): Record<string, number>;
+export declare function convertIndex(tableKey: string, total: number): { sum: number; scaled: number; percentile: number; ci95: number } | undefined;
+export declare function descriptiveClass(score: number, bugRef?: string, strict?: boolean): string;
+export declare function num(x: unknown): number;
+export declare function rawRange(band: string, code: string): [number, number];

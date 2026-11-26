@@ -1,13 +1,11 @@
 import { api, clearSession } from './api.js';
-import { el, icon, confirmModal, toast, toastError, emptyState, skeletonState } from './ui.js';
+import { bindThemeBtn, confirmModal, el, emptyState, icon, initTheme, skeletonState, toast, toastError } from './ui.js';
 import { register, start, render, registerNotFound } from './router.js';
 import { renderLoginPage, showApp } from './login.js';
 
 // فقط داشبورد و ۴۰۴ eager می‌مانند؛
 // بقیهٔ نماها با ورود به مسیر بار می‌شوند (lazyView پایین) — الگوی موجود «روز کاری → سنجش»
 import { renderDashboard } from './views/dashboard.js';
-import { renderNotFound } from './views/not-found.js'; // نمای ۴۰۴ برای مسیرهای ناشناخته
-import { initGlobalSearch } from './global-search.js';
 import { initAnnouncementBanners } from './announcements.js';
 import { fa } from './format.js'; // badge لیست انتظار
 
@@ -53,7 +51,7 @@ window.addEventListener('unhandledrejection', (e) => {
   reportClientError(String(r?.message ?? r ?? 'unhandledrejection'), null, null, null, r?.stack ?? null);
 });
 
-import { session } from './state.js';
+import { session } from './api.js';
 import { initRum } from './rum.js'; // تله‌متری بی‌نام کارایی (بدون IP/UA — قانون PII design.md)
 // فاز A — نشانگر سربرگ «سرور محلی» از feed مشترک پوسته (engine:status + poll ۳۰ثانیه‌ای) تغذیه می‌شود؛
 // تابع نگاشت حالت→رنگ/برچسب همان خالصِ پنل سلامت است (serverStateView — یک منبع، دو لایه).
@@ -63,53 +61,6 @@ import { serverStateView, installServerStatusFeed, subscribeServerStatus } from 
 
 // ثبت ناظرهای CWV در نخستین فرصت؛ گزارشگرها buffered هستند و رویدادهای پیش از این هم می‌گیرند
 initRum();
-
-const THEME_KEY = 'cs.theme';
-const THEME_COLORS = { light: '#F7F3EA', dark: '#191C22' }; // — دارک نرم‌شده
-
-function currentTheme() {
-  return document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
-}
-
-function initTheme() {
-  let saved = null;
-  try { saved = localStorage.getItem(THEME_KEY); } catch { /* حالت خصوصی مرورگر */ }
-  const system = window.matchMedia?.('(prefers-color-scheme: dark)')?.matches ? 'dark' : 'light';
-  applyTheme(saved === 'dark' || saved === 'light' ? saved : system, false);
-}
-
-function applyTheme(next, persist = true) {
-  const theme = next === 'dark' ? 'dark' : 'light';
-  const set = () => {
-    document.documentElement.dataset.theme = theme;
-    const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', THEME_COLORS[theme]);
-  };
-  // A15: گذار تم یکدست با View Transitions — قبلاً body fade می‌شد و بقیهٔ سطوح snap (دو سرعته)
-  const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
-  if (!reduce && typeof document.startViewTransition === 'function') {
-    document.startViewTransition(set);
-  } else {
-    set();
-  }
-  if (persist) { try { localStorage.setItem(THEME_KEY, theme); } catch { /* noop */ } }
-  updateThemeBtn();
-}
-
-function toggleTheme() {
-  applyTheme(currentTheme() === 'dark' ? 'light' : 'dark');
-}
-
-let themeBtn;
-
-function updateThemeBtn() {
-  const dark = currentTheme() === 'dark';
-  const label = dark ? 'حالت روشن' : 'حالت تاریک';
-  if (!themeBtn) return;
-  themeBtn.replaceChildren(icon(dark ? 'sun' : 'moon', 18));
-  themeBtn.title = label;
-  themeBtn.setAttribute('aria-label', label);
-}
 
 const NAV = [
   { hash: '#/dashboard', label: 'داشبورد', icon: 'dashboard', group: 'امروز' },
@@ -332,6 +283,8 @@ function installServerStatusPill() {
     if (themeBtnEl) topbar.insertBefore(pill, themeBtnEl); else topbar.appendChild(pill);
     const paint = (status) => {
       const view = serverStateView(status?.state, status?.degradedReason);
+      pill.setAttribute('role', 'status'); /* ui-005 ۱.۲۷.۸۳ — تغییر وضعیت سرور اعلام می‌شود */
+      pill.setAttribute('aria-live', 'polite');
       pill.className = `badge ${view.badge}`;
       const dotEl = pill.querySelector('.dot');
       if (dotEl) dotEl.className = `dot ${view.dot}`;
@@ -595,7 +548,7 @@ register('#/cloud-setup', { title: 'پیکربندی اتصال ابری', rende
 register('#/working-hours', { title: 'تنظیمات', render: lazyView(() => import('./views/settings.js'), 'renderSettings', '#/working-hours') }); // — مسیر قدیمی → تنظیمات
 register('#/schools', { title: 'مدارس', render: roleOnly(['manager', 'secretary'], lazyView(() => import('./views/schools.js'), 'renderSchools', '#/schools')) }); // — منشی مجاز
 register('#/students', { title: 'دانش‌آموزان', render: lazyView(() => import('./views/students.js'), 'renderStudents', '#/students') });
-register('#/students/:id', { title: 'پروفایل دانش‌آموز', render: lazyView(() => import('./views/student-profile.js'), 'renderStudentProfile', '#/students/') });
+register('#/students/:id', { title: 'پروندهٔ دانش‌آموز', render: lazyView(() => import('./views/student-profile.js'), 'renderStudentProfile', '#/students/') });
 register('#/students/:id/progress-report', { title: 'گزارش پیشرفت', render: lazyView(() => import('./views/progress-report.js'), 'renderProgressReport', '#/students/') }); // نقش‌ها در سرور کنترل می‌شوند (مثل ot/progress)
 register('#/waitlist', { title: 'لیست انتظار', render: roleOnly(['manager', 'secretary', 'therapist', 'supervisor'], lazyView(() => import('./waitlist.js'), 'renderWaitlistModule', '#/waitlist'), 'این بخش برای دفتر و ثبت متقاضی توسط درمانگر فعال است.') }); /* ۱.۲۵.۰۱ — ناظر: آیتم منو بدون گیت می‌افتاد روی «دسترسی مجاز نیست»؛ ۱.۲۷.۳۸ — صندوق ورودی تبِ دوم همین نما */
 register('#/archive', { title: 'آرشیو', render: roleOnly(['manager', 'secretary', 'supervisor'], lazyView(() => import('./views/archive.js'), 'renderArchive', '#/archive')) }); /* ۱.۲۵.۰۱ — ناظر: فقط مشاهده؛ اکشن‌های ردیف در خود نما پنهان می‌شوند */
@@ -621,7 +574,7 @@ register('#/special-needs', { title: 'نیازهای ویژه', render: roleOnly
 register('#/bug-report', { title: 'گزارش به پشتیبانی', render: lazyView(() => import('./views/bug-report.js'), 'renderBugReport', '#/bug-report') }); // ۱.۲۵.۵۷ — همهٔ همکاران؛ نام تازه
 
 // مسیر ناشناخته به‌جای ریدایرکت بی‌صدا، نمای ۴۰۴ را رندر می‌کند (hash دست‌نخورده می‌ماند)
-registerNotFound({ title: 'صفحه پیدا نشد', render: renderNotFound });
+registerNotFound({ title: 'صفحه پیدا نشد', render: lazyView(() => import('./views/not-found.js'), 'renderNotFound', '#/404') }); /* ۱.۲۷.۷۳ — تنبل: global-search از بوت خارج ماند */
 
 document.addEventListener('routechange', (e) => syncNav(e.detail.path, e.detail.notFound === true));
 
@@ -631,15 +584,29 @@ window.addEventListener('hashchange', () => {
   syncNav(location.hash.replace(/^#\//, '') || 'dashboard');
 });
 
-themeBtn = document.getElementById('theme-btn');
-themeBtn?.addEventListener('click', toggleTheme);
-
-initTheme();
-buildSidebar();
-
-initGlobalSearch();
+/* ۱.۲۷.۷۳ — پالت سرچ تنبل: global-search از بوت خارج شد (سقف boot)؛ اولین ⌘K/کلیک/«/»
+   ماژول را همان لحظه می‌آورد و پالت را باز می‌کند — دفعات بعد همان ماژول کش‌شده باز می‌کند. */
+let gsPromise = null;
+const lazySearch = () => {
+  gsPromise = gsPromise ?? import('./global-search.js').then((m) => { m.initGlobalSearch(); return m; });
+  return gsPromise.then((m) => m.openPalette());
+};
+document.getElementById('global-search-btn')?.addEventListener('click', lazySearch);
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && String(e.key).toLowerCase() === 'k') { e.preventDefault(); lazySearch(); return; }
+  if (e.key === '/') {
+    const t = e.target;
+    const tag = t && t.tagName ? t.tagName.toLowerCase() : '';
+    if (tag !== 'input' && tag !== 'select' && tag !== 'textarea' && !(t && t.isContentEditable)) { e.preventDefault(); lazySearch(); }
+  }
+});
 
 installServerStatusPill(); // فاز A — نشانگر سربرگ «سرور محلی» (فقط پوستهٔ میز؛ حالت وب مخفی)
+
+/* ۱.۲۷.۷۴ — wiring تم بازگشت (در sdt151 ناخواسته حذف شده بود — دکمهٔ روشن/تاریک مرده بود):
+   تم اولیه + اتصال دکمهٔ سربرگ با paint آیکون */
+initTheme();
+bindThemeBtn(document.getElementById('theme-btn'));
 
 document.getElementById('menu-btn').addEventListener('click', () => {
   const sidebar = document.getElementById('sidebar');

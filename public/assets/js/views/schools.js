@@ -1,5 +1,5 @@
 import { api, qs } from '../api.js';
-import { session } from '../state.js';
+import { session } from '../api.js';
 import { fa, enDigits } from '../format.js';
 import { el, icon, formModal, confirmModal, openModal, toast, toastError, dataTable, statusBadge, loadingState, emptyState, callBadge, lockBtn, collapseRemove, flashNode } from '../ui.js';
 import { invalidateStudentFormMeta } from '../student-form.js'; // — کش فرم دانش‌آموز بعد از هر تغییر مدارس/کلاس تازه شود
@@ -12,7 +12,7 @@ function canDeactivate() {
   return session.user?.role === 'manager';
 }
 
-/* ۱.۱۷.۰ — زبان واحد دایره‌های اقدام (هم‌سان با فهرست/پروفایل دانش‌آموز ۱.۱۵–۱.۱۶):
+/* ۱.۱۷.۰ — زبان واحد دایره‌های اقدام (هم‌سان با فهرست/پروندهٔ دانش‌آموز ۱.۱۵–۱.۱۶):
    به درخواست کاربر سیستم مودال‌محورِ منوی ⋯ در مدارس هم حذف شد — دکمه‌ها مستقیم سرِ ردیف‌اند،
    امن‌ها اول و حذفِ مخرب همیشه آخری با فاصلهٔ ایمن؛ هر دکمه قفل مشغولی واحد (ضد اسپم) دارد
    و تأیید مخرب‌ها با همان confirmModal شفاف می‌ماند. */

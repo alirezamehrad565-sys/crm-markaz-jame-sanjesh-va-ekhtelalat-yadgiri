@@ -3,8 +3,13 @@
     "target": "ES2022",
     "module": "ES2022",
     "moduleResolution": "Bundler",
-    "lib": ["ES2022"],
-    "types": ["@cloudflare/workers-types", "vitest/globals"],
+    "lib": [
+      "ES2022"
+    ],
+    "types": [
+      "@cloudflare/workers-types",
+      "vitest/globals"
+    ],
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -14,12 +19,56 @@
     "noEmit": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"],
-      "@core/*": ["./src/core/*"],
-      "@domain/*": ["./src/domain/*"],
-      "@app/*": ["./src/application/*"]
+      "@/*": [
+        "./src/*"
+      ],
+      "@core/*": [
+        "./src/core/*"
+      ],
+      "@domain/*": [
+        "./src/domain/*"
+      ],
+      "@app/*": [
+        "./src/application/*"
+      ],
+      "@sync/internal-sync": [
+        "./src/internal-sync/index.ts"
+      ],
+      "@sync/internal-sync/*": [
+        "./src/internal-sync/*"
+      ],
+      "@sync/node-sync": [
+        "./src/node-sync/index.ts"
+      ],
+      "@sync/node-sync/*": [
+        "./src/node-sync/*"
+      ],
+      "@sync/node-sync-client": [
+        "./src/node-sync-client/index.ts"
+      ],
+      "@sync/node-sync-client/*": [
+        "./src/node-sync-client/*"
+      ],
+      "@sync/node-sync-runner": [
+        "./src/node-sync-runner/index.ts"
+      ],
+      "@sync/node-sync-runner/*": [
+        "./src/node-sync-runner/*"
+      ],
+      "@sync/cloud-setup": [
+        "./src/cloud-setup/index.ts"
+      ],
+      "@sync/cloud-setup/*": [
+        "./src/cloud-setup/*"
+      ]
     }
   },
-  "include": ["src/**/*.ts", "public/assets/play/engine/**/*.d.ts"],
-  "exclude": ["node_modules", "src/application/board-ui"]
+  "include": [
+    "src/**/*.ts",
+    "public/assets/play/engine/**/*.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "src/application/board-ui"
+  ]
 }

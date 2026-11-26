@@ -15,7 +15,7 @@
  * قرارداد پاکت: هم‌الگوی node-sync (data/error envelope) و آزمون‌پذیر.
  */
 import { z } from 'zod';
-import { NODE_PULL_DOMAIN_SET } from '../node-sync'; // هم‌سطح — آینهٔ فهرست سفید سمت ابر
+import { NODE_PULL_DOMAIN_SET } from '@sync/node-sync'; /* architecture-007 ۱.۲۷.۸۴ */ // هم‌سطح — آینهٔ فهرست سفید سمت ابر
 import type { DbClient } from '@core/db';
 import type { Logger } from '@core/logger';
 

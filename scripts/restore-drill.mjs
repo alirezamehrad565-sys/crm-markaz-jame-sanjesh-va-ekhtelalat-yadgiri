@@ -10,10 +10,12 @@
  * اجرا: node scripts/restore-drill.mjs --file <backup.json> [--report docs/reports/...]
  * خروجی ۰ فقط با PASS — هر FAIL خروجی ۱ می‌دهد (گزارش فارسی در docs/reports/ می‌نشیند).
  */
-import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, mkdtempSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { dirname, join, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { DatabaseSync } from 'node:sqlite';
 
 const ROOT = resolve(join(dirname(fileURLToPath(import.meta.url)), '..'));
 const MIGRATIONS_DIR = join(ROOT, 'migrations');
@@ -187,6 +189,51 @@ if (envelope && tableNames.length > 0) {
     record('هم‌خوانی اسکیما', 'PASS', `فهرست جدول‌های فایل دقیقاً با ${faNum(migrationNames.size)} CREATE TABLE مایگریشن‌ها هم‌خوان است`);
   } else if (schemaOk) {
     record('هم‌خوانی اسکیما', 'PASS', `همهٔ جدول‌های فایل در مایگریشن‌ها تعریف شده‌اند (${faNum(missing.length)} جدول کهنه‌تر غایب — هشدار بالا)`);
+  }
+}
+
+// ۶) بازپخش end-to-end (data-006 — ۱.۲۷.۸۳): بسته → پایگاه‌دادهٔ SQLite موقت با همان
+//    مایگریشن‌های مخزن → درج همهٔ ردیف‌ها به ترتیب جدول‌ها (با defer_foreign_keys برای
+//    چرخه‌های FK) → مقایسهٔ شمارش هر جدول. PASS فقط با بازپخش موفق — «بکاپِ تست‌نشده = نیست».
+let replayRan = false;
+if (envelope && tableNames.length > 0 && schemaOk) {
+  replayRan = true;
+  let replayOk = false;
+  let replayDetail = '';
+  try {
+    const tmp = mkdtempSync(join(tmpdir(), 'restore-drill-'));
+    const conn = new DatabaseSync(join(tmp, 'replay.sqlite'));
+    const migFiles = readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith('.sql')).sort();
+    for (const f of migFiles) {
+      conn.exec(readFileSync(join(MIGRATIONS_DIR, f), 'utf8'));
+    }
+    conn.exec('PRAGMA defer_foreign_keys = ON');
+    conn.exec('BEGIN IMMEDIATE');
+    let inserted = 0;
+    for (const name of tableNames) {
+      const rows = envelope.tables[name].rows ?? [];
+      for (const row of rows) {
+        const cols = Object.keys(row);
+        if (cols.length === 0) throw new Error(`ردیف بی‌ستون در جدول «${name}»`);
+        if (cols.some((c) => !IDENT_RE.test(c))) throw new Error(`نام ستون غیرامن در جدول «${name}»`);
+        const sql = `INSERT INTO "${name}" (${cols.map((c) => `"${c}"`).join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`;
+        conn.prepare(sql).run(...cols.map((c) => (row[c] === undefined ? null : row[c])));
+        inserted += 1;
+      }
+    }
+    conn.exec('COMMIT');
+    const mismatch = [];
+    for (const name of tableNames) {
+      const actual = conn.prepare(`SELECT COUNT(*) AS n FROM "${name}"`).get()?.n ?? -1;
+      if (Number(actual) !== (envelope.tables[name].rows ?? []).length) mismatch.push(name);
+    }
+    replayOk = mismatch.length === 0;
+    replayDetail = replayOk
+      ? `${faNum(inserted)} ردیف در ${faNum(tableNames.length)} جدول بازپخش و شمارش‌ها برابرند (${faNum(migFiles.length)} مایگریشن)`
+      : `ناهم‌خوانی شمارش پس از بازپخش: ${mismatch.join('، ')}`;
+    record('بازپخش end-to-end', replayOk ? 'PASS' : 'FAIL', replayDetail);
+  } catch (err) {
+    record('بازپخش end-to-end', 'FAIL', `بازپخش شکست خورد — ${err.message}`);
   }
 }
 

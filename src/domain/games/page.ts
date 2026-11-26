@@ -1,6 +1,7 @@
 // page.ts — صفحهٔ سه‌حالتهٔ لینک (M1: گذارها · M2: پخش‌کنندهٔ کودک · فاز ۲ بازطراحی: پنج‌شِمال)
 // این صفحه فقط گذارها را می‌راند و هیچ منبع بیرونی ندارد؛ دارایی‌های بازی از همان مبدأ با ?v= نسخه می‌آیند.
 import { APP_VERSION } from '@core/version';
+import { safeJsonEmbed } from '@core/shared/csp';
 import { GAME_KIND_IDS } from './registry';
 import type { PublicStateView, PreviewStateView } from './types';
 
@@ -11,8 +12,13 @@ function faNum(n: number): string {
 }
 
 function esc(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
+
+/* ۱.۲۷.۸۲ (security-007/ADR-004): embed امن JSON حالا در بلاک دادهٔ <script type="application/json">
+   می‌نشیند — CSP اجرایی نیست و جاسازی امن آن با safeJsonEmbed مشترک انجام می‌شود. اسکریپت اجرایی
+   صفحه به فایل بیرونی /assets/play/page-boot.js رفت تا script-src بدون unsafe-inline بسته شود.
+   توکن از مسیر URL می‌آید و باید هرگز خام در کد اجرایی نباشد. */
 
 /* پوستهٔ اختصاصی نوع‌بازی (G7/۱.۲۵.۴۳) — هر بازی فایل CSS خودش را می‌گیرد؛
    فقط برای نوع‌های شناخته‌شدهٔ رجیستری سرو می‌شود (نام مسیر از ورودی کاربر ساخته نمی‌شود) */
@@ -83,28 +89,8 @@ function page(model: PublicStateView, token: string, body: string): string {
 </head>
 <body>
 <div class="wrap">${body}</div>
-<script>
-(function () {
-  var TOKEN = ${JSON.stringify(token)};
-  function post(path, body) {
-    return fetch('/api/m/' + TOKEN + path, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body || {})
-    }).then(function (r) { return r.json(); }).then(function () { location.reload(); })
-      .catch(function () { location.reload(); });
-  }
-  var bind = function (id, path, body) {
-    var el = document.getElementById(id);
-    if (el) el.addEventListener('click', function () { el.disabled = true; post(path, body); });
-  };
-  bind('btn-start', '/start');
-  bind('btn-gate-open', '/parent-gate', {});
-  bind('btn-gate-solve', '/parent-gate', { solve: true });
-  var c1 = document.getElementById('btn-confirm1');
-  if (c1) c1.addEventListener('click', function () { c1.disabled = true; post('/confirm'); });
-})();
-</script>
+<script type="application/json" id="page-boot">${safeJsonEmbed(token)}</script>
+<script src="/assets/play/page-boot.js?v=${APP_VERSION}" defer></script>
 </body>
 </html>`;
 }

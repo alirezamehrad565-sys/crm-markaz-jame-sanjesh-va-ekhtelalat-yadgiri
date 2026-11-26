@@ -12,7 +12,7 @@
 import { APP_VERSION } from '@core/version';
 import type { DbClient } from '@core/db';
 import { readHumanEvents } from '@core/human-events';
-import { NODE_SYNC_STATUS_MIRROR_KEY } from '../../node-sync-runner/status'; // فقط-خواندنی؛ اصلاح نمی‌شود
+import { NODE_SYNC_STATUS_MIRROR_KEY } from '@sync/node-sync-runner/status'; // فقط-خواندنی؛ اصلاح نمی‌شود
 import { buildStoreZip, zipText } from './zip';
 import type { ZipEntry } from './zip';
 

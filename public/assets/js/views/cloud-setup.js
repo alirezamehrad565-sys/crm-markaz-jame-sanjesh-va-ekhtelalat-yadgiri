@@ -399,7 +399,7 @@ export function mountCloudSetup(root, deps = {}, opts = {}) {
     try { onDone(); } catch { /* شنوندهٔ خراب میزبان هرگز ویزارد را نمی‌کشد */ }
   }
 
-  const resultLine = el('div', { style: { marginBottom: 'var(--sp-4)' }, hidden: true });
+  const resultLine = el('div', { style: { marginBottom: 'var(--sp-4)' }, hidden: true, role: 'status', 'aria-live': 'polite' }); /* ui-005 ۱.۲۷.۸۳ — نتیجهٔ ویزارد به فناوری یاری‌رسان اعلام می‌شود */
 
   function setResult(tone, text) {
     state.result = { tone, text };

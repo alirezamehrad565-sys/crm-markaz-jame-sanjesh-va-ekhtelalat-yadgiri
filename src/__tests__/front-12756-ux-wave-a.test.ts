@@ -4,7 +4,7 @@
  * اعتبارسنجی مرورگری واقعی روی سرور محلی انجام شد (snapshotهای accessibility قبل/بعد).
  */
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const ROOT = join(__dirname, '../..');
@@ -13,34 +13,38 @@ const read = (p: string) => readFileSync(join(ROOT, p), 'utf8');
 describe('موج A — هر عمل یک خانهٔ ثابت', () => {
   const view = read('public/assets/js/views/student-profile.js');
 
-  it('ثبت رویداد فقط یک خانه دارد (ردیف اقدام کارت وضعیت) — سرصفه‌های تاریخچه و جلسات خالی‌اند', () => {
-    expect((view.match(/ثبت رویداد پرونده/g) ?? []).length).toBe(1);
+  it('ثبت رویداد از خانه‌های خودش — برگهٔ جلسه + ردیف اقدام کارت وضعیت (قرارداد کلاسیک ۱.۲۷.۵۷ — ۱.۲۷.۷۱)', () => {
+    /* ۱.۲۷.۷۳ — +۱: دیپ‌لینک پالت ⌘K (?action=event) همان خانهٔ ثابت را باز می‌کند */
+    expect((view.match(/openCaseEventForm\(/g) ?? []).length).toBe(5);
+    expect(view).not.toContain('buildStationPanel');
     expect(view).not.toContain("el('div', { class: 'card__title' }, 'تاریخچهٔ پرونده'),\n        canCreateCaseEvents()");
     expect(view).not.toContain("'نوبت‌ها و حضور'),\n          canReport");
   });
 
-  it('گزارش به معلم یک خانهٔ ثابت دارد — از ردیف اقدام کارت قدیمی به ایستگاه «پیگیری» میز جلسه (۱.۲۷.۵۸)', () => {
+  it('گزارش به معلم یک خانهٔ ثابت دارد — ردیف اقدام کارت وضعیت (قرارداد کلاسیک — ۱.۲۷.۷۱)', () => {
     // فقط یک دکمهٔ دکمه‌وار — رخداد دوم، عنوان مودال باز است نه دکمهٔ تکراری
     expect((view.match(/icon\('bot', 15\), 'ارسال گزارش به معلم مدرسه'/g) ?? []).length).toBe(1);
-    expect(view).toContain('دکمهٔ ارسال تازه در ایستگاه «پیگیری» میز جلسه است.');
+    expect(view).toContain('onclick: () => openTeacherReportModal(student)');
   });
 
-  it('صدور گزارش قطعی دو خانهٔ دائمی دارد: نوار هویت + بخش آ-۵ مرجع (۱.۲۷.۵۸ — رفع «گزارش قطعی بی‌خانه»)', () => {
-    expect(view).not.toContain("onclick: () => openSnapshotBuilder() }, icon('file', 15), 'صدور گزارش قطعی') : null");
-    expect((view.match(/lockBtn\(e\.currentTarget, openSnapshotBuilder\)/g) ?? []).length).toBe(2);
+  it('صدور گزارش قطعی خانهٔ ثابتش ردیف اقدام کارت وضعیت است (قرارداد کلاسیک ۱.۲۷.۵۷ — ۱.۲۷.۷۱)', () => {
+    /* ۱.۲۷.۷۳ — +۱: دیپ‌لینک پالت ⌘K (?action=definite) همان خانهٔ ثابت را باز می‌کند */
+    expect((view.match(/openSnapshotBuilder\(/g) ?? []).length).toBe(3); // دکمهٔ ردیف اقدام + تعریف تابع + دیپ‌لینک پالت
     expect(view).toContain("}, icon('file', 15), 'صدور گزارش قطعی')");
     expect(view).toContain("'بازگشت به فهرست'"); // page-head فقط ناوبری
   });
 
-  it('ایستگاه پیگیری با گیت per-item — منشی (canSendReport) هم گزارش معلم را می‌بیند (۱.۲۷.۵۸)', () => {
+  it('ردیف اقدام با گیت per-item — منشی (canSendReport) هم گزارش معلم را می‌بیند (قرارداد کلاسیک — ۱.۲۷.۷۱)', () => {
     expect(view).toContain('(canCreateCaseEvents() || canSendReport)');
-    expect(view).toContain("canSendReport\n                ? el('button', {\n                    class: 'btn btn--soft btn--sm', type: 'button',\n                    onclick: () => openTeacherReportModal(student)");
+    expect(view).toContain("(canCreateCaseEvents() || canSendReport)\n                ? el('div', { class: 'profile-actions__row' },");
   });
 
   it('چیپ جلسه‌های بی‌گزارش کنار اقدام بعدی — از منبع واحد با برگهٔ جلسه', () => {
     expect(view).toContain('missingReportAppts()');
     expect(view).toContain('const missingReports = missingReportAppts();');
-    expect(view).toContain('جلسهٔ بی‌گزارش`');
+    /* ۱.۲۷.۶۹ — ماژول خالص station-state با حذف فلوی ایستگاه‌ها کنار رفت؛ چیپ مانده‌ها تک‌منبع با برگهٔ جلسه */
+    expect(existsSync(join(ROOT, 'public/assets/js/profile/station-state.js'))).toBe(false);
+    expect(view).toContain('const missingReports = missingReportAppts();');
   });
 
   it('حضور از خود پرونده ثبت‌شدنی است — PATCH موجود، گیت سرور محترم', () => {

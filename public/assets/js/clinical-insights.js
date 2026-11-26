@@ -2,11 +2,12 @@ import { api } from './api.js';
 import { el, icon, confirmModal, formModal, openModal, toast, toastError, emptyState, loadingState, scienceNote } from './ui.js';
 import { fa, enDigits, formatJalaliDateTime, formatJalaliNumeric, formatJalaliShort, formatStoredJalaliNumeric, parseJalaliInput, tehranDayRange, tehranTodayYmd, tehranYmdOfIso, toJalali, gradeLabel } from './format.js'; // enDigits/جلالی برای فرم پراپ
 import { lineChart } from './charts.js'; // روند پراپ پیشروی با خط ملاک
-import { session } from './state.js';
+import { session } from './api.js';
 import { openExerciseSendModal } from './exercise-send.js';
 import { cardListEditor } from './plan-cards.js'; // ویرایشگر کارت جلسه (کارت‌های آماده + کارت‌های قبلی + کارت آزاد)
 import { openCaseEventForm, openCaseEventDetail, openChecklistBatchSendModal } from './case-events.js'; // — : ارسال گروهی فرم‌های پلن + : بازکردن جزئیات فرم از ردیف‌های تب بالینی
 import { pathwayChip, canEditPathway, openPathwayModal } from './session-type.js'; // — مسیر پرونده
+import { therapyLineOf } from './profile/therapy-line.js'; // — ۱.۲۷.۶۴ موج ۳: گام‌های واقعی خط درمان (تابع خالص، تک‌منبع)
 import { otChecklistCard, otProgressPanel, protocolChip, protocolCard, NEEDS_KEY, OT_SESSION_KEY } from './ot-checklist.js'; // — فلو دوفازی شناسایی→مداخله (openNeedsModal در کارت جمع‌بندی) + پنل پیشرفت جلسه‌به‌جلسه
 import { synthesisSection, fetchFormulation } from './case-formulation.js'; // — کارت واحد جمع‌بندی تشخیصی
 import { wechslerProfileBlock, wechslerSourceBadge, connectionsSection, WEAKEST_FA } from './wechsler-profile.js'; // — نیم‌رخ وکسلر + «پیوند با سایر اطلاعات» → مرحلهٔ ۵
@@ -1999,7 +2000,9 @@ function protocolStrip(protoCardNode) {
     steps);
 }
 
-export async function renderClinicalTab(box, { student }) {
+/* ۱.۲۷.۶۴ — موج ۳ «گزارش از دل گام»: محاسبهٔ گام‌ها در ماژول خالص profile/therapy-line.js —
+   اینجا فقط دادهٔ همین رندرر به آن داده می‌شود و نتیجه با onTherapyLine به نما می‌رود (تک‌منبع). */
+export async function renderClinicalTab(box, { student, onTherapyLine } = {}) {
   const canDecide = canDecideFor(student);
 
   async function load() {
@@ -2065,6 +2068,18 @@ export async function renderClinicalTab(box, { student }) {
       dynamicChecklistKeys.push(k);
     }
     const checklistAllKeys = [...staticChecklistKeys, ...dynamicChecklistKeys];
+
+    /* ۱.۲۷.۶۴ — موج ۳: گام‌های واقعی همین پرونده بی‌درنگ به نما گزارش می‌شود — نوار sticky هاب
+       چیپ‌های «از دل گام» را با همان دادهٔ همین رندرر می‌سازد (صفر fetch تازه، تک‌منبع) */
+    if (typeof onTherapyLine === 'function') {
+      try {
+        onTherapyLine(therapyLineOf({
+          events, typesById, anamnesisTypeId, paths,
+          checklistKeys: checklistAllKeys,
+          probeTypeKeys: PROBE_AREAS.map((a) => a.typeKey)
+        }));
+      } catch { /* نما مقاوم است */ }
+    }
 
     const openEventDetailOf = async (e) => { // ردیف‌ها کلیک‌پذیر
       try {

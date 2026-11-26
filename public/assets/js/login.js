@@ -1,5 +1,5 @@
-import { api, setToken, setDevStaffId } from './api.js';
-import { el, icon } from './ui.js';
+import { api, setDevStaffId } from './api.js';
+import { el, icon, bindThemeBtn } from './ui.js';
 
 const SESSION_KEY = 'cs.loginOk';
 
@@ -72,6 +72,13 @@ export function renderLoginPage(onSuccess) {
   root.style.display = '';
   document.body.classList.add('is-login');
 
+  /* ۱.۲۷.۷۴ — دکمهٔ روشن/تاریک صفحهٔ ورود: پیش از ورود هم تم قابل تغییر است؛
+     همان منطق مشترک ui.js — پس از ورود دکمهٔ سربرگ همان را ادامه می‌دهد */
+  const loginThemeBtn = el('button', {
+    class: 'btn btn--ghost btn--icon login__theme theme-toggle',
+    type: 'button'
+  });
+
   const userInput = el('input', {
     class: 'input',
     id: 'login-username',
@@ -90,7 +97,8 @@ export function renderLoginPage(onSuccess) {
     dir: 'ltr',
     style: { textAlign: 'left' }
   });
-  const errorBox = el('div', { class: 'login__error', style: { display: 'none' } });
+  /* ۱.۲۷.۷۷ — role=alert: اسکرین‌ریدر خطا را بلافاصله اعلام می‌کند (قبلاً فقط تغییر متن بود) */
+  const errorBox = el('div', { class: 'login__error', role: 'alert', style: { display: 'none' } });
   const annBox = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px' } });
   const hintBox = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px' } });
 
@@ -107,7 +115,8 @@ export function renderLoginPage(onSuccess) {
     btn.disabled = true;
     try {
       const res = await api.post('/api/auth/login', { username, password });
-      setToken(res.data.token);
+      /* ۱.۲۷.۸۲ (security-009/ADR-005): توکن نشست در کوکی httpOnly صادر شد — SPA آن را
+         ذخیره/ارسال نمی‌کند. مقدار body.token فقط برای کلاینت‌های غیرمرورگری (wizard ابری) است. */
       setDevStaffId(res.data.staff.id);
       sessionStorage.setItem(SESSION_KEY, '1');
       /* B1 — ورود موفق نباید روی hash «#/login» بماند: روتر این مسیر را نمی‌شناسد و نمای ۴۰۴ می‌بیند.
@@ -150,6 +159,10 @@ export function renderLoginPage(onSuccess) {
       annBox
     )
   );
+
+  /* ۱.۲۷.۷۴ — append پس از replaceChildren (فرزندان قبلی پاک می‌شوند) */
+  bindThemeBtn(loginThemeBtn);
+  root.append(loginThemeBtn);
 
   drawPublicAnnouncements(annBox);
   drawFirstRunHint(hintBox);

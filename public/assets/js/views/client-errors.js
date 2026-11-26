@@ -49,10 +49,12 @@ function occurrenceRow(e) {
 }
 
 export async function renderClientErrors(outlet) {
+  outlet.setAttribute('aria-busy', 'true'); /* ui-005 ۱.۲۷.۸۳ — اعلام بارگذاری (الگوی reports.js) */
   outlet.replaceChildren(skeletonState('list', 5));
 
   const root = el('div', {});
   outlet.replaceChildren(root);
+  outlet.setAttribute('aria-busy', 'false');
   let state = { days: 7, version: '' };
 
   async function reload() {

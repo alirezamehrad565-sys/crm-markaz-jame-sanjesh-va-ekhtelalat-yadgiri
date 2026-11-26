@@ -19,6 +19,11 @@ const TABLE_POLICIES: Record<string, string> = {
   audit_log: '۱۸۰ روز', // ف۴ — pruneOld شبانه (P1-4)
   rum_events: '۹۰ روز', // نگه‌داری تله‌متری (۱.۲۵.۶۶)
   client_errors: '۹۰ روز', // نگه‌داری تله‌متری (۱.۲۵.۶۶)
+  node_push_events: '۹۰ روز', // data-004 (۱.۲۷.۸۳) — هرس شبانه روی received_at
+  node_sync_inbox: '۹۰ روز', // data-004 (۱.۲۷.۸۳) — هرس شبانه روی received_at
+  quota_usage: '۴۰۰ روز', // data-004 (۱.۲۷.۸۳) — هرس شبانه روی day (یک ردیف در روز)
+  exercise_file_chunks: 'پاکسازی یتیم‌ها هر شب', // data-002 (۱.۲۷.۸۳) — سوییپ chunk بدون attachment تمرین
+  report_snapshots: 'ماندگار — با حذف قطعی دانش‌آموز پاک می‌شود', // data-003 (۱.۲۷.۸۳) — سیاست snapshot-first: نسخهٔ قطعی سند؛ در force-delete صریحاً حذف
   network_content: 'فقط-افزودنی', // حذف فیزیکی ممنوع — بایگانی active=0 (§۳-۱۵)
   game_links: 'پاکسازی دوره‌ای', // games.maintenance — لینک منقضی هر شب
   game_preview_tokens: 'پاکسازی دوره‌ای', // games.maintenance — توکن منقضی هر شب

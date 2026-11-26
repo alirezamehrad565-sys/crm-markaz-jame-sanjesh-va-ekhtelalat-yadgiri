@@ -16,6 +16,7 @@ export interface UpdateFollowUpInput {
   status?: FollowUpStatus;
   assigneeId?: string;
   dueAt?: string | null;
+  result?: string;
 }
 
 export interface FollowUpListFilters {

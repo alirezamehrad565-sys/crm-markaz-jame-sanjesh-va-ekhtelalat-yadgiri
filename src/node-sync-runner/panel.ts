@@ -5,13 +5,13 @@
  * اعتبار را از «اتصال ابر» (record + مخزن امن) می‌گیرد و runner می‌سازد و syncNow
  * می‌زند. همهٔ کنش‌ها نرم‌اند — خطا در خط وضعیت نمایش داده می‌شود، نه پرتاب.
  */
-import { csEl, csButton } from '../cloud-setup/dom-build.js';
-import type { CsDocument, CsElement } from '../cloud-setup/dom-build.js';
+import { csEl, csButton } from '@sync/cloud-setup/dom-build.js';
+import type { CsDocument, CsElement } from '@sync/cloud-setup/dom-build.js';
 import { createNodeSyncRunner } from './runner.js';
 import type { PushNowOutcome, RunnerFetch, SyncNowOutcome } from './runner.js';
 import { createSyncCoordinator, modeFa, readCoordinatorState, COORD_INTERVAL_MS_DEFAULT } from './coordinator.js';
 import type { SyncCoordinator } from './coordinator.js';
-import type { NodeSyncStore } from '../node-sync-client/client.js';
+import type { NodeSyncStore } from '@sync/node-sync-client/client.js';
 
 /** v1.26.0 — هماهنگ‌سازهای زندهٔ همین صفحه — «ویرایش اتصال» با notifyCoordinatorsChanged خبرشان می‌کند */
 const activeCoordinators: SyncCoordinator[] = [];

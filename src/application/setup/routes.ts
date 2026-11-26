@@ -12,7 +12,7 @@
  * بدون هیچ دادهٔ بالینی در پاسخ — فقط وضعیت راه‌اندازی.
  */
 import { z } from 'zod';
-import { hashPassword } from '@core/auth';
+import { hashPassword, requireRole } from '@core/auth';
 import { ConflictError } from '@core/errors';
 import type { AppHono } from '@core/shared';
 import { createDb } from '@core/db';
@@ -138,7 +138,8 @@ export function registerSetupStatusRoutes(app: AppHono, deps: { logger: Logger }
 const CompleteSchema = z.object({ close_demo: z.boolean().optional().default(true) });
 
 export function registerSetupCompleteRoutes(app: AppHono, deps: SetupCompleteDeps): void {
-  app.post('/api/setup/complete', async (c) => {
+  /* SEC-12776 (security-004 ممیزی) — کامنت سند «فقط manager» حالا واقعاً گیت هم هست */
+  app.post('/api/setup/complete', requireRole('manager'), async (c) => {
     const body = CompleteSchema.parse(await c.req.json<unknown>().catch(() => ({})));
     const out = await completeSetup(deps, body.close_demo);
     return c.json({ data: out }, 200);

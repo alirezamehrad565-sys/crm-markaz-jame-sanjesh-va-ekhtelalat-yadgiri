@@ -5,12 +5,20 @@ import {
   createStudent,
   makeNationalId,
   apptBody,
-  tehranTodayAt,
   ALI_ID,
   MARYAM_ID,
   STUDENT1_ID
 } from '../../test/harness';
 import type { Api } from '../../test/harness';
+
+/* ۱.۲۷.۶۲ — آزمون حساس-به-زمان بود: نوبتِ «امروز ساعت ۱۰» بعد از نیمه‌شب تهران ~۲۹ ساعت
+   در آینده می‌افتاد و گارد دو-ساعتهٔ حضور ۴۰۰ می‌داد. تاریخ‌ها نسبی به now شدند. */
+/* ۱.۲۷.۶۲ — اصلاح حساسیت زمانی: نوبت باید روی شبکهٔ ۱۵دقیقه‌ای باشد (سد isOnGrid) و
+   حضور فقط تا now+۲h بسته است؛ پس تاریخ‌های آزمون «گذشتهٔ روی-شبکه» شدند — در هر ساعتی از شبانه‌روز پایدار. */
+const pastOnGridIso = (minutesAgo: number): string => {
+  const grid = 15 * 60_000;
+  return new Date(Math.floor((Date.now() - minutesAgo * 60_000) / grid) * grid).toISOString();
+};
 
 describe('دسترسی‌های تازهٔ درمانگر', () => {
   let A: ReturnType<typeof createTestApp>;
@@ -27,7 +35,7 @@ describe('دسترسی‌های تازهٔ درمانگر', () => {
 
   it('حضور و غیاب: درمانگر روی جلسهٔ خودش ۲۰۰ می‌گیرد', async () => {
     const student = await createStudent(secretary);
-    const made = await secretary.post('/api/appointments', apptBody(ALI_ID, tehranTodayAt(10), 45, [student.id]));
+    const made = await secretary.post('/api/appointments', apptBody(ALI_ID, pastOnGridIso(90), 45, [student.id]));
     expect(made.status).toBe(201);
     const apptId = (made.body as { data: { id: string } }).data.id;
 
@@ -37,7 +45,7 @@ describe('دسترسی‌های تازهٔ درمانگر', () => {
 
   it('حضور و غیاب: درمانگر روی جلسهٔ همکار ۴۰۳ می‌گیرد (مالکیت)', async () => {
     const student = await createStudent(secretary);
-    const made = await secretary.post('/api/appointments', apptBody(MARYAM_ID, tehranTodayAt(11), 45, [student.id]));
+    const made = await secretary.post('/api/appointments', apptBody(MARYAM_ID, pastOnGridIso(120), 45, [student.id]));
     expect(made.status).toBe(201);
     const apptId = (made.body as { data: { id: string } }).data.id;
 
