@@ -1,7 +1,6 @@
 import { api, setDevStaffId } from './api.js';
 import { el, icon, bindThemeBtn } from './ui.js';
-
-const SESSION_KEY = 'cs.loginOk';
+import { fa } from './format.js'; // B1 — ارقام فارسی شمارش معکوس ۴۲۹ (format.js از قبل در چانک بوت است)
 
 function brandLogo() {
   /* ۱.۲۷.۴۷ — لوگوی بزرگ‌تر (۹۶px) و دوسطحی سیاه‌وسفید؛ SVG درون‌خطی با متغیرهای تم وارونه می‌شود */
@@ -86,6 +85,7 @@ export function renderLoginPage(onSuccess) {
     autocomplete: 'username',
     placeholder: 'مثلاً manager',
     dir: 'ltr',
+    'aria-describedby': 'login-username-hint',
     style: { textAlign: 'left' }
   });
   const passInput = el('input', {
@@ -93,32 +93,76 @@ export function renderLoginPage(onSuccess) {
     id: 'login-password',
     type: 'password',
     autocomplete: 'current-password',
-    placeholder: '••••••',
+    placeholder: 'مثلاً ۱۲۳۴۵۶۷۸',
     dir: 'ltr',
+    'aria-describedby': 'login-password-hint',
     style: { textAlign: 'left' }
   });
+  /* B1 — کلید نمایش رمز: دکمهٔ ghost روی گوشهٔ ورودی؛ type بین password/text می‌چرخد و
+     aria-pressed + aria-label دوسویه وضعیت را برای صفحه‌خوان اعلام می‌کند — dir=ltr ورودی دست نمی‌خورد */
+  const eyeBtn = el('button', {
+    class: 'btn btn--ghost btn--icon login__eye',
+    type: 'button',
+    'aria-label': 'نمایش رمز',
+    'aria-pressed': 'false',
+    title: 'نمایش رمز',
+    onclick: () => {
+      const show = passInput.type === 'password';
+      passInput.type = show ? 'text' : 'password';
+      eyeBtn.setAttribute('aria-pressed', String(show));
+      const label = show ? 'پنهان‌سازی رمز' : 'نمایش رمز';
+      eyeBtn.setAttribute('aria-label', label);
+      eyeBtn.title = label;
+    }
+  }, icon('eye', 16));
+  const passWrap = el('div', { class: 'login__pass-wrap', dir: 'ltr' }, passInput, eyeBtn);
+  /* B1 — خطای فیلد-سطح: hint زیر ورودی + aria-invalid روی خود ورودی (کلاس field__error موجود) */
+  const userHint = el('div', { class: 'field__error', id: 'login-username-hint', style: { display: 'none' } });
+  const passHint = el('div', { class: 'field__error', id: 'login-password-hint', style: { display: 'none' } });
+  /* پاک‌شدن حالت نامعتبر با تایپ — هم‌الگوی formModal در ui.js */
+  for (const [input, hint] of [[userInput, userHint], [passInput, passHint]]) {
+    input.addEventListener('input', () => {
+      input.removeAttribute('aria-invalid');
+      hint.style.display = 'none';
+    });
+  }
   /* ۱.۲۷.۷۷ — role=alert: اسکرین‌ریدر خطا را بلافاصله اعلام می‌کند (قبلاً فقط تغییر متن بود) */
   const errorBox = el('div', { class: 'login__error', role: 'alert', style: { display: 'none' } });
   const annBox = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px' } });
   const hintBox = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px' } });
 
+  const submitBtn = el('button', { class: 'btn btn--primary btn--lg', id: 'login-submit', type: 'submit', style: { width: '100%' } },
+    icon('check', 17), 'ورود به سامانه'
+  );
+
   const submit = async () => {
+    /* B1 — قفل مشغولی هم‌الگوی ui.lockBtn (dataset.busy): دوبارکلیک/دوبار Enter فراخوانی دوم را نمی‌گذرد */
+    const btn = submitBtn;
+    if (!btn || btn.dataset.busy === '1') return;
     errorBox.style.display = 'none';
     const username = userInput.value.trim();
     const password = passInput.value;
-    if (!username || !password) {
-      errorBox.textContent = 'نام کاربری و رمز عبور را وارد کنید.';
-      errorBox.style.display = '';
+    const invalid = [];
+    if (!username) invalid.push([userInput, userHint, 'نام کاربری را بنویسید']);
+    if (!password) invalid.push([passInput, passHint, 'رمز را بنویسید']);
+    if (invalid.length > 0) {
+      for (const [input, hint, msg] of invalid) {
+        input.setAttribute('aria-invalid', 'true');
+        hint.textContent = msg;
+        hint.style.display = '';
+      }
+      invalid[0][0].focus();
       return;
     }
-    const btn = root.querySelector('#login-submit');
+    btn.dataset.busy = '1';
     btn.disabled = true;
+    btn.setAttribute('aria-busy', 'true');
+    let holdForRetry = false;
     try {
       const res = await api.post('/api/auth/login', { username, password });
       /* ۱.۲۷.۸۲ (security-009/ADR-005): توکن نشست در کوکی httpOnly صادر شد — SPA آن را
          ذخیره/ارسال نمی‌کند. مقدار body.token فقط برای کلاینت‌های غیرمرورگری (wizard ابری) است. */
       setDevStaffId(res.data.staff.id);
-      sessionStorage.setItem(SESSION_KEY, '1');
       /* B1 — ورود موفق نباید روی hash «#/login» بماند: روتر این مسیر را نمی‌شناسد و نمای ۴۰۴ می‌بیند.
          دیپ‌لینک واقعی (مثل #/reports) دست‌نخورده می‌ماند و پس از reload همان جا رندر می‌شود. */
       if (!location.hash || location.hash === '#/' || location.hash === '#/login') location.hash = '#/dashboard';
@@ -128,10 +172,37 @@ export function renderLoginPage(onSuccess) {
       errorBox.textContent = err.message || 'ورود ناموفق بود.';
       errorBox.style.display = '';
       passInput.value = '';
-      passInput.focus();
+      /* B1 — فوکوس به نخستین فیلد خالی/نامعتبر (قبلاً همیشه رمز بود) */
+      [userInput, passInput].find((input) => !input.value.trim())?.focus();
+      /* B1 — ۴۲۹ با بازهٔ تلاش دوباره: دکمه تا پایان شمارش معکوس قفل می‌ماند؛
+         ارقام فارسی با fa() — شمارنده روی خود دکمه می‌نشیند */
+      const wait = Number(err?.retryAfterSeconds);
+      if (err?.status === 429 && Number.isFinite(wait) && wait > 0) {
+        holdForRetry = true;
+        let remaining = Math.max(1, Math.ceil(wait));
+        let timer;
+        const tick = () => {
+          if (!btn.isConnected) { clearInterval(timer); return; }
+          if (remaining <= 0) {
+            clearInterval(timer);
+            btn.disabled = false;
+            delete btn.dataset.busy;
+            btn.replaceChildren(icon('check', 17), 'ورود به سامانه');
+            return;
+          }
+          btn.replaceChildren(`تلاش مجدد پس از ${fa(remaining)} ثانیه`);
+          remaining -= 1;
+        };
+        tick(); // برچسب شمارش معکوس بی‌درنگ — نه از ثانیهٔ دوم
+        timer = setInterval(tick, 1000);
+      }
     } finally {
-      const b = root.querySelector('#login-submit');
-      if (b) b.disabled = false;
+      btn.removeAttribute('aria-busy');
+      /* طول شمارش معکوس: dataset.busy سر جایش می‌ماند تا Enter هم در همان بازه فراخوانی دوم را ببندد */
+      if (!holdForRetry) {
+        btn.disabled = false;
+        delete btn.dataset.busy;
+      }
     }
   };
 
@@ -141,12 +212,12 @@ export function renderLoginPage(onSuccess) {
   },
     el('label', { class: 'field-label', for: 'login-username' }, 'نام کاربری'),
     userInput,
+    userHint,
     el('label', { class: 'field-label', for: 'login-password' }, 'رمز عبور'),
-    passInput,
+    passWrap,
+    passHint,
     errorBox,
-    el('button', { class: 'btn btn--primary btn--lg', id: 'login-submit', type: 'submit', style: { width: '100%' } },
-      icon('check', 17), 'ورود به سامانه'
-    )
+    submitBtn
   );
 
   root.replaceChildren(
@@ -167,8 +238,6 @@ export function renderLoginPage(onSuccess) {
   drawPublicAnnouncements(annBox);
   drawFirstRunHint(hintBox);
   setTimeout(() => userInput.focus(), 50);
-
-  return { submit };
 }
 
 export function showApp() {

@@ -1,5 +1,5 @@
-import { api, clearSession } from './api.js';
-import { bindThemeBtn, confirmModal, el, emptyState, icon, initTheme, skeletonState, toast, toastError } from './ui.js';
+import { api, clearSession, ERROR_TEXT } from './api.js';
+import { bindThemeBtn, confirmModal, el, emptyState, icon, initTheme, skeletonState } from './ui.js';
 import { register, start, render, registerNotFound } from './router.js';
 import { renderLoginPage, showApp } from './login.js';
 
@@ -313,19 +313,32 @@ async function loadCurrentUser() {
     return true;
   } catch (err) {
     if (err.status === 401 || err.status === 403) {
+      /* B1 — نشست پایان‌یافته: خروج تمیز تا هدر X-Dev-Staff-Id فاسد دوباره فرستاده نشود */
+      clearSession();
       session.user = null;
       renderUserChip();
       renderLoginPage((staff) => {
+        /* B1 — پیش از reload فقط وضعیت می‌نشیند: بازسازی منو/چیپ و خوش‌آمد حذف شد —
+           reload بعد از ۲۵۰ms همه را دور می‌ریخت؛ بوت تازه /api/me را می‌کشد و از صفر می‌سازد */
         session.user = { staffId: staff.id, displayName: staff.fullName, role: staff.role, email: staff.email };
-        renderUserChip();
-        rebuildNavForRole();
-        toast(`خوش آمدید، ${staff.fullName}`, 'success');
       });
       return false;
     }
-    toastError(err);
-    return false;
+    /* B1 — خطای غیر-احرازی (۵۰۰/شبکه): به کارت خطای بوت می‌رود، نه toast و پوستهٔ مرده */
+    return 'error';
   }
+}
+
+/* B1 — کارت خطای بوت غیر-احرازی: هم‌قوارهٔ errorState/state-block (base.css) — بدون CSS تازه.
+   «تلاش دوباره» همان فراخوانی بوت را از سر می‌گیرد */
+function renderBootError(retry) {
+  outlet.replaceChildren(
+    el('div', { class: 'state-block' },
+      icon('alert', 30),
+      el('p', { style: { margin: '10px 0' } }, ERROR_TEXT.NETWORK),
+      el('button', { class: 'btn btn--ghost btn--sm', onclick: retry }, icon('refresh', 16), 'تلاش دوباره')
+    )
+  );
 }
 
 async function logout() {
@@ -635,7 +648,10 @@ initAnnouncementBanners(); // — بنر اعلان‌ها (صفحه ورود + 
 /* rust-f3 — توتوریال اولیه: هوک شروع فقط در پوستهٔ دسکتاپ (فلگ استاتیک ماژول تور هم پیش‌فرض خاموش است).
    در وب تولیدی گارد زیر هرگز true نمی‌شود → نه DOM، نه fetch، نه تغییر مسیر؛ حتی چانک تور fetch نمی‌شود.
    login.js پس از ورود location.reload() می‌زند → این فراخوانی روی بوتِ پس از نشست معتبر = «ورود نخست». */
-loadCurrentUser().then((ok) => {
+/* B1 — بوت سه‌حالته: ok → شل؛ false → صفحهٔ ورود؛ «error» → کارت خطای بوت با دکمهٔ «تلاش دوباره»
+   که همین فراخوانی را از سر می‌گیرد (قبلاً خطای ۵۰۰/شبکه پوستهٔ مرده با toast می‌گذاشت) */
+const boot = () => loadCurrentUser().then((ok) => {
+  if (ok === 'error') { renderBootError(boot); return; }
   if (!ok) return;
   start(outlet);
   updateWaitlistBadge();
@@ -658,6 +674,7 @@ loadCurrentUser().then((ok) => {
   }
   /* __TUTORIAL_HOOK__ */
 });
+boot();
 
 document.getElementById('user-chip').addEventListener('click', () => {
   if (session.user) logout();

@@ -98,6 +98,14 @@ async function doRequest(method, path, body, signal) {
     err.code = payload?.error;
     err.details = payload?.details;
     err.currentVersion = payload?.current_version;
+    /* B1 — ۴۲۹: بازهٔ تلاش دوباره روی خطا می‌آید (هدر استاندارد Retry-After یا بدنه) تا
+       فراخوان — مثل صفحهٔ ورود — شمارش معکوس بدهد. Retry-After تاریخ‌محور/ناموجود → نادیده. */
+    if (res.status === 429) {
+      const headerS = Number(res.headers.get('retry-after'));
+      const bodyS = Number(payload?.details?.retryAfterSeconds);
+      const waitS = Number.isFinite(headerS) && headerS > 0 ? headerS : Number.isFinite(bodyS) && bodyS > 0 ? Math.ceil(bodyS) : null;
+      if (waitS !== null) err.retryAfterSeconds = waitS;
+    }
     throw err;
   }
 

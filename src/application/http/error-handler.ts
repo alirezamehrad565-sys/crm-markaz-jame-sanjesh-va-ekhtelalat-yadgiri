@@ -1,6 +1,6 @@
 import type { Context } from 'hono';
 import { ZodError } from 'zod';
-import { AppError, ConflictError } from '@core/errors';
+import { AppError, ConflictError, RateLimitError } from '@core/errors';
 import type { Logger } from '@core/logger';
 
 /** پاکت خطا همیشه request-id همان درخواست را حمل می‌کند (ف۵ — P2-13) تا لاگ/audit/پاسخ با هم بسته شوند */
@@ -38,6 +38,9 @@ export function errorHandler(err: Error, c: Context): Response {
 
   if (err instanceof AppError) {
     // ف۵ — جزئیات خطا (مثل retry_after_seconds در ۴۲۹) اکنون به پاکت می‌آید؛ قبلاً ساخته می‌شد ولی هرگز ارسال نمی‌شد
+    // B1 (front-12801) — ۴۲۹ استاندارد: هدر Retry-After هم ست می‌شود — قبلاً فقط details در بدنه بود و
+    // throttle صفحهٔ ورود (auth/routes.ts) هدر را ست نمی‌کرد؛ هم‌الگوی chain.ts §installWriteRateLimit
+    if (err instanceof RateLimitError) c.header('Retry-After', String(err.retryAfterSeconds));
     return c.json(
       withRequestId({
         error: err.code,
