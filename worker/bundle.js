@@ -23917,6 +23917,252 @@ var FEATURES = {
   apiKeys: true
 };
 
+// src/core/shared/http-params.ts
+function pageParams(query) {
+  return {
+    page: Number.parseInt(query.page ?? "1", 10) || 1,
+    pageSize: Number.parseInt(query.page_size ?? String(DEFAULT_PAGE_SIZE), 10) || DEFAULT_PAGE_SIZE
+  };
+}
+__name(pageParams, "pageParams");
+
+// src/core/shared/cutoffs.ts
+var SNAP_IV_CUTOFFS = {
+  parent: { ia: { warn: 11, danger: 16 }, hi: { danger: 13 }, odd: { warn: 10, danger: 14 } },
+  teacher: { ia: { warn: 14, danger: 16 }, hi: { danger: 11 }, odd: { warn: 12, danger: 16 } }
+};
+var SCARED_CUTOFFS = { danger: 25, warnMin: 20, strong: 30 };
+
+// src/core/shared/multipart.ts
+var SEGMENT_TARGET = 15e5;
+var HEADERS_MAX = 64 * 1024;
+var enc = /* @__PURE__ */ __name((s) => new TextEncoder().encode(s), "enc");
+var dec = new TextDecoder();
+var EMPTY = new Uint8Array(0);
+function concatBytes(a, b) {
+  const out = new Uint8Array(a.length + b.length);
+  out.set(a, 0);
+  out.set(b, a.length);
+  return out;
+}
+__name(concatBytes, "concatBytes");
+function indexOfBytes(haystack, needle, from = 0) {
+  if (needle.length === 0) return from;
+  outer: for (let i = Math.max(0, from); i <= haystack.length - needle.length; i += 1) {
+    for (let j = 0; j < needle.length; j += 1) {
+      if (haystack[i + j] !== needle[j]) continue outer;
+    }
+    return i;
+  }
+  return -1;
+}
+__name(indexOfBytes, "indexOfBytes");
+function headerParam(line2, param) {
+  const star = new RegExp(`${param}\\*=([^;]+)`, "i").exec(line2);
+  if (star) {
+    const parts = star[1].split("''");
+    const value = parts.length >= 2 ? parts[1] : parts[0];
+    try {
+      return decodeURIComponent(value);
+    } catch {
+      return value;
+    }
+  }
+  const m = new RegExp(`${param}="((?:[^"\\\\]|\\\\.)*)"`, "i").exec(line2) ?? new RegExp(`${param}=([^;\\r\\n]+)`, "i").exec(line2);
+  if (!m) return "";
+  return m[1].replace(/\\/g, "").trim();
+}
+__name(headerParam, "headerParam");
+async function parseMultipartStream(body, contentType) {
+  const bm = /boundary=(?:"([^"]+)"|([^;,]+))/i.exec(contentType);
+  if (!bm) throw new ValidationError("\u0628\u062F\u0646\u0647\u0654 multipart \u0628\u062F\u0648\u0646 boundary \u0627\u0633\u062A");
+  const boundary = (bm[1] ?? bm[2] ?? "").trim().replace(/^"|"$/g, "");
+  if (!boundary) throw new ValidationError("boundary \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A");
+  const firstDelim = enc(`--${boundary}`);
+  const delim = enc(`\r
+--${boundary}`);
+  const HEAD_END = enc("\r\n\r\n");
+  const files = [];
+  const fields = /* @__PURE__ */ new Map();
+  const reader = body.getReader();
+  let win = EMPTY;
+  let pending = EMPTY;
+  let mode = "preamble";
+  let cur = null;
+  let curField = null;
+  let finished = false;
+  const flushPending = /* @__PURE__ */ __name(() => {
+    if (pending.length === 0) return;
+    if (cur) {
+      cur.segments.push(pending);
+      cur.size += pending.length;
+    } else if (curField) {
+      curField.chunks.push(pending);
+    }
+    pending = EMPTY;
+  }, "flushPending");
+  const finishPart = /* @__PURE__ */ __name(() => {
+    flushPending();
+    if (cur) {
+      files.push(cur);
+      cur = null;
+    } else if (curField) {
+      let value = "";
+      if (curField.chunks.length > 0) {
+        let acc = EMPTY;
+        for (const c of curField.chunks) acc = concatBytes(acc, c);
+        value = dec.decode(acc);
+      }
+      fields.set(curField.name, value);
+      curField = null;
+    }
+  }, "finishPart");
+  const startPart = /* @__PURE__ */ __name((headerBlock) => {
+    const text = dec.decode(headerBlock);
+    const disposition = /content-disposition:[^\r\n]*/i.exec(text)?.[0] ?? "";
+    const name = headerParam(disposition, "name");
+    const filename = headerParam(disposition, "filename");
+    const type = /content-type:[^\r\n]*/i.exec(text)?.[0]?.split(":")[1]?.trim() ?? "";
+    if (filename) {
+      cur = { name, filename, mimeType: type || "application/octet-stream", segments: [], size: 0 };
+      curField = null;
+    } else {
+      cur = null;
+      curField = { name, chunks: [] };
+    }
+  }, "startPart");
+  const finish = /* @__PURE__ */ __name(() => {
+    if (!finished) {
+      if (mode === "content") finishPart();
+      finished = true;
+    }
+    mode = "done";
+  }, "finish");
+  for (; ; ) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value || value.length === 0) continue;
+    win = concatBytes(win, value);
+    for (; ; ) {
+      if (finished) break;
+      if (mode === "preamble") {
+        const p = indexOfBytes(win, firstDelim, 0);
+        if (p < 0) {
+          if (win.length > firstDelim.length) win = win.slice(win.length - firstDelim.length);
+          break;
+        }
+        const after = p + firstDelim.length;
+        if (win[after] === 45 && win[after + 1] === 45) {
+          finish();
+          break;
+        }
+        const lineEnd = indexOfBytes(win, enc("\r\n"), after);
+        if (lineEnd < 0) break;
+        win = win.slice(lineEnd + 2);
+        mode = "headers";
+        continue;
+      }
+      if (mode === "headers") {
+        const p = indexOfBytes(win, HEAD_END, 0);
+        if (p < 0) {
+          if (win.length > HEADERS_MAX) throw new ValidationError("\u0647\u062F\u0631 part \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0628\u0632\u0631\u06AF \u0627\u0633\u062A");
+          break;
+        }
+        startPart(win.slice(0, p));
+        win = win.slice(p + HEAD_END.length);
+        mode = "content";
+        continue;
+      }
+      if (mode === "content") {
+        const p = indexOfBytes(win, delim, 0);
+        if (p >= 0) {
+          pending = concatBytes(pending, win.slice(0, p));
+          finishPart();
+          const after = p + delim.length;
+          if (win[after] === 45 && win[after + 1] === 45) {
+            finish();
+            break;
+          }
+          win = win.slice(after + 2);
+          mode = "headers";
+          continue;
+        }
+        const safe = win.length - HOLD_MARGIN(delim.length);
+        if (safe > 0) {
+          pending = concatBytes(pending, win.slice(0, safe));
+          if (pending.length >= SEGMENT_TARGET) {
+            flushPending();
+          }
+          win = win.slice(safe);
+        }
+        break;
+      }
+    }
+    if (finished) break;
+  }
+  finish();
+  return { files, fields };
+}
+__name(parseMultipartStream, "parseMultipartStream");
+function HOLD_MARGIN(delimLen) {
+  return delimLen + 8;
+}
+__name(HOLD_MARGIN, "HOLD_MARGIN");
+
+// src/core/shared/file-sanitize.ts
+function faNum(n) {
+  return String(n).replace(/\d/g, (d) => "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9"[Number(d)]);
+}
+__name(faNum, "faNum");
+function estimateBase64Bytes(b64) {
+  const s = b64.replace(/\s/g, "");
+  const padding = s.endsWith("==") ? 2 : s.endsWith("=") ? 1 : 0;
+  return Math.max(0, Math.floor(s.length * 3 / 4) - padding);
+}
+__name(estimateBase64Bytes, "estimateBase64Bytes");
+function stripDataUrlPrefix(b64) {
+  return b64.replace(/^data:[^;]*;base64,/, "");
+}
+__name(stripDataUrlPrefix, "stripDataUrlPrefix");
+function isAllowedExerciseMimeType(mime) {
+  return ALLOWED_EXERCISE_FILE_MIME_TYPES.includes(mime.toLowerCase());
+}
+__name(isAllowedExerciseMimeType, "isAllowedExerciseMimeType");
+function sanitizeFilename(raw2) {
+  const base = raw2.split(/[/\\]/).pop() ?? "";
+  return base.replace(/\s+/g, " ").trim().slice(0, 200);
+}
+__name(sanitizeFilename, "sanitizeFilename");
+function sizeLimitMessage(bytes) {
+  const mb = bytes / (1024 * 1024);
+  const limitLabel = mb >= 1 ? `${faNum(Math.round(mb))} \u0645\u06AF\u0627\u0628\u0627\u06CC\u062A` : `${faNum(Math.round(bytes / 1024))} \u06A9\u06CC\u0644\u0648\u0628\u0627\u06CC\u062A`;
+  return `\u062D\u062C\u0645 \u0641\u0627\u06CC\u0644 \u0628\u06CC\u0634 \u0627\u0632 ${limitLabel} \u0627\u0633\u062A`;
+}
+__name(sizeLimitMessage, "sizeLimitMessage");
+function validateExerciseFileInput(input2, maxBytes = MAX_EXERCISE_FILE_BYTES) {
+  const filename = sanitizeFilename(input2.filename);
+  if (filename.length === 0) return { ok: false, reason: "\u0646\u0627\u0645 \u0641\u0627\u06CC\u0644 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A" };
+  if (!isAllowedExerciseMimeType(input2.mimeType)) {
+    return { ok: false, reason: "\u0627\u06CC\u0646 \u0646\u0648\u0639 \u0641\u0627\u06CC\u0644 \u0645\u062C\u0627\u0632 \u0646\u06CC\u0633\u062A \u2014 \u0641\u0642\u0637 \u0633\u0646\u062F\u060C \u062A\u0635\u0648\u06CC\u0631\u060C \u0648\u06CC\u062F\u06CC\u0648 \u0648 HTML \u06A9\u0627\u0631\u0628\u0631\u06AF" };
+  }
+  const bytes = estimateBase64Bytes(stripDataUrlPrefix(input2.contentB64));
+  if (bytes <= 0) return { ok: false, reason: "\u0645\u062D\u062A\u0648\u0627\u06CC \u0641\u0627\u06CC\u0644 \u062E\u0627\u0644\u06CC \u0627\u0633\u062A" };
+  if (bytes > maxBytes) return { ok: false, reason: sizeLimitMessage(maxBytes) };
+  return { ok: true };
+}
+__name(validateExerciseFileInput, "validateExerciseFileInput");
+function validateExerciseFileBytes(input2, maxBytes) {
+  const filename = sanitizeFilename(input2.filename);
+  if (filename.length === 0) return { ok: false, reason: "\u0646\u0627\u0645 \u0641\u0627\u06CC\u0644 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A" };
+  if (!isAllowedExerciseMimeType(input2.mimeType)) {
+    return { ok: false, reason: "\u0627\u06CC\u0646 \u0646\u0648\u0639 \u0641\u0627\u06CC\u0644 \u0645\u062C\u0627\u0632 \u0646\u06CC\u0633\u062A \u2014 \u0641\u0642\u0637 \u0633\u0646\u062F\u060C \u062A\u0635\u0648\u06CC\u0631\u060C \u0648\u06CC\u062F\u06CC\u0648 \u0648 HTML \u06A9\u0627\u0631\u0628\u0631\u06AF" };
+  }
+  if (!Number.isFinite(input2.size) || input2.size <= 0) return { ok: false, reason: "\u0645\u062D\u062A\u0648\u0627\u06CC \u0641\u0627\u06CC\u0644 \u062E\u0627\u0644\u06CC \u0627\u0633\u062A" };
+  if (input2.size > maxBytes) return { ok: false, reason: sizeLimitMessage(maxBytes) };
+  return { ok: true };
+}
+__name(validateExerciseFileBytes, "validateExerciseFileBytes");
+
 // src/core/auth/jwt.ts
 var JWKS_TTL_MS = 5 * 60 * 1e3;
 var jwksCache = null;
@@ -24403,15 +24649,6 @@ function findStaffByUsername(db, username) {
   ).bind(u, u.toLowerCase()).first();
 }
 __name(findStaffByUsername, "findStaffByUsername");
-
-// src/application/http/responses.ts
-function pageParams(query) {
-  return {
-    page: Number.parseInt(query.page ?? "1", 10) || 1,
-    pageSize: Number.parseInt(query.page_size ?? String(DEFAULT_PAGE_SIZE), 10) || DEFAULT_PAGE_SIZE
-  };
-}
-__name(pageParams, "pageParams");
 
 // src/application/http/error-handler.ts
 function requestIdOf(c) {
@@ -35208,62 +35445,10 @@ function registerTodoRoutes(app, service) {
 __name(registerTodoRoutes, "registerTodoRoutes");
 
 // src/domain/exercise-bank/pure.ts
-function faNum(n) {
-  return String(n).replace(/\d/g, (d) => "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9"[Number(d)]);
-}
-__name(faNum, "faNum");
 function normalizeExerciseTitle(raw2) {
   return raw2.replace(/\s+/g, " ").trim();
 }
 __name(normalizeExerciseTitle, "normalizeExerciseTitle");
-function estimateBase64Bytes(b64) {
-  const s = b64.replace(/\s/g, "");
-  const padding = s.endsWith("==") ? 2 : s.endsWith("=") ? 1 : 0;
-  return Math.max(0, Math.floor(s.length * 3 / 4) - padding);
-}
-__name(estimateBase64Bytes, "estimateBase64Bytes");
-function stripDataUrlPrefix(b64) {
-  return b64.replace(/^data:[^;]*;base64,/, "");
-}
-__name(stripDataUrlPrefix, "stripDataUrlPrefix");
-function isAllowedExerciseMimeType(mime) {
-  return ALLOWED_EXERCISE_FILE_MIME_TYPES.includes(mime.toLowerCase());
-}
-__name(isAllowedExerciseMimeType, "isAllowedExerciseMimeType");
-function sanitizeFilename(raw2) {
-  const base = raw2.split(/[/\\]/).pop() ?? "";
-  return base.replace(/\s+/g, " ").trim().slice(0, 200);
-}
-__name(sanitizeFilename, "sanitizeFilename");
-function sizeLimitMessage(bytes) {
-  const mb = bytes / (1024 * 1024);
-  const limitLabel = mb >= 1 ? `${faNum(Math.round(mb))} \u0645\u06AF\u0627\u0628\u0627\u06CC\u062A` : `${faNum(Math.round(bytes / 1024))} \u06A9\u06CC\u0644\u0648\u0628\u0627\u06CC\u062A`;
-  return `\u062D\u062C\u0645 \u0641\u0627\u06CC\u0644 \u0628\u06CC\u0634 \u0627\u0632 ${limitLabel} \u0627\u0633\u062A`;
-}
-__name(sizeLimitMessage, "sizeLimitMessage");
-function validateExerciseFileInput(input2, maxBytes = MAX_EXERCISE_FILE_BYTES) {
-  const filename = sanitizeFilename(input2.filename);
-  if (filename.length === 0) return { ok: false, reason: "\u0646\u0627\u0645 \u0641\u0627\u06CC\u0644 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A" };
-  if (!isAllowedExerciseMimeType(input2.mimeType)) {
-    return { ok: false, reason: "\u0627\u06CC\u0646 \u0646\u0648\u0639 \u0641\u0627\u06CC\u0644 \u0645\u062C\u0627\u0632 \u0646\u06CC\u0633\u062A \u2014 \u0641\u0642\u0637 \u0633\u0646\u062F\u060C \u062A\u0635\u0648\u06CC\u0631\u060C \u0648\u06CC\u062F\u06CC\u0648 \u0648 HTML \u06A9\u0627\u0631\u0628\u0631\u06AF" };
-  }
-  const bytes = estimateBase64Bytes(stripDataUrlPrefix(input2.contentB64));
-  if (bytes <= 0) return { ok: false, reason: "\u0645\u062D\u062A\u0648\u0627\u06CC \u0641\u0627\u06CC\u0644 \u062E\u0627\u0644\u06CC \u0627\u0633\u062A" };
-  if (bytes > maxBytes) return { ok: false, reason: sizeLimitMessage(maxBytes) };
-  return { ok: true };
-}
-__name(validateExerciseFileInput, "validateExerciseFileInput");
-function validateExerciseFileBytes(input2, maxBytes) {
-  const filename = sanitizeFilename(input2.filename);
-  if (filename.length === 0) return { ok: false, reason: "\u0646\u0627\u0645 \u0641\u0627\u06CC\u0644 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A" };
-  if (!isAllowedExerciseMimeType(input2.mimeType)) {
-    return { ok: false, reason: "\u0627\u06CC\u0646 \u0646\u0648\u0639 \u0641\u0627\u06CC\u0644 \u0645\u062C\u0627\u0632 \u0646\u06CC\u0633\u062A \u2014 \u0641\u0642\u0637 \u0633\u0646\u062F\u060C \u062A\u0635\u0648\u06CC\u0631\u060C \u0648\u06CC\u062F\u06CC\u0648 \u0648 HTML \u06A9\u0627\u0631\u0628\u0631\u06AF" };
-  }
-  if (!Number.isFinite(input2.size) || input2.size <= 0) return { ok: false, reason: "\u0645\u062D\u062A\u0648\u0627\u06CC \u0641\u0627\u06CC\u0644 \u062E\u0627\u0644\u06CC \u0627\u0633\u062A" };
-  if (input2.size > maxBytes) return { ok: false, reason: sizeLimitMessage(maxBytes) };
-  return { ok: true };
-}
-__name(validateExerciseFileBytes, "validateExerciseFileBytes");
 function clampPage(page2) {
   const n = Number(page2);
   return Number.isInteger(n) && n >= 1 ? n : 1;
@@ -37541,182 +37726,6 @@ footer{text-align:center;color:var(--muted);font-size:12.5px;margin-top:18px}
 </html>`;
 }
 __name(renderActivitiesPage, "renderActivitiesPage");
-
-// src/domain/exercise-bank/multipart.ts
-var SEGMENT_TARGET = 15e5;
-var HEADERS_MAX = 64 * 1024;
-var enc = /* @__PURE__ */ __name((s) => new TextEncoder().encode(s), "enc");
-var dec = new TextDecoder();
-var EMPTY = new Uint8Array(0);
-function concatBytes(a, b) {
-  const out = new Uint8Array(a.length + b.length);
-  out.set(a, 0);
-  out.set(b, a.length);
-  return out;
-}
-__name(concatBytes, "concatBytes");
-function indexOfBytes(haystack, needle, from = 0) {
-  if (needle.length === 0) return from;
-  outer: for (let i = Math.max(0, from); i <= haystack.length - needle.length; i += 1) {
-    for (let j = 0; j < needle.length; j += 1) {
-      if (haystack[i + j] !== needle[j]) continue outer;
-    }
-    return i;
-  }
-  return -1;
-}
-__name(indexOfBytes, "indexOfBytes");
-function headerParam(line2, param) {
-  const star = new RegExp(`${param}\\*=([^;]+)`, "i").exec(line2);
-  if (star) {
-    const parts = star[1].split("''");
-    const value = parts.length >= 2 ? parts[1] : parts[0];
-    try {
-      return decodeURIComponent(value);
-    } catch {
-      return value;
-    }
-  }
-  const m = new RegExp(`${param}="((?:[^"\\\\]|\\\\.)*)"`, "i").exec(line2) ?? new RegExp(`${param}=([^;\\r\\n]+)`, "i").exec(line2);
-  if (!m) return "";
-  return m[1].replace(/\\/g, "").trim();
-}
-__name(headerParam, "headerParam");
-async function parseMultipartStream(body, contentType) {
-  const bm = /boundary=(?:"([^"]+)"|([^;,]+))/i.exec(contentType);
-  if (!bm) throw new ValidationError("\u0628\u062F\u0646\u0647\u0654 multipart \u0628\u062F\u0648\u0646 boundary \u0627\u0633\u062A");
-  const boundary = (bm[1] ?? bm[2] ?? "").trim().replace(/^"|"$/g, "");
-  if (!boundary) throw new ValidationError("boundary \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A");
-  const firstDelim = enc(`--${boundary}`);
-  const delim = enc(`\r
---${boundary}`);
-  const HEAD_END = enc("\r\n\r\n");
-  const files = [];
-  const fields = /* @__PURE__ */ new Map();
-  const reader = body.getReader();
-  let win = EMPTY;
-  let pending = EMPTY;
-  let mode = "preamble";
-  let cur = null;
-  let curField = null;
-  let finished = false;
-  const flushPending = /* @__PURE__ */ __name(() => {
-    if (pending.length === 0) return;
-    if (cur) {
-      cur.segments.push(pending);
-      cur.size += pending.length;
-    } else if (curField) {
-      curField.chunks.push(pending);
-    }
-    pending = EMPTY;
-  }, "flushPending");
-  const finishPart = /* @__PURE__ */ __name(() => {
-    flushPending();
-    if (cur) {
-      files.push(cur);
-      cur = null;
-    } else if (curField) {
-      let value = "";
-      if (curField.chunks.length > 0) {
-        let acc = EMPTY;
-        for (const c of curField.chunks) acc = concatBytes(acc, c);
-        value = dec.decode(acc);
-      }
-      fields.set(curField.name, value);
-      curField = null;
-    }
-  }, "finishPart");
-  const startPart = /* @__PURE__ */ __name((headerBlock) => {
-    const text = dec.decode(headerBlock);
-    const disposition = /content-disposition:[^\r\n]*/i.exec(text)?.[0] ?? "";
-    const name = headerParam(disposition, "name");
-    const filename = headerParam(disposition, "filename");
-    const type = /content-type:[^\r\n]*/i.exec(text)?.[0]?.split(":")[1]?.trim() ?? "";
-    if (filename) {
-      cur = { name, filename, mimeType: type || "application/octet-stream", segments: [], size: 0 };
-      curField = null;
-    } else {
-      cur = null;
-      curField = { name, chunks: [] };
-    }
-  }, "startPart");
-  const finish = /* @__PURE__ */ __name(() => {
-    if (!finished) {
-      if (mode === "content") finishPart();
-      finished = true;
-    }
-    mode = "done";
-  }, "finish");
-  for (; ; ) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (!value || value.length === 0) continue;
-    win = concatBytes(win, value);
-    for (; ; ) {
-      if (finished) break;
-      if (mode === "preamble") {
-        const p = indexOfBytes(win, firstDelim, 0);
-        if (p < 0) {
-          if (win.length > firstDelim.length) win = win.slice(win.length - firstDelim.length);
-          break;
-        }
-        const after = p + firstDelim.length;
-        if (win[after] === 45 && win[after + 1] === 45) {
-          finish();
-          break;
-        }
-        const lineEnd = indexOfBytes(win, enc("\r\n"), after);
-        if (lineEnd < 0) break;
-        win = win.slice(lineEnd + 2);
-        mode = "headers";
-        continue;
-      }
-      if (mode === "headers") {
-        const p = indexOfBytes(win, HEAD_END, 0);
-        if (p < 0) {
-          if (win.length > HEADERS_MAX) throw new ValidationError("\u0647\u062F\u0631 part \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0628\u0632\u0631\u06AF \u0627\u0633\u062A");
-          break;
-        }
-        startPart(win.slice(0, p));
-        win = win.slice(p + HEAD_END.length);
-        mode = "content";
-        continue;
-      }
-      if (mode === "content") {
-        const p = indexOfBytes(win, delim, 0);
-        if (p >= 0) {
-          pending = concatBytes(pending, win.slice(0, p));
-          finishPart();
-          const after = p + delim.length;
-          if (win[after] === 45 && win[after + 1] === 45) {
-            finish();
-            break;
-          }
-          win = win.slice(after + 2);
-          mode = "headers";
-          continue;
-        }
-        const safe = win.length - HOLD_MARGIN(delim.length);
-        if (safe > 0) {
-          pending = concatBytes(pending, win.slice(0, safe));
-          if (pending.length >= SEGMENT_TARGET) {
-            flushPending();
-          }
-          win = win.slice(safe);
-        }
-        break;
-      }
-    }
-    if (finished) break;
-  }
-  finish();
-  return { files, fields };
-}
-__name(parseMultipartStream, "parseMultipartStream");
-function HOLD_MARGIN(delimLen) {
-  return delimLen + 8;
-}
-__name(HOLD_MARGIN, "HOLD_MARGIN");
 
 // src/domain/exercise-bank/routes.ts
 var EXT_MIME_FALLBACK = {
@@ -53192,11 +53201,6 @@ var DIGITS_2MIN_NORM = {
   "\u0647\u0641\u062A\u0645": 55,
   "\u0647\u0634\u062A\u0645": 55
 };
-var SNAP_IV_CUTOFFS = {
-  parent: { ia: { warn: 11, danger: 16 }, hi: { danger: 13 }, odd: { warn: 10, danger: 14 } },
-  teacher: { ia: { warn: 14, danger: 16 }, hi: { danger: 11 }, odd: { warn: 12, danger: 16 } }
-};
-var SCARED_CUTOFFS = { danger: 25, warnMin: 20, strong: 30 };
 var DCDQ_WARN_CEILING = 42;
 function dcdqDangerCutoffFor(ageYears2) {
   if (ageYears2 === null || ageYears2 === void 0) return 31;
@@ -69145,7 +69149,7 @@ function registerRoutes8(app, service) {
 }
 __name(registerRoutes8, "registerRoutes");
 
-// worker/scoring.js
+// src/core/scoring/scoring.js
 var CONTENT_FORMULA = {
   production: [
     { key: "exercises", weight: 4, label: "\u062A\u0645\u0631\u06CC\u0646" },
@@ -69522,6 +69526,30 @@ async function bumpSessionBookmark(db) {
   }
 }
 __name(bumpSessionBookmark, "bumpSessionBookmark");
+async function scoringBoardForEnv(env, periodKey, now = /* @__PURE__ */ new Date()) {
+  return scoringBoardData(scoringDb(env), periodKey, now);
+}
+__name(scoringBoardForEnv, "scoringBoardForEnv");
+async function scoringBoardData(db, periodKey, now = /* @__PURE__ */ new Date()) {
+  if (!PERIODS[periodKey]) {
+    throw new Error(`\u062F\u0648\u0631\u0647\u0654 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A: ${periodKey}`);
+  }
+  const cfg = await readScoringConfig(db);
+  const since = effectiveSince(periodKey, PERIODS, now, cfg.epoch ?? SCORING_EPOCH);
+  const rows = await computeBoard(db, since, {
+    contentFormula: effectiveContentFormula(cfg.weights),
+    usageFormula: effectiveUsageFormula(cfg.weights),
+    adminCap: effectiveAdminCap(cfg.weights)
+  });
+  return {
+    period: PERIODS[periodKey].key,
+    periodLabel: PERIODS[periodKey].label,
+    since,
+    generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    rows
+  };
+}
+__name(scoringBoardData, "scoringBoardData");
 async function handleScoring(request, env) {
   const url2 = new URL(request.url);
   const path = url2.pathname;
@@ -69536,22 +69564,7 @@ async function handleScoring(request, env) {
     if (!PERIODS[periodKey]) {
       return json2({ error: "VALIDATION_ERROR", message: "\u062F\u0648\u0631\u0647\u0654 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A" }, 400);
     }
-    const cfg = await readScoringConfig(db);
-    const since = effectiveSince(periodKey, PERIODS, /* @__PURE__ */ new Date(), cfg.epoch ?? SCORING_EPOCH);
-    const rows = await computeBoard(db, since, {
-      contentFormula: effectiveContentFormula(cfg.weights),
-      usageFormula: effectiveUsageFormula(cfg.weights),
-      adminCap: effectiveAdminCap(cfg.weights)
-    });
-    return json2({
-      data: {
-        period: PERIODS[periodKey].key,
-        periodLabel: PERIODS[periodKey].label,
-        since,
-        generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
-        rows
-      }
-    });
+    return json2({ data: await scoringBoardData(db, periodKey) });
   }
   if (path === "/api/scoring/explain" && request.method === "GET") {
     const meRow = await db.prepare(`SELECT id, COALESCE(role_ext, role) AS role FROM staff WHERE id = ? LIMIT 1`).bind(authed.sub).first();
@@ -69677,16 +69690,7 @@ function createDashboardKpiService(deps) {
       to: query.to || ""
     });
     const part = /* @__PURE__ */ __name((p) => p.catch(() => null), "part");
-    const scoringP = part(
-      handleScoring(
-        new Request(new URL("/api/scoring/board?period=month", call.url), { headers: call.headers }),
-        call.env
-      ).then(async (res) => {
-        if (!res.ok) return null;
-        const body = await res.json().catch(() => null);
-        return body?.data ?? null;
-      })
-    );
+    const scoringP = part(scoringBoardForEnv(call.env, "month"));
     const [today, summary, goal, scoring, me, knowledge, announcements, waitlist, dayAppts, followups, validation] = await Promise.all([
       isTherapist ? Promise.resolve(null) : part(dashboard.getTodayCards(date5)),
       isTherapist ? Promise.resolve(null) : part(dashboard.getPeriodSummary(range.from, range.to)),

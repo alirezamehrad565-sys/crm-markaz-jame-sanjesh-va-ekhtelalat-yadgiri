@@ -8,7 +8,7 @@ import type {
 import type { DbClient } from '@core/db';
 import type { Logger } from '@core/logger';
 import { tehranRange } from '@core/shared';
-import { effectiveContentFormula, productionScoreOf, SCORING_CONFIG_KEY } from '../../../worker/scoring.js';
+import { effectiveContentFormula, productionScoreOf, SCORING_CONFIG_KEY } from '@core/scoring/scoring.js' /* architecture-006 ۱.۲۷.۸۴ */;
 import {
   avgWaitDaysOf,
   buildDaySeries,

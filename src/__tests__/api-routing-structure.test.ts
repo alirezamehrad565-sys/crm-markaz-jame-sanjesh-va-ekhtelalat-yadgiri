@@ -65,7 +65,8 @@ describe('گیت ساختاری api-routing (architecture-001) — ۱.۲۷.۸۰'
   });
 
   it('⑥ import scoring از لایهٔ مسیریابی بیرون کشیده شد — فقط در kpi-source است', () => {
-    expect(read('src/application/dashboard/kpi-source.ts')).toContain("from '../../../worker/scoring.js'");
-    expect(index + routes + composition + middleware).not.toContain('worker/scoring');
+    expect(read('src/application/dashboard/kpi-source.ts')).toContain("from '@core/scoring/scoring.js'"); /* architecture-006 ۱.۲۷.۸۴ */
+    expect(read('src/application/dashboard/kpi-source.ts')).toContain('scoringBoardForEnv');
+    expect(index + routes + composition + middleware).not.toContain('worker/scoring'); /* src هرگز به worker/ import نمی‌کند */
   });
 });

@@ -79,6 +79,7 @@ function resolveTarget(spec) {
   if (spec.startsWith('.')) base = posix.normalize(posix.join('src/application/api-routing', spec));
   else if (spec.startsWith('@domain/')) base = `src/domain/${spec.slice('@domain/'.length)}`;
   else if (spec.startsWith('@app/')) base = `src/application/${spec.slice('@app/'.length)}`;
+  else if (spec.startsWith('@sync/')) base = `src/${spec.slice('@sync/'.length)}`; /* architecture-007 (۱.۲۷.۸۴) — خانوادهٔ سینک با alias mount می‌شود */
   else return null;
   // تک‌فایلِ مستقیم مقدم است (مثل '@app/instance-sync/desktop-routes' یا '../node-sync/app')
   const fileHit = [`${base}.ts`, base].find((c) => existsSync(join(ROOT, c)) && statSync(join(ROOT, c)).isFile());

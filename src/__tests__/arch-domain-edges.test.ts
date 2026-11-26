@@ -62,6 +62,22 @@ describe('گیت یال‌های دامنه (architecture-003/005 — ۱.۲۷.۸
     expect(stale, `یال مصوب اما دیگر در کد نیست — دفتر فقط-کاهش‌پذیر است: ${stale.join(', ')}`).toEqual([]);
   });
 
+  it('هیچ فایل src/ با مسیر نسبی به worker/ import ندارد (architecture-006 — ۱.۲۷.۸۴)', () => {
+    const SRC = join(ROOT, 'src');
+    const offenders: string[] = [];
+    const walk = (dir: string): void => {
+      for (const name of readdirSync(dir)) {
+        const p = join(dir, name);
+        if (statSync(p).isDirectory()) { walk(p); continue; }
+        if (!p.endsWith('.ts') && !p.endsWith('.js')) continue;
+        if (p.includes('__tests__')) continue;
+        if (/from ['"][^'"]*worker\//.test(readFileSync(p, 'utf8'))) offenders.push(relative(ROOT, p));
+      }
+    };
+    walk(SRC);
+    expect(offenders, `این فایل‌های src هنوز به worker/ وابسته‌اند: ${offenders.join(', ')} — از @core/scoring و... بخوانید`).toEqual([]);
+  });
+
   it('دفتر مصوب در design.md §۱۱ با همین گیت هم‌خوان است', () => {
     const doc = readFileSync(join(ROOT, 'docs/rust/design.md'), 'utf8');
     const missing = Object.keys(APPROVED_EDGES).filter((e) => !doc.includes(e));

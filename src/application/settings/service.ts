@@ -16,7 +16,7 @@ import {
   CONTENT_FORMULA,
   SCORING_EPOCH,
   USAGE_FORMULA
-} from '../../../worker/scoring.js';
+} from '@core/scoring/scoring.js' /* architecture-006 ۱.۲۷.۸۴ */;
 
 export interface SettingsDeps {
   db: DbClient;

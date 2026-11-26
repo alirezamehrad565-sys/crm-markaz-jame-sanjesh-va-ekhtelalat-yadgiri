@@ -3,12 +3,13 @@
  * (change_boundary یافتهٔ ممیزی؛ done_when: createApp هندلر چندخطی منطق‌دار ندارد).
  * منطق عیناً از api-routing/index.ts (بخش «فاز F») منتقل شده است: همان ۱۱ منبع موازی، همان
  * گارد نقش‌ها (درمانگر فقط‌خواندنی؛ دفتر؛ مدیر) و همان قرارداد «شکست تک‌بخشی → null» (part()).
- * تابلوی پیشرفت از لایهٔ scoring با بازسازی Request صدا زده می‌شود تا auth، دوره و بوک‌مارک
- * نشست همان مسیر همیشگی را طی کند — این import اکنون فقط همین‌جاست (نه در لایهٔ مسیریابی).
+ * ۱.۲۷.۸۴ (architecture-006): تابلوی پیشرفت دیگر با بازسازی Request صدا زده نمی‌شود —
+ * ورودی خالص scoringBoardForEnv از هستهٔ مشترک @core/scoring مستقیم خوانده می‌شود (actor همین‌جا
+ * احراز شده است؛ بوک‌مارک نشست فقط متعلق به مسیر HTTP /api/scoring است نه محاسبهٔ KPI).
  */
 import { DashboardSummaryQuerySchema, DashboardTodayQuerySchema } from '@core/shared';
 import type { AppBindings, AuthContext } from '@core/shared';
-import { handleScoring } from '../../../worker/scoring.js';
+import { scoringBoardForEnv } from '@core/scoring/scoring.js';
 import type { DashboardService } from './service';
 import type { KnowledgeService } from '@domain/knowledge';
 import type { AnnouncementService } from '@domain/announcements';
@@ -96,16 +97,7 @@ export function createDashboardKpiService(deps: DashboardKpiDeps): DashboardKpiS
 
     const part = <T>(p: Promise<T>): Promise<T | null> => p.catch(() => null);
 
-    const scoringP = part(
-      handleScoring(
-        new Request(new URL('/api/scoring/board?period=month', call.url), { headers: call.headers }),
-        call.env
-      ).then(async (res) => {
-        if (!res.ok) return null;
-        const body = (await res.json().catch(() => null)) as { data?: unknown } | null;
-        return body?.data ?? null;
-      })
-    );
+    const scoringP = part(scoringBoardForEnv(call.env as unknown as { DB: unknown }, 'month'));
 
     const [today, summary, goal, scoring, me, knowledge, announcements, waitlist, dayAppts, followups, validation] =
       await Promise.all([
