@@ -262,11 +262,11 @@ center-system/
 ### ۴.۱ الگوی Barrel File
 
 ```typescript
-// ✅ مجاز: import از index.ts
+// ✓ مجاز: import از index.ts
 import { createAppointmentService } from '@/domain/appointment-core';
 import type { Appointment } from '@/domain/appointment-core';
 
-// ❌ ممنوع: import از فایل داخلی
+// ✗ ممنوع: import از فایل داخلی
 import { createAppointmentService } from '@/domain/appointment-core/service';
 ```
 
@@ -906,27 +906,27 @@ HTTP/1.1 409 Conflict
 
 | ↓ از \ → به | SHARED | DB | AUTH | AUDIT | ERRORS | LOGGER | APPT-CORE | ATTEND | CONFLICT | STUDENT-PROFILE | HTTP | API-ROUTING | NOTIFY (core) |
 |-------------|--------|----|----|-------|--------|--------|-----------|--------|----------|-----------------|------|-------------|----------------|
-| shared | — | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| db | ✅ | — | ❌ | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| auth | ✅ | ✅ | — | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| audit | ✅ | ✅ | ❌ | — | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| errors | ❌ | ❌ | ❌ | ❌ | — | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| logger | ❌ | ❌ | ❌ | ❌ | ❌ | — | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| notify (core) | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | — | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| appointment-core | ✅ | ✅ | type only | ✅ | ✅ | ✅ | — | ❌ | ✅ (read-only) | ❌ | ❌ | ❌ | ❌ |
-| attendance | ✅ | ✅ | type only | ✅ | ✅ | ✅ | ✅ (read-only) | — | ❌ | ❌ | ❌ | ❌ | ❌ |
-| conflict-engine | ✅ | ✅ | type only | ❌ | ✅ | ✅ | ❌ (read-only نیاز نیست) | ❌ | — | ❌ | ❌ | ❌ | ❌ |
-| student-profile | ✅ | ✅ | type only | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | — | ✅ (pageParams) | ❌ | ❌ |
-| http | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | — | ❌ | ❌ |
-| notify (app) | ✅ | ✅ | ✅ (listStaff، type only) | ✅ | ✅ | ✅ | ❌ | ✅ (read-only) | ❌ | ❌ | ✅ (read-only) | ❌ | ✅ |
-| dashboard | ✅ | ✅ | ✅ (listStaff) | ❌ | ✅ | ✅ | ✅ (read-only) | ✅ (read-only) | ✅ (read-only) | ✅ (read-only) | ❌ | ❌ | ❌ |
-| api-routing | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ |
-| staff | ✅ | ✅ | type only | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| working-hours | ✅ | ✅ | type only | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| settings (app) | ✅ | ✅ | type only | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| board-ui | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | via HTTP | via HTTP | via HTTP | via HTTP | ❌ | ❌ | ❌ |
+| shared | — | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| db | ✓ | — | ✗ | ✗ | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| auth | ✓ | ✓ | — | ✗ | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| audit | ✓ | ✓ | ✗ | — | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| errors | ✗ | ✗ | ✗ | ✗ | — | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| logger | ✗ | ✗ | ✗ | ✗ | ✗ | — | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| notify (core) | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | — | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| appointment-core | ✓ | ✓ | type only | ✓ | ✓ | ✓ | — | ✗ | ✓ (read-only) | ✗ | ✗ | ✗ | ✗ |
+| attendance | ✓ | ✓ | type only | ✓ | ✓ | ✓ | ✓ (read-only) | — | ✗ | ✗ | ✗ | ✗ | ✗ |
+| conflict-engine | ✓ | ✓ | type only | ✗ | ✓ | ✓ | ✗ (read-only نیاز نیست) | ✗ | — | ✗ | ✗ | ✗ | ✗ |
+| student-profile | ✓ | ✓ | type only | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | — | ✓ (pageParams) | ✗ | ✗ |
+| http | ✓ | ✗ | ✗ | ✗ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | — | ✗ | ✗ |
+| notify (app) | ✓ | ✓ | ✓ (listStaff، type only) | ✓ | ✓ | ✓ | ✗ | ✓ (read-only) | ✗ | ✗ | ✓ (read-only) | ✗ | ✓ |
+| dashboard | ✓ | ✓ | ✓ (listStaff) | ✗ | ✓ | ✓ | ✓ (read-only) | ✓ (read-only) | ✓ (read-only) | ✓ (read-only) | ✗ | ✗ | ✗ |
+| api-routing | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — | ✓ |
+| staff | ✓ | ✓ | type only | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| working-hours | ✓ | ✓ | type only | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| settings (app) | ✓ | ✓ | type only | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| board-ui | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | via HTTP | via HTTP | via HTTP | via HTTP | ✗ | ✗ | ✗ |
 
-کلید: ✅ = مجاز، ❌ = ممنوع، "type only" = فقط type، "read-only" = فقط خواندن.
+کلید: ✓ = مجاز، ✗ = ممنوع، "type only" = فقط type، "read-only" = فقط خواندن.
 
 ### ۱۰.۲ نمودار وابستگی (Mermaid)
 
@@ -971,25 +971,25 @@ flowchart TB
 ### ۱۰.۳ وابستگی‌های مجاز vs ممنوع
 
 ```typescript
-// ✅ مجاز: domain → core
+// ✓ مجاز: domain → core
 import { createDb } from '@core/db';
 
-// ✅ مجاز: application → domain (read-only consumer)
+// ✓ مجاز: application → domain (read-only consumer)
 import { createAppointmentService } from '@domain/appointment-core';
 
-// ✅ مجاز: domain → domain (read-only, via index.ts)
+// ✓ مجاز: domain → domain (read-only, via index.ts)
 import { findOverlaps } from '@domain/conflict-engine';
 
-// ❌ ممنوع: core → domain
+// ✗ ممنوع: core → domain
 import { Appointment } from '@domain/appointment-core'; // در @core/db
 
-// ❌ ممنوع: domain → application
+// ✗ ممنوع: domain → application
 import { errorHandler } from '@app/http'; // در @domain/appointment-core
 
-// ❌ ممنوع: import از فایل داخلی ماژول دیگر
+// ✗ ممنوع: import از فایل داخلی ماژول دیگر
 import { createAppointmentService } from '@domain/appointment-core/service';
 
-// ❌ ممنوع: cross-domain write
+// ✗ ممنوع: cross-domain write
 // در @domain/attendance/service.ts:
 await db.execute('UPDATE appointments SET status =...', [...]);
 ```
@@ -1045,12 +1045,12 @@ await db.execute('UPDATE appointments SET status =...', [...]);
 
 | ماژول | تست‌های اجباری | وضعیت فعلی |
 |-------|----------------|------------|
-| conflict-engine | overlap detection (مرز دقیق)، نوبت لغوشده، exclude_id، چندتداخلی | ✅ ۹ تست pure |
-| core/shared | national-id: checksum، ارقام فارسی/عربی، padding، ورودی نامعتبر | ✅ ۱۰ تست pure |
-| core/shared | time: tehranTimeLabel، addDaysYmd (مرز ماه/سال/کبیسه) | ✅ ۹ تست pure |
-| dashboard | KPIها: status counts، staff cards، attendance stats، مرز روز تهران، next appointment | ✅ ۶ تست pure |
-| core/notify | قالب‌ها: همه idها، fallback، exhaustiveness؛ webhook: پارس همه دستورها + کد اتصال | ✅ ۱۸ تست pure |
-| application/notify | planReminders: مسیر خوش‌بین، disabled، no_chat، too_soon، افق، کانال، dedup، summary | ✅ ۱۱ تست pure |
+| conflict-engine | overlap detection (مرز دقیق)، نوبت لغوشده، exclude_id، چندتداخلی | ✓ ۹ تست pure |
+| core/shared | national-id: checksum، ارقام فارسی/عربی، padding، ورودی نامعتبر | ✓ ۱۰ تست pure |
+| core/shared | time: tehranTimeLabel، addDaysYmd (مرز ماه/سال/کبیسه) | ✓ ۹ تست pure |
+| dashboard | KPIها: status counts، staff cards، attendance stats، مرز روز تهران، next appointment | ✓ ۶ تست pure |
+| core/notify | قالب‌ها: همه idها، fallback، exhaustiveness؛ webhook: پارس همه دستورها + کد اتصال | ✓ ۱۸ تست pure |
+| application/notify | planReminders: مسیر خوش‌بین، disabled، no_chat، too_soon، افق، کانال، dedup، summary | ✓ ۱۱ تست pure |
 | appointment-core | CRUD کامل، move با تداخل، resize، cancel، version 409، week copy + undo (integration با Miniflare) | فاز بعد |
 | attendance | mark ها، mark روی cancelled (خطا)، listPending، stats (integration) | فاز بعد |
 | auth | JWT معتبر → 200، جعلی → 401، email ناموجود → 401، inactive → 401 (integration) | فاز بعد |

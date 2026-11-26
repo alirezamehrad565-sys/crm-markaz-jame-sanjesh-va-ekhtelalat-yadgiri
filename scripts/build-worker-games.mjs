@@ -24,7 +24,7 @@ execFileSync(esbuild, args, { stdio: 'inherit' });
 // سربرگ توضیحی فارسی + یادداشت «دست نزنید — از منبع ساخته می‌شود»
 const banner = `/**
  * بک‌اند مستقل ماژول بازی‌های درمانی (Hono + D1) — ساخته‌شده از منبع با scripts/build-worker-games.mjs
- * ⚠ این فایل را دستی ویرایش نکنید — تغییرها را در src/games-worker.ts و src/application/games-standalone بدهید و باندل را بازسازی کنید.
+ * هشدار این فایل را دستی ویرایش نکنید — تغییرها را در src/games-worker.ts و src/application/games-standalone بدهید و باندل را بازسازی کنید.
  * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
  */
 `;

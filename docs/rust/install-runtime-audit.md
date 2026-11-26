@@ -112,33 +112,33 @@
 
 ```text
 [Build]
-worker/src-entry.mjs ──esbuild──▶ worker/bundle.js (3.95MB)
-src/games-worker.ts  ──esbuild──▶ worker/games-bundle.js (1.22MB)
-scripts/engine/engine.mjs ──build:engine-server──▶ scripts/engine/engine-server.js
-src/* ──build:client──▶ public/  (index.html: ?v= دستی)
+worker/src-entry.mjs ──esbuild── worker/bundle.js (3.95MB)
+src/games-worker.ts ──esbuild── worker/games-bundle.js (1.22MB)
+scripts/engine/engine.mjs ──build:engine-server── scripts/engine/engine-server.js
+src/* ──build:client── public/ (index.html: ?v= دستی)
 
 [CI desktop-build]
 build-installer-runtime.mjs --target x86_64-pc-windows-msvc
-  ├─ دانلود node v22.23.5 ──▶ binaries/node-<target>          (هش → manifest)
-  ├─ public/ ──────────────▶ resources/engine/public/
-  ├─ migrations+seed ──────▶ resources/engine/d1-seed/
-  ├─ engine-server.js ─────▶ resources/engine/engine-server.js
-  ├─ worker/bundle.js ─────▶ resources/engine/bundles/worker.js   ◀── تولید می‌شود
-  ├─ worker/games-bundle.js▶ resources/engine/bundles/games.js    ◀── تولید می‌شود
-  ├─ worker/central-bundle.js▶ resources/engine/central/central-worker.js (میراث v1.26)
-  └─ schema.sql ───────────▶ resources/engine/central/schema.sql
+ ├─ دانلود node v22.23.5 ── binaries/node-<target> (هش → manifest)
+ ├─ public/ ────────────── resources/engine/public/
+ ├─ migrations+seed ────── resources/engine/d1-seed/
+ ├─ engine-server.js ───── resources/engine/engine-server.js
+ ├─ worker/bundle.js ───── resources/engine/bundles/worker.js ── تولید می‌شود
+ ├─ worker/games-bundle.js resources/engine/bundles/games.js ── تولید می‌شود
+ ├─ worker/central-bundle.js resources/engine/central/central-worker.js (میراث v1.26)
+ └─ schema.sql ─────────── resources/engine/central/schema.sql
   └─ manifest: src-tauri/engine-runtime-manifest.json  (خارج از resources → شحنمی‌رود!)
---check (هش‌ها) ──▶ npx @tauri-apps/cli@2 build ──▶ NSIS
+--check (هش‌ها) ── npx @tauri-apps/cli@2 build ── NSIS
 
 [NSIS install — $INSTDIR = %LOCALAPPDATA%\Markaz-Jame-Desktop]
 Markaz-Jame-Desktop.exe ، node.exe (سایدکار لخت)، resources\engine\... (فایل لخت، بدون آرشیو)
 
 [Runtime boot — lib.rs::boot_engine]
 تیپل نصاب:  server=resources\engine\engine-server.js ✓
-            main  =resources\engine\central\worker.js ✗ (هرگز تولید نشده) ◀◀◀ خطای فعلی
+ main =resources\engine\central\worker.js ✗ (هرگز تولید نشده) خطای فعلی
             games =resources\engine\central\games.js  ✗
             public=resources\engine\public ✓   data=%APPDATA%\ir.sdt144.center.desktop
-پیش‌بازرسی v1.27.04 ──▶ FAIL (دو باندل) ──▶ بدون spawn ──▶ engine.log خالی ──▶ UI: Failed
+پیش‌بازرسی v1.27.04 ── FAIL (دو باندل) ── بدون spawn ── engine.log خالی ── UI: Failed
 ```
 
 ---
@@ -159,12 +159,12 @@ Setup.exe
   └─ ثبت نتیجه نصب (لاگ نصاب)                       (۱۰)
 
 [Runtime Manager — FSM با سلامت مستقل دو ورکر]
-PRECHECK ─▶ VALIDATING ─▶ PREPARING ─▶ STARTING ─▶ HEALTH_CHECK ─▶ READY
+PRECHECK ─ VALIDATING ─ PREPARING ─ STARTING ─ HEALTH_CHECK ─ READY
     │            │             │            │              │            │
-    └── هر گام: خطای صریح فارسی + log_tail ──▶ FAILED ◀─────┘            │
-                                                              DEGRADED ◀─┘ (یکی از دو ورکر ناسالم)
-READY ⇄ DEGRADED / FAILED ──(نگهبان respawn)──▶ STARTING
-READY/DEGRADED ──خروج عمدی──▶ STOPPING ──▶ STOPPED
+ └── هر گام: خطای صریح فارسی + log_tail ── FAILED ─────┘ │
+ DEGRADED ─┘ (یکی از دو ورکر ناسالم)
+READY ⇄ DEGRADED / FAILED ──(نگهبان respawn)── STARTING
+READY/DEGRADED ──خروج عمدی── STOPPING ── STOPPED
 پروب‌ها: main /health روی mainPort و games /health روی gamesPort — مستقل، هرکدام با مهلت و سیاست خودش
 ```
 
@@ -212,11 +212,11 @@ READY/DEGRADED ──خروج عمدی──▶ STOPPING ──▶ STOPPED
 
 | بررسی | وضعیت | شواهد |
 | --- | --- | --- |
-| دیتابیس مستقل از resources | ✅ بله | DB = `%APPDATA%\ir.sdt144.center.desktop\d1\miniflare-D1DatabaseObject\<hash>.sqlite`؛ resources فقط خواندنی برنامه است |
-| نصب نسخهٔ جدید داده را حفظ می‌کند؟ | ✅ بله | NSIS فقط `$INSTDIR` را بازنویسی می‌کند؛ dataDir دست‌نخورده؛ `boot_engine` فقط اگر `dataDir\d1` نباشد seed کپی می‌کند (`lib.rs` — گارد `if !data_dir.join("d1").exists()`) |
-| Repair فقط فایل‌های ثابت برنامه؟ | ⚠️ طراحی لازم | امروز Repair «نصب مجدد» است (فقط $INSTDIR) — درست، ولی باید مستند و از UI هدایت شود؛ هیچ‌گاه dataDir را لمس نکند |
-| بازیابی فقط با تأیید سلامت بکاپ | ⚠️ ناقص | فعلاً هنگام بوت یک audit ردیف `db.backup_file` ثبت می‌شود (`engine.mjs:257`) ولی جریان بازیابی با وارسی سلامت بکاپ تعریف نشده — به P1/P2 (وارسی `PRAGMA quick_check` روی بکاپ پیش از جایگزینی) |
-| کپی d1-seed اتمیک | ⚠️ | کپی بازگشتی ساده؛ وسط کپی اگر اپ قطع شود کپی ناقص می‌ماند → tmp+rename (P1) |
+| دیتابیس مستقل از resources | ✓ بله | DB = `%APPDATA%\ir.sdt144.center.desktop\d1\miniflare-D1DatabaseObject\<hash>.sqlite`؛ resources فقط خواندنی برنامه است |
+| نصب نسخهٔ جدید داده را حفظ می‌کند؟ | ✓ بله | NSIS فقط `$INSTDIR` را بازنویسی می‌کند؛ dataDir دست‌نخورده؛ `boot_engine` فقط اگر `dataDir\d1` نباشد seed کپی می‌کند (`lib.rs` — گارد `if !data_dir.join("d1").exists()`) |
+| Repair فقط فایل‌های ثابت برنامه؟ | هشدار طراحی لازم | امروز Repair «نصب مجدد» است (فقط $INSTDIR) — درست، ولی باید مستند و از UI هدایت شود؛ هیچ‌گاه dataDir را لمس نکند |
+| بازیابی فقط با تأیید سلامت بکاپ | هشدار ناقص | فعلاً هنگام بوت یک audit ردیف `db.backup_file` ثبت می‌شود (`engine.mjs:257`) ولی جریان بازیابی با وارسی سلامت بکاپ تعریف نشده — به P1/P2 (وارسی `PRAGMA quick_check` روی بکاپ پیش از جایگزینی) |
+| کپی d1-seed اتمیک | هشدار | کپی بازگشتی ساده؛ وسط کپی اگر اپ قطع شود کپی ناقص می‌ماند → tmp+rename (P1) |
 
 ---
 

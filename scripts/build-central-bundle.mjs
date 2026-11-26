@@ -19,7 +19,7 @@ execFileSync(esbuild, [path.join(root, 'worker', 'src-entry-node.mjs'),
 const body = readFileSync(out, 'utf8');
 const banner = `/**
  * ورکر مرکزی مستقل «markaz-central» — ساخته‌شده از منبع با scripts/build-central-bundle.mjs
- * ⚠ این فایل را دستی ویرایش نکنید — تغییرها را در src/ بدهید و باندل را بازسازی کنید.
+ * هشدار این فایل را دستی ویرایش نکنید — تغییرها را در src/ بدهید و باندل را بازسازی کنید.
  * نصب: پوستهٔ دسکتاپ (cf_deploy.rs) این ماژول را با توکن کلادفلر کاربر deploy می‌کند.
  */
 `;

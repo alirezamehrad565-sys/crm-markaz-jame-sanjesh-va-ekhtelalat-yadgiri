@@ -1,6 +1,6 @@
 # طرح داکرایز کردن سامانه — استقلال از Cloudflare
 
-> **وضعیت: پیاده‌سازی شد ✅** — لایهٔ Node (درایور `node:sqlite` + ورودی سرور + کرون + استاتیک + CLI)
+> **وضعیت: پیاده‌سازی شد ✓** — لایهٔ Node (درایور `node:sqlite` + ورودی سرور + کرون + استاتیک + CLI)
 > و بستهٔ داکر (`Dockerfile` + `docker-compose.yml` + اورلی Caddy) تحویل شده است.
 > انتشار خودکار ایمیج روی **GHCR** هم فعال است (`.github/workflows/docker-publish.yml`):
 > با هر پوش روی main و هر تگ `v*`، ایمیج amd64+arm64 ساخته و به
@@ -17,14 +17,14 @@
 
 | # | وابستگی | وضعیت فعلی | سختی جداسازی |
 |---|---------|------------|---------------|
-| ۱ | **D1** (دیتابیس) | فقط از دو نقطه لمس می‌شود: (a) wrapper واحد `createDb(env.DB)` در `src/core/db/client.ts` با ۵ متد (query/queryOne/execute/batch/transaction)؛ (b) چند فراخوانی مستقیم `env.DB.prepare()` در ماژول auth (throttle لاگین، ارتقای هش رمز، runtime-secret) | 🟢 آسان — **همین الان ماک D1 روی `node:sqlite` داریم**: `src/test/mock-d1.ts` (۱۱۳ خط) که تمام ۱۳۰۰ تست از جمله e2e روی آن سبز است |
-| ۲ | **Hono** (فریم‌ورک) | نسخهٔ ۴.۶ — Hono ذاتاً چند-پلتفرمی است و با `@hono/node-server` بدون تغییر کد روی Node اجرا می‌شود | 🟢 صفر |
-| ۳ | **Workers Assets** (فایل‌های استاتیک) | سروِ فایل‌های `public/` + قواعد `_headers` (کش immutable برای img/font، ۵ دقیقه‌ای برای js/css، no-cache برای پوسته) | 🟡 ساده — یک middleware استاتیک با همان قواعد کش |
-| ۴ | **Cron Triggers** (۴ زمان‌بند) | هندلر `scheduled(event, env, ctx)` که فقط `event.cron` را با دو ثابت مقایسه می‌کند | 🟢 آسان — `node-cron` با همان عبارات و فراخوانی همان توابع |
-| ۵ | **WebCrypto / fetch** | با فلگ `nodejs_compat` کد روی APIهای استاندارد وب است؛ Node ۱۸+ هر دو را سراسری دارد | 🟢 صفر |
-| ۶ | **Secrets** | رمزها/توکن‌ها در خود D1 ذخیره می‌شوند (`runtime-secret.ts` — d1AsSecretStore)، نه در Workers Secrets | 🟢 صفر — چون دیتابیس با خودمان می‌آید |
-| ۷ | **ctx.waitUntil** | فقط در fetch/scheduled | 🟢 شیم ۳ خطی |
-| ۸ | **تلگرام بات** | کاملاً outbound (fetch به api.telegram.org) + webhook ورودی | 🟢 صفر — فقط آدرس webhook باید به دامنهٔ جدید ثبت شود |
+| ۱ | **D1** (دیتابیس) | فقط از دو نقطه لمس می‌شود: (a) wrapper واحد `createDb(env.DB)` در `src/core/db/client.ts` با ۵ متد (query/queryOne/execute/batch/transaction)؛ (b) چند فراخوانی مستقیم `env.DB.prepare()` در ماژول auth (throttle لاگین، ارتقای هش رمز، runtime-secret) | آسان — **همین الان ماک D1 روی `node:sqlite` داریم**: `src/test/mock-d1.ts` (۱۱۳ خط) که تمام ۱۳۰۰ تست از جمله e2e روی آن سبز است |
+| ۲ | **Hono** (فریم‌ورک) | نسخهٔ ۴.۶ — Hono ذاتاً چند-پلتفرمی است و با `@hono/node-server` بدون تغییر کد روی Node اجرا می‌شود | صفر |
+| ۳ | **Workers Assets** (فایل‌های استاتیک) | سروِ فایل‌های `public/` + قواعد `_headers` (کش immutable برای img/font، ۵ دقیقه‌ای برای js/css، no-cache برای پوسته) | ساده — یک middleware استاتیک با همان قواعد کش |
+| ۴ | **Cron Triggers** (۴ زمان‌بند) | هندلر `scheduled(event, env, ctx)` که فقط `event.cron` را با دو ثابت مقایسه می‌کند | آسان — `node-cron` با همان عبارات و فراخوانی همان توابع |
+| ۵ | **WebCrypto / fetch** | با فلگ `nodejs_compat` کد روی APIهای استاندارد وب است؛ Node ۱۸+ هر دو را سراسری دارد | صفر |
+| ۶ | **Secrets** | رمزها/توکن‌ها در خود D1 ذخیره می‌شوند (`runtime-secret.ts` — d1AsSecretStore)، نه در Workers Secrets | صفر — چون دیتابیس با خودمان می‌آید |
+| ۷ | **ctx.waitUntil** | فقط در fetch/scheduled | شیم ۳ خطی |
+| ۸ | **تلگرام بات** | کاملاً outbound (fetch به api.telegram.org) + webhook ورودی | صفر — فقط آدرس webhook باید به دامنهٔ جدید ثبت شود |
 | ۹ | WebSocket / DO / KV / R2 / Queues | **استفاده نمی‌شوند** (بررسی bundle) | — |
 
 **نتیجه:** تنها کار واقعیِ مهندسی، یک درایور SQLite برای «پروداکشن» + سرو استاتیک + کرون است. تقریباً همهٔ اجزا در مخزن موجودند.

@@ -245,7 +245,7 @@ if (migHits.length > 0) {
 console.log('✓ وارسی گیت: migrations/0114 روی هر ۷ regex گیت check-d1-compat صفر خورد (بند ① و ⑬ سبز)');
 
 // ─── تولید local-triggers.sql — همان ۳×N trigger، فقط برای موتور محلی node:sqlite ───
-// ⚠ در trigger پس از DELETE فقط OLD در دسترس است (NEW تعریف نشده) — pk از OLD خوانده می‌شود.
+// هشدار در trigger پس از DELETE فقط OLD در دسترس است (NEW تعریف نشده) — pk از OLD خوانده می‌شود.
 const trig = [];
 trig.push(`-- local-triggers.sql — triggerهای فقط-میز هم‌گامی instance-sync (فاز B — مأموریت SB2)
 -- فقط-میز؛ D1 این فایل را هرگز نمی‌بیند — گیت check-d1-compat آن را نمی‌سنجد چون خارج از migrations/ است؛

@@ -535,7 +535,17 @@ try {
   bad(`اجرای گیت کنتراست خطا داد: ${e instanceof Error ? e.message : String(e)}`);
 }
 
-lines.push(failed ? '❌ گیت ساختار دسکتاپ قرمز است' : '✅ گیت ساختار دسکتاپ سبز است');
+// ⑰ گیت ضد-AI-slop — اموجی تزئینی در اسناد/کامنت‌ها و متا-اشاره ممنوع (۱.۲۷.۸۵ — sdt162)
+try {
+  const { spawnSync: ss17 } = await import('node:child_process');
+  const r17 = ss17('node', [path.join(ROOT, 'scripts', 'check-ai-slop.mjs')], { timeout: 60_000, encoding: 'utf8' });
+  (r17.stdout || '').split('\n').filter((l) => l.includes('✓') || l.includes('✗')).slice(0, 4).forEach((l) => lines.push('  ' + l));
+  r17.status === 0 ? ok('گیت ضد-slop سبز است') : bad(`گیت ضد-slop قرمز است (exit=${r17.status})`);
+} catch (e) {
+  bad(`اجرای گیت ضد-slop خطا داد: ${e instanceof Error ? e.message : String(e)}`);
+}
+
+lines.push(failed ? '✗ گیت ساختار دسکتاپ قرمز است' : '✓ گیت ساختار دسکتاپ سبز است');
 writeFileSync('/tmp/desktop-check-report.txt', lines.join('\n') + '\n');
 console.log(lines.join('\n'));
 process.exit(failed ? 1 : 0);

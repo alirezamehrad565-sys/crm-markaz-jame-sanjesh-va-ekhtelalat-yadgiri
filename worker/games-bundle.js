@@ -1,6 +1,6 @@
 /**
  * بک‌اند مستقل ماژول بازی‌های درمانی (Hono + D1) — ساخته‌شده از منبع با scripts/build-worker-games.mjs
- * ⚠ این فایل را دستی ویرایش نکنید — تغییرها را در src/games-worker.ts و src/application/games-standalone بدهید و باندل را بازسازی کنید.
+ * هشدار این فایل را دستی ویرایش نکنید — تغییرها را در src/games-worker.ts و src/application/games-standalone بدهید و باندل را بازسازی کنید.
  * سامانهٔ مرکز جامع سنجش، آموزش، توان‌بخشی و مداخلات بهنگام · @sdt144
  */
 var __defProp = Object.defineProperty;
@@ -1979,7 +1979,7 @@ var Hono3 = class extends Hono {
 };
 
 // src/core/version.ts
-var APP_VERSION = "1.27.21";
+var APP_VERSION = "1.27.84";
 
 // node_modules/zod/v4/classic/external.js
 var external_exports = {};
@@ -22523,6 +22523,23 @@ var WAITLIST_NAME_MAX = 120;
 var WAITLIST_SERVICE_TYPE_MAX = 120;
 var WAITLIST_NOTE_MAX = 1e3;
 var WAITLIST_LIST_LIMIT = 500;
+var REFERRAL_FAMILY_LEVELS = [
+  "low",
+  "mid",
+  "high"
+];
+var REFERRAL_CATEGORIES = [
+  "delayed",
+  "learning_disorder",
+  "intellectual",
+  "behavioral",
+  "autism",
+  "speech",
+  "other"
+];
+var REFERRAL_CHILDREN_MAX = 50;
+var REFERRAL_CONCERN_MAX = 1e3;
+var REFERRAL_REJECT_REASON_MAX = 300;
 var TODO_STATUSES = ["pending", "done"];
 var TODO_PRIORITIES = ["normal", "urgent"];
 var TODO_BOXES = ["inbox", "outbox"];
@@ -22726,13 +22743,14 @@ var CancelAppointmentSchema = external_exports.object({
   version: external_exports.number().int().positive()
 });
 var CopyWeekSchema = external_exports.object({
-  source_monday: TehranYmdSchema,
-  target_monday: TehranYmdSchema,
+  /* ۱.۲۷.۴۸ — کپی هفته بر پایهٔ شنبه (مرز هفتهٔ تقویم) */
+  source_week_start: TehranYmdSchema,
+  target_week_start: TehranYmdSchema,
   staff_id: UuidSchema.optional(),
   dry_run: external_exports.boolean().optional().default(false)
 });
 var MarkAttendanceSchema = external_exports.object({
-  status: external_exports.enum([ATTENDANCE_STATUS.PRESENT, ATTENDANCE_STATUS.LATE, ATTENDANCE_STATUS.ABSENT, ATTENDANCE_STATUS.CANCELLED]),
+  status: external_exports.enum([ATTENDANCE_STATUS.PENDING, ATTENDANCE_STATUS.PRESENT, ATTENDANCE_STATUS.LATE, ATTENDANCE_STATUS.ABSENT, ATTENDANCE_STATUS.CANCELLED]),
   note: external_exports.string().max(1e3).optional()
 });
 var GuardianPhoneSchema = external_exports.string().transform((v) => {
@@ -23211,10 +23229,11 @@ var NewFollowUpSchema = external_exports.object({
 var UpdateFollowUpSchema = external_exports.object({
   status: FollowUpStatusSchema.optional(),
   assignee_id: UuidSchema.optional(),
-  due_at: IsoDateTimeSchema.nullable().optional()
+  due_at: IsoDateTimeSchema.nullable().optional(),
+  result: external_exports.string().trim().max(500, "\u0646\u062A\u06CC\u062C\u0647\u0654 \u067E\u06CC\u06AF\u06CC\u0631\u06CC \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F5\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").optional()
 }).refine(
-  (v) => v.status !== void 0 || v.assignee_id !== void 0 || v.due_at !== void 0,
-  { message: "\u062D\u062F\u0627\u0642\u0644 \u06CC\u06A9\u06CC \u0627\u0632 \u0648\u0636\u0639\u06CC\u062A/\u0645\u0633\u0626\u0648\u0644/\u0645\u0647\u0644\u062A \u0628\u0627\u06CC\u062F \u0627\u0631\u0633\u0627\u0644 \u0634\u0648\u062F" }
+  (v) => v.status !== void 0 || v.assignee_id !== void 0 || v.due_at !== void 0 || v.result !== void 0,
+  { message: "\u062D\u062F\u0627\u0642\u0644 \u06CC\u06A9\u06CC \u0627\u0632 \u0648\u0636\u0639\u06CC\u062A/\u0645\u0633\u0626\u0648\u0644/\u0645\u0647\u0644\u062A/\u0646\u062A\u06CC\u062C\u0647 \u0628\u0627\u06CC\u062F \u0627\u0631\u0633\u0627\u0644 \u0634\u0648\u062F" }
 );
 var TodoPrioritySchema = external_exports.enum(TODO_PRIORITIES);
 var TodoStatusSchema = external_exports.enum(TODO_STATUSES);
@@ -23368,10 +23387,114 @@ var ScreeningQuerySchema = external_exports.object({
   q: external_exports.string().trim().max(80).optional(),
   tag: external_exports.string().trim().max(800).optional()
 });
+var IqEvaluationCreateSchema = external_exports.object({
+  result_option: external_exports.number().int("\u06AF\u0632\u06CC\u0646\u0647\u0654 \u0646\u062A\u06CC\u062C\u0647 \u0628\u0627\u06CC\u062F \u0639\u062F\u062F \u0635\u062D\u06CC\u062D \u0628\u0627\u0634\u062F").min(1, "\u06CC\u06A9\u06CC \u0627\u0632 \u06AF\u0632\u06CC\u0646\u0647\u200C\u0647\u0627\u06CC \u06F1 \u062A\u0627 \u06F7 \u0631\u0627 \u0627\u0646\u062A\u062E\u0627\u0628 \u06A9\u0646\u06CC\u062F").max(7, "\u06CC\u06A9\u06CC \u0627\u0632 \u06AF\u0632\u06CC\u0646\u0647\u200C\u0647\u0627\u06CC \u06F1 \u062A\u0627 \u06F7 \u0631\u0627 \u0627\u0646\u062A\u062E\u0627\u0628 \u06A9\u0646\u06CC\u062F"),
+  autism_referral: external_exports.boolean().optional().default(false),
+  leiter_score: external_exports.number().finite("\u0646\u0645\u0631\u0647\u0654 \u0644\u06CC\u200C\u062A\u0631 \u0628\u0627\u06CC\u062F \u0639\u062F\u062F \u0628\u0627\u0634\u062F").nullish(),
+  wechsler_verbal_score: external_exports.number().finite("\u0646\u0645\u0631\u0647\u0654 \u0648\u06A9\u0633\u0644\u0631 \u0628\u0627\u06CC\u062F \u0639\u062F\u062F \u0628\u0627\u0634\u062F").nullish(),
+  goodenough_score: external_exports.number().finite("\u0646\u0645\u0631\u0647\u0654 \u06AF\u0648\u062F\u06CC\u0646\u0627\u0641 \u0628\u0627\u06CC\u062F \u0639\u062F\u062F \u0628\u0627\u0634\u062F").nullish(),
+  clinical_observations: external_exports.string().max(2e3, "\u0645\u0634\u0627\u0647\u062F\u0627\u062A \u0628\u0627\u0644\u06CC\u0646\u06CC \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F2\u06F0\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").optional()
+});
+var ReferralChildSchema = external_exports.object({
+  first_name: external_exports.string().trim().min(2, "\u0646\u0627\u0645 \u06A9\u0648\u062F\u06A9 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").max(80, "\u0646\u0627\u0645 \u06A9\u0648\u062F\u06A9 \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F8\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A"),
+  birth_date: TehranYmdSchema.nullish(),
+  /* تاریخ تولد شمسیِ تایپی از فرم عمومی — سرویس با jalaliToGregorianYmd به میلادی می‌بَرد؛
+     تبدیل در یک نقطهٔ سمت سرور تا الگوریتم مشترکِ تست‌شدهٔ سامانه تک‌منبع بماند
+     ۱.۲۷.۶۱ — فرم عمومی برای «خالی» null می‌فرستد (قرارداد صفحه)؛ این فیلدها nullish‌اند
+     وگرنه گام آخرِ رفرال با «expected string, received null» رد می‌شد؛ سرویس از قبل null را می‌فهمد */
+  birth_date_text: external_exports.string().trim().max(20, "\u062A\u0627\u0631\u06CC\u062E \u062A\u0648\u0644\u062F \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F2\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").nullish(),
+  school_text: external_exports.string().trim().max(120).nullish(),
+  grade_text: external_exports.string().trim().max(40).nullish(),
+  class_text: external_exports.string().trim().max(40).nullish(),
+  concern_category: external_exports.enum(REFERRAL_CATEGORIES).nullish(),
+  /* تلفن ولیّ هر کودک — در ثبت دسته‌ای معلم به‌ازای هر ردیف جدا می‌آید؛
+     در ثبت خانواده خود معرف همان ولیّ است و از referrer_phone استفاده می‌شود */
+  guardian_phone: GuardianPhoneSchema.nullish(),
+  concern_tags: external_exports.array(external_exports.string().trim().min(2).max(40)).max(8, "\u062D\u062F\u0627\u06A9\u062B\u0631 \u06F8 \u0628\u0631\u0686\u0633\u0628 \u062F\u063A\u062F\u063A\u0647").optional().default([]),
+  concern_text: external_exports.string().trim().max(REFERRAL_CONCERN_MAX).nullish(),
+  prior_eval: external_exports.boolean().nullish(),
+  prior_eval_note: external_exports.string().trim().max(300).nullish(),
+  /* ۱.۲۷.۳۶ — فرم تکمیلی وضعیت خانواده زیر هر دانش‌آموز (اختیاری؛ «نمی‌دانم» ارسال نمی‌شود) */
+  family_culture: external_exports.enum(REFERRAL_FAMILY_LEVELS).nullish(),
+  family_finance: external_exports.enum(REFERRAL_FAMILY_LEVELS).nullish(),
+  family_cooperation: external_exports.enum(REFERRAL_FAMILY_LEVELS).nullish(),
+  /* ۱.۲۷.۴۶ — «سطح مالی و فرهنگی خانواده» (فیلد ترکیبی مسیر معلم؛ خواست کارفرما) —
+     معلم یک ارزیابی کلی می‌دهد؛ فرهنگی/مالی جدا فقط از فرم تکمیلی خانواده پر می‌شود */
+  family_liv: external_exports.enum(REFERRAL_FAMILY_LEVELS).nullish()
+});
+var PublicReferralSubmissionSchema = external_exports.object({
+  role: external_exports.enum(["family", "teacher"], { message: "\u0646\u0642\u0634 \u0645\u0639\u0631\u0641 \u0628\u0627\u06CC\u062F \u062E\u0627\u0646\u0648\u0627\u062F\u0647 \u06CC\u0627 \u0645\u0639\u0644\u0645 \u0628\u0627\u0634\u062F" }),
+  referrer_name: external_exports.string().trim().min(2, "\u0646\u0627\u0645 \u0645\u0639\u0631\u0641 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").max(80, "\u0646\u0627\u0645 \u0645\u0639\u0631\u0641 \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F8\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A"),
+  referrer_phone: GuardianPhoneSchema,
+  /* ۱.۲۷.۶۱ — مسیر معلم هم برای «بدون مدرسه/پایه/کلاس» null می‌فرستد */
+  school_text: external_exports.string().trim().max(120).nullish(),
+  grade_text: external_exports.string().trim().max(40).nullish(),
+  class_text: external_exports.string().trim().max(40).nullish(),
+  token: external_exports.string().trim().max(200).optional(),
+  children: external_exports.array(ReferralChildSchema).min(1, "\u062D\u062F\u0627\u0642\u0644 \u06CC\u06A9 \u06A9\u0648\u062F\u06A9 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A").max(REFERRAL_CHILDREN_MAX, `\u062D\u062F\u0627\u06A9\u062B\u0631 ${REFERRAL_CHILDREN_MAX} \u06A9\u0648\u062F\u06A9 \u062F\u0631 \u0647\u0631 \u062B\u0628\u062A`)
+}).superRefine((v, ctx) => {
+  if (v.role !== "teacher") return;
+  v.children.forEach((c, i) => {
+    const missing = [];
+    if (!c.family_cooperation) missing.push("\u0647\u0645\u06A9\u0627\u0631\u06CC \u062E\u0627\u0646\u0648\u0627\u062F\u0647");
+    if (!c.family_liv) missing.push("\u0633\u0637\u062D \u0645\u0627\u0644\u06CC \u0648 \u0641\u0631\u0647\u0646\u06AF\u06CC \u062E\u0627\u0646\u0648\u0627\u062F\u0647");
+    if (missing.length > 0) {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: ["children", i],
+        message: `\u0628\u0631\u0627\u06CC \u062F\u0627\u0646\u0634\u200C\u0622\u0645\u0648\u0632 \xAB${c.first_name || `\u0631\u062F\u06CC\u0641 ${i + 1}`}\xBB \u0627\u06CC\u0646 \u0641\u06CC\u0644\u062F\u0647\u0627 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A: ${missing.join(" \u0648 ")}`
+      });
+    }
+  });
+});
+var ReferralRejectSchema = external_exports.object({
+  reason: external_exports.string().trim().min(2, "\u062F\u0644\u06CC\u0644 \u0631\u062F \u0644\u0627\u0632\u0645 \u0627\u0633\u062A \u2014 \u0628\u0631\u0627\u06CC \u0645\u0639\u0631\u0641 \u0642\u0627\u0628\u0644 \u0627\u0631\u0633\u0627\u0644 \u0627\u0633\u062A").max(REFERRAL_REJECT_REASON_MAX, `\u062F\u0644\u06CC\u0644 \u0631\u062F \u062D\u062F\u0627\u06A9\u062B\u0631 ${REFERRAL_REJECT_REASON_MAX} \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A`)
+});
+var FormBlockSchema = external_exports.object({
+  kind: external_exports.enum(["text", "longtext", "number", "phone", "select", "multi", "yes_no", "note"], {
+    message: "\u0646\u0648\u0639 \u0628\u0644\u0648\u06A9 \u0645\u0639\u062A\u0628\u0631 \u0646\u06CC\u0633\u062A"
+  }),
+  label: external_exports.string().trim().min(2, "\u0628\u0631\u0686\u0633\u0628 \u0628\u0644\u0648\u06A9 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").max(200, "\u0628\u0631\u0686\u0633\u0628 \u0628\u0644\u0648\u06A9 \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F2\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A"),
+  required: external_exports.boolean().optional().default(false),
+  options: external_exports.array(
+    external_exports.object({
+      value: external_exports.string().trim().min(1, "\u0645\u0642\u062F\u0627\u0631 \u06AF\u0632\u06CC\u0646\u0647 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A").max(40),
+      label: external_exports.string().trim().min(1, "\u0628\u0631\u0686\u0633\u0628 \u06AF\u0632\u06CC\u0646\u0647 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A").max(100)
+    })
+  ).max(12, "\u062D\u062F\u0627\u06A9\u062B\u0631 \u06F1\u06F2 \u06AF\u0632\u06CC\u0646\u0647").optional(),
+  note: external_exports.string().trim().max(2e3, "\u0645\u062A\u0646 \u0635\u0641\u062D\u0647\u0654 \u0622\u06AF\u0627\u0647\u06CC \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F2\u06F0\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").optional()
+}).refine((b) => b.kind === "select" || b.kind === "multi" ? (b.options?.length ?? 0) >= 2 : true, {
+  message: "\u0628\u0631\u0627\u06CC \u0628\u0644\u0648\u06A9 \u0627\u0646\u062A\u062E\u0627\u0628\u060C \u062D\u062F\u0627\u0642\u0644 \u062F\u0648 \u06AF\u0632\u06CC\u0646\u0647 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A"
+}).refine((b) => b.kind === "note" ? Boolean(b.note && b.note.trim().length >= 4) : true, {
+  message: "\u0628\u0631\u0627\u06CC \u0635\u0641\u062D\u0647\u0654 \u0622\u06AF\u0627\u0647\u06CC\u060C \u0645\u062A\u0646 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A"
+});
+var FormUpsertSchema = external_exports.object({
+  title: external_exports.string().trim().min(2, "\u0639\u0646\u0648\u0627\u0646 \u0641\u0631\u0645 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").max(120, "\u0639\u0646\u0648\u0627\u0646 \u0641\u0631\u0645 \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F1\u06F2\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A"),
+  slug: external_exports.string().trim().regex(/^[a-z0-9][a-z0-9-]{2,59}$/, "\u0627\u0633\u0644\u0627\u06AF \u0641\u0642\u0637 \u062D\u0631\u0648\u0641 \u0644\u0627\u062A\u06CC\u0646 \u06A9\u0648\u0686\u06A9\u060C \u0631\u0642\u0645 \u0648 \u062E\u0637\u200C\u062A\u06CC\u0631\u0647 (\u06F3 \u062A\u0627 \u06F6\u06F0 \u0646\u0648\u06CC\u0633\u0647)"),
+  description: external_exports.string().trim().max(500, "\u062A\u0648\u0636\u06CC\u062D \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F5\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").optional(),
+  blocks: external_exports.array(FormBlockSchema).max(60, "\u062D\u062F\u0627\u06A9\u062B\u0631 \u06F6\u06F0 \u0628\u0644\u0648\u06A9 \u062F\u0631 \u0647\u0631 \u0641\u0631\u0645").default([]),
+  published: external_exports.boolean().optional().default(false)
+});
+var FormResponseSubmitSchema = external_exports.object({
+  answers: external_exports.array(
+    external_exports.object({
+      index: external_exports.number().int().min(0, "\u0627\u0646\u062F\u06CC\u0633 \u0628\u0644\u0648\u06A9 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A").max(59),
+      value: external_exports.union([
+        external_exports.string().max(2e3, "\u067E\u0627\u0633\u062E \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F2\u06F0\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A"),
+        external_exports.array(external_exports.string().max(100)).max(12, "\u062D\u062F\u0627\u06A9\u062B\u0631 \u06F1\u06F2 \u0627\u0646\u062A\u062E\u0627\u0628"),
+        external_exports.number().finite("\u067E\u0627\u0633\u062E \u0639\u062F\u062F\u06CC \u0628\u0627\u06CC\u062F \u0639\u062F\u062F \u0628\u0627\u0634\u062F"),
+        external_exports.boolean()
+      ])
+    })
+  ).max(60),
+  respondent_name: external_exports.string().trim().min(2, "\u0646\u0627\u0645 \u067E\u0627\u0633\u062E\u200C\u062F\u0647\u0646\u062F\u0647 \u062D\u062F\u0627\u0642\u0644 \u06F2 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A").max(80),
+  respondent_phone: GuardianPhoneSchema.nullish(),
+  token: external_exports.string().trim().max(200).optional()
+});
 
 // src/core/shared/features.ts
 var FEATURES = {
-  apiKeys: false
+  apiKeys: true
 };
 
 // src/core/errors/errors.ts
@@ -23449,6 +23572,11 @@ var RateLimitError = class extends AppError {
   }
 };
 
+// src/core/shared/multipart.ts
+var HEADERS_MAX = 64 * 1024;
+var dec = new TextDecoder();
+var EMPTY = new Uint8Array(0);
+
 // src/core/auth/jwt.ts
 var JWKS_TTL_MS = 5 * 60 * 1e3;
 var jwksCache = null;
@@ -23510,7 +23638,7 @@ async function verifyAccessToken(token, teamDomain) {
 __name(verifyAccessToken, "verifyAccessToken");
 
 // src/core/auth/session-jwt.ts
-var SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
+var SESSION_TTL_SECONDS = 14 * 24 * 60 * 60;
 function base64UrlEncode(bytes) {
   let bin = "";
   for (const b of bytes) bin += String.fromCharCode(b);
@@ -23604,45 +23732,23 @@ function d1AsSecretStore(db) {
   };
 }
 __name(d1AsSecretStore, "d1AsSecretStore");
-function randomHexSecret() {
-  const bytes = crypto.getRandomValues(new Uint8Array(32));
-  return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-__name(randomHexSecret, "randomHexSecret");
-var cachedSecret = null;
-async function getOrCreateRuntimeSecret(store) {
-  if (cachedSecret) return cachedSecret;
-  const row = await store.queryOne(
+async function resolveSessionSecret(env) {
+  if (env.AUTH_SECRET && env.AUTH_SECRET.length >= 16) return env.AUTH_SECRET;
+  if (isDevEnv(env.ENV)) return DEV_AUTH_SECRET;
+  const row = await d1AsSecretStore(env.DB).queryOne(
     `SELECT value FROM settings WHERE key = ? LIMIT 1`,
     [SETTINGS_AUTH_SECRET_KEY]
   );
   if (row) {
     try {
       const parsed = JSON.parse(row.value);
-      if (typeof parsed === "string" && parsed.length >= 32) {
-        cachedSecret = parsed;
-        return cachedSecret;
-      }
+      if (typeof parsed === "string" && parsed.length >= 32) return parsed;
     } catch {
     }
   }
-  const secret = randomHexSecret();
-  await store.execute(
-    `INSERT INTO settings (key, value, updated_by, updated_at)
-     VALUES (?, ?, NULL, datetime('now'))
-     ON CONFLICT(key) DO UPDATE SET
-       value = excluded.value,
-       updated_at = excluded.updated_at`,
-    [SETTINGS_AUTH_SECRET_KEY, JSON.stringify(secret)]
+  throw new Error(
+    "SEC-12776: \u062F\u0631 \u0645\u062D\u06CC\u0637 \u062A\u0648\u0644\u06CC\u062F AUTH_SECRET \u062A\u0646\u0638\u06CC\u0645 \u0646\u0634\u062F\u0647 \u0627\u0633\u062A \u2014 \u0628\u0627 \xABnpx wrangler secret put AUTH_SECRET\xBB \u0631\u0627\u0632 \u0642\u0648\u06CC (\u062D\u062F\u0627\u0642\u0644 \u06F1\u06F6 \u06A9\u0627\u0631\u0627\u06A9\u062A\u0631) \u0628\u06AF\u0630\u0627\u0631\u06CC\u062F\u061B \u0633\u0627\u062E\u062A \u062E\u0648\u062F\u06A9\u0627\u0631 \u0631\u0627\u0632 \u0646\u0634\u0633\u062A \u062D\u0630\u0641 \u0634\u062F\u0647 \u0627\u0633\u062A."
   );
-  cachedSecret = secret;
-  return secret;
-}
-__name(getOrCreateRuntimeSecret, "getOrCreateRuntimeSecret");
-async function resolveSessionSecret(env) {
-  if (env.AUTH_SECRET && env.AUTH_SECRET.length >= 16) return env.AUTH_SECRET;
-  if (isDevEnv(env.ENV)) return DEV_AUTH_SECRET;
-  return getOrCreateRuntimeSecret(d1AsSecretStore(env.DB));
 }
 __name(resolveSessionSecret, "resolveSessionSecret");
 
@@ -23680,6 +23786,27 @@ async function touchApiKeyLastUsed(db, id) {
 }
 __name(touchApiKeyLastUsed, "touchApiKeyLastUsed");
 
+// src/core/auth/session-cookie.ts
+var SESSION_COOKIE_NAME = "cs_session";
+function buildSessionCookie(token) {
+  return `${SESSION_COOKIE_NAME}=${token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${SESSION_TTL_SECONDS}`;
+}
+__name(buildSessionCookie, "buildSessionCookie");
+function clearSessionCookie() {
+  return `${SESSION_COOKIE_NAME}=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0`;
+}
+__name(clearSessionCookie, "clearSessionCookie");
+function readSessionCookie(cookieHeader) {
+  if (!cookieHeader) return void 0;
+  for (const part of cookieHeader.split(";")) {
+    const idx = part.indexOf("=");
+    if (idx === -1) continue;
+    if (part.slice(0, idx).trim() === SESSION_COOKIE_NAME) return part.slice(idx + 1).trim();
+  }
+  return void 0;
+}
+__name(readSessionCookie, "readSessionCookie");
+
 // src/core/auth/middleware.ts
 var DEV_STAFF_HEADER = "X-Dev-Staff-Id";
 var ACCESS_JWT_HEADER = "Cf-Access-Jwt-Assertion";
@@ -23688,7 +23815,7 @@ function authMiddleware() {
   return async (c, next) => {
     const env = c.env;
     const db = env.DB;
-    if (env.ENV === "development") {
+    if (env.ENV === "development" && env.DEV_IMPERSONATION === "1") {
       const devStaffId = c.req.header(DEV_STAFF_HEADER);
       if (devStaffId) {
         const staff2 = await getStaffById(db, devStaffId);
@@ -23728,17 +23855,31 @@ function authMiddleware() {
       return next();
     }
     const authHeader = c.req.header("Authorization");
-    if (authHeader?.startsWith("Bearer ")) {
-      const sessionToken = authHeader.slice(7).trim();
+    const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : void 0;
+    const fromCookie = !bearerToken;
+    const sessionToken = fromCookie ? readSessionCookie(c.req.header("Cookie")) : bearerToken;
+    if (sessionToken) {
+      if (fromCookie) {
+        const method = c.req.method.toUpperCase();
+        const origin = c.req.header("Origin");
+        if (method !== "GET" && method !== "HEAD" && method !== "OPTIONS" && origin) {
+          if (origin !== new URL(c.req.url).origin) {
+            throw new ForbiddenError("\u062F\u0631\u062E\u0648\u0627\u0633\u062A \u0628\u06CC\u0646\u200C\u0645\u0628\u062F\u0623 \u0628\u0627 \u06A9\u0648\u06A9\u06CC \u0646\u0634\u0633\u062A \u0645\u062C\u0627\u0632 \u0646\u06CC\u0633\u062A");
+          }
+        }
+      }
       const payload2 = await verifySessionJwt(sessionToken, await resolveSessionSecret(env));
       if (payload2) {
         if (!payload2.sid) {
           throw new AuthError("\u062A\u0648\u06A9\u0646 \u0641\u0627\u0642\u062F \u0634\u0646\u0627\u0633\u0647\u0654 \u0646\u0634\u0633\u062A \u0627\u0633\u062A \u2014 \u0648\u0631\u0648\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A");
         }
         const nowIso = (/* @__PURE__ */ new Date()).toISOString();
-        const session = await db.prepare("SELECT revoked_at, expires_at FROM auth_sessions WHERE sid = ?").bind(payload2.sid).first();
+        const session = await db.prepare("SELECT revoked_at, expires_at, staff_id FROM auth_sessions WHERE sid = ?").bind(payload2.sid).first();
         if (!session || session.revoked_at !== null || session.expires_at <= nowIso) {
           throw new AuthError("\u0646\u0634\u0633\u062A \u0628\u0627\u0637\u0644 \u06CC\u0627 \u0645\u0646\u0642\u0636\u06CC \u0634\u062F\u0647 \u0627\u0633\u062A \u2014 \u0648\u0631\u0648\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A");
+        }
+        if (session.staff_id !== payload2.sub) {
+          throw new AuthError("\u0646\u0634\u0633\u062A \u0628\u0647 \u06A9\u0627\u0631\u0628\u0631 \u062F\u06CC\u06AF\u0631\u06CC \u062A\u0639\u0644\u0642 \u062F\u0627\u0631\u062F \u2014 \u0648\u0631\u0648\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u0644\u0627\u0632\u0645 \u0627\u0633\u062A");
         }
         const staff2 = await getStaffById(db, payload2.sub);
         if (!staff2 || staff2.active !== 1) {
@@ -27834,6 +27975,13 @@ function createGamesService(deps) {
 }
 __name(createGamesService, "createGamesService");
 
+// src/core/shared/csp.ts
+var PUBLIC_PAGE_CSP = "default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
+function safeJsonEmbed(v) {
+  return JSON.stringify(v ?? null).replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
+}
+__name(safeJsonEmbed, "safeJsonEmbed");
+
 // src/domain/games/page.ts
 var FA_DIGITS = "\u06F0\u06F1\u06F2\u06F3\u06F4\u06F5\u06F6\u06F7\u06F8\u06F9";
 function faNum(n) {
@@ -27841,7 +27989,7 @@ function faNum(n) {
 }
 __name(faNum, "faNum");
 function esc2(s) {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 __name(esc2, "esc");
 function skinLink(kind) {
@@ -27906,28 +28054,8 @@ function page(model, token, body) {
 </head>
 <body>
 <div class="wrap">${body}</div>
-<script>
-(function () {
-  var TOKEN = ${JSON.stringify(token)};
-  function post(path, body) {
-    return fetch('/api/m/' + TOKEN + path, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body || {})
-    }).then(function (r) { return r.json(); }).then(function () { location.reload(); })
-      .catch(function () { location.reload(); });
-  }
-  var bind = function (id, path, body) {
-    var el = document.getElementById(id);
-    if (el) el.addEventListener('click', function () { el.disabled = true; post(path, body); });
-  };
-  bind('btn-start', '/start');
-  bind('btn-gate-open', '/parent-gate', {});
-  bind('btn-gate-solve', '/parent-gate', { solve: true });
-  var c1 = document.getElementById('btn-confirm1');
-  if (c1) c1.addEventListener('click', function () { c1.disabled = true; post('/confirm'); });
-})();
-</script>
+<script type="application/json" id="page-boot">${safeJsonEmbed(token)}</script>
+<script src="/assets/play/page-boot.js?v=${APP_VERSION}" defer></script>
 </body>
 </html>`;
 }
@@ -28323,7 +28451,7 @@ function registerGamesPublicRoutes(app, service) {
         "Content-Type": "text/html; charset=utf-8",
         "Cache-Control": "no-store",
         "X-Robots-Tag": "noindex, nofollow",
-        "Content-Security-Policy": "default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+        "Content-Security-Policy": PUBLIC_PAGE_CSP
       }
     });
   });
@@ -28337,7 +28465,7 @@ function registerGamesPublicRoutes(app, service) {
         "Content-Type": "text/html; charset=utf-8",
         "Cache-Control": "no-store",
         "X-Robots-Tag": "noindex, nofollow",
-        "Content-Security-Policy": "default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+        "Content-Security-Policy": PUBLIC_PAGE_CSP
       }
     });
   });
@@ -28635,6 +28763,7 @@ function registerAuthRoutes(app, deps) {
       resourceId: staff.id
     });
     deps.logger.child("auth").info("login.ok", { role: staff.role });
+    c.header("Set-Cookie", buildSessionCookie(token));
     return c.json(
       {
         data: {
@@ -28669,6 +28798,7 @@ function registerLogoutRoute(app, deps) {
       resourceId: ctx.staffId
     });
     deps.logger.child("auth").info("logout.ok", { role: ctx.role });
+    c.header("Set-Cookie", clearSessionCookie());
     return c.json({ data: { ok: true } }, 200);
   });
 }
@@ -28747,14 +28877,18 @@ __name(makeRateLimiter, "makeRateLimiter");
 var API_RATE_LIMIT_PER_MIN_DEFAULT = 240;
 var API_RATE_LIMIT_PER_MIN_MAX = 1e4;
 var API_RATE_LIMIT_WINDOW_MS = 6e4;
-function parseApiRateLimitPerMin(raw2) {
+function parsePerMinWithDefault(raw2, fallback) {
   if (raw2 === null || raw2 === void 0 || typeof raw2 === "string" && raw2.trim() === "") {
-    return API_RATE_LIMIT_PER_MIN_DEFAULT;
+    return fallback;
   }
   const n = typeof raw2 === "string" ? Number(raw2.trim()) : Number(raw2);
-  if (!Number.isFinite(n) || n < 0) return API_RATE_LIMIT_PER_MIN_DEFAULT;
+  if (!Number.isFinite(n) || n < 0) return fallback;
   if (n === 0) return 0;
   return Math.min(Math.trunc(n), API_RATE_LIMIT_PER_MIN_MAX);
+}
+__name(parsePerMinWithDefault, "parsePerMinWithDefault");
+function parseApiRateLimitPerMin(raw2) {
+  return parsePerMinWithDefault(raw2, API_RATE_LIMIT_PER_MIN_DEFAULT);
 }
 __name(parseApiRateLimitPerMin, "parseApiRateLimitPerMin");
 function makeKeyedRateLimiter(windowMs, maxKeys = 4096) {
@@ -28790,6 +28924,69 @@ function makeKeyedRateLimiter(windowMs, maxKeys = 4096) {
 }
 __name(makeKeyedRateLimiter, "makeKeyedRateLimiter");
 
+// src/application/http/chain.ts
+function installRequestId(app, path = "/api/*") {
+  app.use(path, async (c, next) => {
+    const requestId = `req-${crypto.randomUUID()}`;
+    c.set("requestId", requestId);
+    try {
+      return await runWithRequestId(requestId, () => next());
+    } finally {
+      c.header("X-Request-Id", requestId);
+    }
+  });
+}
+__name(installRequestId, "installRequestId");
+function installWriteRateLimit(app, opts = {}) {
+  const path = opts.path ?? "/api/*";
+  const exceptions = opts.exceptionPaths ?? ["/api/auth/login"];
+  const keyPrefix = opts.keyPrefix ?? "";
+  const message = opts.message ?? "\u062F\u0631\u062E\u0648\u0627\u0633\u062A\u200C\u0647\u0627\u06CC \u0646\u0648\u0634\u062A\u0646\u06CC \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0645\u062C\u0627\u0632 \u0627\u0633\u062A \u2014 \u06A9\u0645\u06CC \u0628\u0639\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F";
+  const apiRateLimiter = makeKeyedRateLimiter(API_RATE_LIMIT_WINDOW_MS);
+  let disabledLogged = false;
+  app.use(path, async (c, next) => {
+    if (c.req.method !== "POST" && c.req.method !== "PUT" && c.req.method !== "PATCH" && c.req.method !== "DELETE") {
+      return next();
+    }
+    if (exceptions.includes(c.req.path)) return next();
+    const perMin = parseApiRateLimitPerMin(c.env?.API_RATE_LIMIT_PER_MIN);
+    if (perMin <= 0) {
+      if (opts.onDisabled && !disabledLogged) {
+        disabledLogged = true;
+        opts.onDisabled();
+      }
+      return next();
+    }
+    const ip = (c.req.header("cf-connecting-ip") ?? "unknown").slice(0, 64);
+    if (!apiRateLimiter.allow(`${keyPrefix}${perMin}:${ip}`, perMin)) {
+      c.header("Retry-After", String(Math.ceil(API_RATE_LIMIT_WINDOW_MS / 1e3)));
+      throw new RateLimitError(Math.ceil(API_RATE_LIMIT_WINDOW_MS / 1e3), message);
+    }
+    return next();
+  });
+}
+__name(installWriteRateLimit, "installWriteRateLimit");
+function installNoStore(app, path = "/api/*") {
+  app.use(path, async (c, next) => {
+    await next();
+    c.header("Cache-Control", "no-store");
+  });
+}
+__name(installNoStore, "installNoStore");
+function installNotFound(app, message) {
+  app.notFound(
+    (c) => c.json(message ? { error: "NOT_FOUND", message } : { error: "NOT_FOUND" }, 404)
+  );
+}
+__name(installNotFound, "installNotFound");
+function applyGenericChain(app, opts = {}) {
+  installRequestId(app, opts.requestIdPath ?? "/api/*");
+  if (opts.writeLimit) installWriteRateLimit(app, opts.writeLimit);
+  installNoStore(app, opts.noStorePath ?? "/api/*");
+  if (opts.notFound !== null) installNotFound(app, opts.notFound?.message);
+}
+__name(applyGenericChain, "applyGenericChain");
+
 // src/application/games-standalone/index.ts
 function createGamesApp(deps) {
   const { db, audit, logger } = deps;
@@ -28806,32 +29003,9 @@ function createGamesApp(deps) {
     c.set("logger", logger);
     return next();
   });
-  app.use("/api/*", async (c, next) => {
-    const requestId = `req-${crypto.randomUUID()}`;
-    c.set("requestId", requestId);
-    try {
-      return await runWithRequestId(requestId, () => next());
-    } finally {
-      c.header("X-Request-Id", requestId);
-    }
-  });
-  const apiRateLimiter = makeKeyedRateLimiter(API_RATE_LIMIT_WINDOW_MS);
-  app.use("/api/*", async (c, next) => {
-    if (c.req.method !== "POST" && c.req.method !== "PUT" && c.req.method !== "PATCH" && c.req.method !== "DELETE") {
-      return next();
-    }
-    if (c.req.path === "/api/auth/login") return next();
-    const perMin = parseApiRateLimitPerMin(c.env?.API_RATE_LIMIT_PER_MIN);
-    if (perMin <= 0) return next();
-    const ip = (c.req.header("cf-connecting-ip") ?? "unknown").slice(0, 64);
-    if (!apiRateLimiter.allow(`${perMin}:${ip}`, perMin)) {
-      c.header("Retry-After", String(Math.ceil(API_RATE_LIMIT_WINDOW_MS / 1e3)));
-      throw new RateLimitError(
-        Math.ceil(API_RATE_LIMIT_WINDOW_MS / 1e3),
-        "\u062F\u0631\u062E\u0648\u0627\u0633\u062A\u200C\u0647\u0627\u06CC \u0646\u0648\u0634\u062A\u0646\u06CC \u0628\u06CC\u0634 \u0627\u0632 \u062D\u062F \u0645\u062C\u0627\u0632 \u0627\u0633\u062A \u2014 \u06A9\u0645\u06CC \u0628\u0639\u062F \u062F\u0648\u0628\u0627\u0631\u0647 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F"
-      );
-    }
-    return next();
+  applyGenericChain(app, {
+    writeLimit: { exceptionPaths: ["/api/auth/login"] },
+    notFound: { message: "\u0645\u0633\u06CC\u0631 \u062F\u0631\u062E\u0648\u0627\u0633\u062A\u06CC \u06CC\u0627\u0641\u062A \u0646\u0634\u062F" }
   });
   app.use("*", async (c, next) => {
     await next();
@@ -28841,10 +29015,6 @@ function createGamesApp(deps) {
     c.header("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
     c.header("Cross-Origin-Opener-Policy", "same-origin");
     c.header("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
-  });
-  app.use("/api/*", async (c, next) => {
-    await next();
-    c.header("Cache-Control", "no-store");
   });
   app.use("*", async (c, next) => {
     const start = Date.now();
@@ -28888,7 +29058,7 @@ function createGamesApp(deps) {
   app.get("/api/me", (c) => c.json({ data: c.get("authContext") }, 200));
   registerGamesRoutes(app, games);
   app.onError(errorHandler2);
-  app.notFound((c) => c.json({ error: "NOT_FOUND", message: "\u0645\u0633\u06CC\u0631 \u062F\u0631\u062E\u0648\u0627\u0633\u062A\u06CC \u06CC\u0627\u0641\u062A \u0646\u0634\u062F" }, 404));
+  installNotFound(app, "\u0645\u0633\u06CC\u0631 \u062F\u0631\u062E\u0648\u0627\u0633\u062A\u06CC \u06CC\u0627\u0641\u062A \u0646\u0634\u062F");
   return app;
 }
 __name(createGamesApp, "createGamesApp");

@@ -49,7 +49,7 @@ npm run restore:drill -- --file backups/local-backup-*.json --note "D1 محلی 
 npm run restore:drill -- --file <backup.json> --report docs/reports/restore-drill-<YYYY-MM-DD>.md --note "خروجی زندهٔ پروداکشن، <تاریخ>، توسط <نام>"
 ```
 - `--report` اختیاری است (پیش‌فرض همان مسیر بالا با تاریخ UTC امروز)؛ `--note` منشأ فایل را در گزارش ثبت می‌کند — همیشه بنویسید.
-- **PASS ✅:** همهٔ بررسی‌ها سبز؛ گزارش را کامیت کنید (همین evidence در مخزن، شاهد ماه است).
+- **PASS ✓:** همهٔ بررسی‌ها سبز؛ گزارش را کامیت کنید (همین evidence در مخزن، شاهد ماه است).
 - **قاعدهٔ مقایسهٔ checksum:** checksum جدولی که در آن ماه تغییر داده‌ای نداشته باید ثابت بماند؛
   ثابت‌ماندنِ غیرمنتظره یا تغییرِ غیرمنتظره هر دو پرسش می‌خواهند.
 
@@ -74,4 +74,4 @@ FAIL یعنی فایل پشتیبانِ آن ماه **به‌عنوان مسیر
 
 | تاریخ | فایل | نتیجه | RTO | یادداشت |
 |---|---|---|---|---|
-| 2026-11-11 | `backups/local-backup-2026-11-11.json` (D1 محلی + seed — npm run backup:local) | ✅ PASS | ۲۰ میلی‌ثانیه | نخستین drill — گزارش: `docs/reports/restore-drill-2026-11-11.md`؛ ۸۷ جدول/۳۱۴ ردیف، هم‌خوانی کامل با ۸۷ CREATE TABLE |
+| 2026-11-11 | `backups/local-backup-2026-11-11.json` (D1 محلی + seed — npm run backup:local) | ✓ PASS | ۲۰ میلی‌ثانیه | نخستین drill — گزارش: `docs/reports/restore-drill-2026-11-11.md`؛ ۸۷ جدول/۳۱۴ ردیف، هم‌خوانی کامل با ۸۷ CREATE TABLE |
