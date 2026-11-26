@@ -49,7 +49,8 @@
     "smoke:engine:adapter": "SMOKE_ENGINE=adapter node scripts/engine/engine-smoke.mjs",
     "audit:sec": "node scripts/sec-audit.mjs",
     "bench:complexity": "node scripts/complexity-bench.mjs",
-    "bench:gate": "node scripts/complexity-bench.mjs --gate"
+    "bench:gate": "node scripts/complexity-bench.mjs --gate",
+    "e2e:browser": "playwright test"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.5",
@@ -60,9 +61,11 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250109.0",
+    "@playwright/test": "1.65.1",
     "@types/node": "^22.20.5",
     "esbuild": "^0.28.2",
     "fast-check": "^4.10.2",
+    "playwright": "1.65.1",
     "typescript": "^5.7.3",
     "vitest": "^2.1.8",
     "web-vitals": "^6.2.3",
