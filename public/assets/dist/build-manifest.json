@@ -1,6 +1,6 @@
 {
   "_comment": "مانیفست باندل کلاینت؛ گات بودجه (perf-budget.mjs) از این می‌خواند. فایل ساخته‌شده است — دستی ویرایش نشود.",
-  "boot": "boot.FLHKL2GG.js",
+  "boot": "boot.XZUS2OE5.js",
   "bootImports": [
     "chunk.KPX3C6MD.js",
     "chunk.WGMG7WXI.js",
@@ -29,16 +29,16 @@
       "role": "lazy"
     },
     {
-      "name": "boot.FLHKL2GG.js",
-      "raw": 70699,
-      "gz": 22711,
-      "role": "boot"
+      "name": "boot.MQEFWFHN.js",
+      "raw": 1202,
+      "gz": 717,
+      "role": "lazy"
     },
     {
-      "name": "boot.LXVOQTXA.js",
-      "raw": 1202,
-      "gz": 718,
-      "role": "lazy"
+      "name": "boot.XZUS2OE5.js",
+      "raw": 70699,
+      "gz": 22710,
+      "role": "boot"
     },
     {
       "name": "bug-report.KEPLYFXX.js",
@@ -56,12 +56,6 @@
       "name": "center-kpi.USZMP7L5.js",
       "raw": 7282,
       "gz": 2873,
-      "role": "lazy"
-    },
-    {
-      "name": "chunk.2GMSIASV.js",
-      "raw": 362,
-      "gz": 265,
       "role": "lazy"
     },
     {
@@ -125,6 +119,18 @@
       "role": "lazy"
     },
     {
+      "name": "chunk.CGZW5X34.js",
+      "raw": 362,
+      "gz": 265,
+      "role": "lazy"
+    },
+    {
+      "name": "chunk.CY4VYLSK.js",
+      "raw": 23115,
+      "gz": 7009,
+      "role": "lazy"
+    },
+    {
       "name": "chunk.EDER3AUA.js",
       "raw": 40226,
       "gz": 11471,
@@ -177,12 +183,6 @@
       "raw": 2093,
       "gz": 945,
       "role": "boot-dep"
-    },
-    {
-      "name": "chunk.L2THVWZJ.js",
-      "raw": 23115,
-      "gz": 7009,
-      "role": "lazy"
     },
     {
       "name": "chunk.LF5IRNMU.js",
@@ -257,9 +257,9 @@
       "role": "lazy"
     },
     {
-      "name": "cloud-setup.IEQ2BCTL.js",
+      "name": "cloud-setup.WWTKYUBU.js",
       "raw": 19559,
-      "gz": 6758,
+      "gz": 6759,
       "role": "lazy"
     },
     {
@@ -317,7 +317,7 @@
       "role": "lazy"
     },
     {
-      "name": "health-panel.NYR2HRY7.js",
+      "name": "health-panel.GIWI6JVL.js",
       "raw": 63262,
       "gz": 17962,
       "role": "lazy"
@@ -341,9 +341,9 @@
       "role": "lazy"
     },
     {
-      "name": "panel.TWMDUFVE.js",
+      "name": "panel.CTDHZN3F.js",
       "raw": 4211,
-      "gz": 1563,
+      "gz": 1562,
       "role": "lazy"
     },
     {
@@ -359,7 +359,7 @@
       "role": "lazy"
     },
     {
-      "name": "runner.TXRLOVLB.js",
+      "name": "runner.BQLYLTK6.js",
       "raw": 583,
       "gz": 331,
       "role": "lazy"
@@ -437,7 +437,7 @@
       "role": "lazy"
     },
     {
-      "name": "version.HI4L3QIC.js",
+      "name": "version.YDPCRDFJ.js",
       "raw": 134,
       "gz": 125,
       "role": "lazy"
@@ -458,6 +458,6 @@
   "totals": {
     "files": 74,
     "raw": 1377754,
-    "gz": 447970
+    "gz": 447968
   }
 }

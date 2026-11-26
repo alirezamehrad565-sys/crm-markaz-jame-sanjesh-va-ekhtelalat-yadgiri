@@ -79,6 +79,6 @@ describe('گیت فرانت ۱.۲۵.۸۱ — پیش‌نمایش از نگاه �
     expect(previewPage).toContain('/assets/public/preview-form.js');
     expect(publicForm).toContain('export function familySectionsOf');
     // نسخه
-    expect(version).toContain("APP_VERSION = '1.27.83'");
+    expect(version).toContain("APP_VERSION = '1.27.84'");
   });
 });

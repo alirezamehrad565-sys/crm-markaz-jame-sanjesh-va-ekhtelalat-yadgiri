@@ -197,11 +197,12 @@
           "detail": "نقشهٔ aliasها (@core/*، @domain/*، @app/*) جهت مجاز را مؤید ساختار three-layer نشان می‌دهد؛ سه import فوق جهت وارونه‌اند. در کل src/domain هیچ import دیگری از @app یافت نشد (grep)."
         }
       ],
-      "status": "new",
+      "status": "fixed",
       "verification": {
         "status": "not-required",
         "counterevidence": [],
-        "note": ""
+        "note": "",
+        "lifecycle_note": "release 1.27.84 (sdt161) — pageParams به @core/shared/http-params رفت (@app/http فقط re-export سازگاری)؛ import مردهٔ SettingsService حذف — grep «from '@app/» در src/domain = صفر + گیت دائمی arch-domain-edges"
       },
       "remediation": {
         "observable_effect": "استفادهٔ مجدد از ماژول‌های document-requests/student-profile در میزبان دیگر بدون کشیدن @app/settings و @app/http ممکن نیست.",
@@ -301,11 +302,12 @@
           "detail": "import { assertNoAssessmentBlockInRange } from '@domain/assessment-blocks' و week-copy.ts:8 هم‌الگو — یال مقدار دیگر؛ جمع یال‌ها: appointment-core→assessment-blocks×۲، finance/clearbook/docs/knowledge→exercise-bank×۶، working-day→attendance (type)، clinical-engine→case-events (type)×۴، ot-engine→clinical-engine (مقدار)، clinical-engine→case-formulation (مقدار)."
         }
       ],
-      "status": "new",
+      "status": "fixed",
       "verification": {
         "status": "not-required",
         "counterevidence": [],
-        "note": ""
+        "note": "",
+        "lifecycle_note": "release 1.27.84 (sdt161) — برش‌های SNAP/SCARED به @core/shared/cutoffs، گروه اعتبارسنجی فایل به file-sanitize و پارسر multipart به shared/multipart رفت؛ یال‌های مقدار تمرین↔مالی/کلیربوک/اسناد/دانش و ot↔clinical حذف؛ چهار یال باقی‌مانده فقط-تایپ/عمدی در design.md §۱۱ ثبت و گیت کد↔سند را قفل می‌کند (کامنت حل circular هم یال‌محو شد)"
       },
       "remediation": {
         "observable_effect": "قاعدهٔ معماری در کد دوپهلو است: خواننده نمی‌داند کدام یال domain→domain مجاز است؛ چرخه‌های بالقوه فقط با ترتیب ساخت در createServices مهار می‌شوند.",
@@ -349,11 +351,12 @@
           "detail": "main = \"worker/entry.js\" — worker/ واحد استقرار مستقل ورکر است؛ scoring.d.ts فقط تایپ آن را به src می‌دهد؛ پیوند سه‌گانهٔ فوق این مرز را در زمان کامپایل می‌دوزد و خارج از قالب aliasهای tsconfig است."
         }
       ],
-      "status": "new",
+      "status": "fixed",
       "verification": {
         "status": "not-required",
         "counterevidence": [],
-        "note": ""
+        "note": "",
+        "lifecycle_note": "release 1.27.84 (sdt161) — هستهٔ scoring به src/core/scoring رفت (worker/scoring فقط shim)؛ ورودی خالص scoringBoardData/scoringBoardForEnv؛ /api/dashboard/kpis دیگر Request مصنوعی نمی‌سازد (kpi-source مستقیم) — گیت دائمی «صفر import به worker/»"
       },
       "remediation": {
         "observable_effect": "تغییر سورس scoring بدون رعایت هم‌زمانی باندل ورکر و باندل اصلی می‌تواند دو رفتار نسخه‌پریش بسازد؛ مسیر نسبی بیرون از src نیز قرارداد aliasهای پروژه را می‌شکند.",
@@ -397,11 +400,12 @@
           "detail": "import مقدار از '../node-sync' (خط ۶۷) و import type آن (خط ۶۸) — کامنت خط ۸ صراحتاً به NODE_PUSH_DOMAIN_SET در src/node-sync/service.ts ارجاع می‌دهد («هم‌سطح — آینهٔ فهرست سفید سمت ابر»)؛ مرز مسئولیت internal-sync (استقرار) با node-sync (قرارداد نود) در پوشه‌های جدا اما یال‌دار."
         }
       ],
-      "status": "new",
+      "status": "fixed",
       "verification": {
         "status": "not-required",
         "counterevidence": [],
-        "note": ""
+        "note": "",
+        "lifecycle_note": "release 1.27.84 (sdt161) — خانوادهٔ سینک زیر ریشهٔ واحد @sync/* (پنج alias در tsconfig+vitest؛ esbuild همان paths)؛ همهٔ importهای نسبی بین‌خانواده‌ای و سه mount api-routing alias شدند؛ نقشهٔ یال‌های مجاز در node-sync.md §یال‌های مجاز + گیت arch-sync-edges پنج‌سناریویی"
       },
       "remediation": {
         "observable_effect": "کشف «چه چیزی سینک است» نیازمند مرور شش پوشهٔ پراکنده است؛ alias و مسیر نسبی در یک فایل، ابزارهای خودکار مرزها را کور می‌کند.",

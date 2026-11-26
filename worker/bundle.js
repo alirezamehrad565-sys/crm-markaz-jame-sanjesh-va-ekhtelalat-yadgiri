@@ -24224,7 +24224,7 @@ async function verifyAccessToken(token, teamDomain) {
 __name(verifyAccessToken, "verifyAccessToken");
 
 // src/core/auth/session-jwt.ts
-var SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
+var SESSION_TTL_SECONDS = 14 * 24 * 60 * 60;
 function base64UrlEncode(bytes) {
   let bin = "";
   for (const b of bytes) bin += String.fromCharCode(b);
@@ -43131,7 +43131,7 @@ function safeJsonEmbed2(v) {
 __name(safeJsonEmbed2, "safeJsonEmbed");
 
 // src/core/version.ts
-var APP_VERSION = "1.27.83";
+var APP_VERSION = "1.27.84";
 var NODE_MIN_VERSION = "1.26.0";
 
 // src/domain/case-events/public-form.ts
