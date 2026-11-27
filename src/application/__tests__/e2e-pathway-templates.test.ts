@@ -75,10 +75,11 @@ describe('مدیریت قالب‌های مسیر (CRUD /api/pathway-templates)'
     { title: 'جلسهٔ ۲ — تمرین ساختمان واژه', items: [{ type: 'homework', text: 'برگهٔ تمرین خانواده + ثبت زمان' }] }
   ];
 
-  it('فهرست خالی → ۲۰۰', async () => {
+  it('فهرست بدون قالب کاربری → ۲۰۰ (فقط قالب‌های سیستمی 0128 می‌نشینند)', async () => {
     const res = await ali.get('/api/pathway-templates');
     expect(res.status).toBe(200);
-    expect(dataOf<TemplateBody[]>(res)).toHaveLength(0);
+    // seed 0128 هفت قالب سیستمی می‌آورد؛ این آزمون نبودِ قالب کاربری را می‌سنجد
+    expect(dataOf<TemplateBody[]>(res).filter((t) => !t.key.startsWith('sys-'))).toHaveLength(0);
   });
 
   it('ساخت قالب با جلسات → ۲۰۱ + summary کامل؛ RBAC منشی ۴۰۳؛ درمانگر دیگر ۲۰۱', async () => {

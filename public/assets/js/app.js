@@ -69,6 +69,7 @@ const NAV = [
   { hash: '#/working-day', label: 'روز کاری', icon: 'board', group: 'امروز', roles: ['manager', 'secretary', 'therapist'] },
   { hash: '#/screening', label: 'سنجش روزانه', icon: 'checklist', group: 'امروز', roles: ['manager', 'secretary'] },
   { hash: '#/reports', label: 'آمار دوره', icon: 'trendingUp', group: 'ارزیابی و درمان', roles: ['manager', 'secretary'] },
+  { hash: '#/reports', label: 'آمار من', icon: 'trendingUp', group: 'ارزیابی و درمان', roles: ['therapist'] }, // الگوی دو-ورودی «تقویم نوبت‌ها» — آمار شخصی درمانگر از /api/dashboard/me (نمای my-stats)
   { hash: '#/staff', label: 'کارکنان', icon: 'users', group: 'مرکز', roles: ['manager'] },
   { hash: '#/schools', label: 'مدارس', icon: 'school', group: 'دانش‌آموزان', roles: ['manager', 'secretary'] },
   { hash: '#/students', label: 'دانش‌آموزان', icon: 'student', group: 'دانش‌آموزان' },
@@ -178,10 +179,18 @@ window.addEventListener('waitlist:changed', updateWaitlistBadge);
 
 async function updateTodosBadge() {
   const badge = document.querySelector('.nav__badge--todos');
-  if (!badge || !session.user || (session.user.role !== 'manager' && session.user.role !== 'secretary')) return;
+  if (!badge || !session.user) return;
+  const role = session.user.role;
+  const isOffice = role === 'manager' || role === 'secretary';
+  if (!isOffice && role !== 'therapist') return;
   try {
-    const res = await api.getDetached('/api/todos?box=inbox'); // پوسته‌محور
-    const attention = res.badge?.attention ?? 0;
+    /* درمانگر: همان بج روی همان عنصر، اما منبعش /api/dashboard/me است —
+       missingNotes (گزارش جلسهٔ ثبت‌نشده) + pendingSurveys.count (پرسشنامهٔ در انتظارِ خانواده؛
+       فیلدهای ADDITIVE — غیبت هر دو tolerated با ?? 0) — شکست بی‌صدا (ممیزی UX: درمانگر قبلاً هیچ بجی نمی‌دید) */
+    const res = isOffice
+      ? await api.getDetached('/api/todos?box=inbox') // پوسته‌محور
+      : await api.getDetached('/api/dashboard/me'); // پوسته‌محور
+    const attention = isOffice ? (res.badge?.attention ?? 0) : (res.data?.missingNotes ?? 0) + (res.data?.pendingSurveys?.count ?? 0);
     if (attention > 0) {
       badge.textContent = fa(attention);
       badge.hidden = false;
@@ -521,10 +530,16 @@ register('#/my-attendance', { title: 'روز کاری', render: (c) => { locatio
 register('#/my-reports', { title: 'روز کاری', render: (c) => { location.hash = '#/working-day'; } });
 register('#/screening', { title: 'سنجش روزانه', render: roleOnly(['manager', 'secretary'], lazyView(() => import('./views/screening.js'), 'renderScreening', '#/screening')) }); // — غربال نوآموزان
 register('#/attendance', { title: 'روز کاری', render: (c) => { location.hash = '#/working-day'; } }); // — مسیر قدیمی
+/* «آمار من» درمانگر: GET /api/dashboard/me در نمای views/my-stats.js رندر می‌شود — بونس قدیمی
+   «#/reports → روز کاری» برداشته شد (ممیزی UX: درمانگر هیچ نمای آماری خودش را نداشت).
+   دفتر (مدیر/منشی) و ناظر همان گزارش دوره را می‌بینند — رفتارشان دست‌نخورده.
+   lazyView my-stats بدون hash ثبت می‌شود تا viewChunks['#/reports'] (پیش‌بارگذاری هاور/فوکوس)
+   همچنان چانک گزارش دوره را بگیرد — همین قرارِ قبلی. */
+const myStatsView = lazyView(() => import('./views/my-stats.js'), 'renderMyStats');
 register('#/reports', {
   title: 'گزارش‌ها',
   render: (c) => {
-    if (session.user?.role === 'therapist') { location.hash = '#/working-day'; return; }
+    if (session.user?.role === 'therapist') return myStatsView(c);
     return reportsView(c);
   }
 });

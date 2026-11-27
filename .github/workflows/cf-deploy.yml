@@ -2,6 +2,8 @@ name: Deploy (Cloudflare)
 # انتشار خودکار تولیدی با هر پوش مؤثر روی main:
 # پشتیبان D1 → مایگریشن → deploy → دروازهٔ سلامت ×۳ → رولبک خودکار (scripts/update-remote.mjs)
 # اعتبارها از رازهای مخزن: CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID
+# گیت انتشار: ابتدا ci.yml (workflow_call — job «ci-gates») باید سبز شود؛ سپس deploy
+# در environment: production اجرا می‌شود (امکان تأیید دستی/قواعد حفاظت در تنظیمات مخزن)
 on:
   push:
     branches: [main]
@@ -30,13 +32,37 @@ permissions:
   contents: read
 
 jobs:
+  # دروازهٔ انتشار — همان گیت‌های ci.yml به‌صورت workflow_call؛ deploy تنها پس از سبزی آن اجرا می‌شود
+  ci-gates:
+    name: CI gates (تایپ، آزمون، بودجه، امنیت و بسته‌سازی)
+    uses: ./.github/workflows/ci.yml
+    timeout-minutes: 60
+
   deploy:
     name: backup → migrate → deploy → health ×3
+    needs: ci-gates
+    environment: production
     runs-on: ubuntu-latest
+    # پین صریح wrangler — با نسخهٔ قفل‌شدهٔ مخزن (package-lock.json) هم‌مِهری دارد؛
+    # گام «کنترل پین wrangler» بعد از npm ci هر انحراف را سریع قرمز می‌کند.
+    env:
+      WRANGLER_VERSION: 3.114.17
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: actions/setup-node@v4
+      # پیش‌پرواز سریع: نبودِ توکن باید در چند ثانیه قرمز شود، نه وسط دیپلوی.
+      - name: پیش‌پرواز — کنترل وجود توکن Cloudflare
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -z "${CLOUDFLARE_API_TOKEN}" ]; then
+            echo "::error::راز CLOUDFLARE_API_TOKEN خالی است — در GitHub → Settings → Secrets and variables → Actions هر دو راز CLOUDFLARE_API_TOKEN و CLOUDFLARE_ACCOUNT_ID را بسازید و دوباره اجرا کنید."
+            exit 1
+          fi
+          echo "پیش‌پرواز: توکن Cloudflare موجود است ✓"
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 24
           cache: npm
@@ -44,18 +70,30 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # پین wrangler: اجرای اسکریپت انتشار با npx همیشه از node_modules محلی می‌گیرد؛
+      # این گام فقط تضمین می‌کند همان پین ۳.۱۱۴.۱۷ نصب شده باشد.
+      - name: کنترل پین wrangler
+        run: |
+          INSTALLED="$(npx --no-install wrangler --version | tail -n 1 | tr -d ' ')"
+          echo "wrangler نصب‌شده: ${INSTALLED} — پین مورد انتظار: ${WRANGLER_VERSION}"
+          case "${INSTALLED}" in
+            *"${WRANGLER_VERSION}"*) echo "پین wrangler: ✓" ;;
+            *) echo "::error::نسخهٔ wrangler (${INSTALLED}) با پین ${WRANGLER_VERSION} یکی نیست — package-lock.json را همگام کنید (npm i -D wrangler@${WRANGLER_VERSION})."; exit 1 ;;
+          esac
+
       - name: انتشار تولیدی (update-remote)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SKIP_BACKUP: ${{ inputs.skip_backup }}
         run: |
           ARGS="--yes"
-          if [ "${{ inputs.skip_backup }}" = "true" ]; then ARGS="--yes --skip-backup"; fi
+          if [ "${SKIP_BACKUP}" = "true" ]; then ARGS="--yes --skip-backup"; fi
           node scripts/update-remote.mjs $ARGS
 
       - name: آپلود پشتیبان D1 به آرتیفکت اجرا
         if: hashFiles('backups/*.sql') != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: d1-backup
           path: backups/

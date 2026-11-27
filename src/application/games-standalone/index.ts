@@ -118,7 +118,11 @@ export function createGamesApp(deps: GamesAppDeps): AppHono {
 
   registerLogoutRoute(app, { audit, logger });
 
-  app.get('/api/me', (c) => c.json({ data: c.get('authContext') }, 200));
+  /* SEC (ممیزی ۱.۲۷.۸۸) — هم‌الگوی api-routing: /api/me بدون sessionId (فقط برای خروج سرور لازم است) */
+  app.get('/api/me', (c) => {
+    const { sessionId: _omit, ...me } = c.get('authContext');
+    return c.json({ data: me }, 200);
+  });
 
   // ② API پرسنلی بازی‌ها — عین همان ثبت‌نام اپ اصلی
   registerGamesRoutes(app, games);

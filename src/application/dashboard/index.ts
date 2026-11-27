@@ -1,6 +1,15 @@
 export { createDashboardService } from './service';
 export { registerRoutes } from './routes';
 export type { DashboardDeps, DashboardService } from './service';
+/* ۱.۲۷.۸۸ — پرونده‌های اخیر من + نظرسنجی‌های در انتظار (الحاقی به /api/dashboard/me) */
+export { loadMyActivity } from './recent';
+export type {
+  MyDashboardStats,
+  MyPendingSurveyItem,
+  MyPendingSurveys,
+  MyRecentCase,
+  MyRecentCaseKind
+} from './types';
 /* ۱.۲۷.۸۰ (architecture-001) — تجمیع KPI داشبورد به سرویس منتقل شد (از لایهٔ مسیریابی) */
 export { createDashboardKpiService } from './kpi-source';
 export type { DashboardKpiService, DashboardKpiDeps, DashboardKpiQuery, DashboardKpiCall } from './kpi-source';

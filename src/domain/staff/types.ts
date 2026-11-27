@@ -16,6 +16,13 @@ export interface StaffMember {
   createdAt: string;
 }
 
+/* ممیزی صفحهٔ تقویم (۱.۲۷.۸۸) — پروجکشن عمومی کارمند برای نقش‌های غیر مدیریتی در GET /api/staff:
+   فقط فیلدهایی که انتخابگرها (تقویم/تمرین/پیگیری/ساعات کاری) لازم دارند */
+export type StaffPublicMember = Pick<
+  StaffMember,
+  'id' | 'fullName' | 'role' | 'active' | 'notifyEnabled' | 'createdAt'
+>;
+
 export interface NewStaffInput {
   fullName: string;
   phone?: string | null; // ناظر بدون تلفن؛ بقیهٔ نقش‌ها در اسکیما الزام می‌شود

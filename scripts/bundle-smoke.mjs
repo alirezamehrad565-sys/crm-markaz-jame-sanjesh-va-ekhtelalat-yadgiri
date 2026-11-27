@@ -1,5 +1,7 @@
 // آزمون برابری عملکردی دو باندل (قدیم ↔ بازسازی‌شده) روی یک D1 شبیه‌سازی‌شده
 // استفاده: node scripts/bundle-smoke.mjs <bundleOld> <bundleNew>
+// یا:      node scripts/bundle-smoke.mjs <bundle>      ← باندلِ داده‌شده ↔ باندلِ زندهٔ committed
+// یا:      node scripts/bundle-smoke.mjs               ← خودپروب باندلِ زندهٔ committed (worker/bundle.js)
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
@@ -78,9 +80,18 @@ const CASES = [
   ['GET', '/api/scoring/board', MANAGER_ID, null] // لایهٔ امتیاز
 ];
 
+const DEFAULT_BUNDLE = path.join(ROOT, 'worker', 'bundle.js'); // باندلِ زندهٔ committed
+
 async function probe(bundlePath) {
   const mod = await import(pathToFileURL(path.resolve(bundlePath)).href);
-  const worker = mod.default;
+  const worker = mod?.default;
+  // شکلِ باندل: export default با تابع fetch (هم‌شکلِ ورودیِ Worker). اگر خراب/کهرطرف شود، خطا صریح باشد نه «undefined.fetch»
+  if (!worker || typeof worker.fetch !== 'function') {
+    throw new TypeError(
+      `باندل شکلِ موردانتظار را ندارد: انتظار «export default { fetch(request, env, ctx), scheduled(...) }» — ` +
+      `mod.default.fetch باید تابع باشد. صادرشده‌های باندل [${Object.keys(mod ?? {}).join(', ') || 'هیچ'}]: ${bundlePath}`
+    );
+  }
   const db = new MockD1(makeDb());
   /* SEC-12776 — impersonation دولبقه‌ای است: ENV=development کافی نیست، DEV_IMPERSONATION=1 هم لازم */
   const env = { DB: db, ENV: 'development', DEV_IMPERSONATION: '1', CF_ACCESS_TEAM_DOMAIN: '' };
@@ -122,7 +133,23 @@ async function probe(bundlePath) {
   return out;
 }
 
-const [oldPath, newPath] = process.argv.slice(2);
+/* آرگومان‌ها: ۲ = مقایسهٔ زوج‌پروب <قدیم> <جدید>؛ ۱ = داده‌شده ↔ باندلِ زندهٔ committed؛
+   ۰ = خودپروب باندلِ زندهٔ committed. خطای TypeError دربارهٔ «paths» قبلاً از path.resolve(undefined)
+   می‌آمد — یعنی probe با آرگومانِ غایب صدا زده می‌شد؛ این‌جا تضمین می‌شود هر دو مسیر رشتهٔ معتبر باشند */
+const args = process.argv.slice(2);
+let oldPath, newPath;
+if (args.length === 0) {
+  oldPath = DEFAULT_BUNDLE;
+  newPath = DEFAULT_BUNDLE;
+} else if (args.length === 1) {
+  oldPath = DEFAULT_BUNDLE;
+  newPath = path.resolve(process.cwd(), args[0]);
+} else if (args.length === 2) {
+  [oldPath, newPath] = args;
+} else {
+  console.error('استفاده: node scripts/bundle-smoke.mjs [bundleOld bundleNew] — بدون آرگومان: خودپروب worker/bundle.js');
+  process.exit(2);
+}
 const logLines = [];
 const a = await probe(oldPath);
 const b = await probe(newPath);

@@ -7,7 +7,7 @@ import type { DbClient } from '@core/db';
 import { inParamChunks, inPlaceholders } from '@core/db/in-chunks'; // ۱.۲۵.۷۲ — دروازهٔ IN-list (بدهی ف۶ ⑧)
 import { findAssessmentBlockConflict } from '@domain/assessment-blocks'; // ۱.۲۷.۱۵ — سد بلوک سنجش در کپی هفته (نرم، هم‌الگوی تداخل)
 import type { AppointmentRow } from './repository';
-import type { CopyWeekInput, CopyWeekResult } from './types';
+import type { CopyWeekInput, CopyWeekResult, UndoCopyWeekResult } from './types';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -155,38 +155,58 @@ export async function copyWeek(ctx: WeekCopyCtx & { input: CopyWeekInput }): Pro
   return { batchId, copied: toCopy.length, conflicts, dryRun: false };
 }
 
-export async function undoCopyWeek(ctx: WeekCopyCtx & { batchId: string }): Promise<{ removed: number }> {
+export async function undoCopyWeek(ctx: WeekCopyCtx & { batchId: string }): Promise<UndoCopyWeekResult> {
   const { db, audit, logger, actor, batchId } = ctx;
 
-  const batchRows = await db.query<{ id: string }>(`SELECT id FROM appointments WHERE batch_id = ?`, [batchId]);
+  /* ممیزی صفحهٔ تقویم (۱.۲۷.۸۸) — یک پرس‌وجو، همهٔ نگهبان‌ها. تا اینجا فقط «attendance != pending»
+     سد می‌شد: یادداشت جلسه و نسخهٔ ویرایش‌شده بی‌صدا پاک می‌شدند، و ردیفِ دارای گزارش جلسه یا
+     ارجاع لیست انتظار کل batch را با خطای FK (۵۰۰) می‌شکست. حالا هر نوبتِ دارای سابقه نگه داشته
+     می‌شود و فقط بقیهٔ دسته حذف می‌شوند (هم‌نگهبان‌های remove تکی). */
+  interface BatchRow {
+    id: string;
+    staff_id: string;
+    status: string;
+    version: number;
+    history_cnt: number;
+    has_case_event: number;
+    has_waitlist: number;
+  }
+  const batchRows = await db.query<BatchRow>(
+    `SELECT a.id, a.staff_id, a.status, a.version,
+            (SELECT COUNT(*) FROM appointment_students asn
+              WHERE asn.appointment_id = a.id
+                AND (asn.attendance IN ('present', 'late', 'absent')
+                     OR asn.session_note IS NOT NULL OR asn.next_action IS NOT NULL OR asn.note IS NOT NULL)) AS history_cnt,
+            EXISTS (SELECT 1 FROM case_events ce WHERE ce.appointment_id = a.id AND ce.deleted_at IS NULL) AS has_case_event,
+            EXISTS (SELECT 1 FROM waitlist w WHERE w.scheduled_appointment_id = a.id AND w.deleted_at IS NULL) AS has_waitlist
+       FROM appointments a
+      WHERE a.batch_id = ?`,
+    [batchId]
+  );
   if (batchRows.length === 0) {
     throw new NotFoundError('دسته کپی هفته');
   }
 
   if (actor.role === 'therapist') {
-    const staffRows = await db.query<{ staff_id: string }>(
-      `SELECT DISTINCT staff_id FROM appointments WHERE batch_id = ?`,
-      [batchId]
-    );
-    if (staffRows.some((r) => r.staff_id !== actor.staffId)) {
+    if (batchRows.some((r) => r.staff_id !== actor.staffId)) {
       throw new ForbiddenError('برگردانی دستهٔ کپی فقط برای برنامهٔ خودِ شما مجاز است');
     }
   }
 
-  /* ۱.۲۵.۷۲ — تکه‌بندی ۹۰تایی: دستهٔ کپی هفتهٔ پر صدها نوبت دارد (سقف ۱۰۰ بایند D1) */
-  const attended: { appointment_id: string }[] = [];
-  for (const chunk of inParamChunks(batchRows.map((r) => r.id))) {
-    attended.push(...await db.query<{ appointment_id: string }>(
-      `SELECT DISTINCT appointment_id FROM appointment_students
-      WHERE appointment_id IN (${inPlaceholders(chunk.length)}) AND attendance != 'pending'`,
-      chunk
-    ));
+  const reasons = { case_event: 0, history: 0, edited: 0, waitlist: 0, status: 0 };
+  const removable: string[] = [];
+  for (const r of batchRows) {
+    let blocked = false;
+    if (r.has_case_event) { reasons.case_event += 1; blocked = true; }
+    if (r.history_cnt > 0) { reasons.history += 1; blocked = true; }
+    if (r.version > 1) { reasons.edited += 1; blocked = true; }
+    if (r.has_waitlist) { reasons.waitlist += 1; blocked = true; }
+    if (r.status !== 'scheduled') { reasons.status += 1; blocked = true; }
+    if (!blocked) removable.push(r.id);
   }
-  const blockedIds = new Set(attended.map((r) => r.appointment_id));
-
-  const removable = batchRows.map((r) => r.id).filter((id) => !blockedIds.has(id));
+  const blockedCount = batchRows.length - removable.length;
   if (removable.length === 0) {
-    return { removed: 0 };
+    return { removed: 0, blocked: blockedCount };
   }
 
   await db.transaction(async (tx) => {
@@ -199,10 +219,14 @@ export async function undoCopyWeek(ctx: WeekCopyCtx & { batchId: string }): Prom
       action: 'appointment.copy_week.undo',
       resourceType: 'appointment_batch',
       resourceId: batchId,
-      changes: { removed: { from: null, to: removable.length }, blocked: { from: null, to: blockedIds.size } }
+      changes: {
+        removed: { from: null, to: removable.length },
+        blocked: { from: null, to: blockedCount },
+        blocked_reasons: { from: null, to: reasons }
+      }
     });
   });
 
-  logger.child('copyWeek').info('appointment.copy_week.undo.done', { removed: removable.length });
-  return { removed: removable.length };
+  logger.child('copyWeek').info('appointment.copy_week.undo.done', { removed: removable.length, blocked: blockedCount });
+  return { removed: removable.length, blocked: blockedCount };
 }

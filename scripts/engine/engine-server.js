@@ -1721,8 +1721,9 @@ async function toWebRequest(req, url) {
 async function writeWebResponse(res, response) {
   const headers = { ...Object.fromEntries(response.headers) };
   const setCookies = typeof response.headers.getSetCookie === "function" ? response.headers.getSetCookie() : [];
-  res.writeHead(response.status, response.statusText || void 0, headers);
+  if (setCookies.length > 0) delete headers["set-cookie"];
   for (const c of setCookies) res.appendHeader("set-cookie", c);
+  res.writeHead(response.status, response.statusText || void 0, headers);
   if (reqHead(res.req?.method)) {
     res.end();
     return;

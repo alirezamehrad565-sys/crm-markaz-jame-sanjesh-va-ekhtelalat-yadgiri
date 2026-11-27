@@ -22,6 +22,12 @@ export function setDevStaffId(id) {
 export function clearSession() {
   localStorage.removeItem(TOKEN_KEY); // پاک‌سازی میراث نشست‌های پیش از مهاجرت در همان خروج اول
   localStorage.removeItem(STAFF_ID_KEY);
+  /* ممیزی صفحهٔ تقویم (۱.۲۷.۸۸) — شناسهٔ دستهٔ کپی هفته stateِ «این نشست» است؛ sessionStorage با
+     reload زنده می‌ماند و برای کاربر بعدیِ همین تب دکمهٔ «برگردان آخرین کپی» می‌ساخت */
+  try {
+    sessionStorage.removeItem('cs.lastBatchId');
+    sessionStorage.removeItem('cs.lastBatchOwner');
+  } catch { /* حالت خصوصی */ }
 }
 
 export const ERROR_TEXT = {

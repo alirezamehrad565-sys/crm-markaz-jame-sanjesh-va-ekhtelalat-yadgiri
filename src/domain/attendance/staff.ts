@@ -31,8 +31,10 @@ export interface MarkStaffAttendanceInput {
 export interface StaffAttendanceService {
   mark(input: MarkStaffAttendanceInput, actor: AuthContext): Promise<StaffAttendanceRecord>;
   list(filters: { from: string; to: string; staffId?: string }): Promise<StaffAttendanceRecord[]>;
-  daySummary(date: string): Promise<StaffAttendanceDaySummary>;
-  rangeSummary(from: string, to: string): Promise<StaffAttendancePersonSummary[]>;
+  /* staffId اختیاری: سقف‌گذاری خواندن به یک همکار (مسیر سقف‌دارِ staff-routes)؛
+     بدون آن رفتار کامل دفتر — شکل پاسخ در هر دو حالت یکسان است. */
+  daySummary(date: string, staffId?: string): Promise<StaffAttendanceDaySummary>;
+  rangeSummary(from: string, to: string, staffId?: string): Promise<StaffAttendancePersonSummary[]>;
 }
 
 interface StaffAttendanceRow {
@@ -231,25 +233,31 @@ export function createStaffAttendanceService(deps: StaffAttendanceDeps): StaffAt
       return rows.map(rowToRecord);
     },
 
-    async daySummary(date): Promise<StaffAttendanceDaySummary> {
+    async daySummary(date, staffId?): Promise<StaffAttendanceDaySummary> {
+      /* سقف‌دار: فقط ردیف‌های همان همکار — totalActiveStaff=۱ تا «ثبت‌نشده» معنای فردی بگیرد */
       const [staffCount, rows] = await Promise.all([
-        db.queryOne<{ n: number }>(`SELECT COUNT(*) AS n FROM staff WHERE active = 1`),
+        staffId ? Promise.resolve({ n: 1 }) : db.queryOne<{ n: number }>(`SELECT COUNT(*) AS n FROM staff WHERE active = 1`),
         db.query<StaffAttendanceRow>(
-          `SELECT id, staff_id, date, status, note, updated_at FROM staff_attendance WHERE date = ?`,
-          [date]
+          `SELECT id, staff_id, date, status, note, updated_at FROM staff_attendance
+            WHERE date = ?${staffId ? ' AND staff_id = ?' : ''}`,
+          staffId ? [date, staffId] : [date]
         )
       ]);
       return aggregateDay(date, rows, staffCount?.n ?? 0);
     },
 
-    async rangeSummary(from, to): Promise<StaffAttendancePersonSummary[]> {
+    async rangeSummary(from, to, staffId?): Promise<StaffAttendancePersonSummary[]> {
+      /* سقف‌دار: فقط ردیف فعال همان همکار — خروجی آرایهٔ همان شکل با حداکثر یک عضو */
       const [staffRows, rows] = await Promise.all([
         db.query<{ id: string; displayName: string; role: string }>(
-          `SELECT id, full_name AS displayName, role FROM staff WHERE active = 1 ORDER BY full_name`
+          `SELECT id, full_name AS displayName, role FROM staff
+            WHERE active = 1${staffId ? ' AND id = ?' : ''}${staffId ? '' : ' ORDER BY full_name'}`,
+          staffId ? [staffId] : []
         ),
         db.query<StaffAttendanceRow>(
-          `SELECT id, staff_id, date, status, note, updated_at FROM staff_attendance WHERE date >= ? AND date <= ?`,
-          [from, to]
+          `SELECT id, staff_id, date, status, note, updated_at FROM staff_attendance
+            WHERE date >= ? AND date <= ?${staffId ? ' AND staff_id = ?' : ''}`,
+          staffId ? [from, to, staffId] : [from, to]
         )
       ]);
       return aggregateRange(from, to, rows, staffRows);

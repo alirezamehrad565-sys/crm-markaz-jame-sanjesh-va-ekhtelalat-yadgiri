@@ -8,12 +8,14 @@ import { openStudentForm } from '../student-form.js';
 import { openStudentDelete } from '../student-delete.js'; // — جریان واحد حذف کامل پرونده (مشترک با کارت پروفایل)
 import { hueClass, hueDot } from '../staff-hue.js'; // — رنگ درمانگر روی ردیف جدول/چیپ فیلتر/راهنما
 import { session } from '../api.js';
+import { createStudentsSort } from './students-sort.js'; // — سورت و شمارندهٔ سربرگ (گیت کمپلکسیتی)
 
 const local = {
   query: '',
   schoolId: '',
   tagId: '',
   ownerId: '',
+  sort: 'name', // — مرتب‌سازی سمت کاربر روی همان صفحه؛ ماندگاری مثل فیلترها در همین state ماژول
   page: 1,
   pageSize: 20,
   schools: [],
@@ -233,6 +235,8 @@ export async function renderStudents(container, ctx) {
   const tableZone = el('div', {}, legendZone, el('div', { class: 'card card__body--flush card--table cv-block' }, table, pagerZone)); /* E2 */
   const countBadge = el('span', { class: 'badge badge--neutral' });
 
+  const sortCtl = createStudentsSort({ local, hasFilter, countBadge, getResult: () => result, onSortChange: () => renderTbody(result) });
+
   function fetchPage() {
     return api.get(`/api/students${qs({
       query: local.query || undefined,
@@ -305,9 +309,11 @@ export async function renderStudents(container, ctx) {
 
   function renderTbody(res) {
     result = res;
-    const rows = res.data ?? [];
+    const rows = sortCtl.sortRows(res.data ?? []);
     const meta = res.meta ?? { page: 1, totalPages: 1, total: rows.length };
-    countBadge.textContent = `${fa(meta.total)} نفر`;
+    sortCtl.noteServerTotal(meta.total);
+    sortCtl.paintCount(meta.total);
+    sortCtl.syncTotalAll();
     tbody.replaceChildren(...(rows.length ? rows.map((s) => rowEl(s)) : [emptyRow()]));
     paintLegend(rows);
 
@@ -393,11 +399,7 @@ export async function renderStudents(container, ctx) {
     /* همگام‌سازی بی‌صدای فهرست + پیجر — بدون اسکلت، بدون دست‌زدن به نوار ابزار */
     quietSync: refreshRows,
     /* فقط شمارندهٔ سربرگ (پس از حذف؛ پیجر همان‌جا می‌ماند تا انیمیشن سالم بماند) */
-    quietSyncCount() {
-      api.get(`/api/students${qs({ query: local.query || undefined, school_id: local.schoolId || undefined, tag_id: local.tagId || undefined, owner_id: local.ownerId || undefined, page: 1, page_size: 1 })}`)
-        .then((res) => { countBadge.textContent = `${fa(res.meta?.total ?? 0)} نفر`; })
-        .catch(() => {});
-    }
+    quietSyncCount: () => sortCtl.quietSyncCount()
   };
 
   const searchInput = el('input', { class: 'input', type: 'search', placeholder: 'جستجو: نام یا کد ملی…', 'aria-label': 'جستجوی نام یا کد ملی', value: local.query }); /* S5-03 */
@@ -462,6 +464,7 @@ export async function renderStudents(container, ctx) {
   const toolbar = el('div', { class: 'toolbar' },
     searchInput,
     schoolSel,
+    sortCtl.sortSel,
     ownerChips,
     tagFilter,
     el('div', { class: 'spacer' }),

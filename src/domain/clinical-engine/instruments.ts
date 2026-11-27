@@ -5,6 +5,21 @@ import type { BatteryDef } from './types';
 
 type RawBatteryDef = BatteryDef;
 
+/* ۱.۲۷.۸۸ — ممیزی روان‌سنجی (quick wins): دستهٔ کتابخانهٔ باتری — ۹ دستهٔ فارسی ثابت.
+   هر بلوک JSON فیلد batteryCategory دارد؛ lookup سمت API: batteryCategoryOf(key). */
+export const BATTERY_CATEGORIES = [
+  'شناختی/هوش',
+  'توجه/اجرایی',
+  'حرکتی',
+  'زبان-گفتار',
+  'اجتماعی-هیجانی',
+  'رفتار/تنظیم',
+  'خودیاری والدین',
+  'غربگری',
+  'پروتکل درمانی'
+] as const;
+export type BatteryCategory = (typeof BATTERY_CATEGORIES)[number];
+
 const RAW: RawBatteryDef[] = [
   ...(screeningJson as unknown as RawBatteryDef[]),
   ...(specificJson as unknown as RawBatteryDef[]),
@@ -14,6 +29,9 @@ const RAW: RawBatteryDef[] = [
 function resolveBattery(defs: RawBatteryDef[]): BatteryDef[] {
   const byKey = new Map(defs.map((d) => [d.key, d]));
   return defs.map((d) => {
+    if (!BATTERY_CATEGORIES.includes(d.batteryCategory as BatteryCategory)) {
+      throw new Error(`battery: batteryCategory نامعتبر برای ${d.key} — باید یکی از ۹ دستهٔ BATTERY_CATEGORIES باشد`);
+    }
     if (!d.sameItemsAs) return d;
     const src = byKey.get(d.sameItemsAs);
     if (!src) throw new Error(`battery: sameItemsAs پیدا نشد — ${d.key} → ${d.sameItemsAs}`);
@@ -29,9 +47,19 @@ export function batteryDef(key: string): BatteryDef | undefined {
   return BY_KEY.get(key);
 }
 
+/* ۱.۲۷.۸۸ — دستهٔ باتری هر کلید ce-* (فقط بلوک‌های JSON باتری؛ بقیه null) */
+const BATTERY_CATEGORY_BY_KEY = new Map<string, BatteryCategory>(
+  BATTERY.map((d) => [d.key, d.batteryCategory as BatteryCategory])
+);
+export function batteryCategoryOf(key: string): BatteryCategory | null {
+  return BATTERY_CATEGORY_BY_KEY.get(key) ?? null;
+}
+
 export const WCPM_NORM_50TH: Record<string, number> = {
   'اول': 60, 'دوم': 89, 'سوم': 107, 'چهارم': 123, 'پنجم': 139, 'ششم': 150, 'هفتم': 150, 'هشتم': 150
 };
+/* ۱.۲۷.۸۸ — ممیزی روان‌سنجی: هر سه جدول هنجار بالا «بدون مبدأ — نیازمند تأیید» ثبت‌اند؛
+   ادعای منبعی برایشان ثبت نشده است — رجیستری: docs/INSTRUMENT-SOURCES.md */
 
 export const ALPHA_15S_NORM: Record<string, number> = {
   'اول': 20, 'دوم': 35, 'سوم': 45, 'چهارم': 50, 'پنجم': 55, 'ششم': 60, 'هفتم': 60, 'هشتم': 60

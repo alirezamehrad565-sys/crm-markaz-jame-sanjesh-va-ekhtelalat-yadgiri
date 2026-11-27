@@ -496,6 +496,49 @@ function renderFilesSection(event, canEdit, onChanged) {
   return wrap;
 }
 
+function surveyConcernTone(level) {
+  return level === 'high' ? 'error' : level === 'medium' ? 'warning' : 'success';
+}
+
+/* ۱.۲۷.x — تحلیل ساختاری نظرسنجی خانواده (analysis.survey از سمت سرور): بج سطح کلی،
+   پاراگراف تفسیر توصیفی، نرخ نشانه‌ها به تفکیک بخش فرم و گویه‌های نشانه‌دار؛
+   فرم بدون بخش‌بندی فقط بج و تفسیر می‌گیرد — نوار تک‌حیطه‌ای تکرارِ بج است */
+function surveyAnalysisSection(sv) {
+  const wrap = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '12px' } });
+  if (sv.level) wrap.appendChild(el('div', {
+    class: `badge badge--${surveyConcernTone(sv.level)}`,
+    style: { fontSize: 'var(--fs-xs)', padding: '8px 12px', whiteSpace: 'normal', textAlign: 'right', lineHeight: 'var(--lh-body)' }
+  }, `تحلیل توصیفی پاسخ خانواده: ${fa(sv.concerning)} نشانه از ${fa(sv.answered)} پاسخ (${fa(sv.concern_pct)}٪) — سطح کلی: ${sv.level_label}`));
+  if (sv.interpretation) wrap.appendChild(el('div', {
+    style: { background: 'var(--surface-2)', borderRadius: 'var(--radius-md)', padding: '12px 14px', whiteSpace: 'pre-wrap', fontSize: 'var(--fs-xs)', lineHeight: 'var(--lh-relaxed)' }
+  }, el('b', { style: { display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' } }, icon('compass', 14), 'تفسیر توصیفی سامانه'), sv.interpretation));
+  if (sv.grouped_by !== 'none' && sv.domains && sv.domains.length > 0) {
+    const domWrap = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px' } },
+      el('b', { style: { fontSize: 'var(--fs-xs)' } }, 'نرخ نشانه‌ها به تفکیک بخش فرم'));
+    for (const d of sv.domains) {
+      const barColor = d.concern_pct >= 50 ? 'var(--danger)' : d.concern_pct >= 20 ? 'var(--warning)' : 'var(--success)';
+      domWrap.appendChild(el('div', {},
+        el('div', { style: { display: 'flex', justifyContent: 'space-between', gap: '8px', fontSize: 'var(--fs-2xs)', marginBottom: '3px' } },
+          el('span', {}, d.name),
+          el('span', { class: 'cell-sub' }, `${fa(d.concerning)} از ${fa(d.answered)} — ${fa(d.concern_pct)}٪`)),
+        el('div', { style: { height: '7px', borderRadius: '4px', background: 'var(--surface-2)', overflow: 'hidden' } },
+          el('div', { style: { height: '100%', width: `${d.concern_pct}%`, borderRadius: '4px', background: barColor } }))));
+    }
+    wrap.appendChild(domWrap);
+  }
+  if (sv.flagged && sv.flagged.length > 0) {
+    const flagWrap = el('div', { style: { background: 'var(--surface-2)', borderRadius: 'var(--radius-md)', padding: '12px 14px' } },
+      el('b', { style: { fontSize: 'var(--fs-xs)', marginBottom: '6px', display: 'block' } }, `گویه‌های نشانه‌دار (${fa(sv.flagged.length)} مورد)`));
+    for (const fl of sv.flagged) {
+      flagWrap.appendChild(el('div', { style: { display: 'flex', alignItems: 'baseline', gap: '8px', padding: '5px 0', borderBottom: '1px solid var(--line)', fontSize: 'var(--fs-xs)' } },
+        el('span', { style: { flex: '1', minWidth: '0' } }, fl.question),
+        el('span', { class: 'cell-sub', style: { whiteSpace: 'nowrap' } }, `«${fl.answer}»`)));
+    }
+    wrap.appendChild(flagWrap);
+  }
+  return wrap;
+}
+
 export function openCaseEventDetail(event, { onChanged } = {}) {
   const canEdit = Boolean(session.user && ['manager', 'therapist'].includes(session.user.role));
   const body = el('div', {});
@@ -516,23 +559,30 @@ export function openCaseEventDetail(event, { onChanged } = {}) {
   );
   body.appendChild(head);
 
+  const a = event.analysis;
+  if (a && a.survey) {
+    /* ۱.۲۷.x — فرم‌های چندحیطه‌ای بدون باندِ کل تحلیل ساختاری دارند؛ مسیر قدیمیِ «امتیاز تحلیل:
+       ۰ از ۰» + نیم‌رخ سبز بی‌باند گمراه‌کننده بود و جای خود را به همین بخش می‌دهد */
+    body.appendChild(surveyAnalysisSection(a.survey));
+  }
   if (event.analysis) {
     const maxTotal = event.analysis.maxScore ?? event.analysis.total * 3;
     const bandTone = (event.analysis.band ?? '').includes('جدی') ? 'error' : (event.analysis.band ?? '').includes('توجه') ? 'warning' : 'success';
-    body.appendChild(el('div', {
-      class: `badge badge--${bandTone}`,
-      style: { fontSize: 'var(--fs-xs)', padding: '8px 12px', marginBottom: '12px' } /* px خام → توکن (S2-13) */
-    }, `امتیاز تحلیل: ${fa(event.analysis.score)} از ${fa(maxTotal)}${event.analysis.band ? ` — ${event.analysis.band}` : ''}`));
+    if (!a.survey) {
+      body.appendChild(el('div', {
+        class: `badge badge--${bandTone}`,
+        style: { fontSize: 'var(--fs-xs)', padding: '8px 12px', marginBottom: '12px' } /* px خام → توکن (S2-13) */
+      }, `امتیاز تحلیل: ${fa(event.analysis.score)} از ${fa(maxTotal)}${event.analysis.band ? ` — ${event.analysis.band}` : ''}`));
+    }
 
-    const a = event.analysis;
-    if (a.interpretation) {
+    if (a.interpretation && !a.survey) {
       body.appendChild(el('div', {
         style: { background: 'var(--surface-2)', borderRadius: 'var(--radius-md)', padding: '12px 14px', marginBottom: '12px', whiteSpace: 'pre-wrap', fontSize: 'var(--fs-xs)', lineHeight: 'var(--lh-relaxed)' } /* */
       },
       el('b', { style: { display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' } }, icon('compass', 14), 'تفسیر خودکار سامانه'),
       a.interpretation));
     }
-    if (a.subscaleScores && a.subscaleScores.length > 0) {
+    if (!a.survey && a.subscaleScores && a.subscaleScores.length > 0) {
       const subWrap = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' } },
         el('b', { style: { fontSize: 'var(--fs-xs)' } }, 'نیمرخ زیرمقیاس‌ها'));
       for (const s of a.subscaleScores) {

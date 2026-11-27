@@ -145,6 +145,7 @@ describe('/ — auth & session (API واقعی)', () => {
     expect(data.role).toBe('secretary');
     expect(data.staffId).toBe(SECRETARY_ID);
     expect(data.displayName).toBe('زهرا کریمی');
+    expect(data.sessionId).toBeUndefined(); /* SEC ممیزی — شناسهٔ نشست از /api/me حذف شد (فقط مصرف سرورِ خروج) */
   });
 
   it('dev bypass با X-Dev-Staff-Id در ENV=development', async () => {

@@ -34,6 +34,7 @@ export {
   NationalIdSchema,
   NewAppointmentSchema,
   NewAppointmentSchema as AppointmentSchema,
+  AppointmentStudentRefSchema, /* ممیزی صفحهٔ تقویم (۱.۲۷.۸۸) — اسکیمای افزودن دانش‌آموز به نوبت */
   NewApiKeySchema,
   NewClassSchema,
   NewSchoolSchema,

@@ -4,11 +4,49 @@ import { el, icon, openModal, formModal, confirmModal, toast, toastError, emptyS
 import { TOOL_GUIDES } from '../clinical-content.js';
 import { session } from '../api.js';
 import { openChecklistSendModal, fillTargetOf } from '../case-events.js';
-import { CATEGORY_ICONS, TYPE_ICON_CHOICES, typeIconNode } from '../case-event-icons.js';
+import { TYPE_ICON_CHOICES, typeIconNode } from '../case-event-icons.js';
 /* ۱.۲۵.۶۰ — نظرسنجی خانواده‌ها به ماژول مستقل «#/family-surveys» منتقل شد (فقط مدیر)؛
    این نما فقط فرم‌ساز است و تب نظرسنجی/کدهای آن از این‌جا حذف شده‌اند. */
 
 const CATEGORY_LABELS = { session: 'جلسه', checklist: 'چک‌لیست', note: 'یادداشت' };
+
+/* گروه‌بندی کتابخانهٔ فرم‌ها — خواست کارفرما: «۳۳ فرم داریم، دسته‌بندی درستی نداره، تعدادشون زیاده».
+   از دل مقادیر واقعیِ موجودِ DB مشتق شده، نه طبقه‌بندی موازی: دسته‌های seed سیستمی (session/note)
+   عیناً همان گروه‌اند و فقط سطلِ درشتِ checklist (۲۲ قالب) با خانوادهٔ واقعی کلیدها
+   (sdq/scared/snap/dcdq = مقیاس، sld/*-criteria = ملاک‌های DSM، بقیه = پایش/نظرسنجی خانواده)
+   و is_system به گروه‌های منطقی می‌شکند. هیچ مقداری در DB عوض نمی‌شود — category='checklist'
+   در نمره‌دهی، باتری و ارسال لینک بار معنایی دارد و دست‌نخوردنی است. قالب‌های سفارشی مرکز
+   (t-*) و هر قالب آیندهٔ غیرسیستمی همیشه گروه خودشان را دارند. */
+export const FORM_GROUP_ORDER = ['scale', 'criteria', 'monitor', 'session', 'note', 'custom'];
+export const FORM_GROUP_LABELS = {
+  scale: 'مقیاس‌ها و پرسشنامه‌های استاندارد',
+  criteria: 'چک‌لیست‌های ملاک‌های DSM',
+  monitor: 'پایش خانواده و نظرسنجی‌ها',
+  session: 'ثبت جلسه و آزمون‌های درمانگر',
+  note: 'گزارش‌ها و جمع‌بندی بالینی',
+  custom: 'ابزارهای سفارشی مرکز'
+};
+export function formGroupOf(t) {
+  if (!t || !t.isSystem) return 'custom';
+  if (t.category === 'session' || t.category === 'note') return t.category;
+  const key = String(t.key ?? '');
+  if (/^ce-(sdq|scared|snap|dcdq)/.test(key)) return 'scale';
+  if (/^ce-(sld|.*-criteria)/.test(key)) return 'criteria';
+  if (/^ce-rehab/.test(key)) return 'session'; // ابزارهای ارزیابی توانبخشی — ثبت درمانگر
+  return 'monitor'; // پایش/نظرسنجی خانواده + هر چک‌لیست سیستمی آینده
+}
+export function typeMatchesFilter(t, f) {
+  const q = (f.q2 ?? '').trim();
+  return Boolean(t.active)
+    && (f.grp === 'all' || formGroupOf(t) === f.grp)
+    && (f.aud === 'all' || t.audience === f.aud || t.audience === 'both')
+    && (!q || String(t.title ?? '').includes(q));
+}
+export function groupTypes(types) {
+  return FORM_GROUP_ORDER
+    .map((id) => ({ id, label: FORM_GROUP_LABELS[id] ?? id, items: types.filter((t) => formGroupOf(t) === id) }))
+    .filter((g) => g.items.length > 0);
+}
 // — برچسب فارسی آیکون‌ها برای aria-label دکمه‌های انتخاب آیکون (title انگلیسیِ آیکون برای منطق انتخاب فعال باید بماند)
 const ICON_LABELS = {
   clipboard: 'برگهٔ فرم', puzzle: 'پازل', note: 'یادداشت', book: 'کتاب', edit: 'ویرایش',
@@ -32,6 +70,47 @@ const SUBSCALE_DOT_COLORS = ['var(--hue-1-strong)', 'var(--hue-7-strong)', 'var(
 const SCALE_MAX_LIMIT = 10;
 const FIELD_OPTIONS_MAX = 12;
 const SUBSCALES_MAX = 8;
+
+/* ۱.۲۷.۸۸ — ممیزی روان‌سنجی (quick wins): «کتابخانهٔ باتری» — بخش فقط-خواندنی بالای نما.
+   قالب‌های سیستمی باتری (بلوک‌های JSON باتری) با دستهٔ ۹‌گانهٔ batteryCategory گروه می‌شوند؛
+   هر ردیف: نام + چیپ مخاطب + مبدأ ابزار (tool_source — مایگریشن ۰۱۲۶). قالب بی‌مبدأ «مبدأ ثبت‌نشده».
+   برای همهٔ نقش‌های این نما فقط-خواندنی است و هیچ اکشنی ندارد — رجیستری کامل: docs/INSTRUMENT-SOURCES.md */
+const BATTERY_CATEGORY_ORDER = ['شناختی/هوش', 'توجه/اجرایی', 'حرکتی', 'زبان-گفتار', 'اجتماعی-هیجانی', 'رفتار/تنظیم', 'خودیاری والدین', 'غربگری', 'پروتکل درمانی'];
+const BATTERY_NO_SOURCE = 'مبدأ ثبت‌نشده';
+
+function batteryRow(t) {
+  return el('div', { style: { display: 'flex', alignItems: 'baseline', gap: 'var(--sp-2)', flexWrap: 'wrap', padding: 'var(--sp-2) 0', borderTop: '1px solid var(--border)' } },
+    el('b', { style: { fontSize: 'var(--fs-sm)' } }, t.title),
+    el('span', { class: 'badge badge--neutral' }, AUDIENCE_LABELS[t.audience] ?? 'خانواده'),
+    t.active ? null : el('span', { class: 'badge badge--neutral' }, 'خارج از گردش'),
+    el('span', { class: 'cell-sub', style: { flex: '1', minWidth: '180px' } },
+      t.toolSource ? `مبدأ: ${t.toolSource}` : BATTERY_NO_SOURCE)
+  );
+}
+
+function batteryLibrarySection(types) {
+  const items = types.filter((t) => t.batteryCategory);
+  const groups = BATTERY_CATEGORY_ORDER
+    .map((cat) => ({ cat, rows: items.filter((t) => t.batteryCategory === cat) }))
+    .filter((g) => g.rows.length > 0);
+  return el('section', { class: 'card', dataset: { zone: 'battery-library' }, style: { margin: '0 0 var(--sp-4)' } },
+    el('div', { class: 'card__body' },
+      el('div', { style: { display: 'flex', alignItems: 'baseline', gap: 'var(--sp-2)', flexWrap: 'wrap' } },
+        el('b', { style: { fontSize: 'var(--fs-md)' } }, 'کتابخانهٔ باتری'),
+        el('span', { class: 'badge badge--accent' }, `${fa(items.length)} ابزار سیستمی`),
+        el('span', { class: 'cell-sub' }, 'فقط-خواندنی — گروه‌بندی ۹‌دستهٔ ممیزی روان‌سنجی؛ «مبدأ» شناسنامهٔ ابزار هر قالب است.')),
+      groups.length === 0
+        ? emptyState({ iconName: 'book', title: 'باتری در دسترس نیست', hint: 'قالب سیستمی باتری یافت نشد.' })
+        : el('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 'var(--sp-4)', marginTop: 'var(--sp-3)' } },
+            ...groups.map((g) => el('div', {},
+              el('div', { style: { display: 'flex', alignItems: 'baseline', gap: 'var(--sp-2)', margin: '0 0 var(--sp-1)' } },
+                el('b', { style: { fontSize: 'var(--fs-sm)', color: 'var(--primary)' } }, g.cat),
+                el('span', { class: 'chip', style: { fontSize: 'var(--fs-2xs)' } }, fa(g.rows.length))),
+              el('div', { style: { display: 'flex', flexDirection: 'column' } },
+                ...g.rows.map((t) => batteryRow(t))))))
+    )
+  );
+}
 
 function canUse() {
   return Boolean(session.user && ['manager', 'secretary', 'therapist'].includes(session.user.role));
@@ -74,14 +153,14 @@ export async function renderCaseEventTypes(container) {
     return;
   }
   const tagName = new Map((tags ?? []).map((t) => [t.id, t.name]));
-  const state = { tab: 'library', cat: 'all', aud: 'all', types, pending, tagName };
+  const state = { tab: 'library', grp: 'all', aud: 'all', types, pending, tagName };
 
   /* —— ۱.۲۲.۰ جریان پیوسته (زبان ۱.۱۹–۱.۲۱): شِلِ نما — سربرگ، تب‌ها، نوار فیلترهای
      کتابخانه و ناحیه‌های فهرست — یک‌بار مونت می‌شود و هیچ اکشنی دیگر کل container را
      با اسکلت rebuild نمی‌کند. ساخت/ویرایش/غیرفعال‌سازی/حذف قالب فقط همان کارت را پچ
      (ctl.patch) یا جمع (ctl.remove) می‌کنند یا ناحیهٔ فهرست را بی‌صدا همگام می‌کنند
      (ctl.quietSync)؛ یادآوری/لغو/حذف چک‌لیست هم فقط ناحیهٔ صف انتظار را. فیلتر
-     دسته/مخاطب/جستجو فقط ناحیهٔ فهرست را عوض می‌کند و چیپ‌ها درجا فعال می‌شوند —
+     گروه/مخاطب/جستجو فقط ناحیهٔ فهرست را عوض می‌کند و چیپ‌ها درجا فعال می‌شوند —
      ورودی جستجو دیگر هرگز بازسازی نمی‌شود، پس هک بازگرداندن مکان‌نما (searchRefocus)
      حذف شد. اسکلت فقط روی مونت اولیه و خطای مرگبار بارگذاری. —— */
   let gen = 0; // — گارد نسل قالب‌ها: پاسخ کهنهٔ درخواست قبلی نباید روی دادهٔ تازه بنشیند
@@ -129,12 +208,19 @@ export async function renderCaseEventTypes(container) {
 
   /* ۱.۲۲.۰ — ناحیه‌های یک‌بارمونت: نوار فیلتر کتابخانه، فهرست قالب‌ها و صف انتظار */
   const libraryFilters = buildLibraryFilters();
+  /* ۱.۲۷.۸۸ — کتابخانهٔ باتری: فقط-خواندنی، بالای تب‌ها؛ با هر همگام‌سازی بی‌صدا تازه می‌شود */
+  const batteryZone = el('div', {});
+  paintBatteryZone();
   const listZone = el('div', {});
   const pendingZone = el('div', {});
   const builderZone = el('div', {}); /* ۱.۲۷.۴۰ */
   const body = el('div', {});
-  container.replaceChildren(head, tabs, body);
+  container.replaceChildren(head, batteryZone, tabs, body);
   renderBodyZone();
+
+  function paintBatteryZone() {
+    batteryZone.replaceChildren(batteryLibrarySection(state.types));
+  }
 
   function renderBodyZone() {
     if (state.tab === 'library') {
@@ -161,13 +247,9 @@ export async function renderCaseEventTypes(container) {
     tabBtns.pending.textContent = `در انتظار پاسخ (${fa(state.pending.length)})`;
   }
 
-  /* فیلتر بخش فعال — همان منطق قبلی renderLibrary */
+  /* فیلتر بخش فعال — همان منطق قبلی renderLibrary؛ فیلتر «دسته» به «گروه» کتابخانه ارتقا یافت */
   function matchesTypeFilter(t) {
-    const q2 = (state.q2 ?? '').trim();
-    return Boolean(t.active)
-      && (state.cat === 'all' || t.category === state.cat)
-      && (state.aud === 'all' || t.audience === state.aud || t.audience === 'both')
-      && (!q2 || String(t.title ?? '').includes(q2));
+    return typeMatchesFilter(t, state);
   }
 
   /* ۱.۲۲.۰ — رندر «فقط ناحیهٔ فهرست قالب‌ها» از state محلی — بدون GET، بدون اسکلت، بدون پرش اسکرول
@@ -184,9 +266,18 @@ export async function renderCaseEventTypes(container) {
       }));
       return;
     }
+    /* گروه‌بندی کتابخانه: هر گروه سربرگ + نشان تعداد + شبکهٔ کارت‌های همان گروه —
+       همان زبان بصری «کتابخانهٔ باتری»؛ گروه خالی رندر نمی‌شود. */
     listZone.replaceChildren(
-      el('div', { dataset: { zone: 'active' }, style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 'var(--sp-4)' } },
-        ...active.map((t) => typeCard(t)))
+      el('div', { dataset: { zone: 'active' } },
+        ...groupTypes(active).map((g) =>
+          el('section', { dataset: { group: g.id }, style: { margin: '0 0 var(--sp-5)' } },
+            el('div', { style: { display: 'flex', alignItems: 'baseline', gap: 'var(--sp-2)', margin: '0 0 var(--sp-2)' } },
+              el('b', { style: { fontSize: 'var(--fs-md)' } }, g.label),
+              el('span', { class: 'badge badge--neutral' }, `${fa(g.items.length)} فرم`)),
+            el('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 'var(--sp-4)' } },
+              ...g.items.map((t) => typeCard(t))))
+        ))
     );
   }
 
@@ -199,12 +290,12 @@ export async function renderCaseEventTypes(container) {
       const stateActive = state.types.filter(matchesTypeFilter).length;
       const activeMismatch = stateActive === 0
         ? Boolean(grid)
-        : !grid || grid.querySelectorAll(':scope > [data-id]').length !== stateActive;
+        : !grid || grid.querySelectorAll('[data-id]').length !== stateActive;
       if (activeMismatch) paintTypeZone();
     }, 320);
   }
 
-  /* ۱.۲۲.۰ — نوار فیلترهای کتابخانه (چیپ‌های دسته/مخاطب + جستجو) — یک‌بار ساخته می‌شود */
+  /* ۱.۲۲.۰ — نوار فیلترهای کتابخانه (چیپ‌های گروه/مخاطب + جستجو) — یک‌بار ساخته می‌شود */
   function buildLibraryFilters() {
     const chip = (label, active, onClick, key = null) => el('button', {
       class: `chip ${active ? 'is-active' : ''}`,
@@ -228,10 +319,9 @@ export async function renderCaseEventTypes(container) {
     });
 
     return el('div', { style: { display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap', margin: '0 0 var(--sp-4)', alignItems: 'center' } },
-      el('span', { class: 'cell-sub' }, 'دسته:'),
-      chip('همه', state.cat === 'all', () => setTypeFilter('cat', 'all'), 'cat:all'),
-      ...Object.entries(CATEGORY_LABELS).map(([k, v]) =>
-        chip(el('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-1)' } }, icon(CATEGORY_ICONS[k], 13), v), state.cat === k, () => setTypeFilter('cat', k), `cat:${k}`)),
+      el('span', { class: 'cell-sub' }, 'گروه:'),
+      chip('همه', state.grp === 'all', () => setTypeFilter('grp', 'all'), 'grp:all'),
+      ...FORM_GROUP_ORDER.map((k) => chip(FORM_GROUP_LABELS[k], state.grp === k, () => setTypeFilter('grp', k), `grp:${k}`)),
       el('span', { style: { width: 'var(--sp-3)' } }),
       el('span', { class: 'cell-sub' }, 'مخاطب:'),
       chip('همه', state.aud === 'all', () => setTypeFilter('aud', 'all'), 'aud:all'),
@@ -241,9 +331,9 @@ export async function renderCaseEventTypes(container) {
     );
   }
 
-  /* ۱.۲۲.۰ — تغییر فیلتر دسته/مخاطب: فقط ناحیهٔ فهرست رندر می‌شود؛ فعال‌بودن چیپ‌ها درجا عوض می‌شود */
+  /* ۱.۲۲.۰ — تغییر فیلتر گروه/مخاطب: فقط ناحیهٔ فهرست رندر می‌شود؛ فعال‌بودن چیپ‌ها درجا عوض می‌شود */
   function setTypeFilter(kind, value) {
-    if (kind === 'cat') state.cat = value;
+    if (kind === 'grp') state.grp = value;
     else state.aud = value;
     paintFilterChips();
     paintTypeZone();
@@ -251,7 +341,7 @@ export async function renderCaseEventTypes(container) {
 
   function paintFilterChips() {
     for (const b of libraryFilters.querySelectorAll('button[data-chip]')) {
-      const on = b.dataset.chip === `cat:${state.cat}` || b.dataset.chip === `aud:${state.aud}`;
+      const on = b.dataset.chip === `grp:${state.grp}` || b.dataset.chip === `aud:${state.aud}`;
       b.classList.toggle('is-active', on);
       b.setAttribute('aria-pressed', String(on)); /* S3-21 */
     }
@@ -303,14 +393,15 @@ export async function renderCaseEventTypes(container) {
     /* ۱.۲۲.۰ — پچ درجای یک کارت از بدنهٔ پاسخ mutation — بدون GET، بدون اسکلت، بدون پرش اسکرول */
     patch(t) {
       updateCounts();
+      const prev = state.types.find((x) => x.id === t?.id);
+      if (prev?.batteryCategory) paintBatteryZone(); /* ۱.۲۷.۸۸ — شناسنامهٔ ابزار باتری درجا تازه شود (پاسخ mutation شناسنامه را ندارد) */
       if (!t?.id || !listZone.isConnected) { ctl.quietSync(); return; }
-      const prev = state.types.find((x) => x.id === t.id);
       state.types = state.types.map((x) => (x.id === t.id ? t : x));
       const old = listZone.querySelector(`[data-id="${CSS.escape(String(t.id))}"]`);
       if (!old) { ctl.quietSync(); return; } // با فیلتر فعلی تازه وارد دید شده — همگام‌سازی بی‌صدا
-      // از فیلتر دسته/مخاطب/جستجو خارج شد (فقط کارت‌های فعال فیلتر می‌شوند — ۱.۲۷.۴۰: غیرفعال‌ها اصلاً رندر نمی‌شوند)
+      // از فیلتر گروه/مخاطب/جستجو خارج شد (فقط کارت‌های فعال فیلتر می‌شوند — ۱.۲۷.۴۰: غیرفعال‌ها اصلاً رندر نمی‌شوند)
       if (t.active && !matchesTypeFilter(t)) { collapseRemove(old); ensureNonEmptyPaint(); return; }
-      if (Boolean(prev?.active) !== Boolean(t.active)) { paintTypeZone(); return; } // قالب غیرفعال شد → از فهرست پاک می‌شود
+      if (Boolean(prev?.active) !== Boolean(t.active) || formGroupOf(prev) !== formGroupOf(t)) { paintTypeZone(); return; } // قالب غیرفعال شد یا گروهش عوض شد → رندر تازهٔ فهرست
       const fresh = typeCard(t);
       old.replaceWith(fresh);
       flashNode(fresh);
@@ -330,6 +421,7 @@ export async function renderCaseEventTypes(container) {
         if (myGen !== gen) return;
         state.types = res.data ?? [];
         updateCounts();
+        paintBatteryZone(); /* ۱.۲۷.۸۸ — شناسنامهٔ باتری با دادهٔ تازه */
         if (listZone.isConnected) paintTypeZone();
       } catch (err) {
         if (myGen === gen) toastError(err);
@@ -879,7 +971,7 @@ function openTypeForm({ type = null, tagName = null, onSaved }) {
   /* ۱.۲۵.۸۱ — «پیش‌نمایش از نگاه خانواده» (خواست کارفرما): تعریفِ در حال طراحی با فرم POST
      در تب تازه باز می‌شود؛ صفحهٔ بازشده عین فرم خانواده است و پر کردنش هیچ جایی ذخیره
      نمی‌شود (تحلیل خالص سمت سرور). فرم مخفی = تنها راه گذاشتن تعریف بزرگ در بدنهٔ POST
-     با تب تازه؛ توکن نشست در بدنه می‌آید چون مسیر /public سرِتیتِ هدر Authorization است. */
+     با تب تازه؛ ۱.۲۷.۸۲ (ADR-005) — احراز با کوکی نشست هم‌مبدأ است و هیچ توکنی در بدنه یا هدر نمی‌رود. */
   function openFamilyPreview() {
     if (v(st.title).length < 2 || st.fields.length === 0) {
       toast('برای پیش‌نمایش، عنوان قالب و حداقل یک آیتم لازم است', 'error');

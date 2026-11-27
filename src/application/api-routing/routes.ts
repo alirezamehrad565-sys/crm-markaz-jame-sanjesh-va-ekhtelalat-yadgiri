@@ -193,7 +193,13 @@ function registerPostGateSystemRoutes(app: AppHono, services: Services, deps: Ap
   // ?format=html صفحهٔ مدیریتی رندر-سروری بدون JavaScript). ثبت دو-خطی هم‌الگوی quota.
   registerCentralNodesMapRoutes(app, { db: services.db });
 
-  app.get('/api/me', (c) => c.json({ data: c.get('authContext') }, 200));
+  /* SEC (ممیزی ۱.۲۷.۸۸) — /api/me دیگر sessionId (شناسهٔ ردیف نشست) را نمی‌فرستد:
+     کلاینت هیچ کاری با آن ندارد و افشای آن فقط سطح حمله را بالا می‌برد. خروج همان چهار
+     فیلد staffId/email/role/displayName را دارد؛ ابطالِ خروج سرور با ctx.sessionId بی‌تغییر است. */
+  app.get('/api/me', (c) => {
+    const { sessionId: _omit, ...me } = c.get('authContext');
+    return c.json({ data: me }, 200);
+  });
 }
 
 /** دامنه‌های بالینی: نوبت/حضور/پرونده/انتظار/فرم/پیگیری/رویداد/موتور بالینی/خروجی نسخه‌دار/بازی */

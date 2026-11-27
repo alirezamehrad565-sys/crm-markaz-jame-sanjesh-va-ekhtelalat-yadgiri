@@ -6,8 +6,10 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  buildSurveyInsights, classifySurveyNote, surveyTrendSlices, SURVEY_NOTE_THEMES
+  applySurveyStructuredAnalysis, buildSurveyInsights, buildSurveyStructuredInsight,
+  classifySurveyNote, surveyConcernLevelOf, surveyStructuredSummaryFa, surveyTrendSlices, SURVEY_NOTE_THEMES
 } from '../survey-insights';
+import type { CaseEventField, CaseEventSubscale } from '../types';
 
 const NOW = new Date('2026-11-10T09:00:00.000Z');
 const DAY = 86_400_000;
@@ -133,5 +135,139 @@ describe('buildSurveyInsights — ریاضی تابلو', () => {
     expect(ins.previous.sent).toBe(0);
     expect(ins.previous.response_rate).toBeNull();
     expect(ins.trend).toHaveLength(7);
+  });
+});
+
+/* ─── ۱.۲۷.x — تحلیل ساختاری نظرسنجی خانواده ───
+   فیکسچر بریده‌شده از ساختار واقعی «فرم ارزیابی عملکرد حسی _فرم خانواده» (t-9fa42a382d):
+   آیتم دودویی بله=۱/خیر=۰ با subscaleId، زیرمقیاس‌های excludeFromTotal و بدون باند؛
+   یک آیتم مقیاس ۰-۲ با برچسب هم افزوده شده تا مسیر scaleLabels پوشش داده شود */
+const SURVEY_SUBS: CaseEventSubscale[] = [
+  { id: 'sub_touch', name: 'بخش اول: حس لمس', excludeFromTotal: true, bands: null },
+  { id: 'sub_oral', name: 'بخش دوم: حس دهانی', excludeFromTotal: true, bands: null },
+  { id: 'sub_vest', name: 'بخش سوم: حس عمقی و وستیبولار', excludeFromTotal: true, bands: null }
+];
+const YES_NO = [{ label: 'بله', score: 1 }, { label: 'خیر', score: 0 }];
+const SURVEY_FIELDS: CaseEventField[] = [
+  { key: 't1', label: 'گویه لمس یک', type: 'single', scoredOptions: YES_NO, subscaleId: 'sub_touch' },
+  { key: 't2', label: 'گویه لمس دو', type: 'single', scoredOptions: YES_NO, subscaleId: 'sub_touch' },
+  { key: 't3', label: 'گویه لمس سه', type: 'single', scoredOptions: YES_NO, subscaleId: 'sub_touch' },
+  { key: 'o1', label: 'گویه دهانی یک', type: 'single', scoredOptions: YES_NO, subscaleId: 'sub_oral' },
+  { key: 'o2', label: 'گویه دهانی دو', type: 'single', scoredOptions: YES_NO, subscaleId: 'sub_oral' },
+  { key: 'v1', label: 'گویه وستیبولار یک', type: 'scale', scaleMax: 2, scaleLabels: ['هرگز', 'گاهی', 'همیشه'], subscaleId: 'sub_vest' },
+  { key: 'v2', label: 'گویه وستیبولار دو', type: 'scale', scaleMax: 2, scaleLabels: ['هرگز', 'گاهی', 'همیشه'], subscaleId: 'sub_vest' }
+];
+/* مقدار خام آیتم «single» = اندیس گزینه در scoredOptions (گزینهٔ صفر همینجا «بله» است) —
+   هم‌قرارداد fillByFamily که اندیس را می‌فرستد و itemScoreOf نمرهٔ گزینه را می‌خواند */
+const SURVEY_VALUES: Record<string, number> = { t1: 0, t2: 0, t3: 1, o1: 0, o2: 1, v1: 2, v2: 0 };
+
+describe('surveyConcernLevelOf — آستانه‌های توصیفی', () => {
+  it('۰-۱۹ کم، ۲۰-۴۹ متوسط، ۵۰ به بالا — صرفاً هیوریستیک نمایشی', () => {
+    expect(surveyConcernLevelOf(0)).toBe('low');
+    expect(surveyConcernLevelOf(19)).toBe('low');
+    expect(surveyConcernLevelOf(20)).toBe('medium');
+    expect(surveyConcernLevelOf(49)).toBe('medium');
+    expect(surveyConcernLevelOf(50)).toBe('high');
+    expect(surveyConcernLevelOf(100)).toBe('high');
+  });
+});
+
+describe('buildSurveyStructuredInsight — فرم چندحیطه‌ای با زیرمقیاس', () => {
+  it('تفکیک حیطه‌ای از زیرمقیاس‌های خود فرم + نرخ نشانه در هر بخش', () => {
+    const ins = buildSurveyStructuredInsight(SURVEY_FIELDS, SURVEY_VALUES, SURVEY_SUBS)!;
+    expect(ins.grouped_by).toBe('subscale');
+    expect(ins.domains.map((d) => d.name)).toEqual(['بخش اول: حس لمس', 'بخش دوم: حس دهانی', 'بخش سوم: حس عمقی و وستیبولار']);
+    expect(ins.domains[0]).toMatchObject({ id: 'sub_touch', items: 3, answered: 3, concerning: 2, concern_pct: 67 });
+    expect(ins.domains[1]).toMatchObject({ id: 'sub_oral', items: 2, answered: 2, concerning: 1, concern_pct: 50 });
+    expect(ins.domains[2]).toMatchObject({ id: 'sub_vest', items: 2, answered: 2, concerning: 1, concern_pct: 50 });
+    expect(ins.items).toBe(7);
+    expect(ins.answered).toBe(7);
+    expect(ins.concerning).toBe(4);
+    expect(ins.concern_pct).toBe(57); // ۴/۷ ≈ ۵۷٪
+    expect(ins.level).toBe('high');
+    expect(ins.level_label).toBe('بالا');
+  });
+
+  it('گویه‌های نشانه‌دار: متن گویه + برچسب پاسخ همان که خانواده دیده (بله / برچسب نمرهٔ مقیاس)', () => {
+    const ins = buildSurveyStructuredInsight(SURVEY_FIELDS, SURVEY_VALUES, SURVEY_SUBS)!;
+    expect(ins.flagged.map((f) => f.key)).toEqual(['t1', 't2', 'o1', 'v1']);
+    expect(ins.flagged[0]).toEqual({ key: 't1', question: 'گویه لمس یک', answer: 'بله' });
+    expect(ins.flagged[3].answer).toBe('همیشه'); // برچسب نمرهٔ ۲ مقیاس
+    expect(ins.flagged.some((f) => f.key === 'v2')).toBe(false); // پاسخ صفر نشانه نیست
+  });
+
+  it('تفسیر صریحاً توصیفی و بدون هنجار — بیشترین حیطه‌ها را نام می‌برد', () => {
+    const ins = buildSurveyStructuredInsight(SURVEY_FIELDS, SURVEY_VALUES, SURVEY_SUBS)!;
+    expect(ins.interpretation).toContain('توصیفی');
+    expect(ins.interpretation).toContain('بدون هنجار روان‌سنجی');
+    expect(ins.interpretation).toContain('از ۷ آیتمِ پاسخ‌گرفته، ۴ مورد');
+    expect(ins.interpretation).toContain('«بخش اول: حس لمس»');
+    expect(ins.interpretation).toContain('«بخش دوم: حس دهانی»');
+  });
+});
+
+describe('buildSurveyStructuredInsight — فرم بدون گروه', () => {
+  const fields: CaseEventField[] = [
+    { key: 'a', label: 'گویه یک', type: 'single', scoredOptions: YES_NO },
+    { key: 'b', label: 'گویه دو', type: 'single', scoredOptions: YES_NO }
+  ];
+  it('بدون زیرمقیاس و سربرگ → تک‌حیطهٔ «همهٔ آیتم‌ها» با همان ریاضی', () => {
+    const ins = buildSurveyStructuredInsight(fields, { a: 0, b: 0 })!;
+    expect(ins.grouped_by).toBe('none');
+    expect(ins.domains).toHaveLength(1);
+    expect(ins.domains[0].name).toBe('همهٔ آیتم‌ها');
+    expect(ins.domains[0]).toMatchObject({ items: 2, answered: 2, concerning: 2, concern_pct: 100 });
+    expect(ins.concern_pct).toBe(100);
+    expect(ins.level).toBe('high');
+    expect(ins.interpretation).toContain('بخش‌بندی صریح ندارد');
+  });
+  it('بخش‌بندی از سربرگ‌های فرم وقتی زیرمقیاس تعریف نشده', () => {
+    const withHeadings: CaseEventField[] = [
+      { key: 'h1', label: 'بخش خوراک', type: 'heading' },
+      { key: 'a', label: 'گویه یک', type: 'single', scoredOptions: YES_NO },
+      { key: 'b', label: 'گویه دو', type: 'single', scoredOptions: YES_NO },
+      { key: 'h2', label: 'بخش خواب', type: 'heading' },
+      { key: 'c', label: 'گویه سه', type: 'single', scoredOptions: YES_NO }
+    ];
+    const ins = buildSurveyStructuredInsight(withHeadings, { a: 0, b: 1, c: 0 })!;
+    expect(ins.grouped_by).toBe('heading');
+    expect(ins.domains.map((d) => d.name)).toEqual(['بخش خوراک', 'بخش خواب']);
+    expect(ins.domains[0]).toMatchObject({ answered: 2, concerning: 1, concern_pct: 50 });
+    expect(ins.domains[1]).toMatchObject({ answered: 1, concerning: 1, concern_pct: 100 });
+    expect(ins.flagged).toHaveLength(2);
+  });
+  it('فرم بدون آیتم نمره‌دار → null (مسیر تحلیل قدیمی دست‌نخورده)', () => {
+    const free: CaseEventField[] = [{ key: 'n1', label: 'یادداشت', type: 'longtext' }];
+    expect(buildSurveyStructuredInsight(free, {})).toBeNull();
+  });
+});
+
+describe('applySurveyStructuredAnalysis — الحاق بدون شکستن مسیر قدیمی', () => {
+  it('maxScore صفر («نمرهٔ کل: ۰ از ۰») → تفسیر جایگزین می‌شود', () => {
+    const legacy = { score: 0, band: null, answered: 7, total: 7, maxScore: 0, subscaleScores: [], interpretation: 'نمرهٔ کل: ۰ از ۰' };
+    const ins = buildSurveyStructuredInsight(SURVEY_FIELDS, SURVEY_VALUES, SURVEY_SUBS)!;
+    const merged = applySurveyStructuredAnalysis(legacy, ins);
+    expect(merged.survey).toBe(ins);
+    expect(merged.interpretation).toBe(ins.interpretation);
+    expect(merged.interpretation).not.toContain('نمرهٔ کل');
+  });
+  it('maxScore>0 → پاراگراف توصیفی به انتهای تفسیر موجود اضافه می‌شود (extend نه break)', () => {
+    const legacy = { score: 2, band: null, answered: 2, total: 2, maxScore: 2, subscaleScores: [], interpretation: 'نمرهٔ کل: ۲ از ۲' };
+    const ins = buildSurveyStructuredInsight(
+      [{ key: 'a', label: 'گویه یک', type: 'single', scoredOptions: YES_NO }, { key: 'b', label: 'گویه دو', type: 'single', scoredOptions: YES_NO }],
+      { a: 1, b: 0 }
+    )!;
+    const merged = applySurveyStructuredAnalysis(legacy, ins);
+    expect(merged.interpretation?.startsWith('نمرهٔ کل: ۲ از ۲')).toBe(true);
+    expect(merged.interpretation).toContain('بدون هنجار روان‌سنجی');
+    expect(merged.survey).toBe(ins);
+  });
+  it('خلاصهٔ تک‌خطی فهرست‌ها: کوتاه، توصیفی و با شمار نشانه‌ها', () => {
+    const ins = buildSurveyStructuredInsight(SURVEY_FIELDS, SURVEY_VALUES, SURVEY_SUBS)!;
+    const s = surveyStructuredSummaryFa(ins);
+    expect(Array.from(s).length).toBeLessThanOrEqual(300);
+    expect(s).toContain('تحلیل توصیفی');
+    expect(s).toContain('۴ نشانه از ۷ پاسخ');
+    expect(s).toContain('سطح کلی: بالا');
   });
 });

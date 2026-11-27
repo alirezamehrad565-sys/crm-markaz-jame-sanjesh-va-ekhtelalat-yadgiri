@@ -23,6 +23,8 @@ import type { StudentProfileService } from '@domain/student-profile';
 import type { ScreeningService } from '@domain/screening';
 import type { SettingsService } from '@app/settings';
 import { goalsQueryWindow, summarizeScreeningGoals } from './screening-goal';
+import { loadMyActivity } from './recent';
+import type { MyDashboardStats } from './types';
 import {
   computeAttendanceStats,
   computeStaffCards,
@@ -50,7 +52,8 @@ export interface DashboardService {
   getPeriodSummary(fromYmd: string, toYmd: string): Promise<DashboardPeriodSummary>;
   getScreeningGoal(): Promise<DashboardScreeningGoal>;
   getScoreboard(actorStaffId: string | null): Promise<TherapistScoreboard>;
-  getMyStats(actorStaffId: string): Promise<MyPerformanceStats>;
+  /* ۱.۲۷.۸۸ — خروجی با فیلدهای اختیاری recentCases/pendingSurveys الحاقی غنی‌تر شده (ADDITIVE) */
+  getMyStats(actorStaffId: string): Promise<MyDashboardStats>;
 }
 
 export function createDashboardService(deps: DashboardDeps): DashboardService {
@@ -258,7 +261,7 @@ export function createDashboardService(deps: DashboardDeps): DashboardService {
       };
     },
 
-    async getMyStats(actorStaffId: string): Promise<MyPerformanceStats> {
+    async getMyStats(actorStaffId: string): Promise<MyDashboardStats> {
       const todayYmd = tehranTodayYmd();
       const [gy, gm, gd] = todayYmd.split('-').map(Number);
       const j = toJalaliParts(gy, gm, gd);
@@ -268,7 +271,7 @@ export function createDashboardService(deps: DashboardDeps): DashboardService {
       const prevStart = jalaliToGregorianYmd(prevJy, prevJm, 1);
       const prevEnd = addDaysYmd(monthStart, -1);
 
-      const [curCounts, prevCounts, staffRows, missing, nextRow] = await Promise.all([
+      const [curCounts, prevCounts, staffRows, missing, nextRow, myActivity] = await Promise.all([
         activityCounts(monthStart, todayYmd),
         activityCounts(prevStart, prevEnd),
         listStaff(db, true),
@@ -294,7 +297,9 @@ export function createDashboardService(deps: DashboardDeps): DashboardService {
             ORDER BY a.start_at
             LIMIT 1`,
           [actorStaffId, new Date().toISOString()]
-        )
+        ),
+        /* ۱.۲۷.۸۸ — پرونده‌های اخیر من + نظرسنجی‌های در انتظار (الحاقی؛ هم‌زمان با بقیه) */
+        loadMyActivity(db, actorStaffId)
       ]);
 
       const cur = curCounts.get(actorStaffId) ?? { sessions: 0, exercises: 0, events: 0, followups: 0 };
@@ -346,7 +351,10 @@ export function createDashboardService(deps: DashboardDeps): DashboardService {
         nextAppointment: nextRow
           ? { id: nextRow.id, startAt: nextRow.start_at, endAt: nextRow.end_at, studentNames: (nextRow.names ?? '').split('، ').filter(Boolean) }
           : null,
-        history: [...prevHistory, { label: `${JALALI_MONTHS_FA[j.jm - 1]} ${j.jy}`, score: scoreOf(cur) }]
+        history: [...prevHistory, { label: `${JALALI_MONTHS_FA[j.jm - 1]} ${j.jy}`, score: scoreOf(cur) }],
+        /* ۱.۲۷.۸۸ — الحاقی ADDITIVE: تا ۶ پروندهٔ اخیرِ من + وضعیت پرسشنامه‌های خانواده */
+        recentCases: myActivity.recentCases,
+        pendingSurveys: myActivity.pendingSurveys
       };
     }
   };

@@ -345,6 +345,80 @@ describe('حضور روزانهٔ همکاران (فقط امروز)', () => {
   });
 });
 
+describe('سقف‌بندی خواندن حضور همکاران — درمانگر فقط خودش، دفتر و ناظر کامل', () => {
+  let A: ReturnType<typeof createTestApp>;
+  let manager: Api;
+  let secretary: Api;
+  let ali: Api; // درمانگر ali = ALI_ID
+  let supervisor: Api;
+  const today = tehranTodayYmd();
+
+  beforeAll(async () => {
+    A = createTestApp();
+    manager = await asRole(A, 'manager');
+    secretary = await asRole(A, 'secretary');
+    ali = await asRole(A, 'therapist');
+    await secretary.put('/api/staff-attendance', { staff_id: ALI_ID, date: today, status: 'present' });
+    await secretary.put('/api/staff-attendance', { staff_id: MARYAM_ID, date: today, status: 'absent' });
+
+    const created = await manager.post('/api/staff', {
+      full_name: 'ناظر آزمون', phone: '09121119111', national_id: makeNationalId(),
+      username: 'nazertest', password: 'pass-9911', role: 'supervisor'
+    });
+    expect(created.status).toBe(201);
+    supervisor = new Api(A, await loginToken(A, 'nazertest', 'pass-9911'));
+  });
+
+  it('لیست توسط درمانگر — فقط رکوردهای خودش؛ staff_id دیگری نادیده گرفته می‌شود', async () => {
+    const res = await ali.get(`/api/staff-attendance?from=${today}&to=${today}&staff_id=${MARYAM_ID}`);
+    expect(res.status).toBe(200);
+    const items = (res.body as { data: Array<{ staffId: string }> }).data;
+    expect(items.length).toBeGreaterThan(0);
+    expect(items.every((r) => r.staffId === ALI_ID)).toBe(true);
+  });
+
+  it('خلاصهٔ روز توسط درمانگر — فقط خودش: totalActiveStaff=۱ و غایبِ دیگری دیده نمی‌شود', async () => {
+    const res = await ali.get(`/api/staff-attendance/day-summary?date=${today}`);
+    expect(res.status).toBe(200);
+    const s = (res.body as { data: { present: number; absent: number; totalActiveStaff: number; unmarked: number } }).data;
+    expect(s.totalActiveStaff).toBe(1);
+    expect(s.present).toBe(1);
+    expect(s.absent).toBe(0);
+    expect(s.unmarked).toBe(0);
+  });
+
+  it('خلاصهٔ بازه توسط درمانگر — فقط ردیف خودش', async () => {
+    const res = await ali.get(`/api/staff-attendance/range-summary?from=${today}&to=${today}`);
+    expect(res.status).toBe(200);
+    const items = (res.body as { data: Array<{ staffId: string; present: number; absent: number }> }).data;
+    expect(items.length).toBe(1);
+    expect(items[0].staffId).toBe(ALI_ID);
+    expect(items[0].present).toBe(1);
+    expect(items[0].absent).toBe(0);
+  });
+
+  it('دفتر (مدیر) — دست کامل: هر دو همکار در لیست و خلاصهٔ روز', async () => {
+    const list = await manager.get(`/api/staff-attendance?from=${today}&to=${today}`);
+    expect(list.status).toBe(200);
+    const items = (list.body as { data: Array<{ staffId: string }> }).data;
+    expect(items.map((r) => r.staffId)).toEqual(expect.arrayContaining([ALI_ID, MARYAM_ID]));
+
+    const day = await manager.get(`/api/staff-attendance/day-summary?date=${today}`);
+    expect(day.status).toBe(200);
+    const s = (day.body as { data: { absent: number; totalActiveStaff: number; unmarked: number } }).data;
+    expect(s.totalActiveStaff).toBe(5); // چهار همکار seed + ناظر آزمون
+    expect(s.absent).toBe(1); // مریم غایب
+    expect(s.unmarked).toBe(3); // مدیر، منشی و ناظر امروز ثبت نشده‌اند
+  });
+
+  it('ناظر (فقط-خواندنی مستندشده در supervisorGate) — دست کامل حفظ می‌شود', async () => {
+    const res = await supervisor.get(`/api/staff-attendance?from=${today}&to=${today}`);
+    expect(res.status).toBe(200);
+    const items = (res.body as { data: Array<{ staffId: string }> }).data;
+    expect(items.map((r) => r.staffId)).toEqual(expect.arrayContaining([ALI_ID, MARYAM_ID]));
+  });
+});
+
 describe('بورد روز کاری', () => {
   let A: ReturnType<typeof createTestApp>;
   let manager: Api;

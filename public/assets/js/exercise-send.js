@@ -27,14 +27,18 @@ export async function downloadSubmissionFile(submissionId, filename) {
   }
 }
 
-export async function openExerciseSendModal({ student, onSent }) {
+/* preset (اختیاری): { studentId, studentName? } — برای بازکننده‌هایی که فقط شناسهٔ دانش‌آموز دارند
+   (کارت جلسهٔ روز کاری)؛ فراخوانی‌های فعلی با student کامل دست‌نخورده می‌مانند */
+export async function openExerciseSendModal({ student, onSent, preset } = {}) {
   if (!isStaff()) {
     toast('ارسال تمرین برای نقش شما فعال نیست');
     return;
   }
+  const target = student ?? (preset?.studentId ? { id: preset.studentId, firstName: preset.studentName ?? '' } : null);
+  if (!target) return;
   let suggestions;
   try {
-    suggestions = (await api.get(`/api/students/${student.id}/exercises/suggest`)).data;
+    suggestions = (await api.get(`/api/students/${target.id}/exercises/suggest`)).data;
   } catch (err) {
     toastError(err);
     return;
@@ -126,11 +130,11 @@ export async function openExerciseSendModal({ student, onSent }) {
                 return;
               }
               const payload = { exercise_ids: [...picked], note: note.value.trim() || null };
-              const created = await api.post(`/api/students/${student.id}/exercises/batches`, payload);
+              const created = await api.post(`/api/students/${target.id}/exercises/batches`, payload);
               const batch = created.data;
               const send = await api.post(`/api/exercises/batches/${batch.id}/send`, {});
               if (send.data.sent > 0) {
-                toast(`تمرین‌ها برای ${studentLabel(student)} به چت خانواده ارسال شد (${fa(send.data.sent)} پیام)`);
+                toast(`تمرین‌ها برای ${studentLabel(target)} به چت خانواده ارسال شد (${fa(send.data.sent)} پیام)`);
               } else {
                 toast('تمرین‌ها در پرونده ثبت شد — ولیّ هنوز به بات متصل نیست', 'warning');
               }
@@ -147,7 +151,7 @@ export async function openExerciseSendModal({ student, onSent }) {
   ];
 
   openModal({
-    title: `ارسال تمرین با بله — ${studentLabel(student)}`,
+    title: `ارسال تمرین با بله — ${studentLabel(target)}`,
     body,
     wide: true,
     actions

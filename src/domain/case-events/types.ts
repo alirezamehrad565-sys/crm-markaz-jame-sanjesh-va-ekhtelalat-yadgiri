@@ -74,6 +74,33 @@ export interface CaseEventAnalysis {
   subscaleScores?: CaseEventSubscaleScore[];
   flags?: CaseEventFlag[];
   interpretation?: string | null;
+  /* ۱.۲۷.x — تحلیل ساختاری نظرسنجی خانواده: فقط برای چک‌لیست‌های بدون باندِ کل که خروجی
+     قدیمی‌شان («نمرهٔ کل: ۰ از ۰» یا بدون تفسیر حیطه‌ای) کمکی نبود؛ بانددارها دست‌نخورده‌اند */
+  survey?: CaseEventSurveyAnalysis | null;
+}
+
+/* ─── ۱.۲۷.x — تحلیل ساختاری نظرسنجی خانواده: بر پایهٔ بخش‌بندی خودِ فرم (زیرمقیاس یا سربرگ)؛
+   «نشانه‌دار» = نمرهٔ مؤثر غیرصفر (هم‌قرارداد امتیازدهی چک‌لیست)؛ سطح‌ها آستانهٔ نمایشی توصیفی‌اند، نه هنجار */
+export interface CaseEventSurveyDomain {
+  id: string | null; name: string;
+  items: number; answered: number; concerning: number;
+  /** ٪ پاسخ نشانه‌دار در همین بخش — ۰ تا ۱۰۰ */
+  concern_pct: number;
+}
+
+export interface CaseEventSurveyFlag { key: string; question: string; answer: string }
+
+export interface CaseEventSurveyAnalysis {
+  /** منبع بخش‌بندی: زیرمقیاس‌های فرم، سربرگ‌های فرم، یا بدون گروه (تک‌حیطه‌ای) */
+  grouped_by: 'subscale' | 'heading' | 'none';
+  domains: CaseEventSurveyDomain[];
+  flagged: CaseEventSurveyFlag[];
+  items: number; answered: number; concerning: number; concern_pct: number;
+  /** سطح کلی نشانه‌ها — توصیفی، بدون هنجار روان‌سنجی؛ null وقتی پاسخی نیست */
+  level: 'low' | 'medium' | 'high' | null;
+  level_label: string | null;
+  /** پاراگراف تفسیر توصیفی فارسی — صریحاً بدون هنجار روان‌سنجی */
+  interpretation: string;
 }
 
 export interface CaseEventSubscaleScore {
@@ -106,6 +133,9 @@ export interface CaseEventTypeRecord {
   audience: CaseEventAudience;
   toolSource: string | null; // ۱.۲۷.۲۸ — M5: شناسنامهٔ ابزار — منبع/مرجع قالب
   toolNorm: string | null; // ۱.۲۷.۲۸ — M5: شناسنامهٔ ابزار — هنجار سنی/روایی
+  /* ۱.۲۷.۸۸ — ممیزی روان‌سنجی: دستهٔ کتابخانهٔ باتری (۹ دستهٔ فارسی — فقط بلوک‌های JSON باتری؛ از
+     رجیستری instruments.ts با کلید پر می‌شود، ستون DB ندارد). null = خارج از باتری */
+  batteryCategory?: string | null;
   active: boolean;
   isSystem: boolean;
   createdAt: string;

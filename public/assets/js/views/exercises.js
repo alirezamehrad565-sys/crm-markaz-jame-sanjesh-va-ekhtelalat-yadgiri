@@ -977,9 +977,7 @@ export function renderExercises(container) {
         const url = f.id
           ? `/api/exercises/${ex.id}/files/${f.id}`
           : `/api/exercises/${ex.id}/file`;
-        const res = await fetch(url, {
-          headers: { Authorization: `Bearer ${localStorage.getItem('cs.token') ?? ''}` }
-        });
+        const res = await fetch(url); /* ۱.۲۷.۸۲ (ADR-005): احراز با کوکی نشست هم‌مبدأ — هدر Bearer دستی حذف شد */
         if (!res.ok) throw new Error(`دریافت فایل ناموفق بود (کد ${fa(res.status)})`);
         const blob = await res.blob();
         if (my !== seq) return; // پاسخ کهنه — کاربر فایل دیگری را باز کرده

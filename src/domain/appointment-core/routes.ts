@@ -1,4 +1,5 @@
 import {
+  AppointmentStudentRefSchema,
   CancelAppointmentSchema,
   CopyWeekSchema,
   MoveAppointmentSchema,
@@ -8,7 +9,7 @@ import {
 } from '@core/shared';
 import type { AppHono, CopyWeekInput } from '@core/shared';
 import { getAuthContext, requireRole } from '@core/auth';
-import { ForbiddenError, NotFoundError, ValidationError } from '@core/errors';
+import { ForbiddenError, NotFoundError } from '@core/errors';
 import type { AppointmentService } from './types';
 
 export function registerRoutes(app: AppHono, service: AppointmentService): void {
@@ -121,10 +122,9 @@ export function registerRoutes(app: AppHono, service: AppointmentService): void 
 
   app.post('/api/appointments/:id/students', async (c) => {
     const actor = getAuthContext(c);
-    const body = (await c.req.json<unknown>()) as { student_id?: string; facet_id?: string };
-    if (!body.student_id) {
-      throw new ValidationError('student_id الزامی است');
-    }
+    /* ممیزی صفحهٔ تقویم (۱.۲۷.۸۸) — قبلاً بدنه بدون اسکیا cast می‌شد و student_id نامعتبر به خطای FK
+       و پاسخ ۵۰۰ می‌رسید؛ همان اسکیمای ارجاع دانش‌آموزِ ثبت نوبت اینجا هم اعمال می‌شود (۴۰۰ سرّه) */
+    const body = AppointmentStudentRefSchema.parse(await c.req.json<unknown>());
     await service.addStudent(c.req.param('id'), body.student_id, body.facet_id, actor);
     return c.body(null, 204);
   });

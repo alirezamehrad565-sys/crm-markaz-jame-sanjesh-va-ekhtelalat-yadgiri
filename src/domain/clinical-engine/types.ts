@@ -482,6 +482,8 @@ export interface BatteryDef {
   familyFillable: boolean;
   audience: CaseEventAudience;
   source: string;
+  /* ۱.۲۷.۸۸ — ممیزی روان‌سنجی: دستهٔ کتابخانهٔ باتری (یکی از ۹ دستهٔ BATTERY_CATEGORIES در instruments.ts) */
+  batteryCategory?: string;
   tags: string[];
   fields?: CaseEventField[];
   subscales?: CaseEventSubscale[] | null;

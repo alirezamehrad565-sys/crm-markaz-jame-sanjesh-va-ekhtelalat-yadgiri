@@ -39,6 +39,14 @@ export interface AppointmentLifecycleObserver {
   onCancelled(appointment: Appointment): Promise<void>;
 }
 
+/* ممیزی صفحهٔ تقویم (۱.۲۷.۸۸) — نتیجهٔ برگردانی دستهٔ کپی هفته: removed = نوبت‌های حذف‌شده،
+   blocked = نوبت‌های دسته که به‌دلیل سابقه (گزارش جلسه، حضور/یادداشت، ویرایش، ارجاع لیست انتظار)
+   نگه داشته شدند؛ تفکیک دلیل فقط در ردیف audit ثبت می‌شود */
+export interface UndoCopyWeekResult {
+  removed: number;
+  blocked: number;
+}
+
 export interface AppointmentService {
   create(input: NewAppointmentInput, actor: AuthContext): Promise<{ appointment: Appointment; warnings: ConflictWarning[] }>;
   createWithinTx(tx: DbClient, input: NewAppointmentInput, actor: AuthContext): Promise<{ appointment: Appointment; warnings: ConflictWarning[] }>;
@@ -55,7 +63,7 @@ export interface AppointmentService {
   addStudent(appointmentId: string, studentId: string, facetId: string | undefined, actor: AuthContext): Promise<void>;
   removeStudent(appointmentId: string, studentId: string, actor: AuthContext): Promise<void>;
   copyWeek(input: CopyWeekInput, actor: AuthContext): Promise<CopyWeekResult>;
-  undoCopyWeek(batchId: string, actor: AuthContext): Promise<{ removed: number }>;
+  undoCopyWeek(batchId: string, actor: AuthContext): Promise<UndoCopyWeekResult>;
 
   setConflictEngine(engine: {
     checkOverlap(proposed: {

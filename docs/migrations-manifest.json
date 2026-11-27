@@ -126,5 +126,9 @@
   "0122_report_snapshots.sql": "9d637e9f549ac6209a4d2509b287c3d8e1ab900967c71fc8bc37cd34d15d1bd9",
   "0123_attendance_late_and_followup_result.sql": "9b9d2d00ee0e464435c26dfad1e55b642d6f53fdfeea3d9048fff333f9c32308",
   "0124_reconcile_central_records.sql": "d4aeaed15643f7d887153cb615db2e515626703a4f1eeccca8638f1f796d1a74",
-  "0125_audit_log_created_at_index.sql": "01305c214809e795e952d92c3a603ed7e9eff53ef40519c6ef5ea01d8f32e321"
+  "0125_audit_log_created_at_index.sql": "01305c214809e795e952d92c3a603ed7e9eff53ef40519c6ef5ea01d8f32e321",
+  "0126_tool_metadata_backfill.sql": "5489ed8416d3723bf322cbfc685095983882f6393e6c99a28769f61c2d5568c0",
+  "0127_intake_v2_retire.sql": "ca5419a610ed2c979bc4bf3608d41a6e1a055c41f2f6c8e384ab84fa61157460",
+  "0128_system_pathway_templates.sql": "504b3f8f69bce4ad5e3957d459acab2b8ff3f9e00cba2e6bade7ecc402013086",
+  "0129_system_exercise_cards.sql": "9dc8ba6e03804300b0e3e5a922c2a1e34dc3abb80e88189dbfb578ed9eeed81e"
 }

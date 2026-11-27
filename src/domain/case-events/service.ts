@@ -19,7 +19,7 @@ import {
   validateFileInput, validateProbeValues, validateReadCoreLevels, validateRehabFxValues, validateSensoryChipLevels, validateTypeDefinition, withTeacherName
 } from './pure';
 import type { ProbeArea } from './pure';
-import { buildSurveyInsights, surveyKindOfEventKey } from './survey-insights';
+import { applySurveyStructuredAnalysis, buildSurveyInsights, buildSurveyStructuredInsight, surveyKindOfEventKey, surveyStructuredSummaryFa } from './survey-insights';
 import type { SurveyInsightRow } from './survey-insights';
 import { applyWechslerEngineToPayload, WISC4_EVENT_KEY } from '../wechsler-engine';
 
@@ -1387,6 +1387,12 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
           .map(([k, v]) => [k, Number(v)])
       );
       const analysis = analyzeChecklist(type.fields, bands, numericValues, subscales);
+      /* ۱.۲۷.x — تحلیل ساختاری نظرسنجی خانواده: چک‌لیست‌های چندحیطه‌ای بدون باندِ کل
+         (زیرمقیاس‌های excludeFromTotal مثل فرم عملکرد حسی خانواده) خروجی قدیمی «۰ از ۰» می‌گرفتند؛
+         تحلیل توصیفی حیطه‌ای از ساختار خودِ فرم به analysis.survey می‌نشیند.
+         فرم‌های بانددار (مسیر قدیمی) دقیقاً مثل قبل می‌مانند. */
+      const structured = buildSurveyStructuredInsight(type.fields, numericValues, subscales);
+      if (structured && analysis.band === null) applySurveyStructuredAnalysis(analysis, structured);
       const teacher = teacherBindingOfPayload(parseJson<unknown>(row.payload, null));
       const payload = withTeacherName((() => {
         const p: Record<string, { value: string; label: string }> = {};
@@ -1405,7 +1411,13 @@ export function createCaseEventsService(deps: CaseEventDeps): CaseEventsService 
       for (const [k, v] of Object.entries(previous)) {
         if (k.startsWith('_') && v && !payload[k]) payload[k] = v;
       }
-      const summary = buildSummary(payload, analysis);
+      /* summary: برای فرم‌های با تحلیل ساختاری، خط بی‌معنای «امتیاز: ۰ از ۰» با خلاصهٔ توصیفی جایگزین می‌شود */
+      const baseSummary = buildSummary(payload, analysis);
+      const summary = analysis.survey
+        ? (analysis.maxScore === 0
+          ? surveyStructuredSummaryFa(analysis.survey)
+          : [baseSummary, surveyStructuredSummaryFa(analysis.survey)].filter(Boolean).join(' — '))
+        : baseSummary;
       const sourceTag = input.viaWeb ? `web:${now().toISOString()}` : (input.sourceChatId ?? 'unknown');
 
       await db.execute(

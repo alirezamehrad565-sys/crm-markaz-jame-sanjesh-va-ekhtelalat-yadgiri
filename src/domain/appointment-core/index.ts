@@ -8,6 +8,7 @@ export type {
   CopyWeekResult,
   ListFilters,
   MyStudent,
-  NewAppointmentInput
+  NewAppointmentInput,
+  UndoCopyWeekResult
 } from './types';
 export type { Appointment, AppointmentStudent, ConflictWarning } from '@core/shared';

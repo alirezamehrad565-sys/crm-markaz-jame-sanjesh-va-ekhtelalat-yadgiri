@@ -23,9 +23,30 @@ if (!current) {
   process.exit(1);
 }
 const old = fromArg ?? current;
+
+// v1.27.۱۹ — مهرهای دسکتاپ: جایگزینی رشتهٔ «نسخهٔ فعلی» اگر مهر قبلاً جامانده بود هیچ‌چیز
+// پیدا نمی‌کرد و بامپ بی‌صدا رد می‌شد (کلاس گزارش کارفرمای ۱.۲۷.۱۸ — CARGO_PKG_VERSION که
+// روی ۱.۲۷.۱۴ ماند و گیت خودآزمایی بوت پوسته «نصب ارتقا ناقص» داد). حالا مقدارگذاری مستقیم
+// + هشدار رانش، و گیت scripts/check-versions.mjs (در CI) هم هر ناهم‌مهر می‌گیرد.
+// (Cargo.lock در مخزن ردیابی نمی‌شود — cargo هنگام بیلد نسخهٔ پکیج را از خود Cargo.toml بازمی‌سازد.)
+const desktopStamps = [
+  ['desktop/src-tauri/tauri.conf.json', /"version": "[^"]+"/, /"version": "([^"]+)"/, `"version": "${target}"`, 'tauri.conf.json'],
+  ['desktop/src-tauri/Cargo.toml', /(\[package\][\s\S]*?\bversion = ")[^"]+(")/, /\[package\][\s\S]*?\bversion = "([^"]+)"/, `$1${target}$2`, 'Cargo.toml (CARGO_PKG_VERSION)'],
+];
+
 if (!fromArg && current === target) {
-  console.error(`نسخهٔ فعلی همان ${target} است — چیزی برای بامپ نیست`);
-  process.exit(1);
+  // رانش ۱.۲۷.۸۸ — اگر version.ts دستی بامپ شده ولی مهرهای دسکتاپ جامانده‌اند، اجرای سادهٔ
+  // بامپ نباید پیش از بخش مهرها خارج شود؛ فقط حلقهٔ جایگزینی رشته‌ای بی‌اثر است (old === target)
+  // و بخش مهر دسکتاپ رانش را صلب می‌کند. اگر همه‌چیز هم‌مهر بود، رفتار قبلی حفظ می‌شود.
+  const drift = desktopStamps.some(([f, , reGet]) => {
+    try { return (readFileSync(f, 'utf8').match(reGet)?.[1] ?? target) !== target; }
+    catch { return false; }
+  });
+  if (!drift) {
+    console.error(`نسخهٔ فعلی همان ${target} است — چیزی برای بامپ نیست`);
+    process.exit(1);
+  }
+  console.warn(`⚠ version.ts از قبل روی ${target} است — فقط مهرهای دسکتاپ جامانده‌اند؛ صلب رانش (کلاس ۱.۲۷.۸۸)`);
 }
 
 const files = [
@@ -66,14 +87,6 @@ for (const f of files) {
   console.log(`${f}: ${n + escN} جایگزینی`);
 }
 
-// v1.27.۱۹ — مهرهای دسکتاپ: جایگزینی رشتهٔ «نسخهٔ فعلی» اگر مهر قبلاً جامانده بود هیچ‌چیز
-// پیدا نمی‌کرد و بامپ بی‌صدا رد می‌شد (کلاس گزارش کارفرمای ۱.۲۷.۱۸ — CARGO_PKG_VERSION که
-// روی ۱.۲۷.۱۴ ماند و گیت خودآزمایی بوت پوسته «نصب ارتقا ناقص» داد). حالا مقدارگذاری مستقیم
-// + هشدار رانش، و گیت scripts/check-versions.mjs (در CI) هم هر ناهم‌مهر می‌گیرد.
-const desktopStamps = [
-  ['desktop/src-tauri/tauri.conf.json', /"version": "[^"]+"/, /"version": "([^"]+)"/, `"version": "${target}"`, 'tauri.conf.json'],
-  ['desktop/src-tauri/Cargo.toml', /(\[package\][\s\S]*?\bversion = ")[^"]+(")/, /\[package\][\s\S]*?\bversion = "([^"]+)"/, `$1${target}$2`, 'Cargo.toml (CARGO_PKG_VERSION)'],
-];
 for (const [f, reSet, reGet, to, label] of desktopStamps) {
   const before = readFileSync(f, 'utf8');
   const oldVal = before.match(reGet)?.[1];

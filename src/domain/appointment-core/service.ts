@@ -8,7 +8,7 @@ import { inParamChunks, inPlaceholders } from '@core/db/in-chunks'; // ۱.۲۵.�
 import { assertNoAssessmentBlockInRange } from '@domain/assessment-blocks'; // ۱.۲۷.۱۴ — سد سخت بلوک سنجش (خواست کارفرما)
 import { rowToAppointment, rowToStudent, selectAppointmentById, selectAppointments, selectStudentsOfAppointments, APPOINTMENT_STUDENT_QUERY_CHUNK } from './repository';
 import type { AppointmentRow, AppointmentStudentRow } from './repository';
-import type { Appointment, AppointmentDeps, AppointmentLifecycleObserver, AppointmentService, AppointmentUpdatePatch, CopyWeekInput, CopyWeekResult, ListFilters, MyStudent, NewAppointmentInput } from './types';
+import type { Appointment, AppointmentDeps, AppointmentLifecycleObserver, AppointmentService, AppointmentUpdatePatch, CopyWeekInput, CopyWeekResult, ListFilters, MyStudent, NewAppointmentInput, UndoCopyWeekResult } from './types';
 import { copyWeek as copyWeekImpl, undoCopyWeek as undoCopyWeekImpl } from './week-copy';
 
 interface ConflictChecker {
@@ -42,6 +42,25 @@ function assertAppointmentScope(actor: AuthContext, targetStaffId: string): void
   throw new ForbiddenError('شما فقط به نوبت‌های خودتان دسترسی دارید');
 }
 
+const STALE_VERSION_MSG = 'این نوبت همین الان توسط کاربر دیگری تغییر کرد.';
+
+/** شمار پرونده‌های موجود از میان شناسه‌های ورودی — تکه‌بندی ۹۰تایی (سقف ۱۰۰ بایند D1) */
+async function countExistingStudents(
+  reader: { query<T>(sql: string, params?: unknown[]): Promise<T[]> },
+  studentIds: string[]
+): Promise<number> {
+  const known = new Set<string>();
+  for (const chunk of inParamChunks(studentIds)) {
+    for (const row of await reader.query<{ id: string }>(
+      `SELECT id FROM students WHERE id IN (${inPlaceholders(chunk.length)})`,
+      chunk
+    )) {
+      known.add(row.id);
+    }
+  }
+  return known.size;
+}
+
 async function assertStudentsInScope(
   reader: { query<T>(sql: string, params?: unknown[]): Promise<T[]> },
   actor: AuthContext,
@@ -51,20 +70,60 @@ async function assertStudentsInScope(
   /* ۱.۲۵.۷۲ — تکه‌بندی ۹۰تایی: studentIds از بدنهٔ درخواست است (ویرایش دسته‌جمعی می‌تواند >۱۰۰ باشد — سقف ۱۰۰ بایند D1)؛ بیرون‌مرزی = اجتماع بیرونِ هر تکه */
   const outside: { id: string }[] = [];
   for (const chunk of inParamChunks(studentIds)) {
+    /* ممیزی صفحهٔ تقویم (۱.۲۷.۸۸) — «دانش‌آموزِ خودم» یک تعریف دارد: همان شرطِ listMyStudents
+       (سابقهٔ نوبت با من، یا پروندهٔ فعالِ مالکِ من). تا اینجا پروندهٔ متعلق به درمانگر در انتخابگر
+       دیده می‌شد اما ثبتش ۴۰۳ می‌گرفت. شرط مالکیت NULL-safe نوشته شده (owner NULL = بی‌مالک). */
     outside.push(...await reader.query<{ id: string }>(
       `SELECT s.id FROM students s
-      WHERE s.id IN (${inPlaceholders(chunk.length)})
-        AND NOT EXISTS (
-          SELECT 1 FROM appointments a
-            JOIN appointment_students asn ON asn.appointment_id = a.id
-           WHERE a.staff_id = ? AND asn.student_id = s.id
-        )`,
-      [...chunk, actor.staffId]
+        WHERE s.id IN (${inPlaceholders(chunk.length)})
+          AND (s.owner_staff_id IS NULL OR s.owner_staff_id <> ? OR s.active <> 1)
+          AND NOT EXISTS (
+            SELECT 1 FROM appointments a
+              JOIN appointment_students asn ON asn.appointment_id = a.id
+             WHERE a.staff_id = ? AND asn.student_id = s.id
+          )`,
+      [...chunk, actor.staffId, actor.staffId]
     ));
   }
-  if (outside.length > 0) {
+  /* ممیزی صفحهٔ تقویم (۱.۲۷.۸۸) — شناسهٔ ناموجود هم «بیرون» است: قبلاً چنین ردیفی در پرس‌وجوی بالا
+     اصلاً برنمی‌گشت، سد رد می‌شد و INSERT به خطای FK (۵۰۰) می‌خورد. پیام عمداً یکی است تا وجود
+     یا عدم وجود پروندهٔ دیگران لو نرود. */
+  const existing = await countExistingStudents(reader, studentIds);
+  if (outside.length > 0 || existing !== new Set(studentIds).size) {
     throw new ForbiddenError('نوبت‌دهی درمانگر فقط برای دانش‌آموزانِ خودِ او مجاز است');
   }
+}
+
+/* ممیزی صفحهٔ تقویم (۱.۲۷.۸۸) — پروندهٔ ناموجود/حذف‌شده در ورودی (کش SWR فرم یا درخواست دستی)
+   قبلاً به خطای FK و پاسخ ۵۰۰ می‌رسید؛ اکنون ۴۰۰ سرّه. برای درمانگر ناموجود = بی‌سابقه (۴۰۳ در
+   assertStudentsInScope) تا وجود/عدم وجود پروندهٔ دیگران لو نرود؛ تکراری در یک نوبت هم ۴۰۰ است. */
+async function assertStudentsExist(
+  reader: { query<T>(sql: string, params?: unknown[]): Promise<T[]> },
+  actor: AuthContext,
+  studentIds: string[]
+): Promise<void> {
+  if (actor.role === 'therapist' || studentIds.length === 0) return;
+  if (new Set(studentIds).size !== studentIds.length) {
+    throw new ValidationError('یک دانش‌آموز در فهرست نوبت تکرار شده است');
+  }
+  if ((await countExistingStudents(reader, studentIds)) !== studentIds.length) {
+    throw new ValidationError('یک یا چند دانش‌آموزِ انتخاب‌شده در پرونده‌ها یافت نشد');
+  }
+}
+
+/* ممیزی صفحهٔ تقویم (۱.۲۷.۸۸) — قفل خوش‌بینانهٔ واقعی. tx.execute داخل db.transaction فقط دستور را
+   صف می‌کند و نتیجهٔ batch دور ریخته می‌شود؛ پس «UPDATE … AND version = ?» داخل تراکنش هرگز
+   نمی‌توانست بگوید ۰ ردیف تغییر کرد: نوشتهٔ هم‌زمانِ کاربر دیگر بی‌صدا کنار می‌رفت و درخواستِ
+   بازنده «موفق» جواب می‌گرفت (به‌همراه audit و اعلانِ کاذب). دروازه با db.execute اجرا می‌شود تا
+   meta.changes دیده شود — هم‌الگوی games.maintenance و assessment-blocks.remove. */
+async function gateVersionedUpdate(db: DbClient, id: string, sql: string, params: unknown[]): Promise<void> {
+  const res = await db.execute(sql, params);
+  const changes = res?.meta?.changes;
+  const changed = typeof changes === 'number' ? changes : Number(changes ?? 0);
+  if (changed === 1) return;
+  const fresh = await db.queryOne<{ version: number }>(`SELECT version FROM appointments WHERE id = ?`, [id]);
+  if (!fresh) throw new NotFoundError('نوبت');
+  throw new ConflictError(STALE_VERSION_MSG, fresh.version);
 }
 
 async function loadStudents(tx: { queryOne<T>(sql: string, params?: unknown[]): Promise<T | null>; query<T>(sql: string, params?: unknown[]): Promise<T[]> }, appointmentId: string): Promise<AppointmentStudentRow[]> {
@@ -192,6 +251,12 @@ export function createAppointmentService(deps: AppointmentDeps): AppointmentServ
         durationMin: (Date.parse(input.endAt) - Date.parse(input.startAt)) / 60000
       });
 
+      /* ممیزی صفحهٔ تقویم (۱.۲۷.۸۸) — وجود پرونده «بیرون» تراکنش سنجیده می‌شود: در تراکنشِ ساختگی
+         tx.execute فقط صف می‌کند و ردیفِ پرونده‌ای که همان لحظه در یک تراکنش دیگر/قبلی ساخته شده
+         دیده نمی‌شد (جریان لیست انتظار → نوبت ۴۰۰ می‌گرفت). createWithinTx مستقیم فقط مصرف‌کنندهٔ
+         داخلیِ مورد اعتماد دارد که فهرست دانش‌آموز را خودش می‌سازد. */
+      assertAppointmentScope(actor, input.staffId);
+      await assertStudentsExist(db, actor, input.students.map((s) => s.studentId));
       const { appointment, warnings } = await db.transaction((tx) => service.createWithinTx(tx, input, actor));
 
       await fireLifecycle('created', appointment);
@@ -279,36 +344,34 @@ export function createAppointmentService(deps: AppointmentDeps): AppointmentServ
     },
 
     async update(id: string, patch: AppointmentUpdatePatch, version: number, actor: AuthContext): Promise<Appointment> {
-      return db.transaction(async (tx) => {
-        const q = selectAppointmentById(id);
-        const row = await tx.queryOne<AppointmentRow>(q.sql, q.params);
-        if (!row) throw new NotFoundError('نوبت');
-        assertAppointmentScope(actor, row.staff_id); // فاز ۵ — قبل از بررسی وضعیت
-        if (row.status === 'cancelled') throw new ConflictError('نوبت لغوشده قابل ویرایش نیست', row.version);
-        if (row.version !== version) throw new ConflictError('این نوبت همین الان توسط کاربر دیگری تغییر کرد.', row.version);
+      const q = selectAppointmentById(id);
+      const row = await db.queryOne<AppointmentRow>(q.sql, q.params);
+      if (!row) throw new NotFoundError('نوبت');
+      assertAppointmentScope(actor, row.staff_id); // فاز ۵ — قبل از بررسی وضعیت
+      if (row.status === 'cancelled') throw new ConflictError('نوبت لغوشده قابل ویرایش نیست', row.version);
+      if (row.version !== version) throw new ConflictError(STALE_VERSION_MSG, row.version);
 
-        const changes: Record<string, { from: unknown; to: unknown }> = {};
-        let noteChanged = false;
-        if (patch.note !== undefined && patch.note !== row.note) {
-          await tx.execute(`UPDATE appointments SET note = ?, version = version + 1, updated_at = datetime('now') WHERE id = ?`, [
-            patch.note,
-            id
-          ]);
-          changes.note = { from: row.note, to: patch.note };
-          noteChanged = true;
-          await audit.logInTransaction(tx, {
-            actorId: actor.staffId,
-            action: 'appointment.update',
-            resourceType: 'appointment',
-            resourceId: id,
-            changes
-          });
-        }
-
-        const students = await loadStudents(tx, id);
-        const merged = noteChanged ? { ...row, note: patch.note, version: row.version + 1 } : row;
-        return rowToAppointment(merged as AppointmentRow, students.map(rowToStudent));
+      const students = await loadStudents(db, id);
+      if (patch.note === undefined || patch.note === row.note) {
+        return rowToAppointment(row as AppointmentRow, students.map(rowToStudent));
+      }
+      /* ممیزی صفحهٔ تقویم (۱.۲۷.۸۸) — این UPDATE قید نسخه نداشت: یادداشت با نسخهٔ کهنه روی تغییرِ
+         کاربر دیگر بی‌صدا می‌نشست. حالا دروازهٔ شرطی + audit پس از تأییدِ دروازه. */
+      await gateVersionedUpdate(
+        db,
+        id,
+        `UPDATE appointments SET note = ?, version = version + 1, updated_at = datetime('now') WHERE id = ? AND version = ?`,
+        [patch.note, id, version]
+      );
+      await audit.log({
+        actorId: actor.staffId,
+        action: 'appointment.update',
+        resourceType: 'appointment',
+        resourceId: id,
+        changes: { note: { from: row.note, to: patch.note } }
       });
+      const merged = { ...row, note: patch.note, version: row.version + 1 };
+      return rowToAppointment(merged as AppointmentRow, students.map(rowToStudent));
     },
 
     async move(id: string, newStartAt: string, version: number, actor: AuthContext): Promise<{ appointment: Appointment; warnings: ConflictWarning[] }> {
@@ -320,28 +383,29 @@ export function createAppointmentService(deps: AppointmentDeps): AppointmentServ
       if (!current) throw new NotFoundError('نوبت');
       assertAppointmentScope(actor, current.staffId); // فاز ۵ — قبل از بررسی وضعیت
       if (current.status === 'cancelled') throw new ConflictError('نوبت لغوشده قابل جابه‌جایی نیست', current.version);
-      if (current.version !== version) throw new ConflictError('این نوبت همین الان توسط کاربر دیگری تغییر کرد.', current.version);
+      if (current.version !== version) throw new ConflictError(STALE_VERSION_MSG, current.version);
 
       const durationMin = (Date.parse(current.endAt) - Date.parse(current.startAt)) / 60000;
       const newEndAt = addMinutes(newStartAt, durationMin);
 
-      await db.transaction(async (tx) => {
-        // ۱.۲۷.۱۴ — سد سخت بلوک سنجش: جابه‌جایی نوبتِ درمانگر/منشی به درون بازهٔ سنجش ممنوع است
-        await assertNoAssessmentBlockInRange(tx, { startAt: newStartAt, endAt: newEndAt }, actor, current.staffId); /* ۱.۲۷.۱۵ */
-        await tx.execute(
-          `UPDATE appointments SET start_at = ?, end_at = ?, version = version + 1, updated_at = datetime('now') WHERE id = ? AND version = ?`,
-          [newStartAt, newEndAt, id, version]
-        );
-        await audit.logInTransaction(tx, {
-          actorId: actor.staffId,
-          action: 'appointment.move',
-          resourceType: 'appointment',
-          resourceId: id,
-          changes: {
-            start_at: { from: current.startAt, to: newStartAt },
-            end_at: { from: current.endAt, to: newEndAt }
-          }
-        });
+      // ۱.۲۷.۱۴ — سد سخت بلوک سنجش: جابه‌جایی نوبتِ درمانگر/منشی به درون بازهٔ سنجش ممنوع است
+      await assertNoAssessmentBlockInRange(db, { startAt: newStartAt, endAt: newEndAt }, actor, current.staffId); /* ۱.۲۷.۱۵ */
+      // ممیزی صفحهٔ تقویم (۱.۲۷.۸۸) — دروازهٔ قفل خوش‌بینانه بیرون تراکنش (نتیجهٔ UPDATE شرطی دیده می‌شود)
+      await gateVersionedUpdate(
+        db,
+        id,
+        `UPDATE appointments SET start_at = ?, end_at = ?, version = version + 1, updated_at = datetime('now') WHERE id = ? AND version = ?`,
+        [newStartAt, newEndAt, id, version]
+      );
+      await audit.log({
+        actorId: actor.staffId,
+        action: 'appointment.move',
+        resourceType: 'appointment',
+        resourceId: id,
+        changes: {
+          start_at: { from: current.startAt, to: newStartAt },
+          end_at: { from: current.endAt, to: newEndAt }
+        }
       });
 
       const appointment = (await service.getById(id)) as Appointment;
@@ -365,7 +429,7 @@ export function createAppointmentService(deps: AppointmentDeps): AppointmentServ
       if (!current) throw new NotFoundError('نوبت');
       assertAppointmentScope(actor, current.staffId); // فاز ۵ — قبل از بررسی وضعیت
       if (current.status === 'cancelled') throw new ConflictError('نوبت لغوشده قابل تغییر مدت نیست', current.version);
-      if (current.version !== version) throw new ConflictError('این نوبت همین الان توسط کاربر دیگری تغییر کرد.', current.version);
+      if (current.version !== version) throw new ConflictError(STALE_VERSION_MSG, current.version);
 
       const minutes = (Date.parse(newEndAt) - Date.parse(current.startAt)) / 60000;
       if (minutes < 15 || minutes > 240) {
@@ -375,20 +439,21 @@ export function createAppointmentService(deps: AppointmentDeps): AppointmentServ
         throw new ValidationError('زمان پایان باید روی شبکه ۱۵ دقیقه‌ای باشد');
       }
 
-      await db.transaction(async (tx) => {
-        // ۱.۲۷.۱۴ — سد سخت بلوک سنجش: کشیدن پایان نوبت به درون بازهٔ سنجش ممنوع است
-        await assertNoAssessmentBlockInRange(tx, { startAt: current.startAt, endAt: newEndAt }, actor, current.staffId); /* ۱.۲۷.۱۵ */
-        await tx.execute(
-          `UPDATE appointments SET end_at = ?, version = version + 1, updated_at = datetime('now') WHERE id = ? AND version = ?`,
-          [newEndAt, id, version]
-        );
-        await audit.logInTransaction(tx, {
-          actorId: actor.staffId,
-          action: 'appointment.resize',
-          resourceType: 'appointment',
-          resourceId: id,
-          changes: { end_at: { from: current.endAt, to: newEndAt } }
-        });
+      // ۱.۲۷.۱۴ — سد سخت بلوک سنجش: کشیدن پایان نوبت به درون بازهٔ سنجش ممنوع است
+      await assertNoAssessmentBlockInRange(db, { startAt: current.startAt, endAt: newEndAt }, actor, current.staffId); /* ۱.۲۷.۱۵ */
+      // ممیزی صفحهٔ تقویم (۱.۲۷.۸۸) — دروازهٔ قفل خوش‌بینانه بیرون تراکنش (نتیجهٔ UPDATE شرطی دیده می‌شود)
+      await gateVersionedUpdate(
+        db,
+        id,
+        `UPDATE appointments SET end_at = ?, version = version + 1, updated_at = datetime('now') WHERE id = ? AND version = ?`,
+        [newEndAt, id, version]
+      );
+      await audit.log({
+        actorId: actor.staffId,
+        action: 'appointment.resize',
+        resourceType: 'appointment',
+        resourceId: id,
+        changes: { end_at: { from: current.endAt, to: newEndAt } }
       });
 
       const appointment = (await service.getById(id)) as Appointment;
@@ -411,14 +476,36 @@ export function createAppointmentService(deps: AppointmentDeps): AppointmentServ
       if (current.status === 'cancelled') {
         throw new ConflictError('نوبت قبلاً لغو شده است', current.version);
       }
-      if (current.version !== version) throw new ConflictError('این نوبت همین الان توسط کاربر دیگری تغییر کرد.', current.version);
+      if (current.version !== version) throw new ConflictError(STALE_VERSION_MSG, current.version);
 
+      /* ممیزی صفحهٔ تقویم (۱.۲۷.۸۸) — لغو، سابقهٔ حضورِ ثبت‌شده را پاک نمی‌کند: KPI مرکز و داشبورد
+         فقط بر پایهٔ همین attendance می‌شمارند و «حاضر» → «کنسل» آمار جلسهٔ برگزارشده را می‌برد.
+         اگر جلسه در واقع برگزار نشده، اول حضور به «در انتظار» برمی‌گردد، بعد لغو. */
+      const recorded = await db.queryOne<{ cnt: number }>(
+        `SELECT COUNT(*) AS cnt FROM appointment_students
+          WHERE appointment_id = ? AND attendance IN ('present', 'late', 'absent')`,
+        [id]
+      );
+      if ((recorded?.cnt ?? 0) > 0) {
+        throw new ConflictError('این نوبت سابقهٔ حضور ثبت‌شده دارد و لغو نمی‌شود — اگر جلسه برگزار نشده، اول وضعیت حضور را به «در انتظار» برگردانید', version);
+      }
+
+      // دروازهٔ قفل خوش‌بینانه بیرون تراکنش (نتیجهٔ UPDATE شرطی دیده می‌شود)
+      await gateVersionedUpdate(
+        db,
+        id,
+        `UPDATE appointments SET status = 'cancelled', version = version + 1, updated_at = datetime('now') WHERE id = ? AND version = ?`,
+        [id, version]
+      );
       await db.transaction(async (tx) => {
+        /* قید وضعیتِ تازه: حضور فقط تا وقتی «کنسل» می‌شود که همین لغو هنوز برقرار باشد — اگر در این
+           فاصله نوبت برگردانده شده باشد، حضورِ نوبتِ برگشته را بی‌صدا کنسل نمی‌کند */
         await tx.execute(
-          `UPDATE appointments SET status = 'cancelled', version = version + 1, updated_at = datetime('now') WHERE id = ? AND version = ?`,
-          [id, version]
+          `UPDATE appointment_students SET attendance = 'cancelled'
+            WHERE appointment_id = ? AND attendance != 'cancelled'
+              AND EXISTS (SELECT 1 FROM appointments WHERE id = ? AND status = 'cancelled' AND version = ?)`,
+          [id, id, version + 1]
         );
-        await tx.execute(`UPDATE appointment_students SET attendance = 'cancelled' WHERE appointment_id = ? AND attendance != 'cancelled'`, [id]);
         await audit.logInTransaction(tx, {
           actorId: actor.staffId,
           action: 'appointment.cancel',
@@ -459,7 +546,7 @@ export function createAppointmentService(deps: AppointmentDeps): AppointmentServ
             [id]
           );
           if ((history?.cnt ?? 0) > 0) {
-            throw new ConflictError('این نوبت سابقهٔ جلسه (حضور/یادداشت) دارد و حذف نمی‌شود — از «لغو نوبت» استفاده کنید');
+            throw new ConflictError('این نوبت سابقهٔ جلسه (حضور/یادداشت) دارد و حذف نمی‌شود — برای لغو، اگر حضوری ثبت شده اول وضعیت آن را به «در انتظار» برگردانید');
           }
         }
 
@@ -530,14 +617,23 @@ export function createAppointmentService(deps: AppointmentDeps): AppointmentServ
       if (current.status !== 'cancelled') {
         throw new ConflictError('فقط نوبت لغوشده قابل برگرداندن است', current.version);
       }
-      if (current.version !== version) throw new ConflictError('این نوبت همین الان توسط کاربر دیگری تغییر کرد.', current.version);
+      if (current.version !== version) throw new ConflictError(STALE_VERSION_MSG, current.version);
 
+      // ممیزی صفحهٔ تقویم (۱.۲۷.۸۸) — دروازهٔ قفل خوش‌بینانه بیرون تراکنش (نتیجهٔ UPDATE شرطی دیده می‌شود)
+      await gateVersionedUpdate(
+        db,
+        id,
+        `UPDATE appointments SET status = 'scheduled', version = version + 1, updated_at = datetime('now') WHERE id = ? AND version = ?`,
+        [id, version]
+      );
       await db.transaction(async (tx) => {
+        // قید وضعیتِ تازه (هم‌قرارداد cancel): اگر در این فاصله دوباره لغو شده باشد، حضورش را برنمی‌گرداند
         await tx.execute(
-          `UPDATE appointments SET status = 'scheduled', version = version + 1, updated_at = datetime('now') WHERE id = ? AND version = ?`,
-          [id, version]
+          `UPDATE appointment_students SET attendance = 'pending'
+            WHERE appointment_id = ? AND attendance = 'cancelled'
+              AND EXISTS (SELECT 1 FROM appointments WHERE id = ? AND status = 'scheduled' AND version = ?)`,
+          [id, id, version + 1]
         );
-        await tx.execute(`UPDATE appointment_students SET attendance = 'pending' WHERE appointment_id = ? AND attendance = 'cancelled'`, [id]);
         await audit.logInTransaction(tx, {
           actorId: actor.staffId,
           action: 'appointment.restore',
@@ -562,6 +658,7 @@ export function createAppointmentService(deps: AppointmentDeps): AppointmentServ
         assertAppointmentScope(actor, row.staff_id); // فاز ۵ — قبل از بررسی وضعیت
         if (row.status === 'cancelled') throw new ConflictError('به نوبت لغوشده نمی‌توان دانش‌آموز افزود', row.version);
         await assertStudentsInScope(tx, actor, [studentId]); // فاز ۵
+        await assertStudentsExist(tx, actor, [studentId]); // ممیزی صفحهٔ تقویم (۱.۲۷.۸۸) — پروندهٔ ناموجود: ۴۰۰ به‌جای ۵۰۰
 
         const exists = await tx.queryOne<{ student_id: string }>(
           `SELECT student_id FROM appointment_students WHERE appointment_id = ? AND student_id = ?`,
@@ -618,7 +715,7 @@ export function createAppointmentService(deps: AppointmentDeps): AppointmentServ
       return copyWeekImpl({ db, audit, logger, actor, input });
     },
 
-    async undoCopyWeek(batchId: string, actor: AuthContext): Promise<{ removed: number }> {
+    async undoCopyWeek(batchId: string, actor: AuthContext): Promise<UndoCopyWeekResult> {
       return undoCopyWeekImpl({ db, audit, logger, actor, batchId });
     }
   };

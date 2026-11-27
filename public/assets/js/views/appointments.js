@@ -104,6 +104,40 @@ function isSupervisorRole() {
   return session.user?.role === 'supervisor';
 }
 
+/* ممیزی صفحهٔ تقویم (۱.۲۷.۸۸) — دستهٔ کپیِ قابل برگردانی فقط اگر متعلق به همین کاربر باشد برمی‌گردد.
+   sessionStorage با reload زنده می‌ماند و شناسهٔ دستهٔ کاربرِ قبلیِ همین تب (خروج یا انقضای نشست)
+   به دکمهٔ «برگردان آخرین کپی» می‌رسید؛ مالک کنار شناسهٔ دسته نگه داشته می‌شود. مقدار رشته‌ای
+   «null» (کپی از هفتهٔ خالی) هم رد می‌شود — قبلاً بعد از reload دکمه برای دستهٔ ناموجود ظاهر می‌شد. */
+/* ممیزی صفحهٔ تقویم (۱.۲۷.۸۸) — ستون مقصدِ دراپ کارت سنجش: ستون درمانگرِ دیگر هدف است؛ همان
+   ستون، ستون «سایر» و ستونِ بدون درمانگر (نمای هفتگی) هدف نیستند. خالص تا رفتاری آزموده شود. */
+export function dropTargetStaff(colStaff, fromStaffId) {
+  return colStaff && colStaff !== '_other' && colStaff !== fromStaffId ? colStaff : undefined;
+}
+
+/* ممیزی صفحهٔ تقویم (۱.۲۷.۸۸) — پیام «برگردان آخرین کپی»: وقتی نوبتی به دلیل سابقهٔ جلسه مانده،
+   هر دو تعداد گفته می‌شود (هشدار)؛ وگرنه فقط تعداد برگردانده‌شده (موفقیت). */
+export function undoCopyMessage(removed, blocked) {
+  if (blocked > 0) {
+    return {
+      message: `${fa(removed)} نوبت برگردانده شد — ${fa(blocked)} نوبت به دلیل سابقهٔ جلسه (گزارش، یادداشت یا ارجاع) دست‌نخورده ماند`,
+      type: 'warning',
+      ttl: 8000
+    };
+  }
+  return { message: `${fa(removed)} نوبت برگردانده شد`, type: 'success', ttl: 3600 };
+}
+
+export function restoreLastBatchId(storage, staffId) {
+  try {
+    const id = storage.getItem('cs.lastBatchId');
+    if (!id || id === 'null') return null;
+    if (storage.getItem('cs.lastBatchOwner') !== (staffId ?? '')) return null;
+    return id;
+  } catch {
+    return null; /* حالت خصوصی */
+  }
+}
+
 const state = {
   weekStart: null, // YMD شنبه
   viewMode: null,  // 'week' | 'day' — پیش‌فرض همیشه هفتگی (تصمیم کاربر)؛ نمای روزانه با سوییچ دستی
@@ -114,7 +148,7 @@ const state = {
   studentNames: new Map(),
   studentsAll: [], // — همه دانش‌آموزان فعال (همه صفحه‌ها) برای pickerها
   myStudents: [], // فاز ۵ — دانش‌آموزان همکار جاری (picker نقش درمانگر)
-  lastBatchId: sessionStorage.getItem('cs.lastBatchId') || null, /* S2-09 */
+  lastBatchId: restoreLastBatchId(sessionStorage, session.user?.staffId), /* S2-09 */
   lastDuration: 45,
   centerHours: [], // [{weekday, startMinute, endMinute}]
   blocks: [] // ۱.۲۷.۱۴ — بلوک‌های نوبت سنجش (رزرو مدیر): [{id, date, startMinute, endMinute, therapistIds, note}]
@@ -823,10 +857,10 @@ async function handleDrop(e, targetYmd, cellMinute, cell) {
     const snapped = Math.round(newMinute / 15) * 15;
     const dur = Math.max(15, Math.min(480, Number(payload.dur) || 60));
     const endMinute = Math.min(1440, snapped + dur);
-    const targetStaff =
-      cell.dataset.staff && cell.dataset.staff !== '_other' && cell.dataset.staff !== payload.staffId
-        ? cell.dataset.staff
-        : undefined;
+    /* ممیزی صفحهٔ تقویم (۱.۲۷.۸۸) — ستون درمانگر روی .grid-day است نه روی .grid-cell؛ تا اینجا
+       دیتاستِ سلول همیشه بدون staff بود و «پرتاب به ستون درمانگر دیگر» در نمای روزانه عملاً
+       فقط ساعت را جابه‌جا می‌کرد (درمانگرِ کارت عوض نمی‌شد). */
+    const targetStaff = dropTargetStaff(cell.closest('.grid-day')?.dataset?.staff, payload.staffId);
     if (targetYmd === payload.fromYmd && snapped === payload.fromMinute && !targetStaff) return; // درگ بی‌اثر
     try {
       await api.patch(`/api/assessment-blocks/${payload.id}`, {
@@ -1221,6 +1255,7 @@ function openCreateModal(container, preset = {}) {
           throw new Error('این بازه برای «سنجش» رزرو شده است — نوبت‌گیریِ درمانگرِ درگیر در این زمان ممکن نیست');
         }
       }
+      if (picked.size === 0) throw new Error('حداقل یک دانش‌آموز را برای نوبت انتخاب کنید'); /* ۱.۲۷.۸۸ — همان قاعدهٔ سرور، پیش از ارسال */
       const res = await api.post('/api/appointments', {
         staff_id: values.staff_id,
         start_at: startAt,
@@ -1275,7 +1310,8 @@ function openCreateModal(container, preset = {}) {
     }
 
     const block = el('div', { class: 'field span-2' },
-      el('label', { class: 'field__label' }, 'دانش‌آموزان (اختیاری)'),
+      /* ممیزی صفحهٔ تقویم (۱.۲۷.۸۸) — برچسب قبلی «(اختیاری)» بود ولی سرور بدون دانش‌آموز ۴۰۰ می‌داد */
+      el('label', { class: 'field__label' }, 'دانش‌آموزان (حداقل یک نفر)'),
       searchInput, listBox
     );
     searchInput.style.marginBottom = 'var(--sp-2)';
@@ -1662,8 +1698,17 @@ async function copyPrevWeek() {
       staff_id: state.staffFilter || undefined,
       dry_run: false
     });
-    state.lastBatchId = res.data.batchId;
-    try { sessionStorage.setItem('cs.lastBatchId', state.lastBatchId); } catch { /* خصوصی */ } /* S2-09 */
+    /* ممیزی صفحهٔ تقویم (۱.۲۷.۸۸) — هفتهٔ خالی batchId: null می‌دهد؛ قبلاً رشتهٔ «null» ذخیره می‌شد و
+       بعد از reload دکمهٔ «برگردان» برای دستهٔ ناموجود ظاهر می‌شد. مالکِ دسته هم کنارش می‌نشیند. */
+    state.lastBatchId = res.data.batchId || null;
+    try {
+      if (state.lastBatchId) {
+        sessionStorage.setItem('cs.lastBatchId', state.lastBatchId);
+        sessionStorage.setItem('cs.lastBatchOwner', session.user?.staffId ?? '');
+      } else {
+        sessionStorage.removeItem('cs.lastBatchId');
+      }
+    } catch { /* خصوصی */ } /* S2-09 */
     toast(`${fa(res.data.copied)} نوبت کپی شد${res.data.conflicts?.length ? ` — ${fa(res.data.conflicts.length)} تداخل` : ''}`, res.data.conflicts?.length ? 'warning' : 'success', 6000);
     await VIEW?.refreshGrid?.(); /* ۱.۲۰.۰ — بدون اسکلت؛ دکمهٔ برگردان با syncUndoBtn ظاهر می‌شود */
   } catch (err) {
@@ -1675,11 +1720,22 @@ async function undoLastCopy() {
   if (!state.lastBatchId) return;
   try {
     const res = await api.post(`/api/appointments/copy-week/${state.lastBatchId}/undo`);
-    toast(`${fa(res.data.removed)} نوبت برگردانده شد`, 'success');
+    /* ممیزی صفحهٔ تقویم (۱.۲۷.۸۸) — نوبت‌هایی که بعد از کپی سابقه گرفته‌اند (گزارش جلسه، یادداشت،
+       ارجاع لیست انتظار، جابه‌جایی) عمداً می‌مانند؛ تعدادشان باید گفته شود وگرنه «N نوبت برگردانده شد»
+       با آنچه کاربر روی گرید می‌بیند نمی‌خواند. */
+    const outcome = undoCopyMessage(Number(res.data?.removed ?? 0), Number(res.data?.blocked ?? 0));
+    toast(outcome.message, outcome.type, outcome.ttl);
     state.lastBatchId = null;
     try { sessionStorage.removeItem('cs.lastBatchId'); } catch { /* خصوصی */ } /* F5: بعد از reload دکمهٔ برگردان برای دستهٔ انجام‌شده دوباره ظاهر نشود */
     await VIEW?.refreshGrid?.(); /* ۱.۲۰.۰ */
   } catch (err) {
     toastError(err);
+    /* ممیزی صفحهٔ تقویم (۱.۲۷.۸۸) — دستهٔ ناموجود (در تب دیگر برگردانده/پاک شده): دکمهٔ «برگردان»
+       برای دستهٔ مرده می‌ماند و هر کلیک ۴۰۴ می‌داد؛ شناسه پاک و نوار همگام می‌شود. */
+    if (err?.status === 404) {
+      state.lastBatchId = null;
+      try { sessionStorage.removeItem('cs.lastBatchId'); } catch { /* خصوصی */ }
+      await VIEW?.refreshGrid?.();
+    }
   }
 }

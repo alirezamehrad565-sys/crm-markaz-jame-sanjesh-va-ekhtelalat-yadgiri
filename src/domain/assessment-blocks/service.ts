@@ -239,28 +239,38 @@ export function createAssessmentBlockService(deps: AssessmentBlockDeps) {
             : null;
       const now = new Date().toISOString();
 
-      await db.transaction(async (tx) => {
-        await tx.execute(
-          `UPDATE assessment_blocks
-             SET block_date = ?, start_minute = ?, end_minute = ?, therapist_ids = ?, note = ?, version = version + 1, updated_at = ?
-           WHERE id = ?`,
-          [date, startMinute, endMinute, JSON.stringify(therapistIds), note, now, id]
+      /* ممیزی صفحهٔ تقویم (۱.۲۷.۸۸) — قفل خوش‌بینانهٔ واقعی: این UPDATE قید نسخه نداشت؛ مقایسهٔ نسخهٔ
+         بالا فقط «خواندن-سپس-نوشتن» بود و نوشتهٔ هم‌زمانِ کاربر دیگر بی‌صدا بازنویسی می‌شد.
+         دروازه با db.execute و «AND version = ?» — نتیجهٔ واقعی meta.changes دیده می‌شود (هم‌الگوی remove). */
+      const gate = await db.execute(
+        `UPDATE assessment_blocks
+           SET block_date = ?, start_minute = ?, end_minute = ?, therapist_ids = ?, note = ?, version = version + 1, updated_at = ?
+         WHERE id = ? AND version = ? AND deleted_at IS NULL`,
+        [date, startMinute, endMinute, JSON.stringify(therapistIds), note, now, id, patch.version]
+      );
+      const changes = gate?.meta?.changes;
+      if ((typeof changes === 'number' ? changes : Number(changes ?? 0)) !== 1) {
+        const fresh = await db.queryOne<{ version: number }>(
+          'SELECT version FROM assessment_blocks WHERE id = ? AND deleted_at IS NULL',
+          [id]
         );
-        await audit.logInTransaction(tx, {
-          actorId: actor.staffId,
-          action: 'assessment_block.update',
-          resourceType: 'assessment_block',
-          resourceId: id,
-          changes: {
-            date: { from: row.block_date, to: date },
-            window: {
-              from: `${minuteToLabel(row.start_minute)}-${minuteToLabel(row.end_minute)}`,
-              to: `${minuteToLabel(startMinute)}-${minuteToLabel(endMinute)}`
-            },
-            therapist_ids: { from: prevIds, to: therapistIds },
-            note: { from: row.note, to: note }
-          }
-        });
+        if (!fresh) throw new NotFoundError('بلوک سنجش');
+        throw new ConflictError('این بازهٔ سنجش همین الان توسط کاربر دیگری تغییر کرد.', fresh.version);
+      }
+      await audit.log({
+        actorId: actor.staffId,
+        action: 'assessment_block.update',
+        resourceType: 'assessment_block',
+        resourceId: id,
+        changes: {
+          date: { from: row.block_date, to: date },
+          window: {
+            from: `${minuteToLabel(row.start_minute)}-${minuteToLabel(row.end_minute)}`,
+            to: `${minuteToLabel(startMinute)}-${minuteToLabel(endMinute)}`
+          },
+          therapist_ids: { from: prevIds, to: therapistIds },
+          note: { from: row.note, to: note }
+        }
       });
 
       logger.child('assessment-blocks').info('block.updated', { id, movedDay: date !== row.block_date });

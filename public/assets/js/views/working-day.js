@@ -21,7 +21,8 @@ import {
 import { el, icon, toast, toastError, skeletonState, errorState, emptyState, statusBadge, formModal, confirmModal, collapseRemove } from '../ui.js'; /* ۱.۲۵.۰۲ — نسخهٔ محلی با undo به جعبه‌ابزار مشترک منتقل شد (rm?.undo() با قرارداد جدید سازگار است) */
 import { hueClass, staffHue } from '../staff-hue.js'; // — رنگ ثابت هر درمانگر روی کارت نوبت
 import { sessionTypeOf } from '../session-type.js'; // — نوع جلسه (جدول ۴)
-import { openCaseEventForm, canCreateCaseEvents } from '../case-events.js';
+import { openCaseEventForm, canCreateCaseEvents, fetchCaseEventTypes } from '../case-events.js';
+import { openExerciseSendModal } from '../exercise-send.js'; // — «ارسال تکلیف» مستقیم از کارت جلسه
 import { session } from '../api.js';
 
 const local = { date: tehranTodayYmd(), viewJ: null }; // viewJ: ماه نمایش تقویم {jy, jm}
@@ -374,6 +375,7 @@ export async function renderWorkingDay(container, opts = {}) {
   lastBoardJson = JSON.stringify(board); // مرجع مقایسهٔ auto-refresh
   currentBoard = board; // مرجع وصله‌های جراحی (جریان پیوسته)
 
+  const myAttSlot = el('span', {}); // چیپ «حضور من» — فقط درمانگر، پرشدن async (سقف‌دار سمت سرور)
   const pageHead = el('div', { class: 'page-head' },
     el('div', {},
       el('div', { class: 'page-head__title' }, 'روز کاری'),
@@ -383,6 +385,7 @@ export async function renderWorkingDay(container, opts = {}) {
           : 'تقویم، حضور و غیاب همکاران، نوبت‌ها و سنجش — همه در یک نگاه'
       )
     ),
+    ...(isTherapist() ? [myAttSlot] : []),
     el('button', { class: 'btn btn--ghost btn--sm', onclick: () => rerender() }, icon('refresh', 16), 'به‌روزرسانی')
   );
 
@@ -413,6 +416,8 @@ export async function renderWorkingDay(container, opts = {}) {
   import('../waitlist.js').then(({ renderWaitlistBoardWidget }) => renderWaitlistBoardWidget(auxSlot)).catch(() => {});
   drawOverdue(auxSlot, board);
 
+  if (isTherapist()) fillMyAttendanceChip(myAttSlot, local.date);
+
   if (board.isToday) startRefresh();
   else stopRefresh();
 }
@@ -423,6 +428,26 @@ function chip(num, label, tone, title) {
     el('b', {}, fa(num)),
     el('span', {}, label)
   );
+}
+
+/* «حضور من» — چیپ وضعیت حضور خودِ درمانگر در سربرگ؛ منبع: day-summary که سمت سرور
+   به رکوردهای خودش سقف‌خورده. واژگان و تُن‌ها همان چارت کارت دفتر (STAFF_STATUS_LABEL /
+   تُن‌های chip بالا). کارت دفتر دست‌نخورده می‌ماند؛ شکست → پنهان بی‌صدا. */
+function fillMyAttendanceChip(slot, date) {
+  const MY_ATT_TONE = { present: 'success', absent: 'error', late: 'warn', leave: 'accent', sick: 'sick' };
+  api.get(`/api/staff-attendance/day-summary?date=${date}`)
+    .then((r) => {
+      const s = r.data ?? {};
+      const st = s.present > 0 ? 'present' : s.late > 0 ? 'late' : s.absent > 0 ? 'absent'
+        : s.leave > 0 ? 'leave' : s.sick > 0 ? 'sick' : 'unmarked';
+      slot.replaceChildren(el('span', {
+        class: `wd-opschip ${st === 'unmarked' ? 'wd-opschip--neutral' : `wd-opschip--${MY_ATT_TONE[st]}`}`,
+        title: 'وضعیت حضور خودتان در این روز'
+      },
+      el('span', {}, 'حضور من:'),
+      el('b', {}, st === 'unmarked' ? 'ثبت‌نشده' : STAFF_STATUS_LABEL[st])));
+    })
+    .catch(() => slot.replaceChildren()); // خاموشی نرم — چیپ هرگز بورد را نمی‌شکند
 }
 
 function calCard(board) {
@@ -935,6 +960,15 @@ function apptCard(a) {
             onclick: () => openSessionReport(a, s)
           }, icon('file', 12))
         : null,
+      !cancelled && (canManage() || isTherapist())
+        ? el('button', {
+            class: 'btn btn--ghost btn--icon btn--sm',
+            type: 'button',
+            'aria-label': `ارسال تکلیف — ${s.name}`,
+            title: `ارسال تکلیف — ${s.name}`,
+            onclick: () => openExerciseSendModal({ preset: { studentId: s.studentId, studentName: s.name } })
+          }, icon('zap', 12))
+        : null,
       cancelled
         ? el('span', { class: `wd-mark wd-mark--${cls}` }, SESSION_STATUS_LABEL[s.attendance] ?? s.attendance)
         : el('span', { class: 'wd-appt__sactions', role: 'group', 'aria-label': `ثبت حضور ${s.name}` },
@@ -952,14 +986,27 @@ function apptCard(a) {
   );
 }
 
+/* کاهش هزینهٔ کلیک گزارش: نوع پیش‌فرض فرم از آخرین ثبت همین نما (وضعیت محلی) یا
+   اولین نوع «جلسه» می‌آید — فرم مستقیم روی فیلدها باز می‌شود و «تغییر نوع فرم»
+   داخل فرم همچنان انتخابگر را در دسترس می‌گذارد (case-events قفل نشده) */
+let lastReportTypeId = null;
+
 async function openSessionReport(appt, s) {
   try {
     const prof = await api.get(`/api/students/${s.studentId}`);
+    let defaultTypeId = lastReportTypeId;
+    if (!defaultTypeId) {
+      const types = await fetchCaseEventTypes(true).catch(() => []); // — خطا نرم: رفتار قبل (انتخابگر)
+      defaultTypeId = types.find((t) => t.category === 'session')?.id ?? null;
+    }
     openCaseEventForm({
       student: prof.data,
       appointmentId: appt.id,
       occurredYmd: tehranYmdOfIso(appt.startAt),
-      onSaved: () => {
+      defaultTypeId,
+      onSaved: (saved) => {
+        const tid = saved?.eventTypeId ?? saved?.type?.id ?? null;
+        if (tid) lastReportTypeId = tid;
         toast('گزارش روی خط زمانی پرونده ثبت شد', 'success', 2400);
         syncAssessmentsLight(); // فقط چیپ «ارزیابی امروز» در پس‌زمینه — بدون بازسازی نما
       }

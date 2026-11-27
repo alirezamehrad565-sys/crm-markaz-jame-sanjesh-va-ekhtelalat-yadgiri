@@ -7,6 +7,7 @@ import type { CaseEventsService, CaseEventTypeInput } from './types';
 import { renderFillFormPage, familySectionsOf } from './public-form';
 import { renderPreviewPage, renderPreviewErrorPage } from './preview-form';
 import { PUBLIC_PAGE_CSP } from '@core/shared/csp'; // ۱.۲۷.۸۲ (security-007/ADR-004): پرکردن شکاف CSP صفحات عمومی فرم
+import { batteryCategoryOf } from '@domain/clinical-engine/instruments'; /* ۱.۲۷.۸۸ — ممیزی روان‌سنجی: دستهٔ کتابخانهٔ باتری از رجیستری JSON */
 
 export function registerCaseEventsRoutes(app: AppHono, service: CaseEventsService): void {
 
@@ -15,7 +16,9 @@ export function registerCaseEventsRoutes(app: AppHono, service: CaseEventsServic
       activeOnly: c.req.query('active') === undefined ? false : c.req.query('active') === 'true',
       category: (c.req.query('category') || undefined) as never
     });
-    return c.json({ data: items }, 200);
+    /* ۱.۲۷.۸۸ — دستهٔ کتابخانهٔ باتری از رجیستری JSON باتری (کلید محور) به پاسخ اضافه می‌شود؛
+       فقط بلوک‌های باتری مقدار دارند و قالب‌های دیگر null می‌گیرند — ستون DB ندارد. */
+    return c.json({ data: items.map((it) => ({ ...it, batteryCategory: batteryCategoryOf(it.key) })) }, 200);
   });
 
   app.post('/api/case-events/types', requireRole('manager', 'secretary', 'therapist'), async (c) => {

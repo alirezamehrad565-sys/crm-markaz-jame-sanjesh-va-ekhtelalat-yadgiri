@@ -2,7 +2,9 @@ import { api, qs } from '../api.js';
 import {
   addDaysYmd,
   fa,
+  formatJalaliDateTime,
   iranianWeekdayOfYmd,
+  relativeDayLabel,
   tehranDayRange,
   tehranTimeOfIso,
   tehranTodayYmd,
@@ -12,6 +14,7 @@ import {
 } from '../format.js';
 import { el, icon, skeletonState, errorState, emptyState, openModal, progressRing, toast, toastError, kpi, KPI_ALERT_RATE } from '../ui.js'; // toast/toastError گم‌شده بود: مسیر ذخیرهٔ حسابرسی بی‌بازخورد می‌افتد · ۱.۲۵.۰۵: kpi/آستانه تک‌منبع
 import { illoNoAnnouncements, illoKnowledge } from '../illustrations.js'; // — وکتورها
+import { sessionTypeChip } from '../session-type.js'; // — چیپ نوع جلسه (جدول ۴) برای «برنامهٔ امروز»
 import { session } from '../api.js';
 
 const KNOWLEDGE_CATEGORY_LABELS = { tip: 'نکتهٔ آموزشی', protocol: 'پروتکل درمانی', article: 'مقاله', news: 'خبر مرکز' };
@@ -78,6 +81,24 @@ function therapistDashboard(container, { myStats, scoring, knowledge, announceme
 
   /* ۱.۱۱.۰ — درخواست مدیر: اعلان و دانش‌افزایی در داشبورد درمانگر هم بیاید بالا —
      اطلاع‌رسانی مرکز + دانش‌افزایی درست زیر سربرگ، پیش از کارنامهٔ امتیاز */
+  /* «شروع سریع» درمانگر — تنبل: فقط پس از رسیدن داده (یا خطای هر بخش) درجا نقاشی می‌شود،
+     بدون اسکلت اضافه و بدون مسدودکردن رندر داشبورد */
+  const quickZone = el('div');
+  parts.push(quickZone);
+  loadQuickStrip(quickZone);
+
+  /* «برنامهٔ امروز» درمانگر — درست زیر نوار شروع سریع؛ تنبل مثل نوار: پس از رسیدن داده درجا نقاشی می‌شود */
+  const planZone = el('div');
+  parts.push(planZone);
+  loadTodayPlan(planZone);
+
+  /* ۱.۲۷.۸۸ — «پرونده‌های اخیر» + «پرسشنامه‌های خانواده» درمانگر، درست زیر «برنامهٔ امروز»؛
+     از همان payload مایگرفته تغذیه می‌شوند (kpis.me = getMyStats — فیلدهای ADDITIVE تازهٔ
+     recentCases/pendingSurveys) — بدون GET دوم. شکست کل payload پیش‌تر در renderDashboard با
+     errorState + تلاش مجدد گرفته می‌شود؛ نبودِ اختیاریِ فیلد = حالت خالی رسمی. */
+  parts.push(recentCasesCard(myStats));
+  parts.push(pendingSurveysCard(myStats));
+
   const info = infoGrid(knowledge, announcements);
   if (info) parts.push(info);
 
@@ -137,6 +158,215 @@ function therapistDashboard(container, { myStats, scoring, knowledge, announceme
   return parts;
 }
 
+/* «شروع سریع» درمانگر — سه شمارندهٔ کلیک‌پذیر + یک کنش برجسته، در یک ردیف kpi-grid (همان اجزای ui).
+   سه GET هم‌زمان؛ شکست هر شمارنده مستقل نرم می‌شود («—»). شمارنده‌ها از endpointهای در دسترسِ همین نقش:
+   دانش‌آموزان (سرور خودش به پرونده‌های درمانگر محدود می‌کند)، نوبت‌های امروزِ تهران (بدون لغوشده)،
+   قالب‌های فعال طرح درمان. تا پاسخ نیامده هیچ‌چیز نقاشی نمی‌شود — بدون اسکلت، بدون لرزش داشبورد. */
+function loadQuickStrip(zone) {
+  const dayRange = tehranDayRange(tehranTodayYmd());
+  const countOf = (p) => p.then((r) => {
+    const rows = r?.data;
+    return Array.isArray(rows) ? rows.length : (r?.meta?.total ?? null);
+  }).catch(() => null);
+  Promise.all([
+    countOf(api.get(`/api/students${qs({ page: 1, page_size: 1 })}`)),
+    api.get(`/api/appointments${qs({ from: dayRange.start, to: dayRange.end })}`)
+      .then((r) => (Array.isArray(r?.data) ? r.data : []).filter((a) => a?.status !== 'cancelled').length)
+      .catch(() => null),
+    countOf(api.get('/api/pathway-templates'))
+  ]).then(([students, todayAppts, plans]) => {
+    if (!zone.isConnected) return;
+    zone.replaceChildren(
+      el('div', { class: 'kpi-grid', style: { marginBottom: 'var(--sp-4)' } },
+        kpi('دانش‌آموزان من', students, null, 'primary', null, '#/students'),
+        kpi('نوبت‌های امروز', todayAppts, null, 'accent', null, '#/appointments'),
+        kpi('برنامه‌های درمان فعال', plans, null, 'primary', null, '#/treatment-plans'),
+        el('button', { class: 'btn btn--primary', type: 'button', onclick: () => { location.hash = '#/exercises'; } },
+          icon('grid', 16), 'کارت‌های آماده')
+      )
+    );
+  });
+}
+
+/* «برنامهٔ امروز» درمانگر — نوبت‌های امروزِ تهران از /api/appointments (سرور خودش فقط برنامهٔ همان
+   درمانگر را برمی‌گرداند؛ لغوشده حذف می‌شود — همان قرارداد نوار شروع سریع). نام دانش‌آموزان از
+   /api/appointments/my-students — دو GET هم‌زمان؛ شکست فهرست نام‌ها نرم می‌شود («دانش‌آموز»). */
+function loadTodayPlan(zone) {
+  const dayRange = tehranDayRange(tehranTodayYmd());
+  const nameMap = api.get('/api/appointments/my-students').then((r) => {
+    const map = new Map();
+    for (const s of (Array.isArray(r?.data) ? r.data : [])) map.set(s.id, s);
+    return map;
+  }).catch(() => new Map());
+  const rows = api
+    .get(`/api/appointments${qs({ from: dayRange.start, to: dayRange.end })}`)
+    .then((r) => (Array.isArray(r?.data) ? r.data : []).filter((a) => a?.status !== 'cancelled'))
+    .catch(() => null);
+  Promise.all([rows, nameMap]).then(([list, names]) => {
+    if (!zone.isConnected) return;
+    zone.replaceChildren(
+      list === null
+        ? errorState(new Error('بارگذاری داشبورد ناموفق بود'), () => loadTodayPlan(zone))
+        : todayPlanCard(list, names)
+    );
+  });
+}
+
+function todayPlanCard(rows, nameMap) {
+  return el(
+    'div',
+    { class: 'card', style: { marginBottom: 'var(--sp-4)' } },
+    el(
+      'div',
+      { class: 'card__head' },
+      el('div', { class: 'card__title' }, icon('calendar', 16), 'برنامهٔ امروز'),
+      rows.length ? el('span', { class: 'badge badge--accent' }, `${fa(rows.length)} نوبت`) : null
+    ),
+    el(
+      'div',
+      { class: 'card__body', style: { paddingTop: 'var(--sp-2)', paddingBottom: 'var(--sp-2)' } },
+      rows.length === 0
+        ? emptyState({ iconName: 'clock', title: 'امروز نوبتی ندارید' })
+        : rows.map((a) => todayPlanRow(a, nameMap))
+    )
+  );
+}
+
+/* ردیف نوبت — بازهٔ ساعت + نوع جلسه + دانش‌آموزان + چیپ حضور (از students[].attendance)؛
+   کنش‌ها: «گزارش جلسه» → روز کاری (جریان موجود) و «ارسال تکلیف» → مودال ارسال با پیش‌انتخاب
+   همان دانش‌آموز (openExerciseSendModal با student اختیاری — import پویا، فقط با کلیک). */
+function todayPlanRow(a, nameMap) {
+  const studs = (a.students ?? []).filter((s) => s.attendance !== 'cancelled');
+  const nameOf = (s) => `${nameMap.get(s.studentId)?.firstName ?? ''} ${nameMap.get(s.studentId)?.lastName ?? ''}`.trim() || 'دانش‌آموز';
+  const attChip = (s) => {
+    const map = { present: ['حاضر', 'badge--success'], late: ['تأخیر', 'badge--warning'], absent: ['غایب', 'badge--error'], pending: ['در انتظار', 'badge--neutral'] };
+    const [label, cls] = map[s.attendance] ?? ['در انتظار', 'badge--neutral'];
+    return el('span', { class: `badge ${cls}`, title: studs.length > 1 ? nameOf(s) : null }, label);
+  };
+  const sendExercise = (s) => {
+    import('../exercise-send.js')
+      .then((m) => m.openExerciseSendModal({ student: { id: s.studentId, firstName: nameMap.get(s.studentId)?.firstName ?? '', lastName: nameMap.get(s.studentId)?.lastName ?? '' } }))
+      .catch((err) => toastError(err));
+  };
+  return el(
+    'div',
+    { class: 'fu-row' },
+    el(
+      'div',
+      { class: 'fu-row__main' },
+      el('div', { class: 'fu-row__title' }, `${fa(tehranTimeOfIso(a.startAt))} – ${fa(tehranTimeOfIso(a.endAt))}`, sessionTypeChip(a.sessionType)),
+      el(
+        'div',
+        { class: 'cell-sub' },
+        studs.length ? studs.map(nameOf).join('، ') : '—',
+        studs.length ? ' — ' : null,
+        ...studs.map(attChip)
+      )
+    ),
+    el(
+      'div',
+      { style: { display: 'flex', gap: 'var(--sp-2)', alignItems: 'center', flexWrap: 'wrap' } },
+      el('button', { class: 'btn btn--soft btn--sm', type: 'button', onclick: () => { location.hash = '#/working-day'; } }, icon('edit', 14), 'گزارش جلسه'),
+      ...studs.map((s) => el('button', { class: 'btn btn--ghost btn--sm', type: 'button', title: nameOf(s), onclick: () => sendExercise(s) }, icon('send', 14), 'ارسال تکلیف'))
+    )
+  );
+}
+
+/* ── ۱.۲۷.۸۸ — دو کارت تازهٔ درمانگر از payload مایگرفته (بدون GET دوم) ─────────────
+   واژگان چیپ نوع فعالیت = واژه‌های جاافتادهٔ همین کدبیس (جلسه/رویداد/پرسش‌نامه/طرح/تمرین)؛
+   تاریخ نسبت‌ها از relativeDayLabel (مشترک format.js) و تاریخ کامل از formatJalaliNumeric —
+   قالب‌ساز تازه‌ای نوشته نمی‌شود. کلیک ردیف → پروفایل همان دانش‌آموز (#/students/:id). */
+const CASE_KIND_CHIPS = { session: 'جلسه', event: 'رویداد', survey: 'پرسش‌نامه', plan: 'طرح', exercise: 'تمرین' };
+
+function recentCasesCard(stats) {
+  const rows = Array.isArray(stats?.recentCases) ? stats.recentCases : [];
+  return el(
+    'div',
+    { class: 'card', style: { marginBottom: 'var(--sp-4)' } },
+    el('div', { class: 'card__head' }, el('div', { class: 'card__title' }, icon('student', 16), 'پرونده‌های اخیر')),
+    el(
+      'div',
+      { class: 'card__body', style: { paddingTop: 'var(--sp-2)', paddingBottom: 'var(--sp-2)' } },
+      rows.length === 0
+        ? emptyState({ iconName: 'student', title: 'هنوز پرونده‌ای باز نکرده‌اید' })
+        : rows.map(recentCaseRow)
+    )
+  );
+}
+
+function recentCaseRow(c) {
+  const ymd = tehranYmdOfIso(c.lastAt);
+  return el(
+    'div',
+    { class: 'fu-row', style: { cursor: 'pointer' }, title: 'مشاهدهٔ پروندهٔ دانش‌آموز', onclick: () => { location.hash = `#/students/${c.studentId}`; } },
+    el(
+      'div',
+      { class: 'fu-row__main' },
+      el('div', { class: 'fu-row__title' }, c.displayName, kindChip(c.kind)),
+      el('div', { class: 'cell-sub' }, c.brief ?? '—')
+    ),
+    el('span', { class: 'cell-sub' }, relativeDayLabel(ymd) ?? formatJalaliNumeric(ymd))
+  );
+}
+
+function kindChip(kind) {
+  return CASE_KIND_CHIPS[kind] ? el('span', { class: 'badge badge--neutral' }, CASE_KIND_CHIPS[kind]) : null;
+}
+
+/* «پرسشنامه‌های خانواده» — در انتظارها اول و تکمیل‌شده‌ها بعد (ترتیب تازه‌به‌کهنِ سرور در هر گروه
+   حفظ می‌شود). sentAt null = لینک ساخته‌شده ولی ارسال‌نشده («ارسال نشده» — هم‌واژهٔ exercise-send).
+   count > items.length ← «و N مورد دیگر». بج سرِ کارت = شمار کل در انتظارها در دامنهٔ درمانگر. */
+function pendingSurveysCard(stats) {
+  const ps = stats?.pendingSurveys ?? null;
+  const items = Array.isArray(ps?.items) ? ps.items : [];
+  const count = typeof ps?.count === 'number' ? ps.count : items.length;
+  const sorted = [...items].sort((a, b) => (a?.status === 'completed') - (b?.status === 'completed'));
+  const rest = count - items.length;
+  return el(
+    'div',
+    { class: 'card', style: { marginBottom: 'var(--sp-4)' } },
+    el(
+      'div',
+      { class: 'card__head' },
+      el('div', { class: 'card__title' }, icon('checklist', 16), 'پرسشنامه‌های خانواده'),
+      count > 0 ? el('span', { class: 'badge badge--warning' }, fa(count)) : null
+    ),
+    el(
+      'div',
+      { class: 'card__body', style: { paddingTop: 'var(--sp-2)', paddingBottom: 'var(--sp-2)' } },
+      items.length === 0
+        ? emptyState({ iconName: 'checklist', title: 'پرسشنامهٔ در انتظاری ندارید' })
+        : [...sorted.map(surveyRow), rest > 0 ? el('div', { class: 'cell-sub', style: { textAlign: 'center' } }, `و ${fa(rest)} مورد دیگر`) : null]
+    )
+  );
+}
+
+function surveyRow(s) {
+  const done = s?.status === 'completed';
+  return el(
+    'div',
+    { class: 'fu-row', style: { cursor: 'pointer' }, title: 'مشاهدهٔ پروندهٔ دانش‌آموز', onclick: () => { location.hash = `#/students/${s.studentId}`; } },
+    el(
+      'div',
+      { class: 'fu-row__main' },
+      el(
+        'div',
+        { class: 'fu-row__title' },
+        s.displayName,
+        done ? el('span', { class: 'badge badge--success' }, 'تکمیل‌شده') : el('span', { class: 'badge badge--warning' }, 'در انتظار')
+      ),
+      el(
+        'div',
+        { class: 'cell-sub' },
+        s.formName ?? '—',
+        ' — ',
+        s.sentAt ? formatJalaliDateTime(s.sentAt) : 'ارسال نشده',
+        done && s.completedAt ? ` — تکمیل: ${formatJalaliDateTime(s.completedAt)}` : null
+      )
+    )
+  );
+}
+
 function heroScore(scoreRow, rows, since = null) {
   const top = Math.max(1, ...rows.map((r) => r.total));
   const isTop = scoreRow.rank === 1 && scoreRow.total > 0;
@@ -166,7 +396,7 @@ function heroScore(scoreRow, rows, since = null) {
 
   return el(
     'div',
-    { class: 'hero-score', style: { cursor: 'pointer' }, title: 'جزئیات در گزارش دوره', onclick: () => { location.hash = '#/reports'; } } /* POLISH-3 M2 — حفر امتیاز کل به گزارش دوره */,
+    { class: 'hero-score', style: { cursor: 'pointer' }, title: 'جزئیات در گزارش دوره', onclick: () => { location.hash = '#/working-day'; } } /* POLISH-3 M2 — حفر امتیاز کل؛ مقصد واقعی درمانگر «روز کاری» است (پرش بی‌مقصد #/reports حذف شد — ممیزی UX) */,
     el(
       'div',
       { class: 'hero-score__ring' },
@@ -207,10 +437,13 @@ function scoreTiles(myStats) {
   return el(
     'div',
     { class: 'score-tiles', style: { marginBottom: 'var(--sp-4)' } },
-    tile('جلسات برگزارشده', myStats.sessions, myStats.sessionsPrev, '#/reports'),
+    /* حفر نقش‌آگاه (ممیزی UX) — #/reports برای درمانگر به #/working-day پرش می‌کند؛ مستقیم به مقصد
+       واقعی می‌رویم: گزارش جلسه و رویداد پرونده در «روز کاری» ثبت می‌شوند. پیگیری نمای تجمیعی
+       در دسترس درمانگر ندارد — بدون حفر (tile بدون route کلیک‌پذیر نیست). */
+    tile('جلسات برگزارشده', myStats.sessions, myStats.sessionsPrev, '#/working-day'),
     tile('تمرین افزوده به بانک', myStats.exercises, myStats.exercisesPrev, '#/exercises'),
-    tile('رویداد پروندهٔ ثبت‌شده', myStats.events, myStats.eventsPrev, '#/reports'),
-    tile('پیگیری انجام‌شده', myStats.followups, myStats.followupsPrev, '#/reports')
+    tile('رویداد پروندهٔ ثبت‌شده', myStats.events, myStats.eventsPrev, '#/working-day'),
+    tile('پیگیری انجام‌شده', myStats.followups, myStats.followupsPrev, null)
   );
 }
 
@@ -351,8 +584,16 @@ function weekTrendCard(summaryData, todayData) {
 function leaderboardCard(rows, title, meStaffId, since = null, linkTo = null) {
   const max = Math.max(1, ...rows.map((x) => x.total));
   const body =
+    /* اِنتای خالی نقش‌آوار (ممیزی UX): ارجاع به ماژول «کارکنان» فقط برای دفتر معنا دارد —
+       درمانگر به‌جای آن راه رشد می‌بیند (همان راهنمای امتیازِ هیرو، بدون اشاره به ماژول غیرقابل‌دسترس) */
     rows.length === 0
-      ? emptyState({ iconName: 'users', title: 'درمانگری ثبت نشده است', hint: 'کارکنان ← افزودن همکار با نقش درمانگر' })
+      ? emptyState({
+          iconName: 'users',
+          title: 'درمانگری ثبت نشده است',
+          hint: linkTo
+            ? 'کارکنان ← افزودن همکار با نقش درمانگر'
+            : 'با ثبت گزارش جلسه و تمرین در بانک تمرین، امتیاز می‌گیرید'
+        })
       : el(
           'div',
           { class: 'lb-list' },
