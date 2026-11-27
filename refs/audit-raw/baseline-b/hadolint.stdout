@@ -1,1 +1,0 @@
-[{"code":"DL3066","column":1,"file":"/home/z/my-project/gh-work/Dockerfile","level":"info","line":42,"message":"Non-numeric user-id may not be resolvable by host system"},{"code":"DL3025","column":1,"file":"/home/z/my-project/gh-work/Dockerfile","level":"warning","line":47,"message":"Use arguments JSON notation for CMD and ENTRYPOINT arguments"}]

@@ -1,6 +1,0 @@
-[extend]
-useDefault = true
-
-[[allowlists]]
-description = "host environments and outputs"
-paths = ['''(^|/)\.next/''', '''(^|/)\.nox/''', '''(^|/)\.nuxt/''', '''(^|/)\.pytest_cache/''', '''(^|/)\.ruff_cache/''', '''(^|/)\.tox/''', '''(^|/)\.turbo/''', '''(^|/)__pycache__/''', '''(^|/)audit/''', '''(^|/)build/''', '''(^|/)coverage/''', '''(^|/)dist/''', '''(^|/)env/''', '''(^|/)htmlcov/''', '''(^|/)node_modules/''', '''(^|/)venv/''']
