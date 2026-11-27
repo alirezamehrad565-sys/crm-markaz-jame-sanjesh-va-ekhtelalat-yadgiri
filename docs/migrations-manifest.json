@@ -130,5 +130,6 @@
   "0126_tool_metadata_backfill.sql": "5489ed8416d3723bf322cbfc685095983882f6393e6c99a28769f61c2d5568c0",
   "0127_intake_v2_retire.sql": "ca5419a610ed2c979bc4bf3608d41a6e1a055c41f2f6c8e384ab84fa61157460",
   "0128_system_pathway_templates.sql": "504b3f8f69bce4ad5e3957d459acab2b8ff3f9e00cba2e6bade7ecc402013086",
-  "0129_system_exercise_cards.sql": "9dc8ba6e03804300b0e3e5a922c2a1e34dc3abb80e88189dbfb578ed9eeed81e"
+  "0129_system_exercise_cards.sql": "9dc8ba6e03804300b0e3e5a922c2a1e34dc3abb80e88189dbfb578ed9eeed81e",
+  "0130_system_pathway_templates_g123.sql": "ea34fe6b1808fa140afcfb78041961a052cf36f89dc0fd1fcc4c541272907621"
 }

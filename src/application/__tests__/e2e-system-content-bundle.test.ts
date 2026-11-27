@@ -8,18 +8,22 @@ import { batteryDef } from '../../domain/clinical-engine/instruments';
 import { allSkillKeys, isValidFocusKey } from '../../domain/exercise-bank/focus';
 import { EXERCISE_FORMATS } from '../../core/shared/constants';
 
-// باندل محتوای سیستمی «طرح درمان» (0128 قالب‌های مسیر + 0129 کارت‌های تمرین):
+// باندل محتوای سیستمی «طرح درمان» (0128 قالب‌های مسیر + 0129 کارت‌های تمرین + 0130 بسته‌های چندجلسه‌ای پایهٔ اول تا سوم):
 // دروازهٔ درستی محتوا — کلید هدف/پراپ/ابزار ارجاعی باید در دارایی‌های authored موجود باشد
 // و کارت‌ها تاکسونومی کامل (قالب/برگ هدف/اختلال/پایه) داشته باشند.
 
 const SYSTEM_TEMPLATE_KEYS = [
   'sys-adhd-preschool',
   'sys-adhd-primary',
+  'sys-anxiety-emotion',
+  'sys-attention-g123',
+  'sys-math-g1',
+  'sys-sld-math',
   'sys-sld-reading',
   'sys-sld-writing',
-  'sys-sld-math',
-  'sys-anxiety-emotion',
-  'sys-speech-delay'
+  'sys-speech-delay',
+  'sys-wm-primary',
+  'sys-writing-g12'
 ];
 
 const SYSTEM_CARD_IDS = Array.from({ length: 12 }, (_, i) =>
@@ -60,7 +64,7 @@ function dataOf<T>(res: { body: unknown }): T {
 // مایگریشن می‌سازد. پس برای آینه‌کردن پروداکشن، هر دو فایل idempotent پس از seed دوباره اجرا می‌شوند
 // (INSERT OR IGNORE — ردیف تکراری نمی‌سازد) و همین اجرای دوم خودش بخشی از ادعای idempotency است.
 const MIG_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
-const BUNDLE_FILES = ['0128_system_pathway_templates.sql', '0129_system_exercise_cards.sql'];
+const BUNDLE_FILES = ['0128_system_pathway_templates.sql', '0129_system_exercise_cards.sql', '0130_system_pathway_templates_g123.sql'];
 const EXERCISE_SEED_FILE = '0043_exercise_seed.sql';
 function readMigration(f: string): string {
   return readFileSync(path.join(MIG_DIR, 'migrations', f), 'utf8');
@@ -91,7 +95,7 @@ describe('باندل محتوای سیستمی طرح درمان — قالب‌
     A.sql.exec(readMigration(EXERCISE_SEED_FILE)); // seed 0043 هم با گارد staff — لینک کارت‌های قدیمی برای دروازهٔ ۴ لازم است
   });
 
-  it('هفت قالب سیستمی با is_system=1 و فعال — فیلدهای الزامی پر است', () => {
+  it('یازده قالب سیستمی با is_system=1 و فعال — فیلدهای الزامی پر است', () => {
     const rows = A.sql
       .prepare(`SELECT * FROM pathway_templates WHERE key LIKE 'sys-%' ORDER BY key`)
       .all() as unknown as TemplateRow[];
@@ -151,7 +155,7 @@ describe('باندل محتوای سیستمی طرح درمان — قالب‌
         }
       }
     }
-    expect(probeRefs, 'سه قالب SLD باید پروب مرجع داشته باشند').toBeGreaterThanOrEqual(3);
+    expect(probeRefs, 'قالب‌های SLD و بسته‌های نوشتن/حساب 0130 باید پروب مرجع داشته باشند').toBeGreaterThanOrEqual(3);
   });
 
   it('دروازهٔ درستی ۳ — ابزارهای ارجاعی فقط کلیدهای موجود باتری', () => {
@@ -197,7 +201,7 @@ describe('باندل محتوای سیستمی طرح درمان — قالب‌
       await ali.get('/api/pathway-templates')
     );
     const sys = list.filter((t) => t.key.startsWith('sys-'));
-    expect(sys).toHaveLength(7);
+    expect(sys).toHaveLength(11);
     for (const t of sys) expect(t.isSystem).toBe(true);
   });
 
@@ -219,11 +223,11 @@ describe('باندل محتوای سیستمی طرح درمان — قالب‌
     expect(probeItems.length, 'پروب‌های پایش در جلسات seed شده‌اند').toBeGreaterThanOrEqual(3);
   });
 
-  it('idempotency — اجرای دوبارهٔ فایل‌های 0128/0129 روی همان DB ردیف تازه نمی‌سازد', () => {
+  it('idempotency — اجرای دوبارهٔ فایل‌های 0128/0129/0130 روی همان DB ردیف تازه نمی‌سازد', () => {
     replaySystemBundle(A.sql); // همین describe هم دو بار اجرا کرده — جمع همچنان دقیق
     const tpl = A.sql.prepare(`SELECT COUNT(*) AS n FROM pathway_templates WHERE key LIKE 'sys-%'`).get() as { n: number };
     const cards = A.sql.prepare(`SELECT COUNT(*) AS n FROM exercises WHERE id LIKE 'cccccccc-8200-4000-8000-0000000002%'`).get() as { n: number };
-    expect(tpl.n).toBe(7);
+    expect(tpl.n).toBe(11);
     expect(cards.n).toBe(12);
   });
 });
