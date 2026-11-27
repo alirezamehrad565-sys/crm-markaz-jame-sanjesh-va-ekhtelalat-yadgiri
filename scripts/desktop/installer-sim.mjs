@@ -126,9 +126,18 @@ if (!CORRUPT && !failed) {
     }
     if (cfg && cfg.port && cfg.gamesPort) {
       ok(`engine-config.json آمد — پورت‌های نهایی: ${cfg.port}/${cfg.gamesPort}`);
+      // فچ زودهنگام روی پورت تازه‌باز گاهی ECONNREFUSED گذرا می‌دهد (محلی یک‌بار، در CI هم یک‌بار
+      // باعث قرمز بی‌دلیل گیت شد) — چند تلاش کوتاه قبل از قرمزی؛ معنای گیت تغییر نمی‌کند.
+      const fetchReady = async (url, tries = 6, delayMs = 400) => {
+        let lastErr = null;
+        for (let i = 0; i < tries; i++) {
+          try { return await fetch(url); } catch (e) { lastErr = e; await new Promise((r) => setTimeout(r, delayMs)); }
+        }
+        throw lastErr;
+      };
       const health = async (port, label) => {
         try {
-          const res = await fetch(`http://127.0.0.1:${port}/health`);
+          const res = await fetchReady(`http://127.0.0.1:${port}/health`);
           res.ok ? ok(`/health ورکر ${label} پاسخ 200 داد`) : bad(`/health ورکر ${label} status=${res.status}`);
         } catch (e) {
           bad(`/health ورکر ${label} در دسترس نیست — ${e.message}`);
@@ -137,7 +146,7 @@ if (!CORRUPT && !failed) {
       await health(cfg.port, 'اصلی');
       await health(cfg.gamesPort, 'بازی‌ها'); // پروب مستقل — پیش‌نیاز FSM و DEGRADED فاز بعد
       try {
-        const res = await fetch(`http://127.0.0.1:${cfg.port}/`);
+        const res = await fetchReady(`http://127.0.0.1:${cfg.port}/`);
         const text = await res.text();
         res.ok && text.length > 500
           ? ok('پوستهٔ استاتیک از public سرو شد')
@@ -149,7 +158,7 @@ if (!CORRUPT && !failed) {
       // زنده باید با APP_VERSION منبع یکتا یکی باشد — خودآزمایی نسخهٔ موتور/برنامه در بوت واقعی
       try {
         const appVersion = readFileSync(path.join(ROOT, 'src', 'core', 'version.ts'), 'utf8').match(/APP_VERSION = '([^']+)'/)?.[1];
-        const res = await fetch(`http://127.0.0.1:${cfg.port}/api/engine/capabilities`);
+        const res = await fetchReady(`http://127.0.0.1:${cfg.port}/api/engine/capabilities`);
         const caps = await res.json();
         res.ok && caps?.ok === true && appVersion && caps.version === appVersion
           ? ok(`/api/engine/capabilities ۲۰۰ داد و نسخهٔ موتور (${caps.version}) با APP_VERSION یکی است`)
