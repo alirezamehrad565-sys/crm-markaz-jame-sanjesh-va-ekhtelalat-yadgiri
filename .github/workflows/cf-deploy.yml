@@ -33,10 +33,10 @@ permissions:
 
 jobs:
   # دروازهٔ انتشار — همان گیت‌های ci.yml به‌صورت workflow_call؛ deploy تنها پس از سبزی آن اجرا می‌شود
+  # (timeout در خود ci.yml تعریف شده — job فراخوانِ ورک‌فلوی قابل‌استفاده timeout-minutes قبول نمی‌کند)
   ci-gates:
     name: CI gates (تایپ، آزمون، بودجه، امنیت و بسته‌سازی)
     uses: ./.github/workflows/ci.yml
-    timeout-minutes: 60
 
   deploy:
     name: backup → migrate → deploy → health ×3
