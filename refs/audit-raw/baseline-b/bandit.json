@@ -1,0 +1,676 @@
+{
+  "errors": [],
+  "generated_at": "2026-11-27T05:21:15Z",
+  "metrics": {
+    "/home/z/my-project/gh-work/scripts/fix-copy-week-contract.py": {
+      "CONFIDENCE.HIGH": 3,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 3,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 119,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "/home/z/my-project/gh-work/scripts/gen-logo.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 76,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "/home/z/my-project/gh-work/scripts/make-desktop-icons.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 34,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py": {
+      "CONFIDENCE.HIGH": 19,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 19,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 69,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "/home/z/my-project/gh-work/scripts/shots-phases-pixelcheck.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 1,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 1,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 35,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "/home/z/my-project/gh-work/scripts/shots-pixelcheck.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 3,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 3,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 37,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "/home/z/my-project/gh-work/scripts/theme-retune-12749.py": {
+      "CONFIDENCE.HIGH": 2,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 2,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 112,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "_totals": {
+      "CONFIDENCE.HIGH": 24,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 4,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 24,
+      "SEVERITY.MEDIUM": 4,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 482,
+      "nosec": 0,
+      "skipped_tests": 0
+    }
+  },
+  "results": [
+    {
+      "code": "17         if s.count(old) == 0:\n18             assert s.count(new) >= 1, f'{p}: neither old nor new :: {old[:60]!r}'\n19             continue  # \u0642\u0628\u0644\u0627\u064b \u0627\u0639\u0645\u0627\u0644 \u0634\u062f\u0647 \u2014 \u0627\u06cc\u062f\u0645\u067e\u0648\u062a\u0646\u062a\n",
+      "col_offset": 12,
+      "end_col_offset": 81,
+      "filename": "/home/z/my-project/gh-work/scripts/fix-copy-week-contract.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.",
+      "line_number": 18,
+      "line_range": [
+        18
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html",
+      "test_id": "B101",
+      "test_name": "assert_used"
+    },
+    {
+      "code": "19             continue  # \u0642\u0628\u0644\u0627\u064b \u0627\u0639\u0645\u0627\u0644 \u0634\u062f\u0647 \u2014 \u0627\u06cc\u062f\u0645\u067e\u0648\u062a\u0646\u062a\n20         assert s.count(old) == 1, f'{p}: count={s.count(old)} :: {old[:60]!r}'\n21         s = s.replace(old, new)\n",
+      "col_offset": 8,
+      "end_col_offset": 78,
+      "filename": "/home/z/my-project/gh-work/scripts/fix-copy-week-contract.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.",
+      "line_number": 20,
+      "line_range": [
+        20
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html",
+      "test_id": "B101",
+      "test_name": "assert_used"
+    },
+    {
+      "code": "29         if s.count(old) == 0:\n30             assert s.count(new) >= 1, f'{p}: neither old nor new :: {old[:60]!r}'\n31             continue\n",
+      "col_offset": 12,
+      "end_col_offset": 81,
+      "filename": "/home/z/my-project/gh-work/scripts/fix-copy-week-contract.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.",
+      "line_number": 30,
+      "line_range": [
+        30
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html",
+      "test_id": "B101",
+      "test_name": "assert_used"
+    },
+    {
+      "code": "3 # \u2460 \u0647\u0645\u200c\u0645\u062d\u062a\u0648\u0627/\u0628\u0631\u0627\u0628\u0631-\u067e\u0627\u06cc\u0647/\u0628\u0631\u0627\u0628\u0631-\u0631\u06cc\u0645\u0648\u062a \u2192 \u062e\u0648\u062f\u06a9\u0627\u0631 \u2461 \u0628\u0642\u06cc\u0647 \u0628\u0647\u200c\u062c\u0632 \u062f\u0633\u062a\u06cc\u200c\u0647\u0627 \u2192 \u0627\u06af\u0631 theirs == \u062f\u0631\u062e\u062a origin/main \u2192 ours\n4 import subprocess, hashlib\n5 \n",
+      "col_offset": 0,
+      "end_col_offset": 26,
+      "filename": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 78,
+        "link": "https://cwe.mitre.org/data/definitions/78.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Consider possible security implications associated with the subprocess module.",
+      "line_number": 4,
+      "line_range": [
+        4
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/blacklists/blacklist_imports.html#b404-import-subprocess",
+      "test_id": "B404",
+      "test_name": "blacklist"
+    },
+    {
+      "code": "7 def blob(ref, path):\n8     r = subprocess.run([\"git\", \"-C\", repo, \"show\", f\"{ref}:{path}\"], capture_output=True)\n9     return r.stdout if r.returncode == 0 else None\n",
+      "col_offset": 8,
+      "end_col_offset": 89,
+      "filename": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 78,
+        "link": "https://cwe.mitre.org/data/definitions/78.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Starting a process with a partial executable path",
+      "line_number": 8,
+      "line_range": [
+        8
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b607_start_process_with_partial_path.html",
+      "test_id": "B607",
+      "test_name": "start_process_with_partial_path"
+    },
+    {
+      "code": "7 def blob(ref, path):\n8     r = subprocess.run([\"git\", \"-C\", repo, \"show\", f\"{ref}:{path}\"], capture_output=True)\n9     return r.stdout if r.returncode == 0 else None\n",
+      "col_offset": 8,
+      "end_col_offset": 89,
+      "filename": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 78,
+        "link": "https://cwe.mitre.org/data/definitions/78.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "subprocess call - check for execution of untrusted input.",
+      "line_number": 8,
+      "line_range": [
+        8
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html",
+      "test_id": "B603",
+      "test_name": "subprocess_without_shell_equals_true"
+    },
+    {
+      "code": "14 \n15 conflicts = [c for c in subprocess.run(\n16     [\"git\", \"-C\", repo, \"diff\", \"--name-only\", \"--diff-filter=U\"],\n17     capture_output=True, text=True).stdout.split(\"\\n\") if c.strip()]\n18 \n",
+      "col_offset": 24,
+      "end_col_offset": 35,
+      "filename": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 78,
+        "link": "https://cwe.mitre.org/data/definitions/78.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Starting a process with a partial executable path",
+      "line_number": 15,
+      "line_range": [
+        15,
+        16,
+        17
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b607_start_process_with_partial_path.html",
+      "test_id": "B607",
+      "test_name": "start_process_with_partial_path"
+    },
+    {
+      "code": "14 \n15 conflicts = [c for c in subprocess.run(\n16     [\"git\", \"-C\", repo, \"diff\", \"--name-only\", \"--diff-filter=U\"],\n17     capture_output=True, text=True).stdout.split(\"\\n\") if c.strip()]\n18 \n",
+      "col_offset": 24,
+      "end_col_offset": 35,
+      "filename": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 78,
+        "link": "https://cwe.mitre.org/data/definitions/78.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "subprocess call - check for execution of untrusted input.",
+      "line_number": 15,
+      "line_range": [
+        15,
+        16,
+        17
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html",
+      "test_id": "B603",
+      "test_name": "subprocess_without_shell_equals_true"
+    },
+    {
+      "code": "25     if ho == ht:\n26         subprocess.run([\"git\", \"-C\", repo, \"checkout\", \"--ours\", \"--\", path], check=True)\n27         stats[\"same\"] += 1\n",
+      "col_offset": 8,
+      "end_col_offset": 89,
+      "filename": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 78,
+        "link": "https://cwe.mitre.org/data/definitions/78.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Starting a process with a partial executable path",
+      "line_number": 26,
+      "line_range": [
+        26
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b607_start_process_with_partial_path.html",
+      "test_id": "B607",
+      "test_name": "start_process_with_partial_path"
+    },
+    {
+      "code": "25     if ho == ht:\n26         subprocess.run([\"git\", \"-C\", repo, \"checkout\", \"--ours\", \"--\", path], check=True)\n27         stats[\"same\"] += 1\n",
+      "col_offset": 8,
+      "end_col_offset": 89,
+      "filename": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 78,
+        "link": "https://cwe.mitre.org/data/definitions/78.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "subprocess call - check for execution of untrusted input.",
+      "line_number": 26,
+      "line_range": [
+        26
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html",
+      "test_id": "B603",
+      "test_name": "subprocess_without_shell_equals_true"
+    },
+    {
+      "code": "28     elif ht == hb and ho is not None:\n29         subprocess.run([\"git\", \"-C\", repo, \"checkout\", \"--ours\", \"--\", path], check=True)\n30         stats[\"ours\"] += 1\n",
+      "col_offset": 8,
+      "end_col_offset": 89,
+      "filename": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 78,
+        "link": "https://cwe.mitre.org/data/definitions/78.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Starting a process with a partial executable path",
+      "line_number": 29,
+      "line_range": [
+        29
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b607_start_process_with_partial_path.html",
+      "test_id": "B607",
+      "test_name": "start_process_with_partial_path"
+    },
+    {
+      "code": "28     elif ht == hb and ho is not None:\n29         subprocess.run([\"git\", \"-C\", repo, \"checkout\", \"--ours\", \"--\", path], check=True)\n30         stats[\"ours\"] += 1\n",
+      "col_offset": 8,
+      "end_col_offset": 89,
+      "filename": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 78,
+        "link": "https://cwe.mitre.org/data/definitions/78.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "subprocess call - check for execution of untrusted input.",
+      "line_number": 29,
+      "line_range": [
+        29
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html",
+      "test_id": "B603",
+      "test_name": "subprocess_without_shell_equals_true"
+    },
+    {
+      "code": "31     elif ho == hb and ht is not None:\n32         subprocess.run([\"git\", \"-C\", repo, \"checkout\", \"--theirs\", \"--\", path], check=True)\n33         stats[\"theirs\"] += 1\n",
+      "col_offset": 8,
+      "end_col_offset": 91,
+      "filename": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 78,
+        "link": "https://cwe.mitre.org/data/definitions/78.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Starting a process with a partial executable path",
+      "line_number": 32,
+      "line_range": [
+        32
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b607_start_process_with_partial_path.html",
+      "test_id": "B607",
+      "test_name": "start_process_with_partial_path"
+    },
+    {
+      "code": "31     elif ho == hb and ht is not None:\n32         subprocess.run([\"git\", \"-C\", repo, \"checkout\", \"--theirs\", \"--\", path], check=True)\n33         stats[\"theirs\"] += 1\n",
+      "col_offset": 8,
+      "end_col_offset": 91,
+      "filename": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 78,
+        "link": "https://cwe.mitre.org/data/definitions/78.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "subprocess call - check for execution of untrusted input.",
+      "line_number": 32,
+      "line_range": [
+        32
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html",
+      "test_id": "B603",
+      "test_name": "subprocess_without_shell_equals_true"
+    },
+    {
+      "code": "34     elif h(theirs) == h(remote_tree):\n35         subprocess.run([\"git\", \"-C\", repo, \"checkout\", \"--ours\", \"--\", path], check=True)\n36         stats[\"ours\"] += 1\n",
+      "col_offset": 8,
+      "end_col_offset": 89,
+      "filename": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 78,
+        "link": "https://cwe.mitre.org/data/definitions/78.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Starting a process with a partial executable path",
+      "line_number": 35,
+      "line_range": [
+        35
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b607_start_process_with_partial_path.html",
+      "test_id": "B607",
+      "test_name": "start_process_with_partial_path"
+    },
+    {
+      "code": "34     elif h(theirs) == h(remote_tree):\n35         subprocess.run([\"git\", \"-C\", repo, \"checkout\", \"--ours\", \"--\", path], check=True)\n36         stats[\"ours\"] += 1\n",
+      "col_offset": 8,
+      "end_col_offset": 89,
+      "filename": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 78,
+        "link": "https://cwe.mitre.org/data/definitions/78.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "subprocess call - check for execution of untrusted input.",
+      "line_number": 35,
+      "line_range": [
+        35
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html",
+      "test_id": "B603",
+      "test_name": "subprocess_without_shell_equals_true"
+    },
+    {
+      "code": "37     elif h(ours) == h(remote_tree):\n38         subprocess.run([\"git\", \"-C\", repo, \"checkout\", \"--theirs\", \"--\", path], check=True)\n39         stats[\"theirs\"] += 1\n",
+      "col_offset": 8,
+      "end_col_offset": 91,
+      "filename": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 78,
+        "link": "https://cwe.mitre.org/data/definitions/78.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Starting a process with a partial executable path",
+      "line_number": 38,
+      "line_range": [
+        38
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b607_start_process_with_partial_path.html",
+      "test_id": "B607",
+      "test_name": "start_process_with_partial_path"
+    },
+    {
+      "code": "37     elif h(ours) == h(remote_tree):\n38         subprocess.run([\"git\", \"-C\", repo, \"checkout\", \"--theirs\", \"--\", path], check=True)\n39         stats[\"theirs\"] += 1\n",
+      "col_offset": 8,
+      "end_col_offset": 91,
+      "filename": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 78,
+        "link": "https://cwe.mitre.org/data/definitions/78.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "subprocess call - check for execution of untrusted input.",
+      "line_number": 38,
+      "line_range": [
+        38
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html",
+      "test_id": "B603",
+      "test_name": "subprocess_without_shell_equals_true"
+    },
+    {
+      "code": "46 # \u2500\u2500\u2500 \u0641\u0627\u06cc\u0644\u200c\u0647\u0627\u06cc \u062f\u0633\u062a\u06cc: \u0634\u0634 \u0622\u06cc\u0646\u0647\u0654 \u0646\u0633\u062e\u0647 \u2192 1.25.38 \u00b7 data/app.db \u2192 \u0645\u062d\u0644\u06cc \u2500\u2500\u2500\n47 subprocess.run([\"git\", \"-C\", repo, \"checkout\", \"--ours\", \"--\", \"data/app.db\"], check=True)\n48 for path in [\"package.json\", \"public/index.html\", \"public/sw.js\", \"src/core/version.ts\"]:\n",
+      "col_offset": 0,
+      "end_col_offset": 90,
+      "filename": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 78,
+        "link": "https://cwe.mitre.org/data/definitions/78.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Starting a process with a partial executable path",
+      "line_number": 47,
+      "line_range": [
+        47
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b607_start_process_with_partial_path.html",
+      "test_id": "B607",
+      "test_name": "start_process_with_partial_path"
+    },
+    {
+      "code": "46 # \u2500\u2500\u2500 \u0641\u0627\u06cc\u0644\u200c\u0647\u0627\u06cc \u062f\u0633\u062a\u06cc: \u0634\u0634 \u0622\u06cc\u0646\u0647\u0654 \u0646\u0633\u062e\u0647 \u2192 1.25.38 \u00b7 data/app.db \u2192 \u0645\u062d\u0644\u06cc \u2500\u2500\u2500\n47 subprocess.run([\"git\", \"-C\", repo, \"checkout\", \"--ours\", \"--\", \"data/app.db\"], check=True)\n48 for path in [\"package.json\", \"public/index.html\", \"public/sw.js\", \"src/core/version.ts\"]:\n",
+      "col_offset": 0,
+      "end_col_offset": 90,
+      "filename": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 78,
+        "link": "https://cwe.mitre.org/data/definitions/78.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "subprocess call - check for execution of untrusted input.",
+      "line_number": 47,
+      "line_range": [
+        47
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html",
+      "test_id": "B603",
+      "test_name": "subprocess_without_shell_equals_true"
+    },
+    {
+      "code": "48 for path in [\"package.json\", \"public/index.html\", \"public/sw.js\", \"src/core/version.ts\"]:\n49     subprocess.run([\"git\", \"-C\", repo, \"checkout\", \"--ours\", \"--\", path], check=True)\n50 \n",
+      "col_offset": 4,
+      "end_col_offset": 85,
+      "filename": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 78,
+        "link": "https://cwe.mitre.org/data/definitions/78.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Starting a process with a partial executable path",
+      "line_number": 49,
+      "line_range": [
+        49
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b607_start_process_with_partial_path.html",
+      "test_id": "B607",
+      "test_name": "start_process_with_partial_path"
+    },
+    {
+      "code": "48 for path in [\"package.json\", \"public/index.html\", \"public/sw.js\", \"src/core/version.ts\"]:\n49     subprocess.run([\"git\", \"-C\", repo, \"checkout\", \"--ours\", \"--\", path], check=True)\n50 \n",
+      "col_offset": 4,
+      "end_col_offset": 85,
+      "filename": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 78,
+        "link": "https://cwe.mitre.org/data/definitions/78.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "subprocess call - check for execution of untrusted input.",
+      "line_number": 49,
+      "line_range": [
+        49
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html",
+      "test_id": "B603",
+      "test_name": "subprocess_without_shell_equals_true"
+    },
+    {
+      "code": "16 rows = []\n17 for f in sorted(glob.glob(os.environ.get('SHOTS_DIR', '/tmp/shots-phases') + '/*.png')):\n18     img = Image.open(f).convert('RGB')\n",
+      "col_offset": 54,
+      "end_col_offset": 73,
+      "filename": "/home/z/my-project/gh-work/scripts/shots-phases-pixelcheck.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 377,
+        "link": "https://cwe.mitre.org/data/definitions/377.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Probable insecure usage of temp file/directory.",
+      "line_number": 17,
+      "line_range": [
+        17
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b108_hardcoded_tmp_directory.html",
+      "test_id": "B108",
+      "test_name": "hardcoded_tmp_directory"
+    },
+    {
+      "code": "18 print(f\"{'file':40s} {'corner-bg':16s} {'corner-ok':9s} {'bottom-clip':12s}\")\n19 for f in sorted(glob.glob('/tmp/shots/*.png') + glob.glob('/tmp/shots-qa/*.png') + glob.glob('/tmp/shots-gonogo/*.png')):\n20     img = Image.open(f).convert('RGB')\n",
+      "col_offset": 26,
+      "end_col_offset": 44,
+      "filename": "/home/z/my-project/gh-work/scripts/shots-pixelcheck.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 377,
+        "link": "https://cwe.mitre.org/data/definitions/377.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Probable insecure usage of temp file/directory.",
+      "line_number": 19,
+      "line_range": [
+        19
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b108_hardcoded_tmp_directory.html",
+      "test_id": "B108",
+      "test_name": "hardcoded_tmp_directory"
+    },
+    {
+      "code": "18 print(f\"{'file':40s} {'corner-bg':16s} {'corner-ok':9s} {'bottom-clip':12s}\")\n19 for f in sorted(glob.glob('/tmp/shots/*.png') + glob.glob('/tmp/shots-qa/*.png') + glob.glob('/tmp/shots-gonogo/*.png')):\n20     img = Image.open(f).convert('RGB')\n",
+      "col_offset": 58,
+      "end_col_offset": 79,
+      "filename": "/home/z/my-project/gh-work/scripts/shots-pixelcheck.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 377,
+        "link": "https://cwe.mitre.org/data/definitions/377.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Probable insecure usage of temp file/directory.",
+      "line_number": 19,
+      "line_range": [
+        19
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b108_hardcoded_tmp_directory.html",
+      "test_id": "B108",
+      "test_name": "hardcoded_tmp_directory"
+    },
+    {
+      "code": "18 print(f\"{'file':40s} {'corner-bg':16s} {'corner-ok':9s} {'bottom-clip':12s}\")\n19 for f in sorted(glob.glob('/tmp/shots/*.png') + glob.glob('/tmp/shots-qa/*.png') + glob.glob('/tmp/shots-gonogo/*.png')):\n20     img = Image.open(f).convert('RGB')\n",
+      "col_offset": 93,
+      "end_col_offset": 118,
+      "filename": "/home/z/my-project/gh-work/scripts/shots-pixelcheck.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 377,
+        "link": "https://cwe.mitre.org/data/definitions/377.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Probable insecure usage of temp file/directory.",
+      "line_number": 19,
+      "line_range": [
+        19
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b108_hardcoded_tmp_directory.html",
+      "test_id": "B108",
+      "test_name": "hardcoded_tmp_directory"
+    },
+    {
+      "code": "13         if s.count(old) == 0:\n14             assert s.count(new) >= 1, f'{p}: neither :: {old[:60]!r}'\n15             continue  # \u0627\u06cc\u062f\u0645\u067e\u0648\u062a\u0646\u062a\n",
+      "col_offset": 12,
+      "end_col_offset": 69,
+      "filename": "/home/z/my-project/gh-work/scripts/theme-retune-12749.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.",
+      "line_number": 14,
+      "line_range": [
+        14
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html",
+      "test_id": "B101",
+      "test_name": "assert_used"
+    },
+    {
+      "code": "15             continue  # \u0627\u06cc\u062f\u0645\u067e\u0648\u062a\u0646\u062a\n16         assert s.count(old) == 1, f'{p}: count={s.count(old)} :: {old[:60]!r}'\n17         s = s.replace(old, new)\n",
+      "col_offset": 8,
+      "end_col_offset": 78,
+      "filename": "/home/z/my-project/gh-work/scripts/theme-retune-12749.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.",
+      "line_number": 16,
+      "line_range": [
+        16
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html",
+      "test_id": "B101",
+      "test_name": "assert_used"
+    }
+  ]
+}

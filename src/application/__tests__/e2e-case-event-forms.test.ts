@@ -550,18 +550,25 @@ describe('فرم‌های تکی خانواده جای «فرم جامع» (هر
       )
       .run(studentId);
     const types = dataOf<Array<{ id: string; key: string }>>(await manager.get('/api/case-events/types?active=true'));
-    for (const k of ['ce-snap-iv-p-v1', 'ce-sdq-p-v1', 'ce-scared-p-v1', 'ce-id-adapt-v1']) {
+    // 0131 — فرم‌های خارج از مأموریت SLD/دیرآموزی بایگانی شدند؛ جریان تکی روی فرم‌های فعال مأموریت می‌رود
+    for (const k of ['ce-sld-read-v1', 'ce-sdq-p-v1', 'ce-id-adapt-v1']) {
       const t = types.find((x) => x.key === k);
       expect(t, k).toBeTruthy();
       typeIds[k] = t!.id;
     }
+    // — SNAP-IV والد و SCARED والد: بایگانی 0131 — از فهرست فعال می‌افتند (الگوی بازنشستگی ce-anamnesis-v2)
+    expect(types.find((x) => x.key === 'ce-snap-iv-p-v1')).toBeUndefined();
+    expect(types.find((x) => x.key === 'ce-scared-p-v1')).toBeUndefined();
+    const all = (await manager.get('/api/case-events/types')).body as { data: { key: string; active: boolean }[] };
+    expect(all.data.find((x) => x.key === 'ce-snap-iv-p-v1')!.active).toBe(false);
+    expect(all.data.find((x) => x.key === 'ce-scared-p-v1')!.active).toBe(false);
     // — دو فرم جامع دیگر در کتابخانه نیست
     expect(types.find((x) => x.key === 'ce-comp-family-v2')).toBeUndefined();
     expect(types.find((x) => x.key === 'ce-comp-teacher-v2')).toBeUndefined();
   });
 
-  it('SNAP-IV والد تکی: ساخت → در انتظار خانواده + توکن؛ صف «در انتظار پاسخ» نشان می‌دهد', async () => {
-    const created = await manager.post(`/api/students/${studentId}/case-events`, { eventTypeId: typeIds['ce-snap-iv-p-v1'], values: {} });
+  it('چک‌لیست دشواری خواندن تکی: ساخت → در انتظار خانواده + توکن؛ صف «در انتظار پاسخ» نشان می‌دهد', async () => {
+    const created = await manager.post(`/api/students/${studentId}/case-events`, { eventTypeId: typeIds['ce-sld-read-v1'], values: {} });
     expect(created.status).toBe(201);
     const rec = dataOf<{ id: string; status: string }>(created);
     expect(rec.status).toBe('pending_family');
@@ -572,10 +579,17 @@ describe('فرم‌های تکی خانواده جای «فرم جامع» (هر
     expect(pending.some((p) => p.id === rec.id)).toBe(true);
   });
 
+  it('فرم بایگانی‌شدهٔ 0131 (SNAP-IV والد) برای ورودی جدید بسته است → ۴۰۹', async () => {
+    const snapTypeId = (A.sql.prepare(`SELECT id FROM case_event_types WHERE key = 'ce-snap-iv-p-v1'`).get() as { id: string }).id;
+    const created = await manager.post(`/api/students/${studentId}/case-events`, { eventTypeId: snapTypeId, values: {} });
+    expect(created.status).toBe(409);
+    expect((created.body as { message: string }).message).toContain('غیرفعال');
+  });
+
   it('ارسال با بله (خانواده) → sent≥۱ و لینک امن در پیام', async () => {
     const rows = A.sql.prepare(
       `SELECT e.id FROM case_events e JOIN case_event_types t ON t.id = e.event_type_id
-        WHERE t.key = 'ce-snap-iv-p-v1' AND e.student_id = ? AND e.status = 'pending_family'`
+        WHERE t.key = 'ce-sld-read-v1' AND e.student_id = ? AND e.status = 'pending_family'`
     ).all(studentId) as { id: string }[];
     const res = await manager.post(`/api/case-events/${rows[0].id}/send`, { audience: 'family' });
     expect(res.status).toBe(200);
@@ -585,16 +599,16 @@ describe('فرم‌های تکی خانواده جای «فرم جامع» (هر
   });
 
   it('وب‌فرم تکی: GET صفحهٔ تک‌فرمی (بدون سربرگ «بخش ۲ از ۵») + POST کامل → تحلیل؛ POST دوباره → ۴۰۹', async () => {
-    const created = await manager.post(`/api/students/${studentId}/case-events`, { eventTypeId: typeIds['ce-snap-iv-p-v1'], values: {} });
+    const created = await manager.post(`/api/students/${studentId}/case-events`, { eventTypeId: typeIds['ce-sld-read-v1'], values: {} });
     const rec = dataOf<{ id: string }>(created);
     const tokenRow = A.sql.prepare(`SELECT fill_token FROM case_events WHERE id = ?`).get(rec.id) as { fill_token: string };
     const page = await A.app.request(`/public/case-events/${rec.id}/fill?token=${tokenRow.fill_token}`);
     expect(page.status).toBe(200);
     const html = await page.text();
-    expect(html).toContain('چک‌لیست توجه و بی‌قراری — فرم خانواده (SNAP-IV)');
+    expect(html).toContain('چک‌لیست دشواری خواندن — فرم خانواده و معلم (ملاک‌های DSM)');
     expect(html).not.toContain('بخش ۲ از');
     const answers: Record<string, number> = {};
-    for (const f of fieldsOf('ce-snap-iv-p-v1')) answers[f.key] = 1;
+    for (const f of fieldsOf('ce-sld-read-v1')) answers[f.key] = 1;
     const post = await A.app.request(`/public/case-events/${rec.id}/fill`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -603,9 +617,11 @@ describe('فرم‌های تکی خانواده جای «فرم جامع» (هر
     expect(post.status).toBe(200);
     const analysisRow = A.sql.prepare(`SELECT analysis FROM case_events WHERE id = ?`).get(rec.id) as { analysis: string };
     const a = JSON.parse(analysisRow.analysis) as { score: number; band: string | null; subscaleScores: { id: string; band: string | null }[] };
-    expect(a.score).toBe(26);
-    expect(a.subscaleScores.map((x) => x.id)).toEqual(['ia', 'hi', 'odd']);
-    expect(a.subscaleScores.find((x) => x.id === 'ia')!.band).toBe('در محدودهٔ عادی');
+    // همهٔ آیتم‌ها در ۱ (وسط طیف): نشانه‌های خواندن ۶ + تأثیر ۲ = ۸ (شروع دشواری/دلایل دیگر از جمع خارج‌اند)
+    expect(a.score).toBe(8);
+    expect(a.subscaleScores.map((x) => x.id)).toEqual(['crita', 'critb', 'critc', 'critd']);
+    expect(a.subscaleScores.find((x) => x.id === 'crita')!.band).toBe('مرزی — نیاز به بررسی');
+    expect(a.subscaleScores.find((x) => x.id === 'critb')!.band).toBe('تأثیر واقعی گزارش شده');
 
     const post2 = await A.app.request(`/public/case-events/${rec.id}/fill`, {
       method: 'POST',
@@ -615,7 +631,7 @@ describe('فرم‌های تکی خانواده جای «فرم جامع» (هر
     expect(post2.status).toBe(409);
   });
 
-  it('بات: چک‌لیست بلند خانواده (SNAP-IV ۲۷ آیتمی) در «چک‌لیست‌های من» می‌آید و با لینک وب پاسخ می‌گیرد', async () => {
+  it('بات: چک‌لیست بلند خانواده (SDQ ۲۵ آیتمی) در «چک‌لیست‌های من» می‌آید و با لینک وب پاسخ می‌گیرد', async () => {
     const created = await manager.post(`/api/students/${studentId}/case-events`, { eventTypeId: typeIds['ce-sdq-p-v1'], values: {} });
     const rec = dataOf<{ id: string }>(created);
     const mine = await bot(A, tx('چک‌لیست‌های من', 9151));

@@ -1,0 +1,102 @@
+===== SUMMARY =====
+tsc EXIT=0
+vitest EXIT=1
+build-client EXIT=0
+worker-bundle EXIT=0
+worker-check EXIT=0
+npm-check:route-registry EXIT=0
+npm-audit:sec EXIT=0
+npm-check:d1 EXIT=0
+npm-check:migrations-manifest EXIT=0
+bundle-smoke EXIT=1
+perf EXIT=0
+ui-voice EXIT=0
+contrast EXIT=0
+===== VITEST TAIL =====
+     97|     expect(readFileSync(join(__dirname, '../../public/sw.js'), 'utf8')…
+       |                                                                         ^
+     98|   });
+     99| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed | 331 passed (332)
+      Tests  1 failed | 3396 passed (3397)
+   Start at  06:04:20
+   Duration  235.13s (transform 5.36s, setup 0ms, collect 86.73s, tests 98.06s, environment 51ms, prepare 15.53s)
+
+===== FAILED FILES (if any) =====
+ FAIL  src/__tests__/front-supervisor-readonly.test.ts > گیت ۱.۲۵.۰۱ — هم‌نسخه‌ای انتشار > version.ts = ?v=های index.html = VERSION سوورکر
+ ❯ src/__tests__/front-supervisor-readonly.test.ts (7 tests | 1 failed) 14ms
+ ❯ src/__tests__/front-supervisor-readonly.test.ts:97:73
+===== OTHER GATES (last lines) =====
+--- build-client
+
+   index.html → boot/boot.AIM47MRP.js + 4 modulepreload
+   boot: boot.AIM47MRP.js — 22.2KB gz (+ چانک بوت 21.6KB)
+   کل باندل: 72 فایل — 1345KB خام → 437KB gzip
+   build-client: ✓
+--- worker-bundle
+
+  worker/bundle.js  4.2mb ⚠️
+
+⚡ Done in 164ms
+✓ worker/bundle.js بازسازی شد — نسخهٔ 1.27.88 — 4.18MB
+--- worker-check
+--- perf
+   ✓ critical_css_gz: 70,133 / سقف 72,400 بایت gzip
+   ✓ fonts_raw: 167,256 / سقف 170,000 بایت خام
+   ✓ vendor سنگین (xlsx) بیرون از گراف بوت است
+   (بوت: 5 فایل · 127KB خام → 44KB gzip · CSS 68KB gzip · فونت 163KB · مبنای اندازه‌گیری: باندل dist (boot.AIM47MRP.js))
+   بودجهٔ کارایی: ✓
+--- ui-voice
+… views/health-panel.js:96 « درگاه» ← توکن «درگاه» — لیست سفید لایهٔ ② (ALLOW: واژهٔ محصول CP — جدول درگاه‌های کنترل‌پلین)
+✓ گیت زبان کاربر سبز است — 83 فایل، 31772 رشتهٔ رندرشونده، یافتهٔ قرمز: ۰
+--- contrast
+✓ تیره │ badge     │ badge--neutral │ color-mix(in srgb, var(--text-2) 55%, var(--text)) × --surface-3 │ 7.42 ≥ 4.50
+✓ تیره │ link      │ لینک روی صفحه │ --primary × --bg │ 7.55 ≥ 4.50
+✓ تیره │ link      │ لینک روی کارت │ --primary × --surface │ 6.71 ≥ 4.50
+✓ تیره │ ui        │ حلقهٔ فوکوس (غیرمتنی — §2.4.11) │ --focus × --surface │ 7.97 ≥ 3.0
+✓ گیت کنتراست AA سبز است — 34 جفت × ۲ تم = 68 سنجش · سبز 65 · مجازِ ثبت‌شده 3 · تخلف ۰
+--- /home/z/my-project/refs/logs/gate-npm-audit:sec.log
+[LOW] S6 src/application/student-timeline/service.ts:526 — JSON.parse بدون try در پنجرهٔ ±۶ خط — بررسی ورودی نامعتبر
+[LOW] S7 src/node-sync-runner/boot.ts:100 — console.* در سورس ورکر — به logger مسیر داده شود
+[LOW] S7 src/node-sync-runner/runner.ts:837 — console.* در سورس ورکر — به logger مسیر داده شود
+[LOW] S7 src/node-sync-runner/runner.ts:844 — console.* در سورس ورکر — به logger مسیر داده شود
+سقف حجم صریح در: 32 فایل → src/application/backup/routes.ts, src/application/backup/service.ts, src/application/client-errors/routes.ts, src/application/cp-link/body.ts, src/application/cp-link/index.ts, src/application/http/responses.ts …
+جمع: HIGH=0 MED=0 LOW=4
+--- /home/z/my-project/refs/logs/gate-npm-check:d1.log
+  ✓ [11] ⑪ rum_events: ردیف‌شمار خودکار با الگوی پذیرفتهٔ D1 (AUTOINCREMENT سالم)
+  ✓ [12] ⑫ زیرساخت صندوق سینک مرکز↔میز کامل است (node_sync_inbox/synced_announcements/sync_nodes)
+  ✓ [13] ⑬ اجرای دوم کامل — دوباره‌تلاش امن است
+  ℹ اجرای دوم: 710 دستور دوباره اجرا شد؛ 117 دستور ALTER ADD COLUMN با ستونِ موجود رد شد (تنها کلاس غیردوباره‌پذیرِ dump) — اسکیما بایت‌به‌بایت ثابت ماند
+
+نتیجه: 13 سبز / 0 سرخ — اسکیمای 128 مایگریشن «دوباره‌پذیر» اثبات شد: همان SQL به موتور محلی (SQLite) و به markaz-central (D1) می‌رود و اجرای دوم کامل روی DB پرشده صفر خطا و بدون تغییر اسکیما است.
+--- /home/z/my-project/refs/logs/gate-npm-check:migrations-manifest.log
+✓ گیت مانیفست مایگریشن‌ها سبز شد — 128 فایل بی‌انحراف با docs/migrations-manifest.json
+--- /home/z/my-project/refs/logs/gate-npm-check:route-registry.log
+✓ گیت رجیستری مسیرها سبز است — 441 ثبت در 56 ماژول (domain 331 · application 95 · other 15)
+===== GIT STATUS AFTER GATES =====
+ M CHANGELOG.md
+ M public/assets/dist/build-manifest.json
+ M public/assets/js/api.js
+ M public/assets/js/views/appointments.js
+ M public/index.html
+ M src/__tests__/front-12561.test.ts
+ M src/__tests__/front-12581.test.ts
+ D src/__tests__/front-appointments-12788.test.ts
+ M src/__tests__/front-supervisor-readonly.test.ts
+ M src/__tests__/front-ux-pro-max.test.ts
+ A src/application/__tests__/audit-page-appointments.test.ts
+ M src/core/shared/index.ts
+ M src/core/version.ts
+ M src/domain/appointment-core/index.ts
+ M src/domain/appointment-core/routes.ts
+ M src/domain/appointment-core/service.ts
+ M src/domain/appointment-core/types.ts
+ M src/domain/appointment-core/week-copy.ts
+ M src/domain/assessment-blocks/service.ts
+ M src/domain/staff/routes.ts
+ M src/domain/staff/types.ts
+ M worker/bundle.js
+?? src/__tests__/front-appointments-audit-logic.test.ts

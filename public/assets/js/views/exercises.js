@@ -39,6 +39,23 @@ const FORMAT_LABELS = { worksheet: 'تمرین', homework: 'تکلیف', game: '
 const FORMAT_ICONS = { worksheet: 'file', homework: 'checklist', game: 'gamepad', instruction: 'board', family: 'heart' };
 const PAGE_SIZE = 18;
 
+// چیپ‌های هدف روزمرهٔ درمانگر — میان‌برِ فیلتر «برای چه؟». هر چیپ مجموعه‌ای از کلیدهای واقعی
+// درخت هدف (منبع: src/domain/exercise-bank/focus.ts) است؛ فیلتر ?focus= هر کلید را سمت سرور
+// به خودش + زیرشاخه‌ها گسترش می‌دهد و اجتماع کلیدها می‌آید — پس چیپ ادعای تازه‌ای نمی‌سازد.
+const GOAL_CHIPS = [
+  { key: 'reading', fa: 'خواندن', icon: 'book', keys: ['lang_phonology', 'lang_comprehension', 'lang_ran', 'fluency_auto'] },
+  { key: 'writing', fa: 'نوشتن', icon: 'edit', keys: ['perception_visomotor', 'spatial_relations', 'lang_expression', 'ef_org_thoughts'] },
+  { key: 'math', fa: 'ریاضی', icon: 'calculator', keys: ['proc_successive', 'proc_simultaneous', 'reason_problem', 'memory_sequence'] },
+  { key: 'wm_attention', fa: 'حافظهٔ کاری و توجه', icon: 'brain', keys: ['memory_working', 'attention_sustained', 'attention_selective', 'attention_divided'] }
+];
+// چیپ‌های پایه — عضویتش از برچسب‌های واقعی پایهٔ DB (ستون پایه درخت واحد) با تطبیق نام می‌آید
+const GRADE_CHIP_DEFS = [
+  { key: 'g1', fa: 'اول', re: /اول/ },
+  { key: 'g2', fa: 'دوم', re: /دوم/ },
+  { key: 'g3', fa: 'سوم', re: /سوم/ },
+  { key: 'g4', fa: 'چهارم به بالا', re: /چهارم|پنجم|ششم/ }
+];
+
 // /درخت واحد طبقه‌بندی (چهار ستون) از meta.taxonomyTree — یک زبان برای منو/فرم/پیکر
 // کلیدهای legacy (focusTree/disorderTree) از payload حذف شدند؛ هیچ‌جا خوانده نمی‌شوند
 let TAX_TREE = [];
@@ -172,6 +189,25 @@ function formatBadge(format) {
 
 function publishedBadge(published) {
   return el('span', { class: `badge ${published ? 'badge--success' : 'badge--warning'}` }, published ? 'منتشرشده' : 'پیش‌نویس');
+}
+
+/* برچسب‌های پایهٔ کارت — فقط برچسب‌های واقعی ستون پایهٔ درخت واحد (یا دستهٔ grade برچسب) */
+function gradeTagsOf(ex) {
+  return (Array.isArray(ex.tags) ? ex.tags : []).filter((t) => (TAX_KEY_PILLAR.get(t.id) ?? t.category) === 'grade');
+}
+
+/* خط «برای چه؟» — صرفاً از فرادادهٔ واقعی کارت: کلیدهای درخت هدف، وگرنه برچسب اختلال،
+   وگرنه نوع کارت (هر کارت در طرح درمان به کارت جلسه تبدیل می‌شود — ادعای تازه‌ای نیست) */
+function whyLabelsOf(ex) {
+  const focusItems = (Array.isArray(ex.focus) ? ex.focus : [])
+    .filter((k) => TAX_LABELS.has(k))
+    .map((k) => ({ key: k, fa: TAX_LABELS.get(k) }));
+  if (focusItems.length > 0) return focusItems.slice(0, 3);
+  const disorderItems = (Array.isArray(ex.tags) ? ex.tags : [])
+    .filter((t) => (TAX_KEY_PILLAR.get(t.id) ?? t.category) === 'disorder')
+    .map((t) => ({ key: null, fa: t.name }));
+  if (disorderItems.length > 0) return disorderItems.slice(0, 3);
+  return null;
 }
 
 
@@ -380,7 +416,9 @@ export function renderExercises(container) {
   let disFacets = {}; // شمارندهٔ خانواده‌های اختلال
   let gradeFacets = {}; // شمارندهٔ دوره‌های پایه تحصیلی
   // فیلترهای درخت واحد: کلیدهای هدف (info/exec) + شناسه/کلید برچسب‌های اختلال و پایه (ستون برچسبی)
-  const state = { format: '', q: '', published: 'all', page: 1, focus: [], disorders: [], grades: [] };
+  // پیش‌فرض انتشار: مدیر همهٔ کارت‌ها را می‌بیند؛ بقیه فقط منتشرشده را (با همان select قابل تغییر است)
+  const isAdmin = session.user?.role === 'manager';
+  const state = { format: '', q: '', published: isAdmin ? 'all' : 'true', page: 1, focus: [], disorders: [], grades: [], sort: 'new' };
   const menuFocusSel = new Set(); // انتخاب زندهٔ ستون‌های علمی — با state.focus همگام می‌ماند
   const menuTagSel = new Set(); // انتخاب زندهٔ ستون‌های برچسبی — با state.disorders/grades همگام می‌ماند
   let taxPicker = null; // نمونهٔ کامپوننت مشترک taxonomy.js — ماندگار در طول عمر نما
@@ -537,6 +575,8 @@ export function renderExercises(container) {
         state.focus = [...menuFocusSel];
         state.disorders = [...menuTagSel].filter((k) => TAX_KEY_PILLAR.get(k) === 'disorder');
         state.grades = [...menuTagSel].filter((k) => TAX_KEY_PILLAR.get(k) === 'grade');
+        syncGoalChips(); // انتخاب از درخت پیشرفته — چیپ‌های میان‌بر هم‌گام بمانند
+        syncGradeChips();
         state.page = 1;
         refreshZone();
       }
@@ -572,6 +612,100 @@ export function renderExercises(container) {
       refreshZone();
     });
 
+    // مرتب‌سازی سمت کلاینت روی همین صفحه — سرور پارامتر sort ندارد و نباید هم داشته باشد
+    const sortSel = el(
+      'select',
+      { class: 'select', 'aria-label': 'مرتب‌سازیِ همین صفحه' },
+      el('option', { value: 'new', selected: state.sort === 'new' }, 'جدیدترین'),
+      el('option', { value: 'fa', selected: state.sort === 'fa' }, 'الفبای فارسی')
+    );
+    sortSel.addEventListener('change', () => { state.sort = sortSel.value; drawList(); });
+    const sortWrap = el(
+      'label',
+      { class: 'exb-sort', style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-1)' } },
+      el('span', { class: 'cell-sub' }, 'مرتب‌سازیِ همین صفحه'),
+      sortSel
+    );
+
+    // چیپ‌های هدف «برای چه؟» — میان‌بر فیلتر روی کلیدهای واقعی درخت هدف (اجتماع با گسترش سرور)
+    const sameSet = (list, keys) => list.length === keys.length && keys.every((k) => list.includes(k));
+    const goalChips = el(
+      'div',
+      { class: 'exb-grades', role: 'group', 'aria-label': 'فیلتر هدف کارت — برای چه؟' },
+      el('span', { class: 'cell-sub' }, 'برای چه؟'),
+      ...GOAL_CHIPS.map((g) =>
+        el('button', {
+          class: `chip${sameSet(state.focus, g.keys) ? ' is-active' : ''}`,
+          type: 'button',
+          'aria-pressed': String(sameSet(state.focus, g.keys)),
+          style: { cursor: 'pointer' },
+          dataset: { goalKey: g.key },
+          title: `${g.fa} — کلیدهای هدف: ${g.keys.map((k) => TAX_LABELS.get(k) ?? k).join('، ')}`,
+          onclick: () => {
+            const wasOn = sameSet(state.focus, g.keys);
+            state.focus = wasOn ? [] : [...g.keys];
+            menuFocusSel.clear();
+            if (!wasOn) for (const k of g.keys) menuFocusSel.add(k);
+            taxPicker?.refresh();
+            syncGoalChips();
+            state.page = 1;
+            refreshZone();
+          }
+        }, icon(g.icon, 14), g.fa)
+      )
+    );
+    function syncGoalChips() {
+      for (const b of goalChips.querySelectorAll('button.chip')) {
+        const g = GOAL_CHIPS.find((x) => x.key === b.dataset.goalKey);
+        const on = g ? sameSet(state.focus, g.keys) : false;
+        b.classList.toggle('is-active', on);
+        b.setAttribute('aria-pressed', String(on));
+      }
+    }
+
+    // چیپ‌های پایه — عضویت از برچسب‌های واقعی پایهٔ ستون چهارم درخت (اگر برچسب پایه ثبت شده باشد)
+    const gradeTags = [];
+    for (const px of TAX_TREE) {
+      if (px.key !== 'grade') continue;
+      for (const d of px.domains ?? []) for (const lf of d.leaves ?? []) gradeTags.push({ id: lf.key, fa: lf.fa });
+    }
+    const gradeChipDefs = GRADE_CHIP_DEFS
+      .map((g) => ({ ...g, ids: gradeTags.filter((t) => g.re.test(t.fa)).map((t) => t.id) }))
+      .filter((g) => g.ids.length > 0);
+    const gradeChips = gradeTags.length === 0 ? null : el(
+      'div',
+      { class: 'exb-grades', role: 'group', 'aria-label': 'فیلتر پایه تحصیلی' },
+      el('span', { class: 'cell-sub' }, 'پایه:'),
+      ...gradeChipDefs.map((g) =>
+        el('button', {
+          class: `chip${sameSet(state.grades, g.ids) ? ' is-active' : ''}`,
+          type: 'button',
+          'aria-pressed': String(sameSet(state.grades, g.ids)),
+          style: { cursor: 'pointer' },
+          dataset: { gradeKey: g.key },
+          title: `برچسب‌های پایه: ${g.ids.map((id) => TAX_LABELS.get(id) ?? id).join('، ')}`,
+          onclick: () => {
+            const wasOn = sameSet(state.grades, g.ids);
+            state.grades = wasOn ? [] : [...g.ids];
+            for (const k of [...menuTagSel]) if (TAX_KEY_PILLAR.get(k) === 'grade') menuTagSel.delete(k);
+            if (!wasOn) for (const id of g.ids) menuTagSel.add(id);
+            taxPicker?.refresh();
+            syncGradeChips();
+            state.page = 1;
+            refreshZone();
+          }
+        }, g.fa)
+      )
+    );
+    function syncGradeChips() {
+      for (const b of gradeChips?.querySelectorAll('button.chip') ?? []) {
+        const g = gradeChipDefs.find((x) => x.key === b.dataset.gradeKey);
+        const on = g ? sameSet(state.grades, g.ids) : false;
+        b.classList.toggle('is-active', on);
+        b.setAttribute('aria-pressed', String(on));
+      }
+    }
+
     // فیلتر «نوع کارت»: همین نگاشت، نوع کارت جلسه در طرح درمان را می‌سازد
     // ۱.۲۲.۰ — چیپ‌ها یک‌بار مونت می‌مانند؛ کلیک فقط is-active را درجا عوض می‌کند و ناحیهٔ داده را quiet می‌کشد
     const typeChips = el('div', { class: 'exb-grades', role: 'group', 'aria-label': 'فیلتر نوع کارت' },
@@ -605,10 +739,35 @@ export function renderExercises(container) {
     };
     const pickFormat = (k) => { state.format = k; syncTypeChips(); refreshZone(); };
 
+    // «فیلتر پیشرفته» — درخت چهارستونه به‌صورت جمع‌شده؛ میان‌برهای هدف/پایه بالای صفحه‌اند
+    const advPanel = el('div', { id: 'exb-adv-panel', hidden: true });
+    advPanel.append(taxPicker.el);
+    const advBtn = el(
+      'button',
+      {
+        class: 'btn btn--soft btn--sm',
+        type: 'button',
+        'aria-expanded': 'false',
+        'aria-controls': 'exb-adv-panel',
+        title: 'درخت کامل طبقه‌بندی: پردازش اطلاعات، کارکردهای اجرایی، اختلال‌ها و پایه تحصیلی',
+        onclick: () => {
+          const willOpen = advPanel.hidden;
+          advPanel.hidden = !willOpen;
+          advBtn.setAttribute('aria-expanded', String(willOpen));
+        }
+      },
+      icon('filter', 14),
+      'فیلتر پیشرفته — درخت هدف، اختلال و پایه',
+      icon('chevD', 13)
+    );
+
     nav.replaceChildren(
-      taxPicker.el, // چهار ستون با یک زبان: تب + خلاصهٔ انتخاب‌ها + درخت
-      el('div', { class: 'exb-filters' }, search, pubSel),
-      typeChips
+      goalChips, // میان‌بر «برای چه؟» — خواندن/نوشتن/ریاضی/حافظهٔ کاری و توجه
+      gradeChips, // میان‌بر پایه — اول/دوم/سوم/چهارم به بالا (اگر برچسب پایه ثبت شده باشد)
+      el('div', { class: 'exb-filters' }, search, pubSel, sortWrap),
+      typeChips,
+      advBtn, // درخت واحد کامل — جمع‌شده تا کاربر اول با هدف و پایه شروع کند
+      advPanel
     );
   }
 
@@ -714,9 +873,20 @@ export function renderExercises(container) {
         ? [{ id: '', filename: ex.file.filename, mime: ex.file.mime, size: ex.file.size }]
         : [];
     const previewFiles = files.filter(previewable);
+    // کنش اصلی کارت — پرش به ویرایشگر «طرح درمان»؛ پیوند کارت از دکمهٔ «کارت آماده» همان‌جا ساخته می‌شود
+    const canPlan = Boolean(session.user && ['manager', 'therapist'].includes(session.user.role));
+    const addPlanBtn = canPlan
+      ? el('button', {
+          class: 'btn btn--primary btn--sm',
+          type: 'button',
+          title: 'پرش به «طرح درمان» — در ویرایشگر جلسه با «کارت آماده» این کارت را به جلسه اضافه کنید',
+          onclick: () => { location.hash = '#/treatment-plans'; }
+        }, icon('plus', 14), 'افزودن به جلسهٔ طرح')
+      : null;
     const actions = el(
       'div',
       { class: 'exb-card__actions' },
+      addPlanBtn,
       previewFiles.length > 0
         ? el(
             'button',
@@ -757,6 +927,21 @@ export function renderExercises(container) {
       ? el('span', { class: 'exb-file' }, 'بدون فایل')
       : buildCardFiles(ex, files);
     const thumb = files.length > 0 ? buildThumb(ex, files) : null;
+    // خط «برای چه؟» + چیپ پایه — اولین چیزی که درمانگر روی هر کارت می‌بیند
+    const gradeTags = gradeTagsOf(ex);
+    const whyLabels = whyLabelsOf(ex);
+    const whyRow = el(
+      'div',
+      { class: 'exb-card__focus' },
+      el('span', { class: 'cell-sub' }, 'برای چه؟'),
+      (whyLabels ?? [{ key: null, fa: `${FORMAT_LABELS[ex.format] ?? 'کارت'} برای جلسهٔ طرح درمان` }]).map((it) =>
+        el('span', { class: 'badge badge--info exb-focus', title: it.fa }, icon(TAX_ICONS.get(it.key) ?? 'target', 12), it.fa)
+      ),
+      ...gradeTags.slice(0, 2).map((t) =>
+        el('span', { class: 'badge badge--neutral exb-focus', title: `پایه تحصیلی: ${t.name}` }, icon('school', 12), /پایه/.test(t.name) ? t.name : `پایهٔ ${t.name}`)
+      ),
+      gradeTags.length > 2 ? el('span', { class: 'badge badge--neutral' }, `+${fa(gradeTags.length - 2)}`) : null
+    );
     return el(
       'div',
       { class: 'card exb-card', dataset: { id: String(ex.id) } }, // — ۱.۲۲.۰ data-id برای پچ/حذف درجا
@@ -772,6 +957,7 @@ export function renderExercises(container) {
           publishedBadge(ex.published),
           ex.visibility === 'private' ? privateBadge() : null)
       ),
+      whyRow,
       ex.description ? el('p', { class: 'exb-card__desc', title: ex.description }, ex.description) : null,
       safeExternalHref(ex.externalUrl)
         ? el('div', { style: { marginBottom: 'var(--sp-2)' } },
@@ -779,23 +965,10 @@ export function renderExercises(container) {
               icon('gamepad', 13),
               el('span', { class: 'exb-file-chip__name' }, 'باز کردن بازی/تمرین آنلاین')))
         : null,
-      // بج هدف‌های شناختی کارت (حداکثر ۳ + شمارندهٔ باقی‌مانده)
-      Array.isArray(ex.focus) && ex.focus.length > 0
-        ? el(
-            'div',
-            { class: 'exb-card__focus' },
-            ex.focus.slice(0, 3).map((k) =>
-              el('span', { class: 'badge badge--info exb-focus', title: TAX_LABELS.get(k) ?? 'برچسب آزاد' /* S6-14 */ },
-                icon(TAX_ICONS.get(k) ?? 'target', 12),
-                TAX_LABELS.get(k) ?? 'برچسب آزاد' /* S6-14 */)
-            ),
-            ex.focus.length > 3 ? el('span', { class: 'badge badge--neutral' }, `+${fa(ex.focus.length - 3)}`) : null
-          )
-        : null,
       el(
         'div',
         { class: 'exb-card__tags' },
-        ex.tags.map((t) => el('span', { class: 'badge badge--neutral' }, t.name))
+        (Array.isArray(ex.tags) ? ex.tags : []).filter((t) => !gradeTags.some((g) => g.id === t.id)).map((t) => el('span', { class: 'badge badge--neutral' }, t.name))
       ),
       el(
         'div',
@@ -872,6 +1045,12 @@ export function renderExercises(container) {
     quietSync: refreshZone
   };
 
+  /* مرتب‌سازی سمت کلاینت فقط روی کارت‌های همین صفحه — «جدیدترین» یعنی ترتیب سرور دست‌نخورده */
+  function sortedItems() {
+    if (state.sort !== 'fa') return items;
+    return [...items].sort((a, b) => String(a.title ?? '').localeCompare(String(b.title ?? ''), 'fa'));
+  }
+
   function drawList() {
     const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -883,7 +1062,7 @@ export function renderExercises(container) {
           iconName: filtered ? 'search' : 'grid',
           title: filtered ? 'با این فیلترها کارتی پیدا نشد' : 'هنوز کارت آماده‌ای ثبت نشده',
           hint: filtered
-            ? 'فیلترهای درخت واحد (هدف/اختلال/پایه)، نوع کارت یا جستجو را تغییر دهید؛ یا از ستون‌های دیگر شروع کنید.'
+            ? 'چیپ «برای چه؟» و پایه، فیلتر پیشرفته (درخت هدف/اختلال/پایه)، نوع کارت یا جستجو را تغییر دهید.'
             : isStaff()
               ? 'با «کارت جدید» اولین کارت آماده را بسازید — هدف شناختی، نوع کارت و پایه/اختلال را انتخاب کنید تا کارت در طرح درمان و بات هدفمند پیدا شود.'
               : 'کارت‌های آمادهٔ مرکز برای طرح درمان اینجا نمایش داده می‌شود.'
@@ -893,7 +1072,7 @@ export function renderExercises(container) {
     }
 
     body.replaceChildren(
-      el('div', { class: 'exb-list' }, items.map((ex) => cardEl(ex))),
+      el('div', { class: 'exb-list' }, sortedItems().map((ex) => cardEl(ex))),
       buildPager(totalPages)
     );
   }

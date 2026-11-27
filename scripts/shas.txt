@@ -1,0 +1,11 @@
+checkout	actions/checkout	tag	11d5960a326750d5838078e36cf38b85af677262	v4.4.0
+setup-node	actions/setup-node	tag	49933ea5288caeca8642d1e84afbd3f7d6820020	v4.4.0
+upload-artifact	actions/upload-artifact	tag	ea165f8d65b6e75b540449e92b4886f43607fa02	v4.6.2
+rust-cache	Swatinem/rust-cache	tag	d1527c8f67ef9af357290475d4af4b0fab8f12e0	v2.9.3
+setup-qemu	docker/setup-qemu-action	tag	c7c53464625b32c7a7e944ae62b3e17d2b600130	v3.7.0
+setup-buildx	docker/setup-buildx-action	tag	8d2750c68a42422c14e847fe6c8ac0403b4cbd6f	v3.12.0
+login	docker/login-action	tag	c94ce9fb468520275223c153574b00df6fe4bcc9	v3.7.0
+metadata	docker/metadata-action	tag	c299e40c65443455700f0fdfc63efafe5b349051	v5.10.0
+build-push	docker/build-push-action	tag	10e90e3645eae34f1e60eeb005ba3a3d33f178e8	v6.19.2
+rust-toolchain	dtolnay/rust-toolchain	branch	39008827e6b4319a349e9a42dfc90579dd25f1ca	@stable
+nsis	nsis-dev/nsis	branch	a96303eae3115221471bb127fa916a13d8bf9ecd	@master

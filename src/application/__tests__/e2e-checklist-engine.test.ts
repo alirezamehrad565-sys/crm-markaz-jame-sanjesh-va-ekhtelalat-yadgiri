@@ -25,7 +25,7 @@ interface PendingRow {
 }
 
 describe('کتابخانهٔ سنجش آماده (seed مهاجرت)', () => {
-  it('قالب‌های استاندارد با مخاطب و برچسب seed شده‌اند — کانرز، اخنباخ کاربردی و چک‌لیست کلاس از غیرفعال (جایگزین: SNAP-IV و SDQ) — ۱.۲۵.۵۹: SDQ والد هم به کلید تازه مهاجرت شد', async () => {
+  it('قالب‌های استاندارد با مخاطب و برچسب seed شده‌اند — کانرز، اخنباخ کاربردی و چک‌لیست کلاس از غیرفعال (جایگزین: SNAP-IV و SDQ) — ۱.۲۵.۵۹: SDQ والد هم به کلید تازه مهاجرت شد — 0131: SNAP-IV والد از فعال خارج (بایگانی SLD)', async () => {
     const A = createTestApp();
     const m = await asRole(A, 'manager');
     const types = dataOf<Array<{ key: string; title: string; audience: string; tags: string[]; category: string }>>(
@@ -37,9 +37,9 @@ describe('کتابخانهٔ سنجش آماده (seed مهاجرت)', () => {
     expect(byKey['ce-sdq-p-v1'].category).toBe('checklist');
     expect(byKey['sdq-parent']).toBeUndefined(); // ۱.۲۵.۵۹ — بازنشسته؛ جانشین ce-sdq-p-v1
     expect(byKey['conners-short']).toBeUndefined();
-    expect(byKey['ce-snap-iv-p-v1']).toBeTruthy();
-    expect(byKey['ce-snap-iv-p-v1'].audience).toBe('family');
-    expect(byKey['ce-snap-iv-p-v1'].tags).toContain(ADHD_TAG);
+    expect(byKey['ce-snap-iv-p-v1']).toBeUndefined(); // 0131 — بایگانی: مرکز فقط SLD/دیرآموزی
+    const all = dataOf<Array<{ key: string; active: boolean }>>(await m.get('/api/case-events/types'));
+    expect(all.find((t) => t.key === 'ce-snap-iv-p-v1')!.active).toBe(false); // ردیف برای بازگشت محفوظ است
     expect(byKey['achenbach-practical']).toBeUndefined();
     expect(byKey['teacher-classroom']).toBeUndefined();
   });
@@ -66,7 +66,7 @@ describe('فرم‌ساز همگانی: منشی هم می‌سازد (دستو�
 });
 
 describe('موتور پیشنهاد بر اساس برچسب‌های دانش‌آموز', () => {
-  it('دانش‌آموز با برچسب ADHD → SNAP-IV سر فهرست با matched؛ بدون برچسب → همه score=۰', async () => {
+  it('دانش‌آموز با برچسب ADHD → SDQ والد/معلم سر فهرست با matched (SNAP-IV پس از 0131 بایگانی است)؛ بدون برچسب → همه score=۰', async () => {
     const A = createTestApp();
     const m = await asRole(A, 'manager');
     const s = await createStudent(m, {});
@@ -79,8 +79,11 @@ describe('موتور پیشنهاد بر اساس برچسب‌های دانش�
     expect(sug[0].score).toBeGreaterThanOrEqual(1);
     expect(sug[0].matched.some((x) => x.id === ADHD_TAG)).toBe(true);
     const matchedKeys = sug.filter((x) => x.score > 0).map((x) => x.type.key);
-    expect(matchedKeys).toContain('ce-snap-iv-p-v1');
-    expect(matchedKeys).toContain('ce-snap-iv-t-v1');
+    // 0131 — چک‌لیست‌های فعالِ برچسب‌خوردهٔ ADHD فقط SDQ والد و معلم‌اند؛ SNAP-IV بایگانی شده
+    expect(matchedKeys).toContain('ce-sdq-p-v1');
+    expect(matchedKeys).toContain('ce-sdq-t-v1');
+    expect(matchedKeys).not.toContain('ce-snap-iv-p-v1');
+    expect(matchedKeys).not.toContain('ce-snap-iv-t-v1');
     expect(sug.every((x) => x.type.category === 'checklist')).toBe(true); // — : پیشنهاد فقط چک‌لیست تکی
 
     const s2 = await createStudent(m, {});

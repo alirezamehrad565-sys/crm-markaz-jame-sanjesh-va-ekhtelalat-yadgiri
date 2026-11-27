@@ -1,0 +1,831 @@
+{
+ "bandit": {
+  "findings": 28,
+  "errors": 0,
+  "rows": [
+   {
+    "severity": "LOW",
+    "confidence": "HIGH",
+    "test": "B101",
+    "file": "/home/z/my-project/gh-work/scripts/fix-copy-week-contract.py",
+    "line": 18
+   },
+   {
+    "severity": "LOW",
+    "confidence": "HIGH",
+    "test": "B101",
+    "file": "/home/z/my-project/gh-work/scripts/fix-copy-week-contract.py",
+    "line": 20
+   },
+   {
+    "severity": "LOW",
+    "confidence": "HIGH",
+    "test": "B101",
+    "file": "/home/z/my-project/gh-work/scripts/fix-copy-week-contract.py",
+    "line": 30
+   },
+   {
+    "severity": "LOW",
+    "confidence": "HIGH",
+    "test": "B404",
+    "file": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+    "line": 4
+   },
+   {
+    "severity": "LOW",
+    "confidence": "HIGH",
+    "test": "B607",
+    "file": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+    "line": 8
+   },
+   {
+    "severity": "LOW",
+    "confidence": "HIGH",
+    "test": "B603",
+    "file": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+    "line": 8
+   },
+   {
+    "severity": "LOW",
+    "confidence": "HIGH",
+    "test": "B607",
+    "file": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+    "line": 15
+   },
+   {
+    "severity": "LOW",
+    "confidence": "HIGH",
+    "test": "B603",
+    "file": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+    "line": 15
+   },
+   {
+    "severity": "LOW",
+    "confidence": "HIGH",
+    "test": "B607",
+    "file": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+    "line": 26
+   },
+   {
+    "severity": "LOW",
+    "confidence": "HIGH",
+    "test": "B603",
+    "file": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+    "line": 26
+   },
+   {
+    "severity": "LOW",
+    "confidence": "HIGH",
+    "test": "B607",
+    "file": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+    "line": 29
+   },
+   {
+    "severity": "LOW",
+    "confidence": "HIGH",
+    "test": "B603",
+    "file": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+    "line": 29
+   },
+   {
+    "severity": "LOW",
+    "confidence": "HIGH",
+    "test": "B607",
+    "file": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+    "line": 32
+   },
+   {
+    "severity": "LOW",
+    "confidence": "HIGH",
+    "test": "B603",
+    "file": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+    "line": 32
+   },
+   {
+    "severity": "LOW",
+    "confidence": "HIGH",
+    "test": "B607",
+    "file": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+    "line": 35
+   },
+   {
+    "severity": "LOW",
+    "confidence": "HIGH",
+    "test": "B603",
+    "file": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+    "line": 35
+   },
+   {
+    "severity": "LOW",
+    "confidence": "HIGH",
+    "test": "B607",
+    "file": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+    "line": 38
+   },
+   {
+    "severity": "LOW",
+    "confidence": "HIGH",
+    "test": "B603",
+    "file": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+    "line": 38
+   },
+   {
+    "severity": "LOW",
+    "confidence": "HIGH",
+    "test": "B607",
+    "file": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+    "line": 47
+   },
+   {
+    "severity": "LOW",
+    "confidence": "HIGH",
+    "test": "B603",
+    "file": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+    "line": 47
+   },
+   {
+    "severity": "LOW",
+    "confidence": "HIGH",
+    "test": "B607",
+    "file": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+    "line": 49
+   },
+   {
+    "severity": "LOW",
+    "confidence": "HIGH",
+    "test": "B603",
+    "file": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+    "line": 49
+   },
+   {
+    "severity": "MEDIUM",
+    "confidence": "MEDIUM",
+    "test": "B108",
+    "file": "/home/z/my-project/gh-work/scripts/shots-phases-pixelcheck.py",
+    "line": 17
+   },
+   {
+    "severity": "MEDIUM",
+    "confidence": "MEDIUM",
+    "test": "B108",
+    "file": "/home/z/my-project/gh-work/scripts/shots-pixelcheck.py",
+    "line": 19
+   },
+   {
+    "severity": "MEDIUM",
+    "confidence": "MEDIUM",
+    "test": "B108",
+    "file": "/home/z/my-project/gh-work/scripts/shots-pixelcheck.py",
+    "line": 19
+   },
+   {
+    "severity": "MEDIUM",
+    "confidence": "MEDIUM",
+    "test": "B108",
+    "file": "/home/z/my-project/gh-work/scripts/shots-pixelcheck.py",
+    "line": 19
+   },
+   {
+    "severity": "LOW",
+    "confidence": "HIGH",
+    "test": "B101",
+    "file": "/home/z/my-project/gh-work/scripts/theme-retune-12749.py",
+    "line": 14
+   },
+   {
+    "severity": "LOW",
+    "confidence": "HIGH",
+    "test": "B101",
+    "file": "/home/z/my-project/gh-work/scripts/theme-retune-12749.py",
+    "line": 16
+   }
+  ]
+ },
+ "checkov": {
+  "failed": 2,
+  "passed": 239,
+  "parsing_errors": 0,
+  "by_check": {
+   "CKV_GHA_7": 1,
+   "CKV2_GHA_1": 1
+  },
+  "rows": [
+   {
+    "check": "CKV_GHA_7",
+    "sev": null,
+    "file": "/.github/workflows/cf-deploy.yml",
+    "line": 20,
+    "platform": null,
+    "resource": "on(Deploy (Cloudflare))"
+   },
+   {
+    "check": "CKV2_GHA_1",
+    "sev": null,
+    "file": "/.github/workflows/ci.yml",
+    "line": 0,
+    "platform": null,
+    "resource": "on(CI)"
+   }
+  ]
+ },
+ "hadolint": [
+  {
+   "file": "/home/z/my-project/gh-work/Dockerfile",
+   "line": 42,
+   "code": "DL3066",
+   "level": "info"
+  },
+  {
+   "file": "/home/z/my-project/gh-work/Dockerfile",
+   "line": 47,
+   "code": "DL3025",
+   "level": "warning"
+  }
+ ],
+ "zizmor_stderr": " INFO zizmor: 🌈 zizmor v1.31.1\n WARN audit: zizmor: zizmor is running in offline mode by default; some audits and auto-fixes will not be available. see https://docs.zizmor.sh/usage/#operating-modes for details\n INFO audit: zizmor: 🌈 completed /home/z/my-project/gh-work/.github/workflows/cf-deploy.yml\n INFO audit: zizmor: 🌈 completed /home/z/my-project/gh-work/.github/workflows/ci.yml\n INFO audit: zizmor: 🌈 completed /home/z/my-project/gh-work/.github/workflows/desktop-build.yml\n INFO audit: zizmor: 🌈 completed /home/z/my-project/gh-work/.github/workflows/docker-publish.yml\n",
+ "zizmor": [
+  {
+   "level": "Medium",
+   "confidence": "Low",
+   "ident": "artipacked",
+   "locs": [
+    "cf-deploy.yml:36"
+   ],
+   "desc": "credential persistence through GitHub Actions artifacts"
+  },
+  {
+   "level": "High",
+   "confidence": "High",
+   "ident": "template-injection",
+   "locs": [
+    "cf-deploy.yml:46",
+    "cf-deploy.yml:50",
+    "cf-deploy.yml:52"
+   ],
+   "desc": "code injection via template expansion"
+  },
+  {
+   "level": "High",
+   "confidence": "High",
+   "ident": "unpinned-uses",
+   "locs": [
+    "cf-deploy.yml:36"
+   ],
+   "desc": "unpinned action reference"
+  },
+  {
+   "level": "High",
+   "confidence": "High",
+   "ident": "unpinned-uses",
+   "locs": [
+    "cf-deploy.yml:38"
+   ],
+   "desc": "unpinned action reference"
+  },
+  {
+   "level": "High",
+   "confidence": "High",
+   "ident": "unpinned-uses",
+   "locs": [
+    "cf-deploy.yml:55",
+    "cf-deploy.yml:57"
+   ],
+   "desc": "unpinned action reference"
+  },
+  {
+   "level": "Medium",
+   "confidence": "Low",
+   "ident": "artipacked",
+   "locs": [
+    "ci.yml:13"
+   ],
+   "desc": "credential persistence through GitHub Actions artifacts"
+  },
+  {
+   "level": "Medium",
+   "confidence": "Medium",
+   "ident": "excessive-permissions",
+   "locs": [
+    "ci.yml:9"
+   ],
+   "desc": "overly broad permissions"
+  },
+  {
+   "level": "High",
+   "confidence": "High",
+   "ident": "unpinned-uses",
+   "locs": [
+    "ci.yml:13"
+   ],
+   "desc": "unpinned action reference"
+  },
+  {
+   "level": "High",
+   "confidence": "High",
+   "ident": "unpinned-uses",
+   "locs": [
+    "ci.yml:15",
+    "ci.yml:16"
+   ],
+   "desc": "unpinned action reference"
+  },
+  {
+   "level": "Medium",
+   "confidence": "Low",
+   "ident": "artipacked",
+   "locs": [
+    "desktop-build.yml:56"
+   ],
+   "desc": "credential persistence through GitHub Actions artifacts"
+  },
+  {
+   "level": "Medium",
+   "confidence": "Low",
+   "ident": "artipacked",
+   "locs": [
+    "desktop-build.yml:92"
+   ],
+   "desc": "credential persistence through GitHub Actions artifacts"
+  },
+  {
+   "level": "High",
+   "confidence": "High",
+   "ident": "unpinned-uses",
+   "locs": [
+    "desktop-build.yml:56"
+   ],
+   "desc": "unpinned action reference"
+  },
+  {
+   "level": "High",
+   "confidence": "High",
+   "ident": "unpinned-uses",
+   "locs": [
+    "desktop-build.yml:61"
+   ],
+   "desc": "unpinned action reference"
+  },
+  {
+   "level": "High",
+   "confidence": "High",
+   "ident": "unpinned-uses",
+   "locs": [
+    "desktop-build.yml:62"
+   ],
+   "desc": "unpinned action reference"
+  },
+  {
+   "level": "High",
+   "confidence": "High",
+   "ident": "unpinned-uses",
+   "locs": [
+    "desktop-build.yml:65"
+   ],
+   "desc": "unpinned action reference"
+  },
+  {
+   "level": "High",
+   "confidence": "High",
+   "ident": "unpinned-uses",
+   "locs": [
+    "desktop-build.yml:92"
+   ],
+   "desc": "unpinned action reference"
+  },
+  {
+   "level": "High",
+   "confidence": "High",
+   "ident": "unpinned-uses",
+   "locs": [
+    "desktop-build.yml:93"
+   ],
+   "desc": "unpinned action reference"
+  },
+  {
+   "level": "High",
+   "confidence": "High",
+   "ident": "unpinned-uses",
+   "locs": [
+    "desktop-build.yml:94"
+   ],
+   "desc": "unpinned action reference"
+  },
+  {
+   "level": "High",
+   "confidence": "High",
+   "ident": "unpinned-uses",
+   "locs": [
+    "desktop-build.yml:97"
+   ],
+   "desc": "unpinned action reference"
+  },
+  {
+   "level": "High",
+   "confidence": "High",
+   "ident": "unpinned-uses",
+   "locs": [
+    "desktop-build.yml:141"
+   ],
+   "desc": "unpinned action reference"
+  },
+  {
+   "level": "High",
+   "confidence": "Low",
+   "ident": "cache-poisoning",
+   "locs": [
+    "desktop-build.yml:21",
+    "desktop-build.yml:62"
+   ],
+   "desc": "runtime artifacts potentially vulnerable to a cache poisoning attack"
+  },
+  {
+   "level": "High",
+   "confidence": "Low",
+   "ident": "cache-poisoning",
+   "locs": [
+    "desktop-build.yml:21",
+    "desktop-build.yml:65",
+    "desktop-build.yml:68"
+   ],
+   "desc": "runtime artifacts potentially vulnerable to a cache poisoning attack"
+  },
+  {
+   "level": "High",
+   "confidence": "Low",
+   "ident": "cache-poisoning",
+   "locs": [
+    "desktop-build.yml:21",
+    "desktop-build.yml:94"
+   ],
+   "desc": "runtime artifacts potentially vulnerable to a cache poisoning attack"
+  },
+  {
+   "level": "High",
+   "confidence": "Low",
+   "ident": "cache-poisoning",
+   "locs": [
+    "desktop-build.yml:100",
+    "desktop-build.yml:21",
+    "desktop-build.yml:97"
+   ],
+   "desc": "runtime artifacts potentially vulnerable to a cache poisoning attack"
+  },
+  {
+   "level": "Medium",
+   "confidence": "Low",
+   "ident": "artipacked",
+   "locs": [
+    "docker-publish.yml:39"
+   ],
+   "desc": "credential persistence through GitHub Actions artifacts"
+  },
+  {
+   "level": "High",
+   "confidence": "High",
+   "ident": "unpinned-uses",
+   "locs": [
+    "docker-publish.yml:39",
+    "docker-publish.yml:40"
+   ],
+   "desc": "unpinned action reference"
+  },
+  {
+   "level": "High",
+   "confidence": "High",
+   "ident": "unpinned-uses",
+   "locs": [
+    "docker-publish.yml:42",
+    "docker-publish.yml:43"
+   ],
+   "desc": "unpinned action reference"
+  },
+  {
+   "level": "High",
+   "confidence": "High",
+   "ident": "unpinned-uses",
+   "locs": [
+    "docker-publish.yml:45",
+    "docker-publish.yml:46"
+   ],
+   "desc": "unpinned action reference"
+  },
+  {
+   "level": "High",
+   "confidence": "High",
+   "ident": "unpinned-uses",
+   "locs": [
+    "docker-publish.yml:48",
+    "docker-publish.yml:49"
+   ],
+   "desc": "unpinned action reference"
+  },
+  {
+   "level": "High",
+   "confidence": "High",
+   "ident": "unpinned-uses",
+   "locs": [
+    "docker-publish.yml:55",
+    "docker-publish.yml:57"
+   ],
+   "desc": "unpinned action reference"
+  },
+  {
+   "level": "High",
+   "confidence": "High",
+   "ident": "unpinned-uses",
+   "locs": [
+    "docker-publish.yml:76",
+    "docker-publish.yml:77"
+   ],
+   "desc": "unpinned action reference"
+  }
+ ],
+ "ruff": {
+  "findings": 37,
+  "by_rule": {
+   "EXE001": 7,
+   "UP009": 3,
+   "I001": 6,
+   "UP020": 6,
+   "SIM115": 11,
+   "PLW1510": 2,
+   "RUF010": 2
+  },
+  "rows": [
+   {
+    "code": "EXE001",
+    "file": "/home/z/my-project/gh-work/scripts/fix-copy-week-contract.py",
+    "line": 1
+   },
+   {
+    "code": "UP009",
+    "file": "/home/z/my-project/gh-work/scripts/fix-copy-week-contract.py",
+    "line": 2
+   },
+   {
+    "code": "I001",
+    "file": "/home/z/my-project/gh-work/scripts/fix-copy-week-contract.py",
+    "line": 12
+   },
+   {
+    "code": "UP020",
+    "file": "/home/z/my-project/gh-work/scripts/fix-copy-week-contract.py",
+    "line": 15
+   },
+   {
+    "code": "SIM115",
+    "file": "/home/z/my-project/gh-work/scripts/fix-copy-week-contract.py",
+    "line": 15
+   },
+   {
+    "code": "UP020",
+    "file": "/home/z/my-project/gh-work/scripts/fix-copy-week-contract.py",
+    "line": 22
+   },
+   {
+    "code": "SIM115",
+    "file": "/home/z/my-project/gh-work/scripts/fix-copy-week-contract.py",
+    "line": 22
+   },
+   {
+    "code": "UP020",
+    "file": "/home/z/my-project/gh-work/scripts/fix-copy-week-contract.py",
+    "line": 27
+   },
+   {
+    "code": "SIM115",
+    "file": "/home/z/my-project/gh-work/scripts/fix-copy-week-contract.py",
+    "line": 27
+   },
+   {
+    "code": "UP020",
+    "file": "/home/z/my-project/gh-work/scripts/fix-copy-week-contract.py",
+    "line": 33
+   },
+   {
+    "code": "SIM115",
+    "file": "/home/z/my-project/gh-work/scripts/fix-copy-week-contract.py",
+    "line": 33
+   },
+   {
+    "code": "EXE001",
+    "file": "/home/z/my-project/gh-work/scripts/gen-logo.py",
+    "line": 1
+   },
+   {
+    "code": "UP009",
+    "file": "/home/z/my-project/gh-work/scripts/gen-logo.py",
+    "line": 2
+   },
+   {
+    "code": "EXE001",
+    "file": "/home/z/my-project/gh-work/scripts/make-desktop-icons.py",
+    "line": 1
+   },
+   {
+    "code": "I001",
+    "file": "/home/z/my-project/gh-work/scripts/make-desktop-icons.py",
+    "line": 37
+   },
+   {
+    "code": "EXE001",
+    "file": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+    "line": 1
+   },
+   {
+    "code": "I001",
+    "file": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+    "line": 4
+   },
+   {
+    "code": "PLW1510",
+    "file": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+    "line": 8
+   },
+   {
+    "code": "PLW1510",
+    "file": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+    "line": 15
+   },
+   {
+    "code": "SIM115",
+    "file": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+    "line": 53
+   },
+   {
+    "code": "SIM115",
+    "file": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+    "line": 56
+   },
+   {
+    "code": "SIM115",
+    "file": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+    "line": 63
+   },
+   {
+    "code": "SIM115",
+    "file": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+    "line": 65
+   },
+   {
+    "code": "SIM115",
+    "file": "/home/z/my-project/gh-work/scripts/resolve-drift-redo.py",
+    "line": 83
+   },
+   {
+    "code": "EXE001",
+    "file": "/home/z/my-project/gh-work/scripts/shots-phases-pixelcheck.py",
+    "line": 1
+   },
+   {
+    "code": "I001",
+    "file": "/home/z/my-project/gh-work/scripts/shots-phases-pixelcheck.py",
+    "line": 4
+   },
+   {
+    "code": "RUF010",
+    "file": "/home/z/my-project/gh-work/scripts/shots-phases-pixelcheck.py",
+    "line": 37
+   },
+   {
+    "code": "EXE001",
+    "file": "/home/z/my-project/gh-work/scripts/shots-pixelcheck.py",
+    "line": 1
+   },
+   {
+    "code": "I001",
+    "file": "/home/z/my-project/gh-work/scripts/shots-pixelcheck.py",
+    "line": 6
+   },
+   {
+    "code": "RUF010",
+    "file": "/home/z/my-project/gh-work/scripts/shots-pixelcheck.py",
+    "line": 45
+   },
+   {
+    "code": "EXE001",
+    "file": "/home/z/my-project/gh-work/scripts/theme-retune-12749.py",
+    "line": 1
+   },
+   {
+    "code": "UP009",
+    "file": "/home/z/my-project/gh-work/scripts/theme-retune-12749.py",
+    "line": 2
+   },
+   {
+    "code": "I001",
+    "file": "/home/z/my-project/gh-work/scripts/theme-retune-12749.py",
+    "line": 8
+   },
+   {
+    "code": "UP020",
+    "file": "/home/z/my-project/gh-work/scripts/theme-retune-12749.py",
+    "line": 11
+   },
+   {
+    "code": "SIM115",
+    "file": "/home/z/my-project/gh-work/scripts/theme-retune-12749.py",
+    "line": 11
+   },
+   {
+    "code": "UP020",
+    "file": "/home/z/my-project/gh-work/scripts/theme-retune-12749.py",
+    "line": 18
+   },
+   {
+    "code": "SIM115",
+    "file": "/home/z/my-project/gh-work/scripts/theme-retune-12749.py",
+    "line": 18
+   }
+  ]
+ },
+ "trivy": [
+  {
+   "target": "package-lock.json",
+   "pkg": "@hono/node-server",
+   "installed": "2.1.5",
+   "fixed": "2.1.6, 1.19.18",
+   "sev": "MEDIUM",
+   "id": "CVE-2026-126210"
+  },
+  {
+   "target": "package-lock.json",
+   "pkg": "@hono/node-server",
+   "installed": "2.1.5",
+   "fixed": "2.1.6",
+   "sev": "MEDIUM",
+   "id": "CVE-2026-126343"
+  },
+  {
+   "target": "package-lock.json",
+   "pkg": "hono",
+   "installed": "4.13.13",
+   "fixed": "4.13.16",
+   "sev": "MEDIUM",
+   "id": "CVE-2026-126355"
+  },
+  {
+   "target": "package-lock.json",
+   "pkg": "hono",
+   "installed": "4.13.13",
+   "fixed": "4.13.16",
+   "sev": "MEDIUM",
+   "id": "CVE-2026-126356"
+  },
+  {
+   "target": "package-lock.json",
+   "pkg": "hono",
+   "installed": "4.13.13",
+   "fixed": "4.13.16",
+   "sev": "MEDIUM",
+   "id": "CVE-2026-126357"
+  },
+  {
+   "target": "package-lock.json",
+   "pkg": "hono",
+   "installed": "4.13.13",
+   "fixed": "4.13.16",
+   "sev": "MEDIUM",
+   "id": "CVE-2026-126358"
+  },
+  {
+   "target": "package-lock.json",
+   "pkg": "hono",
+   "installed": "4.13.13",
+   "fixed": "4.13.16",
+   "sev": "LOW",
+   "id": "CVE-2026-126359"
+  },
+  {
+   "target": "package-lock.json",
+   "licenses": [
+    {
+     "name": "MIT",
+     "sev": "LOW",
+     "category": "notice"
+    },
+    {
+     "name": "MIT",
+     "sev": "LOW",
+     "category": "notice"
+    },
+    {
+     "name": "MIT",
+     "sev": "LOW",
+     "category": "notice"
+    },
+    {
+     "name": "MIT",
+     "sev": "LOW",
+     "category": "notice"
+    },
+    {
+     "name": "MIT",
+     "sev": "LOW",
+     "category": "notice"
+    }
+   ]
+  }
+ ],
+ "trivy_stderr": "m] Run \"npm install\" to collect the license information of packages\tdir=\"node_modules\"\n2026-11-27T05:21:48Z\tINFO\tSuppressing dependencies for development and testing. To display them, try the '--include-dev-deps' flag.\n2026-11-27T05:21:48Z\tINFO\tNumber of language-specific files\tnum=1\n2026-11-27T05:21:48Z\tINFO\t[npm] Detecting vulnerabilities...\n2026-11-27T05:21:48Z\tINFO\tDetected config files\tnum=1\n"
+}

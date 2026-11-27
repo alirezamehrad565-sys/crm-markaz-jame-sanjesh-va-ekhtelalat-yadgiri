@@ -131,5 +131,6 @@
   "0127_intake_v2_retire.sql": "ca5419a610ed2c979bc4bf3608d41a6e1a055c41f2f6c8e384ab84fa61157460",
   "0128_system_pathway_templates.sql": "504b3f8f69bce4ad5e3957d459acab2b8ff3f9e00cba2e6bade7ecc402013086",
   "0129_system_exercise_cards.sql": "9dc8ba6e03804300b0e3e5a922c2a1e34dc3abb80e88189dbfb578ed9eeed81e",
-  "0130_system_pathway_templates_g123.sql": "ea34fe6b1808fa140afcfb78041961a052cf36f89dc0fd1fcc4c541272907621"
+  "0130_system_pathway_templates_g123.sql": "ea34fe6b1808fa140afcfb78041961a052cf36f89dc0fd1fcc4c541272907621",
+  "0131_sld_specialization.sql": "9a26b37ffa865bf329e31efb4806125c05f43e503400a11c4f4a705fb2cc9523"
 }

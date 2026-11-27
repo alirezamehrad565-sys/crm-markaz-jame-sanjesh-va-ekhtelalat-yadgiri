@@ -8,7 +8,8 @@ import { batteryDef } from '../../domain/clinical-engine/instruments';
 import { allSkillKeys, isValidFocusKey } from '../../domain/exercise-bank/focus';
 import { EXERCISE_FORMATS } from '../../core/shared/constants';
 
-// باندل محتوای سیستمی «طرح درمان» (0128 قالب‌های مسیر + 0129 کارت‌های تمرین + 0130 بسته‌های چندجلسه‌ای پایهٔ اول تا سوم):
+// باندل محتوای سیستمی «طرح درمان» (0128 قالب‌های مسیر + 0129 کارت‌های تمرین + 0130 بسته‌های چندجلسه‌ای پایهٔ اول تا سوم
+//   + 0131 بازموضع‌سازی اختصاصی به SLD/دیرآموزی):
 // دروازهٔ درستی محتوا — کلید هدف/پراپ/ابزار ارجاعی باید در دارایی‌های authored موجود باشد
 // و کارت‌ها تاکسونومی کامل (قالب/برگ هدف/اختلال/پایه) داشته باشند.
 
@@ -25,6 +26,12 @@ const SYSTEM_TEMPLATE_KEYS = [
   'sys-wm-primary',
   'sys-writing-g12'
 ];
+
+// 0131 — بازموضع‌سازی مرکز فقط به اختلال یادگیری/دیرآموزی: پنج قالب بایگانی نرم (active=0 + یادداشت) شدند
+// و شش قالب مأموریتِ جدید (SLD/حافظهٔ کاری/نوشتن/حساب پایهٔ اول) فعال می‌مانند.
+const ARCHIVED_TEMPLATE_KEYS = ['sys-adhd-preschool', 'sys-adhd-primary', 'sys-anxiety-emotion', 'sys-speech-delay', 'sys-attention-g123'];
+const ACTIVE_TEMPLATE_KEYS = SYSTEM_TEMPLATE_KEYS.filter((k) => !ARCHIVED_TEMPLATE_KEYS.includes(k));
+const ARCHIVE_NOTE_MARKER = '[بایگانی 0131';
 
 const SYSTEM_CARD_IDS = Array.from({ length: 12 }, (_, i) =>
   `cccccccc-8200-4000-8000-0000000002${String(1 + i).padStart(2, '0')}`
@@ -64,7 +71,7 @@ function dataOf<T>(res: { body: unknown }): T {
 // مایگریشن می‌سازد. پس برای آینه‌کردن پروداکشن، هر دو فایل idempotent پس از seed دوباره اجرا می‌شوند
 // (INSERT OR IGNORE — ردیف تکراری نمی‌سازد) و همین اجرای دوم خودش بخشی از ادعای idempotency است.
 const MIG_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
-const BUNDLE_FILES = ['0128_system_pathway_templates.sql', '0129_system_exercise_cards.sql', '0130_system_pathway_templates_g123.sql'];
+const BUNDLE_FILES = ['0128_system_pathway_templates.sql', '0129_system_exercise_cards.sql', '0130_system_pathway_templates_g123.sql', '0131_sld_specialization.sql'];
 const EXERCISE_SEED_FILE = '0043_exercise_seed.sql';
 function readMigration(f: string): string {
   return readFileSync(path.join(MIG_DIR, 'migrations', f), 'utf8');
@@ -95,15 +102,24 @@ describe('باندل محتوای سیستمی طرح درمان — قالب‌
     A.sql.exec(readMigration(EXERCISE_SEED_FILE)); // seed 0043 هم با گارد staff — لینک کارت‌های قدیمی برای دروازهٔ ۴ لازم است
   });
 
-  it('یازده قالب سیستمی با is_system=1 و فعال — فیلدهای الزامی پر است', () => {
+  it('یازده قالب سیستمی — شش فعال (مأموریت SLD/دیرآموزی) و پنج بایگانی نرم با یادداشت (0131)', () => {
     const rows = A.sql
       .prepare(`SELECT * FROM pathway_templates WHERE key LIKE 'sys-%' ORDER BY key`)
       .all() as unknown as TemplateRow[];
     expect(rows.map((r) => r.key)).toEqual([...SYSTEM_TEMPLATE_KEYS].sort());
 
+    // 0131 — قالب‌های خارج از مأموریتِ «اختلال یادگیری/دیرآموزی» بایگانی نرم شدند (active=0، ردیف محفوظ)
     for (const r of rows) {
       expect(r.is_system, `${r.key}: is_system`).toBe(1);
-      expect(r.active, `${r.key}: active`).toBe(1);
+      if (ARCHIVED_TEMPLATE_KEYS.includes(r.key)) {
+        expect(r.active, `${r.key}: بایگانی 0131 — active`).toBe(0);
+        expect(r.description ?? '', `${r.key}: یادداشت بایگانی در انتهای توصیف`).toContain(ARCHIVE_NOTE_MARKER);
+      } else {
+        expect(r.active, `${r.key}: فعال (مأموریت SLD)`).toBe(1);
+        expect(r.description ?? '', `${r.key}: توصیف بدون یادداشت بایگانی`).not.toContain(ARCHIVE_NOTE_MARKER);
+      }
+      const groupOf = r.active === 1 ? ACTIVE_TEMPLATE_KEYS : ARCHIVED_TEMPLATE_KEYS;
+      expect(groupOf, `${r.key}: گروه فعال/بایگانی 0131`).toContain(r.key);
       expect(r.title.length, `${r.key}: title`).toBeGreaterThan(10);
       expect((r.description ?? '').length, `${r.key}: description`).toBeGreaterThan(80);
       expect(['learning', 'slow_learner', 'mental_ot', 'rehab'], `${r.key}: protocol`).toContain(r.protocol);
@@ -196,12 +212,41 @@ describe('باندل محتوای سیستمی طرح درمان — قالب‌
     expect(links, 'قالب‌ها کارت‌های واقعی بانک تمرین را لینک کرده‌اند').toBeGreaterThanOrEqual(15);
   });
 
-  it('قالب‌های سیستمی از API فهرست می‌شوند (isSystem=true برای کلاینت)', async () => {
+  it('لینک‌سازی 0131 — شناسهٔ کارتِ بانکِ تولید در لحظهٔ اجرا با عنوان دقیق حل می‌شود؛ بدون کارت، null می‌ماند', () => {
+    // مایگریشن 0131 شناسهٔ ردیف‌های بانکِ تولید (عنوان‌های exercises.json) را نمی‌داند — با زیرکوئری عنوانِ
+    // دقیق در لحظهٔ اجرا حل می‌کند و با گارد EXISTS، در نبود کارت بی‌اثر می‌ماند. اینجا با ساخت یک ردیف
+    // هم‌عنوانِ واقعی، مکانیزم «شناسهٔ واقعی، نه ساختگی» اثبات می‌شود.
+    const before = JSON.parse(
+      (A.sql.prepare(`SELECT sessions_json j FROM pathway_templates WHERE key = 'sys-wm-primary'`).get() as { j: string }).j
+    ) as SessionJson[];
+    expect(before[0].items![1].linkId, 'قبل از وجود کارتِ بانکِ تولید — null (هیچ شناسه‌ای ساخته نشده)').toBeNull();
+
+    A.sql.exec(`INSERT INTO exercises (id, title, format, published, created_by) VALUES ('cccccccc-1301-4000-8000-000000000131', 'شمارش برعکس', 'worksheet', 1, (SELECT id FROM staff ORDER BY created_at LIMIT 1))`);
+    replaySystemBundle(A.sql); // اجرای دوبارهٔ باندل شامل 0131 — idempotent
+
+    const after = JSON.parse(
+      (A.sql.prepare(`SELECT sessions_json j FROM pathway_templates WHERE key = 'sys-wm-primary'`).get() as { j: string }).j
+    ) as SessionJson[];
+    expect(after[0].items![1].linkId, 'شناسهٔ واقعیِ همان ردیف تازه‌ساخته').toBe('cccccccc-1301-4000-8000-000000000131');
+    // تکلیف‌های هم‌عنوان («تکرار شمارش برعکس») هم به همان کارت می‌رسند
+    expect(after[1].items![2].linkId).toBe('cccccccc-1301-4000-8000-000000000131');
+    expect(after[3].items![2].linkId).toBe('cccccccc-1301-4000-8000-000000000131');
+    // شکل 0051 دست‌نخورده — text/done عیناً سرِ جایشان
+    expect(after[0].items![1].done).toBe(false);
+    expect(after[0].items![1].text).toBe(before[0].items![1].text);
+    // JSON همهٔ قالب‌های سیستمی همچنان معتبر
+    const rows = A.sql.prepare(`SELECT sessions_json j FROM pathway_templates WHERE key LIKE 'sys-%'`).all() as unknown as { j: string | null }[];
+    for (const r of rows) expect(r.j === null ? true : (A.sql.prepare(`SELECT json_valid(?) v`).get(r.j) as { v: number }).v, 'json_valid').toBe(1);
+  });
+
+  it('قالب‌های سیستمی از API فهرست می‌شوند — پس از 0131 فقط شش قالب مأموریت SLD (بایگانی‌ها از فهرست می‌افتند)', async () => {
     const list = dataOf<{ key: string; isSystem: boolean; active: boolean }[]>(
       await ali.get('/api/pathway-templates')
     );
     const sys = list.filter((t) => t.key.startsWith('sys-'));
-    expect(sys).toHaveLength(11);
+    // 0131 — سرویس فقط active=1 را می‌دهد (service.ts:953)؛ شش قالبِ اختلال یادگیری/دیرآموزی باقی می‌ماند
+    expect(sys).toHaveLength(6);
+    expect(sys.map((t) => t.key).sort()).toEqual([...ACTIVE_TEMPLATE_KEYS].sort());
     for (const t of sys) expect(t.isSystem).toBe(true);
   });
 
@@ -223,7 +268,7 @@ describe('باندل محتوای سیستمی طرح درمان — قالب‌
     expect(probeItems.length, 'پروب‌های پایش در جلسات seed شده‌اند').toBeGreaterThanOrEqual(3);
   });
 
-  it('idempotency — اجرای دوبارهٔ فایل‌های 0128/0129/0130 روی همان DB ردیف تازه نمی‌سازد', () => {
+  it('idempotency — اجرای دوبارهٔ فایل‌های 0128/0129/0130/0131 روی همان DB ردیف تازه نمی‌سازد', () => {
     replaySystemBundle(A.sql); // همین describe هم دو بار اجرا کرده — جمع همچنان دقیق
     const tpl = A.sql.prepare(`SELECT COUNT(*) AS n FROM pathway_templates WHERE key LIKE 'sys-%'`).get() as { n: number };
     const cards = A.sql.prepare(`SELECT COUNT(*) AS n FROM exercises WHERE id LIKE 'cccccccc-8200-4000-8000-0000000002%'`).get() as { n: number };
@@ -248,13 +293,18 @@ describe('باندل محتوای سیستمی طرح درمان — کارت‌
     published: number;
   }
 
-  it('دوازده کارت موجود، منتشرشده و با فرمت معتبر', () => {
+  it('دوازده کارت موجود و با فرمت معتبر — یازده منتشر؛ کارت ۲۱۲ اتیسم پس از 0131 بایگانی (published=0)', () => {
     const rows = SYSTEM_CARD_IDS.map(
       (id) => A.sql.prepare(`SELECT id, title, description, format, published FROM exercises WHERE id = ?`).get(id) as CardRow | undefined
     ).filter((r): r is CardRow => Boolean(r));
     expect(rows).toHaveLength(12);
     for (const r of rows) {
-      expect(r.published, `${r.title}: published`).toBe(1);
+      if (r.id === 'cccccccc-8200-4000-8000-000000000212') {
+        // 0131 — کارت اتیسم «بازی نوبت‌گیری خانه» بایگانی نرم شد؛ ردیف و تاکسونومی برای بازگشت محفوظ است
+        expect(r.published, `${r.title}: بایگانی اتیسم 0131 — published`).toBe(0);
+      } else {
+        expect(r.published, `${r.title}: published`).toBe(1);
+      }
       expect(EXERCISE_FORMATS, `${r.title}: format`).toContain(r.format);
       // خودبسندگی: توصیف خانواده‌محور با هدف، وسایل، مراحل و معیار — بدون نیاز به پیوست
       expect((r.description ?? '').length, `${r.title}: توصیف خودبسنده`).toBeGreaterThan(300);

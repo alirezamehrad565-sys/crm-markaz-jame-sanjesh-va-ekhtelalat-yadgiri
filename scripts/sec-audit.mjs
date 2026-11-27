@@ -19,7 +19,9 @@ import { execSync } from 'node:child_process';
 import path from 'node:path';
 
 const ROOT = process.cwd();
-const SKIP_DIRS = new Set(['node_modules', 'dist', '.git', 'target', 'installer', 'workerd']);
+// فقط سورس محصول اسکن می‌شود؛ پوشه‌های همسایهٔ ریشه (مهارت‌های محیط، تحویل‌ها، ورودی‌ها،
+// پوشه‌های سرگردان) کد اجرایی محصول نیستند — فیکسچر آزمایشی داخلشان «راز» ساختگی دارد.
+const SKIP_DIRS = new Set(['node_modules', 'dist', '.git', 'target', 'installer', 'workerd', 'skills', 'download', 'upload', 'refs', 'gh-work']);
 
 const findings = [];
 const SELF = 'scripts/sec-audit.mjs'; // خود-دفع: اسکنر الگوهای خودش را گزارش نکند

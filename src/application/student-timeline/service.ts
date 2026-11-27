@@ -523,7 +523,10 @@ export function createStudentTimelineService(db: DbClient): StudentTimelineServi
           const eo = pp?.['engine_output'];
           const rawVal = eo && typeof eo === 'object' ? (eo as { value?: unknown }).value : eo;
           if (typeof rawVal === 'string' && rawVal.includes('"fsiq"')) {
-            const eng = JSON.parse(rawVal) as { ok?: unknown; profile?: { fsiq?: number | null; fsiqBand?: string | null } | null };
+            /* payload رویداد موتور دست‌ساز است — ناقص/خراب فقط این روایت را می‌اندازد، نه تایم‌لاین را */
+            type WechslerEngineOutput = { ok?: unknown; profile?: { fsiq?: number | null; fsiqBand?: string | null } | null };
+            let eng: WechslerEngineOutput | null = null;
+            try { eng = JSON.parse(rawVal) as WechslerEngineOutput; } catch { /* روایت وکسلر نادیده گرفته می‌شود */ }
             if (eng?.ok && typeof eng.profile?.fsiq === 'number') {
               milestone = true;
               const band = eng.profile?.fsiqBand;

@@ -31163,7 +31163,11 @@ function createStudentTimelineService(db) {
           const eo = pp?.["engine_output"];
           const rawVal = eo && typeof eo === "object" ? eo.value : eo;
           if (typeof rawVal === "string" && rawVal.includes('"fsiq"')) {
-            const eng = JSON.parse(rawVal);
+            let eng = null;
+            try {
+              eng = JSON.parse(rawVal);
+            } catch {
+            }
             if (eng?.ok && typeof eng.profile?.fsiq === "number") {
               milestone = true;
               const band = eng.profile?.fsiqBand;
@@ -43369,7 +43373,7 @@ function safeJsonEmbed2(v) {
 __name(safeJsonEmbed2, "safeJsonEmbed");
 
 // src/core/version.ts
-var APP_VERSION = "1.27.92";
+var APP_VERSION = "1.27.93";
 var NODE_MIN_VERSION = "1.26.0";
 
 // src/domain/case-events/public-form.ts

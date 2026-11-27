@@ -12,7 +12,7 @@ import {
   WEEKDAY_NAMES,
   formatJalaliNumeric
 } from '../format.js';
-import { el, icon, skeletonState, errorState, emptyState, openModal, progressRing, toast, toastError, kpi, KPI_ALERT_RATE } from '../ui.js'; // toast/toastError گم‌شده بود: مسیر ذخیرهٔ حسابرسی بی‌بازخورد می‌افتد · ۱.۲۵.۰۵: kpi/آستانه تک‌منبع
+import { el, icon, skeletonState, errorState, emptyState, openModal, progressRing, toast, toastError, kpi, KPI_ALERT_RATE, flashNode } from '../ui.js'; // toast/toastError گم‌شده بود: مسیر ذخیرهٔ حسابرسی بی‌بازخورد می‌افتد · ۱.۲۵.۰۵: kpi/آستانه تک‌منبع · flashNode: فلش کارت مقصد حفرهای درون‌صفحه
 import { illoNoAnnouncements, illoKnowledge } from '../illustrations.js'; // — وکتورها
 import { sessionTypeChip } from '../session-type.js'; // — چیپ نوع جلسه (جدول ۴) برای «برنامهٔ امروز»
 import { session } from '../api.js';
@@ -85,12 +85,19 @@ function therapistDashboard(container, { myStats, scoring, knowledge, announceme
      بدون اسکلت اضافه و بدون مسدودکردن رندر داشبورد */
   const quickZone = el('div');
   parts.push(quickZone);
-  loadQuickStrip(quickZone);
+  const pendingSurveysCount = typeof myStats?.pendingSurveys?.count === 'number' ? myStats.pendingSurveys.count : null;
+  loadQuickStrip(quickZone, pendingSurveysCount);
 
-  /* «برنامهٔ امروز» درمانگر — درست زیر نوار شروع سریع؛ تنبل مثل نوار: پس از رسیدن داده درجا نقاشی می‌شود */
-  const planZone = el('div');
+  /* «برنامهٔ امروز» درمانگر — درست زیر نوار شروع سریع؛ تنبل مثل نوار: پس از رسیدن داده درجا نقاشی می‌شود.
+     data-dash-panel مقصد حفرهای KPI «جلسات امروز» است (کلیک → اسکرول + فلش همین صفحه). */
+  const planZone = el('div', { dataset: { dashPanel: 'today' } });
   parts.push(planZone);
   loadTodayPlan(planZone);
+
+  /* «شروع سریع طرح SLD» — شش طرح کتابخانه‌ای سیستمی از همان API قالب‌ها؛ کارت اختیاری و تنبل */
+  const sldZone = el('div');
+  parts.push(sldZone);
+  loadSldQuickStart(sldZone);
 
   /* ۱.۲۷.۸۸ — «پرونده‌های اخیر» + «پرسشنامه‌های خانواده» درمانگر، درست زیر «برنامهٔ امروز»؛
      از همان payload مایگرفته تغذیه می‌شوند (kpis.me = getMyStats — فیلدهای ADDITIVE تازهٔ
@@ -158,11 +165,31 @@ function therapistDashboard(container, { myStats, scoring, knowledge, announceme
   return parts;
 }
 
+/* حفر درون‌صفحه‌ای (الگوی کارت اعتبارسنجی M2): کلیک/کیبورد روی شاخص → اسکرول + فلش کارت مقصدِ همان داشبورد.
+   مقصدها با data-dash-panel شناسه‌دارند — «برنامهٔ امروز» و «پرسشنامه‌های خانواده». */
+function focusDashPanel(key) {
+  const target = document.querySelector(`[data-dash-panel="${CSS.escape(key)}"]`);
+  if (!target) return;
+  target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  flashNode(target);
+}
+
+function panelKpi(tile, key, hint) {
+  tile.classList.add('kpi--link');
+  tile.setAttribute('role', 'link');
+  tile.setAttribute('tabindex', '0');
+  tile.title = hint;
+  const go = () => focusDashPanel(key);
+  tile.addEventListener('click', go);
+  tile.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+  return tile;
+}
+
 /* «شروع سریع» درمانگر — سه شمارندهٔ کلیک‌پذیر + یک کنش برجسته، در یک ردیف kpi-grid (همان اجزای ui).
-   سه GET هم‌زمان؛ شکست هر شمارنده مستقل نرم می‌شود («—»). شمارنده‌ها از endpointهای در دسترسِ همین نقش:
-   دانش‌آموزان (سرور خودش به پرونده‌های درمانگر محدود می‌کند)، نوبت‌های امروزِ تهران (بدون لغوشده)،
-   قالب‌های فعال طرح درمان. تا پاسخ نیامده هیچ‌چیز نقاشی نمی‌شود — بدون اسکلت، بدون لرزش داشبورد. */
-function loadQuickStrip(zone) {
+   سه GET هم‌زمان؛ شکست هر شمارنده مستقل نرم می‌شود («—»). شمارندهٔ «پاسخ‌های منتظر» از payload
+   مایگرفته می‌آید (GET دوم ندارد). «جلسات امروز» به‌جای پرش به تقویم، کارت «برنامهٔ امروز» همین
+   صفحه را نشانه می‌گیرد (حفر درون‌صفحه). تا پاسخ نیامده هیچ‌چیز نقاشی نمی‌شود — بدون اسکلت. */
+function loadQuickStrip(zone, pendingSurveysCount = null) {
   const dayRange = tehranDayRange(tehranTodayYmd());
   const countOf = (p) => p.then((r) => {
     const rows = r?.data;
@@ -179,8 +206,9 @@ function loadQuickStrip(zone) {
     zone.replaceChildren(
       el('div', { class: 'kpi-grid', style: { marginBottom: 'var(--sp-4)' } },
         kpi('دانش‌آموزان من', students, null, 'primary', null, '#/students'),
-        kpi('نوبت‌های امروز', todayAppts, null, 'accent', null, '#/appointments'),
+        panelKpi(kpi('جلسات امروز', todayAppts, null, 'accent'), 'today', 'پرش به «برنامهٔ امروز» همین داشبورد'),
         kpi('برنامه‌های درمان فعال', plans, null, 'primary', null, '#/treatment-plans'),
+        panelKpi(kpi('پاسخ‌های منتظر', pendingSurveysCount, 'پرسشنامه‌های خانواده', pendingSurveysCount ? 'accent' : 'neutral'), 'surveys', 'پرش به «پرسشنامه‌های خانواده» همین داشبورد'),
         el('button', { class: 'btn btn--primary', type: 'button', onclick: () => { location.hash = '#/exercises'; } },
           icon('grid', 16), 'کارت‌های آماده')
       )
@@ -276,10 +304,57 @@ function todayPlanRow(a, nameMap) {
    واژگان چیپ نوع فعالیت = واژه‌های جاافتادهٔ همین کدبیس (جلسه/رویداد/پرسش‌نامه/طرح/تمرین)؛
    تاریخ نسبت‌ها از relativeDayLabel (مشترک format.js) و تاریخ کامل از formatJalaliNumeric —
    قالب‌ساز تازه‌ای نوشته نمی‌شود. کلیک ردیف → پروفایل همان دانش‌آموز (#/students/:id). */
-const CASE_KIND_CHIPS = { session: 'جلسه', event: 'رویداد', survey: 'پرسش‌نامه', plan: 'طرح', exercise: 'تمرین' };
+const CASE_KIND_CHIPS = { session: 'جلسه', event: 'رویداد', survey: 'پرسشنامه', plan: 'طرح', exercise: 'تمرین' };
+/* فیلترهای «پرونده‌های اخیر» — همهٔ فیلترها سمت کلاینت روی همان payload مایگرفته می‌ماند
+   (فیلدها: kind ∈ جلسه/رویداد/پرسشنامه/طرح/تمرین + lastAt ISO)؛ هیچ GET تازه‌ای در کار نیست. */
+const CASE_KIND_FILTERS = ['', 'session', 'survey', 'plan', 'event', 'exercise'];
 
 function recentCasesCard(stats) {
   const rows = Array.isArray(stats?.recentCases) ? stats.recentCases : [];
+  const todayYmd = tehranTodayYmd();
+  const filter = { kind: '', todayOnly: false };
+  const listBox = el('div');
+
+  const todayBtn = el('button', {
+    class: 'chip', type: 'button', 'aria-pressed': 'false', style: { cursor: 'pointer' },
+    title: 'فقط فعالیت‌هایی که آخرین رویدادشان امروز است',
+    onclick: () => { filter.todayOnly = !filter.todayOnly; paintChips(); draw(); }
+  }, 'فقط امروز');
+  const chipRow = el(
+    'div',
+    { class: 'exb-grades', role: 'group', 'aria-label': 'فیلتر نوع فعالیت', style: { marginBottom: 'var(--sp-2)' } },
+    el('span', { class: 'cell-sub' }, 'نوع:'),
+    ...CASE_KIND_FILTERS.map((k) =>
+      el('button', {
+        class: 'chip', type: 'button', 'aria-pressed': 'false', style: { cursor: 'pointer' },
+        dataset: { kindKey: k },
+        onclick: () => { filter.kind = k; paintChips(); draw(); }
+      }, k === '' ? 'همه' : CASE_KIND_CHIPS[k])),
+    todayBtn
+  );
+  function paintChips() {
+    for (const b of chipRow.querySelectorAll('button.chip')) {
+      const on = b === todayBtn ? filter.todayOnly : (b.dataset.kindKey ?? '') === filter.kind;
+      b.classList.toggle('is-active', on);
+      b.setAttribute('aria-pressed', String(on));
+    }
+  }
+  function draw() {
+    const visible = rows.filter((c) =>
+      (!filter.kind || c.kind === filter.kind) &&
+      (!filter.todayOnly || tehranYmdOfIso(c.lastAt) === todayYmd));
+    listBox.replaceChildren(
+      visible.length === 0
+        ? emptyState({
+            iconName: 'student',
+            title: rows.length === 0 ? 'هنوز پرونده‌ای باز نکرده‌اید' : 'با این فیلتر موردی نیست',
+            hint: rows.length === 0 ? null : 'فیلتر نوع یا «فقط امروز» را بردارید.'
+          })
+        : visible.map(recentCaseRow)
+    );
+  }
+  paintChips();
+  draw();
   return el(
     'div',
     { class: 'card', style: { marginBottom: 'var(--sp-4)' } },
@@ -287,25 +362,35 @@ function recentCasesCard(stats) {
     el(
       'div',
       { class: 'card__body', style: { paddingTop: 'var(--sp-2)', paddingBottom: 'var(--sp-2)' } },
-      rows.length === 0
-        ? emptyState({ iconName: 'student', title: 'هنوز پرونده‌ای باز نکرده‌اید' })
-        : rows.map(recentCaseRow)
+      chipRow,
+      listBox
     )
   );
 }
 
 function recentCaseRow(c) {
   const ymd = tehranYmdOfIso(c.lastAt);
+  const open = () => { location.hash = `#/students/${c.studentId}`; };
   return el(
     'div',
-    { class: 'fu-row', style: { cursor: 'pointer' }, title: 'مشاهدهٔ پروندهٔ دانش‌آموز', onclick: () => { location.hash = `#/students/${c.studentId}`; } },
+    { class: 'fu-row', style: { cursor: 'pointer' }, title: 'مشاهدهٔ پروندهٔ دانش‌آموز', onclick: open },
     el(
       'div',
       { class: 'fu-row__main' },
       el('div', { class: 'fu-row__title' }, c.displayName, kindChip(c.kind)),
       el('div', { class: 'cell-sub' }, c.brief ?? '—')
     ),
-    el('span', { class: 'cell-sub' }, relativeDayLabel(ymd) ?? formatJalaliNumeric(ymd))
+    el(
+      'div',
+      { style: { display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', flexShrink: 0 } },
+      el('span', { class: 'cell-sub' }, relativeDayLabel(ymd) ?? formatJalaliNumeric(ymd)),
+      el('button', {
+        class: 'btn btn--ghost btn--sm', type: 'button',
+        'aria-label': `ورود به پروندهٔ ${c.displayName}`,
+        title: `ورود به پروندهٔ ${c.displayName}`,
+        onclick: (e) => { e.stopPropagation(); open(); }
+      }, 'ورود به پرونده', icon('chevL', 13))
+    )
   );
 }
 
@@ -324,7 +409,7 @@ function pendingSurveysCard(stats) {
   const rest = count - items.length;
   return el(
     'div',
-    { class: 'card', style: { marginBottom: 'var(--sp-4)' } },
+    { class: 'card', style: { marginBottom: 'var(--sp-4)' }, dataset: { dashPanel: 'surveys' } }, // مقصد حفر KPI «پاسخ‌های منتظر»
     el(
       'div',
       { class: 'card__head' },
@@ -341,8 +426,44 @@ function pendingSurveysCard(stats) {
   );
 }
 
+/* ردیف پرسشنامهٔ خانواده — بازشونده: سرِ ردیف نام + وضعیت؛ بدنهٔ بازشده نام فرم، وضعیت و زمان‌ها
+   را کامل نشان می‌دهد. payload این کارت لینک/توکن عمومی ندارد (پیوند عمومی فقط هنگام ارسال با
+   بات ساخته می‌شود) — پس کنشِ ردیف صادقانه به رویدادهای فرم خانواده در پروندهٔ همان دانش‌آموز
+   می‌رود و متن راهنما همین را می‌گوید؛ هیچ endpoint از‌ساخت‌درِ این نما صدا نمی‌شود. */
 function surveyRow(s) {
   const done = s?.status === 'completed';
+  const detail = el(
+    'div',
+    {
+      class: 'cell-sub',
+      style: { display: 'flex', flexDirection: 'column', gap: 'var(--sp-1)', marginTop: 'var(--sp-2)', paddingInlineStart: 'var(--sp-3)', borderInlineStart: '2px solid var(--border)' },
+      hidden: true
+    },
+    el('div', {}, 'فرم: ', el('b', {}, s.formName ?? '—')),
+    el('div', {}, done ? 'وضعیت: تکمیل‌شده — پاسخ روی تایم‌لاین پرونده نشسته' : 'وضعیت: در انتظار پاسخ خانواده'),
+    el('div', {}, 'ارسال: ', s.sentAt ? formatJalaliDateTime(s.sentAt) : 'ارسال نشده — لینک هنوز برای خانواده فرستاده نشده'),
+    done && s.completedAt ? el('div', {}, 'تکمیل: ', formatJalaliDateTime(s.completedAt)) : null,
+    el(
+      'div',
+      { style: { display: 'flex', gap: 'var(--sp-2)', alignItems: 'center', flexWrap: 'wrap', marginTop: 'var(--sp-1)' } },
+      el('button', {
+        class: 'btn btn--soft btn--sm', type: 'button',
+        title: `بازکردن فرم‌های خانوادهٔ ${s.displayName} در پروندهٔ دانش‌آموز`,
+        onclick: (e) => { e.stopPropagation(); location.hash = `#/students/${s.studentId}?tab=timeline&filter=case_events`; }
+      }, icon('link', 13), 'فرم‌های خانواده در پرونده'),
+      el('span', {}, 'پیوند عمومی فرم فقط با ارسال بات ساخته می‌شود — ارسال دوباره و پاسخ‌ها در پروندهٔ همین دانش‌آموز')
+    )
+  );
+  const toggleBtn = el('button', {
+    class: 'btn btn--ghost btn--sm', type: 'button', 'aria-expanded': 'false',
+    title: 'نمایش جزئیات فرم',
+    onclick: (e) => {
+      e.stopPropagation();
+      const willOpen = detail.hidden;
+      detail.hidden = !willOpen;
+      toggleBtn.setAttribute('aria-expanded', String(willOpen));
+    }
+  }, icon('chevD', 13), 'جزئیات');
   return el(
     'div',
     { class: 'fu-row', style: { cursor: 'pointer' }, title: 'مشاهدهٔ پروندهٔ دانش‌آموز', onclick: () => { location.hash = `#/students/${s.studentId}`; } },
@@ -362,6 +483,61 @@ function surveyRow(s) {
         ' — ',
         s.sentAt ? formatJalaliDateTime(s.sentAt) : 'ارسال نشده',
         done && s.completedAt ? ` — تکمیل: ${formatJalaliDateTime(s.completedAt)}` : null
+      ),
+      detail
+    ),
+    toggleBtn
+  );
+}
+
+/* ── «شروع سریع طرح SLD» — شش طرح کتابخانه‌ای سیستمی مرکز (seed مایگریشن ۰۱۲۸/۰۱۳۰) ─────
+   منبع: همان GET /api/pathway-templates که نمای «طرح درمان» می‌خواند — کلیدهای sys-*
+   فیلتر می‌شوند و هر ردیف فقط به همان نما می‌رود؛ ویرایشگر طرح در نمای مقصد باز می‌شود و
+   «کپی» همان طرح، نسخهٔ قابل‌ویرایش برای دانش‌آموز می‌سازد. لینک عمیقِ پیش‌انتخاب قالب در
+   نمای مقصد وجود ندارد، پس به‌جای اختراع قاعدهٔ تازه، ناوبری صادقانه + راهنمای «کپی». */
+const SLD_PLAN_KEYS = ['sys-sld-reading', 'sys-sld-writing', 'sys-sld-math', 'sys-wm-primary', 'sys-writing-g12', 'sys-math-g1'];
+
+function loadSldQuickStart(zone) {
+  api.get('/api/pathway-templates')
+    .then((r) => {
+      if (!zone.isConnected) return;
+      const tpls = Array.isArray(r?.data) ? r.data : [];
+      const rows = SLD_PLAN_KEYS.map((k) => tpls.find((t) => t?.key === k)).filter(Boolean);
+      if (rows.length === 0) return; // طرح‌های سیستمی در دسترس نیست — کارت اختیاری است، بی‌صدا حذف
+      zone.replaceChildren(sldQuickStartCard(rows));
+    })
+    .catch(() => { /* بی‌صدا — کارت شروع سریع اختیاری است؛ بقیهٔ داشبورد سالم می‌ماند */ });
+}
+
+function sldQuickStartCard(rows) {
+  return el(
+    'div',
+    { class: 'card', style: { marginBottom: 'var(--sp-4)' } },
+    el(
+      'div',
+      { class: 'card__head' },
+      el('div', { class: 'card__title' }, icon('zap', 16), 'شروع سریع طرح SLD'),
+      el('p', { class: 'hint-text', style: { flexBasis: '100%', margin: '0' } }, 'برای درمانگر، در آغاز دورهٔ هر دانش‌آموز: یکی از شش طرح آمادهٔ اختلال یادگیری را باز کنید — در «طرح درمان» با «کپی» نسخهٔ قابل‌ویرایش همان طرح ساخته می‌شود.')
+    ),
+    el(
+      'div',
+      { class: 'card__body', style: { paddingTop: 'var(--sp-2)', paddingBottom: 'var(--sp-2)' } },
+      rows.map((t) =>
+        el(
+          'div',
+          { class: 'fu-row' },
+          el(
+            'div',
+            { class: 'fu-row__main' },
+            el('div', { class: 'fu-row__title' }, t.title),
+            el('div', { class: 'cell-sub' }, `${fa((t.sessions ?? []).length)} جلسه در طرح`)
+          ),
+          el('button', {
+            class: 'btn btn--soft btn--sm', type: 'button',
+            title: `بازکردن «${t.title}» در طرح درمان — نسخهٔ دانش‌آموز با «کپی» ساخته می‌شود`,
+            onclick: () => { location.hash = '#/treatment-plans'; }
+          }, icon('plus', 14), 'ایجاد طرح')
+        )
       )
     )
   );
@@ -389,7 +565,7 @@ function heroScore(scoreRow, rows, since = null) {
   const sinceLabel = since ? `شروع شمارش: ${formatJalaliNumeric(tehranYmdOfIso(since))}` : null;
   const hint =
     scoreRow.total === 0
-      ? 'با ثبت گزارش جلسه و تمرین در بانک تمرین، امتیاز می‌گیرید'
+      ? 'با ثبت گزارش جلسه و کارت در کارت‌های تمرین، امتیاز می‌گیرید'
       : !isTop && gap > 0
         ? `${fa(gap)} امتیاز تا صدر تابلو`
         : null;
@@ -592,7 +768,7 @@ function leaderboardCard(rows, title, meStaffId, since = null, linkTo = null) {
           title: 'درمانگری ثبت نشده است',
           hint: linkTo
             ? 'کارکنان ← افزودن همکار با نقش درمانگر'
-            : 'با ثبت گزارش جلسه و تمرین در بانک تمرین، امتیاز می‌گیرید'
+            : 'با ثبت گزارش جلسه و کارت در کارت‌های تمرین، امتیاز می‌گیرید'
         })
       : el(
           'div',

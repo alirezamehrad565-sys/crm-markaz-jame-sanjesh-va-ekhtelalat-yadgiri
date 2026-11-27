@@ -1,0 +1,5 @@
+Warning: --output has been deprecated in favor of --output-file
+Scanning dir /home/z/my-project/gh-work
+Starting filesystem walk for root: /
+Scanned /home/z/my-project/gh-work/package-lock.json file and found 235 packages
+End status: 195 dirs visited, 1519 inodes visited, 1 Extract calls, 35.139622ms elapsed, 35.139872ms wall time

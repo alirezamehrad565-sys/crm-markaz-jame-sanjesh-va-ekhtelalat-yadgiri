@@ -78,28 +78,30 @@ describe('لج فرضیه (اسنپ‌شات در رویداد پرونده)', (
     expect(rows).toHaveLength(1);
   });
 
-  it('دادهٔ بی‌اثر بر رتبه (رویداد سوم هم‌ارز) → رکورد جدید نمی‌سازد؛ تغییر رتبه (ADHD تازه) → رکورد دوم', async () => {
+  it('دادهٔ بی‌اثر بر رتبه (رویداد سوم هم‌ارز) → رکورد جدید نمی‌سازد؛ تغییر رتبه (نارسانویسی تازه) → رکورد دوم', async () => {
     const values = { rA1: 2, rA2: 2, rA3: 2, rA4: 2, rA5: 2, rA6: 2, rB1: 2, rB2: 2, rC1: 2, rD1: 0 };
     await postAndFill(A, ali, studentId, sldReadTypeId, values);
     await ali.get(`/api/students/${studentId}/clinical-insights`);
     expect(logRowsOf(A, studentId)).toHaveLength(1); // امتیاز/ترتیب همان است
 
-    // SNAP-IV والد با همهٔ آیتم‌ها در بیشینه → فرضیهٔ ADHD تازه وارد فهرست → اثرانگشت عوض می‌شود
-    const snapFields = JSON.parse(
-      (A.sql.prepare(`SELECT fields FROM case_event_types WHERE key = 'ce-snap-iv-p-v1'`).get() as { fields: string }).fields
+    // چک‌لیست نوشتن با همهٔ آیتم‌ها در بیشینه → فرضیهٔ نارسانویسی تازه وارد فهرست → اثرانگشت عوض می‌شود
+    // (0131 — SNAP-IV والد بایگانی است؛ مأموریت مرکز SLD/دیرآموزی، فرم فعال مأموریتی استفاده می‌شود)
+    const wriFields = JSON.parse(
+      (A.sql.prepare(`SELECT fields FROM case_event_types WHERE key = 'ce-sld-wri-v1'`).get() as { fields: string }).fields
     ) as { key: string; type: string }[];
-    const snapTypeId = (dataOf<{ id: string; key: string }[]>(await ali.get('/api/case-events/types?active=true')).find((t) => t.key === 'ce-snap-iv-p-v1'))!.id;
+    const wriTypeId = (dataOf<{ id: string; key: string }[]>(await ali.get('/api/case-events/types?active=true')).find((t) => t.key === 'ce-sld-wri-v1'))!.id;
     const answers: Record<string, number> = {};
-    for (const f of snapFields) if (f.type === 'scale') answers[f.key] = 2;
-    await postAndFill(A, ali, studentId, snapTypeId, answers);
+    for (const f of wriFields) if (f.type === 'scale') answers[f.key] = 2;
+    answers['wD1'] = 0; // الگوی ردیف خواندن — «بررسی دلایل دیگر» بیشینه نمی‌گیرد
+    await postAndFill(A, ali, studentId, wriTypeId, answers);
 
     const res = await ali.get(`/api/students/${studentId}/clinical-insights`);
     const body = dataOf<InsightsBody>(res);
-    expect(body.ranked.some((h) => h.targetKey === 'adhd')).toBe(true);
+    expect(body.ranked.some((h) => h.targetKey === 'dysgraphia')).toBe(true);
     const rows = logRowsOf(A, studentId);
     expect(rows).toHaveLength(2);
     const newest = JSON.parse(rows[0].payload) as { ranked: { targetKey: string }[] };
-    expect(newest.ranked.some((h) => h.targetKey === 'adhd')).toBe(true);
+    expect(newest.ranked.some((h) => h.targetKey === 'dysgraphia')).toBe(true);
   });
 
   it('مسیر خواندن فرانت: GET case-events لج را با payload کامل برمی‌گرداند', async () => {

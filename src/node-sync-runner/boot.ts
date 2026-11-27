@@ -14,6 +14,9 @@
  *    panel.ts. اعتبار ناقص = runner خودش offline را آینه می‌کند (بدون هیچ fetch).
  */
 import { createNodeSyncRunner, CATCHUP_STATE_KEY } from './runner.js';
+import { createLogger } from '@core/logger';
+
+const bootLog = createLogger('node-sync-boot');
 import type { CatchUpStateV1, NodeSyncRunner, RunnerFetch } from './runner.js';
 import { createSyncCoordinator, COORD_INTERVAL_MS_DEFAULT } from './coordinator.js';
 import type { SyncCoordinator } from './coordinator.js';
@@ -97,7 +100,7 @@ export function startNodeSyncBootCatchUp(deps: BootCatchUpDeps): { started: bool
         // نرم — انبار ناموفق هم چیزی را نمی‌شکند
       }
       const message = err instanceof Error ? err.message : String(err);
-      console.warn(`[node-sync] همگام‌سازی جبرانی بوت ناموفق بود — نرم ادامه می‌دهیم: ${message}`);
+      bootLog.warn('node-sync.boot.catchup_failed', { message });
     }
   })();
 

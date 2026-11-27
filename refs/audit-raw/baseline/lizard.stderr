@@ -1,0 +1,64 @@
+Error: Fail to parse file '/home/z/my-project/gh-work/public/assets/js/views/appointments.js'
+Traceback (most recent call last):
+  File "/home/z/my-project/refs/venv-audit/bin/lizard", line 6, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/z/my-project/refs/venv-audit/lib/python3.12/site-packages/lizard_core/cli.py", line 62, in main
+    warning_count = printer(result, options, schema, AllResult)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/z/my-project/refs/venv-audit/lib/python3.12/site-packages/lizard_ext/__init__.py", line 18, in print_csv
+    csv_output(total_factory(list(results)), options)
+                             ^^^^^^^^^^^^^
+  File "/home/z/my-project/refs/venv-audit/lib/python3.12/site-packages/lizard_core/analysis.py", line 30, in analyze_files
+    yield from result
+  File "/home/z/my-project/refs/venv-audit/lib/python3.12/site-packages/lizard_core/file_analyzer.py", line 80, in __call__
+    return self.analyze_source_code(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/z/my-project/refs/venv-audit/lib/python3.12/site-packages/lizard_core/file_analyzer.py", line 101, in analyze_source_code
+    for _ in reader(tokens, reader):
+             ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/z/my-project/refs/venv-audit/lib/python3.12/site-packages/lizard_languages/code_reader.py", line 152, in __call__
+    state(token)
+  File "/home/z/my-project/refs/venv-audit/lib/python3.12/site-packages/lizard_languages/typescript_states.py", line 33, in __call__
+    return super().__call__(token, reader)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/z/my-project/refs/venv-audit/lib/python3.12/site-packages/lizard_languages/code_reader.py", line 49, in __call__
+    if self._state(token):
+       ^^^^^^^^^^^^^^^^^^
+  File "/home/z/my-project/refs/venv-audit/lib/python3.12/site-packages/lizard_languages/typescript_states.py", line 33, in __call__
+    return super().__call__(token, reader)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/z/my-project/refs/venv-audit/lib/python3.12/site-packages/lizard_languages/code_reader.py", line 49, in __call__
+    if self._state(token):
+       ^^^^^^^^^^^^^^^^^^
+  File "/home/z/my-project/refs/venv-audit/lib/python3.12/site-packages/lizard_languages/typescript_states.py", line 33, in __call__
+    return super().__call__(token, reader)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/z/my-project/refs/venv-audit/lib/python3.12/site-packages/lizard_languages/code_reader.py", line 49, in __call__
+    if self._state(token):
+       ^^^^^^^^^^^^^^^^^^
+  File "/home/z/my-project/refs/venv-audit/lib/python3.12/site-packages/lizard_languages/typescript_states.py", line 33, in __call__
+    return super().__call__(token, reader)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/z/my-project/refs/venv-audit/lib/python3.12/site-packages/lizard_languages/code_reader.py", line 49, in __call__
+    if self._state(token):
+       ^^^^^^^^^^^^^^^^^^
+  File "/home/z/my-project/refs/venv-audit/lib/python3.12/site-packages/lizard_languages/typescript_states.py", line 33, in __call__
+    return super().__call__(token, reader)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/z/my-project/refs/venv-audit/lib/python3.12/site-packages/lizard_languages/code_reader.py", line 49, in __call__
+    if self._state(token):
+       ^^^^^^^^^^^^^^^^^^
+  File "/home/z/my-project/refs/venv-audit/lib/python3.12/site-packages/lizard_languages/typescript_states.py", line 33, in __call__
+    return super().__call__(token, reader)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/z/my-project/refs/venv-audit/lib/python3.12/site-packages/lizard_languages/code_reader.py", line 49, in __call__
+    if self._state(token):
+       ^^^^^^^^^^^^^^^^^^
+  File "/home/z/my-project/refs/venv-audit/lib/python3.12/site-packages/lizard_languages/typescript_states.py", line 104, in _state_global
+    and self._binding_candidate.in_expression):
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/z/my-project/refs/venv-audit/lib/python3.12/site-packages/lizard_languages/javascript_bindings.py", line 34, in in_expression
+    return self._frames[-1].initializing or bool(self._expression_brackets)
+           ~~~~~~~~~~~~^^^^
+IndexError: list index out of range

@@ -9,7 +9,8 @@ import {
 } from '../../test/harness';
 
 const PKG = 'ce-comp-teacher-v2';
-const COMPONENTS = ['ce-snap-iv-t-v1', 'ce-sdq-t-v1', 'ce-sld-class-t-v1'];
+// 0131 — ce-snap-iv-t-v1 بایگانی شد؛ جریان معلم روی فرم‌های فعال مأموریت (SDQ-T و ملاک‌های کلاسی) می‌رود
+const COMPONENTS = ['ce-sdq-t-v1', 'ce-sld-class-t-v1'];
 
 describe('انتخاب معلم — CRUD معلم‌های پرونده (student_teachers)', () => {
   let A: ReturnType<typeof createTestApp>;
@@ -80,7 +81,7 @@ describe('انتخاب معلم — CRUD معلم‌های پرونده (student
   });
 });
 
-describe(' — فرم‌های تکی معلم (SNAP-IV-T / SDQ-T / ملاک‌های کلاسی) — گره‌خوردن معلم و لینک مستقل', () => {
+describe(' — فرم‌های تکی معلم (SDQ-T / ملاک‌های کلاسی؛ SNAP-IV-T پس از 0131 بایگانی است) — گره‌خوردن معلم و لینک مستقل', () => {
   let A: ReturnType<typeof createTestApp>;
   let manager: ReturnType<typeof asRole> extends Promise<infer T> ? T : never;
   let studentId = '';
@@ -102,11 +103,15 @@ describe(' — فرم‌های تکی معلم (SNAP-IV-T / SDQ-T / ملاک‌�
     const t2 = await manager.post(`/api/students/${studentId}/teachers`, { name: teacher2.name, class_label: 'هنر' });
     teacher2 = { ...teacher2, id: dataOf<{ id: string }>(t2).id };
     const types = dataOf<Array<{ id: string; key: string; active: boolean }>>(await manager.get('/api/case-events/types?active=true'));
-    for (const k of ['ce-snap-iv-t-v1', 'ce-sdq-t-v1', 'ce-sld-class-t-v1']) {
+    for (const k of COMPONENTS) {
       const t = types.find((x) => x.key === k);
       expect(t, k).toBeTruthy();
       typeIds[k] = t!.id;
     }
+    // — SNAP-IV معلم: بایگانی 0131 — از فهرست فعال می‌افتد ولی ردیف برای بازگشت محفوظ است
+    expect(types.find((x) => x.key === 'ce-snap-iv-t-v1')).toBeUndefined();
+    const allTypes = dataOf<Array<{ key: string; active: boolean }>>(await manager.get('/api/case-events/types'));
+    expect(allTypes.find((x) => x.key === 'ce-snap-iv-t-v1')!.active).toBe(false);
     // — فرم جامع معلم دیگر در کتابخانه نیست
     expect(types.find((x) => x.key === 'ce-comp-teacher-v2')).toBeUndefined();
   });
@@ -120,8 +125,8 @@ describe(' — فرم‌های تکی معلم (SNAP-IV-T / SDQ-T / ملاک‌�
   });
 
   it('صدور لینک مستقل به‌ازای هر معلم — دو معلم، دو رویداد، دو لینک متمایز؛ نام معلم گره می‌خورد', async () => {
-    const ev1 = dataOf<{ id: string }>(await manager.post(`/api/students/${studentId}/case-events`, { eventTypeId: typeIds['ce-snap-iv-t-v1'], values: {} }));
-    const ev2 = dataOf<{ id: string }>(await manager.post(`/api/students/${studentId}/case-events`, { eventTypeId: typeIds['ce-snap-iv-t-v1'], values: {} }));
+    const ev1 = dataOf<{ id: string }>(await manager.post(`/api/students/${studentId}/case-events`, { eventTypeId: typeIds['ce-sdq-t-v1'], values: {} }));
+    const ev2 = dataOf<{ id: string }>(await manager.post(`/api/students/${studentId}/case-events`, { eventTypeId: typeIds['ce-sdq-t-v1'], values: {} }));
     const l1 = await manager.post(`/api/case-events/${ev1.id}/teacher-link`, { teacher_name: teacher1.name, teacher_id: teacher1.id });
     expect(l1.status).toBe(200);
     const out1 = dataOf<{ link: string; teacherName: string }>(l1);
@@ -137,8 +142,8 @@ describe(' — فرم‌های تکی معلم (SNAP-IV-T / SDQ-T / ملاک‌�
     expect(bad.status).toBe(400);
   });
 
-  it('پاسخ معلم اول (SNAP-IV-T) → «پاسخ معلم: سرکار موسوی» + تحلیل زیرمقیاس‌ها', async () => {
-    const created = dataOf<{ id: string }>(await manager.post(`/api/students/${studentId}/case-events`, { eventTypeId: typeIds['ce-snap-iv-t-v1'], values: {} }));
+  it('پاسخ معلم اول (SDQ-T) → «پاسخ معلم: سرکار موسوی» + تحلیل زیرمقیاس‌ها', async () => {
+    const created = dataOf<{ id: string }>(await manager.post(`/api/students/${studentId}/case-events`, { eventTypeId: typeIds['ce-sdq-t-v1'], values: {} }));
     await manager.post(`/api/case-events/${created.id}/teacher-link`, { teacher_name: teacher1.name, teacher_id: teacher1.id });
     const tokenRow = A.sql.prepare(`SELECT fill_token FROM case_events WHERE id = ?`).get(created.id) as { fill_token: string };
     const page = await A.app.request(`/public/case-events/${created.id}/fill?token=${tokenRow.fill_token}`);
@@ -146,8 +151,7 @@ describe(' — فرم‌های تکی معلم (SNAP-IV-T / SDQ-T / ملاک‌�
     expect(await page.text()).toContain('فرم شما — سرکار موسوی');
 
     const answers: Record<string, number> = {};
-    for (const f of fieldsOf('ce-snap-iv-t-v1')) answers[f.key] = 1;
-    for (let i = 1; i <= 9; i++) answers[`s0${i}`] = 3;
+    for (const f of fieldsOf('ce-sdq-t-v1')) answers[f.key] = 1;
     const post = await A.app.request(`/public/case-events/${created.id}/fill`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -159,9 +163,11 @@ describe(' — فرم‌های تکی معلم (SNAP-IV-T / SDQ-T / ملاک‌�
     const payload = JSON.parse(rec.payload) as Record<string, { value: string; label: string }>;
     expect(payload.teacher_name).toEqual({ value: 'سرکار موسوی', label: 'پاسخ معلم' });
     const a = JSON.parse(rec.analysis) as { score: number; subscaleScores: { id: string; score: number; band: string | null }[] };
-    expect(a.subscaleScores.map((x) => x.id)).toEqual(['ia', 'hi', 'odd']);
-    expect(a.subscaleScores.find((x) => x.id === 'ia')!.score).toBe(27);
-    expect(a.subscaleScores.find((x) => x.id === 'ia')!.band).toBe('قابل توجه — نیاز به بررسی بیشتر');
+    // همهٔ آیتم‌ها در ۱ (وسط طیف — آیتم‌های معکوس هم بی‌اثر): چهار زیرمقیاس شماری‌پذیر ۵×۴ = ۲۰؛ pros از جمع خارج است
+    expect(a.subscaleScores.map((x) => x.id)).toEqual(['emo', 'cond', 'hyper', 'peer', 'pros']);
+    expect(a.score).toBe(20);
+    expect(a.subscaleScores.find((x) => x.id === 'hyper')!.score).toBe(5);
+    expect(a.subscaleScores.find((x) => x.id === 'hyper')!.band).toBe('در محدودهٔ عادی');
   });
 
   it('پاسخ معلم دوم (ملاک‌های کلاسی) → «پاسخ معلم: جناب کاظمی» + باندهای sld_read/write/calc', async () => {
@@ -220,13 +226,13 @@ describe(' — فرم‌های تکی معلم (SNAP-IV-T / SDQ-T / ملاک‌�
   });
 
   it('رگرسیون تکی معلم بدون اتصال: payload بدون «پاسخ معلم»؛ صفحهٔ تکی بدون «فرم شما —»', async () => {
-    const created = dataOf<{ id: string }>(await manager.post(`/api/students/${studentId}/case-events`, { eventTypeId: typeIds['ce-snap-iv-t-v1'], values: {} }));
+    const created = dataOf<{ id: string }>(await manager.post(`/api/students/${studentId}/case-events`, { eventTypeId: typeIds['ce-sdq-t-v1'], values: {} }));
     const tokenRow = A.sql.prepare(`SELECT fill_token FROM case_events WHERE id = ?`).get(created.id) as { fill_token: string };
     const page = await A.app.request(`/public/case-events/${created.id}/fill?token=${tokenRow.fill_token}`);
     expect(page.status).toBe(200);
     expect(await page.text()).not.toContain('فرم شما — ');
     const answers: Record<string, number> = {};
-    for (const f of fieldsOf('ce-snap-iv-t-v1')) answers[f.key] = 1;
+    for (const f of fieldsOf('ce-sdq-t-v1')) answers[f.key] = 1;
     const post = await A.app.request(`/public/case-events/${created.id}/fill`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -237,7 +243,7 @@ describe(' — فرم‌های تکی معلم (SNAP-IV-T / SDQ-T / ملاک‌�
     const payload = JSON.parse(rec.payload) as Record<string, unknown>;
     expect(payload['teacher_name']).toBeUndefined();
     const a = JSON.parse(rec.analysis) as { score: number; subscaleScores: { id: string }[] };
-    expect(a.score).toBe(26);
-    expect(a.subscaleScores.map((x) => x.id)).toEqual(['ia', 'hi', 'odd']);
+    expect(a.score).toBe(20);
+    expect(a.subscaleScores.map((x) => x.id)).toEqual(['emo', 'cond', 'hyper', 'peer', 'pros']);
   });
 });

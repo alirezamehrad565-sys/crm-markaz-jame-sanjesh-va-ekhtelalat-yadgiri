@@ -41,7 +41,10 @@ import { createNodeSyncClient } from '@sync/node-sync-client/client.js';
 import { NODE_PULL_DOMAINS } from '@sync/node-sync-client/client.js';
 import type { NodePullItem, NodeSyncStore } from '@sync/node-sync-client/client.js';
 import { APP_VERSION, compareSemver } from '../core/version.js';
+import { createLogger } from '@core/logger';
 import { SYNC_COORD_KEY } from './coordinator.js';
+
+const reconLog = createLogger('node-sync-reconcile');
 
 /** کلید وضعیت آخرین همگامی در انبار پیشرفت */
 export const SYNC_STATUS_KEY = 'nodesync:last-status-v1';
@@ -834,14 +837,12 @@ export function createNodeSyncRunner(opts: NodeSyncRunnerOptions): NodeSyncRunne
       if (!Number.isNaN(centerMaxT) && !Number.isNaN(localMaxT) && centerMaxT !== localMaxT) same = false;
       if (!same) {
         detail.push({ domain: row.domain, center: row.count, local: localCount });
-        console.warn(
-          `آشتی‌ساز: ناهم‌خوانی در دامنهٔ ${row.domain} — مرکز ${row.count}، این دستگاه ${localCount}`
-        );
+        reconLog.warn('node-sync.reconcile.mismatch', { domain: row.domain, center: row.count, local: localCount });
       }
     }
     const at = now().toISOString();
     if (detail.length === 0) {
-      console.info('آشتی‌ساز: شمارش دامنه‌ها هم‌خوان است');
+      reconLog.info('node-sync.reconcile.ok');
       writeReconciliation({ v: 1, at, ok: true, differences: 0, detail: null });
       return { status: 'ok', ok: true, differences: 0 };
     }

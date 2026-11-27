@@ -1,19 +1,19 @@
 {
-  "files": 442,
-  "totalLoc": 108311,
-  "fnCount": 2838,
+  "files": 460,
+  "totalLoc": 110771,
+  "fnCount": 2965,
   "fnLen": {
     "p50": 7,
-    "p90": 51,
-    "p99": 346,
-    "max": 1839
+    "p90": 49,
+    "p99": 341,
+    "max": 1848
   },
   "fnsOver80": 170,
-  "fnsOver150": 89,
+  "fnsOver150": 88,
   "filesOver600": 48,
   "maxFileLoc": 2387,
-  "topFilesSum": 20790,
-  "dupRatio": 0.0289,
-  "elFiles": 69,
+  "topFilesSum": 21014,
+  "dupRatio": 0.0283,
+  "elFiles": 71,
   "htmlFiles": 10
 }
