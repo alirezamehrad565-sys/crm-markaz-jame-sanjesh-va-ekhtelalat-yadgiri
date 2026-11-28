@@ -43373,7 +43373,7 @@ function safeJsonEmbed2(v) {
 __name(safeJsonEmbed2, "safeJsonEmbed");
 
 // src/core/version.ts
-var APP_VERSION = "1.27.93";
+var APP_VERSION = "1.27.94";
 var NODE_MIN_VERSION = "1.26.0";
 
 // src/domain/case-events/public-form.ts
@@ -69029,7 +69029,7 @@ var RECENT_CASES_SQL = `
     SELECT 'session' AS kind, st.id AS student_id,
            trim(st.first_name || ' ' || st.last_name) AS display_name,
            replace(a.start_at, ' ', 'T') AS last_at,
-           '\u062C\u0644\u0633\u0647\u0654 \u062F\u0631\u0645\u0627\u0646' AS brief
+           CASE WHEN a.start_at >= ? THEN '\u062C\u0644\u0633\u0647\u0654 \u0627\u0645\u0631\u0648\u0632 \u2014 \u067E\u06CC\u0634\u200C\u0631\u0648' ELSE '\u062C\u0644\u0633\u0647\u0654 \u062F\u0631\u0645\u0627\u0646' END AS brief
       FROM appointments a
       JOIN appointment_students asn ON asn.appointment_id = a.id
       JOIN students st ON st.id = asn.student_id
@@ -69061,6 +69061,19 @@ var RECENT_CASES_SQL = `
      WHERE ip.deleted_at IS NULL AND ip.created_by = ?
        AND ${STUDENT_SCOPE_SQL}
      ORDER BY replace(ip.updated_at, ' ', 'T') DESC LIMIT ${PER_ARM_LIMIT}
+  )
+  UNION ALL
+  SELECT * FROM (
+    SELECT 'plan' AS kind, st.id AS student_id,
+           trim(st.first_name || ' ' || st.last_name) AS display_name,
+           replace(ps.updated_at, ' ', 'T') AS last_at,
+           '\u0628\u0647\u200C\u0631\u0648\u0632\u0631\u0633\u0627\u0646\u06CC \u062C\u0644\u0633\u0647\u0654 \u0637\u0631\u062D \u062F\u0631\u0645\u0627\u0646' AS brief
+      FROM pathway_sessions ps
+      JOIN intervention_paths ip ON ip.id = ps.pathway_id AND ip.deleted_at IS NULL
+      JOIN students st ON st.id = ip.student_id
+     WHERE ps.created_by = ?
+       AND ${STUDENT_SCOPE_SQL}
+     ORDER BY replace(ps.updated_at, ' ', 'T') DESC LIMIT ${PER_ARM_LIMIT}
   )
   UNION ALL
   SELECT * FROM (
@@ -69131,9 +69144,15 @@ function surveyItemOf2(r) {
 }
 __name(surveyItemOf2, "surveyItemOf");
 async function loadMyActivity(db, actorStaffId) {
+  const today = tehranDayRange(tehranTodayYmd());
+  const nowIso2 = (/* @__PURE__ */ new Date()).toISOString();
   const recentRows = db.query(RECENT_CASES_SQL, [
+    nowIso2,
     actorStaffId,
-    (/* @__PURE__ */ new Date()).toISOString(),
+    today.end,
+    actorStaffId,
+    actorStaffId,
+    actorStaffId,
     actorStaffId,
     actorStaffId,
     actorStaffId,

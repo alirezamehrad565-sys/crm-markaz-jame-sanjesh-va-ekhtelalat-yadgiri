@@ -10,42 +10,101 @@ import { TYPE_ICON_CHOICES, typeIconNode } from '../case-event-icons.js';
 
 const CATEGORY_LABELS = { session: 'جلسه', checklist: 'چک‌لیست', note: 'یادداشت' };
 
-/* گروه‌بندی کتابخانهٔ فرم‌ها — خواست کارفرما: «۳۳ فرم داریم، دسته‌بندی درستی نداره، تعدادشون زیاده».
-   از دل مقادیر واقعیِ موجودِ DB مشتق شده، نه طبقه‌بندی موازی: دسته‌های seed سیستمی (session/note)
-   عیناً همان گروه‌اند و فقط سطلِ درشتِ checklist (۲۲ قالب) با خانوادهٔ واقعی کلیدها
-   (sdq/scared/snap/dcdq = مقیاس، sld/*-criteria = ملاک‌های DSM، بقیه = پایش/نظرسنجی خانواده)
-   و is_system به گروه‌های منطقی می‌شکند. هیچ مقداری در DB عوض نمی‌شود — category='checklist'
-   در نمره‌دهی، باتری و ارسال لینک بار معنایی دارد و دست‌نخوردنی است. قالب‌های سفارشی مرکز
-   (t-*) و هر قالب آیندهٔ غیرسیستمی همیشه گروه خودشان را دارند. */
-export const FORM_GROUP_ORDER = ['scale', 'criteria', 'monitor', 'session', 'note', 'custom'];
-export const FORM_GROUP_LABELS = {
-  scale: 'مقیاس‌ها و پرسشنامه‌های استاندارد',
-  criteria: 'چک‌لیست‌های ملاک‌های DSM',
-  monitor: 'پایش خانواده و نظرسنجی‌ها',
-  session: 'ثبت جلسه و آزمون‌های درمانگر',
-  note: 'گزارش‌ها و جمع‌بندی بالینی',
+/* دسته‌بندی کشویی کتابخانهٔ فرم‌ها — خواست کارفرمای ۱.۲۷.۹۴: «۳۳+ فرم، فهرست تخت طولانی است؛
+   به دسته‌بندی کشویی با سربرگ فارسی نیاز داریم». از دل مقادیر واقعیِ موجودِ DB مشتق شده، نه
+   طبقه‌بندی موازی: هر کلید از خانوادهٔ واقعی کلیدها/کارکردش به یکی از هشت دستهٔ زیر می‌رود —
+   هیچ مقداری در DB عوض نمی‌شود و category='checklist' در نمره‌دهی، باتری و ارسال لینک
+   دست‌نخوردنی می‌ماند. قالب‌های سفارشی مرکز (t-*) و هر قالب آیندهٔ غیرسیستمی همیشه دستهٔ
+   خودشان را دارند؛ قالب سیستمی ناشناختهٔ آینده به سطل امن «پایش و پیگیری» می‌رود، نه گم‌شدن. */
+export const FORM_CATEGORY_ORDER = ['intake', 'sld', 'scales', 'family', 'monitor', 'comorbid', 'clinic', 'custom'];
+export const FORM_CATEGORY_LABELS = {
+  intake: 'ورودی و سوابق',
+  sld: 'سنجش‌های SLD',
+  scales: 'مقیاس‌های معلم/والد',
+  family: 'خانواده و خانه',
+  monitor: 'پایش و پیگیری',
+  comorbid: 'ابزارهای هم‌بودی و افتراق',
+  clinic: 'ثبت جلسه و جمع‌بندی درمانگر',
   custom: 'ابزارهای سفارشی مرکز'
 };
-export function formGroupOf(t) {
+/* نقشهٔ صریح کلیدهای واقعی seed (مایگریشن‌های 0029 تا 0105) — خوانا و قابل ممیزی، نه regex تاریک */
+const KEY_CATEGORY = {
+  // ورودی و سوابق — گفت‌وگوی اول/شرح‌حال و بستهٔ جامع غربالگری
+  anamnesis: 'intake',
+  'ce-anamnesis-v2': 'intake',
+  'ce-anamnesis-v3': 'intake',
+  'ce-comp-family-v2': 'intake',
+  'ce-comp-teacher-v2': 'intake',
+  legacy_assessment: 'intake',
+  // سنجش‌های SLD — چک‌لیست‌های ملاک خواندن/نوشتن/حساب + پروب‌های کوتاه درمانگر
+  'ce-sld-read-v1': 'sld',
+  'ce-sld-wri-v1': 'sld',
+  'ce-sld-calc-v1': 'sld',
+  'ce-sld-class-t-v1': 'sld',
+  'ce-probe-read-v1': 'sld',
+  'ce-probe-write-v1': 'sld',
+  'ce-probe-calc-v1': 'sld',
+  // مقیاس‌های استاندارد والد/معلم
+  'sdq-parent': 'scales',
+  'ce-sdq-p-v1': 'scales',
+  'ce-sdq-t-v1': 'scales',
+  'ce-snap-iv-p-v1': 'scales',
+  'ce-snap-iv-t-v1': 'scales',
+  'ce-scared-p-v1': 'scales',
+  'conners-short': 'scales',
+  'achenbach-practical': 'scales',
+  'teacher-classroom': 'scales',
+  'quick-multi-v1': 'scales',
+  'ce-dcdq-v1': 'scales',
+  // خانواده و خانه — مشاهده/پایش در خانه و انطباق روزمره
+  home_behavior: 'family',
+  'ce-home-monitor-v2': 'family',
+  'ce-id-adapt-v1': 'family',
+  // پایش و پیگیری — نظرسنجی‌ها و فرم پیگیری ۳–۶ماهه
+  'ce-followup-3m-v1': 'monitor',
+  'ce-survey-progress-v1': 'monitor',
+  'ce-survey-discharge-v1': 'monitor',
+  'ce-center-survey-v1': 'monitor',
+  // ابزارهای هم‌بودی و افتراق — چک‌لیست‌های ملاک DSM چندمنبعی
+  'ce-asd-criteria-v1': 'comorbid',
+  'ce-odd-criteria-v1': 'comorbid',
+  'ce-speech-criteria-v1': 'comorbid',
+  // ثبت جلسه و جمع‌بندی درمانگر — وکسلر، کاردرمانی ذهنی، نتایج و لج‌ها
+  'ce-ot-session-v1': 'clinic',
+  'ce-rehab-adl-v1': 'clinic',
+  'ce-rehab-cog-v1': 'clinic',
+  'ce-rehab-motor-v1': 'clinic',
+  'ce-wechsler-w4-v1': 'clinic',
+  wechsler: 'clinic',
+  intervention: 'clinic',
+  'ce-results-v1': 'clinic',
+  'ce-needs-v1': 'clinic',
+  'ce-hypothesis-log-v1': 'clinic',
+  'ce-clinical-suspicion-v1': 'clinic'
+};
+export function formCategoryOf(t) {
   if (!t || !t.isSystem) return 'custom';
-  if (t.category === 'session' || t.category === 'note') return t.category;
   const key = String(t.key ?? '');
-  if (/^ce-(sdq|scared|snap|dcdq)/.test(key)) return 'scale';
-  if (/^ce-(sld|.*-criteria)/.test(key)) return 'criteria';
-  if (/^ce-rehab/.test(key)) return 'session'; // ابزارهای ارزیابی توانبخشی — ثبت درمانگر
-  return 'monitor'; // پایش/نظرسنجی خانواده + هر چک‌لیست سیستمی آینده
+  if (KEY_CATEGORY[key]) return KEY_CATEGORY[key];
+  // قواعد خانوادهٔ کلید برای قالب‌های سیستمی آینده — همان منطق قبلی با دسته‌های تازه
+  if (/^ce-(sld|probe)-/.test(key)) return 'sld';
+  if (/(sdq|snap|scared|conners|dcdq|achenbach|quick-multi)/.test(key)) return 'scales';
+  if (/-criteria(-|$)/.test(key)) return 'comorbid';
+  if (/^ce-(survey|followup)/.test(key)) return 'monitor';
+  if (t.category === 'session' || t.category === 'note') return 'clinic';
+  return 'monitor'; // سطل امن — هر چک‌لیست سیستمی ناشناخته = پایش/نظرسنجی
+}
+export function categoryGroups(types) {
+  return FORM_CATEGORY_ORDER
+    .map((id) => ({ id, label: FORM_CATEGORY_LABELS[id] ?? id, items: types.filter((t) => formCategoryOf(t) === id) }))
+    .filter((g) => g.items.length > 0);
 }
 export function typeMatchesFilter(t, f) {
   const q = (f.q2 ?? '').trim();
   return Boolean(t.active)
-    && (f.grp === 'all' || formGroupOf(t) === f.grp)
+    && (f.grp === 'all' || formCategoryOf(t) === f.grp)
     && (f.aud === 'all' || t.audience === f.aud || t.audience === 'both')
     && (!q || String(t.title ?? '').includes(q));
-}
-export function groupTypes(types) {
-  return FORM_GROUP_ORDER
-    .map((id) => ({ id, label: FORM_GROUP_LABELS[id] ?? id, items: types.filter((t) => formGroupOf(t) === id) }))
-    .filter((g) => g.items.length > 0);
 }
 // — برچسب فارسی آیکون‌ها برای aria-label دکمه‌های انتخاب آیکون (title انگلیسیِ آیکون برای منطق انتخاب فعال باید بماند)
 const ICON_LABELS = {
@@ -253,7 +312,27 @@ export async function renderCaseEventTypes(container) {
   }
 
   /* ۱.۲۲.۰ — رندر «فقط ناحیهٔ فهرست قالب‌ها» از state محلی — بدون GET، بدون اسکلت، بدون پرش اسکرول
-     ۱.۲۷.۴۰ — خواست کارفرما: قالب‌های غیرفعال دیگر هیچ‌جا رندر نمی‌شوند (نه بخش جدا، نه کم‌رنگ) */
+     ۱.۲۷.۴۰ — خواست کارفرما: قالب‌های غیرفعال دیگر هیچ‌جا رندر نمی‌شوند (نه بخش جدا، نه کم‌رنگ)
+     ۱.۲۷.۹۴ — دسته‌های کشویی: هر دسته یک <details> با الگوی همان .pr-domain («گزارش پیشرفت» —
+       سربرگ + نشان تعداد + فلش). حالت باز/بستهٔ هر دسته در sessionStorage همین نشست می‌ماند؛
+       با جستجوی فعال، دسته‌های غیرخالی همه باز می‌شوند تا نتیجه پشت سرهم نباشد. */
+  const LIB_OPEN_KEY = 'case-event-types.lib-open';
+  function openCatsOf() {
+    try {
+      const raw = sessionStorage.getItem(LIB_OPEN_KEY);
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+    } catch { /* حافظهٔ نشست اختیاری است */ }
+    return { intake: true }; // پیش‌فرض: فقط «ورودی و سوابق» باز — بقیه جمع‌شده
+  }
+  function rememberOpenCat(id, open) {
+    try {
+      const cats = openCatsOf();
+      cats[id] = open;
+      sessionStorage.setItem(LIB_OPEN_KEY, JSON.stringify(cats));
+    } catch { /* حافظهٔ نشست اختیاری است */ }
+  }
+
   function paintTypeZone() {
     if (!listZone.isConnected) return;
     updateCounts();
@@ -266,18 +345,24 @@ export async function renderCaseEventTypes(container) {
       }));
       return;
     }
-    /* گروه‌بندی کتابخانه: هر گروه سربرگ + نشان تعداد + شبکهٔ کارت‌های همان گروه —
-       همان زبان بصری «کتابخانهٔ باتری»؛ گروه خالی رندر نمی‌شود. */
+    const searchActive = Boolean((state.q2 ?? '').trim());
+    const openCats = openCatsOf();
     listZone.replaceChildren(
       el('div', { dataset: { zone: 'active' } },
-        ...groupTypes(active).map((g) =>
-          el('section', { dataset: { group: g.id }, style: { margin: '0 0 var(--sp-5)' } },
-            el('div', { style: { display: 'flex', alignItems: 'baseline', gap: 'var(--sp-2)', margin: '0 0 var(--sp-2)' } },
-              el('b', { style: { fontSize: 'var(--fs-md)' } }, g.label),
-              el('span', { class: 'badge badge--neutral' }, `${fa(g.items.length)} فرم`)),
-            el('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 'var(--sp-4)' } },
-              ...g.items.map((t) => typeCard(t))))
-        ))
+        ...categoryGroups(active).map((g) => {
+          const summary = el('summary', {},
+            el('b', {}, g.label),
+            el('span', { class: 'badge badge--neutral' }, `${fa(g.items.length)} فرم`),
+            el('span', { class: 'pr-domain__chev', 'aria-hidden': 'true' }, icon('chevD', 14)));
+          const grid = el('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 'var(--sp-4)' } },
+            ...g.items.map((t) => typeCard(t)));
+          const det = el('details', { class: 'pr-domain', dataset: { cat: g.id }, style: { margin: '0 0 var(--sp-4)' } },
+            summary,
+            el('div', { style: { padding: 'var(--sp-3) var(--sp-4)' } }, grid));
+          det.open = searchActive ? true : Boolean(openCats[g.id]); // جستجو → دسته‌های غیرخالی خودکار باز
+          det.addEventListener('toggle', () => rememberOpenCat(g.id, det.open));
+          return det;
+        }))
     );
   }
 
@@ -319,9 +404,9 @@ export async function renderCaseEventTypes(container) {
     });
 
     return el('div', { style: { display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap', margin: '0 0 var(--sp-4)', alignItems: 'center' } },
-      el('span', { class: 'cell-sub' }, 'گروه:'),
+      el('span', { class: 'cell-sub' }, 'دسته:'),
       chip('همه', state.grp === 'all', () => setTypeFilter('grp', 'all'), 'grp:all'),
-      ...FORM_GROUP_ORDER.map((k) => chip(FORM_GROUP_LABELS[k], state.grp === k, () => setTypeFilter('grp', k), `grp:${k}`)),
+      ...FORM_CATEGORY_ORDER.map((k) => chip(FORM_CATEGORY_LABELS[k], state.grp === k, () => setTypeFilter('grp', k), `grp:${k}`)),
       el('span', { style: { width: 'var(--sp-3)' } }),
       el('span', { class: 'cell-sub' }, 'مخاطب:'),
       chip('همه', state.aud === 'all', () => setTypeFilter('aud', 'all'), 'aud:all'),
@@ -401,7 +486,7 @@ export async function renderCaseEventTypes(container) {
       if (!old) { ctl.quietSync(); return; } // با فیلتر فعلی تازه وارد دید شده — همگام‌سازی بی‌صدا
       // از فیلتر گروه/مخاطب/جستجو خارج شد (فقط کارت‌های فعال فیلتر می‌شوند — ۱.۲۷.۴۰: غیرفعال‌ها اصلاً رندر نمی‌شوند)
       if (t.active && !matchesTypeFilter(t)) { collapseRemove(old); ensureNonEmptyPaint(); return; }
-      if (Boolean(prev?.active) !== Boolean(t.active) || formGroupOf(prev) !== formGroupOf(t)) { paintTypeZone(); return; } // قالب غیرفعال شد یا گروهش عوض شد → رندر تازهٔ فهرست
+      if (Boolean(prev?.active) !== Boolean(t.active) || formCategoryOf(prev) !== formCategoryOf(t)) { paintTypeZone(); return; } // قالب غیرفعال شد یا دسته‌اش عوض شد → رندر تازهٔ فهرست
       const fresh = typeCard(t);
       old.replaceWith(fresh);
       flashNode(fresh);

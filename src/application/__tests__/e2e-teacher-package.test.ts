@@ -108,10 +108,10 @@ describe(' — فرم‌های تکی معلم (SDQ-T / ملاک‌های کلا
       expect(t, k).toBeTruthy();
       typeIds[k] = t!.id;
     }
-    // — SNAP-IV معلم: بایگانی 0131 — از فهرست فعال می‌افتد ولی ردیف برای بازگشت محفوظ است
-    expect(types.find((x) => x.key === 'ce-snap-iv-t-v1')).toBeUndefined();
+    // — SNAP-IV معلم: با 0132 به گردش برگشت (فرم فعال)؛ خودِ جریان بستهٔ معلم هدفمند روی SDQ-T می‌ماند
+    expect(types.find((x) => x.key === 'ce-snap-iv-t-v1')).toBeTruthy();
     const allTypes = dataOf<Array<{ key: string; active: boolean }>>(await manager.get('/api/case-events/types'));
-    expect(allTypes.find((x) => x.key === 'ce-snap-iv-t-v1')!.active).toBe(false);
+    expect(allTypes.find((x) => x.key === 'ce-snap-iv-t-v1')!.active).toBe(true);
     // — فرم جامع معلم دیگر در کتابخانه نیست
     expect(types.find((x) => x.key === 'ce-comp-teacher-v2')).toBeUndefined();
   });

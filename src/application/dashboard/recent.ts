@@ -1,14 +1,23 @@
-/* ۱.۲۷.۸۸ — موتور «پرونده‌های اخیر من» و «نظرسنجی‌های در انتظار» برای GET /api/dashboard/me.
+/* ۱.۲۷.۹۴ — موتور «پرونده‌های اخیر من» و «نظرسنجی‌های در انتظار» برای GET /api/dashboard/me.
    اصل: ADDITIVE — فقط فیلدهای تازه به JSON اضافه می‌شود؛ هیچ شِما/مایگریشن‌ای در کار نیست و
    همهٔ ستون‌های خوانده‌شده موجودند (نسخهٔ تولید D1: 1.27.87).
    دامنه (همان تعریف my-students در appointment-core/service.ts::listMyStudents):
      دانش‌آموزِ فعالِ من = سابقهٔ نوبت با من (appointments.staff_id = من) یا مالکِ فعالِ من
      (students.owner_staff_id = من). برای نظرسنجی‌ها، «درمانگرِ ارزیابی‌شده»
      (case_events.staff_id — createSurveyEvents) هم شریک دامنه است.
+   پنج شاخهٔ UNION (باگ «پرونده‌های اخیر خالی» — پوششِ آنچه درمانگر واقعاً تولید می‌کند):
+     ① جلسه — گذشته تا انتهای امروزِ تهران؛ نوبت پیش‌روی امروز با brief «جلسهٔ امروز — پیش‌رو»
+     ② رویداد پروندهٔ ثبت‌شدهٔ من
+     ③ طرح درمانِ ساختهٔ من — ستون intervention_paths.updated_by وجود ندارد (0044/0051) و
+        ساختنش مایگریشن می‌خواهد؛ پس «ویرایش طرحِ دیگران» پوشش داده نمی‌شود
+     ④ جلسات طرحِ ساختهٔ من (pathway_sessions.created_by) — ویرایش جلسهٔ طرح و کارت‌های
+        پیوندشده در items_json را می‌پوشاند (last_at = updated_at جلسه)
+     ⑤ تمرینِ حواله‌شدهٔ من
    پرسشنامهٔ خانواده در همین جدول case_events زندگی می‌کند:
      ساخت/ارسال: status='pending_family' (createSurveyEvents/sendChecklistLink — sent_at هنگام ارسال لینک)
      تکمیل: fillByFamily → status='completed' + updated_at همان لحظه (ستون completed_at وجود ندارد). */
 import type { DbClient } from '@core/db';
+import { tehranDayRange, tehranTodayYmd } from '@core/shared';
 import type { MyPendingSurveyItem, MyPendingSurveys, MyRecentCase, MyRecentCaseKind } from './types';
 
 /* سقف هر شاخهٔ UNION قبل از ادغام — کافی برای پوشش ۶ دانش‌آموز متمایز حتی با تکرار */
@@ -45,7 +54,7 @@ const RECENT_CASES_SQL = `
     SELECT 'session' AS kind, st.id AS student_id,
            trim(st.first_name || ' ' || st.last_name) AS display_name,
            replace(a.start_at, ' ', 'T') AS last_at,
-           'جلسهٔ درمان' AS brief
+           CASE WHEN a.start_at >= ? THEN 'جلسهٔ امروز — پیش‌رو' ELSE 'جلسهٔ درمان' END AS brief
       FROM appointments a
       JOIN appointment_students asn ON asn.appointment_id = a.id
       JOIN students st ON st.id = asn.student_id
@@ -77,6 +86,19 @@ const RECENT_CASES_SQL = `
      WHERE ip.deleted_at IS NULL AND ip.created_by = ?
        AND ${STUDENT_SCOPE_SQL}
      ORDER BY replace(ip.updated_at, ' ', 'T') DESC LIMIT ${PER_ARM_LIMIT}
+  )
+  UNION ALL
+  SELECT * FROM (
+    SELECT 'plan' AS kind, st.id AS student_id,
+           trim(st.first_name || ' ' || st.last_name) AS display_name,
+           replace(ps.updated_at, ' ', 'T') AS last_at,
+           'به‌روزرسانی جلسهٔ طرح درمان' AS brief
+      FROM pathway_sessions ps
+      JOIN intervention_paths ip ON ip.id = ps.pathway_id AND ip.deleted_at IS NULL
+      JOIN students st ON st.id = ip.student_id
+     WHERE ps.created_by = ?
+       AND ${STUDENT_SCOPE_SQL}
+     ORDER BY replace(ps.updated_at, ' ', 'T') DESC LIMIT ${PER_ARM_LIMIT}
   )
   UNION ALL
   SELECT * FROM (
@@ -166,11 +188,17 @@ export interface MyActivityPayload {
   pendingSurveys: MyPendingSurveys;
 }
 
-/* سه پرس‌وجوی مستقل موازی — بدون حلقهٔ N+1؛ هر شاخهٔ UNION با LIMIT سقف‌دار */
+/* پنج پرس‌وجوی شاخه‌ای در یک UNION موازی — بدون حلقهٔ N+1؛ هر شاخه با LIMIT سقف‌دار.
+   بازهٔ شاخهٔ جلسه: گذشته تا «انتهای امروز تهران» — نوبت‌های پیش‌روی امروز هم دیده می‌شوند
+   (باگ «پرونده‌های اخیر خالی» درمانگری که تازه روزش را با نوبت‌های پیش‌رو شروع کرده). */
 export async function loadMyActivity(db: DbClient, actorStaffId: string): Promise<MyActivityPayload> {
-  /* پارامترها به ترتیب جایگاهی: جلسه(۲) + رویداد(۳) + طرح(۳) + تمرین(۳) */
+  const today = tehranDayRange(tehranTodayYmd());
+  const nowIso = new Date().toISOString();
+  /* پارامترها به ترتیب جایگاهیِ متن SQL (SELECTها پیش از WHERE):
+     جلسه(۳: اکنونِ برچسب پیش‌رو + من + انتهای امروز) + رویداد(۳) + طرح(۳) + جلسات طرح(۳) + تمرین(۳) */
   const recentRows = db.query<RecentRow>(RECENT_CASES_SQL, [
-    actorStaffId, new Date().toISOString(),
+    nowIso, actorStaffId, today.end,
+    actorStaffId, actorStaffId, actorStaffId,
     actorStaffId, actorStaffId, actorStaffId,
     actorStaffId, actorStaffId, actorStaffId,
     actorStaffId, actorStaffId, actorStaffId

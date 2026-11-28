@@ -2100,8 +2100,15 @@ tr.wl-row--urgent > td:first-child {
 }
 .exb-card__actions {
   display: flex;
+  flex-wrap: wrap; /* ۱.۲۷.۹۴ — دکمه‌های کارت در عرض کم ردیف می‌شوند نه سرریز از لبهٔ کارت */
   gap: var(--sp-1);
   margin-inline-start: auto;
+}
+.exb-sort { /* برچسب + سلکت «مرتب‌سازیِ همین صفحه» — هم‌خانوادهٔ نوار فیلترها (exercises.js) */
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  flex-shrink: 0;
 }
 .exb-pager {
   display: flex;
@@ -2121,6 +2128,11 @@ tr.wl-row--urgent > td:first-child {
   }
   .exb-filters .select {
     flex: 1 1 140px;
+  }
+  /* ۱.۲۷.۹۴ — کنش‌های کارت در موبایل کل عرض می‌گیرند؛ دکمهٔ اصلی از لبهٔ کارت بیرون نمی‌زند */
+  .exb-card__actions {
+    margin-inline-start: 0;
+    width: 100%;
   }
 }
 
@@ -2149,6 +2161,15 @@ tr.wl-row--urgent > td:first-child {
 
 @media (max-width: 640px) {
 }
+
+/* ۱.۲۷.۹۴ — رفع پرش اول-ثانیهٔ داشبورد درمانگر (CLS):
+   ① سه ناحیهٔ تنبلِ زیرِ فولد (شروع سریع / برنامهٔ امروز / طرح SLD) تا رسیدن داده جای خود را
+      نگه می‌دارند تا سه پرش چیدمانی صفر شود؛ با پر شدن، JS کلاس را برمی‌دارد.
+   ② وارینت تک‌ستونهٔ اسکلت — داشبورد پشتهٔ کارت است نه گرید چهارکارتی؛ اجزای skel در
+      components.css تعریف شده‌اند و اینجا فقط چیدمان همان اجزا عوض می‌شود. */
+.dz-reserve { min-height: 88px; }
+.skel-state--stack .skel-state__cards { display: flex; flex-direction: column; gap: var(--sp-4); }
+.skel-state--stack .skel-card { min-height: 88px; justify-content: center; }
 
 .hero-score {
   position: relative; overflow: hidden;
@@ -2488,6 +2509,9 @@ tr.wl-row--urgent > td:first-child {
 .an-empty { display: flex; flex-direction: column; align-items: center; padding: var(--sp-2) 0; }
 
 .exb-nav { display: flex; flex-direction: column; gap: var(--sp-3); margin-bottom: var(--sp-4); }
+/* بدنهٔ دادهٔ نمای کارت‌های آماده (exercises.js: فهرست + صفحه‌بندی) — پشتهٔ تک‌ستونه هم‌خانوادهٔ exb-nav؛
+   فاصلهٔ ردیف‌ها را فرزندان خودشان دارند (pager با margin-top) — بدون gap اضافه */
+.exb-body { display: flex; flex-direction: column; min-width: 0; }
 /* کاشی‌های .exb-cat حذف شد: ستون اختلال‌ها همان درخت .exb-dom دو ستون دیگر را گرفت */
 /* کلاس‌های رندر قدیم منو (.exb-crumb · .exb-pillars · .exb-pillar__icon · .exb-selchips) حذف شدند */
 .exb-grades { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
@@ -2790,14 +2814,18 @@ tr.wl-row--urgent > td:first-child {
   margin-bottom: var(--sp-2);
 }
 .chip-group { display: flex; flex-wrap: wrap; gap: 6px; }
-.chip {
+/* ۱.۲۷.۹۴ — این بلوک قبلاً unscoped بود و همهٔ چیپ‌های اپ (چیپ‌های هدف کارت‌ها، چیپ‌های
+   «پرونده‌های اخیر» داشبورد و…) را با فونت/پدینگ/پس‌زمینهٔ خودش می‌لغزاند (به‌دلیل ترتیب
+   فایل، بر .chip عمومی در components.css/views.css می‌پایید). مالکش فرم‌ساز است — به
+   ظرفِ خودش (.form-grid مودال formModal در ui.js) سقول شد تا چیپ عمومی دوباره حاکم شود. */
+.form-grid .chip {
   border: 1px solid var(--line); background: var(--surface); color: var(--text-1);
   border-radius: 999px; padding: 5px var(--sp-3); font-size: var(--fs-xs, 12px);
   cursor: pointer; font-family: inherit; line-height: var(--lh-ui, 1.5); /* F1: کنترل تک‌خطی */
   transition: background var(--fast), border-color var(--fast);
 }
-.chip:hover { border-color: var(--brand); }
-.chip.is-on { background: var(--brand-soft); border-color: var(--brand); font-weight: 700; color: var(--brand-deep); }
+.form-grid .chip:hover { border-color: var(--brand); }
+.form-grid .chip.is-on { background: var(--brand-soft); border-color: var(--brand); font-weight: 700; color: var(--brand-deep); }
 .form-progress { margin: 0 0 var(--sp-2); font-size: var(--fs-xs, 12px); color: var(--text-2); }
 .form-progress__bar { height: 5px; background: var(--line); border-radius: 999px; overflow: hidden; margin-top: var(--sp-1); }
 .form-progress__fill { height: 100%; width: 100%; background: var(--brand); border-radius: 999px; transform: scaleX(0); transform-origin: 100% 50%; transition: transform var(--normal); } /* E1: با هر کلید تایپ scaleX آپدیت می‌شود نه width */

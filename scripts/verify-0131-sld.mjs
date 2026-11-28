@@ -50,7 +50,9 @@ function buildDb(withProdCards) {
 const ACTIVE_6 = ['sys-sld-reading', 'sys-sld-writing', 'sys-sld-math', 'sys-wm-primary', 'sys-writing-g12', 'sys-math-g1'];
 const ARCHIVED_5 = ['sys-adhd-preschool', 'sys-adhd-primary', 'sys-anxiety-emotion', 'sys-speech-delay', 'sys-attention-g123'];
 const ARCHIVED_CARDS = ['113', '114', '115', '212'];
-const ARCHIVED_FORMS = ['ce-asd-criteria-v1', 'ce-odd-criteria-v1', 'ce-scared-p-v1', 'ce-snap-iv-p-v1', 'ce-snap-iv-t-v1', 'ce-dcdq-v1'];
+// 0132 — پنج فرم هم‌بودی به گردش برگشتند؛ فقط ce-asd-criteria-v1 آرشیو می‌ماند (مأموریت بدون اتیسم)
+const ASD_ARCHIVED = ['ce-asd-criteria-v1'];
+const RETURNED_5 = ['ce-snap-iv-p-v1', 'ce-snap-iv-t-v1', 'ce-scared-p-v1', 'ce-dcdq-v1', 'ce-odd-criteria-v1'];
 // آیتم‌های هدف لینک 0131: [key, sessionIdx, itemIdx]
 // (sys-sld-math S3 i1 «مسئلهٔ کلامی چهارگام» از 0128 از قبل 206 دارد — هدف 0131 نیست)
 const LINK_TARGETS = [
@@ -78,6 +80,7 @@ for (const scenario of [['A (با کارت‌های تولید)', true], ['B (ب
   console.log(`\n─── سناریو ${label} ───`);
   const db = buildDb(withCards);
   db.exec(m131);
+  db.exec(readFileSync(join(MIG_DIR, '0132_sld_comorbidity_forms_return.sql'), 'utf8'));
 
   const rows = db.prepare(`SELECT key, active, description FROM pathway_templates WHERE key LIKE 'sys-%' ORDER BY key`).all();
   check(`${label}: ۱۱ قالب سیستمی`, rows.length === 11, String(rows.length));
@@ -90,8 +93,10 @@ for (const scenario of [['A (با کارت‌های تولید)', true], ['B (ب
     db.prepare(`SELECT COUNT(*) n FROM exercises WHERE id IN ('cccccccc-8200-4000-8000-000000000113','cccccccc-8200-4000-8000-000000000114','cccccccc-8200-4000-8000-000000000115','cccccccc-8200-4000-8000-000000000212') AND published = 0`).get().n === 4);
   check(`${label}: کارت‌های توجه/حافظه/بازی منتشر می‌مانند`,
     db.prepare(`SELECT COUNT(*) n FROM exercises WHERE id IN ('cccccccc-8200-4000-8000-000000000110','cccccccc-8200-4000-8000-000000000112','cccccccc-8200-4000-8000-000000000131','cccccccc-8200-4000-8000-000000000211') AND published = 1`).get().n === 4);
-  check(`${label}: ۶ فرم بایگانی`,
-    db.prepare(`SELECT COUNT(*) n FROM case_event_types WHERE key IN (${ARCHIVED_FORMS.map((k) => `'${k}'`).join(',')}) AND active = 0`).get().n === 6);
+  check(`${label}: فرم اتیسم بایگانی می‌ماند (0131/0132)`,
+    db.prepare(`SELECT COUNT(*) n FROM case_event_types WHERE key IN (${ASD_ARCHIVED.map((k) => `'${k}'`).join(',')}) AND active = 0`).get().n === 1);
+  check(`${label}: ۵ فرم بازگشتهٔ 0132 فعال`,
+    db.prepare(`SELECT COUNT(*) n FROM case_event_types WHERE key IN (${RETURNED_5.map((k) => `'${k}'`).join(',')}) AND active = 1`).get().n === 5);
   check(`${label}: فرم‌های نگه‌داشته فعال`,
     db.prepare(`SELECT COUNT(*) n FROM case_event_types WHERE key IN ('ce-sdq-p-v1','ce-sdq-t-v1','ce-sld-read-v1','ce-sld-wri-v1','ce-sld-calc-v1','ce-probe-read-v1','ce-probe-write-v1','ce-probe-calc-v1','ce-speech-criteria-v1','ce-anamnesis-v3') AND active = 1`).get().n === 10);
 
@@ -137,7 +142,7 @@ for (const scenario of [['A (با کارت‌های تولید)', true], ['B (ب
   for (const r of activeRows) {
     const hay = [r.steps, db.prepare(`SELECT sessions_json j FROM pathway_templates WHERE key = ?`).get(r.key).j].join(' ');
     for (const tok of hay.match(/ce-[a-z0-9-]+/g) ?? []) {
-      if (ARCHIVED_FORMS.includes(tok)) badRefs.push(`${r.key}:${tok}`);
+      if (ASD_ARCHIVED.includes(tok)) badRefs.push(`${r.key}:${tok}`);
     }
   }
   check(`${label}: قالب‌های فعال به فرم بایگانی ارجاع ندارند`, badRefs.length === 0, badRefs.join(', '));

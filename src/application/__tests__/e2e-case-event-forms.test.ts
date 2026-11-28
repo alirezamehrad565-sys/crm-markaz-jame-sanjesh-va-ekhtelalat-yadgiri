@@ -556,12 +556,12 @@ describe('فرم‌های تکی خانواده جای «فرم جامع» (هر
       expect(t, k).toBeTruthy();
       typeIds[k] = t!.id;
     }
-    // — SNAP-IV والد و SCARED والد: بایگانی 0131 — از فهرست فعال می‌افتند (الگوی بازنشستگی ce-anamnesis-v2)
-    expect(types.find((x) => x.key === 'ce-snap-iv-p-v1')).toBeUndefined();
-    expect(types.find((x) => x.key === 'ce-scared-p-v1')).toBeUndefined();
+    // — SNAP-IV والد و SCARED والد: با 0132 به گردش برگشتند (نگاه متخصص: اسکرین هم‌بودی لازمِ کلینیک SLD است)
+    expect(types.find((x) => x.key === 'ce-snap-iv-p-v1')).toBeTruthy();
+    expect(types.find((x) => x.key === 'ce-scared-p-v1')).toBeTruthy();
     const all = (await manager.get('/api/case-events/types')).body as { data: { key: string; active: boolean }[] };
-    expect(all.data.find((x) => x.key === 'ce-snap-iv-p-v1')!.active).toBe(false);
-    expect(all.data.find((x) => x.key === 'ce-scared-p-v1')!.active).toBe(false);
+    expect(all.data.find((x) => x.key === 'ce-snap-iv-p-v1')!.active).toBe(true);
+    expect(all.data.find((x) => x.key === 'ce-scared-p-v1')!.active).toBe(true);
     // — دو فرم جامع دیگر در کتابخانه نیست
     expect(types.find((x) => x.key === 'ce-comp-family-v2')).toBeUndefined();
     expect(types.find((x) => x.key === 'ce-comp-teacher-v2')).toBeUndefined();
@@ -579,11 +579,12 @@ describe('فرم‌های تکی خانواده جای «فرم جامع» (هر
     expect(pending.some((p) => p.id === rec.id)).toBe(true);
   });
 
-  it('فرم بایگانی‌شدهٔ 0131 (SNAP-IV والد) برای ورودی جدید بسته است → ۴۰۹', async () => {
+  it('فرم بازگشتهٔ 0132 (SNAP-IV والد) برای ورودی جدید باز است → ۲۰۱', async () => {
     const snapTypeId = (A.sql.prepare(`SELECT id FROM case_event_types WHERE key = 'ce-snap-iv-p-v1'`).get() as { id: string }).id;
     const created = await manager.post(`/api/students/${studentId}/case-events`, { eventTypeId: snapTypeId, values: {} });
-    expect(created.status).toBe(409);
-    expect((created.body as { message: string }).message).toContain('غیرفعال');
+    expect(created.status).toBe(201);
+    const rec = dataOf<{ id: string; status: string }>(created);
+    expect(rec.status).toBeTruthy();
   });
 
   it('ارسال با بله (خانواده) → sent≥۱ و لینک امن در پیام', async () => {

@@ -20,7 +20,11 @@ import { session } from '../api.js';
 const KNOWLEDGE_CATEGORY_LABELS = { tip: 'نکتهٔ آموزشی', protocol: 'پروتکل درمانی', article: 'مقاله', news: 'خبر مرکز' };
 
 export async function renderDashboard(container) {
-  container.replaceChildren(skeletonState('cards', 4));
+  /* ۱.۲۷.۹۴ — اسکلت تک‌ستونه: داشبورد (هر دو نقش) پشتهٔ کارت‌های تک‌ستونه است، نه گرید چهارکارتی؛
+     اسکلت ناهم‌شکل = پرش بزرگ اول-ثانیه (CLS). همان اجزای skel با یک وارینت stack. */
+  const skel = skeletonState('cards', 4);
+  skel.classList.add('skel-state--stack');
+  container.replaceChildren(skel);
 
   const role = session.user?.role;
   const isTherapist = role === 'therapist';
@@ -82,22 +86,26 @@ function therapistDashboard(container, { myStats, scoring, knowledge, announceme
   /* ۱.۱۱.۰ — درخواست مدیر: اعلان و دانش‌افزایی در داشبورد درمانگر هم بیاید بالا —
      اطلاع‌رسانی مرکز + دانش‌افزایی درست زیر سربرگ، پیش از کارنامهٔ امتیاز */
   /* «شروع سریع» درمانگر — تنبل: فقط پس از رسیدن داده (یا خطای هر بخش) درجا نقاشی می‌شود،
-     بدون اسکلت اضافه و بدون مسدودکردن رندر داشبورد */
-  const quickZone = el('div');
+     بدون اسکلت اضافه و بدون مسدودکردن رندر داشبورد.
+     ۱.۲۷.۹۴ — سه ناحیهٔ تنبلِ زیر هم (شروع سریع/برنامهٔ امروز/طرح SLD) تا رسیدن داده با
+     کلاس dz-reserve جای خود را نگه می‌دارند (min-height) تا سه پرش چیدمانی زیرِ فولد صفر شود؛
+     با پر شدن/خطای هر ناحیه کلاس برداشته می‌شود تا ارتفاع واقعی حکم کند. */
+  const unreserve = (zone) => zone.classList.remove('dz-reserve');
+  const quickZone = el('div', { class: 'dz-reserve' });
   parts.push(quickZone);
   const pendingSurveysCount = typeof myStats?.pendingSurveys?.count === 'number' ? myStats.pendingSurveys.count : null;
-  loadQuickStrip(quickZone, pendingSurveysCount);
+  loadQuickStrip(quickZone, pendingSurveysCount, () => unreserve(quickZone));
 
   /* «برنامهٔ امروز» درمانگر — درست زیر نوار شروع سریع؛ تنبل مثل نوار: پس از رسیدن داده درجا نقاشی می‌شود.
      data-dash-panel مقصد حفرهای KPI «جلسات امروز» است (کلیک → اسکرول + فلش همین صفحه). */
-  const planZone = el('div', { dataset: { dashPanel: 'today' } });
+  const planZone = el('div', { class: 'dz-reserve', dataset: { dashPanel: 'today' } });
   parts.push(planZone);
-  loadTodayPlan(planZone);
+  loadTodayPlan(planZone, () => unreserve(planZone));
 
   /* «شروع سریع طرح SLD» — شش طرح کتابخانه‌ای سیستمی از همان API قالب‌ها؛ کارت اختیاری و تنبل */
-  const sldZone = el('div');
+  const sldZone = el('div', { class: 'dz-reserve' });
   parts.push(sldZone);
-  loadSldQuickStart(sldZone);
+  loadSldQuickStart(sldZone, () => unreserve(sldZone));
 
   /* ۱.۲۷.۸۸ — «پرونده‌های اخیر» + «پرسشنامه‌های خانواده» درمانگر، درست زیر «برنامهٔ امروز»؛
      از همان payload مایگرفته تغذیه می‌شوند (kpis.me = getMyStats — فیلدهای ADDITIVE تازهٔ
@@ -189,7 +197,7 @@ function panelKpi(tile, key, hint) {
    سه GET هم‌زمان؛ شکست هر شمارنده مستقل نرم می‌شود («—»). شمارندهٔ «پاسخ‌های منتظر» از payload
    مایگرفته می‌آید (GET دوم ندارد). «جلسات امروز» به‌جای پرش به تقویم، کارت «برنامهٔ امروز» همین
    صفحه را نشانه می‌گیرد (حفر درون‌صفحه). تا پاسخ نیامده هیچ‌چیز نقاشی نمی‌شود — بدون اسکلت. */
-function loadQuickStrip(zone, pendingSurveysCount = null) {
+function loadQuickStrip(zone, pendingSurveysCount = null, onDone = null) {
   const dayRange = tehranDayRange(tehranTodayYmd());
   const countOf = (p) => p.then((r) => {
     const rows = r?.data;
@@ -203,6 +211,7 @@ function loadQuickStrip(zone, pendingSurveysCount = null) {
     countOf(api.get('/api/pathway-templates'))
   ]).then(([students, todayAppts, plans]) => {
     if (!zone.isConnected) return;
+    onDone?.(); // ۱.۲۷.۹۴ — رزرو ارتفاع با رسیدن داده تمام می‌شود
     zone.replaceChildren(
       el('div', { class: 'kpi-grid', style: { marginBottom: 'var(--sp-4)' } },
         kpi('دانش‌آموزان من', students, null, 'primary', null, '#/students'),
@@ -219,7 +228,7 @@ function loadQuickStrip(zone, pendingSurveysCount = null) {
 /* «برنامهٔ امروز» درمانگر — نوبت‌های امروزِ تهران از /api/appointments (سرور خودش فقط برنامهٔ همان
    درمانگر را برمی‌گرداند؛ لغوشده حذف می‌شود — همان قرارداد نوار شروع سریع). نام دانش‌آموزان از
    /api/appointments/my-students — دو GET هم‌زمان؛ شکست فهرست نام‌ها نرم می‌شود («دانش‌آموز»). */
-function loadTodayPlan(zone) {
+function loadTodayPlan(zone, onDone = null) {
   const dayRange = tehranDayRange(tehranTodayYmd());
   const nameMap = api.get('/api/appointments/my-students').then((r) => {
     const map = new Map();
@@ -232,6 +241,7 @@ function loadTodayPlan(zone) {
     .catch(() => null);
   Promise.all([rows, nameMap]).then(([list, names]) => {
     if (!zone.isConnected) return;
+    onDone?.(); // ۱.۲۷.۹۴
     zone.replaceChildren(
       list === null
         ? errorState(new Error('بارگذاری داشبورد ناموفق بود'), () => loadTodayPlan(zone))
@@ -497,16 +507,17 @@ function surveyRow(s) {
    نمای مقصد وجود ندارد، پس به‌جای اختراع قاعدهٔ تازه، ناوبری صادقانه + راهنمای «کپی». */
 const SLD_PLAN_KEYS = ['sys-sld-reading', 'sys-sld-writing', 'sys-sld-math', 'sys-wm-primary', 'sys-writing-g12', 'sys-math-g1'];
 
-function loadSldQuickStart(zone) {
+function loadSldQuickStart(zone, onDone = null) {
   api.get('/api/pathway-templates')
     .then((r) => {
       if (!zone.isConnected) return;
       const tpls = Array.isArray(r?.data) ? r.data : [];
       const rows = SLD_PLAN_KEYS.map((k) => tpls.find((t) => t?.key === k)).filter(Boolean);
+      onDone?.(); // ۱.۲۷.۹۴ — هم مسیر خالی و هم مسیر کارت: رزرو ارتفاع تمام می‌شود
       if (rows.length === 0) return; // طرح‌های سیستمی در دسترس نیست — کارت اختیاری است، بی‌صدا حذف
       zone.replaceChildren(sldQuickStartCard(rows));
     })
-    .catch(() => { /* بی‌صدا — کارت شروع سریع اختیاری است؛ بقیهٔ داشبورد سالم می‌ماند */ });
+    .catch(() => { onDone?.(); /* بی‌صدا — کارت شروع سریع اختیاری است؛ بقیهٔ داشبورد سالم می‌ماند */ });
 }
 
 function sldQuickStartCard(rows) {

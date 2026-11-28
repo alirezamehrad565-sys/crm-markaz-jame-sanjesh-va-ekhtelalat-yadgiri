@@ -37,9 +37,9 @@ describe('کتابخانهٔ سنجش آماده (seed مهاجرت)', () => {
     expect(byKey['ce-sdq-p-v1'].category).toBe('checklist');
     expect(byKey['sdq-parent']).toBeUndefined(); // ۱.۲۵.۵۹ — بازنشسته؛ جانشین ce-sdq-p-v1
     expect(byKey['conners-short']).toBeUndefined();
-    expect(byKey['ce-snap-iv-p-v1']).toBeUndefined(); // 0131 — بایگانی: مرکز فقط SLD/دیرآموزی
+    expect(byKey['ce-snap-iv-p-v1']).toBeTruthy(); // 0132 — بازگشت هم‌بودی‌ها: اسکرین توجه دوباره فعال است
     const all = dataOf<Array<{ key: string; active: boolean }>>(await m.get('/api/case-events/types'));
-    expect(all.find((t) => t.key === 'ce-snap-iv-p-v1')!.active).toBe(false); // ردیف برای بازگشت محفوظ است
+    expect(all.find((t) => t.key === 'ce-snap-iv-p-v1')!.active).toBe(true);
     expect(byKey['achenbach-practical']).toBeUndefined();
     expect(byKey['teacher-classroom']).toBeUndefined();
   });
@@ -66,7 +66,7 @@ describe('فرم‌ساز همگانی: منشی هم می‌سازد (دستو�
 });
 
 describe('موتور پیشنهاد بر اساس برچسب‌های دانش‌آموز', () => {
-  it('دانش‌آموز با برچسب ADHD → SDQ والد/معلم سر فهرست با matched (SNAP-IV پس از 0131 بایگانی است)؛ بدون برچسب → همه score=۰', async () => {
+  it('دانش‌آموز با برچسب ADHD → ابزارهای هم‌بودی توجه سر فهرست با matched (SNAP-IV با 0132 بازگشت)؛ بدون برچسب → همه score=۰', async () => {
     const A = createTestApp();
     const m = await asRole(A, 'manager');
     const s = await createStudent(m, {});
@@ -79,11 +79,11 @@ describe('موتور پیشنهاد بر اساس برچسب‌های دانش�
     expect(sug[0].score).toBeGreaterThanOrEqual(1);
     expect(sug[0].matched.some((x) => x.id === ADHD_TAG)).toBe(true);
     const matchedKeys = sug.filter((x) => x.score > 0).map((x) => x.type.key);
-    // 0131 — چک‌لیست‌های فعالِ برچسب‌خوردهٔ ADHD فقط SDQ والد و معلم‌اند؛ SNAP-IV بایگانی شده
+    // 0132 — ابزارهای هم‌بودی توجه (SNAP-IV والد/معلم) دوباره فعال‌اند و پیشنهاد می‌گیرند؛ SDQ هم هست
+    expect(matchedKeys).toContain('ce-snap-iv-p-v1');
+    expect(matchedKeys).toContain('ce-snap-iv-t-v1');
     expect(matchedKeys).toContain('ce-sdq-p-v1');
     expect(matchedKeys).toContain('ce-sdq-t-v1');
-    expect(matchedKeys).not.toContain('ce-snap-iv-p-v1');
-    expect(matchedKeys).not.toContain('ce-snap-iv-t-v1');
     expect(sug.every((x) => x.type.category === 'checklist')).toBe(true); // — : پیشنهاد فقط چک‌لیست تکی
 
     const s2 = await createStudent(m, {});

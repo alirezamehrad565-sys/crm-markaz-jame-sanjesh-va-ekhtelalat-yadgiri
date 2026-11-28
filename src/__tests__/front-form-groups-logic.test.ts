@@ -1,7 +1,7 @@
 /**
- * آزمون رفتاری گروه‌بندی کتابخانهٔ فرم‌ها (case-event-types.js) — خواست کارفرما:
- * «۳۳ فرم داریم، دسته‌بندی درستی نداره، تعدادشون زیاده». منطق خالصِ groupTypes /
- * formGroupOf / typeMatchesFilter در node اجرا می‌شود — نه فقط متن‌خوانی.
+ * آزمون رفتاری دسته‌بندی کشویی کتابخانهٔ فرم‌ها (case-event-types.js) — خواست کارفرمای ۱.۲۷.۹۴:
+ * «۳۳+ فرم، فهرست تخت طولانی است؛ دسته‌بندی کشویی با سربرگ فارسی می‌خواهیم». منطق خالصِ
+ * categoryGroups / formCategoryOf / typeMatchesFilter در node اجرا می‌شود — نه فقط متن‌خوانی.
  * ۳۳ کلید واقعیِ پروداکشن (کلید + دستهٔ seed + مخاطب) با خروجی read-only اکسپورت
  * پروداکشن هم‌رقم شده‌اند: checklist×۲۲، session×۷، note×۴.
  * الگوی مرجع: front-appointments-logic.test.ts — استاب سبک sessionStorage/localStorage.
@@ -22,45 +22,50 @@ const C = (key: string, category: string, isSystem: boolean, audience = 'family'
 
 /* ۳۳ قالب فعال پروداکشن — دقیقاً همان کلیدها و دسته‌های seed سطرهای ACTIVE */
 const PROD_33: TypeLike[] = [
-  // مقیاس‌ها و پرسشنامه‌های استاندارد — ۶
-  C('ce-asd-criteria-v1', 'checklist', true, 'both'),
-  C('ce-dcdq-v1', 'checklist', true),
-  C('ce-followup-3m-v1', 'checklist', true),
-  C('ce-home-monitor-v2', 'checklist', true),
-  C('ce-id-adapt-v1', 'checklist', true),
-  C('ce-odd-criteria-v1', 'checklist', true, 'both'),
-  C('ce-rehab-adl-v1', 'checklist', true, 'staff'),
-  C('ce-rehab-cog-v1', 'checklist', true, 'staff'),
-  C('ce-rehab-motor-v1', 'checklist', true, 'staff'),
-  C('ce-scared-p-v1', 'checklist', true),
-  C('ce-sdq-p-v1', 'checklist', true),
-  C('ce-sdq-t-v1', 'checklist', true, 'teacher'),
+  // ورودی و سوابق — ۱
+  C('ce-anamnesis-v3', 'session', true),
+  // سنجش‌های SLD — ۷ (ملاک‌های خواندن/نوشتن/حساب + کلاسی معلم + سه پروب درمانگر)
   C('ce-sld-calc-v1', 'checklist', true, 'both'),
   C('ce-sld-class-t-v1', 'checklist', true, 'teacher'),
   C('ce-sld-read-v1', 'checklist', true, 'both'),
   C('ce-sld-wri-v1', 'checklist', true, 'both'),
+  C('ce-probe-calc-v1', 'session', true),
+  C('ce-probe-read-v1', 'session', true),
+  C('ce-probe-write-v1', 'session', true),
+  // مقیاس‌های معلم/والد — ۶
+  C('ce-dcdq-v1', 'checklist', true),
+  C('ce-scared-p-v1', 'checklist', true),
+  C('ce-sdq-p-v1', 'checklist', true),
+  C('ce-sdq-t-v1', 'checklist', true, 'teacher'),
   C('ce-snap-iv-p-v1', 'checklist', true),
   C('ce-snap-iv-t-v1', 'checklist', true, 'teacher'),
-  C('ce-speech-criteria-v1', 'checklist', true, 'both'),
+  // خانواده و خانه — ۲
+  C('ce-home-monitor-v2', 'checklist', true),
+  C('ce-id-adapt-v1', 'checklist', true),
+  // پایش و پیگیری — ۳
+  C('ce-followup-3m-v1', 'checklist', true),
   C('ce-survey-discharge-v1', 'checklist', true),
   C('ce-survey-progress-v1', 'checklist', true),
-  C('t-9fa42a382d', 'checklist', false), // فرم ارزیابی عملکرد حسی — سفارشی مرکز
-  // گزارش‌ها و جمع‌بندی بالینی — ۴
+  // ابزارهای هم‌بودی و افتراق — ۳
+  C('ce-asd-criteria-v1', 'checklist', true, 'both'),
+  C('ce-odd-criteria-v1', 'checklist', true, 'both'),
+  C('ce-speech-criteria-v1', 'checklist', true, 'both'),
+  // ثبت جلسه و جمع‌بندی درمانگر — ۱۰
+  C('ce-rehab-adl-v1', 'checklist', true, 'staff'),
+  C('ce-rehab-cog-v1', 'checklist', true, 'staff'),
+  C('ce-rehab-motor-v1', 'checklist', true, 'staff'),
   C('ce-clinical-suspicion-v1', 'note', true, 'staff'),
   C('ce-hypothesis-log-v1', 'note', true),
   C('ce-needs-v1', 'note', true, 'staff'),
   C('ce-results-v1', 'note', true, 'staff'),
-  // ثبت جلسه و آزمون‌های درمانگر (شامل ابزارهای توانبخشی) — ۷
-  C('ce-anamnesis-v3', 'session', true),
   C('ce-ot-session-v1', 'session', true, 'staff'),
-  C('ce-probe-calc-v1', 'session', true),
-  C('ce-probe-read-v1', 'session', true),
-  C('ce-probe-write-v1', 'session', true),
   C('ce-wechsler-w4-v1', 'session', true, 'staff'),
-  C('intervention', 'session', true)
+  C('intervention', 'session', true),
+  // ابزارهای سفارشی مرکز — ۱
+  C('t-9fa42a382d', 'checklist', false) // فرم ارزیابی عملکرد حسی — سفارشی مرکز
 ]; // — ۳۳ ردیف واقعی: ۲۲ checklist + ۴ note + ۷ session
 
-describe('گروه‌بندی کتابخانهٔ فرم‌ها (case-event-types.js — behavioral)', () => {
+describe('دسته‌بندی کشویی کتابخانهٔ فرم‌ها (case-event-types.js — behavioral)', () => {
   // @ts-ignore — ماژول وانیل فرانت خارج از tsconfig است
   let V: typeof import('../../public/assets/js/views/case-event-types.js');
 
@@ -79,10 +84,11 @@ describe('گروه‌بندی کتابخانهٔ فرم‌ها (case-event-types
     delete (globalThis as Record<string, unknown>).localStorage;
   });
 
-  it('۳۳ قالب واقعی → ۶ گروه با شمارش‌های دقیق، بدون گم‌شدن یا تکرار', () => {
-    const groups = V.groupTypes(PROD_33) as Array<{ id: string; label: string; items: TypeLike[] }>;
-    expect(groups.map((g) => g.id)).toEqual(['scale', 'criteria', 'monitor', 'session', 'note', 'custom']);
-    expect(groups.map((g) => g.items.length)).toEqual([6, 7, 5, 10, 4, 1]);
+  it('۳۳ قالب واقعی → ۸ دسته با شمارش‌های دقیق، بدون گم‌شدن یا تکرار', () => {
+    const groups = V.categoryGroups(PROD_33) as Array<{ id: string; label: string; items: TypeLike[] }>;
+    expect(groups.map((g) => g.id)).toEqual(
+      ['intake', 'sld', 'scales', 'family', 'monitor', 'comorbid', 'clinic', 'custom']);
+    expect(groups.map((g) => g.items.length)).toEqual([1, 7, 6, 2, 3, 3, 10, 1]);
     const total = groups.reduce((s, g) => s + g.items.length, 0);
     expect(total).toBe(33); // هیچ قالبی گم نشده
     const keys = groups.flatMap((g) => g.items.map((t) => t.key));
@@ -90,41 +96,54 @@ describe('گروه‌بندی کتابخانهٔ فرم‌ها (case-event-types
     for (const g of groups) expect(g.label.length).toBeGreaterThan(0); // سربرگ فارسی
   });
 
-  it('formGroupOf — مشتق از مقادیر واقعی، نه طبقه‌بندی موازی', () => {
-    // دسته‌های seed سیستمی عیناً همان گروه‌اند
-    expect(V.formGroupOf(C('ce-anamnesis-v3', 'session', true))).toBe('session');
-    expect(V.formGroupOf(C('ce-results-v1', 'note', true))).toBe('note');
-    // سطل checklist با خانوادهٔ واقعی کلیدها می‌شکند
-    expect(V.formGroupOf(C('ce-sdq-p-v1', 'checklist', true))).toBe('scale');
-    expect(V.formGroupOf(C('ce-snap-iv-t-v1', 'checklist', true))).toBe('scale');
-    expect(V.formGroupOf(C('ce-dcdq-v1', 'checklist', true))).toBe('scale');
-    expect(V.formGroupOf(C('ce-asd-criteria-v1', 'checklist', true))).toBe('criteria');
-    expect(V.formGroupOf(C('ce-sld-class-t-v1', 'checklist', true))).toBe('criteria');
-    expect(V.formGroupOf(C('ce-speech-criteria-v1', 'checklist', true))).toBe('criteria');
-    expect(V.formGroupOf(C('ce-survey-discharge-v1', 'checklist', true))).toBe('monitor');
-    expect(V.formGroupOf(C('ce-home-monitor-v2', 'checklist', true))).toBe('monitor');
-    // ابزارهای ارزیابی توانبخشی — ثبت درمانگر، نه پایش خانواده
-    expect(V.formGroupOf(C('ce-rehab-adl-v1', 'checklist', true))).toBe('session');
-    expect(V.formGroupOf(C('ce-rehab-motor-v1', 'checklist', true))).toBe('session');
-    // سفارشی مرکز (t-*) همیشه گروه خودش — حتی اگر دسته‌اش هر چه باشد
-    expect(V.formGroupOf(C('t-9fa42a382d', 'checklist', false))).toBe('custom');
-    expect(V.formGroupOf(C('t-new-one', 'session', false))).toBe('custom');
-    // چک‌لیست سیستمی آیندهٔ ناشناخته → پایش/نظرسنجی (سطل امن)، نه گم‌شدن
-    expect(V.formGroupOf(C('ce-future-tool-v1', 'checklist', true))).toBe('monitor');
-    expect(V.formGroupOf(undefined as unknown as TypeLike)).toBe('custom');
+  it('formCategoryOf — مشتق از خانوادهٔ واقعی کلیدها، نه طبقه‌بندی موازی', () => {
+    // ورودی و سوابق — گفت‌وگوی اول و بستهٔ جامع
+    expect(V.formCategoryOf(C('ce-anamnesis-v3', 'session', true))).toBe('intake');
+    expect(V.formCategoryOf(C('ce-comp-family-v2', 'session', true))).toBe('intake');
+    expect(V.formCategoryOf(C('ce-comp-teacher-v2', 'session', true))).toBe('intake');
+    // سنجش‌های SLD — ملاک‌ها + پروب‌ها
+    expect(V.formCategoryOf(C('ce-sld-read-v1', 'checklist', true))).toBe('sld');
+    expect(V.formCategoryOf(C('ce-sld-class-t-v1', 'checklist', true))).toBe('sld');
+    expect(V.formCategoryOf(C('ce-probe-calc-v1', 'session', true))).toBe('sld');
+    // مقیاس‌های معلم/والد
+    expect(V.formCategoryOf(C('ce-sdq-p-v1', 'checklist', true))).toBe('scales');
+    expect(V.formCategoryOf(C('ce-snap-iv-t-v1', 'checklist', true))).toBe('scales');
+    expect(V.formCategoryOf(C('ce-dcdq-v1', 'checklist', true))).toBe('scales');
+    expect(V.formCategoryOf(C('quick-multi-v1', 'checklist', true))).toBe('scales');
+    // خانواده و خانه
+    expect(V.formCategoryOf(C('ce-home-monitor-v2', 'checklist', true))).toBe('family');
+    expect(V.formCategoryOf(C('ce-id-adapt-v1', 'checklist', true))).toBe('family');
+    // پایش و پیگیری — نظرسنجی‌ها و پیگیری ۳–۶ماهه
+    expect(V.formCategoryOf(C('ce-survey-discharge-v1', 'checklist', true))).toBe('monitor');
+    expect(V.formCategoryOf(C('ce-followup-3m-v1', 'checklist', true))).toBe('monitor');
+    // ابزارهای هم‌بودی و افتراق — ملاک‌های DSM چندمنبعی
+    expect(V.formCategoryOf(C('ce-asd-criteria-v1', 'checklist', true))).toBe('comorbid');
+    expect(V.formCategoryOf(C('ce-odd-criteria-v1', 'checklist', true))).toBe('comorbid');
+    expect(V.formCategoryOf(C('ce-speech-criteria-v1', 'checklist', true))).toBe('comorbid');
+    // ثبت جلسه و جمع‌بندی درمانگر — وکسلر/کاردرمانی/لج‌ها
+    expect(V.formCategoryOf(C('ce-results-v1', 'note', true))).toBe('clinic');
+    expect(V.formCategoryOf(C('ce-wechsler-w4-v1', 'session', true))).toBe('clinic');
+    expect(V.formCategoryOf(C('ce-rehab-motor-v1', 'checklist', true))).toBe('clinic');
+    expect(V.formCategoryOf(C('intervention', 'session', true))).toBe('clinic');
+    // سفارشی مرکز (t-*) همیشه دستهٔ خودش — حتی اگر دسته‌اش هر چه باشد
+    expect(V.formCategoryOf(C('t-9fa42a382d', 'checklist', false))).toBe('custom');
+    expect(V.formCategoryOf(C('t-new-one', 'session', false))).toBe('custom');
+    // قالب سیستمی آیندهٔ ناشناخته → سطل امن «پایش/نظرسنجی»، نه گم‌شدن
+    expect(V.formCategoryOf(C('ce-future-tool-v1', 'checklist', true))).toBe('monitor');
+    expect(V.formCategoryOf(undefined as unknown as TypeLike)).toBe('custom');
   });
 
-  it('فیلتر گروه — چیپ هر گروه فقط همان گروه را می‌گذارد؛ «همه» ۳۳تای کامل', () => {
+  it('فیلتر دسته — چیپ هر دسته فقط همان دسته را می‌گذارد؛ «همه» ۳۳تای کامل', () => {
     const all = (grp: string) => PROD_33.filter((t) => V.typeMatchesFilter(t, { grp, aud: 'all', q2: '' }));
     expect(all('all').length).toBe(33);
-    expect(all('scale').map((t) => t.key).sort()).toEqual(
+    expect(all('scales').map((t) => t.key).sort()).toEqual(
       ['ce-dcdq-v1', 'ce-scared-p-v1', 'ce-sdq-p-v1', 'ce-sdq-t-v1', 'ce-snap-iv-p-v1', 'ce-snap-iv-t-v1'].sort());
-    expect(all('criteria').every((t) => V.formGroupOf(t) === 'criteria')).toBe(true);
-    expect(all('criteria').length).toBe(7);
+    expect(all('comorbid').every((t) => V.formCategoryOf(t) === 'comorbid')).toBe(true);
+    expect(all('comorbid').length).toBe(3);
     expect(all('custom').map((t) => t.key)).toEqual(['t-9fa42a382d']);
-    // فیلترها روی هم جمع می‌شوند: گروه scale + مخاطب معلم
-    const scaleTeacher = PROD_33.filter((t) => V.typeMatchesFilter(t, { grp: 'scale', aud: 'teacher', q2: '' }));
-    expect(scaleTeacher.map((t) => t.key).sort()).toEqual(['ce-sdq-t-v1', 'ce-snap-iv-t-v1'].sort());
+    // فیلترها روی هم جمع می‌شوند: دستهٔ scales + مخاطب معلم
+    const scalesTeacher = PROD_33.filter((t) => V.typeMatchesFilter(t, { grp: 'scales', aud: 'teacher', q2: '' }));
+    expect(scalesTeacher.map((t) => t.key).sort()).toEqual(['ce-sdq-t-v1', 'ce-snap-iv-t-v1'].sort());
   });
 
   it('فیلتر مخاطب و جستجو — هر دو مخاطب و مخالفِ عنوان حذف می‌شوند؛ غیرفعال هرگز', () => {
@@ -139,10 +158,13 @@ describe('گروه‌بندی کتابخانهٔ فرم‌ها (case-event-types
     expect(inactive).toBe(false); // قالب غیرفعال هیچ‌جا رندر نمی‌شود — رفتار ۱.۲۷.۴۰ دست‌نخورده
   });
 
-  it('ترتیب درون‌گروهی = ترتیب ورودی سرور — دست‌نخورده', () => {
-    const groups = V.groupTypes(PROD_33) as Array<{ id: string; items: TypeLike[] }>;
-    const session = groups.find((g) => g.id === 'session') as { items: TypeLike[] };
-    expect(session.items.map((t) => t.key)).toEqual(
-      ['ce-rehab-adl-v1', 'ce-rehab-cog-v1', 'ce-rehab-motor-v1', 'ce-anamnesis-v3', 'ce-ot-session-v1', 'ce-probe-calc-v1', 'ce-probe-read-v1', 'ce-probe-write-v1', 'ce-wechsler-w4-v1', 'intervention']);
+  it('ترتیب درون‌دسته‌ای = ترتیب ورودی سرور — دست‌نخورده', () => {
+    const groups = V.categoryGroups(PROD_33) as Array<{ id: string; items: TypeLike[] }>;
+    const sld = groups.find((g) => g.id === 'sld') as { items: TypeLike[] };
+    expect(sld.items.map((t) => t.key)).toEqual(
+      ['ce-sld-calc-v1', 'ce-sld-class-t-v1', 'ce-sld-read-v1', 'ce-sld-wri-v1', 'ce-probe-calc-v1', 'ce-probe-read-v1', 'ce-probe-write-v1']);
+    const clinic = groups.find((g) => g.id === 'clinic') as { items: TypeLike[] };
+    expect(clinic.items.map((t) => t.key)).toEqual(
+      ['ce-rehab-adl-v1', 'ce-rehab-cog-v1', 'ce-rehab-motor-v1', 'ce-clinical-suspicion-v1', 'ce-hypothesis-log-v1', 'ce-needs-v1', 'ce-results-v1', 'ce-ot-session-v1', 'ce-wechsler-w4-v1', 'intervention']);
   });
 });
